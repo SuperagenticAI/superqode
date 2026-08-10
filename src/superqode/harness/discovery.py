@@ -98,7 +98,8 @@ def discover_harness_adapters(
                 id="rlm-code",
                 name="RLM Code",
                 description=(
-                    "Recursive Language Model harness with LID context and trajectory evidence"
+                    "Research route: paper reproduction, benchmarks, LID context and "
+                    "trajectory evidence. For coding work use the built-in RLM harness"
                 ),
                 source="optional:rlm-code",
                 available=rlm_available,

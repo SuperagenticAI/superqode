@@ -58,11 +58,117 @@ surface:
 ```text
 :rlm session
 :rlm sandbox
+:rlm usage
 :rlm agents
 :rlm send <agent-id> <message>
 :rlm steer <agent-id> <instruction>
 :rlm cancel <agent-id>
 ```
+
+## Context as data
+
+The repository is available as an object the model can measure and narrow before
+deciding how to read it:
+
+```python
+len(context)                      # bytes, from metadata, without reading files
+context.files()                   # in-scope paths
+context.select("src/**/*.py")     # a narrowed view, leaving the original intact
+context.search("authenticate")    # path:line:text, bounded
+context.read("src/auth.py")
+context.chunk(size=20_000)        # slices that remember where they came from
+```
+
+Discovery respects `.gitignore` when git can answer, falls back to a filtered
+walk when it cannot, and skips binaries. Reading is lazy: `len(context)` uses
+directory metadata, so a model can size a repository before paying to load it.
+
+A chunk carries its file, index and offsets, so answers over chunks can be
+traced back to the source rather than arriving as anonymous text:
+
+```text
+ContextChunk(path='src/auth.py', index=2, chars=20000, preview='def refresh(token):...')
+```
+
+`chunk.labelled()` prefixes the slice with its path and offsets, which is
+usually what you want to hand to a subcall.
+
+A document context needs no repository at all:
+
+```python
+notes = RLMContext(".", document=long_string)
+```
+
+## Semantic subcalls
+
+A recursive language model keeps context as data and asks many small questions
+about it, instead of pushing everything through one conversation. `llm_query` is
+that question:
+
+```python
+source = workspace.read("src/auth.py")
+finding = llm_query("Which invariant does this violate?", context=source)
+
+chunks = context.select("src/**/*.py").chunk(size=8000)
+answers = llm_query_batched([chunk.labelled() for chunk in chunks])
+```
+
+A batch runs concurrently and returns answers in the order its prompts were
+given, so zipping prompts to answers is safe.
+
+Answers are handles, not strings. A returned answer shows a summary, which is
+what reaches the conversation, while the text stays available to Python:
+
+```text
+RLMResponse(id='query-3', chars=4821, preview='The refresh path never revokes...')
+```
+
+```python
+finding.text            # the full answer
+finding.search("token") # matching lines
+finding.chunk(0, 500)   # a slice
+len(finding)            # characters
+```
+
+This is not `rlm.run`. A subcall asks a model one question about text you
+already hold: no tools, no session, no repository. `rlm.run` starts a full child
+coding session with its own kernel and budget. Both are useful and they are not
+interchangeable.
+
+Limits belong to the host, not to the namespace, because the model writes the
+Python that calls these:
+
+```yaml
+runtime:
+  backend: rlm
+  config:
+    subcall_max_calls: 64
+    subcall_max_batch: 16
+    subcall_max_concurrency: 4
+    subcall_max_prompt_chars: 200000
+    subcall_max_response_chars: 200000
+    subcall_token_budget: 0
+    subcall_models: []
+    context_max_files: 2000
+    context_max_file_bytes: 512000
+    context_max_total_bytes: 20000000
+    context_include: []
+    context_exclude: []
+```
+
+`:rlm usage` reports what the recursive work has cost: subcalls against their
+quota, child agents by status, and the size of the corpus in scope. Root
+conversation usage is the harness's to report and is not duplicated there.
+
+One quota covers a session, so single calls and batches draw on the same
+allowance rather than each getting a fresh one. A prompt over the limit comes
+back as a failed answer suggesting you chunk the context, a failed subcall does
+not take down the rest of its batch, and subcall usage is reported separately
+from root and child-agent usage.
+
+Under the `docker` profile the query leaves the boundary, because provider
+credentials never enter it. The sandbox asks the host, which enforces the same
+quota it would have enforced anyway.
 
 ## Goals and completion gates
 
@@ -208,6 +314,43 @@ running untrusted prompts.
 
 Requesting a profile this build cannot provide refuses to start the session
 rather than quietly running on the host.
+
+## The monty profile
+
+```yaml
+runtime:
+  backend: rlm
+  config:
+    sandbox: monty
+```
+
+Monty is a from-scratch Python interpreter with no subprocess, no real
+filesystem and no third-party imports. That makes it the wrong place to do
+coding work and the right place for the other half of the RLM pattern, so this
+is the research and evaluation profile.
+
+It needs the optional dependency:
+
+```bash
+uv pip install 'superqode[monty]'
+```
+
+What works: persistent Python state, `context` with reads, search and chunking,
+`llm_query` and `llm_query_batched`, and `workspace.read`. What refuses, by
+name and with the reason: `shell.run`, `workspace.write` and `workspace.edit`.
+Completion gates refuse too, rather than quietly running on the host, because a
+gate that escaped the profile would verify the wrong machine. An agent that
+cannot run tests must not be able to imply it verified anything.
+
+Recursion is not part of this profile. `rlm.run` needs processes, and Monty has
+none, so it is absent rather than half-wired.
+
+Checkpoints are Monty snapshots rather than pickles, so restoring one never
+involves the host deserializing anything.
+
+One portability note: Monty does not dispatch `len()` to a user class. Use
+`context.size()`, `response.size()` and `chunk.size()`, which work identically
+under every profile, where `len()` works only under `host` and `docker`.
 
 ## Sessions
 

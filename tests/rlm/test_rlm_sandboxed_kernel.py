@@ -126,6 +126,92 @@ async def test_recursive_calls_are_forwarded_to_the_host(tmp_path):
     assert seen[0][1]["prompt"] == "inspect the tests"
 
 
+async def test_subcalls_from_inside_the_sandbox_run_on_the_host(tmp_path):
+    """Provider credentials never enter the boundary, so the query leaves it."""
+    seen: list[tuple[str, dict]] = []
+
+    async def host_call(name: str, payload: dict) -> Any:
+        seen.append((name, payload))
+        if name == "llm.query":
+            return {
+                "__rlm__": "response",
+                "id": "query-1",
+                "text": "the answer" * 20,
+                "usage": {"total_tokens": 15},
+            }
+        if name == "llm.query_batch":
+            return [
+                {"__rlm__": "response", "id": f"query-{index}", "text": prompt.upper()}
+                for index, prompt in enumerate(payload["prompts"], start=2)
+            ]
+        return None
+
+    channel = await _channel(tmp_path, host_call=host_call)
+    try:
+        single = await _execute(
+            channel, "answer = llm_query('what is this', context='some text')\nrepr(answer)"
+        )
+        length = await _execute(channel, "len(answer)")
+        batch = await _execute(
+            channel, "answers = llm_query_batched(['a', 'b'])\n[a.text for a in answers]"
+        )
+    finally:
+        await channel.close()
+
+    # A handle, not the text: the repr is what reaches the conversation.
+    assert "RLMResponse(id='query-1'" in single["value_repr"]
+    assert "the answer" * 20 not in single["value_repr"]
+    assert length["value_repr"] == "200"
+    assert batch["value_repr"] == "['A', 'B']"
+    assert [name for name, _payload in seen] == ["llm.query", "llm.query_batch"]
+    assert seen[0][1]["context"] == "some text"
+
+
+async def test_context_inside_the_sandbox_is_served_by_the_host(tmp_path):
+    """One implementation of discovery and chunking, not a second that drifts."""
+    seen: list[tuple[str, dict]] = []
+
+    async def host_call(name: str, payload: dict) -> Any:
+        seen.append((name, payload))
+        if name == "ctx.files":
+            # The real bridge builds a narrowed view from the carried paths.
+            return payload.get("paths") or ["a.py", "b.py"]
+        if name == "ctx.len":
+            return 4096
+        if name == "ctx.select":
+            return ["a.py"]
+        if name == "ctx.chunk":
+            return [
+                {
+                    "__rlm__": "chunk",
+                    "text": "slice",
+                    "path": "a.py",
+                    "index": 0,
+                    "start": 0,
+                    "end": 5,
+                }
+            ]
+        return None
+
+    channel = await _channel(tmp_path, host_call=host_call)
+    try:
+        listed = await _execute(channel, "context.files()")
+        size = await _execute(channel, "len(context)")
+        narrowed = await _execute(channel, "view = context.select('*.py')\nview.files()")
+        chunked = await _execute(channel, "chunk = context.chunk(size=5)[0]\nchunk.path")
+    finally:
+        await channel.close()
+
+    assert listed["value_repr"] == "['a.py', 'b.py']"
+    assert size["value_repr"] == "4096"
+    assert narrowed["value_repr"] == "['a.py']"
+    assert chunked["value_repr"] == "'a.py'"
+    # A narrowed view carries its own paths, so neither side keeps a handle.
+    operations = [name for name, _payload in seen]
+    assert operations == ["ctx.files", "ctx.len", "ctx.select", "ctx.files", "ctx.chunk"]
+    assert seen[3][1]["paths"] == ["a.py"]
+
+
 async def test_a_host_call_failure_surfaces_inside_the_kernel(tmp_path):
     async def host_call(name: str, payload: dict) -> Any:
         raise RuntimeError("depth limit reached")

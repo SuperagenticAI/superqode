@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.86] - 2026-08-10
+
+### Added
+
+- Semantic subcalls in the RLM Python namespace: `llm_query(prompt, context=...)`
+  asks a model one bounded question about text the environment already holds,
+  and `llm_query_batched(prompts)` runs several concurrently while preserving
+  input order. Answers are handles with a compact representation, so a long
+  answer stays in the environment as data instead of being copied into the root
+  conversation. This is distinct from `rlm.run`, which starts a full child
+  coding session.
+- `:rlm usage` reports the costs the RLM layer owns: subcalls against their
+  quota, child agents by status with their tokens and cost, and the size of the
+  corpus in scope. It states that root conversation usage is reported by the
+  harness rather than silently omitting it.
+- A `context` object in the RLM Python namespace holding the repository as data:
+  `len(context)` sizes the corpus from directory metadata without reading it,
+  `select()` narrows a view without disturbing the original, and `chunk()`
+  returns slices that carry their file, index and offsets so answers over chunks
+  can be traced back to their source. Discovery respects `.gitignore` when git
+  can answer and skips binaries, bounded by `context_*` keys under
+  `runtime.config`. Under the `docker` profile the sandbox is served by the
+  host, which reads the same bind-mounted files, so discovery and chunking have
+  one implementation rather than two that can drift.
+- Subcall limits are owned by the host rather than the namespace, since the
+  model writes the Python that calls them: one shared quota per session covering
+  both single calls and batches, plus batch size, concurrency, prompt and
+  response size, timeout, token budget and a model allowlist, configured under
+  `runtime.config` with `subcall_*` keys. Subcall usage is accounted separately
+  from root and child-agent usage. Under the `docker` profile the query leaves
+  the boundary because provider credentials never enter it, and the host
+  enforces the same quota.
+
+- A `monty` sandbox profile, the research and evaluation tier, running the
+  persistent interpreter inside Monty: no subprocess, no real filesystem and no
+  third-party imports. Persistent Python state, `context`, `llm_query` and
+  `workspace.read` all work, while `shell.run`, `workspace.write` and
+  `workspace.edit` refuse by name with the reason. Completion gates refuse
+  rather than escaping to the host, since a gate outside the profile would
+  verify the wrong machine, and recursion is absent rather than half-wired
+  because Monty has no processes. Checkpoints are Monty snapshots, so restoring
+  one never has the host deserialize anything. Needs `superqode[monty]`.
+- The built-in `rlm` harness is now named as the production recursive route in
+  the README, the harness catalogue and the RLM routes comparison, which
+  previously described three routes without mentioning it at all. RLM Code is
+  described by the job it is better at, research and evaluation, rather than as
+  a competing coding harness, and stays available and addressable exactly as
+  before.
+- `size()` on context, chunks and subcall responses, which behaves identically
+  under every profile. Monty does not dispatch `len()` to a user class, so code
+  meant to run everywhere uses `size()` instead.
+
+### Fixed
+
+- The tools catalog listed the Monty tool as `monty_python_repl`; it registers
+  as `python_repl`. The inventory check that would have caught this only runs
+  when the optional dependency is installed.
+- The Monty `python_repl` tool works again. `pydantic-monty` changed shape:
+  `Monty` is now a worker-pool context manager rather than something
+  constructed with the code, so every call raised
+  `Monty.__new__() takes 0 positional arguments`. The tool now uses
+  `Monty()`, `checkout()` and `feed_run()`, and the optional dependency floor
+  moves to the version that API exists in. The break was invisible because
+  those tests skip whenever the optional dependency is absent, which is the
+  default.
+
 ## [0.2.85] - 2026-08-10
 
 ### Added

@@ -369,6 +369,7 @@ COMMANDS = [
     ":rlm goal",
     ":rlm autonomous",
     ":rlm sandbox",
+    ":rlm usage",
     ":rlm agents",
     ":rlm send",
     ":rlm steer",

@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.85"
+version = "0.2.86"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"
@@ -73,7 +73,9 @@ mlx = [
     "mlx-vlm>=0.5.0,<0.6.0; python_version < '3.14'",
 ]
 monty = [
-    "pydantic-monty>=0.0.4",
+    # The Monty API is pre-1.0 and has changed shape: the pool/checkout/feed_run
+    # form this code uses does not exist in the 0.0.4 the old floor allowed.
+    "pydantic-monty>=0.0.21",
 ]
 semantic = [
     # AST-based semantic code search client. The default integration stays slim:

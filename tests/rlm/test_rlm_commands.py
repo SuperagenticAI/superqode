@@ -68,6 +68,7 @@ def test_rlm_commands_are_offered_for_completion():
         ":rlm goal",
         ":rlm autonomous",
         ":rlm sandbox",
+        ":rlm usage",
         ":rlm agents",
         ":rlm send",
         ":rlm steer",
@@ -151,6 +152,52 @@ async def test_sandbox_cannot_be_switched_from_the_command(tmp_path):
 
     assert any("not set from :rlm sandbox" in message for message in log.errors)
     assert any("runtime.config.sandbox" in message for message in log.infos)
+
+
+async def test_usage_reports_recursive_spend_and_says_what_it_omits(tmp_path):
+    session = await _session(tmp_path)
+    app = App(active=True)
+    log = RecordingLog()
+
+    await app._rlm_dispatch(session, "usage", "", log)
+
+    # A fresh session has an executor with nothing spent, so the budget shows.
+    assert any("subcalls   0 of 64 calls" in message for message in log.infos)
+    assert any("children   none" in message for message in log.infos)
+    assert any("context    " in message for message in log.infos)
+    # Better to name the gap than to look complete.
+    assert any("reported by the harness" in message for message in log.infos)
+
+
+async def test_usage_counts_subcalls_once_they_have_run(tmp_path):
+    from superqode.pipy.messages import AssistantMessage, TextContent, Usage, UsageCost
+    from superqode.pipy.provider_events import AssistantDoneEvent
+    from superqode.rlm.coding_session import _EXECUTORS
+    from superqode.rlm.subcalls import SubcallExecutor
+
+    def stream_fn(model, context, options):
+        async def events():
+            yield AssistantDoneEvent(
+                reason="stop",
+                message=AssistantMessage(
+                    content=[TextContent(text="answer")],
+                    usage=Usage(input=6, output=4, cost=UsageCost(total=0.002)),
+                ),
+            )
+
+        return events()
+
+    session = await _session(tmp_path)
+    executor = SubcallExecutor(model=MODEL, stream_fn=stream_fn)
+    _EXECUTORS[str(session.session_path.resolve())] = executor
+    await executor.query("what is this")
+
+    app = App(active=True)
+    log = RecordingLog()
+    await app._rlm_dispatch(session, "usage", "", log)
+
+    assert any("subcalls   1 of 64 calls" in message for message in log.infos)
+    assert any("$0.0020" in message for message in log.infos)
 
 
 async def test_goal_and_autonomous_commands_persist_policy(tmp_path):

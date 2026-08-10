@@ -140,6 +140,28 @@ superqode --harness workbench --print "review this repository"
 superqode harness use workbench
 ```
 
+### Native RLM
+
+`rlm` is the built-in recursive harness. The model gets exactly one executable
+tool, a persistent Python environment, and builds context by writing Python
+rather than by calling separate search, edit and shell tools:
+
+```bash
+superqode --harness rlm
+```
+
+```python
+chunks = context.select("src/**/*.py").chunk(size=8000)
+answers = llm_query_batched([chunk.labelled() for chunk in chunks])
+
+children = rlm.run_batch(["Inspect the implementation", "Inspect the tests"])
+results = rlm.wait_all(children)
+```
+
+It runs on the host by default, or inside a container with `sandbox: docker`, or
+inside a no-filesystem interpreter with `sandbox: monty` for research and
+evaluation. See [Native RLM](https://superagenticai.github.io/superqode/advanced/rlm/).
+
 ## Progressive Learning Path
 
 Use SuperQode in stages. Each stage builds on a working developer experience
@@ -511,7 +533,8 @@ for the complete workflow.
 - **Local-first support:** Detect engines, probe context windows, generate
   starter harnesses, run smoke checks, and benchmark candidates.
 - **Dynamic RLM workflows:** Analyze large logs, traces, diffs, and repository
-  slices with bounded recursive workflows.
+  slices with bounded recursive workflows, using the built-in `rlm` harness for
+  coding work and RLM Code for paper reproduction and benchmarks.
 - **Measure and optimize:** Use harness tests, scorecards, route optimization,
   skill optimization, and regression gates.
 - **Local code intelligence:** Use bounded reads, multi-repository search,

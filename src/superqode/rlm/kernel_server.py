@@ -272,6 +272,150 @@ class AgentProxy:
         return f"AgentHandle(id={self.id!r}, status={self._status.get('status')!r})"
 
 
+class ResponseProxy:
+    """A subcall answer inside the sandbox, mirroring the host handle.
+
+    The compact ``repr`` is the point: returning one of these keeps a long
+    answer in the environment as data instead of copying it into the root
+    conversation.
+    """
+
+    __slots__ = ("id", "text", "model", "prompt_chars", "truncated", "error", "usage")
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.id = str(data.get("id") or "")
+        self.text = str(data.get("text") or "")
+        self.model = str(data.get("model") or "")
+        self.prompt_chars = int(data.get("prompt_chars") or 0)
+        self.truncated = bool(data.get("truncated"))
+        self.error = str(data.get("error") or "")
+        self.usage = dict(data.get("usage") or {})
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+    def size(self) -> int:
+        """Portable alternative to ``len``; see the host handle."""
+        return len(self.text)
+
+    def __len__(self) -> int:
+        return len(self.text)
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __repr__(self) -> str:
+        if self.error:
+            return f"RLMResponse(id={self.id!r}, error={self.error!r})"
+        preview = self.text[:80].replace("\n", " ")
+        suffix = "..." if len(self.text) > 80 else ""
+        flag = ", truncated=True" if self.truncated else ""
+        return (
+            f"RLMResponse(id={self.id!r}, chars={len(self.text)}{flag}, "
+            f"preview={preview + suffix!r})"
+        )
+
+    def lines(self) -> list[str]:
+        return self.text.splitlines()
+
+    def chunk(self, start: int = 0, size: int = 4000) -> str:
+        return self.text[start : start + size]
+
+    def search(self, pattern: str) -> list[str]:
+        regex = re.compile(pattern)
+        return [line for line in self.text.splitlines() if regex.search(line)]
+
+
+class ChunkProxy:
+    """One slice of the corpus, carrying where it came from."""
+
+    __slots__ = ("text", "path", "index", "start", "end")
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.text = str(data.get("text") or "")
+        self.path = str(data.get("path") or "")
+        self.index = int(data.get("index") or 0)
+        self.start = int(data.get("start") or 0)
+        self.end = int(data.get("end") or 0)
+
+    def size(self) -> int:
+        return len(self.text)
+
+    def __len__(self) -> int:
+        return len(self.text)
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __repr__(self) -> str:
+        preview = self.text[:60].replace("\n", " ")
+        suffix = "..." if len(self.text) > 60 else ""
+        return (
+            f"ContextChunk(path={self.path!r}, index={self.index}, "
+            f"chars={len(self.text)}, preview={preview + suffix!r})"
+        )
+
+    def labelled(self) -> str:
+        return f"# {self.path} (chars {self.start}-{self.end})\n{self.text}"
+
+
+class ContextProxy:
+    """The corpus, served by the host.
+
+    The host reads the same files this container has mounted, so serving it from
+    there keeps one implementation of discovery, filtering and chunking instead
+    of a second copy that could drift. A narrowed view carries its own path list
+    rather than a handle, so neither side has to keep it alive.
+    """
+
+    __slots__ = ("_call", "_paths")
+
+    def __init__(self, call: Any, paths: list[str] | None = None) -> None:
+        self._call = call
+        self._paths = paths
+
+    def _ask(self, operation: str, payload: dict[str, Any] | None = None) -> Any:
+        body = dict(payload or {})
+        body["paths"] = self._paths
+        return self._call(operation, body)
+
+    def files(self) -> Any:
+        return self._ask("ctx.files")
+
+    def size(self) -> int:
+        return int(self._ask("ctx.len") or 0)
+
+    def __len__(self) -> int:
+        return int(self._ask("ctx.len") or 0)
+
+    def __repr__(self) -> str:
+        stats = self._ask("ctx.stats") or {}
+        return (
+            f"RLMContext(profile={stats.get('profile')!r}, files={stats.get('files')}, "
+            f"bytes={stats.get('bytes')})"
+        )
+
+    def stats(self) -> Any:
+        return self._ask("ctx.stats")
+
+    def read(self, path: str) -> Any:
+        return self._ask("ctx.read", {"path": str(path)})
+
+    def text(self) -> Any:
+        return self._ask("ctx.text")
+
+    def search(self, pattern: str, *, limit: int = 200) -> Any:
+        return self._ask("ctx.search", {"pattern": str(pattern), "limit": int(limit)})
+
+    def select(self, *patterns: str) -> "ContextProxy":
+        chosen = self._ask("ctx.select", {"patterns": [str(item) for item in patterns]})
+        return ContextProxy(self._call, [str(item) for item in chosen or ()])
+
+    def chunk(self, size: int = 20_000, *, overlap: int = 0) -> Any:
+        return self._ask("ctx.chunk", {"size": int(size), "overlap": int(overlap)})
+
+
 def _agent_id(value: Any) -> str:
     return str(getattr(value, "id", value))
 
@@ -290,7 +434,33 @@ class SandboxKernel:
             "workspace": Workspace(self.cwd),
             "shell": Shell(self.cwd),
             "rlm": RLMProxy(self.host_call, kernel_id),
+            # Subcalls run on the host: they need provider credentials, and a
+            # quota the sandbox could reach would not be a quota.
+            "llm_query": self._llm_query,
+            "llm_query_batched": self._llm_query_batched,
+            "context": ContextProxy(self.host_call),
         }
+
+    def _llm_query(self, prompt: str, *, context: str = "", model: str | None = None) -> Any:
+        return self.host_call(
+            "llm.query", {"prompt": str(prompt), "context": str(context or ""), "model": model}
+        )
+
+    def _llm_query_batched(
+        self,
+        prompts: Sequence[str],
+        *,
+        contexts: Sequence[str] | None = None,
+        model: str | None = None,
+    ) -> Any:
+        return self.host_call(
+            "llm.query_batch",
+            {
+                "prompts": [str(item) for item in prompts],
+                "contexts": [str(item) for item in contexts or ()],
+                "model": model,
+            },
+        )
 
     def host_call(self, name: str, payload: dict[str, Any]) -> Any:
         """Ask the host to perform an operation and block for its answer."""
@@ -396,9 +566,13 @@ class SandboxKernel:
 
 
 def _revive(value: Any, call: Any) -> Any:
-    """Rebuild agent handles the host described, so `child.wait()` works."""
+    """Rebuild the handles the host described, so they behave like objects."""
     if isinstance(value, dict) and value.get("__rlm__") == "agent":
         return AgentProxy(call, str(value.get("id") or ""), value.get("status"))
+    if isinstance(value, dict) and value.get("__rlm__") == "response":
+        return ResponseProxy(value)
+    if isinstance(value, dict) and value.get("__rlm__") == "chunk":
+        return ChunkProxy(value)
     if isinstance(value, list):
         return [_revive(item, call) for item in value]
     return value

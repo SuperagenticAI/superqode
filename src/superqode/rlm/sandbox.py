@@ -31,8 +31,12 @@ from superqode.harness.sandbox import SandboxPolicy
 
 HOST_BACKEND = "host"
 DOCKER_BACKEND = "docker"
-SUPPORTED_BACKENDS: tuple[str, ...] = (HOST_BACKEND, DOCKER_BACKEND)
-IMPLEMENTED_BACKENDS: tuple[str, ...] = (HOST_BACKEND, DOCKER_BACKEND)
+#: Monty is a from-scratch Python interpreter with no subprocess and no real
+#: filesystem. It is the research and evaluation profile: it can hold a corpus
+#: and query it, and it cannot run tests or change files.
+MONTY_BACKEND = "monty"
+SUPPORTED_BACKENDS: tuple[str, ...] = (HOST_BACKEND, DOCKER_BACKEND, MONTY_BACKEND)
+IMPLEMENTED_BACKENDS: tuple[str, ...] = (HOST_BACKEND, DOCKER_BACKEND, MONTY_BACKEND)
 
 SESSION_GRANULARITY = "session"
 CHILD_GRANULARITY = "child"
@@ -285,6 +289,7 @@ __all__ = [
     "CHILD_GRANULARITY",
     "DEFAULT_IMAGE",
     "DOCKER_BACKEND",
+    "MONTY_BACKEND",
     "HOST_BACKEND",
     "HOST_POLICY",
     "IMPLEMENTED_BACKENDS",

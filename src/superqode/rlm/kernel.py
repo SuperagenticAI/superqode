@@ -23,6 +23,7 @@ from typing import Any, Sequence, cast
 from superqode.pipy.messages import TextContent
 from superqode.pipy.tools.base import AgentTool, AgentToolResult
 
+from .context import ContextPolicy, RLMContext
 from .sandbox import (
     RLMSandboxConfig,
     ensure_command,
@@ -221,6 +222,57 @@ class RLMNamespace:
         return self._supervisor
 
 
+class SubcallNamespace:
+    """`llm_query` for synchronous kernel code.
+
+    The executor is async and owned by the host; kernel code runs in a worker
+    thread. This bridges the two, and deliberately exposes no way to change the
+    quota: the limits belong to the executor, not to anything reachable here.
+    """
+
+    def __init__(self, executor: Any | None = None, loop: Any | None = None) -> None:
+        self._executor = executor
+        self._loop = loop
+
+    def bind(self, executor: Any, loop: Any) -> None:
+        self._executor = executor
+        self._loop = loop
+
+    def query(self, prompt: str, *, context: str = "", model: str | None = None) -> Any:
+        executor = self._require()
+        return self._call(executor.query(str(prompt), context=str(context or ""), model=model))
+
+    def query_batch(
+        self,
+        prompts: Sequence[str],
+        *,
+        contexts: Sequence[str] | None = None,
+        model: str | None = None,
+    ) -> list[Any]:
+        executor = self._require()
+        return self._call(
+            executor.query_batch([str(item) for item in prompts], contexts=contexts, model=model)
+        )
+
+    def usage(self) -> dict[str, Any]:
+        return dict(self._require().snapshot())
+
+    def _require(self) -> Any:
+        if self._executor is None or self._loop is None:
+            raise RuntimeError("Semantic subcalls are not configured for this kernel")
+        return self._executor
+
+    def _call(self, coroutine: Any) -> Any:
+        loop = self._loop
+        if loop is None:
+            coroutine.close()
+            raise RuntimeError("Semantic subcalls are not configured for this kernel")
+        if threading.get_ident() == getattr(loop, "_thread_id", None):
+            coroutine.close()
+            raise RuntimeError("llm_query must be called from the Python tool, not the event loop")
+        return asyncio.run_coroutine_threadsafe(coroutine, loop).result()
+
+
 @dataclass(frozen=True, slots=True)
 class PythonExecutionResult:
     output: str
@@ -246,12 +298,15 @@ class PersistentPythonKernel:
         agent_id: str = "root",
         checkpoint_path: str | Path | None = None,
         sandbox: RLMSandboxConfig | None = None,
+        context_policy: ContextPolicy | None = None,
     ) -> None:
         self.cwd = Path(cwd).expanduser().resolve()
         self.sandbox = sandbox or RLMSandboxConfig()
         self.workspace = Workspace(self.cwd, sandbox=self.sandbox)
         self.shell = Shell(self.cwd, sandbox=self.sandbox)
         self.rlm = RLMNamespace(supervisor, agent_id=agent_id)
+        self.subcalls = SubcallNamespace()
+        self.context = RLMContext(self.cwd, policy=context_policy)
         self.checkpoint_path = (
             Path(checkpoint_path).expanduser() if checkpoint_path is not None else None
         )
@@ -262,6 +317,9 @@ class PersistentPythonKernel:
             "workspace": self.workspace,
             "shell": self.shell,
             "rlm": self.rlm,
+            "llm_query": self.subcalls.query,
+            "llm_query_batched": self.subcalls.query_batch,
+            "context": self.context,
         }
         self._lock = threading.Lock()
         self._restored_names = self._restore_checkpoint()
@@ -386,6 +444,7 @@ def kernel_for(
     agent_id: str = "root",
     checkpoint_path: str | Path | None = None,
     sandbox: RLMSandboxConfig | None = None,
+    context_policy: ContextPolicy | None = None,
 ) -> PersistentPythonKernel:
     """Return the process-local persistent kernel for a session."""
     with _KERNELS_LOCK:
@@ -397,6 +456,7 @@ def kernel_for(
                 agent_id=agent_id,
                 checkpoint_path=checkpoint_path,
                 sandbox=sandbox,
+                context_policy=context_policy,
             )
             _KERNELS[session_key] = kernel
         elif supervisor is not None:
@@ -445,7 +505,9 @@ def create_python_tool(kernel: PersistentPythonKernel) -> AgentTool:
     )
 
 
-_RESERVED_NAMES = frozenset({"workspace", "shell", "rlm"})
+_RESERVED_NAMES = frozenset(
+    {"workspace", "shell", "rlm", "llm_query", "llm_query_batched", "context"}
+)
 
 
 __all__ = [

@@ -13,6 +13,7 @@ _COMMANDS = (
     ("goal", "Set a persistent goal: goal <text>|off"),
     ("autonomous", "Enable completion gates: autonomous [gate]|off"),
     ("sandbox", "Show the execution boundary: sandbox [doctor]"),
+    ("usage", "Show subcall, child-agent and context accounting"),
     ("agents", "List live recursive child agents"),
     ("send", "Queue a follow-up for a child: send <id> <message>"),
     ("steer", "Steer a running child: steer <id> <instruction>"),
@@ -116,6 +117,9 @@ class RLMCommandMixin:
         if sub == "sandbox":
             self._rlm_sandbox(session, rest, log)
             return
+        if sub == "usage":
+            self._rlm_usage(session, supervisor, log)
+            return
         if sub == "session":
             info = await session.info()
             log.add_info(f"id       {info.id}")
@@ -215,6 +219,48 @@ class RLMCommandMixin:
             target = Path(session.session_path).with_suffix(".md")
             target.write_text(await session.export_markdown(), encoding="utf-8")
             log.add_success(f"Exported to {target}")
+
+    @staticmethod
+    def _rlm_usage(session: Any, supervisor: Any, log) -> None:
+        """Report the costs the RLM layer owns.
+
+        Root-turn usage is the harness's to report and is not duplicated here;
+        what this adds is the recursive spend, which nothing else accounts for.
+        """
+        subcalls = getattr(session, "subcall_usage", None)
+        if subcalls:
+            usage = subcalls["usage"]
+            limit = subcalls["policy"]["max_calls"]
+            log.add_info(
+                f"subcalls   {usage['calls']} of {limit} calls, "
+                f"{usage['total_tokens']} tokens, ${usage['cost_usd']:.4f}"
+                + (f", {usage['failures']} failed" if usage["failures"] else "")
+            )
+        else:
+            log.add_info("subcalls   none yet")
+
+        snapshots = supervisor.snapshots() if supervisor is not None else []
+        if snapshots:
+            tokens = sum(
+                int((item.get("usage") or {}).get("total_tokens", 0)) for item in snapshots
+            )
+            cost = sum(float((item.get("usage") or {}).get("cost_usd", 0.0)) for item in snapshots)
+            statuses: dict[str, int] = {}
+            for item in snapshots:
+                statuses[item["status"]] = statuses.get(item["status"], 0) + 1
+            summary = ", ".join(f"{count} {status}" for status, count in sorted(statuses.items()))
+            log.add_info(f"children   {len(snapshots)} ({summary}), {tokens} tokens, ${cost:.4f}")
+        else:
+            log.add_info("children   none")
+
+        try:
+            from superqode.rlm.context import RLMContext
+
+            stats = RLMContext(session.cwd).stats()
+            log.add_info(f"context    {stats['files']} files, {stats['bytes']} bytes in scope")
+        except Exception as error:  # noqa: BLE001 - accounting must not break the command
+            log.add_info(f"context    unavailable: {error}")
+        log.add_info("Root conversation usage is reported by the harness, not here.")
 
     @staticmethod
     def _rlm_sandbox_config(session: Any):

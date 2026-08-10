@@ -15,14 +15,17 @@ from superqode.pipy.session import Session, SessionRepository
 from superqode.pipy.skills import load_skills
 
 from .config import sessions_root
+from .context import ContextPolicy, RLMContext
 from .kernel import create_python_tool, kernel_for
 from .kernel_backend import create_backend_python_tool
 from .policy import GateResult, RLMPolicy, RLMPolicyStore, _bounded
 from .sandbox import RLMSandboxConfig
+from .subcalls import RLMResponse, SubcallExecutor, SubcallPolicy
 from .supervisor import AgentRecord, AgentSupervisor
 
 _SUPERVISORS: dict[str, AgentSupervisor] = {}
 _BACKENDS: dict[str, Any] = {}
+_EXECUTORS: dict[str, SubcallExecutor] = {}
 
 
 @dataclass(slots=True)
@@ -41,6 +44,8 @@ class RLMCodingSessionOptions(CodingSessionOptions):
     gate_timeout: float = 120.0
     durable_children: bool = True
     sandbox: RLMSandboxConfig | None = None
+    subcall_policy: SubcallPolicy | None = None
+    context_policy: ContextPolicy | None = None
     #: The root session that owns the boundary. Children inherit it so they get
     #: their own kernel inside the root's sandbox rather than one each.
     sandbox_session: str = ""
@@ -81,27 +86,43 @@ class RLMCodingSession(PiPyCodingSession):
         # Refuse rather than downgrade: a requested boundary this build cannot
         # provide would otherwise run model-written Python on the host.
         sandbox = (getattr(options, "sandbox", None) or RLMSandboxConfig()).require_available()
+        model = options.model or _default_model()
+        stream_fn = options.stream_fn or _default_stream_fn()
+        # One executor per session, so a batch and a loop of single queries draw
+        # on the same quota rather than each getting a fresh allowance.
+        executor = _executor_for(session_key, model, stream_fn, options)
         if sandbox.isolated:
             # Only the isolated profile goes through a backend. The host path is
             # left exactly as released: rerouting it would risk a regression in
             # a shipped runtime for no behaviour it does not already have.
             tool = create_backend_python_tool(
-                _backend_for(session_key, path, cwd, sandbox, supervisor, agent_id, owner),
+                _backend_for(
+                    session_key,
+                    path,
+                    cwd,
+                    sandbox,
+                    supervisor,
+                    agent_id,
+                    owner,
+                    executor,
+                    getattr(options, "context_policy", None),
+                ),
                 agent_id,
                 drain_events=_supervisor_drain(supervisor),
                 cwd=cwd,
             )
         else:
-            tool = create_python_tool(
-                kernel_for(
-                    session_key,
-                    cwd,
-                    supervisor=supervisor,
-                    agent_id=agent_id,
-                    checkpoint_path=path.with_suffix(".kernel.pkl"),
-                    sandbox=sandbox,
-                )
+            kernel = kernel_for(
+                session_key,
+                cwd,
+                supervisor=supervisor,
+                agent_id=agent_id,
+                checkpoint_path=path.with_suffix(".kernel.pkl"),
+                sandbox=sandbox,
+                context_policy=getattr(options, "context_policy", None),
             )
+            kernel.subcalls.bind(executor, asyncio.get_running_loop())
+            tool = create_python_tool(kernel)
         instance = cls(
             harness=None,  # type: ignore[arg-type]
             session_path=path,
@@ -123,8 +144,8 @@ class RLMCodingSession(PiPyCodingSession):
         )
         instance.harness = AgentHarness(
             session=session,
-            model=options.model or _default_model(),
-            stream_fn=options.stream_fn or _default_stream_fn(),
+            model=model,
+            stream_fn=stream_fn,
             tools=[tool],
             system_prompt=instance._build_prompt,
             thinking_level=options.thinking_level,
@@ -240,7 +261,18 @@ class RLMCodingSession(PiPyCodingSession):
             "- shell.run(command) for commands and tests\n"
             "- rlm.run(prompt) or rlm.run_batch(prompts) for live child agents\n"
             "- child handles provide status(), send(), steer(), wait(), and cancel()\n"
-            "- rlm.agents() lists children and rlm.wait_all(handles) collects results\n\n"
+            "- rlm.agents() lists children and rlm.wait_all(handles) collects results\n"
+            "- llm_query(prompt, context=text) asks a model one question about text you "
+            "already hold, and llm_query_batched(prompts) runs several at once\n"
+            "- context holds the repository as data: len(context), context.files(), "
+            "context.select('src/*.py'), context.search(pattern), context.read(path) "
+            "and context.chunk(size) which returns slices carrying their source\n\n"
+            "Work over the corpus rather than pulling it into this conversation. "
+            "Measure it with len(context), narrow it with select, chunk it, and query "
+            "the chunks with llm_query_batched, keeping answers in variables. Answers "
+            "and chunks are handles, so they show a summary rather than their full "
+            "text; use .text when you need the content. Use rlm.run only for work that "
+            "needs its own repository session.\n\n"
             "Inspect the repository before editing, make focused changes, run relevant "
             "verification, and give a concise final answer. Never claim a command passed "
             "unless its returned result shows success."
@@ -249,6 +281,12 @@ class RLMCodingSession(PiPyCodingSession):
             + suffix
             + f"\n\nWorking directory: {self.cwd}"
         )
+
+    @property
+    def subcall_usage(self) -> dict[str, Any] | None:
+        """What semantic subcalls have cost this session, if any have run."""
+        executor = _EXECUTORS.get(str(Path(self.session_path).resolve()))
+        return executor.snapshot() if executor is not None else None
 
     @property
     def sandbox_backend(self) -> Any | None:
@@ -323,21 +361,122 @@ def _supervisor_drain(supervisor: AgentSupervisor):
     return drain
 
 
+def _executor_for(
+    session_key: str,
+    model: Any,
+    stream_fn: Any,
+    options: CodingSessionOptions,
+) -> SubcallExecutor:
+    existing = _EXECUTORS.get(session_key)
+    if existing is not None:
+        return existing
+    executor = SubcallExecutor(
+        model=model,
+        stream_fn=stream_fn,
+        policy=getattr(options, "subcall_policy", None) or SubcallPolicy(),
+    )
+    _EXECUTORS[session_key] = executor
+    return executor
+
+
+def _response_value(response: RLMResponse) -> dict[str, Any]:
+    """Describe a subcall answer so a sandbox can rebuild the same handle."""
+    return {
+        "__rlm__": "response",
+        "id": response.id,
+        "text": response.text,
+        "model": response.model,
+        "prompt_chars": response.prompt_chars,
+        "truncated": response.truncated,
+        "error": response.error,
+        "usage": dict(response.usage),
+    }
+
+
 def _agent_value(supervisor: AgentSupervisor, agent_id: str) -> dict[str, Any]:
     """Describe a child in a form the sandbox can rebuild as a handle."""
     return {"__rlm__": "agent", "id": agent_id, "status": supervisor.snapshot(agent_id)}
 
 
-def _host_call_bridge(supervisor: AgentSupervisor, agent_id: str):
-    """Serve `rlm.*` for a kernel that runs inside a boundary.
+def _host_call_bridge(
+    supervisor: AgentSupervisor,
+    agent_id: str,
+    executor: SubcallExecutor | None = None,
+    context: RLMContext | None = None,
+):
+    """Serve `rlm.*` and `llm.*` for a kernel that runs inside a boundary.
 
-    Recursion stays on the host because it needs the supervisor and the provider
-    credentials, and because a limit the sandbox could reach is not a limit. The
-    depth, child-count and parallelism checks are the supervisor's either way.
+    Recursion and semantic subcalls both stay on the host: they need the
+    supervisor and the provider credentials, and a limit the sandbox could reach
+    is not a limit. Depth, child count, parallelism and the subcall quota are all
+    enforced out here.
     """
 
     async def call(name: str, payload: dict[str, Any]) -> Any:
         target = str(payload.get("agent") or "")
+        if name.startswith("ctx."):
+            if context is None:
+                raise RuntimeError("Context is not configured for this session")
+            # Every operation carries its own path filter, so a narrowed view
+            # needs no handle to keep alive on either side.
+            view = (
+                RLMContext(context.root, policy=context.policy, paths=payload["paths"])
+                if payload.get("paths") is not None
+                else context
+            )
+            if name == "ctx.files":
+                return view.files()
+            if name == "ctx.len":
+                return len(view)
+            if name == "ctx.stats":
+                return view.stats()
+            if name == "ctx.read":
+                return view.read(str(payload.get("path") or ""))
+            if name == "ctx.text":
+                return view.text()
+            if name == "ctx.search":
+                return view.search(
+                    str(payload.get("pattern") or ""), limit=int(payload.get("limit") or 200)
+                )
+            if name == "ctx.select":
+                return view.select(*[str(item) for item in payload.get("patterns") or ()]).files()
+            if name == "ctx.chunk":
+                return [
+                    {
+                        "__rlm__": "chunk",
+                        "text": chunk.text,
+                        "path": chunk.path,
+                        "index": chunk.index,
+                        "start": chunk.start,
+                        "end": chunk.end,
+                    }
+                    for chunk in view.chunk(
+                        int(payload.get("size") or 20_000),
+                        overlap=int(payload.get("overlap") or 0),
+                    )
+                ]
+            raise RuntimeError(f"Unsupported context operation: {name}")
+        if name.startswith("llm."):
+            if executor is None:
+                raise RuntimeError("Semantic subcalls are not configured for this session")
+            if name == "llm.query":
+                return _response_value(
+                    await executor.query(
+                        str(payload.get("prompt") or ""),
+                        context=str(payload.get("context") or ""),
+                        model=payload.get("model"),
+                    )
+                )
+            if name == "llm.query_batch":
+                answers = await executor.query_batch(
+                    [str(item) for item in payload.get("prompts") or ()],
+                    contexts=[str(item) for item in payload.get("contexts") or ()] or None,
+                    model=payload.get("model"),
+                )
+                return [_response_value(answer) for answer in answers]
+            if name == "llm.usage":
+                return executor.snapshot()
+            raise RuntimeError(f"Unsupported subcall operation: {name}")
         if name in {"rlm.run", "rlm.spawn"}:
             handle = supervisor.spawn(
                 str(payload.get("prompt") or ""),
@@ -386,18 +525,44 @@ def _backend_for(
     supervisor: AgentSupervisor,
     agent_id: str,
     owner: str,
+    executor: SubcallExecutor | None = None,
+    context_policy: ContextPolicy | None = None,
 ) -> Any:
     from .kernel_docker import DockerKernelBackend
+    from .sandbox import MONTY_BACKEND
 
     existing = _BACKENDS.get(session_key)
     if existing is not None:
         return existing
+    if sandbox.backend == MONTY_BACKEND:
+        from .kernel_monty import MontyKernelBackend
+
+        # The research profile has no supervisor bridge: Monty cannot start a
+        # child agent because it has no processes, so recursion is simply not
+        # part of this profile rather than something half-wired.
+        monty = MontyKernelBackend(
+            cwd,
+            config=sandbox,
+            session_id=owner,
+            state_dir=path.with_suffix(".sandbox"),
+            executor=executor,
+            context=RLMContext(cwd, policy=context_policy),
+        )
+        _BACKENDS[session_key] = monty
+        return monty
     backend = DockerKernelBackend(
         cwd,
         config=sandbox,
         session_id=owner,
         state_dir=path.with_suffix(".sandbox"),
-        host_call=_host_call_bridge(supervisor, agent_id),
+        host_call=_host_call_bridge(
+            supervisor,
+            agent_id,
+            executor,
+            # The host reads the same files the container has mounted, so one
+            # implementation serves both profiles.
+            RLMContext(cwd, policy=context_policy),
+        ),
     )
     _BACKENDS[session_key] = backend
     return backend

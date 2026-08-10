@@ -130,7 +130,9 @@ class RLMHarnessProtocolAdapter:
             return await self._session_factory(request, working_directory, session_path)
         from superqode.pipy.ai.models import resolve_model
         from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
+        from superqode.rlm.context import ContextPolicy
         from superqode.rlm.sandbox import RLMSandboxConfig
+        from superqode.rlm.subcalls import SubcallPolicy
 
         limits = dict(request.metadata.get("rlm_config") or {})
         # The backend resolves the profile once, where the HarnessSpec and its
@@ -151,6 +153,8 @@ class RLMHarnessProtocolAdapter:
             gate_timeout=float(limits.get("gate_timeout", 120.0)),
             durable_children=bool(limits.get("durable_children", True)),
             sandbox=sandbox,
+            subcall_policy=SubcallPolicy.from_config(limits),
+            context_policy=ContextPolicy.from_config(limits),
         )
         if session_path and Path(session_path).is_file():
             return await RLMCodingSession.resume(options, session_path=session_path)

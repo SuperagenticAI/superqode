@@ -1,15 +1,41 @@
 # RLM Routes Compared
 
-SuperQode can run three Recursive Language Model routes. They come from the
-same research line but make opposite engineering choices, and none replaces
-another. This page explains what each one actually does so the choice is made
-on mechanism rather than on branding.
+SuperQode can run several Recursive Language Model routes. They come from the
+same research line but make opposite engineering choices. This page explains
+what each one actually does so the choice is made on mechanism rather than on
+branding.
+
+**Start with [Native RLM](rlm.md).** It is the production route: first-party,
+maintained in this repository, with a sandboxed kernel and no external package
+to install. The others exist for reasons named below.
 
 | Route | Engine | Where it runs | Selector |
 | --- | --- | --- | --- |
-| [RLM Code](rlm-code.md) | Python, in process | Inside SuperQode | `runtime.backend: rlm-code` |
+| [Native RLM](rlm.md) | Python, first-party | In process, or inside Docker or Monty | `--harness rlm` |
+| [RLM Code](rlm-code.md) | Python, separate package | Inside SuperQode | `runtime.backend: rlm-code` |
 | [Prime Agent](../providers/prime-agent.md) | TypeScript agent with an IPython kernel | Separate process over Python-hosted RPC; ACP optional | `:prime connect` or `runtime.backend: prime-agent` |
 | [Recursive tools](../local-recursive-dynamic-coding.md) | SuperQode agent loop | Inside SuperQode | `context_handle`, `spawn_harness` |
+
+## Which to use
+
+**Native RLM** for coding work. One persistent Python tool, live child agents
+with durable detached workers, `context` and `llm_query` for working over a
+corpus, goals with completion gates, and a `docker` profile that runs the
+interpreter inside a container. Nothing to install.
+
+**RLM Code** for research and evaluation: paper reproduction, benchmark packs,
+LID and generalization metrics, and the trajectory analysis built around them.
+It is a separately released package with its own experiment-shaped surface, and
+it is the right tool when the run is the artifact.
+
+**Prime Agent** when you specifically want Prime's agent and its ecosystem.
+
+**Recursive tools** when you want recursion inside SuperQode's own loop rather
+than a separate harness.
+
+The native route now covers the coding case that RLM Code's agent mode was
+reaching toward, so new coding work should start there. RLM Code keeps the
+research surface, which the native harness does not attempt to replace.
 
 ## Lineage
 
@@ -82,6 +108,14 @@ explains most of the others.
 ## Execution safety
 
 The gap here is large and worth stating plainly.
+
+Native RLM offers three profiles. `host` runs Python with the permissions of the
+SuperQode process and says so on every activation route. `docker` runs the
+persistent interpreter inside a hardened container, so `import os` and every
+file the model opens belong to the container, with completion gates running in
+the same boundary. `monty` runs it inside a Python interpreter with no
+subprocess and no real filesystem, which is why that profile refuses writes and
+commands rather than pretending to verify anything.
 
 RLM Code selects a sandbox runtime through a policy layer over `monty`,
 `docker`, `apple_container`, `command` and `local` backends. The `monty`

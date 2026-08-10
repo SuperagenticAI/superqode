@@ -200,7 +200,10 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
     """Native recursive coding harness with one persistent Python tool."""
     return HarnessSpec(
         name=name,
-        description="Native RLM coding harness with one persistent Python tool.",
+        description=(
+            "Built-in recursive coding harness: one persistent Python tool, "
+            "child agents, and a sandboxable kernel."
+        ),
         flavor=HarnessFlavor.CODING,
         runtime=RuntimeSpec(
             backend="rlm",

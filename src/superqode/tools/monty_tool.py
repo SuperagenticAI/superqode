@@ -7,10 +7,15 @@ starts in microseconds, so it is the lightest sandbox tier — use it for quick
 generated-Python compute, not for shell commands (use ``bash`` for those) or
 full project runs (use a remote sandbox for those).
 
-This wraps the real ``pydantic-monty`` API (``Monty(...).run(...)`` with
-``ResourceLimits`` and a ``print_callback``). Monty is experimental and supports
-only a subset of Python, so the tool degrades gracefully when it is missing or
-when a snippet uses an unsupported feature.
+This wraps the current ``pydantic-monty`` API: ``Monty()`` owns a worker pool,
+``checkout()`` takes a session from it, and ``feed_start()`` runs a snippet.
+Monty is experimental and supports only a subset of Python, so the tool degrades
+gracefully when it is missing or when a snippet uses an unsupported feature.
+
+Its API has changed before, and the tests are skipped whenever the optional
+dependency is absent, which is the default. That combination hid a break for a
+whole release cycle, so treat a version bump here as something to run against
+rather than assume.
 """
 
 from __future__ import annotations
@@ -63,9 +68,11 @@ def run_monty_snippet(
 ) -> str:
     """Execute a snippet in a fresh Monty sandbox and return captured output.
 
-    Uses the real ``pydantic-monty`` API: build a ``Monty`` with the code and
-    call ``.run()`` with ``ResourceLimits`` and a stdout ``print_callback``. Each
-    call is isolated (no host filesystem/network access). Raises on Monty errors.
+    Uses the current ``pydantic-monty`` API: ``Monty()`` owns a pool of worker
+    subprocesses, ``checkout()`` takes a session out of it with the limits and
+    type-check settings, and ``feed_run()`` drives the code to completion,
+    returning the final expression as ``MontyComplete.output``. Each call is
+    isolated, with no host filesystem or network access. Raises on Monty errors.
     """
     chunks: list[str] = []
 
@@ -76,8 +83,17 @@ def run_monty_snippet(
         max_duration_secs=float(max_duration_secs),
         max_memory=int(max_memory),
     )
-    runner = module.Monty(code, script_name="superqode_repl.py", type_check=type_check)
-    value = runner.run(limits=limits, print_callback=_print_callback)
+    with module.Monty() as pool:
+        with pool.checkout(
+            script_name="superqode_repl.py",
+            limits=limits,
+            type_check=type_check,
+        ) as session:
+            # `feed_run`, not `feed_start`: the latter surfaces every external
+            # call, name lookup and OS call as a snapshot for the caller to
+            # answer, which for a plain REPL would silently complete as None.
+            # It returns the final expression itself, not a wrapper.
+            value = session.feed_run(code, print_callback=_print_callback)
 
     printed = "".join(chunks).rstrip()
     parts = [p for p in (printed, repr(value) if value is not None else "") if p]

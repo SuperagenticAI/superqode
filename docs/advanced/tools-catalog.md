@@ -119,7 +119,7 @@ evidence storage, and supported backends.
 | `skill`, `read_skill`, `create_skill` | Project skills from `.agents/skills/*.md`. |
 | `mcp_*` | MCP server tools, resources, and prompts ([MCP Configuration](../configuration/mcp-config.md)). |
 | `lsp`, `diagnostics` | Go-to-definition, references, hover; project diagnostics ([LSP Integration](lsp-integration.md)). |
-| `monty_python_repl` | Sandboxed Python interpreter (optional extra). |
+| `python_repl` | Small Python snippets in a Monty sandbox with no host filesystem, environment or network, from the optional `monty` extra. Each call runs fresh. For persistent recursive Python, use the [Native RLM harness](rlm.md) instead. |
 
 ## Guarantees that hold across every tool
 
