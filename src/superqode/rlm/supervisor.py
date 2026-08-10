@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
-import os
 import threading
 import time
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
@@ -13,6 +12,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
 from uuid import uuid4
+
+from .identity import (
+    RUNTIME_IDENTITY_VERSION,
+    KernelIdentity,
+    SandboxIdentity,
+    WorkerIdentity,
+    execution_alive,
+    process_alive,
+)
 
 AgentStatus = Literal[
     "queued",
@@ -54,11 +62,28 @@ class AgentRecord:
     worker_request_path: str | None = None
     worker_result_path: str | None = None
     worker_control_path: str | None = None
+    sandbox: SandboxIdentity = field(default_factory=SandboxIdentity)
+    kernel: KernelIdentity = field(default_factory=KernelIdentity)
     usage: dict[str, Any] = field(default_factory=dict)
     children: list[str] = field(default_factory=list)
     pending_messages: list[str] = field(default_factory=list)
     pending_steering: list[str] = field(default_factory=list)
     session: Any | None = field(default=None, repr=False)
+
+    @property
+    def worker(self) -> WorkerIdentity:
+        """A typed view of the process identity kept in the flat fields.
+
+        The flat fields stay authoritative so released journals and every
+        existing call site keep working; this is the handle recovery and the
+        sandboxed kernel read.
+        """
+        return WorkerIdentity(
+            pid=self.worker_pid,
+            request_path=self.worker_request_path,
+            result_path=self.worker_result_path,
+            control_path=self.worker_control_path,
+        )
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -77,6 +102,9 @@ class AgentRecord:
             "worker_request_path": self.worker_request_path,
             "worker_result_path": self.worker_result_path,
             "worker_control_path": self.worker_control_path,
+            "sandbox": self.sandbox.to_dict(),
+            "kernel": self.kernel.to_dict(),
+            "identity_version": RUNTIME_IDENTITY_VERSION,
             "usage": dict(self.usage),
             "children": list(self.children),
         }
@@ -163,6 +191,7 @@ class AgentSupervisor:
         request_path: str | Path,
         result_path: str | Path,
         control_path: str | Path,
+        sandbox: SandboxIdentity | None = None,
     ) -> None:
         with self._lock:
             record = self._record(agent_id)
@@ -170,6 +199,10 @@ class AgentSupervisor:
             record.worker_request_path = str(request_path)
             record.worker_result_path = str(result_path)
             record.worker_control_path = str(control_path)
+            if sandbox is not None:
+                record.sandbox = sandbox
+            # A child gets its own namespace even when it shares a sandbox.
+            record.kernel = KernelIdentity(kernel_id=agent_id, sandbox_id=record.sandbox.sandbox_id)
         self._emit("agent.worker_started", record)
 
     def spawn(
@@ -384,7 +417,7 @@ class AgentSupervisor:
                 result = await self._runner(record)
         except asyncio.CancelledError:
             with self._lock:
-                detached = bool(record.worker_pid and _process_alive(record.worker_pid))
+                detached = execution_alive(record.worker, record.sandbox)
                 if not detached:
                     record.status = "cancelled"
                     record.completed_at = time.time()
@@ -465,6 +498,10 @@ class AgentSupervisor:
         for agent_id, data in latest.items():
             status = str(data.get("status") or "failed")
             error = str(data.get("error") or "") or None
+            # A journal written before identities were recorded has no sandbox
+            # section, which resolves to the host profile it was written under.
+            sandbox_identity = SandboxIdentity.from_dict(data.get("sandbox"))
+            kernel_identity = KernelIdentity.from_dict(data.get("kernel"))
             if status in {"queued", "running"}:
                 worker_pid = _optional_int(data.get("worker_pid"))
                 result_path = str(data.get("worker_result_path") or "")
@@ -475,11 +512,9 @@ class AgentSupervisor:
                     data["result"] = recovered_result.get("result")
                     data["usage"] = recovered_result.get("usage") or {}
                     data["completed_at"] = recovered_result.get("completed_at") or time.time()
-                elif (
-                    worker_pid is not None
-                    and _process_alive(worker_pid)
-                    and _worker_identity_matches(agent_id, data, worker_pid)
-                ):
+                elif execution_alive(
+                    WorkerIdentity(pid=worker_pid), sandbox_identity
+                ) and _worker_identity_matches(agent_id, data, cast(int, worker_pid)):
                     status = "running"
                     self._recoverable_ids.append(agent_id)
                 else:
@@ -518,6 +553,8 @@ class AgentSupervisor:
                     if data.get("worker_control_path") is not None
                     else None
                 ),
+                sandbox=sandbox_identity,
+                kernel=kernel_identity,
                 usage=(
                     dict(data.get("usage") or {}) if isinstance(data.get("usage"), dict) else {}
                 ),
@@ -562,16 +599,6 @@ def _optional_float(value: Any) -> float | None:
 
 def _optional_int(value: Any) -> int | None:
     return int(value) if value is not None else None
-
-
-def _process_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
 
 
 def _read_worker_result(path: str) -> dict[str, Any] | None:

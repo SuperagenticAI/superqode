@@ -35,7 +35,9 @@ EXPECTED_COMMAND_COUNT = 263
 # Rebaselined for the Prime Agent subscription profile, which adds `prime-agent`
 # to the `--connect` choice list after `muse`. Same registry-derived mechanism,
 # so no Click command was added and the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "2155a0365397992c0e886b27b5d5d95e4fbcfed69cf491b79a07db5edcad05ee"
+# Rebaselined for the native RLM harness, which adds `harness-rlm` to the
+# `--connect` choice list after `harness-core`. No Click command was added.
+EXPECTED_HELP_TREE_SHA256 = "ff8c9583a1e22ecdddd56116c875eba5c0e6f95e064b60bf4a31622fdc380662"
 
 
 def _render_help_tree() -> tuple[int, str]:

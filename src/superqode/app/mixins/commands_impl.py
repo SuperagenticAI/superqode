@@ -4201,6 +4201,13 @@ class CommandImplMixin:
             )
             rows.append(("Sandbox", str(getattr(policy, "sandbox", "") or "local"), THEME["text"]))
 
+            # The picker shows this before activation, but `:harness switch` and
+            # `:connect harness-*` never open it. This card runs on every switch,
+            # so a host-executing harness states its permissions on every route.
+            warning = str(spec.metadata.get("selection_warning") or "").strip()
+            if warning:
+                rows.append(("Warning", warning, THEME["warning"]))
+
             memory = getattr(spec.context, "memory", None)
             if memory:
                 rows.append(("Memory", str(memory), THEME["text"]))

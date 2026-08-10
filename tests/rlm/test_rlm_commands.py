@@ -67,6 +67,7 @@ def test_rlm_commands_are_offered_for_completion():
         ":rlm policy",
         ":rlm goal",
         ":rlm autonomous",
+        ":rlm sandbox",
         ":rlm agents",
         ":rlm send",
         ":rlm steer",
@@ -113,6 +114,43 @@ async def test_session_and_empty_agent_list_are_visible(tmp_path):
     assert any("python (serializable state checkpointed)" in message for message in log.infos)
     assert any("detached Python processes" in message for message in log.infos)
     assert any("No recursive child agents" in message for message in log.infos)
+
+
+async def test_sandbox_status_states_the_boundary_without_overclaiming(tmp_path):
+    session = await _session(tmp_path)
+    app = App(active=True)
+    log = RecordingLog()
+
+    await app._rlm_dispatch(session, "sandbox", "", log)
+
+    assert any("backend     host" in message for message in log.infos)
+    assert any("isolation   none" in message for message in log.infos)
+    assert any("not an adversarial model" in message for message in log.infos)
+
+
+async def test_sandbox_doctor_reports_docker_without_claiming_support(tmp_path):
+    session = await _session(tmp_path)
+    app = App(active=True)
+    log = RecordingLog()
+
+    await app._rlm_dispatch(session, "sandbox", "doctor", log)
+
+    reported = log.infos + log.successes
+    assert any("active      host" in message for message in reported)
+    assert any(message.startswith("docker") for message in reported)
+    assert any("Only the host profile runs in this build" in message for message in reported)
+
+
+async def test_sandbox_cannot_be_switched_from_the_command(tmp_path):
+    """A setter would be a no-op or a promise this build cannot keep."""
+    session = await _session(tmp_path)
+    app = App(active=True)
+    log = RecordingLog()
+
+    await app._rlm_dispatch(session, "sandbox", "docker", log)
+
+    assert any("not set from :rlm sandbox" in message for message in log.errors)
+    assert any("runtime.config.sandbox" in message for message in log.infos)
 
 
 async def test_goal_and_autonomous_commands_persist_policy(tmp_path):

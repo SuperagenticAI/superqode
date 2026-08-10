@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.85] - 2026-08-10
+
+### Added
+
+- The native RLM harness is addressable from the connect flow with
+  `:connect harness-rlm`, listed directly after Core.
+- The RLM kernel honours a sandbox profile resolved from `runtime.config` over
+  the harness execution policy. `workspace` and `shell` enforce read, write and
+  shell permissions, a command allowlist, compound-command rules and an
+  environment allowlist. Child agents inherit the profile, and it travels in the
+  detached worker request so a child rebuilds it in its own process. These are
+  guardrails against mistakes, not isolation: unrestricted Python can still
+  reach the host, so `host` remains the only profile this build runs and
+  requesting another refuses to start the session instead of silently
+  downgrading it.
+- `:rlm sandbox` reports the active boundary and `:rlm sandbox doctor` probes
+  for Docker.
+- A `docker` sandbox profile that runs the persistent Python interpreter inside
+  a container instead of in the SuperQode process. One container per root
+  session with a separate kernel per agent, the repository bind-mounted, the
+  kernel server mounted read-only, non-root with a read-only root filesystem,
+  all capabilities dropped, `no-new-privileges`, memory, CPU and process limits,
+  no Docker socket, no host environment beyond `env_allowlist`, and networking
+  off unless the profile allows it. Completion gates run inside the same
+  boundary, checkpoints are written and restored only inside it so the host
+  never unpickles sandbox state, and `rlm.run` reaches the supervisor over the
+  kernel channel so provider credentials and recursion limits stay on the host.
+  Reopening a session reattaches to its container by label and restores each
+  kernel before the first execution.
+- Explicit `WorkerIdentity`, `SandboxIdentity` and `KernelIdentity` records. A
+  host worker and the sandbox owning its Python kernel fail independently, so
+  recovery now asks the subsystem that owns an execution whether it survived
+  rather than trusting a process id. Journals written before this release
+  recover unchanged and need no migration.
+
+### Fixed
+
+- Harnesses that execute on the host now state their permissions on every
+  activation route. The warning was attached to the harness picker only, so
+  `:harness switch` and the new `:connect harness-*` rows activated RLM, PiPy
+  and Prime Agent Python without repeating it.
+
 ## [0.2.84] - 2026-08-09
 
 ### Added

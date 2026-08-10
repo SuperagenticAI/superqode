@@ -12,6 +12,7 @@ _COMMANDS = (
     ("policy", "Show the persistent goal and autonomous completion policy"),
     ("goal", "Set a persistent goal: goal <text>|off"),
     ("autonomous", "Enable completion gates: autonomous [gate]|off"),
+    ("sandbox", "Show the execution boundary: sandbox [doctor]"),
     ("agents", "List live recursive child agents"),
     ("send", "Queue a follow-up for a child: send <id> <message>"),
     ("steer", "Steer a running child: steer <id> <instruction>"),
@@ -78,13 +79,24 @@ class RLMCommandMixin:
         working_directory = Path(
             str(getattr(getattr(pure, "session", None), "working_directory", "") or Path.cwd())
         )
+        metadata: dict[str, Any] = {"working_directory": str(working_directory)}
+        spec = getattr(pure, "_harness_spec", None)
+        if spec is not None:
+            from superqode.rlm.sandbox import RLMSandboxConfig
+
+            # Resolved from the active spec so `:rlm sandbox` reports the same
+            # boundary the turn path uses, rather than a default of its own.
+            metadata["rlm_sandbox"] = RLMSandboxConfig.from_config(
+                getattr(getattr(spec, "runtime", None), "config", None) or {},
+                execution_policy=getattr(spec, "execution_policy", None),
+            ).to_dict()
         adapter = RLMHarnessProtocolAdapter()
         ref = await adapter.resume(
             HarnessSessionRef(
                 session_id=session_id,
                 harness_id="rlm",
                 external_session_id=session_id,
-                metadata={"working_directory": str(working_directory)},
+                metadata=metadata,
             )
         )
         return adapter, ref
@@ -101,6 +113,9 @@ class RLMCommandMixin:
         from superqode.rlm.coding_session import supervisor_for_session
 
         supervisor = supervisor_for_session(session.session_path)
+        if sub == "sandbox":
+            self._rlm_sandbox(session, rest, log)
+            return
         if sub == "session":
             info = await session.info()
             log.add_info(f"id       {info.id}")
@@ -108,6 +123,7 @@ class RLMCommandMixin:
             log.add_info(f"messages {info.message_count}")
             log.add_info("tools    python (serializable state checkpointed)")
             log.add_info("workers  detached Python processes with journal reattachment")
+            log.add_info(f"sandbox  {self._rlm_sandbox_config(session).backend} (:rlm sandbox)")
             return
         if sub == "policy":
             policy = session.policy
@@ -199,6 +215,41 @@ class RLMCommandMixin:
             target = Path(session.session_path).with_suffix(".md")
             target.write_text(await session.export_markdown(), encoding="utf-8")
             log.add_success(f"Exported to {target}")
+
+    @staticmethod
+    def _rlm_sandbox_config(session: Any):
+        from superqode.rlm.sandbox import RLMSandboxConfig
+
+        return getattr(getattr(session, "options", None), "sandbox", None) or RLMSandboxConfig()
+
+    def _rlm_sandbox(self, session: Any, rest: str, log) -> None:
+        """Report the boundary. The profile itself comes from the harness spec.
+
+        Nothing here can change it: the only implemented profile is ``host``, so
+        a setter would either be a no-op or a promise this build cannot keep.
+        """
+        from superqode.rlm.sandbox import docker_available
+
+        config = self._rlm_sandbox_config(session)
+        argument = rest.strip().lower()
+        if argument in {"", "status"}:
+            for line in config.describe():
+                log.add_info(line)
+            return
+        if argument == "doctor":
+            log.add_info(f"active      {config.backend}")
+            available, detail = docker_available()
+            if available:
+                log.add_success(f"docker      {detail}")
+            else:
+                log.add_info(f"docker      unavailable: {detail}")
+            log.add_info(
+                "Only the host profile runs in this build. Docker is reported here "
+                "so the boundary can be verified before it is supported."
+            )
+            return
+        log.add_error(f"The sandbox profile is not set from :rlm sandbox ({argument!r} ignored).")
+        log.add_info("Set runtime.config.sandbox in the harness spec, then reconnect.")
 
 
 __all__ = ["RLMCommandMixin"]

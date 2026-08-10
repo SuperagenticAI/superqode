@@ -148,6 +148,7 @@ def test_registry_has_expected_profiles():
         "kimi-code",
         "acp",
         "harness-core",
+        "harness-rlm",
         "harness-pipy",
         "harness-workbench",
         "harness-presets",

@@ -375,6 +375,57 @@ async def test_supervisor_recovers_completed_children_from_journal(tmp_path):
     assert await recovered.wait(handle.id) == "finished:inspect recovery"
 
 
+def _released_journal_entry(tmp_path, agent_id: str, pid: int, **extra) -> Path:
+    """One journal line in the shape SuperQode 0.2.84 wrote, with no identities."""
+    request_path = tmp_path / f"{agent_id}.request.json"
+    request_path.write_text(json.dumps({"agent_id": agent_id, "worker_pid": pid}), encoding="utf-8")
+    journal = tmp_path / "root.agents.jsonl"
+    agent = {
+        "id": agent_id,
+        "prompt": "work",
+        "parent_id": "root",
+        "status": "running",
+        "worker_pid": pid,
+        "worker_request_path": str(request_path),
+        "worker_result_path": str(tmp_path / f"{agent_id}.result.json"),
+        "worker_control_path": str(tmp_path / f"{agent_id}.control.jsonl"),
+        **extra,
+    }
+    journal.write_text(
+        json.dumps({"type": "agent.worker_started", "agent": agent}) + "\n", encoding="utf-8"
+    )
+    return journal
+
+
+async def test_a_journal_written_before_identities_still_reattaches(tmp_path):
+    """Existing sessions must not need a migration to keep their workers."""
+    journal = _released_journal_entry(tmp_path, "agent-old", os.getpid())
+
+    recovered = AgentSupervisor(asyncio.get_running_loop(), journal_path=journal)
+    snapshot = recovered.snapshot("agent-old")
+
+    assert snapshot["status"] == "running"
+    assert snapshot["worker_pid"] == os.getpid()
+    assert snapshot["sandbox"]["backend"] == "host"
+    assert snapshot["identity_version"] == 1
+
+
+async def test_an_isolated_execution_is_never_assumed_live_from_a_pid(tmp_path):
+    """A live worker pid says nothing about whether its container survived."""
+    journal = _released_journal_entry(
+        tmp_path,
+        "agent-boxed",
+        os.getpid(),
+        sandbox={"backend": "docker", "sandbox_id": "container-1", "session_id": "root"},
+    )
+
+    recovered = AgentSupervisor(asyncio.get_running_loop(), journal_path=journal)
+    snapshot = recovered.snapshot("agent-boxed")
+
+    assert snapshot["status"] == "interrupted"
+    assert snapshot["sandbox"]["sandbox_id"] == "container-1"
+
+
 async def test_supervisor_marks_active_children_interrupted_after_restart(tmp_path):
     journal = tmp_path / "root.agents.jsonl"
     release = asyncio.Event()

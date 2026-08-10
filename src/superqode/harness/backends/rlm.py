@@ -94,6 +94,9 @@ class RLMHarnessBackend:
 
 
 def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
+    # Imported here so selecting another harness does not pay for the RLM stack.
+    from superqode.rlm.sandbox import RLMSandboxConfig
+
     session_id = request.session_id or "rlm-session"
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", session_id).strip(".-") or "session"
     return HarnessSessionRef(
@@ -106,6 +109,12 @@ def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
             "model": request.model,
             "working_directory": str(request.working_directory),
             "rlm_config": dict(request.spec.runtime.config),
+            # Resolved here because this is the only place holding both the
+            # runtime config and the spec's execution policy.
+            "rlm_sandbox": RLMSandboxConfig.from_config(
+                request.spec.runtime.config,
+                execution_policy=request.spec.execution_policy,
+            ).to_dict(),
         },
     )
 

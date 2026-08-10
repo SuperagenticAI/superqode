@@ -5865,7 +5865,7 @@ def test_connect_picker_explains_every_choice():
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
-    assert "Core, Workbench or a preset" in first
+    assert "Core, RLM, PiPy, Workbench or a preset" in first
     assert "Import existing config" in first
     # Marked twice on purpose: the arrow reads at a glance, the word survives
     # a screen reader and a copied transcript.
@@ -5876,7 +5876,7 @@ def test_connect_picker_explains_every_choice():
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
-    assert "Core, Workbench or a preset" in second
+    assert "Core, RLM, PiPy, Workbench or a preset" in second
     assert "Import existing config" in second
     assert "Connect a harness with your model ↗  ← SELECTED" in second
     assert second.count("← SELECTED") == 1

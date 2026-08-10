@@ -88,10 +88,19 @@ async def run_completion_gates(
     cwd: str | Path,
     timeout: float,
     output_limit: int = 12_000,
+    runner: Any | None = None,
 ) -> list[GateResult]:
-    """Run configured host gates in order and retain bounded diagnostic output."""
+    """Run configured gates in order and retain bounded diagnostic output.
+
+    ``runner`` sends a gate wherever the session's Python runs. A gate executed
+    on the host while the kernel sits inside a sandbox would verify the wrong
+    machine, so an isolated profile supplies one and the host profile does not.
+    """
     results: list[GateResult] = []
     for command in gates:
+        if runner is not None:
+            results.append(await runner(str(command), timeout))
+            continue
         results.append(
             await asyncio.to_thread(
                 _run_gate,

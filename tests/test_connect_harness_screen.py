@@ -98,6 +98,7 @@ def test_harness_step_lists_the_built_in_harnesses_with_core_first():
 
     assert [p.id for p in profiles] == [
         "harness-core",
+        "harness-rlm",
         "harness-pipy",
         "harness-workbench",
         "harness-presets",
@@ -115,6 +116,7 @@ def test_the_second_root_choice_opens_the_harness_step():
 def test_choosing_a_harness_activates_it():
     """Selecting a harness switches to it."""
     assert dispatch("harness-core").harness_commands == ["switch core"]
+    assert dispatch("harness-rlm").harness_commands == ["switch rlm"]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
     assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
 
@@ -171,6 +173,27 @@ def test_switching_a_harness_says_what_it_can_do(tmp_path, monkeypatch):
     assert "Sandbox" in rendered
     assert "MCP" in rendered
     assert "shell" in rendered
+
+
+def test_a_host_executing_harness_states_its_permissions_on_every_route(tmp_path, monkeypatch):
+    """`:connect harness-rlm` and `:harness switch` skip the picker warning."""
+    monkeypatch.chdir(tmp_path)
+
+    from pathlib import Path
+
+    from superqode.app_main import SuperQodeApp
+    from superqode.harness import list_harnesses
+
+    entry = next(e for e in list_harnesses(Path.cwd()) if e.id == "rlm")
+    assert entry.spec.metadata["selection_warning"]
+
+    log = FakeLog()
+    SuperQodeApp._write_harness_detail_card(SuperQodeApp(), entry, log)
+
+    rendered = log.items[-1]
+    assert "Warning" in rendered
+    assert "permissions of" in rendered
+    assert "no approval prompts or sandbox" in rendered
 
 
 def test_a_no_tool_harness_says_it_cannot_change_code(tmp_path, monkeypatch):
@@ -466,6 +489,7 @@ def test_new_harness_rows_are_addressable_by_name():
     ids = connection_profile_ids()
     for profile_id in (
         "harness-core",
+        "harness-rlm",
         "harness-workbench",
         "harness-pipy",
         "harness-presets",

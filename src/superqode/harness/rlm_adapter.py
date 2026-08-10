@@ -130,8 +130,13 @@ class RLMHarnessProtocolAdapter:
             return await self._session_factory(request, working_directory, session_path)
         from superqode.pipy.ai.models import resolve_model
         from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
+        from superqode.rlm.sandbox import RLMSandboxConfig
 
         limits = dict(request.metadata.get("rlm_config") or {})
+        # The backend resolves the profile once, where the HarnessSpec and its
+        # execution policy are both in scope. Falling back to the raw runtime
+        # config keeps direct adapter use working.
+        sandbox = RLMSandboxConfig.from_config(request.metadata.get("rlm_sandbox") or limits)
         options = RLMCodingSessionOptions(
             cwd=working_directory,
             model=resolve_model(request.model or "", provider=request.provider or ""),
@@ -145,6 +150,7 @@ class RLMHarnessProtocolAdapter:
             autonomous_max_rounds=int(limits.get("autonomous_max_rounds", 3)),
             gate_timeout=float(limits.get("gate_timeout", 120.0)),
             durable_children=bool(limits.get("durable_children", True)),
+            sandbox=sandbox,
         )
         if session_path and Path(session_path).is_file():
             return await RLMCodingSession.resume(options, session_path=session_path)
@@ -187,6 +193,9 @@ class RLMHarnessProtocolAdapter:
                 policy.gates,
                 cwd=coding_session.cwd,
                 timeout=policy.gate_timeout,
+                # Under an isolated profile this sends the gate into the same
+                # boundary the model's Python runs in.
+                runner=getattr(coding_session, "gate_runner", None),
             )
             passed = all(result.ok for result in results)
             yield HarnessEvent(

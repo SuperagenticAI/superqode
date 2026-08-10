@@ -11,7 +11,6 @@ import ast
 import asyncio
 import contextlib
 import io
-import os
 import pickle
 import re
 import subprocess
@@ -23,6 +22,14 @@ from typing import Any, Sequence, cast
 
 from superqode.pipy.messages import TextContent
 from superqode.pipy.tools.base import AgentTool, AgentToolResult
+
+from .sandbox import (
+    RLMSandboxConfig,
+    ensure_command,
+    ensure_read,
+    ensure_write,
+    resolved_env,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,10 +55,16 @@ class ShellResult:
 
 
 class Workspace:
-    """Convenience repository API injected into the Python namespace."""
+    """Convenience repository API injected into the Python namespace.
 
-    def __init__(self, root: str | Path) -> None:
+    The policy checks here are guardrails. They make a harness's declared
+    execution policy real for ordinary use, but Python in this namespace can
+    still reach the filesystem directly, so they are not an isolation boundary.
+    """
+
+    def __init__(self, root: str | Path, *, sandbox: RLMSandboxConfig | None = None) -> None:
         self.root = Path(root).expanduser().resolve()
+        self.sandbox = sandbox or RLMSandboxConfig()
 
     def _path(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser()
@@ -65,6 +78,7 @@ class Workspace:
         return target
 
     def read(self, path: str | Path, *, offset: int = 1, limit: int | None = None) -> str:
+        ensure_read(self.sandbox)
         target = self._path(path)
         lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
         start = max(0, offset - 1)
@@ -72,12 +86,16 @@ class Workspace:
         return "\n".join(selected)
 
     def write(self, path: str | Path, content: str) -> str:
+        ensure_write(self.sandbox)
         target = self._path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return str(target.relative_to(self.root))
 
     def edit(self, path: str | Path, old: str, new: str, *, replace_all: bool = False) -> str:
+        # An edit both reads and rewrites, so it needs each permission.
+        ensure_read(self.sandbox)
+        ensure_write(self.sandbox)
         target = self._path(path)
         content = target.read_text(encoding="utf-8", errors="replace")
         count = content.count(old)
@@ -88,9 +106,11 @@ class Workspace:
         return f"edited {target.relative_to(self.root)} ({count if replace_all else 1} replacement)"
 
     def glob(self, pattern: str) -> list[str]:
+        ensure_read(self.sandbox)
         return [str(path.relative_to(self.root)) for path in sorted(self.root.glob(pattern))]
 
     def search(self, pattern: str, path: str | Path = ".") -> list[str]:
+        ensure_read(self.sandbox)
         root = self._path(path)
         regex = re.compile(pattern)
         files = root.rglob("*") if root.is_dir() else (root,)
@@ -111,8 +131,9 @@ class Workspace:
 class Shell:
     """Command runner made available inside the Python namespace."""
 
-    def __init__(self, cwd: str | Path) -> None:
+    def __init__(self, cwd: str | Path, *, sandbox: RLMSandboxConfig | None = None) -> None:
         self.cwd = Path(cwd).expanduser().resolve()
+        self.sandbox = sandbox or RLMSandboxConfig()
 
     def run(
         self,
@@ -121,6 +142,7 @@ class Shell:
         timeout: float | None = 120,
         env: dict[str, str] | None = None,
     ) -> ShellResult:
+        ensure_command(self.sandbox, command)
         shell = isinstance(command, str)
         completed = subprocess.run(
             command,
@@ -130,7 +152,7 @@ class Shell:
             text=True,
             timeout=timeout,
             check=False,
-            env={**os.environ, **(env or {})},
+            env=resolved_env(self.sandbox, env),
         )
         display = command if isinstance(command, str) else " ".join(map(str, command))
         return ShellResult(display, completed.returncode, completed.stdout, completed.stderr)
@@ -223,10 +245,12 @@ class PersistentPythonKernel:
         supervisor: Any | None = None,
         agent_id: str = "root",
         checkpoint_path: str | Path | None = None,
+        sandbox: RLMSandboxConfig | None = None,
     ) -> None:
         self.cwd = Path(cwd).expanduser().resolve()
-        self.workspace = Workspace(self.cwd)
-        self.shell = Shell(self.cwd)
+        self.sandbox = sandbox or RLMSandboxConfig()
+        self.workspace = Workspace(self.cwd, sandbox=self.sandbox)
+        self.shell = Shell(self.cwd, sandbox=self.sandbox)
         self.rlm = RLMNamespace(supervisor, agent_id=agent_id)
         self.checkpoint_path = (
             Path(checkpoint_path).expanduser() if checkpoint_path is not None else None
@@ -361,6 +385,7 @@ def kernel_for(
     supervisor: Any | None = None,
     agent_id: str = "root",
     checkpoint_path: str | Path | None = None,
+    sandbox: RLMSandboxConfig | None = None,
 ) -> PersistentPythonKernel:
     """Return the process-local persistent kernel for a session."""
     with _KERNELS_LOCK:
@@ -371,6 +396,7 @@ def kernel_for(
                 supervisor=supervisor,
                 agent_id=agent_id,
                 checkpoint_path=checkpoint_path,
+                sandbox=sandbox,
             )
             _KERNELS[session_key] = kernel
         elif supervisor is not None:

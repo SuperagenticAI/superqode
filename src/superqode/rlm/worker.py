@@ -16,6 +16,7 @@ async def run_worker(request_path: str | Path) -> int:
     try:
         from superqode.pipy.ai.models import resolve_model
         from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
+        from superqode.rlm.sandbox import RLMSandboxConfig
 
         options = RLMCodingSessionOptions(
             cwd=Path(str(request["cwd"])),
@@ -28,6 +29,8 @@ async def run_worker(request_path: str | Path) -> int:
             max_children=int(request.get("max_children") or 8),
             max_parallel=int(request.get("max_parallel") or 4),
             durable_children=True,
+            sandbox=RLMSandboxConfig.from_config(request.get("sandbox")),
+            sandbox_session=str(request.get("sandbox_session") or ""),
         )
         session = await RLMCodingSession.create(options)
         prompt_task = asyncio.create_task(session.prompt(str(request["prompt"])))

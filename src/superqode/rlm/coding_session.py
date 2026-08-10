@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from superqode.pipy.coding_session import CodingSessionOptions, PiPyCodingSession
 from superqode.pipy.harness import AgentHarness, HarnessResources, TurnState
@@ -15,10 +16,13 @@ from superqode.pipy.skills import load_skills
 
 from .config import sessions_root
 from .kernel import create_python_tool, kernel_for
-from .policy import RLMPolicy, RLMPolicyStore
+from .kernel_backend import create_backend_python_tool
+from .policy import GateResult, RLMPolicy, RLMPolicyStore, _bounded
+from .sandbox import RLMSandboxConfig
 from .supervisor import AgentRecord, AgentSupervisor
 
 _SUPERVISORS: dict[str, AgentSupervisor] = {}
+_BACKENDS: dict[str, Any] = {}
 
 
 @dataclass(slots=True)
@@ -36,6 +40,10 @@ class RLMCodingSessionOptions(CodingSessionOptions):
     autonomous_max_rounds: int = 3
     gate_timeout: float = 120.0
     durable_children: bool = True
+    sandbox: RLMSandboxConfig | None = None
+    #: The root session that owns the boundary. Children inherit it so they get
+    #: their own kernel inside the root's sandbox rather than one each.
+    sandbox_session: str = ""
 
 
 class RLMCodingSession(PiPyCodingSession):
@@ -56,6 +64,8 @@ class RLMCodingSession(PiPyCodingSession):
         skills = load_skills(cwd=cwd).skills
         templates = load_prompt_templates(cwd=cwd).templates
         session_key = str(path.resolve())
+        # A child names the session that owns the boundary; a root names itself.
+        owner = str(getattr(options, "sandbox_session", "") or "") or path.stem
         supervisor = getattr(options, "supervisor", None) or _SUPERVISORS.get(session_key)
         if supervisor is None:
             supervisor = AgentSupervisor(
@@ -65,18 +75,33 @@ class RLMCodingSession(PiPyCodingSession):
                 max_parallel=int(getattr(options, "max_parallel", 4)),
                 journal_path=path.with_suffix(".agents.jsonl"),
             )
-            supervisor.set_runner(cls._child_runner(options, supervisor))
+            supervisor.set_runner(cls._child_runner(options, supervisor, owner))
         _SUPERVISORS[session_key] = supervisor
         agent_id = str(getattr(options, "agent_id", "root") or "root")
-        tool = create_python_tool(
-            kernel_for(
-                session_key,
-                cwd,
-                supervisor=supervisor,
-                agent_id=agent_id,
-                checkpoint_path=path.with_suffix(".kernel.pkl"),
+        # Refuse rather than downgrade: a requested boundary this build cannot
+        # provide would otherwise run model-written Python on the host.
+        sandbox = (getattr(options, "sandbox", None) or RLMSandboxConfig()).require_available()
+        if sandbox.isolated:
+            # Only the isolated profile goes through a backend. The host path is
+            # left exactly as released: rerouting it would risk a regression in
+            # a shipped runtime for no behaviour it does not already have.
+            tool = create_backend_python_tool(
+                _backend_for(session_key, path, cwd, sandbox, supervisor, agent_id, owner),
+                agent_id,
+                drain_events=_supervisor_drain(supervisor),
+                cwd=cwd,
             )
-        )
+        else:
+            tool = create_python_tool(
+                kernel_for(
+                    session_key,
+                    cwd,
+                    supervisor=supervisor,
+                    agent_id=agent_id,
+                    checkpoint_path=path.with_suffix(".kernel.pkl"),
+                    sandbox=sandbox,
+                )
+            )
         instance = cls(
             harness=None,  # type: ignore[arg-type]
             session_path=path,
@@ -111,7 +136,7 @@ class RLMCodingSession(PiPyCodingSession):
         return instance
 
     @staticmethod
-    def _child_runner(options: CodingSessionOptions, supervisor: AgentSupervisor):
+    def _child_runner(options: CodingSessionOptions, supervisor: AgentSupervisor, owner: str = ""):
         async def run(record: AgentRecord) -> str:
             if bool(getattr(options, "durable_children", True)) and options.stream_fn is None:
                 from .worker_process import run_durable_child
@@ -144,6 +169,10 @@ class RLMCodingSession(PiPyCodingSession):
                 max_children=supervisor.max_children,
                 max_parallel=supervisor.max_parallel,
                 durable_children=False,
+                sandbox=getattr(options, "sandbox", None),
+                # The root's boundary, so an isolated child gets its own kernel
+                # inside it instead of starting a container of its own.
+                sandbox_session=owner,
             )
             child = await RLMCodingSession.create(child_options)
             await supervisor.attach_session(record.id, child)
@@ -222,6 +251,34 @@ class RLMCodingSession(PiPyCodingSession):
         )
 
     @property
+    def sandbox_backend(self) -> Any | None:
+        """The isolated backend owning this session's Python, if there is one."""
+        return _BACKENDS.get(str(Path(self.session_path).resolve()))
+
+    @property
+    def gate_runner(self) -> Any | None:
+        """Run completion gates wherever this session's Python runs.
+
+        Returns nothing under the host profile, where gates already execute in
+        the same place as the kernel.
+        """
+        backend = self.sandbox_backend
+        if backend is None:
+            return None
+
+        async def run(command: str, timeout: float) -> GateResult:
+            await backend.start()
+            result = await backend.shell(command, timeout=timeout)
+            return GateResult(
+                command=command,
+                returncode=result.returncode,
+                stdout=_bounded(result.stdout, 12_000),
+                stderr=_bounded(result.stderr, 12_000),
+            )
+
+        return run
+
+    @property
     def policy(self) -> RLMPolicy:
         return self.policy_store.load()
 
@@ -253,6 +310,97 @@ def _usage_dict(usage) -> dict[str, int | float]:
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
         "cost_usd": float(getattr(cost, "total", 0.0) or 0.0),
     }
+
+
+def _supervisor_drain(supervisor: AgentSupervisor):
+    """Child lifecycle events come from the host supervisor, not the sandbox."""
+    cursor = {"value": 0}
+
+    def drain() -> list[dict[str, Any]]:
+        events, cursor["value"] = supervisor.events_since(cursor["value"])
+        return events
+
+    return drain
+
+
+def _agent_value(supervisor: AgentSupervisor, agent_id: str) -> dict[str, Any]:
+    """Describe a child in a form the sandbox can rebuild as a handle."""
+    return {"__rlm__": "agent", "id": agent_id, "status": supervisor.snapshot(agent_id)}
+
+
+def _host_call_bridge(supervisor: AgentSupervisor, agent_id: str):
+    """Serve `rlm.*` for a kernel that runs inside a boundary.
+
+    Recursion stays on the host because it needs the supervisor and the provider
+    credentials, and because a limit the sandbox could reach is not a limit. The
+    depth, child-count and parallelism checks are the supervisor's either way.
+    """
+
+    async def call(name: str, payload: dict[str, Any]) -> Any:
+        target = str(payload.get("agent") or "")
+        if name in {"rlm.run", "rlm.spawn"}:
+            handle = supervisor.spawn(
+                str(payload.get("prompt") or ""),
+                parent_id=agent_id,
+                model=payload.get("model"),
+            )
+            return _agent_value(supervisor, handle.id)
+        if name in {"rlm.run_batch", "rlm.spawn_batch"}:
+            handles = supervisor.spawn_batch(
+                [str(item) for item in payload.get("prompts") or ()],
+                parent_id=agent_id,
+                model=payload.get("model"),
+            )
+            return [_agent_value(supervisor, handle.id) for handle in handles]
+        if name == "rlm.agents":
+            parent = None if payload.get("all_agents") else agent_id
+            return supervisor.snapshots(parent_id=parent)
+        if name == "rlm.status":
+            return supervisor.snapshot(target)
+        if name == "rlm.wait":
+            return await supervisor.wait(target)
+        if name == "rlm.wait_all":
+            return await supervisor.wait_all([str(item) for item in payload.get("agents") or ()])
+        if name == "rlm.send":
+            await supervisor.send(target, str(payload.get("message") or ""))
+            return None
+        if name == "rlm.steer":
+            await supervisor.steer(target, str(payload.get("instruction") or ""))
+            return None
+        if name == "rlm.cancel":
+            await supervisor.cancel(target)
+            return None
+        if name == "rlm.delete":
+            supervisor.delete(target)
+            return None
+        raise RuntimeError(f"Unsupported sandbox host call: {name}")
+
+    return call
+
+
+def _backend_for(
+    session_key: str,
+    path: Path,
+    cwd: Path,
+    sandbox: RLMSandboxConfig,
+    supervisor: AgentSupervisor,
+    agent_id: str,
+    owner: str,
+) -> Any:
+    from .kernel_docker import DockerKernelBackend
+
+    existing = _BACKENDS.get(session_key)
+    if existing is not None:
+        return existing
+    backend = DockerKernelBackend(
+        cwd,
+        config=sandbox,
+        session_id=owner,
+        state_dir=path.with_suffix(".sandbox"),
+        host_call=_host_call_bridge(supervisor, agent_id),
+    )
+    _BACKENDS[session_key] = backend
+    return backend
 
 
 def supervisor_for_session(session_path: str | Path) -> AgentSupervisor | None:

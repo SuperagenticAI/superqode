@@ -12,6 +12,8 @@ from typing import Any
 
 from superqode.pipy.coding_session import CodingSessionOptions
 
+from .identity import SandboxIdentity, process_alive
+from .sandbox import RLMSandboxConfig
 from .supervisor import AgentRecord, AgentSupervisor
 
 
@@ -31,6 +33,7 @@ async def run_durable_child(
         control_path = job_dir / "control.jsonl"
         log_path = job_dir / "worker.log"
         job_dir.mkdir(parents=True, exist_ok=True)
+        sandbox_config = getattr(options, "sandbox", None) or RLMSandboxConfig()
         model = options.model
         provider = str(getattr(model, "provider", "") or "")
         model_id = str(getattr(model, "id", "") or "")
@@ -51,6 +54,12 @@ async def run_durable_child(
             "max_depth": max(0, supervisor.max_depth - supervisor.depth(record.id)),
             "max_children": supervisor.max_children,
             "max_parallel": supervisor.max_parallel,
+            # A child inherits the root's boundary. It travels in the request so
+            # the detached worker rebuilds the same profile in its own process.
+            "sandbox": sandbox_config.to_dict(),
+            # Names the root's boundary so an isolated child joins it rather
+            # than starting a second one.
+            "sandbox_session": _session_key(supervisor),
         }
         _atomic_json(request_path, request)
         with log_path.open("ab") as log:
@@ -70,6 +79,13 @@ async def run_durable_child(
             request_path=request_path,
             result_path=result_path,
             control_path=control_path,
+            # Host mode has no boundary to reattach to, so the sandbox id stays
+            # empty. A container profile fills it and recovery checks it instead
+            # of trusting the worker pid alone.
+            sandbox=SandboxIdentity(
+                backend=sandbox_config.backend,
+                session_id=_session_key(supervisor),
+            ),
         )
 
     while True:
@@ -91,13 +107,21 @@ async def run_durable_child(
                 raise asyncio.CancelledError(f"Detached RLM worker {record.id} was cancelled")
             raise RuntimeError(str(result.get("error") or "Detached RLM worker failed"))
         locally_exited = process is not None and process.poll() is not None
-        if locally_exited or (record.worker_pid and not _process_alive(record.worker_pid)):
+        if locally_exited or (record.worker_pid and not process_alive(record.worker_pid)):
             record.worker_pid = None
             raise RuntimeError(
                 f"Detached RLM worker {record.id} exited without writing a result; "
                 f"inspect {_job_dir(supervisor, record.id) / 'worker.log'}"
             )
         await asyncio.sleep(0.2)
+
+
+def _session_key(supervisor: AgentSupervisor) -> str:
+    """Name the root session that owns this worker's sandbox."""
+    journal = supervisor.journal_path
+    if journal is None:
+        return ""
+    return journal.stem.removesuffix(".agents")
 
 
 def _job_dir(supervisor: AgentSupervisor, agent_id: str) -> Path:
@@ -119,18 +143,6 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return value if isinstance(value, dict) else None
-
-
-def _process_alive(pid: int) -> bool:
-    import os
-
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
 
 
 __all__ = ["run_durable_child"]

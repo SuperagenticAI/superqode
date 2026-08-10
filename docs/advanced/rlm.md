@@ -14,6 +14,13 @@ superqode --harness rlm
 Or switch from the TUI:
 
 ```text
+:connect harness-rlm
+```
+
+This opens the model picker after activating RLM. You can also switch the
+active harness directly:
+
+```text
 :harness switch rlm
 ```
 
@@ -50,6 +57,7 @@ surface:
 
 ```text
 :rlm session
+:rlm sandbox
 :rlm agents
 :rlm send <agent-id> <message>
 :rlm steer <agent-id> <instruction>
@@ -102,17 +110,104 @@ Later:
 [line for line in failures.splitlines() if "auth" in line.lower()]
 ```
 
-## Current runtime boundary
+## Runtime boundary
 
-The initial RLM kernel runs Python with the permissions of the SuperQode
+The default `host` profile runs Python with the permissions of the SuperQode
 process. Python can import `os`, use `subprocess`, read environment variables
 and access anything available to that process. The harness picker shows this
-warning before activation, and unattended execution requires the same explicit
+warning before activation, and the switch card repeats it on every route that
+activates the harness, including `:harness switch rlm` and
+`:connect harness-rlm`. Unattended execution requires the same explicit
 pure-permissions opt-in used by other host-executing harnesses.
 
-Run the harness inside a container or another external isolation boundary when
-working with untrusted prompts or repositories. Per-operation approval cannot
-secure unrestricted host Python because Python code can bypass wrapper APIs.
+Per-operation approval cannot secure unrestricted host Python, because Python
+code can bypass wrapper APIs. Isolation needs the interpreter itself to sit
+inside the boundary, which is what the `docker` profile does.
+
+## Execution policy
+
+`:rlm sandbox` reports the boundary the session is running under, and
+`:rlm sandbox doctor` probes for Docker so the environment can be checked before
+an isolated profile is supported.
+
+The profile comes from the harness, not from the command. A HarnessSpec can set
+it under `runtime.config`, and anything it leaves unstated falls back to the
+spec's `execution_policy`:
+
+```yaml
+runtime:
+  backend: rlm
+  config:
+    sandbox: host
+    sandbox_granularity: session
+    allow_write: false
+    allowed_commands: ["uv", "pytest"]
+    allow_compound_commands: false
+    env_allowlist: ["PATH", "HOME"]
+```
+
+The declared policy now reaches the Python namespace, which the released kernel
+ignored: `workspace.write` and `shell.run` refuse work the policy denies, the
+command allowlist is checked before execution, and `env_allowlist` filters the
+environment commands are given. Child agents inherit the same profile, and it
+travels in the detached worker request so a child rebuilds it in its own
+process.
+
+Under `host` these checks are guardrails, not isolation. They make an accidental
+write or an unintended command fail, but Python in that namespace can still call
+`open` and `subprocess` directly, so they do not constrain a model that sets out
+to avoid them.
+
+## The docker profile
+
+```yaml
+runtime:
+  backend: rlm
+  config:
+    sandbox: docker
+    sandbox_image: python:3.12-slim
+    allow_network: false
+    env_allowlist: ["PATH"]
+```
+
+The persistent interpreter runs inside the container, so `import os`,
+`subprocess` and every file the model opens are the container's. One container
+is created per root session and each agent gets its own kernel inside it, which
+keeps root and child namespaces separate while letting them see one another's
+repository changes without paying container startup on every `rlm.run`.
+
+The container is created with the repository bind-mounted at `/workspace`, a
+session-owned state directory at `/state`, and the kernel server mounted
+read-only. It runs as the invoking user with a read-only root filesystem, all
+capabilities dropped, `no-new-privileges`, and memory, CPU and process limits.
+The Docker socket is never mounted. The host environment is never forwarded:
+only names in `env_allowlist` are passed in, so provider credentials stay
+outside. Networking is off unless `allow_network` is true.
+
+Three things follow from the interpreter being inside:
+
+- **Completion gates run inside too.** A gate executed on the host while the
+  model's Python ran in a container would verify the wrong machine.
+- **Checkpoints stay inside.** State is pickled and restored only within the
+  container, and the host keeps a path, a digest and a list of names. The host
+  never unpickles bytes the sandbox produced, because restoring state a model
+  could influence would hand it host execution.
+- **Recursion still happens on the host.** `rlm.run` needs the supervisor and
+  provider credentials, so the kernel asks the host over its channel rather than
+  spawning anything itself. Depth, child-count and parallelism limits stay where
+  the sandbox cannot reach them.
+
+Reopening a session reattaches to its container by label and restores each
+kernel's checkpoint before the first execution. The container outlives the TUI,
+so `:rlm sandbox` reports what is actually running.
+
+The repository is mounted writable, by design: an agent that cannot edit the
+repository cannot do the work. The boundary protects the host outside the
+mounted directory, not the checkout itself, so use a branch or a worktree when
+running untrusted prompts.
+
+Requesting a profile this build cannot provide refuses to start the session
+rather than quietly running on the host.
 
 ## Sessions
 
