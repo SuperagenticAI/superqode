@@ -29,9 +29,16 @@ DS4_MODEL_DISPLAY_NAMES = {
 }
 DEFAULT_DS4_MODELS = (
     ("deepseek-v4-flash", "DeepSeek V4 Flash"),
-    ("deepseek-chat", "DeepSeek V4 Flash (no thinking)"),
+    ("deepseek-chat", "DeepSeek V4 Flash (thinking off)"),
     *DS4_MODEL_DISPLAY_NAMES.items(),
 )
+# The DeepSeek shapes ds4-server can be built for, keyed by the name it
+# reports for the GGUF it actually loaded. These ids are mutually exclusive:
+# one ds4-server process serves exactly one shape.
+DS4_SHAPE_MODEL_IDS = {
+    "DeepSeek V4 Flash": "deepseek-v4-flash",
+    "DeepSeek V4 Pro": "deepseek-v4-pro",
+}
 DEFAULT_DS4_HEALTH_TIMEOUT = 1.0
 DEFAULT_DS4_MODELS_TIMEOUT = 1.5
 
@@ -55,6 +62,22 @@ def _extract_context_length(model_data: Dict[str, Any]) -> Optional[int]:
         if window > 0:
             return window
     return None
+
+
+def _contradicts_loaded_shape(model_id: str, name: Optional[str]) -> bool:
+    """True when ``model_id`` names a shape this server did not load.
+
+    ``/v1/models`` lists every alias the build knows, not just the loaded one:
+    a Flash server still advertises ``deepseek-v4-pro``. Each entry is stamped
+    with the loaded shape's name, so the picker would otherwise show the same
+    GGUF twice under two ids, one of which is a phantom. The reported name is
+    the tie-breaker. Aliases that only toggle thinking (``deepseek-chat``, the
+    GLM and Laguna variants) legitimately share a name and are never dropped.
+    """
+    if model_id not in DS4_SHAPE_MODEL_IDS.values():
+        return False
+    loaded = DS4_SHAPE_MODEL_IDS.get((name or "").strip())
+    return loaded is not None and loaded != model_id
 
 
 def _env_float(name: str, default: float) -> float:
@@ -160,6 +183,8 @@ class DS4Client(LocalProviderClient):
             for model_data in models:
                 model_id = model_data.get("id", "")
                 if not model_id:
+                    continue
+                if _contradicts_loaded_shape(model_id, model_data.get("name")):
                     continue
                 result.append(
                     self._model_from_id(

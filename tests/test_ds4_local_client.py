@@ -158,6 +158,70 @@ async def test_ds4_gives_laguna_aliases_distinct_behavior_names(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ds4_hides_the_shape_the_server_did_not_load(monkeypatch):
+    """A Flash build advertises ``deepseek-v4-pro`` too, stamping both entries
+    with the loaded shape's name. Only the shape backing the GGUF is listed,
+    so the picker stops showing "DeepSeek V4 Flash" twice."""
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {
+            "data": [
+                {"id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash"},
+                {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Flash"},
+            ]
+        }
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert [model.id for model in models] == ["deepseek-v4-flash"]
+    assert [model.name for model in models] == ["DeepSeek V4 Flash"]
+
+
+@pytest.mark.asyncio
+async def test_ds4_keeps_the_pro_shape_when_pro_weights_are_loaded(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {
+            "data": [
+                {"id": "deepseek-v4-flash", "name": "DeepSeek V4 Pro"},
+                {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro"},
+            ]
+        }
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert [model.id for model in models] == ["deepseek-v4-pro"]
+
+
+@pytest.mark.asyncio
+async def test_ds4_keeps_thinking_aliases_that_share_a_model_name(monkeypatch):
+    """Only mutually exclusive shapes are collapsed. Aliases that merely
+    toggle thinking share the loaded name and must all survive."""
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {
+            "data": [
+                {"id": "glm-5.2", "name": "GLM 5.2"},
+                {"id": "glm-5.2-chat", "name": "GLM 5.2"},
+                {"id": "glm-5.2-reasoner", "name": "GLM 5.2"},
+            ]
+        }
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert [model.id for model in models] == ["glm-5.2", "glm-5.2-chat", "glm-5.2-reasoner"]
+
+
+@pytest.mark.asyncio
 async def test_ds4_falls_back_to_known_models_when_server_unreachable(monkeypatch):
     client = DS4Client(host="http://127.0.0.1:8000/v1")
 

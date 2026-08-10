@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.87] - 2026-08-10
+
+### Fixed
+
+- The DwarfStar (ds4) model picker listed the same model twice. ds4-server
+  advertises both `deepseek-v4-flash` and `deepseek-v4-pro` whatever shape the
+  build actually loaded, stamping each entry with the loaded shape's name, so
+  one of the two rows was a phantom pointing at weights that were not there.
+  The reported name now resolves which shape is real. Aliases that only toggle
+  thinking, such as `deepseek-chat` and the GLM and Laguna variants, share a
+  name legitimately and are still listed in full.
+- Models Ollama serves in its native non-GGUF format were degraded to a
+  4096-token, tool-less, text-only listing. Their `/api/tags` entries carry
+  empty family, size and quantization fields and no context length, so the
+  name-based heuristics fell through to their defaults. Such entries are now
+  filled in from `/api/show`, which reports the truth for any architecture.
+  Self-describing GGUF entries are untouched and cost no extra request.
+- `get_model_info()` guessed from the model name while holding the `/api/show`
+  payload, so a model could list with its real context window and then resolve
+  at 4096 tokens on connect. It now reads the declared capabilities and the
+  architecture-scoped context length, with a Modelfile `num_ctx` taking
+  precedence because that is what the server will apply.
+- Tool-calling support was refused without being tested for any architecture
+  missing from a hardcoded family allowlist, which no model released after that
+  list was written could join. Ollama's declared capabilities are now
+  authoritative, and the probe runs; the name heuristic remains the fallback
+  for older Ollama builds that omit the field.
+
 ## [0.2.86] - 2026-08-10
 
 ### Added
