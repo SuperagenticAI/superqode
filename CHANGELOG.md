@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.89] - 2026-08-11
+
+### Added
+
+- Native RLM Python observations are bounded before entering the root model's
+  history. Large values remain available when assigned in the persistent
+  namespace and can be inspected through smaller slices.
+- Detached Docker workers publish their real container identity. Session
+  recovery verifies both the worker request and the live container before
+  reattaching, and reports the child as interrupted when either cannot be
+  verified.
+
+### Changed
+
+- Docker RLM sessions start without network access unless `allow_network` is
+  explicitly enabled. Setting `allow_write: false` mounts the repository
+  read-only, which also blocks direct Python writes that bypass `workspace`.
+- RLM capability metadata, `:rlm help`, and `:rlm sandbox doctor` now report the
+  implemented host, Docker, and Monty profiles rather than the original
+  host-only state. Docker read, shell, and command rules are described as
+  guardrails because unrestricted container Python can call `open` and
+  `subprocess` directly.
+
+### Fixed
+
+- `context.read()` can no longer bypass context include, exclude, binary, or
+  file-count policy by naming a repository path directly.
+- A detached worker with zero remaining recursion depth no longer resets to the
+  default depth of three.
+- Failed and timed-out semantic subcalls count against the host-owned call
+  quota, and `:rlm usage` measures the context policy configured for the active
+  session.
+
 ## [0.2.88] - 2026-08-11
 
 ### Fixed

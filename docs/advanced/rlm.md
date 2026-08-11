@@ -290,6 +290,13 @@ The Docker socket is never mounted. The host environment is never forwarded:
 only names in `env_allowlist` are passed in, so provider credentials stay
 outside. Networking is off unless `allow_network` is true.
 
+When `allow_write` is false, Docker mounts `/workspace` read-only. That boundary
+also blocks direct Python writes through `open`, not only calls through
+`workspace.write`. Read, shell and command rules remain convenience guardrails:
+unrestricted Python inside Docker can call `open` or import `subprocess`
+directly. Use Monty when the interpreter itself must have neither filesystem nor
+subprocess capability.
+
 Three things follow from the interpreter being inside:
 
 - **Completion gates run inside too.** A gate executed on the host while the
@@ -307,10 +314,10 @@ Reopening a session reattaches to its container by label and restores each
 kernel's checkpoint before the first execution. The container outlives the TUI,
 so `:rlm sandbox` reports what is actually running.
 
-The repository is mounted writable, by design: an agent that cannot edit the
-repository cannot do the work. The boundary protects the host outside the
-mounted directory, not the checkout itself, so use a branch or a worktree when
-running untrusted prompts.
+The repository is writable by default because a coding agent needs to edit it.
+Set `allow_write: false` for review or analysis work. In writable mode the
+boundary protects the host outside the mounted directory, not the checkout
+itself, so use a branch or a worktree when running untrusted prompts.
 
 Requesting a profile this build cannot provide refuses to start the session
 rather than quietly running on the host.
@@ -360,10 +367,17 @@ RLM sessions are separate from Core, Workbench, PiPy, RLM Code and Prime Agent:
 ~/.superqode/rlm/sessions/<workspace>/<session>.jsonl
 ```
 
-The conversation and Python tool results are stored in the session tree. Child
-status, ancestry and completed results are recorded beside the root session in
-an `.agents.jsonl` journal. SuperQode restores those records when it resumes a
-session. A child that was still queued or running when the process stopped is
+The conversation and Python tool results are stored in the session tree. Each
+result returned to the root model is bounded to keep repository-sized values
+out of conversation history. The complete value remains available when the
+Python code assigns it to a variable, so inspect large values through bounded
+slices rather than printing them.
+
+Child status, ancestry and completed results are recorded beside the root
+session in an `.agents.jsonl` journal. SuperQode restores those records when it
+resumes a session. For a detached Docker child, the worker publishes its actual
+container identity and recovery verifies both the worker request and the live
+container before reattaching. If either side cannot be verified, the child is
 reported as `interrupted`; it is never presented as successfully completed.
 
 The Python namespace remains exact while the SuperQode process is running.

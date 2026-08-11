@@ -23,10 +23,11 @@ unchanged and no second migration is needed when the sandboxed kernel lands.
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
-from .sandbox import HOST_BACKEND
+from .sandbox import DOCKER_BACKEND, HOST_BACKEND, MONTY_BACKEND
 
 #: Bumped when a journal's identity payload changes shape. Recovery accepts any
 #: version it understands and treats an absent version as the released layout.
@@ -124,14 +125,45 @@ def process_alive(pid: int | None) -> bool:
 def execution_alive(worker: WorkerIdentity, sandbox: SandboxIdentity) -> bool:
     """Ask the subsystem that actually owns this execution whether it survives.
 
-    Host executions are host processes, so a pid check is the whole answer. An
-    isolated backend must answer for its own sandbox, and until one exists the
-    honest answer is that the execution cannot be confirmed, which recovery
-    reports as interrupted rather than assuming a pid means anything.
+    Host executions are host processes, so a pid check is the whole answer.
+    Docker recovery requires both the worker request identity and a live,
+    labelled container; a PID alone never proves an isolated execution lives.
     """
-    if not sandbox.isolated:
-        return worker.alive
-    return False
+    if not worker.alive:
+        return False
+    if not sandbox.isolated or sandbox.backend == MONTY_BACKEND:
+        return True
+    if sandbox.backend != DOCKER_BACKEND:
+        return False
+    target = sandbox.sandbox_id
+    if target:
+        command = ["docker", "inspect", "--format", "{{.State.Status}}", target]
+    elif sandbox.session_id:
+        command = [
+            "docker",
+            "ps",
+            "--quiet",
+            "--filter",
+            f"label=superqode.rlm.session={sandbox.session_id}",
+            "--filter",
+            "label=superqode.rlm.kind=kernel",
+        ]
+    else:
+        return False
+    try:
+        completed = subprocess.run(  # noqa: S603,S607 - fixed recovery probe
+            command,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if completed.returncode != 0:
+        return False
+    output = completed.stdout.strip()
+    return output == "running" if target else bool(output)
 
 
 __all__ = [

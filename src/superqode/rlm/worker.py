@@ -25,7 +25,7 @@ async def run_worker(request_path: str | Path) -> int:
             ),
             thinking_level=str(request.get("thinking_level") or "off"),  # type: ignore[arg-type]
             session_root=Path(str(request["session_root"])),
-            max_depth=int(request.get("max_depth") or 3),
+            max_depth=(int(request["max_depth"]) if "max_depth" in request else 3),
             max_children=int(request.get("max_children") or 8),
             max_parallel=int(request.get("max_parallel") or 4),
             durable_children=True,
@@ -33,6 +33,15 @@ async def run_worker(request_path: str | Path) -> int:
             sandbox_session=str(request.get("sandbox_session") or ""),
         )
         session = await RLMCodingSession.create(options)
+        backend = getattr(session, "sandbox_backend", None)
+        if backend is not None:
+            identity = await backend.start()
+            runtime_path = str(request.get("runtime_path") or "")
+            if runtime_path:
+                _atomic_json(
+                    Path(runtime_path),
+                    {"sandbox": identity.to_dict(), "updated_at": time.time()},
+                )
         prompt_task = asyncio.create_task(session.prompt(str(request["prompt"])))
         control_task = asyncio.create_task(
             _watch_control(Path(str(request["control_path"])), session, prompt_task)

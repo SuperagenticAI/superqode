@@ -501,6 +501,9 @@ class AgentSupervisor:
             # A journal written before identities were recorded has no sandbox
             # section, which resolves to the host profile it was written under.
             sandbox_identity = SandboxIdentity.from_dict(data.get("sandbox"))
+            runtime_identity = _read_worker_sandbox_identity(data)
+            if runtime_identity is not None:
+                sandbox_identity = runtime_identity
             kernel_identity = KernelIdentity.from_dict(data.get("kernel"))
             if status in {"queued", "running"}:
                 worker_pid = _optional_int(data.get("worker_pid"))
@@ -609,6 +612,28 @@ def _read_worker_result(path: str) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _read_worker_sandbox_identity(data: dict[str, Any]) -> SandboxIdentity | None:
+    """Read the boundary identity published by a detached worker.
+
+    The file is metadata only. It is JSON, never executable state, and lets a
+    new supervisor verify the actual container rather than trusting a PID or a
+    container name reconstructed from stale configuration.
+    """
+    request_path = str(data.get("worker_request_path") or "")
+    if not request_path:
+        return None
+    try:
+        request = json.loads(Path(request_path).read_text(encoding="utf-8"))
+        runtime_path = str(request.get("runtime_path") or "")
+        runtime = json.loads(Path(runtime_path).read_text(encoding="utf-8"))
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(runtime, dict):
+        return None
+    identity = SandboxIdentity.from_dict(runtime.get("sandbox"))
+    return identity if identity.backend else None
 
 
 def _worker_identity_matches(agent_id: str, data: dict[str, Any], pid: int) -> bool:

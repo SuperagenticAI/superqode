@@ -59,6 +59,7 @@ class RLMHarnessProtocolAdapter:
         session_id = request.session_id or f"rlm-{uuid4().hex[:12]}"
         working_directory = request.working_directory.expanduser().resolve()
         coding_session = await self._open(request, working_directory)
+        pure_permissions = _pure_permissions(request.metadata)
         ref = HarnessSessionRef(
             session_id=session_id,
             harness_id=self.descriptor.id,
@@ -71,7 +72,7 @@ class RLMHarnessProtocolAdapter:
                 "session_path": str(coding_session.session_path),
                 "model_tools": list(DEFAULT_TOOLS),
                 "persistent_python": True,
-                "pure_permissions": True,
+                "pure_permissions": pure_permissions,
             },
         )
         self._sessions[session_id] = coding_session
@@ -112,6 +113,7 @@ class RLMHarnessProtocolAdapter:
                 **metadata,
                 "session_path": str(coding_session.session_path),
                 "model_tools": list(DEFAULT_TOOLS),
+                "pure_permissions": _pure_permissions(metadata),
             },
         )
         self._sessions[session.session_id] = coding_session
@@ -254,6 +256,15 @@ class RLMHarnessProtocolAdapter:
             return active
         await self.resume(session)
         return self._sessions[session.session_id]
+
+
+def _pure_permissions(metadata: dict[str, Any]) -> bool:
+    """Whether this concrete session runs without an interpreter boundary."""
+    from superqode.rlm.sandbox import RLMSandboxConfig
+
+    limits = dict(metadata.get("rlm_config") or {})
+    sandbox = RLMSandboxConfig.from_config(metadata.get("rlm_sandbox") or limits)
+    return not sandbox.isolated
 
 
 def _record_session_path(session_id: str, session_path: Path | str) -> None:

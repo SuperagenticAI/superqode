@@ -213,7 +213,10 @@ class RLMContext:
         if self.document:
             raise ValueError("A document context has no files; use text() instead")
         target = self._resolve(path)
-        return self._read(target, str(Path(path)))
+        name = str(target.relative_to(self.root))
+        if name not in self.files():
+            raise ValueError(f"Path is outside the configured RLM context: {name}")
+        return self._read(target, name)
 
     def search(self, pattern: str, *, limit: int = 200) -> list[str]:
         """Matching lines as ``path:line:text``, bounded so it stays readable."""

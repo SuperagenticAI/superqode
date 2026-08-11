@@ -58,6 +58,15 @@ def test_binary_and_ignored_files_stay_out(tmp_path):
     assert context.files() == ["a.py"]
 
 
+def test_read_cannot_bypass_context_include_or_exclude_policy(tmp_path):
+    _repo(tmp_path, {"visible.py": "ok\n", "secret.env": "token\n"})
+    context = RLMContext(tmp_path, policy=ContextPolicy(exclude=("*.env",)))
+
+    assert context.read("visible.py") == "ok\n"
+    with pytest.raises(ValueError, match="outside the configured RLM context"):
+        context.read("secret.env")
+
+
 def test_a_view_can_be_narrowed_without_disturbing_the_original(tmp_path):
     _repo(tmp_path, {"src/a.py": "one\n", "src/b.py": "two\n", "docs/c.md": "three\n"})
     context = RLMContext(tmp_path)

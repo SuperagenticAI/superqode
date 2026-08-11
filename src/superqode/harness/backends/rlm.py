@@ -21,16 +21,13 @@ class RLMHarnessBackend:
         supports_no_tool=False,
         supports_streaming=True,
         supports_approvals=False,
-        supports_sandbox=False,
+        supports_sandbox=True,
         supports_shell=True,
         supports_mcp=False,
         supports_typed_output=False,
         supports_workflow_children=False,
         event_detail="rich",
-        notes=(
-            "The initial native RLM kernel executes persistent Python with the permissions "
-            "of the SuperQode process.",
-        ),
+        notes=("Native persistent Python supports host, Docker, and Monty execution profiles.",),
     )
 
     def __init__(self, *, adapter: RLMHarnessProtocolAdapter | None = None) -> None:
@@ -79,7 +76,7 @@ class RLMHarnessBackend:
                 "events": events,
                 "model_tools": ["python"],
                 "persistent_python": True,
-                "pure_permissions": True,
+                "pure_permissions": _pure_permissions(request),
             },
         )
 
@@ -117,6 +114,15 @@ def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
             ).to_dict(),
         },
     )
+
+
+def _pure_permissions(request: HarnessBackendRequest) -> bool:
+    from superqode.rlm.sandbox import RLMSandboxConfig
+
+    return not RLMSandboxConfig.from_config(
+        request.spec.runtime.config,
+        execution_policy=request.spec.execution_policy,
+    ).isolated
 
 
 def _accumulate(totals: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:

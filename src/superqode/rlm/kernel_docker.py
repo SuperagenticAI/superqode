@@ -26,7 +26,7 @@ from typing import Any, Sequence
 from .identity import KernelIdentity, SandboxIdentity
 from .kernel import PythonExecutionResult, ShellResult
 from .kernel_backend import CheckpointReference, KernelHealth
-from .sandbox import DOCKER_BACKEND, RLMSandboxConfig
+from .sandbox import DOCKER_BACKEND, RLMSandboxConfig, ensure_command
 
 #: Where the container finds the kernel server and its own writable state. Both
 #: are fixed so a reattaching process can find them without stored paths.
@@ -94,7 +94,7 @@ def container_run_command(
         "--workdir",
         WORKSPACE_MOUNT,
         "--volume",
-        f"{workspace}:{WORKSPACE_MOUNT}",
+        f"{workspace}:{WORKSPACE_MOUNT}{'' if config.policy.allow_write else ':ro'}",
         # The kernel server is mounted read-only: the sandbox runs it but must
         # not be able to rewrite it.
         "--volume",
@@ -132,7 +132,10 @@ def container_run_command(
     return command
 
 
-def kernel_exec_command(container: str, kernel_id: str) -> list[str]:
+def kernel_exec_command(
+    container: str, kernel_id: str, config: RLMSandboxConfig | None = None
+) -> list[str]:
+    resolved = config or RLMSandboxConfig.from_config({"sandbox": DOCKER_BACKEND})
     return [
         "docker",
         "exec",
@@ -144,6 +147,16 @@ def kernel_exec_command(container: str, kernel_id: str) -> list[str]:
         f"{SERVER_MOUNT}/kernel_server.py",
         kernel_id,
         WORKSPACE_MOUNT,
+        json.dumps(
+            {
+                "allow_read": resolved.policy.allow_read,
+                "allow_write": resolved.policy.allow_write,
+                "allow_shell": resolved.policy.allow_shell,
+                "allowed_commands": list(resolved.policy.allowed_commands),
+                "allow_compound_commands": resolved.policy.allow_compound_commands,
+            },
+            separators=(",", ":"),
+        ),
     ]
 
 
@@ -375,6 +388,7 @@ class DockerKernelBackend:
         verify inside.
         """
         del env  # The container's environment is fixed by the profile.
+        ensure_command(self.config, command)
         display = command if isinstance(command, str) else " ".join(map(str, command))
         code, out, err = await self._docker(
             shell_exec_command(self._require_container(), display), timeout=timeout
@@ -440,7 +454,7 @@ class DockerKernelBackend:
         if existing is not None and existing.alive:
             return existing
         channel = KernelChannel(
-            kernel_exec_command(self._require_container(), kernel_id),
+            kernel_exec_command(self._require_container(), kernel_id, self.config),
             host_call=self.host_call,
             log_path=self.state_dir / f"{kernel_id}.kernel.log",
         )

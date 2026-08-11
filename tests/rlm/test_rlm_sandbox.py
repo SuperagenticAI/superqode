@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from superqode.harness.backends.base import HarnessBackendRequest
-from superqode.harness.backends.rlm import _session_ref
+from superqode.harness.backends.rlm import _pure_permissions, _session_ref
 from superqode.harness.templates import rlm_template
 from superqode.pipy.ai import FakeStream
 from superqode.pipy.stream import Model
@@ -49,6 +49,13 @@ def test_the_built_in_harness_keeps_the_permissions_it_shipped_with():
     assert config.policy.allow_write is True
     assert config.policy.allow_shell is True
     assert config.policy.allowed_commands == ()
+
+
+def test_isolated_profiles_default_to_no_network_while_host_keeps_connectivity():
+    assert _config().allow_network is True
+    assert _config(sandbox="docker").allow_network is False
+    assert _config(sandbox="monty").allow_network is False
+    assert _config(sandbox="docker", allow_network=True).allow_network is True
 
 
 def test_a_spec_that_denies_writes_now_reaches_the_python_namespace(tmp_path):
@@ -204,6 +211,9 @@ def test_the_backend_resolves_the_profile_where_the_spec_is_in_scope(tmp_path):
     assert ref.metadata["rlm_sandbox"]["sandbox"] == "host"
     assert ref.metadata["rlm_sandbox"]["allow_write"] is True
     assert ref.metadata["rlm_sandbox"]["isolated"] is False
+
+    spec.runtime.config["sandbox"] = "docker"
+    assert _pure_permissions(request) is False
 
 
 async def test_a_detached_child_inherits_the_root_boundary(tmp_path, monkeypatch):

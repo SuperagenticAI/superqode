@@ -9,6 +9,7 @@ the checkpoint boundary do not.
 from __future__ import annotations
 
 import inspect
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -305,6 +306,7 @@ def test_the_container_never_mounts_the_docker_socket(tmp_path):
     assert "--cap-drop" in command and "ALL" in command
     assert "no-new-privileges" in command
     assert "--read-only" in command
+    assert command[command.index("--volume") + 1] == f"{tmp_path}:/workspace"
     assert command[-2:] == ["sleep", "infinity"]
 
 
@@ -357,6 +359,7 @@ def test_network_is_off_unless_the_profile_asks_for_it(tmp_path):
         )
         return command[command.index("--network") + 1]
 
+    assert network_of() == "none"
     assert network_of(allow_network=False) == "none"
     assert network_of(allow_network=True) == "bridge"
 
@@ -366,7 +369,8 @@ def test_exec_commands_target_the_workspace_and_the_mounted_server():
     shell = shell_exec_command("abc123", "pytest -q")
 
     assert kernel[:5] == ["docker", "exec", "--interactive", "--workdir", "/workspace"]
-    assert kernel[-3:] == ["/opt/superqode-rlm/kernel_server.py", "agent-1", "/workspace"]
+    assert kernel[-4:-1] == ["/opt/superqode-rlm/kernel_server.py", "agent-1", "/workspace"]
+    assert json.loads(kernel[-1])["allow_shell"] is True
     assert shell[-3:] == ["sh", "-lc", "pytest -q"]
 
 
@@ -390,3 +394,38 @@ async def test_restore_refuses_state_from_outside_the_boundary(tmp_path):
 
     with pytest.raises(ValueError, match=STATE_MOUNT):
         await backend.restore("root", CheckpointReference(path="/etc/passwd"))
+
+
+def test_a_denied_write_uses_a_read_only_workspace_mount(tmp_path):
+    command = container_run_command(
+        image="i",
+        name="c",
+        session_id="s",
+        workspace=tmp_path,
+        server_dir=tmp_path,
+        state_dir=tmp_path / "state",
+        config=RLMSandboxConfig.from_config({"sandbox": "docker", "allow_write": False}),
+        uid=1,
+        gid=1,
+    )
+
+    mounts = [command[index + 1] for index, value in enumerate(command) if value == "--volume"]
+    assert f"{tmp_path}:/workspace:ro" in mounts
+
+
+async def test_sandboxed_namespace_enforces_declared_guardrails(tmp_path):
+    policy = RLMSandboxConfig.from_config(
+        {"sandbox": "docker", "allow_shell": False, "allow_read": False}
+    )
+    channel = KernelChannel(kernel_exec_command("unused", "root", policy))
+    # Replace the Docker command with the same server command plus its policy.
+    channel.command = _command(tmp_path) + [channel.command[-1]]
+    await channel.start()
+    try:
+        denied_read = await _execute(channel, "workspace.read('anything')")
+        denied_shell = await _execute(channel, "shell.run('echo nope')")
+    finally:
+        await channel.close()
+
+    assert "Reading is disabled" in denied_read["error"]
+    assert "Shell execution is disabled" in denied_shell["error"]

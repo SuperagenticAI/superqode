@@ -254,6 +254,7 @@ def create_backend_python_tool(
     opening a session that may never run anything.
     """
     state = {"started": False}
+    observation = PythonExecutionResult.observation
 
     async def execute(tool_call_id, args, signal=None, on_update=None) -> AgentToolResult:
         del tool_call_id, signal, on_update
@@ -266,10 +267,11 @@ def create_backend_python_tool(
             state["started"] = True
         result = await backend.execute(kernel_id, code)
         agent_events = list(drain_events() if drain_events is not None else [])
+        observed, truncated = observation(result)
         if result.error:
-            raise RuntimeError(result.text)
+            raise RuntimeError(observed)
         return AgentToolResult(
-            content=[TextContent(text=result.text)],
+            content=[TextContent(text=observed)],
             details={
                 "runtime": "python",
                 "persistent": True,
@@ -277,6 +279,8 @@ def create_backend_python_tool(
                 "sandbox": backend.identity.backend,
                 "kernel_id": kernel_id,
                 "agent_events": agent_events,
+                "observation_chars": len(result.text),
+                "observation_truncated": truncated,
             },
         )
 

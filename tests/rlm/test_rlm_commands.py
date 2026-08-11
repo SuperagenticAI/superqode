@@ -129,7 +129,7 @@ async def test_sandbox_status_states_the_boundary_without_overclaiming(tmp_path)
     assert any("not an adversarial model" in message for message in log.infos)
 
 
-async def test_sandbox_doctor_reports_docker_without_claiming_support(tmp_path):
+async def test_sandbox_doctor_reports_implemented_profiles(tmp_path):
     session = await _session(tmp_path)
     app = App(active=True)
     log = RecordingLog()
@@ -139,7 +139,7 @@ async def test_sandbox_doctor_reports_docker_without_claiming_support(tmp_path):
     reported = log.infos + log.successes
     assert any("active      host" in message for message in reported)
     assert any(message.startswith("docker") for message in reported)
-    assert any("Only the host profile runs in this build" in message for message in reported)
+    assert any("profiles    host, docker, monty" in message for message in reported)
 
 
 async def test_sandbox_cannot_be_switched_from_the_command(tmp_path):
@@ -167,6 +167,21 @@ async def test_usage_reports_recursive_spend_and_says_what_it_omits(tmp_path):
     assert any("context    " in message for message in log.infos)
     # Better to name the gap than to look complete.
     assert any("reported by the harness" in message for message in log.infos)
+
+
+async def test_usage_applies_the_sessions_context_policy(tmp_path):
+    from superqode.rlm.context import ContextPolicy
+
+    (tmp_path / "visible.py").write_text("ok\n", encoding="utf-8")
+    (tmp_path / "secret.env").write_text("hidden\n", encoding="utf-8")
+    session = await _session(tmp_path)
+    session.options.context_policy = ContextPolicy(include=("visible.py",), exclude=("*.env",))
+    app = App(active=True)
+    log = RecordingLog()
+
+    await app._rlm_dispatch(session, "usage", "", log)
+
+    assert any("context    1 files" in message for message in log.infos)
 
 
 async def test_usage_counts_subcalls_once_they_have_run(tmp_path):

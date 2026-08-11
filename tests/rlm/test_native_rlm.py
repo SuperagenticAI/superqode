@@ -24,7 +24,11 @@ from superqode.pipy.coding_session import CodingSessionOptions
 from superqode.pipy.events import AgentStartEvent
 from superqode.pipy.stream import Model
 from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
-from superqode.rlm.kernel import PersistentPythonKernel
+from superqode.rlm.kernel import (
+    DEFAULT_PYTHON_OBSERVATION_CHARS,
+    PersistentPythonKernel,
+    create_python_tool,
+)
 from superqode.rlm.policy import RLMPolicy, RLMPolicyStore, run_completion_gates
 from superqode.rlm.supervisor import AgentRecord, AgentSupervisor
 from superqode.rlm.worker_process import run_durable_child
@@ -87,6 +91,7 @@ def test_backend_is_registered_without_prime_or_rlm_code_dependency():
     assert backend.name == "rlm"
     assert backend.capabilities.event_detail == "rich"
     assert backend.capabilities.supports_streaming is True
+    assert backend.capabilities.supports_sandbox is True
 
 
 def test_protocol_discovery_uses_the_native_rlm_adapter():
@@ -108,6 +113,19 @@ async def test_kernel_preserves_python_state(tmp_path):
 
     assert assigned.error is None
     assert computed.text == "42"
+
+
+async def test_python_tool_bounds_large_observations_without_losing_kernel_state(tmp_path):
+    kernel = PersistentPythonKernel(tmp_path)
+    tool = create_python_tool(kernel)
+
+    result = await tool.execute("large", {"code": "large = 'x' * 50000\nlarge"})
+
+    assert len(result.content[0].text) <= DEFAULT_PYTHON_OBSERVATION_CHARS
+    assert "observation truncated" in result.content[0].text
+    assert result.details["observation_truncated"] is True
+    assert result.details["observation_chars"] == 50002
+    assert (await kernel.execute("len(large)")).text == "50000"
 
 
 async def test_kernel_restores_serializable_state_after_process_boundary(tmp_path):
@@ -195,9 +213,26 @@ async def test_adapter_streams_rlm_runtime_events(tmp_path):
     events = [event async for event in adapter.send(ref, HarnessMessage("user", "hi"))]
 
     assert ref.metadata["model_tools"] == ["python"]
+    assert ref.metadata["pure_permissions"] is True
     assert events[0].type == "model.requested"
     assert any(event.type == "run_start" and event.data["runtime"] == "rlm" for event in events)
     assert any(event.type == "model_delta" and event.data["text"] == "hello" for event in events)
+
+
+async def test_adapter_metadata_does_not_call_an_isolated_session_pure_permissions(tmp_path):
+    adapter = RLMHarnessProtocolAdapter(
+        session_factory=_factory([text_response("hello")], tmp_path / "sessions")
+    )
+
+    ref = await adapter.create(
+        HarnessCreateRequest(
+            harness_id="rlm",
+            working_directory=tmp_path,
+            metadata={"rlm_sandbox": {"sandbox": "docker"}},
+        )
+    )
+
+    assert ref.metadata["pure_permissions"] is False
 
 
 async def test_adapter_streams_recursive_child_lifecycle(tmp_path):
@@ -410,8 +445,12 @@ async def test_a_journal_written_before_identities_still_reattaches(tmp_path):
     assert snapshot["identity_version"] == 1
 
 
-async def test_an_isolated_execution_is_never_assumed_live_from_a_pid(tmp_path):
+async def test_an_isolated_execution_is_never_assumed_live_from_a_pid(tmp_path, monkeypatch):
     """A live worker pid says nothing about whether its container survived."""
+    monkeypatch.setattr(
+        "superqode.rlm.identity.subprocess.run",
+        lambda *args, **kwargs: type("Completed", (), {"returncode": 0, "stdout": "exited\n"})(),
+    )
     journal = _released_journal_entry(
         tmp_path,
         "agent-boxed",
@@ -424,6 +463,50 @@ async def test_an_isolated_execution_is_never_assumed_live_from_a_pid(tmp_path):
 
     assert snapshot["status"] == "interrupted"
     assert snapshot["sandbox"]["sandbox_id"] == "container-1"
+
+
+async def test_supervisor_recovers_a_live_docker_worker_from_reported_identity(
+    tmp_path, monkeypatch
+):
+    runtime = tmp_path / "runtime.json"
+    runtime.write_text(
+        json.dumps(
+            {
+                "sandbox": {
+                    "backend": "docker",
+                    "sandbox_id": "container-live",
+                    "session_id": "root",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    journal = _released_journal_entry(
+        tmp_path,
+        "agent-boxed",
+        os.getpid(),
+        sandbox={"backend": "docker", "session_id": "root"},
+    )
+    request = Path(json.loads(journal.read_text())["agent"]["worker_request_path"])
+    request.write_text(
+        json.dumps(
+            {
+                "agent_id": "agent-boxed",
+                "worker_pid": os.getpid(),
+                "runtime_path": str(runtime),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "superqode.rlm.identity.subprocess.run",
+        lambda *args, **kwargs: type("Completed", (), {"returncode": 0, "stdout": "running\n"})(),
+    )
+
+    recovered = AgentSupervisor(asyncio.get_running_loop(), journal_path=journal)
+
+    assert recovered.snapshot("agent-boxed")["status"] == "running"
+    assert recovered.snapshot("agent-boxed")["sandbox"]["sandbox_id"] == "container-live"
 
 
 async def test_supervisor_marks_active_children_interrupted_after_restart(tmp_path):
@@ -589,6 +672,7 @@ async def test_worker_entrypoint_writes_atomic_result_and_usage(tmp_path, monkey
                 "session_root": str(tmp_path / "sessions"),
                 "result_path": str(result_path),
                 "control_path": str(tmp_path / "control.jsonl"),
+                "max_depth": 0,
             }
         ),
         encoding="utf-8",
@@ -608,6 +692,7 @@ async def test_worker_entrypoint_writes_atomic_result_and_usage(tmp_path, monkey
             return type("Message", (), {"text": "finished", "usage": Usage()})()
 
     async def fake_create(cls, options):
+        assert options.max_depth == 0
         return Session()
 
     monkeypatch.setattr(RLMCodingSession, "create", classmethod(fake_create))

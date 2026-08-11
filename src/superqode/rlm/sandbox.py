@@ -104,11 +104,14 @@ class RLMSandboxConfig:
                 f"Unknown RLM sandbox granularity {granularity!r}; "
                 f"supported: {', '.join(SUPPORTED_GRANULARITIES)}"
             )
+        backend = _resolve_backend(data, execution_policy)
         return cls(
-            backend=_resolve_backend(data, execution_policy),
+            backend=backend,
             granularity=granularity,
             policy=_resolve_policy(data, execution_policy),
-            allow_network=_flag(data, execution_policy, "allow_network", True),
+            # Host mode keeps its released connectivity. An isolation profile
+            # starts offline and requires an explicit network opt-in.
+            allow_network=_flag(data, execution_policy, "allow_network", backend == HOST_BACKEND),
             env_allowlist=tuple(
                 str(item) for item in data.get("env_allowlist") or () if str(item).strip()
             ),
@@ -168,6 +171,11 @@ class RLMSandboxConfig:
             lines.append(
                 "isolation   none. Python runs as the SuperQode process, so these "
                 "checks catch mistakes, not an adversarial model."
+            )
+        elif self.backend == DOCKER_BACKEND:
+            lines.append(
+                "policy      workspace mounts enforce writes; read, shell and command settings "
+                "are guardrails because unrestricted Python can use open or subprocess directly."
             )
         return lines
 

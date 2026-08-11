@@ -106,7 +106,6 @@ class SubcallUsage:
     failures: int = 0
 
     def record(self, usage: Any) -> None:
-        self.calls += 1
         if usage is None:
             return
         cost = getattr(usage, "cost", None)
@@ -259,6 +258,9 @@ class SubcallExecutor:
                 )
             start = self._counter + 1
             self._counter += count
+            # Calls means quota consumed, including failed calls. Otherwise a
+            # timeout could report zero calls while still exhausting max_calls.
+            self.usage.calls = self._counter
             return start
 
     def _resolve_model(self, model: str | None) -> Model:

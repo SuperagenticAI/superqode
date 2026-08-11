@@ -30,6 +30,7 @@ async def run_durable_child(
         job_dir = _job_dir(supervisor, record.id)
         request_path = job_dir / "request.json"
         result_path = job_dir / "result.json"
+        runtime_path = job_dir / "runtime.json"
         control_path = job_dir / "control.jsonl"
         log_path = job_dir / "worker.log"
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -50,6 +51,7 @@ async def run_durable_child(
             "thinking_level": str(options.thinking_level),
             "session_root": str(job_dir / "sessions"),
             "result_path": str(result_path),
+            "runtime_path": str(runtime_path),
             "control_path": str(control_path),
             "max_depth": max(0, supervisor.max_depth - supervisor.depth(record.id)),
             "max_children": supervisor.max_children,

@@ -32,6 +32,8 @@ from .sandbox import (
     resolved_env,
 )
 
+DEFAULT_PYTHON_OBSERVATION_CHARS = 20_000
+
 
 @dataclass(frozen=True, slots=True)
 class ShellResult:
@@ -286,6 +288,28 @@ class PythonExecutionResult:
             parts.append(self.error.rstrip())
         return "\n".join(parts) or "(no output)"
 
+    def observation(self, max_chars: int = DEFAULT_PYTHON_OBSERVATION_CHARS) -> tuple[str, bool]:
+        """Build a bounded model observation without changing persistent state.
+
+        Repository-sized values belong in persistent Python variables, not in
+        the root model's history. The tool boundary applies this limit after
+        execution; assigning a value keeps it available for later bounded
+        inspection even when its displayed representation is truncated.
+        """
+        text = self.text
+        limit = max(256, int(max_chars))
+        if len(text) <= limit:
+            return text, False
+        omitted = len(text) - limit
+        marker = (
+            f"\n... [Python observation truncated; {omitted:,} characters omitted. "
+            "Keep large values in a variable and inspect bounded slices.] ...\n"
+        )
+        available = max(0, limit - len(marker))
+        head = available * 3 // 4
+        tail = available - head
+        return text[:head] + marker + (text[-tail:] if tail else ""), True
+
 
 class PersistentPythonKernel:
     """One persistent Python namespace owned by one RLM session."""
@@ -465,6 +489,8 @@ def kernel_for(
 
 
 def create_python_tool(kernel: PersistentPythonKernel) -> AgentTool:
+    observation = PythonExecutionResult.observation
+
     async def execute(tool_call_id, args, signal=None, on_update=None) -> AgentToolResult:
         del tool_call_id, signal, on_update
         code = str(args.get("code") or "")
@@ -472,15 +498,18 @@ def create_python_tool(kernel: PersistentPythonKernel) -> AgentTool:
             raise ValueError("Python code cannot be empty")
         result = await kernel.execute(code)
         agent_events = kernel.drain_agent_events()
+        observed, truncated = observation(result)
         if result.error:
-            raise RuntimeError(result.text)
+            raise RuntimeError(observed)
         return AgentToolResult(
-            content=[TextContent(text=result.text)],
+            content=[TextContent(text=observed)],
             details={
                 "runtime": "python",
                 "persistent": True,
                 "cwd": str(kernel.cwd),
                 "agent_events": agent_events,
+                "observation_chars": len(result.text),
+                "observation_truncated": truncated,
             },
         )
 

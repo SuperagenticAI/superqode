@@ -26,6 +26,7 @@ import json
 import os
 import pickle
 import re
+import shlex
 import subprocess
 import sys
 import traceback
@@ -34,6 +35,15 @@ from typing import Any, Sequence, cast
 
 PROTOCOL_VERSION = 1
 RESERVED_NAMES = frozenset({"workspace", "shell", "rlm"})
+_COMPOUND_PATTERN = re.compile(r"[;&|]|\$\(|`|\n")
+
+
+class SandboxPolicyError(RuntimeError):
+    """A convenience namespace call violated the declared Docker policy."""
+
+
+def _policy_flag(policy: dict[str, Any], name: str, default: bool = True) -> bool:
+    return bool(policy[name]) if name in policy else default
 
 
 class ProtocolChannel:
@@ -98,8 +108,9 @@ class Workspace:
     interpreter no longer depends on.
     """
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path, policy: dict[str, Any] | None = None) -> None:
         self.root = Path(root).resolve()
+        self.policy = policy or {}
 
     def _path(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser()
@@ -113,17 +124,25 @@ class Workspace:
         return target
 
     def read(self, path: str | Path, *, offset: int = 1, limit: int | None = None) -> str:
+        if not _policy_flag(self.policy, "allow_read"):
+            raise SandboxPolicyError("Reading is disabled by the RLM sandbox policy")
         lines = self._path(path).read_text(encoding="utf-8", errors="replace").splitlines()
         start = max(0, offset - 1)
         return "\n".join(lines[start : start + limit if limit else None])
 
     def write(self, path: str | Path, content: str) -> str:
+        if not _policy_flag(self.policy, "allow_write"):
+            raise SandboxPolicyError("Writing is disabled by the RLM sandbox policy")
         target = self._path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return str(target.relative_to(self.root))
 
     def edit(self, path: str | Path, old: str, new: str, *, replace_all: bool = False) -> str:
+        if not _policy_flag(self.policy, "allow_read"):
+            raise SandboxPolicyError("Reading is disabled by the RLM sandbox policy")
+        if not _policy_flag(self.policy, "allow_write"):
+            raise SandboxPolicyError("Writing is disabled by the RLM sandbox policy")
         target = self._path(path)
         content = target.read_text(encoding="utf-8", errors="replace")
         count = content.count(old)
@@ -136,9 +155,13 @@ class Workspace:
         return f"edited {target.relative_to(self.root)} ({count if replace_all else 1} replacement)"
 
     def glob(self, pattern: str) -> list[str]:
+        if not _policy_flag(self.policy, "allow_read"):
+            raise SandboxPolicyError("Reading is disabled by the RLM sandbox policy")
         return [str(path.relative_to(self.root)) for path in sorted(self.root.glob(pattern))]
 
     def search(self, pattern: str, path: str | Path = ".") -> list[str]:
+        if not _policy_flag(self.policy, "allow_read"):
+            raise SandboxPolicyError("Reading is disabled by the RLM sandbox policy")
         root = self._path(path)
         regex = re.compile(pattern)
         matches: list[str] = []
@@ -158,8 +181,9 @@ class Workspace:
 class Shell:
     """Commands run inside the boundary, never on the host."""
 
-    def __init__(self, cwd: str | Path) -> None:
+    def __init__(self, cwd: str | Path, policy: dict[str, Any] | None = None) -> None:
         self.cwd = Path(cwd).resolve()
+        self.policy = policy or {}
 
     def run(
         self,
@@ -168,7 +192,23 @@ class Shell:
         timeout: float | None = 120,
         env: dict[str, str] | None = None,
     ) -> ShellResult:
+        if not _policy_flag(self.policy, "allow_shell"):
+            raise SandboxPolicyError("Shell execution is disabled by the RLM sandbox policy")
         shell = isinstance(command, str)
+        if shell:
+            if not _policy_flag(
+                self.policy, "allow_compound_commands"
+            ) and _COMPOUND_PATTERN.search(command):
+                raise SandboxPolicyError("Compound shell commands are disabled by the RLM policy")
+            tokens = shlex.split(command)
+        else:
+            tokens = [str(item) for item in command]
+        allowed = tuple(str(item) for item in self.policy.get("allowed_commands") or ())
+        executable = os.path.basename(tokens[0]) if tokens else ""
+        if allowed and executable not in allowed:
+            raise SandboxPolicyError(
+                f"Command {executable!r} is not in the RLM sandbox allowlist ({', '.join(allowed)})"
+            )
         completed = subprocess.run(  # noqa: S603 - the container is the boundary
             command,
             cwd=self.cwd,
@@ -423,7 +463,13 @@ def _agent_id(value: Any) -> str:
 class SandboxKernel:
     """One persistent namespace, executed inside the boundary."""
 
-    def __init__(self, channel: ProtocolChannel, workspace: str | Path, kernel_id: str) -> None:
+    def __init__(
+        self,
+        channel: ProtocolChannel,
+        workspace: str | Path,
+        kernel_id: str,
+        policy: dict[str, Any] | None = None,
+    ) -> None:
         self.channel = channel
         self.kernel_id = kernel_id
         self.cwd = Path(workspace).resolve()
@@ -431,8 +477,8 @@ class SandboxKernel:
         self.globals: dict[str, Any] = {
             "__name__": "__rlm__",
             "__builtins__": __builtins__,
-            "workspace": Workspace(self.cwd),
-            "shell": Shell(self.cwd),
+            "workspace": Workspace(self.cwd, policy),
+            "shell": Shell(self.cwd, policy),
             "rlm": RLMProxy(self.host_call, kernel_id),
             # Subcalls run on the host: they need provider credentials, and a
             # quota the sandbox could reach would not be a quota.
@@ -582,9 +628,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
     kernel_id = arguments[0] if arguments else "root"
     workspace = arguments[1] if len(arguments) > 1 else "/workspace"
+    try:
+        policy = json.loads(arguments[2]) if len(arguments) > 2 else {}
+    except (TypeError, ValueError):
+        policy = {}
+    if not isinstance(policy, dict):
+        policy = {}
 
     channel = ProtocolChannel()
-    kernel = SandboxKernel(channel, workspace, kernel_id)
+    kernel = SandboxKernel(channel, workspace, kernel_id, policy)
     channel.send({"type": "ready", "kernel_id": kernel_id, "protocol": PROTOCOL_VERSION})
 
     while True:

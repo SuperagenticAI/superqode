@@ -60,7 +60,7 @@ class RLMCommandMixin:
             text.append(f"    :rlm {name:<{width}}  ", style=THEME["cyan"])
             text.append(f"{summary}\n", style=THEME["muted"])
         text.append(
-            "\n  The initial Python kernel has the permissions of the SuperQode process.\n",
+            "\n  The Python kernel uses the sandbox profile selected by the active harness spec.\n",
             style=THEME["dim"],
         )
         log.write(text)
@@ -256,7 +256,8 @@ class RLMCommandMixin:
         try:
             from superqode.rlm.context import RLMContext
 
-            stats = RLMContext(session.cwd).stats()
+            context_policy = getattr(getattr(session, "options", None), "context_policy", None)
+            stats = RLMContext(session.cwd, policy=context_policy).stats()
             log.add_info(f"context    {stats['files']} files, {stats['bytes']} bytes in scope")
         except Exception as error:  # noqa: BLE001 - accounting must not break the command
             log.add_info(f"context    unavailable: {error}")
@@ -271,8 +272,8 @@ class RLMCommandMixin:
     def _rlm_sandbox(self, session: Any, rest: str, log) -> None:
         """Report the boundary. The profile itself comes from the harness spec.
 
-        Nothing here can change it: the only implemented profile is ``host``, so
-        a setter would either be a no-op or a promise this build cannot keep.
+        Nothing here changes it; the profile comes from the active harness
+        specification and takes effect when the session connects.
         """
         from superqode.rlm.sandbox import docker_available
 
@@ -289,10 +290,8 @@ class RLMCommandMixin:
                 log.add_success(f"docker      {detail}")
             else:
                 log.add_info(f"docker      unavailable: {detail}")
-            log.add_info(
-                "Only the host profile runs in this build. Docker is reported here "
-                "so the boundary can be verified before it is supported."
-            )
+            log.add_info("profiles    host, docker, monty")
+            log.add_info("Docker networking is disabled unless allow_network is enabled.")
             return
         log.add_error(f"The sandbox profile is not set from :rlm sandbox ({argument!r} ignored).")
         log.add_info("Set runtime.config.sandbox in the harness spec, then reconnect.")

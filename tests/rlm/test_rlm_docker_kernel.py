@@ -10,16 +10,21 @@ They skip when Docker is unavailable so the suite stays runnable everywhere.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import pickle
 import shutil
 import socket
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 
 from superqode.rlm.kernel_docker import DockerKernelBackend
 from superqode.rlm.sandbox import RLMSandboxConfig
+from superqode.rlm.supervisor import AgentSupervisor
 
 IMAGE = "python:3.12-slim"
 
@@ -135,6 +140,22 @@ async def test_root_and_children_get_separate_namespaces_in_one_container(contai
     assert root_view.value_repr == "'child'"
 
 
+async def test_read_only_policy_is_enforced_by_the_workspace_mount(containers, tmp_path):
+    repo = tmp_path / "readonly-repo"
+    repo.mkdir()
+    source = repo / "kept.txt"
+    source.write_text("original\n", encoding="utf-8")
+    backend = containers("read-only", workspace=repo, allow_write=False)
+    await backend.start()
+
+    wrapped = await backend.execute("root", "workspace.write('kept.txt', 'changed')")
+    direct = await backend.execute("root", "open('kept.txt', 'w').write('changed')")
+
+    assert "Writing is disabled" in (wrapped.error or "")
+    assert "Read-only file system" in (direct.error or "")
+    assert source.read_text(encoding="utf-8") == "original\n"
+
+
 async def test_state_and_the_container_survive_a_detached_reattach(containers):
     first = containers("reattach")
     started = await first.start()
@@ -152,6 +173,51 @@ async def test_state_and_the_container_survive_a_detached_reattach(containers):
     # that execution would otherwise overwrite the state being recovered.
     assert recovered.value_repr == "'survives the restart'"
     assert recovered.error is None
+
+
+async def test_supervisor_recovery_verifies_the_live_docker_boundary(containers, tmp_path):
+    backend = containers("supervisor-recovery")
+    identity = await backend.start()
+    runtime = tmp_path / "worker-runtime.json"
+    runtime.write_text(
+        json.dumps({"sandbox": identity.to_dict()}),
+        encoding="utf-8",
+    )
+    request = tmp_path / "worker-request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "agent_id": "agent-docker",
+                "worker_pid": os.getpid(),
+                "runtime_path": str(runtime),
+            }
+        ),
+        encoding="utf-8",
+    )
+    agent = {
+        "id": "agent-docker",
+        "prompt": "work",
+        "parent_id": "root",
+        "status": "running",
+        "created_at": time.time(),
+        "worker_pid": os.getpid(),
+        "worker_request_path": str(request),
+        "sandbox": {"backend": "docker", "session_id": identity.session_id},
+        "children": [],
+    }
+    journal = tmp_path / "docker.agents.jsonl"
+    journal.write_text(
+        json.dumps({"type": "agent.worker_started", "agent": agent}) + "\n",
+        encoding="utf-8",
+    )
+
+    live = AgentSupervisor(asyncio.get_running_loop(), journal_path=journal)
+    assert live.snapshot("agent-docker")["status"] == "running"
+    assert live.snapshot("agent-docker")["sandbox"]["sandbox_id"] == identity.sandbox_id
+
+    await backend.close()
+    stopped = AgentSupervisor(asyncio.get_running_loop(), journal_path=journal)
+    assert stopped.snapshot("agent-docker")["status"] == "interrupted"
 
 
 async def test_the_host_never_unpickles_state_the_sandbox_produced(containers, monkeypatch):
@@ -311,7 +377,7 @@ async def test_recursion_from_inside_the_container_spawns_on_the_host(tmp_path):
 
 
 async def test_the_profile_can_close_the_network(containers):
-    backend = containers("no-network", allow_network=False)
+    backend = containers("no-network")
     await backend.start()
 
     result = await backend.execute(

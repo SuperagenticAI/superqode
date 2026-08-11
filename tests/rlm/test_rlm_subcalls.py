@@ -138,6 +138,7 @@ async def test_an_oversized_prompt_comes_back_as_data_with_advice():
 
     assert response.ok is False
     assert "Chunk the context" in response.error
+    assert executor.usage.calls == 1
     assert executor.usage.failures == 1
 
 
@@ -194,6 +195,8 @@ async def test_the_timeout_is_reported_as_a_failed_response():
 
     assert response.ok is False
     assert "timed out" in response.error
+    assert executor.usage.calls == 1
+    assert executor.usage.failures == 1
 
 
 def test_the_policy_reads_runtime_config():
