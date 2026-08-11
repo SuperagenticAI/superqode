@@ -77,6 +77,7 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 |---|---|---|---|
 | `SUPERQODE_OLLAMA_NUM_CTX` | int | unset | Request this context length from Ollama per call. Ollama's MLX backend honors only Modelfile-baked values. |
 | `SUPERQODE_OLLAMA_KEEP_ALIVE` | duration | `30m` | How long Ollama keeps the model loaded between calls. |
+| `SUPERQODE_CAPABILITY_TIMEOUT` | seconds | `2` | Maximum wait when asking a local runtime what a model supports (for example Ollama's capability list). On timeout the model is treated as tool-capable rather than silently downgraded. |
 | `SUPERQODE_DISABLE_LOCAL_SHAPING` | `0`/`1` | off | Skip local-request shaping (num_ctx, keep-alive, tool-temperature clamps). |
 | `SUPERQODE_DISABLE_PROMPT_CACHE` | `0`/`1` | off | Disable prompt-cache annotations on outgoing requests. |
 | `SUPERQODE_DS4_THINKING` | mode | unset | Force the DS4 thinking mode instead of the per-model default. |

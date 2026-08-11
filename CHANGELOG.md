@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.88] - 2026-08-11
+
+### Fixed
+
+- Local models outside a hardcoded family allowlist were silently denied tool
+  definitions, so an agentic request came back as prose describing the command
+  the model would have run, with nothing executed. Tool gating now asks the
+  running provider what a model supports, falls back to the model registry, and
+  only withholds tools on an explicit denial. A model the runtime cannot
+  describe is sent tools and allowed to fail loudly, because a false negative
+  here is invisible while a false positive is a diagnosable server error.
+  Ollama reports this through the capability list on `/api/show`; providers that
+  forward tool definitions verbatim are recorded once, as providers, rather than
+  as the models they happen to serve today.
+  This affected every harness built on the shared runtime, including Core and
+  Workbench. Harnesses with their own runtimes, such as RLM, PiPy and Tau, were
+  never involved, and hosted models were never gated this way.
+- `vllm`, `sglang` and `tgi` refused to probe tool support for any model whose
+  name was unfamiliar, and reported the same guess in their model listings.
+  These runtimes pass tool definitions through to the model, so the probe now
+  runs and the listing reflects the server contract.
+
+### Added
+
+- `SUPERQODE_CAPABILITY_TIMEOUT` bounds how long a local runtime is given to
+  answer a capability question. It defaults to 2 seconds, and a timeout leaves
+  the model treated as tool-capable rather than silently downgraded.
+
 ## [0.2.87] - 2026-08-10
 
 ### Fixed

@@ -609,10 +609,24 @@ async def test_agent_stops_when_model_keeps_narrating_tool_use_without_call():
 
 
 @pytest.mark.asyncio
-async def test_local_tool_gating_is_family_based():
-    # Tool-capable family (Qwen 3) DOES receive tools — local models use family
-    # detection, not a fixed registry, so modern local models (Gemma 4, Qwen 3,
-    # Llama 4) can do agentic coding even with custom Ollama names.
+async def test_local_tool_gating_follows_the_runtime_not_the_model_name(monkeypatch):
+    """Tool gating asks the runtime what a model can do.
+
+    A name-based allowlist cannot know about models released after it was
+    written, and getting it wrong is silent: the model receives no tools and
+    answers by describing the command it would have run. So only an explicit
+    denial from the runtime withholds them.
+    """
+    from superqode.providers.local import capabilities
+
+    capabilities.clear_cache()
+
+    declared = {"qwen3:8b": True, "some-embedder:latest": False}
+    monkeypatch.setattr(
+        capabilities, "_ollama_declares_tools", lambda model_id: declared.get(model_id)
+    )
+
+    # The runtime says yes.
     gw_capable = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(
         gateway=gw_capable,
@@ -623,15 +637,28 @@ async def test_local_tool_gating_is_family_based():
     assert result.content == "done"
     assert gw_capable.tools_seen[0] is not None
 
-    # Non-tool-capable family (Gemma 2) stays conservative — no tools sent.
-    gw_conservative = ScriptedGateway([GatewayResponse(content="done")])
+    # The runtime says no. This is the only thing that withholds tools.
+    gw_denied = ScriptedGateway([GatewayResponse(content="done")])
     loop2 = AgentLoop(
-        gateway=gw_conservative,
+        gateway=gw_denied,
         tools=ToolRegistry.default(),
-        config=AgentConfig(provider="ollama", model="gemma2:9b"),
+        config=AgentConfig(provider="ollama", model="some-embedder:latest"),
     )
     await loop2.run("read README.md and summarize the setup")
-    assert gw_conservative.tools_seen[0] is None
+    assert gw_denied.tools_seen[0] is None
+
+    # The runtime cannot say, and the name matches nothing. Previously this
+    # silently dropped tools; it must now default to sending them.
+    gw_unknown = ScriptedGateway([GatewayResponse(content="done")])
+    loop3 = AgentLoop(
+        gateway=gw_unknown,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(provider="ollama", model="muse-glimmer:30b-mlx"),
+    )
+    await loop3.run("read README.md and summarize the setup")
+    assert gw_unknown.tools_seen[0] is not None
+
+    capabilities.clear_cache()
 
 
 def _build_loop_system_prompt(

@@ -20,7 +20,6 @@ from superqode.providers.local.base import (
     ProviderStatus,
     ToolTestResult,
     detect_model_family,
-    likely_supports_tools,
 )
 
 
@@ -141,7 +140,7 @@ class VLLMClient(LocalProviderClient):
                         id=model_id,
                         name=model_id.split("/")[-1],
                         family=detect_model_family(model_id),
-                        supports_tools=likely_supports_tools(model_id),
+                        supports_tools=True,  # OpenAI-compatible passthrough; see capabilities.py
                         running=True,  # If listed, it's loaded
                     )
                 )
@@ -169,13 +168,6 @@ class VLLMClient(LocalProviderClient):
     async def test_tool_calling(self, model_id: str) -> ToolTestResult:
         """Test tool calling capability."""
         start_time = time.time()
-
-        if not likely_supports_tools(model_id):
-            return ToolTestResult(
-                model_id=model_id,
-                supports_tools=False,
-                notes="Model family not known to support tools",
-            )
 
         test_tools = [
             {

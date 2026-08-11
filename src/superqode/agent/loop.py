@@ -362,9 +362,23 @@ def _is_malformed_tool_call_response(response_content: str, tool_calls: List[Dic
 
 
 def _model_supports_tools(provider: str, model: str) -> bool:
-    """Return whether a provider/model should receive tool definitions."""
-    if provider == "ds4":
-        return True
+    """Return whether a provider/model should receive tool definitions.
+
+    Resolution order is runtime first, name last. A local runtime that states
+    a model's capabilities is believed; only an explicit denial withholds
+    tools. Name-based detection cannot know about models released after it was
+    written, so it is never allowed to veto: an unrecognised local model is
+    sent tools and permitted to fail loudly, rather than being silently
+    downgraded to a model that narrates commands instead of running them.
+    """
+    try:
+        from ..providers.local.capabilities import declared_tool_support
+
+        declared = declared_tool_support(provider, model)
+        if declared is not None:
+            return declared
+    except Exception:
+        pass
 
     try:
         from ..providers.models import MODEL_REGISTRY
@@ -375,14 +389,27 @@ def _model_supports_tools(provider: str, model: str) -> bool:
     except Exception:
         pass
 
-    # Local runtimes use arbitrary, user-chosen model names (e.g. a custom
-    # Ollama tag like "gemma4-31b") that won't be in MODEL_REGISTRY. Fall back to
-    # family-based detection so modern local models (Gemma 4, Qwen 3, Llama 4,
-    # …) actually receive tools and can do agentic coding.
+    # Unknown local model: default to sending tools. A false negative here is
+    # invisible and breaks agentic coding outright; a false positive surfaces
+    # as an error from the server, which is diagnosable.
+    if _is_local_provider(provider):
+        return True
+
     try:
         from ..providers.local.base import likely_supports_tools
 
         return likely_supports_tools(model)
+    except Exception:
+        return False
+
+
+def _is_local_provider(provider: str) -> bool:
+    """True when ``provider`` is a locally hosted runtime."""
+    try:
+        from ..providers.registry import PROVIDERS, ProviderCategory
+
+        provider_def = PROVIDERS.get(provider)
+        return bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
     except Exception:
         return False
 
@@ -417,11 +444,7 @@ def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: 
     if _is_simple_conversational_query(user_message):
         return False
 
-    from ..providers.registry import PROVIDERS, ProviderCategory
-
-    provider_def = PROVIDERS.get(provider)
-    is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
-    if is_local_provider:
+    if _is_local_provider(provider):
         return _model_supports_tools(provider, model)
     return True
 
