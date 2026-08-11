@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.91] - 2026-08-11
+
+### Added
+
+- The native RLM example now includes a checked-in Pydantic Monty HarnessSpec
+  for restricted, read-only repository analysis with persistent Python context
+  and bounded semantic subcalls.
+
+### Changed
+
+- The RLM example guide now separates Monty analysis from Docker coding and
+  documents the public TUI commands for inspecting and managing resident RLM
+  sessions without including recording-specific instructions.
+
 ## [0.2.90] - 2026-08-11
 
 ### Added
