@@ -6,7 +6,7 @@ current codebase.
 
 ## Product scope
 
-SuperQode is a terminal-first Agent Engineering framework for code factories. It supports organization-owned HarnessSpecs, established coding agents, local and hosted models, persistent sessions, repository delivery, evaluation, governance, and guarded optimization.
+SuperQode is the terminal-first unified harness layer for coding agents. It supports organization-owned HarnessSpecs, native harnesses, established open-source and proprietary agents, local and hosted models, persistent sessions, repository delivery, evaluation, governance, and guarded optimization.
 
 The primary interfaces are the CLI and TUI. Headless commands, local APIs, browser rendering, and chat channels provide automation and remote access without replacing the terminal workflow.
 

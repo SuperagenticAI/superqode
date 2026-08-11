@@ -242,7 +242,23 @@ class MontyKernelBackend:
 
     async def execute(self, kernel_id: str, code: str) -> PythonExecutionResult:
         session = await self._session(kernel_id)
-        return await asyncio.to_thread(self._feed, session, code)
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._feed, session, code),
+                timeout=self.config.python_timeout,
+            )
+        except TimeoutError:
+            # A timed-out Monty session is never reused. Monty's restricted VM
+            # has no host access, and a replacement session restores only its
+            # last completed snapshot.
+            with self._lock:
+                self._sessions.pop(kernel_id, None)
+            return PythonExecutionResult(
+                "",
+                "",
+                f"Python execution timed out after {self.config.python_timeout:g}s; "
+                "the Monty session was discarded",
+            )
 
     async def shell(
         self,

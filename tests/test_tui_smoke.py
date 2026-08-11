@@ -349,12 +349,12 @@ def test_thinking_bars_use_calm_animation_speeds():
     assert BottomScanningLine.SWEEP_CYCLES_PER_SECOND == 0.2
 
 
-def test_welcome_uses_agent_engineering_positioning():
+def test_welcome_uses_unified_harness_positioning():
     welcome = render_welcome([], state=WelcomeState(repository="/work/repository"))
 
     text = render_plain(welcome)
 
-    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
+    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" in text
     # No command list here. The prompt placeholder names the first command and
     # the bar under it carries them as controls, so the home screen is the
     # product, not a menu.
@@ -380,7 +380,7 @@ def test_welcome_uses_agent_engineering_positioning():
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
     lines = [line.strip() for line in text.splitlines()]
-    headline_index = lines.index("AGENT ENGINEERING FOR YOUR CODE FACTORY")
+    headline_index = lines.index("THE UNIFIED HARNESS LAYER FOR CODING AGENTS")
     capabilities_index = lines.index(
         "Harnesses · Context · Memory · Tools · Evaluations · Control loops"
     )
@@ -412,7 +412,7 @@ def test_welcome_shows_workspace_state_with_a_single_next_step():
     assert "Task" not in text
     assert ":explore" in text
     assert ":tour" in text
-    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" not in text
+    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" not in text
     assert "Interoperability:" not in text
 
 
@@ -455,7 +455,7 @@ def test_welcome_compacts_for_narrow_terminals():
     text = render_plain(render_welcome([], width=50))
 
     assert "SuperQode" in text
-    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
+    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" in text
     assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
@@ -469,10 +469,10 @@ def test_welcome_uses_one_line_headlines_at_small_widths():
     compact = render_plain(render_welcome([], width=36))
     narrow = render_plain(render_welcome([], width=24))
 
-    assert "YOUR CODE FACTORY" in compact
-    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" not in compact
-    assert "AGENT ENGINEERING" in narrow
-    assert "CODE FACTORY" not in narrow
+    assert "UNIFIED HARNESS LAYER" in compact
+    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" not in compact
+    assert "HARNESS LAYER" in narrow
+    assert "CODING AGENTS" not in narrow
 
 
 def test_welcome_screen_is_not_padded_with_stray_blank_lines():

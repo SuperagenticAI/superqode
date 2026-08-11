@@ -10,9 +10,9 @@ organize the work around different primary experiences.
 
 In one sentence: both projects orchestrate coding-agent harnesses. Omnigent
 places the persistent collaborative session at the center of its experience,
-while SuperQode provides terminal-first Agent Engineering for an
-organization-owned code factory, including repository delivery, evaluation,
-governance, and guarded optimization around that session.
+while SuperQode provides a terminal-first unified harness layer across native,
+open-source, and proprietary coding agents, including repository delivery,
+evaluation, governance, and guarded optimization around that session.
 
 ## The shared idea
 
@@ -259,12 +259,12 @@ improvement.
 
 This interoperability does not require SuperQode to emulate the Omnigent server
 or client suite. It treats the imported definition as an input to SuperQode's
-Agent Engineering workflow.
+unified harness workflow.
 
 ## A concise public description
 
 > SuperQode shares Omnigent's multi-harness foundation and provides a distinct
-> terminal-first Agent Engineering workflow. Sessions can continue across
+> terminal-first unified harness workflow. Sessions can continue across
 > harnesses, branch into independent approaches, and feed repository-owned
 > WorkOrders, evaluation, governance, and guarded optimization.
 

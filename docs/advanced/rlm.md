@@ -56,6 +56,10 @@ The TUI streams child start and result events and provides an initial command
 surface:
 
 ```text
+:rlm status
+:rlm attach
+:rlm detach
+:rlm stop
 :rlm session
 :rlm sandbox
 :rlm usage
@@ -64,6 +68,27 @@ surface:
 :rlm steer <agent-id> <instruction>
 :rlm cancel <agent-id>
 ```
+
+## Resident root runtime
+
+The terminal does not own an RLM turn. One resident Python worker owns the root
+session, its persistent kernel and every recursive descendant. Closing the TUI
+or losing its event consumer detaches the client; it does not cancel the model,
+the kernel or child agents. Reopen the same SuperQode session and use
+`:rlm attach` to replay and follow the active turn.
+
+Commands and events cross a versioned, append-only local protocol. The worker
+records its process generation, heartbeat, active command and session path, so
+`:rlm status` can distinguish a live worker from stale state. If a worker dies
+without publishing a result, recovery reports the command as interrupted rather
+than completed. `:rlm stop` is the explicit operation that stops a resident
+root.
+
+All descendants use the root worker's supervisor. Depth, total child count and
+parallelism therefore apply to the complete tree, including grandchildren,
+rather than resetting in each child process. Semantic-subcall usage and its
+quota are persisted beside the session, so restarting a worker does not create
+a fresh allowance.
 
 ## Context as data
 
@@ -149,6 +174,9 @@ runtime:
     subcall_max_response_chars: 200000
     subcall_token_budget: 0
     subcall_models: []
+    python_timeout: 120
+    max_output_chars: 1000000
+    max_checkpoint_bytes: 67108864
     context_max_files: 2000
     context_max_file_bytes: 512000
     context_max_total_bytes: 20000000
@@ -164,7 +192,8 @@ One quota covers a session, so single calls and batches draw on the same
 allowance rather than each getting a fresh one. A prompt over the limit comes
 back as a failed answer suggesting you chunk the context, a failed subcall does
 not take down the rest of its batch, and subcall usage is reported separately
-from root and child-agent usage.
+from root and child-agent usage. Calls, failures, tokens and cost survive a
+resident-worker restart.
 
 Under the `docker` profile the query leaves the boundary, because provider
 credentials never enter it. The sandbox asks the host, which enforces the same
@@ -250,14 +279,16 @@ runtime:
     allowed_commands: ["uv", "pytest"]
     allow_compound_commands: false
     env_allowlist: ["PATH", "HOME"]
+    python_timeout: 120
+    max_output_chars: 1000000
+    max_checkpoint_bytes: 67108864
 ```
 
-The declared policy now reaches the Python namespace, which the released kernel
-ignored: `workspace.write` and `shell.run` refuse work the policy denies, the
-command allowlist is checked before execution, and `env_allowlist` filters the
-environment commands are given. Child agents inherit the same profile, and it
-travels in the detached worker request so a child rebuilds it in its own
-process.
+The declared policy reaches the Python namespace: `workspace.write` and
+`shell.run` refuse work the policy denies, the command allowlist is checked
+before execution, and `env_allowlist` filters the environment commands are
+given. Child agents inherit the root worker's profile and run in separate
+kernels inside the same session boundary.
 
 Under `host` these checks are guardrails, not isolation. They make an accidental
 write or an unintended command fail, but Python in that namespace can still call
@@ -313,6 +344,15 @@ Three things follow from the interpreter being inside:
 Reopening a session reattaches to its container by label and restores each
 kernel's checkpoint before the first execution. The container outlives the TUI,
 so `:rlm sandbox` reports what is actually running.
+
+Docker also enforces a deadline for each Python cell. On timeout SuperQode stops
+that kernel process. The next call starts a replacement and restores the last
+completed checkpoint. Output is bounded before it crosses the process protocol,
+and checkpoint files have a byte budget, so printing or retaining a very large
+value cannot create an unbounded transport frame or state file. Host mode uses
+the same output and checkpoint bounds, but cannot safely interrupt arbitrary
+Python running inside the SuperQode process; use Docker when the deadline must
+be an enforceable boundary.
 
 The repository is writable by default because a coding agent needs to edit it.
 Set `allow_write: false` for review or analysis work. In writable mode the
@@ -374,13 +414,13 @@ Python code assigns it to a variable, so inspect large values through bounded
 slices rather than printing them.
 
 Child status, ancestry and completed results are recorded beside the root
-session in an `.agents.jsonl` journal. SuperQode restores those records when it
-resumes a session. For a detached Docker child, the worker publishes its actual
-container identity and recovery verifies both the worker request and the live
-container before reattaching. If either side cannot be verified, the child is
-reported as `interrupted`; it is never presented as successfully completed.
+session in an `.agents.jsonl` journal. The resident root worker owns one
+supervisor for the whole tree, so root commands can inspect descendants at every
+depth and enforce one shared child and concurrency budget. If the worker dies,
+active in-process descendants are reported as `interrupted`; they are never
+presented as successfully completed.
 
-The Python namespace remains exact while the SuperQode process is running.
+The Python namespace remains exact while the resident worker is running.
 After every successful Python call, SuperQode also checkpoints each
 serializable user variable independently to `.kernel.pkl`. On restart it
 restores the values it can deserialize while rebuilding the host-owned
@@ -389,18 +429,15 @@ handles and other process-bound values are skipped without preventing simpler
 state from recovering. The checkpoint is trusted local runtime state and should
 not be copied from an untrusted source.
 
-With the normal provider gateway, each child is launched as a detached Python
-worker. Its request, control stream, log and atomic result live in a
-session-owned worker directory. Closing the TUI does not terminate that worker.
-When the session is reopened, the supervisor verifies the journaled worker PID
-against its request identity and reattaches to the result file. Follow-up,
-steering and cancellation commands travel through the worker's control JSONL.
+The resident worker's manifest, command stream, control stream, event stream,
+status and log live under `~/.superqode/rlm/runtime`. Files are scoped by both
+workspace and harness session ID. The root worker is a lifecycle boundary, not
+a security sandbox; the selected kernel profile still decides where
+model-written Python runs.
 
-Injected/custom stream functions, including deterministic test transports, run
-children in-process because an arbitrary Python callback cannot be transferred
-to another interpreter. If an in-process child is active during restart it is
-reported as `interrupted`. Set `runtime.config.durable_children: false` to use
-that behavior explicitly.
+Direct Python SDK sessions can still opt into the older detached-per-child
+transport. The released CLI and TUI use one resident root instead, because that
+is the only design in which descendants share authoritative tree-wide limits.
 
 Relocate RLM state with:
 

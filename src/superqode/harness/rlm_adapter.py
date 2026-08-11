@@ -25,7 +25,12 @@ DEFAULT_TOOLS: tuple[str, ...] = ("python",)
 class RLMHarnessProtocolAdapter:
     """Run the one-tool RLM coding session behind Harness Protocol v1."""
 
-    def __init__(self, *, session_factory: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        session_factory: Any | None = None,
+        resident: bool | None = None,
+    ) -> None:
         self.descriptor = HarnessDescriptor(
             id="rlm",
             name="RLM",
@@ -46,18 +51,27 @@ class RLMHarnessProtocolAdapter:
                 "model_tool_count": 1,
                 "persistent_python": True,
                 "durable_children": True,
+                "resident_root": True,
+                "global_recursive_tree": True,
                 "pure_permissions": True,
             },
         )
         self._session_factory = session_factory
+        # Test and SDK callers that inject a session factory intentionally own
+        # that in-process session. Released CLI/TUI sessions use a resident
+        # root worker so disconnecting a terminal does not cancel the turn.
+        self._resident = session_factory is None if resident is None else resident
         self._sessions: dict[str, Any] = {}
         self._refs: dict[str, HarnessSessionRef] = {}
+        self._runtime_clients: dict[str, Any] = {}
 
     async def create(self, request: HarnessCreateRequest) -> HarnessSessionRef:
         if request.harness_id != self.descriptor.id:
             raise ValueError(f"RLM adapter cannot create harness {request.harness_id!r}")
         session_id = request.session_id or f"rlm-{uuid4().hex[:12]}"
         working_directory = request.working_directory.expanduser().resolve()
+        if self._resident:
+            return await self._open_resident(request, session_id, working_directory)
         coding_session = await self._open(request, working_directory)
         pure_permissions = _pure_permissions(request.metadata)
         ref = HarnessSessionRef(
@@ -97,6 +111,13 @@ class RLMHarnessProtocolAdapter:
             session_id=session.session_id,
             metadata=metadata,
         )
+        if self._resident:
+            return await self._open_resident(
+                request,
+                session.session_id,
+                working_directory,
+                external_session_id=session.external_session_id,
+            )
         existing = str(metadata.get("session_path") or "") or _indexed_session_path(
             session.session_id, working_directory
         )
@@ -119,6 +140,54 @@ class RLMHarnessProtocolAdapter:
         self._sessions[session.session_id] = coding_session
         self._refs[session.session_id] = ref
         _record_session_path(session.session_id, coding_session.session_path)
+        return ref
+
+    async def _open_resident(
+        self,
+        request: HarnessCreateRequest,
+        session_id: str,
+        working_directory: Path,
+        *,
+        external_session_id: str | None = None,
+    ) -> HarnessSessionRef:
+        from superqode.rlm.root_runtime import RootRuntimeClient
+
+        # Backend requests carry live control-plane objects such as
+        # ``_harness_store``. A resident worker is a process boundary, so its
+        # manifest contains only portable public configuration.
+        metadata = {
+            **_portable_metadata(request.metadata),
+            "provider": request.provider,
+            "model": request.model,
+            "working_directory": str(working_directory),
+            "model_tools": list(DEFAULT_TOOLS),
+            "persistent_python": True,
+            "pure_permissions": _pure_permissions(request.metadata),
+            "resident_root": True,
+        }
+        client = RootRuntimeClient(
+            session_id,
+            {
+                "session_id": session_id,
+                "external_session_id": external_session_id or "",
+                "provider": request.provider,
+                "model": request.model,
+                "working_directory": str(working_directory),
+                "metadata": metadata,
+            },
+        )
+        status = await client.ensure()
+        if status.session_path:
+            metadata["session_path"] = status.session_path
+            _record_session_path(session_id, status.session_path)
+        ref = HarnessSessionRef(
+            session_id=session_id,
+            harness_id=self.descriptor.id,
+            external_session_id=status.external_session_id or external_session_id or session_id,
+            metadata=metadata,
+        )
+        self._runtime_clients[session_id] = client
+        self._refs[session_id] = ref
         return ref
 
     async def _open(
@@ -167,6 +236,15 @@ class RLMHarnessProtocolAdapter:
         session: HarnessSessionRef,
         message: HarnessMessage,
     ) -> AsyncIterator[HarnessEvent]:
+        if self._resident:
+            client = await self._runtime(session)
+            command_id = await client.submit(
+                "send",
+                {"content": message.content, "message_id": message.message_id},
+            )
+            async for event in client.events(command_id):
+                yield event
+            return
         coding_session = await self._require(session)
         model = coding_session.harness.get_model()
         yield HarnessEvent(
@@ -226,14 +304,36 @@ class RLMHarnessProtocolAdapter:
             prompt = gate_feedback(results)
 
     async def steer(self, session: HarnessSessionRef, message: HarnessMessage) -> None:
+        if self._resident:
+            await (await self._runtime(session)).control("steer", {"content": message.content})
+            return
         coding_session = await self._require(session)
         await coding_session.steer(message.content)
 
     async def cancel(self, session: HarnessSessionRef) -> None:
+        if self._resident:
+            await (await self._runtime(session)).control("cancel")
+            return
         coding_session = await self._require(session)
         await coding_session.abort()
 
     async def checkpoint(self, session: HarnessSessionRef) -> HarnessCheckpoint:
+        if self._resident:
+            events = await (await self._runtime(session)).request("checkpoint")
+            raw = next(
+                (event.data for event in events if event.type == "checkpoint.created"),
+                None,
+            )
+            if raw is None:
+                raise RuntimeError("Resident RLM worker did not return a checkpoint")
+            return HarnessCheckpoint(
+                session_id=str(raw.get("session_id") or session.session_id),
+                harness_id=str(raw.get("harness_id") or self.descriptor.id),
+                checkpoint_id=str(raw.get("checkpoint_id") or f"checkpoint_{uuid4().hex}"),
+                external_checkpoint_id=raw.get("external_checkpoint_id"),
+                created_at=float(raw.get("created_at") or 0.0),
+                state=dict(raw.get("state") or {}),
+            )
         ref = self._refs.get(session.session_id, session)
         coding_session = self._sessions.get(session.session_id)
         leaf = await coding_session.session.get_leaf_id() if coding_session else None
@@ -257,6 +357,14 @@ class RLMHarnessProtocolAdapter:
         await self.resume(session)
         return self._sessions[session.session_id]
 
+    async def _runtime(self, session: HarnessSessionRef) -> Any:
+        active = self._runtime_clients.get(session.session_id)
+        if active is not None:
+            await active.ensure()
+            return active
+        await self.resume(session)
+        return self._runtime_clients[session.session_id]
+
 
 def _pure_permissions(metadata: dict[str, Any]) -> bool:
     """Whether this concrete session runs without an interpreter boundary."""
@@ -265,6 +373,35 @@ def _pure_permissions(metadata: dict[str, Any]) -> bool:
     limits = dict(metadata.get("rlm_config") or {})
     sandbox = RLMSandboxConfig.from_config(metadata.get("rlm_sandbox") or limits)
     return not sandbox.isolated
+
+
+def _portable_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Return the JSON-safe, public subset allowed across the worker boundary."""
+
+    portable: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if str(key).startswith("_"):
+            continue
+        converted = _portable_value(value)
+        if converted is not _NOT_PORTABLE:
+            portable[str(key)] = converted
+    return portable
+
+
+_NOT_PORTABLE = object()
+
+
+def _portable_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        converted = [_portable_value(item) for item in value]
+        return [item for item in converted if item is not _NOT_PORTABLE]
+    if isinstance(value, dict):
+        return _portable_metadata(value)
+    return _NOT_PORTABLE
 
 
 def _record_session_path(session_id: str, session_path: Path | str) -> None:

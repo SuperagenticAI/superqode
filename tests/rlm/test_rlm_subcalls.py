@@ -124,6 +124,29 @@ async def test_the_quota_is_shared_between_single_calls_and_batches():
         await executor.query("fourth")
 
 
+async def test_quota_and_usage_survive_a_resident_worker_restart(tmp_path):
+    state = tmp_path / "subcalls.json"
+    first = SubcallExecutor(
+        model=MODEL,
+        stream_fn=ScriptedStream(lambda prompt: "ok"),
+        policy=SubcallPolicy(max_calls=2),
+        state_path=state,
+    )
+    await first.query("first")
+
+    restored = SubcallExecutor(
+        model=MODEL,
+        stream_fn=ScriptedStream(lambda prompt: "ok"),
+        policy=SubcallPolicy(max_calls=2),
+        state_path=state,
+    )
+    assert restored.snapshot()["usage"]["calls"] == 1
+    assert restored.snapshot()["usage"]["total_tokens"] == 15
+    await restored.query("second")
+    with pytest.raises(SubcallLimitError, match="2 of 2 used"):
+        await restored.query("third")
+
+
 async def test_the_batch_size_limit_is_enforced():
     executor = _executor(lambda prompt: "ok", max_batch=2)
 

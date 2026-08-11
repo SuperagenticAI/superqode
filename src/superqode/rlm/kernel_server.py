@@ -19,6 +19,7 @@ lands in the container log instead of corrupting the message stream.
 from __future__ import annotations
 
 import ast
+import atexit
 import contextlib
 import hashlib
 import io
@@ -44,6 +45,35 @@ class SandboxPolicyError(RuntimeError):
 
 def _policy_flag(policy: dict[str, Any], name: str, default: bool = True) -> bool:
     return bool(policy[name]) if name in policy else default
+
+
+class BoundedTextBuffer(io.TextIOBase):
+    """Capture model output without allowing an unbounded protocol frame."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = max(1, int(limit))
+        self._parts: list[str] = []
+        self._size = 0
+        self._omitted = 0
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, value: str) -> int:
+        text = str(value)
+        available = max(0, self.limit - self._size)
+        if available:
+            kept = text[:available]
+            self._parts.append(kept)
+            self._size += len(kept)
+        self._omitted += max(0, len(text) - available)
+        return len(text)
+
+    def getvalue(self) -> str:
+        text = "".join(self._parts)
+        if self._omitted:
+            text += f"\n... [{self._omitted:,} output characters omitted by kernel limit] ...\n"
+        return text
 
 
 class ProtocolChannel:
@@ -473,6 +503,11 @@ class SandboxKernel:
         self.channel = channel
         self.kernel_id = kernel_id
         self.cwd = Path(workspace).resolve()
+        self.policy = policy or {}
+        self.max_output_chars = max(1, int(self.policy.get("max_output_chars") or 1_000_000))
+        self.max_checkpoint_bytes = max(
+            1, int(self.policy.get("max_checkpoint_bytes") or 64 * 1024 * 1024)
+        )
         self._call_id = 0
         self.globals: dict[str, Any] = {
             "__name__": "__rlm__",
@@ -524,8 +559,9 @@ class SandboxKernel:
             return _revive(message.get("value"), self.host_call)
 
     def execute(self, code: str) -> dict[str, Any]:
-        stdout = io.StringIO()
-        stderr = io.StringIO()
+        stream_limit = max(1, self.max_output_chars // 2)
+        stdout = BoundedTextBuffer(stream_limit)
+        stderr = BoundedTextBuffer(stream_limit)
         value: Any = None
         try:
             module = ast.parse(code, mode="exec")
@@ -548,11 +584,11 @@ class SandboxKernel:
             return {
                 "output": stdout.getvalue() + stderr.getvalue(),
                 "value_repr": "",
-                "error": traceback.format_exc(),
+                "error": traceback.format_exc()[: self.max_output_chars],
             }
         return {
             "output": stdout.getvalue() + stderr.getvalue(),
-            "value_repr": "" if value is None else repr(value),
+            "value_repr": "" if value is None else repr(value)[: self.max_output_chars],
             "error": None,
         }
 
@@ -561,14 +597,26 @@ class SandboxKernel:
         target = Path(path)
         saved: dict[str, bytes] = {}
         skipped: list[str] = []
+        size = 0
         for name, value in self.globals.items():
             if name in RESERVED_NAMES or name.startswith("__"):
                 continue
             try:
-                saved[name] = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+                serialized = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+                if size + len(serialized) > self.max_checkpoint_bytes:
+                    skipped.append(name)
+                    continue
+                saved[name] = serialized
+                size += len(serialized)
             except Exception:  # noqa: BLE001 - isolate each value
                 skipped.append(name)
         payload = pickle.dumps({"version": 1, "variables": saved}, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(payload) > self.max_checkpoint_bytes:
+            return {
+                "saved": [],
+                "skipped": sorted(saved) + sorted(skipped),
+                "error": f"checkpoint exceeds {self.max_checkpoint_bytes} bytes",
+            }
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             temporary = target.with_suffix(target.suffix + ".tmp")
@@ -589,6 +637,11 @@ class SandboxKernel:
         target = Path(path)
         if not target.is_file():
             return {"restored": []}
+        if target.stat().st_size > self.max_checkpoint_bytes:
+            return {
+                "restored": [],
+                "error": f"checkpoint exceeds {self.max_checkpoint_bytes} bytes",
+            }
         try:
             payload = pickle.loads(target.read_bytes())  # noqa: S301 - sandbox-local state
         except Exception as error:  # noqa: BLE001 - a bad checkpoint cannot break resume
@@ -634,6 +687,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         policy = {}
     if not isinstance(policy, dict):
         policy = {}
+    pid_path = Path(arguments[3]) if len(arguments) > 3 and arguments[3] else None
+    if pid_path is not None:
+        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        pid_path.write_text(str(os.getpid()), encoding="utf-8")
+        atexit.register(lambda: pid_path.unlink(missing_ok=True))
 
     channel = ProtocolChannel()
     kernel = SandboxKernel(channel, workspace, kernel_id, policy)

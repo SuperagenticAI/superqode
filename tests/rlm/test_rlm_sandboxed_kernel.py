@@ -20,10 +20,12 @@ from superqode.rlm import kernel_server
 from superqode.rlm.kernel import Shell as HostShell
 from superqode.rlm.kernel import Workspace as HostWorkspace
 from superqode.rlm.kernel_docker import (
+    DockerKernelBackend,
     KernelChannel,
     STATE_MOUNT,
     container_run_command,
     kernel_exec_command,
+    kernel_kill_command,
     safe_name,
     shell_exec_command,
 )
@@ -43,6 +45,19 @@ async def _channel(workspace: Path, *, host_call: Any = None, kernel_id: str = "
     return channel
 
 
+async def _limited_channel(workspace: Path, **policy):
+    command = [
+        sys.executable,
+        str(SERVER),
+        "root",
+        str(workspace),
+        json.dumps(policy),
+    ]
+    channel = KernelChannel(command)
+    await channel.start()
+    return channel
+
+
 async def _execute(channel: KernelChannel, code: str, **extra) -> dict[str, Any]:
     return await channel.request({"op": "execute", "code": code, **extra}, timeout=TIMEOUT)
 
@@ -57,6 +72,72 @@ async def test_the_sandboxed_kernel_keeps_state_between_calls(tmp_path):
 
     assert result["value_repr"] == "42"
     assert result["error"] is None
+
+
+async def test_kernel_transport_bounds_stdout_and_value_repr(tmp_path):
+    channel = await _limited_channel(tmp_path, max_output_chars=1_000)
+    try:
+        result = await _execute(channel, "print('x' * 50000)\n'y' * 50000")
+    finally:
+        await channel.close()
+
+    assert len(result["output"]) < 1_200
+    assert "output characters omitted" in result["output"]
+    assert len(result["value_repr"]) == 1_000
+
+
+async def test_kernel_checkpoint_skips_values_beyond_its_byte_budget(tmp_path):
+    state = tmp_path / "bounded.pkl"
+    channel = await _limited_channel(tmp_path, max_checkpoint_bytes=1_024)
+    try:
+        await _execute(channel, "small = 42\nlarge = 'x' * 5000")
+        result = await channel.request({"op": "checkpoint", "path": str(state)}, timeout=TIMEOUT)
+    finally:
+        await channel.close()
+
+    assert "small" in result["saved"]
+    assert "large" in result["skipped"]
+    assert result["size"] <= 1_024
+
+
+async def test_docker_timeout_discards_the_kernel_channel(tmp_path, monkeypatch):
+    class TimedOutChannel:
+        closed = False
+
+        async def request(self, message, *, timeout=None):
+            del message, timeout
+            raise TimeoutError
+
+        async def close(self):
+            self.closed = True
+
+        async def terminate(self):
+            self.closed = True
+
+    channel = TimedOutChannel()
+    backend = DockerKernelBackend(
+        tmp_path,
+        config=RLMSandboxConfig.from_config({"sandbox": "docker", "python_timeout": 3}),
+        session_id="timeout",
+        state_dir=tmp_path / "state",
+    )
+    backend._channels["root"] = channel  # type: ignore[assignment]
+
+    async def existing(_kernel_id):
+        return channel
+
+    async def docker(_command, *, timeout=120):
+        del timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(backend, "_channel", existing)
+    monkeypatch.setattr(backend, "_require_container", lambda: "container-id")
+    monkeypatch.setattr(backend, "_docker", docker)
+    result = await backend.execute("root", "while True: pass")
+
+    assert "timed out after 3s" in str(result.error)
+    assert channel.closed is True
+    assert "root" not in backend._channels
 
 
 async def test_a_failed_call_returns_a_traceback_and_keeps_the_kernel(tmp_path):
@@ -310,6 +391,14 @@ def test_the_container_never_mounts_the_docker_socket(tmp_path):
     assert command[-2:] == ["sleep", "infinity"]
 
 
+def test_timeout_kills_the_in_container_kernel_process():
+    command = kernel_kill_command("container-id", "agent-1")
+
+    assert command[:3] == ["docker", "exec", "container-id"]
+    assert command[-1] == "/state/agent-1.pid"
+    assert "os.kill" in command[-2]
+
+
 def test_the_host_environment_is_never_forwarded_into_the_container(tmp_path, monkeypatch):
     monkeypatch.setenv("RLM_TEST_SECRET", "leaked")
     monkeypatch.setenv("ALLOWED_ONE", "fine")
@@ -369,8 +458,8 @@ def test_exec_commands_target_the_workspace_and_the_mounted_server():
     shell = shell_exec_command("abc123", "pytest -q")
 
     assert kernel[:5] == ["docker", "exec", "--interactive", "--workdir", "/workspace"]
-    assert kernel[-4:-1] == ["/opt/superqode-rlm/kernel_server.py", "agent-1", "/workspace"]
-    assert json.loads(kernel[-1])["allow_shell"] is True
+    assert kernel[-5:-2] == ["/opt/superqode-rlm/kernel_server.py", "agent-1", "/workspace"]
+    assert json.loads(kernel[-2])["allow_shell"] is True
     assert shell[-3:] == ["sh", "-lc", "pytest -q"]
 
 
@@ -419,7 +508,7 @@ async def test_sandboxed_namespace_enforces_declared_guardrails(tmp_path):
     )
     channel = KernelChannel(kernel_exec_command("unused", "root", policy))
     # Replace the Docker command with the same server command plus its policy.
-    channel.command = _command(tmp_path) + [channel.command[-1]]
+    channel.command = _command(tmp_path) + [channel.command[-2]]
     await channel.start()
     try:
         denied_read = await _execute(channel, "workspace.read('anything')")

@@ -63,6 +63,10 @@ def test_rlm_commands_are_offered_for_completion():
     expected = {
         ":rlm",
         ":rlm help",
+        ":rlm status",
+        ":rlm attach",
+        ":rlm detach",
+        ":rlm stop",
         ":rlm session",
         ":rlm policy",
         ":rlm goal",
@@ -91,6 +95,8 @@ def test_bare_rlm_renders_help():
     assert "one persistent Python tool" in rendered
     assert ":rlm agents" in rendered
     assert ":rlm steer" in rendered
+    assert ":rlm attach" in rendered
+    assert ":rlm status" in rendered
 
 
 def test_rlm_commands_require_the_rlm_harness():

@@ -374,6 +374,7 @@ def _executor_for(
         model=model,
         stream_fn=stream_fn,
         policy=getattr(options, "subcall_policy", None) or SubcallPolicy(),
+        state_path=Path(session_key).with_suffix(".subcalls.json"),
     )
     _EXECUTORS[session_key] = executor
     return executor

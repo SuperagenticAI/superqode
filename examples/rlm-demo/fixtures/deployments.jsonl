@@ -1,0 +1,17 @@
+{"service":"api","deployment_id":"api-100","attempt":1,"status":"succeeded","duration_seconds":240,"timestamp":"2026-08-10T09:00:00Z"}
+{"service":"billing","deployment_id":"bill-200","attempt":1,"status":"succeeded","duration_seconds":180,"timestamp":"2026-08-10T09:01:00Z"}
+{"service":"worker","deployment_id":"worker-300","attempt":1,"status":"failed","duration_seconds":40,"timestamp":"2026-08-10T09:02:00Z"}
+{"service":"web","deployment_id":"web-400","attempt":1,"status":"succeeded","duration_seconds":180,"timestamp":"2026-08-10T09:03:00Z"}
+{"service":"worker","deployment_id":"worker-300","attempt":2,"status":"succeeded","duration_seconds":120,"timestamp":"2026-08-10T09:06:00Z"}
+{"service":"worker","deployment_id":"worker-300","attempt":2,"status":"succeeded","duration_seconds":120,"timestamp":"2026-08-10T09:06:00Z"}
+{"service":"billing","deployment_id":"bill-201","attempt":1,"status":"failed","duration_seconds":70,"timestamp":"2026-08-10T09:10:00Z"}
+{"service":"web","deployment_id":"web-401","attempt":1,"status":"succeeded","duration_seconds":420,"timestamp":"2026-08-10T09:11:00Z"}
+{"service":"api","deployment_id":"api-101","attempt":1,"status":"failed","duration_seconds":30,"timestamp":"2026-08-10T09:12:00Z"}
+{"service":"api","deployment_id":"api-101","attempt":2,"status":"succeeded","duration_seconds":210,"timestamp":"2026-08-10T09:14:00Z"}
+{"service":"billing","deployment_id":"bill-201","attempt":2,"status":"succeeded","duration_seconds":65,"timestamp":"2026-08-10T09:13:00Z"}
+{"service":"billing","deployment_id":"bill-201","attempt":2,"status":"failed","duration_seconds":75,"timestamp":"2026-08-10T09:15:00Z"}
+{"service":"worker","deployment_id":"worker-299","attempt":3,"status":"failed","duration_seconds":80,"timestamp":"2026-08-10T08:59:00Z"}
+{"service":"web","deployment_id":"web-399","attempt":1,"status":"failed","duration_seconds":90,"timestamp":"2026-08-10T08:58:00Z"}
+{"service":"","deployment_id":"broken","attempt":1,"status":"failed","duration_seconds":5,"timestamp":"2026-08-10T09:20:00Z"}
+not-json
+

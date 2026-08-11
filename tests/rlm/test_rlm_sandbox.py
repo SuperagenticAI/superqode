@@ -58,6 +58,23 @@ def test_isolated_profiles_default_to_no_network_while_host_keeps_connectivity()
     assert _config(sandbox="docker", allow_network=True).allow_network is True
 
 
+def test_execution_limits_are_bounded_and_round_trip():
+    config = _config(
+        sandbox="docker",
+        python_timeout=15,
+        max_output_chars=25_000,
+        max_checkpoint_bytes=2_000_000,
+    )
+
+    assert RLMSandboxConfig.from_config(config.to_dict()) == config
+    assert config.python_timeout == 15
+    assert config.max_output_chars == 25_000
+    assert config.max_checkpoint_bytes == 2_000_000
+    description = "\n".join(config.describe())
+    assert "timeout 15s" in description
+    assert "2,000,000 bytes" in description
+
+
 def test_a_spec_that_denies_writes_now_reaches_the_python_namespace(tmp_path):
     """The kernel previously ignored its own harness execution policy."""
     source = tmp_path / "a.py"

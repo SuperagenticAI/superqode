@@ -1,6 +1,6 @@
 # Core Concepts
 
-SuperQode is the open-source, terminal-first Agent Engineering framework for your code factory, with first-class support for local and open models. It gives builders one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
+SuperQode is the open-source, terminal-first unified harness layer for coding agents. It gives builders one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling across native, open-source, and proprietary agents.
 
 Use this section to understand the pieces that make a SuperQode run predictable across local models, hosted providers, ACP agents, and optional runtime SDKs.
 

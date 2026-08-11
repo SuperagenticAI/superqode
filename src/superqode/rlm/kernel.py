@@ -35,6 +35,35 @@ from .sandbox import (
 DEFAULT_PYTHON_OBSERVATION_CHARS = 20_000
 
 
+class _BoundedTextBuffer(io.TextIOBase):
+    """Bound output even in unsafe host mode so memory use stays predictable."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = max(1, int(limit))
+        self.parts: list[str] = []
+        self.size = 0
+        self.omitted = 0
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, value: str) -> int:
+        text = str(value)
+        available = max(0, self.limit - self.size)
+        if available:
+            kept = text[:available]
+            self.parts.append(kept)
+            self.size += len(kept)
+        self.omitted += max(0, len(text) - available)
+        return len(text)
+
+    def getvalue(self) -> str:
+        value = "".join(self.parts)
+        if self.omitted:
+            value += f"\n... [{self.omitted:,} output characters omitted by kernel limit] ...\n"
+        return value
+
+
 @dataclass(frozen=True, slots=True)
 class ShellResult:
     """A compact, Python-friendly command result."""
@@ -359,14 +388,27 @@ class PersistentPythonKernel:
             return {"saved": [], "skipped": [], "path": None}
         saved: dict[str, bytes] = {}
         skipped: list[str] = []
+        size = 0
         for name, value in self.globals.items():
             if name in _RESERVED_NAMES or name.startswith("__"):
                 continue
             try:
-                saved[name] = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+                serialized = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+                if size + len(serialized) > self.sandbox.max_checkpoint_bytes:
+                    skipped.append(name)
+                    continue
+                saved[name] = serialized
+                size += len(serialized)
             except Exception:  # noqa: BLE001 - isolate each value
                 skipped.append(name)
         payload = pickle.dumps({"version": 1, "variables": saved}, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(payload) > self.sandbox.max_checkpoint_bytes:
+            return {
+                "saved": [],
+                "skipped": sorted(saved) + sorted(skipped),
+                "path": str(path),
+                "error": f"checkpoint exceeds {self.sandbox.max_checkpoint_bytes} bytes",
+            }
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_suffix(path.suffix + ".tmp")
@@ -394,8 +436,9 @@ class PersistentPythonKernel:
 
     def _execute_sync(self, code: str) -> PythonExecutionResult:
         with self._lock:
-            stdout = io.StringIO()
-            stderr = io.StringIO()
+            stream_limit = max(1, self.sandbox.max_output_chars // 2)
+            stdout = _BoundedTextBuffer(stream_limit)
+            stderr = _BoundedTextBuffer(stream_limit)
             value: Any = None
             try:
                 module = ast.parse(code, mode="exec")
@@ -417,16 +460,22 @@ class PersistentPythonKernel:
             except BaseException:  # noqa: BLE001 - traceback is returned to the model
                 combined = stdout.getvalue() + stderr.getvalue()
                 self.checkpoint()
-                return PythonExecutionResult(combined, "", traceback.format_exc())
+                return PythonExecutionResult(
+                    combined,
+                    "",
+                    traceback.format_exc()[: self.sandbox.max_output_chars],
+                )
             self.checkpoint()
             return PythonExecutionResult(
                 stdout.getvalue() + stderr.getvalue(),
-                "" if value is None else repr(value),
+                "" if value is None else repr(value)[: self.sandbox.max_output_chars],
             )
 
     def _restore_checkpoint(self) -> tuple[str, ...]:
         path = self.checkpoint_path
         if path is None or not path.is_file():
+            return ()
+        if path.stat().st_size > self.sandbox.max_checkpoint_bytes:
             return ()
         try:
             payload = pickle.loads(path.read_bytes())  # noqa: S301 - trusted RLM state directory

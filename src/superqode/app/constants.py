@@ -16,8 +16,8 @@ COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
 # Compact positioning used by alternate TUI renderers.
-TAGLINE_PART1 = "Agent Engineering for Your Code Factory"
-TAGLINE_PART2 = "Terminal-first · Any agent or model · Local or cloud"
+TAGLINE_PART1 = "The Unified Harness Layer for Coding Agents"
+TAGLINE_PART2 = "Build or connect · Open or proprietary · Local or hosted"
 
 # First-page order for the product-level connection choices.
 CONNECT_COMPLETION_COMMANDS = (
@@ -364,6 +364,10 @@ COMMANDS = [
     ":pipy prompt",
     ":rlm",
     ":rlm help",
+    ":rlm status",
+    ":rlm attach",
+    ":rlm detach",
+    ":rlm stop",
     ":rlm session",
     ":rlm policy",
     ":rlm goal",

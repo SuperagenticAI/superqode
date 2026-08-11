@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.90] - 2026-08-11
+
+### Added
+
+- Native RLM root sessions now run in a resident Python worker. The terminal
+  can detach without cancelling the turn, then replay and follow the same
+  command after reconnecting. One root worker owns the complete recursive
+  agent tree and its global depth, child and parallelism limits.
+- `:rlm status`, `:rlm attach`, `:rlm detach` and `:rlm stop` expose the
+  resident lifecycle in the TUI. An RLM demo fixture documents the
+  one-tool workflow, Docker profile and operational commands.
+
+### Changed
+
+- Product framing now describes SuperQode as the unified harness layer for
+  coding agents. The README, documentation, package metadata, ACP listing and
+  TUI distinguish SuperQode's open-source layer from the native, open-source,
+  proprietary, local and hosted agents it can run or connect.
+- Docker Python cells now enforce their configured deadline against the real
+  in-container kernel process. A timed-out kernel is replaced and restores the
+  last completed checkpoint. Kernel output and checkpoint payloads are bounded
+  before crossing the runtime protocol.
+- Semantic subcall usage and quota consumption persist beside the RLM session,
+  so restarting a resident worker cannot reset host-enforced limits.
+- Resident worker manifests contain only portable public configuration; live
+  control-plane objects and private metadata never cross the process boundary.
+
+### Fixed
+
+- Provider failures in PiPy-backed harnesses now emit a visible protocol error
+  instead of ending as an empty successful run.
+
 ## [0.2.89] - 2026-08-11
 
 ### Added

@@ -11,17 +11,17 @@ to install. The others exist for reasons named below.
 
 | Route | Engine | Where it runs | Selector |
 | --- | --- | --- | --- |
-| [Native RLM](rlm.md) | Python, first-party | In process, or inside Docker or Monty | `--harness rlm` |
+| [Native RLM](rlm.md) | Python and PiPy, first-party | Resident Python root; kernel on host, in Docker, or in Monty | `--harness rlm` |
 | [RLM Code](rlm-code.md) | Python, separate package | Inside SuperQode | `runtime.backend: rlm-code` |
 | [Prime Agent](../providers/prime-agent.md) | TypeScript agent with an IPython kernel | Separate process over Python-hosted RPC; ACP optional | `:prime connect` or `runtime.backend: prime-agent` |
 | [Recursive tools](../local-recursive-dynamic-coding.md) | SuperQode agent loop | Inside SuperQode | `context_handle`, `spawn_harness` |
 
 ## Which to use
 
-**Native RLM** for coding work. One persistent Python tool, live child agents
-with durable detached workers, `context` and `llm_query` for working over a
-corpus, goals with completion gates, and a `docker` profile that runs the
-interpreter inside a container. Nothing to install.
+**Native RLM** for coding work. One persistent Python tool, a resident root
+worker that owns the complete recursive tree, `context` and `llm_query` for
+working over a corpus, goals with completion gates, and a `docker` profile that
+runs the interpreter inside a container. Nothing else to install.
 
 **RLM Code** for research and evaluation: paper reproduction, benchmark packs,
 LID and generalization metrics, and the trajectory analysis built around them.
@@ -43,12 +43,11 @@ RLM Code implements the semantics of the Recursive Language Models paper
 directly, and adds the locally in-distribution profile from the RLM authors'
 harness generalization work. Its center of gravity is the experiment.
 
-Prime Agent is a hard fork of the `pi` coding agent with an RLM runtime grafted
-on. Its center of gravity is the product. The Python package it ships,
-`prime-agent-runtime`, is a kernel-side client of roughly 1,500 lines; the agent
-itself is TypeScript. SuperQode's native Python RPC client now owns the host
-process, correlation, event stream and lifecycle, while Prime retains the agent
-loop and tools.
+Prime Agent is built on the TypeScript `pi` agent and TUI packages. Its
+TypeScript host owns providers, sessions, scheduling and child lifecycle, while
+an IPython process provides the model-facing control environment. SuperQode can
+run Prime through its separate native Python RPC client without changing that
+internal architecture.
 
 ## What recursion means in each
 
@@ -80,6 +79,13 @@ run parameter.
 RLM Code recursion is a bounded, scored computation. Prime Agent recursion is
 process orchestration.
 
+**Native RLM** combines the two useful levels. `llm_query()` and
+`llm_query_batched()` are bounded semantic calls over context already held as
+data. `rlm.run()` starts a complete child coding session when the work needs a
+repository, kernel and conversation of its own. One resident root supervisor
+owns every descendant, so depth, child count and concurrency are enforced over
+the full tree rather than per process.
+
 ## What each does with context
 
 This is the deepest split, and it is a genuine disagreement about the problem.
@@ -101,6 +107,12 @@ deliberately prevented from accumulating context at all.
 **Prime Agent admits context and then manages the overflow.** Conversation
 enters the window normally, and compaction summarizes older content once a
 threshold is crossed, with branch summarization for side work.
+
+**Native RLM exposes the repository as `context`.** The root can measure,
+select, search and chunk it without placing the corpus in conversation, then
+keep subcall answers in Python variables. PiPy compaction remains available for
+conversation that does accumulate. This makes offloading a normal programming
+operation rather than an evaluation-only profile.
 
 One route prevents context pressure. The other treats it. That difference
 explains most of the others.
@@ -167,21 +179,20 @@ to answer what happened in a session.
 
 ## Integration shape inside SuperQode
 
-| | RLM Code | Prime Agent |
-| --- | --- | --- |
-| Coupling | Python import, in process | Subprocess over ACP |
-| Install | `uv tool install "superqode[rlm-code]"` | `install.sh`, then `/login` |
-| Streaming | No, events are replayed from a completed trajectory | Yes, live over ACP |
-| Sandbox | Docker by default | None |
-| Model selection | HarnessSpec `model_policy` | Launch flags, reconnect |
-| Approvals | HarnessSpec policy | None sent by the agent |
-| Evidence | Trajectory, generalization metrics, validation events | Session JSONL |
-| Token accounting | Reported | Not reported over ACP |
+| | Native RLM | RLM Code | Prime Agent |
+| --- | --- | --- | --- |
+| Coupling | First-party Python/PiPy | Python import | Prime process over native Python RPC; ACP alternative |
+| Install | Included with SuperQode | `uv tool install "superqode[rlm-code]"` | Prime installation and provider login |
+| Streaming | Live, replayable resident-worker events | Completed trajectory replay | Live RPC or ACP |
+| Root lifecycle | Resident Python worker; attach and detach | One experiment run | Resident TypeScript daemon worker |
+| Kernel boundary | Host, Docker, or Monty | Runtime selected by research policy | IPython with user OS permissions by default |
+| Model-facing tools | One `python` tool | REPL actions defined by the experiment | One `ipython` tool |
+| Evidence | Session tree, worker events, child journal, usage and gates | Trajectory and generalization metrics | Session JSONL and daemon state |
 
-Because RLM Code is imported, SuperQode translates a `HarnessSpec` into a runner
-request and normalizes the resulting trajectory. Because Prime Agent is a
-process speaking a protocol SuperQode already implements, it needs no
-translation layer at all.
+The native route implements the coding harness directly. RLM Code remains a
+separate research runtime. Prime remains a separate product; the Python RPC
+client gives SuperQode a native host without pretending Prime's TypeScript
+agent loop is Python.
 
 ## Choosing a route
 
@@ -189,12 +200,18 @@ Use **RLM Code** when the run has to be contained and measured: sandboxed
 execution, reproducible trajectories, scoring, and generalization checks across
 task families or input lengths.
 
-Use **Prime Agent** when the run has to keep going: long-horizon coding, live
-sub-agents, autonomous gates, and session continuity across hours.
+Use **Prime Agent** when you specifically need its continual harness, IPython
+skills, schedules, heartbeats or Prime daemon ecosystem.
+
+Use **Native RLM** for long-horizon coding inside SuperQode when you want the
+one-tool architecture, a pure-Python host, explicit semantic subcalls and an
+optional interpreter security boundary. Its resident root continues after the
+TUI detaches and retains one authoritative recursive tree.
 
 Use **recursive tools** when the work belongs inside SuperQode's own loop and
 the goal is keeping large artifacts out of the prompt while staying local and
 offline.
 
-A useful way to hold the three: RLM Code is the instrument, Prime Agent is the
-engine, and the recursive tools are the local workbench.
+RLM Code remains the research instrument. Prime Agent and Native RLM are two
+product architectures with similar one-tool programming models and different
+host/runtime trade-offs.

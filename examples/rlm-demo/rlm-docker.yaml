@@ -1,0 +1,44 @@
+version: 1
+name: native-rlm-docker-demo
+description: Native one-tool RLM with a resident root and Docker kernel isolation.
+flavor: coding
+
+runtime:
+  backend: rlm
+  config:
+    resident_root: true
+    sandbox: docker
+    sandbox_image: python:3.12-slim
+    allow_network: false
+    allow_write: true
+    max_depth: 3
+    max_children: 8
+    max_parallel: 4
+    subcall_max_calls: 32
+    subcall_max_batch: 8
+    subcall_max_concurrency: 4
+    python_timeout: 120
+    max_output_chars: 1000000
+    max_checkpoint_bytes: 67108864
+
+model_policy:
+  profile: rlm
+
+execution_policy:
+  sandbox: docker
+  approval_profile: none
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+
+agents:
+  - id: rlm
+    role: recursive-coding
+    tools:
+      - python
+
+metadata:
+  example: native-rlm-demo
+  model_tool_count: 1
+  resident_root: true

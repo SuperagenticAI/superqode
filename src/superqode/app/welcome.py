@@ -205,11 +205,11 @@ def render_welcome(
 
     desc_text = Text(justify=align)
     if width is None or width >= 48:
-        headline = "AGENT ENGINEERING FOR YOUR CODE FACTORY"
+        headline = "THE UNIFIED HARNESS LAYER FOR CODING AGENTS"
     elif width >= 33:
-        headline = "YOUR CODE FACTORY"
+        headline = "UNIFIED HARNESS LAYER"
     elif width >= 19:
-        headline = "AGENT ENGINEERING"
+        headline = "HARNESS LAYER"
     else:
         headline = "SUPERQODE"
     desc_text.append(f"{headline}\n", style="bold #ffffff")

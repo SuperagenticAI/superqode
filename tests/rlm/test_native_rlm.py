@@ -79,7 +79,9 @@ def test_template_declares_exactly_one_model_tool():
     assert spec.metadata["model_tool_count"] == 1
     assert spec.metadata["persistent_python"] is True
     assert spec.metadata["durable_children"] is True
-    assert spec.runtime.config["durable_children"] is True
+    assert spec.metadata["resident_root"] is True
+    assert spec.runtime.config["resident_root"] is True
+    assert spec.runtime.config["durable_children"] is False
     assert spec.execution_policy.sandbox == "none"
     assert spec.metadata["pure_permissions"] is True
 
@@ -103,6 +105,7 @@ def test_protocol_discovery_uses_the_native_rlm_adapter():
     assert descriptor.capabilities.checkpoint is True
     assert descriptor.metadata["tools"] == ["python"]
     assert descriptor.metadata["durable_children"] is True
+    assert descriptor.metadata["resident_root"] is True
 
 
 async def test_kernel_preserves_python_state(tmp_path):

@@ -8,8 +8,11 @@ alone, determines how the agent behaves.
 Harness engineering treats that surrounding system as a versioned engineering
 artifact that can be specified, measured, reviewed, and improved.
 
-SuperQode is the open-source, terminal-first Agent Engineering framework for your code factory, with first-class support for local and open models. Harness Engineering is the technical discipline that makes each coding agent inspectable, portable, measurable, and improvable within that larger lifecycle. This page
-defines the discipline and documents the SuperQode harness lifecycle.
+SuperQode is the open-source, terminal-first unified harness layer for coding
+agents. Harness Engineering is the technical discipline that makes each coding
+agent inspectable, portable, measurable, and improvable, whether the agent is
+native, open-source, or proprietary. This page defines that discipline and
+documents the SuperQode harness lifecycle.
 
 ---
 

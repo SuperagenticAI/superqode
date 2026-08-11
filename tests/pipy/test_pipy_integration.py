@@ -253,6 +253,28 @@ def test_unknown_events_translate_to_nothing():
     assert translate_event(Odd()) == []
 
 
+def test_failed_turn_translates_to_a_visible_protocol_error():
+    from superqode.pipy import AssistantMessage
+    from superqode.pipy.events import TurnEndEvent
+
+    translated = translate_event(
+        TurnEndEvent(
+            message=AssistantMessage(
+                content=[],
+                stop_reason="error",
+                error_message="provider credentials are unavailable",
+            )
+        ),
+        runtime="rlm",
+    )
+
+    assert [event.type for event in translated] == ["error", "turn_complete"]
+    assert translated[0].data == {
+        "error": "provider credentials are unavailable",
+        "error_type": "ModelTurnError",
+    }
+
+
 # -- protocol conformance ---------------------------------------------------- #
 
 

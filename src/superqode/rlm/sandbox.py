@@ -79,6 +79,9 @@ class RLMSandboxConfig:
     allow_network: bool = True
     env_allowlist: tuple[str, ...] = ()
     image: str = DEFAULT_IMAGE
+    python_timeout: float = 120.0
+    max_output_chars: int = 1_000_000
+    max_checkpoint_bytes: int = 64 * 1024 * 1024
 
     @property
     def isolated(self) -> bool:
@@ -116,6 +119,14 @@ class RLMSandboxConfig:
                 str(item) for item in data.get("env_allowlist") or () if str(item).strip()
             ),
             image=str(data.get("sandbox_image") or DEFAULT_IMAGE),
+            python_timeout=max(1.0, min(3600.0, float(data.get("python_timeout") or 120.0))),
+            max_output_chars=max(
+                20_000, min(10_000_000, int(data.get("max_output_chars") or 1_000_000))
+            ),
+            max_checkpoint_bytes=max(
+                1_048_576,
+                min(1_073_741_824, int(data.get("max_checkpoint_bytes") or 64 * 1024 * 1024)),
+            ),
         )
 
     def require_available(self) -> "RLMSandboxConfig":
@@ -149,6 +160,9 @@ class RLMSandboxConfig:
             "allow_compound_commands": self.policy.allow_compound_commands,
             "env_allowlist": list(self.env_allowlist),
             "isolated": self.isolated,
+            "python_timeout": self.python_timeout,
+            "max_output_chars": self.max_output_chars,
+            "max_checkpoint_bytes": self.max_checkpoint_bytes,
         }
 
     def describe(self) -> list[str]:
@@ -160,6 +174,8 @@ class RLMSandboxConfig:
             f"write       {'yes' if self.policy.allow_write else 'no'}",
             f"shell       {'yes' if self.policy.allow_shell else 'no'}",
             f"network     {'yes' if self.allow_network else 'no'}",
+            f"python      timeout {self.python_timeout:g}s, output {self.max_output_chars:,} chars",
+            f"checkpoint  at most {self.max_checkpoint_bytes:,} bytes",
         ]
         if self.policy.allowed_commands:
             lines.append(f"commands    {', '.join(self.policy.allowed_commands)}")

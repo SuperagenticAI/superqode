@@ -8,10 +8,11 @@
   <img src="assets/superqode-logo.png" alt="SuperQode logo" width="120">
 </p>
 
-<h3 align="center">Agent engineering for your code factory.</h3>
+<h3 align="center">The unified harness layer for coding agents.</h3>
 
 <p align="center">
-  Build your own coding-agent harnesses or connect the agents you already use.
+  Build your own harnesses or connect the agents you already use: open-source,
+  proprietary, local, or hosted.
 </p>
 
 <p align="center">Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
@@ -41,17 +42,13 @@
 
 ## What is SuperQode?
 
-SuperQode is an open-source, terminal-first Agent Engineering framework for
-building, connecting, orchestrating, evaluating, and governing coding-agent
-harnesses across your repositories.
+SuperQode is the open-source, terminal-first unified harness layer for coding
+agents. Build your own harnesses, run SuperQode's native harnesses, or connect
+the coding agents you already use.
 
 Run local or hosted models and the coding agents you already use through one
 inspectable, portable HarnessSpec while keeping tools, policies, sessions, and
 evidence under your control.
-
-<p align="center">
-  <img src="assets/superqode-hero.png" alt="SuperQode Agent Engineering terminal workbench" width="920">
-</p>
 
 ## Install
 

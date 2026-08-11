@@ -140,6 +140,19 @@ async def test_root_and_children_get_separate_namespaces_in_one_container(contai
     assert root_view.value_repr == "'child'"
 
 
+async def test_a_timed_out_cell_is_replaced_from_the_last_checkpoint(containers):
+    backend = containers("cell-timeout", python_timeout=1)
+    await backend.start()
+    await backend.execute("root", "stable = 42")
+
+    timed_out = await backend.execute("root", "import time; time.sleep(30)")
+    restored = await backend.execute("root", "stable")
+
+    assert "timed out after 1s" in str(timed_out.error)
+    assert restored.error is None
+    assert restored.value_repr == "42"
+
+
 async def test_read_only_policy_is_enforced_by_the_workspace_mount(containers, tmp_path):
     repo = tmp_path / "readonly-repo"
     repo.mkdir()

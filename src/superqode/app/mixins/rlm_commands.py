@@ -8,6 +8,10 @@ from typing import Any
 from superqode.app.constants import THEME
 
 _COMMANDS = (
+    ("status", "Show the resident root worker and active turn"),
+    ("attach", "Attach to the active resident RLM turn"),
+    ("detach", "Leave the worker running without cancelling it"),
+    ("stop", "Stop the resident root worker"),
     ("session", "Show the native RLM session and Python continuity"),
     ("policy", "Show the persistent goal and autonomous completion policy"),
     ("goal", "Set a persistent goal: goal <text>|off"),
@@ -82,6 +86,9 @@ class RLMCommandMixin:
         )
         metadata: dict[str, Any] = {"working_directory": str(working_directory)}
         spec = getattr(pure, "_harness_spec", None)
+        provider = str(getattr(getattr(pure, "session", None), "provider", "") or "")
+        model = str(getattr(getattr(pure, "session", None), "model", "") or "")
+        metadata.update({"provider": provider, "model": model})
         if spec is not None:
             from superqode.rlm.sandbox import RLMSandboxConfig
 
@@ -91,6 +98,9 @@ class RLMCommandMixin:
                 getattr(getattr(spec, "runtime", None), "config", None) or {},
                 execution_policy=getattr(spec, "execution_policy", None),
             ).to_dict()
+            metadata["rlm_config"] = dict(
+                getattr(getattr(spec, "runtime", None), "config", None) or {}
+            )
         adapter = RLMHarnessProtocolAdapter()
         ref = await adapter.resume(
             HarnessSessionRef(
@@ -105,10 +115,60 @@ class RLMCommandMixin:
     async def _rlm_run(self, sub: str, rest: str, log) -> None:
         try:
             adapter, ref = await self._rlm_open_session()
+            if getattr(adapter, "_resident", False):
+                await self._rlm_resident_dispatch(adapter, ref, sub, rest, log)
+                return
             session = adapter._sessions[ref.session_id]
             await self._rlm_dispatch(session, sub, rest, log)
         except Exception as error:  # noqa: BLE001 - user-visible TUI command failure
             log.add_error(f":rlm {sub} failed: {error}")
+
+    async def _rlm_resident_dispatch(self, adapter, ref, sub: str, rest: str, log) -> None:
+        client = await adapter._runtime(ref)
+        status = client.status()
+        if sub == "status":
+            log.add_info(f"state    {status.state}")
+            log.add_info(
+                f"worker   {status.pid or 'not running'}"
+                + (f" generation={status.generation[:12]}" if status.generation else "")
+            )
+            log.add_info(f"active   {status.active_command or 'none'}")
+            log.add_info(f"session  {status.external_session_id or ref.session_id}")
+            log.add_info(f"path     {status.session_path or 'initialising'}")
+            return
+        if sub == "detach":
+            log.add_success("Detached. The resident RLM worker will continue running.")
+            return
+        if sub == "stop":
+            await client.control("stop")
+            log.add_success("Stop requested for the resident RLM worker.")
+            return
+        if sub == "attach":
+            if not status.active_command:
+                log.add_info("No active RLM turn to attach to.")
+                return
+            log.add_info(f"Attached to {status.active_command}.")
+            async for event in client.events(status.active_command):
+                data = event.data
+                if event.type in {"model_delta", "message.delta"}:
+                    text = str(data.get("text") or "")
+                    if text:
+                        log.add_info(text)
+                elif event.type in {"tool_call", "tool.requested"}:
+                    log.add_info(
+                        f"tool     {data.get('tool_name') or data.get('name') or 'python'}"
+                    )
+                elif event.type in {"error", "run.failed"}:
+                    log.add_error(str(data.get("error") or "RLM turn failed"))
+            log.add_success("Resident RLM turn completed.")
+            return
+        events = await client.request("admin", {"command": sub, "argument": rest})
+        result = next((event.data for event in events if event.type == "runtime.result"), {})
+        for line in result.get("lines") or ():
+            level = str(line.get("level") or "info")
+            message = str(line.get("text") or "")
+            writer = getattr(log, f"add_{level}", log.add_info)
+            writer(message)
 
     async def _rlm_dispatch(self, session: Any, sub: str, rest: str, log) -> None:
         from superqode.rlm.coding_session import supervisor_for_session

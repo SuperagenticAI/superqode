@@ -17,7 +17,7 @@ A dependable code factory must answer:
 - how policies, credentials, budgets, and approvals are enforced
 - how harness changes are evaluated and promoted safely
 
-SuperQode provides these controls through one terminal-first Agent Engineering framework.
+SuperQode provides these controls through one terminal-first harness layer that works across organization-owned harnesses and established coding agents.
 
 ## Three ways to supply a coding agent
 

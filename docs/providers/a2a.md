@@ -21,7 +21,7 @@ curl -sS https://super-agentic.ai/.well-known/agent-card.json \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['supportedInterfaces'][0]['url'])"
 ```
 
-A checked-in publication artifact lives at [examples/a2a/agent-card.json](../../examples/a2a/agent-card.json). Regenerate it with `--export-agent-card` when version, public interface URL, capabilities, or auth policy change (see below).
+A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regenerate it with `--export-agent-card` when version, public interface URL, capabilities, or auth policy change (see below).
 
 ### Operational pilot
 
@@ -138,8 +138,8 @@ The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow
 
 For harness-to-harness and cross-language checks against a live or local A2A server:
 
-- **Python smoke client:** [examples/a2a/smoke_client.py](../../examples/a2a/smoke_client.py). Discover from a base URL (for example the public Agent Card host), follow the interface URL, send a message, print task state.
-- **TypeScript client:** [examples/qm-deployment-layer/interop/a2a-client.mts](../../examples/qm-deployment-layer/interop/a2a-client.mts). Dependency-free Node client used for independent wire tests (Node 22+).
+- **Python smoke client:** `examples/a2a/smoke_client.py`. Discover from a base URL (for example the public Agent Card host), follow the interface URL, send a message, print task state.
+- **TypeScript client:** `examples/qm-deployment-layer/interop/a2a-client.mts`. Dependency-free Node client used for independent wire tests (Node 22+).
 
 Example (from the SuperQode repo root):
 

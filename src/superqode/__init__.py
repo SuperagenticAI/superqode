@@ -3,7 +3,7 @@ SuperQode CLI package.
 
 This package provides the terminal user interface, command-line interface,
 interactive chat, and voice entrypoints for SuperQode, the terminal-first
-Agent Engineering framework for your code factory.
+The unified harness layer for coding agents.
 
 Features:
 - Repository-owned coding-agent harnesses
@@ -38,7 +38,7 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "0.2.89"
+__version__ = "0.2.90"
 
 # Stable, lightweight public extension surface.  Importing this package does
 # not discover or execute third-party extensions; discovery happens only when

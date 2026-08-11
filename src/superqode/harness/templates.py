@@ -211,9 +211,15 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
                 "max_depth": 3,
                 "max_children": 8,
                 "max_parallel": 4,
-                "durable_children": True,
+                # The resident root worker owns every descendant. Spawning a
+                # second worker per child would split the tree-wide limits.
+                "resident_root": True,
+                "durable_children": False,
                 "autonomous_max_rounds": 3,
                 "gate_timeout": 120,
+                "python_timeout": 120,
+                "max_output_chars": 1_000_000,
+                "max_checkpoint_bytes": 67_108_864,
             },
         ),
         model_policy=ModelPolicySpec(
@@ -240,6 +246,8 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
             "model_tool_count": 1,
             "persistent_python": True,
             "durable_children": True,
+            "resident_root": True,
+            "global_recursive_tree": True,
             "rich_stream_events": True,
             "continuity": "context-replay",
             "kernel_continuity": "serializable-checkpoint",

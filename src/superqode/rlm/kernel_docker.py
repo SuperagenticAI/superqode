@@ -154,9 +154,25 @@ def kernel_exec_command(
                 "allow_shell": resolved.policy.allow_shell,
                 "allowed_commands": list(resolved.policy.allowed_commands),
                 "allow_compound_commands": resolved.policy.allow_compound_commands,
+                "max_output_chars": resolved.max_output_chars,
+                "max_checkpoint_bytes": resolved.max_checkpoint_bytes,
             },
             separators=(",", ":"),
         ),
+        f"{STATE_MOUNT}/{safe_name(kernel_id)}.pid",
+    ]
+
+
+def kernel_kill_command(container: str, kernel_id: str) -> list[str]:
+    """Kill the actual in-container kernel, not only its docker CLI client."""
+    return [
+        "docker",
+        "exec",
+        container,
+        "python3",
+        "-c",
+        "import os,sys; os.kill(int(open(sys.argv[1]).read()), 9)",
+        f"{STATE_MOUNT}/{safe_name(kernel_id)}.pid",
     ]
 
 
@@ -296,6 +312,19 @@ class KernelChannel:
                 self._log.close()
                 self._log = None
 
+    async def terminate(self) -> None:
+        """Stop a stuck kernel immediately instead of asking it to cooperate."""
+        process = self._process
+        self._process = None
+        if process is not None and process.returncode is None:
+            with contextlib.suppress(OSError, ProcessLookupError):
+                process.kill()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(process.wait(), timeout=5)
+        if self._log is not None:
+            self._log.close()
+            self._log = None
+
 
 class DockerKernelBackend:
     """Model-written Python executes inside a container, not on the host."""
@@ -361,13 +390,31 @@ class DockerKernelBackend:
 
     async def execute(self, kernel_id: str, code: str) -> PythonExecutionResult:
         channel = await self._channel(kernel_id)
-        result = await channel.request(
-            {
-                "op": "execute",
-                "code": code,
-                "checkpoint_path": f"{STATE_MOUNT}/{kernel_id}.pkl",
-            }
-        )
+        try:
+            result = await channel.request(
+                {
+                    "op": "execute",
+                    "code": code,
+                    "checkpoint_path": f"{STATE_MOUNT}/{kernel_id}.pkl",
+                },
+                timeout=self.config.python_timeout,
+            )
+        except TimeoutError:
+            # This docker-exec process is the kernel. Killing its channel stops
+            # the cell; the next call creates a clean process and restores the
+            # last successful checkpoint inside the same boundary.
+            self._channels.pop(kernel_id, None)
+            await self._docker(
+                kernel_kill_command(self._require_container(), kernel_id),
+                timeout=5,
+            )
+            await channel.terminate()
+            return PythonExecutionResult(
+                "",
+                "",
+                f"Python execution timed out after {self.config.python_timeout:g}s; "
+                "the kernel was stopped and will restore its previous checkpoint",
+            )
         return PythonExecutionResult(
             str(result.get("output") or ""),
             str(result.get("value_repr") or ""),

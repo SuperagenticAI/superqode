@@ -276,15 +276,30 @@ def translate_event(event: Any, *, runtime: str = "pipy") -> list[HarnessEvent]:
     if kind == "turn_end":
         message = event.message
         usage = getattr(message, "usage", None)
+        stop_reason = str(getattr(message, "stop_reason", "stop") or "stop")
         events = [
             HarnessEvent(
                 type="turn_complete",
                 data={
-                    "stop_reason": getattr(message, "stop_reason", "stop"),
+                    "stop_reason": stop_reason,
                     "usage": _usage_dict(usage),
                 },
             )
         ]
+        if stop_reason in {"error", "aborted"}:
+            detail = str(getattr(message, "error_message", "") or "Model turn failed")
+            events.insert(
+                0,
+                HarnessEvent(
+                    type="error",
+                    data={
+                        "error": detail,
+                        "error_type": (
+                            "ModelTurnAborted" if stop_reason == "aborted" else "ModelTurnError"
+                        ),
+                    },
+                ),
+            )
         text = str(getattr(message, "text", "") or "")
         if text:
             events.insert(

@@ -26,8 +26,10 @@ prevent, but nothing does it by accident.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from superqode.pipy.messages import UserMessage
@@ -109,9 +111,14 @@ class SubcallUsage:
         if usage is None:
             return
         cost = getattr(usage, "cost", None)
-        self.input_tokens += int(getattr(usage, "input", 0) or 0)
-        self.output_tokens += int(getattr(usage, "output", 0) or 0)
-        self.total_tokens += int(getattr(usage, "total_tokens", 0) or 0)
+        input_tokens = int(getattr(usage, "input", 0) or 0)
+        output_tokens = int(getattr(usage, "output", 0) or 0)
+        total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        # Some providers omit the redundant total while still reporting both
+        # components. A zero total must not defeat a persisted token budget.
+        self.total_tokens += total_tokens or input_tokens + output_tokens
         self.cost_usd += float(getattr(cost, "total", 0.0) or 0.0)
 
     def to_dict(self) -> dict[str, Any]:
@@ -190,13 +197,14 @@ class SubcallExecutor:
         stream_fn: Any,
         policy: SubcallPolicy | None = None,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        state_path: str | Path | None = None,
     ) -> None:
         self.model = model
         self.stream_fn = stream_fn
         self.policy = policy or SubcallPolicy()
         self.system_prompt = system_prompt
-        self.usage = SubcallUsage()
-        self._counter = 0
+        self.state_path = Path(state_path) if state_path is not None else None
+        self.usage, self._counter = self._restore()
         self._lock = asyncio.Lock()
 
     async def query(
@@ -261,6 +269,7 @@ class SubcallExecutor:
             # Calls means quota consumed, including failed calls. Otherwise a
             # timeout could report zero calls while still exhausting max_calls.
             self.usage.calls = self._counter
+            self._persist()
             return start
 
     def _resolve_model(self, model: str | None) -> Model:
@@ -282,6 +291,7 @@ class SubcallExecutor:
         body = f"{context}\n\n{prompt}" if context else prompt
         if len(body) > self.policy.max_prompt_chars:
             self.usage.failures += 1
+            self._persist()
             return RLMResponse(
                 id=identifier,
                 text="",
@@ -296,6 +306,7 @@ class SubcallExecutor:
             message = await asyncio.wait_for(self._stream(body, model), timeout=self.policy.timeout)
         except TimeoutError:
             self.usage.failures += 1
+            self._persist()
             return RLMResponse(
                 id=identifier,
                 text="",
@@ -305,6 +316,7 @@ class SubcallExecutor:
             )
         except Exception as error:  # noqa: BLE001 - a failed subcall is data, not a crash
             self.usage.failures += 1
+            self._persist()
             return RLMResponse(
                 id=identifier,
                 text="",
@@ -315,6 +327,7 @@ class SubcallExecutor:
 
         usage = getattr(message, "usage", None)
         self.usage.record(usage)
+        self._persist()
         text = str(getattr(message, "text", "") or "")
         truncated = len(text) > self.policy.max_response_chars
         return RLMResponse(
@@ -347,6 +360,49 @@ class SubcallExecutor:
         if message is None:
             raise RuntimeError("The subcall produced no response")
         return message
+
+    def _restore(self) -> tuple[SubcallUsage, int]:
+        path = self.state_path
+        if path is None or not path.is_file():
+            return SubcallUsage(), 0
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            raw = value.get("usage") if isinstance(value, dict) else None
+            if not isinstance(raw, dict):
+                return SubcallUsage(), 0
+            usage = SubcallUsage(
+                calls=max(0, int(raw.get("calls") or 0)),
+                input_tokens=max(0, int(raw.get("input_tokens") or 0)),
+                output_tokens=max(0, int(raw.get("output_tokens") or 0)),
+                total_tokens=max(0, int(raw.get("total_tokens") or 0)),
+                cost_usd=max(0.0, float(raw.get("cost_usd") or 0.0)),
+                failures=max(0, int(raw.get("failures") or 0)),
+            )
+            return usage, usage.calls
+        except (OSError, TypeError, ValueError):
+            return SubcallUsage(), 0
+
+    def _persist(self) -> None:
+        path = self.state_path
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            temporary.write_text(
+                json.dumps(
+                    {"version": 1, "usage": self.usage.to_dict()},
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            temporary.replace(path)
+        except OSError:
+            # Usage reporting must not turn a completed model response into a
+            # failed tool call. A later update can retry persistence.
+            return
 
 
 def _usage_dict(usage: Any) -> dict[str, Any]:
