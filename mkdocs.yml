@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "The open-source, terminal-first unified harness layer for building native coding-agent harnesses and connecting open-source or proprietary agents."
+site_description: "The open-source, terminal-first harness layer for building native coding-agent harnesses and connecting open-source or proprietary agents."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode

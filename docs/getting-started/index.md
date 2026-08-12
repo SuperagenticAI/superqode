@@ -1,6 +1,6 @@
 # Getting Started
 
-SuperQode is the open-source, terminal-first unified harness layer for coding agents. Start by using it as a normal coding agent: open a repository, connect the agent or model you already use, and ask for coding work. You can switch between native, open-source, and proprietary harnesses during the session without giving up the familiar coding-agent workflow.
+SuperQode is the open-source, terminal-first harness layer for coding agents. Start by using it as a normal coding agent: open a repository, connect the agent or model you already use, and ask for coding work. You can switch between native, open-source, and proprietary harnesses during the session without giving up the familiar coding-agent workflow.
 
 Harness authoring, evaluation, and optimization come later. They let you turn a
 useful interactive setup into a repository-owned, measured, and improvable run

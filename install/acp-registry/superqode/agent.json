@@ -2,7 +2,7 @@
   "id": "superqode",
   "name": "SuperQode",
   "version": "0.2.93",
-  "description": "The open-source, terminal-first unified harness layer for coding agents. Build native harnesses or connect open-source and proprietary agents, models, and runtimes.",
+  "description": "The open-source, terminal-first harness layer for coding agents. Build native harnesses or connect open-source and proprietary agents, models, and runtimes.",
   "repository": "https://github.com/SuperagenticAI/superqode",
   "website": "https://super-agentic.ai/superqode",
   "authors": [

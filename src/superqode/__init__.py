@@ -3,7 +3,7 @@ SuperQode CLI package.
 
 This package provides the terminal user interface, command-line interface,
 interactive chat, and voice entrypoints for SuperQode, the terminal-first
-The unified harness layer for coding agents.
+harness layer for coding agents.
 
 Features:
 - Repository-owned coding-agent harnesses

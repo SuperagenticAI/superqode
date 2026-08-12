@@ -8,7 +8,7 @@
   <img src="assets/superqode-logo.png" alt="SuperQode logo" width="120">
 </p>
 
-<h3 align="center">The unified harness layer for coding agents.</h3>
+<h3 align="center">The harness layer for coding agents.</h3>
 
 <p align="center">
   Build your own harnesses or connect the agents you already use: open-source,
@@ -42,9 +42,9 @@
 
 ## What is SuperQode?
 
-SuperQode is the open-source, terminal-first unified harness layer for coding
-agents. Build your own harnesses, run SuperQode's native harnesses, or connect
-the coding agents you already use.
+SuperQode is the open-source, terminal-first harness layer for coding agents.
+Build your own harnesses, run SuperQode's native harnesses, or connect the
+coding agents you already use.
 
 Run local or hosted models and the coding agents you already use through one
 inspectable, portable HarnessSpec while keeping tools, policies, sessions, and

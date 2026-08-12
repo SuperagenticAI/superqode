@@ -16,7 +16,7 @@ COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
 # Compact positioning used by alternate TUI renderers.
-TAGLINE_PART1 = "The Unified Harness Layer for Coding Agents"
+TAGLINE_PART1 = "The Harness Layer for Coding Agents"
 TAGLINE_PART2 = "Build or connect · Open or proprietary · Local or hosted"
 
 # First-page order for the product-level connection choices.

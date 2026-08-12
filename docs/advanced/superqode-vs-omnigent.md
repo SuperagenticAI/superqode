@@ -10,7 +10,7 @@ organize the work around different primary experiences.
 
 In one sentence: both projects orchestrate coding-agent harnesses. Omnigent
 places the persistent collaborative session at the center of its experience,
-while SuperQode provides a terminal-first unified harness layer across native,
+while SuperQode provides a terminal-first harness layer across native,
 open-source, and proprietary coding agents, including repository delivery,
 evaluation, governance, and guarded optimization around that session.
 

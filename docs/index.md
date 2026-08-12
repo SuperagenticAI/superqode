@@ -11,7 +11,7 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker"><span class="sq-gradient-text">The Unified Harness Layer</span> for Coding Agents</p>
+<p class="sq-kicker"><span class="sq-gradient-text">The Harness Layer</span> for Coding Agents</p>
 
 <p class="sq-tagline">Build your own harnesses, run SuperQode's native harnesses, or connect the agents you already use: open-source, proprietary, local, or hosted.</p>
 
@@ -117,7 +117,7 @@ Use `local build` to select a specific model, endpoint, or model pack.
 
 ## Overview
 
-SuperQode is the open-source, terminal-first unified harness layer for coding agents. Build repository-owned harnesses, run SuperQode's native harnesses, or connect established coding agents through native integrations, SDK runtimes, RPC, and ACP.
+SuperQode is the open-source, terminal-first harness layer for coding agents. Build repository-owned harnesses, run SuperQode's native harnesses, or connect established coding agents through native integrations, SDK runtimes, RPC, and ACP.
 
 [Agent Engineering](https://agentengineering.world/) is the broader discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode focuses that work on the harness layer: the model routing, context, memory, tools, policies, execution, evidence, and evaluation around a coding agent.
 

@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
 version = "0.2.93"
-description = "The unified harness layer for coding agents"
+description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
 # Declared rather than left to setuptools' default glob, so NOTICE cannot
