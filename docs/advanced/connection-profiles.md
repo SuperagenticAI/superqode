@@ -65,7 +65,7 @@ Handoff profile: shows the command to run `agy` in a terminal. Does not connect 
 
 Runs **Grok Build**, xAI's own coding agent, on an eligible SuperGrok or X Premium+ account. The vendor's agent owns the loop. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). SuperQode starts `grok agent stdio` over ACP.
 
-To run **SuperQode's own harness** on the same subscription instead, use `:grok api [model]`. That imports the CLI session token into SuperQode's auth store and routes through the `grok-cli` provider (CLI chat proxy), so `core`/`workbench` and SuperQode's tools drive Grok 4.5.
+To run **SuperQode's own harness** on the same subscription instead, use `:grok api [model]`. That imports the CLI session token into SuperQode's auth store and routes through the `grok-cli` provider (CLI chat proxy). The live catalog default is whatever `grok models` reports (currently grok-4.6). The `grok-cli` *runtime* (`:runtime grok-cli`) is the headless `grok -p` path and is not what Subscriptions opens.
 
 ### GitHub Copilot (connector: copilot)
 
@@ -179,6 +179,7 @@ superqode connect setup deepseek --json
 - ACP -> no runtime change (ACP subprocess)
 - Antigravity -> handoff (no runtime)
 - Grok subscription (`:connect grok`) -> Grok Build ACP subprocess (`grok agent stdio`)
+- Grok headless (`:runtime grok-cli`) -> `grok -p --output-format streaming-json`
 - Grok via SuperQode harness (`:grok api`) -> `grok-cli` provider + CLI session token
 - Qwen Code -> Qwen Code ACP subprocess (`qwen --acp`)
 - Kimi Code -> Kimi Code ACP subprocess (`kimi acp`)

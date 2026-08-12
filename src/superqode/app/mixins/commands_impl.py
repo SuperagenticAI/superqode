@@ -3476,7 +3476,7 @@ class CommandImplMixin:
                 log.add_info("No imported Grok CLI token to remove.")
             return
 
-        model = arg or "grok-build"
+        model = arg or grok_cli_auth.default_subscription_model()
         for prefix in ("grok-cli/", "xai/", "grok/"):
             if model.lower().startswith(prefix):
                 model = model[len(prefix) :]

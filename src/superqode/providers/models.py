@@ -981,9 +981,9 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GROK CLI SUBSCRIPTION (direct API via the local `grok login` session)
     # =========================================================================
     "grok-cli": {
-        "grok-build": ModelInfo(
-            id="grok-build",
-            name="Grok Build (default)",
+        "grok-4.6": ModelInfo(
+            id="grok-4.6",
+            name="Grok 4.6",
             provider="grok-cli",
             context_window=500000,
             max_output=500000,
@@ -994,7 +994,24 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="The CLI's default-model alias (currently Grok 4.5); included with the subscription.",
+            description="Current Grok subscription default (eligibility decided by xAI).",
+            recommended_for=["coding", "agentic coding"],
+            released="2026-08-01",
+        ),
+        "grok-build": ModelInfo(
+            id="grok-build",
+            name="Grok Build (alias)",
+            provider="grok-cli",
+            context_window=500000,
+            max_output=500000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="CLI default-model alias; the signed-in account's live default is reported by `grok models`.",
             recommended_for=["coding", "agentic coding"],
             released="2026-07-08",
         ),
@@ -1597,32 +1614,37 @@ def _grok_cli_live_catalog() -> Dict[str, ModelInfo]:
 
     effective = get_effective_models()
     templates = {**effective.get("xai", {}), **MODELS.get("grok-cli", {})}
+    details = listing.get("details") if isinstance(listing.get("details"), dict) else {}
     catalog: Dict[str, ModelInfo] = {}
     for model_id in ids:
+        extra = details.get(model_id) if isinstance(details.get(model_id), dict) else {}
         template = templates.get(model_id)
         if template is not None:
             catalog[model_id] = ModelInfo(
                 id=model_id,
-                name=template.name,
+                name=str(extra.get("name") or template.name),
                 provider="grok-cli",
-                context_window=template.context_window,
-                max_output=template.max_output,
+                context_window=int(extra.get("context_window") or template.context_window),
+                max_output=int(extra.get("max_output") or template.max_output),
                 capabilities=list(template.capabilities),
-                description=template.description,
+                description=str(extra.get("description") or template.description),
                 recommended_for=list(template.recommended_for),
                 released=template.released,
             )
         else:
             catalog[model_id] = ModelInfo(
                 id=model_id,
-                name=model_id,
+                name=str(extra.get("name") or model_id),
                 provider="grok-cli",
-                context_window=0,
-                max_output=0,
+                context_window=int(extra.get("context_window") or 0),
+                max_output=int(extra.get("max_output") or 0),
                 capabilities=[],
-                description=(
-                    "Subscription model reported by `grok models`; context and "
-                    "capabilities have not been verified."
+                description=str(
+                    extra.get("description")
+                    or (
+                        "Subscription model reported by the Grok CLI catalog; "
+                        "context and capabilities have not been verified."
+                    )
                 ),
             )
     return catalog

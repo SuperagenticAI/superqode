@@ -48,7 +48,7 @@ def _fake_grok_cli_installed(monkeypatch) -> None:
     monkeypatch.setattr(
         am.shutil,
         "which",
-        lambda name, *args, **kwargs: ("/usr/local/bin/grok" if name == "grok" else None),
+        lambda name, *args, **kwargs: "/usr/local/bin/grok" if name == "grok" else None,
     )
 
 
@@ -56,7 +56,7 @@ def _fake_grok_cli_installed(monkeypatch) -> None:
 
 
 def test_read_cli_token_documented_schema(tmp_path):
-    # The schema xAI's CLI README documents: {"https://accounts.x.ai/sign-in": {"key": ...}}
+    # Legacy schema from early CLI docs. Current files use {issuer}::{client_id}.
     auth_file = _write_cli_auth(
         tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-token-123"}}
     )
@@ -64,8 +64,65 @@ def test_read_cli_token_documented_schema(tmp_path):
     token, expires = grok_cli_auth.read_cli_token(auth_file)
 
     assert token == "sess-token-123"
-    # Opaque token: expiry estimated from file mtime + documented 7-day lifetime.
-    assert abs(expires - (auth_file.stat().st_mtime + 7 * 24 * 3600)) < 5
+    # Opaque token with no expires_at and no JWT exp: do not invent a week-long TTL.
+    assert expires == 0
+
+
+def test_read_cli_token_issuer_client_id_and_expires_at(tmp_path):
+    exp = int(time.time()) + 6 * 3600
+    iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(exp))
+    auth_file = _write_cli_auth(
+        tmp_path,
+        {
+            "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828": {
+                "key": "sess-current",
+                "expires_at": iso,
+                "refresh_token": "do-not-copy",
+                "oidc_issuer": "https://auth.x.ai",
+            }
+        },
+    )
+
+    token, expires = grok_cli_auth.read_cli_token(auth_file)
+
+    assert token == "sess-current"
+    assert abs(expires - exp) < 2
+
+
+def test_read_cli_token_prefers_the_latest_expires_at(tmp_path):
+    soon = int(time.time()) + 600
+    later = int(time.time()) + 3600
+    auth_file = _write_cli_auth(
+        tmp_path,
+        {
+            "https://auth.x.ai::old": {"key": "older", "expires_at": soon},
+            "https://auth.x.ai::new": {"key": "newer", "expires_at": later},
+        },
+    )
+
+    token, expires = grok_cli_auth.read_cli_token(auth_file)
+
+    assert token == "newer"
+    assert abs(expires - later) < 2
+
+
+def test_import_cli_token_never_copies_refresh(tmp_path, isolated_auth_store):
+    auth_file = _write_cli_auth(
+        tmp_path,
+        {
+            "https://auth.x.ai::abc": {
+                "key": "sess-live",
+                "refresh_token": "secret-refresh",
+                "expires_at": int(time.time()) + 3600,
+            }
+        },
+    )
+
+    auth = grok_cli_auth.import_cli_token(auth_file)
+
+    assert auth is not None
+    assert auth.access == "sess-live"
+    assert auth.refresh == ""
 
 
 def test_read_cli_token_uses_jwt_exp_when_present(tmp_path):
@@ -131,12 +188,51 @@ def test_provider_api_key_resolves_imported_token(tmp_path, isolated_auth_store)
     assert provider_api_key(PROVIDERS["grok-cli"]) == "sess-abc"
 
 
-def test_expired_imported_token_is_not_used(isolated_auth_store):
+def test_expired_imported_token_is_not_used(tmp_path, isolated_auth_store, monkeypatch):
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
     isolated_auth_store.set(
         "grok-cli", OAuthAuth(access="stale", refresh="", expires=int(time.time()) - 10)
     )
 
     assert provider_api_key(PROVIDERS["grok-cli"]) is None
+
+
+def test_stale_import_is_replaced_from_cli_file(tmp_path, isolated_auth_store, monkeypatch):
+    isolated_auth_store.set(
+        "grok-cli", OAuthAuth(access="stale", refresh="", expires=int(time.time()) - 10)
+    )
+    auth_file = _write_cli_auth(
+        tmp_path,
+        {
+            "https://auth.x.ai::abc": {
+                "key": "fresh-from-cli",
+                "expires_at": int(time.time()) + 3600,
+            }
+        },
+    )
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
+
+    assert provider_api_key(PROVIDERS["grok-cli"]) == "fresh-from-cli"
+    stored = isolated_auth_store.get("grok-cli")
+    assert isinstance(stored, OAuthAuth)
+    assert stored.access == "fresh-from-cli"
+    assert stored.refresh == ""
+
+
+def test_resolve_without_snapshot_does_not_import(tmp_path, isolated_auth_store, monkeypatch):
+    auth_file = _write_cli_auth(
+        tmp_path,
+        {
+            "https://auth.x.ai::abc": {
+                "key": "must-not-import",
+                "expires_at": int(time.time()) + 3600,
+            }
+        },
+    )
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
+
+    assert provider_api_key(PROVIDERS["grok-cli"]) is None
+    assert isolated_auth_store.get("grok-cli") is None
 
 
 # --- provider definition and gateway routing -----------------------------------
@@ -153,7 +249,8 @@ def test_grok_cli_provider_def_targets_documented_proxy():
     assert pdef.extra_headers["X-XAI-Token-Auth"] == "xai-grok-cli"
     assert pdef.extra_headers["x-grok-model-override"] == "{model}"
     assert pdef.extra_headers["x-grok-client-version"] == "{cli_version}"
-    assert pdef.example_models[0] == "grok-build"
+    assert pdef.example_models[0] == "grok-4.6"
+    assert "grok-4.3" in pdef.example_models
 
 
 def test_detect_cli_version_from_version_json(tmp_path, monkeypatch):
@@ -195,10 +292,13 @@ def test_gateway_applies_proxy_headers_and_token(tmp_path, isolated_auth_store, 
 
 
 @pytest.mark.asyncio
-async def test_gateway_rejects_missing_grok_session_before_litellm(isolated_auth_store):
+async def test_gateway_rejects_missing_grok_session_before_litellm(
+    tmp_path, isolated_auth_store, monkeypatch
+):
     from superqode.providers.gateway.base import AuthenticationError
     from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
     gateway = LiteLLMGateway()
     with pytest.raises(AuthenticationError, match="grok login.*:grok api"):
         await gateway.chat_completion([], "grok-4.5", provider="grok-cli")
@@ -294,11 +394,12 @@ def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypa
     _fake_grok_cli_installed(monkeypatch)
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
+    monkeypatch.setattr(grok_cli_auth, "default_subscription_model", lambda: "grok-4.6")
 
     stub, log = _AppStub(), _Log()
     stub._grok_api_cmd("", log)
 
-    assert stub.connected == [("grok-cli", "grok-build")]
+    assert stub.connected == [("grok-cli", "grok-4.6")]
     assert not log.errors
 
 
@@ -404,7 +505,13 @@ def test_parse_cli_models_output_unauthenticated():
     assert parsed["models"] == []
 
 
-def test_cached_cli_models_runs_once_and_clears(monkeypatch):
+def _isolate_catalog_to_stdout(monkeypatch, tmp_path):
+    """Skip the cache file and proxy so tests can drive `grok models` stdout."""
+    monkeypatch.setattr(grok_cli_auth, "GROK_MODELS_CACHE_FILE", tmp_path / "missing-cache.json")
+    monkeypatch.setattr(grok_cli_auth, "fetch_proxy_models", lambda: {"default": "", "models": []})
+
+
+def test_cached_cli_models_runs_once_and_clears(tmp_path, monkeypatch):
     calls = []
 
     class _Proc:
@@ -417,6 +524,7 @@ def test_cached_cli_models_runs_once_and_clears(monkeypatch):
         return _Proc()
 
     grok_cli_auth.clear_cli_models_cache()
+    _isolate_catalog_to_stdout(monkeypatch, tmp_path)
     monkeypatch.setattr(grok_cli_auth.shutil, "which", lambda name: "/usr/local/bin/grok")
     monkeypatch.setattr(grok_cli_auth.subprocess, "run", fake_run)
 
@@ -432,19 +540,72 @@ def test_cached_cli_models_runs_once_and_clears(monkeypatch):
     grok_cli_auth.clear_cli_models_cache()
 
 
-def test_cached_cli_models_ignores_failed_stdout_and_stderr(monkeypatch):
+def test_cached_cli_models_ignores_failed_stdout_and_stderr(tmp_path, monkeypatch):
     class _Proc:
         returncode = 1
         stdout = "Available models:\n  fake-from-failed-command\n"
         stderr = "Available models:\n  warning-looking-like-model\n"
 
+    _isolate_catalog_to_stdout(monkeypatch, tmp_path)
     monkeypatch.setattr(grok_cli_auth.shutil, "which", lambda _name: "/usr/local/bin/grok")
     monkeypatch.setattr(grok_cli_auth.subprocess, "run", lambda *_args, **_kwargs: _Proc())
     grok_cli_auth.clear_cli_models_cache()
 
-    assert grok_cli_auth.cached_cli_models() == {"default": "", "models": []}
+    listing = grok_cli_auth.cached_cli_models()
+    assert listing["default"] == ""
+    assert listing["models"] == []
 
     grok_cli_auth.clear_cli_models_cache()
+
+
+def test_read_models_cache_file_ids_only(tmp_path):
+    cache = tmp_path / "models_cache.json"
+    cache.write_text(
+        json.dumps(
+            {
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "auth_method": "session",
+                "models": {
+                    "grok-4.6": {
+                        "api_key": "must-not-leak",
+                        "info": {
+                            "id": "grok-4.6",
+                            "name": "Grok 4.6",
+                            "description": "latest",
+                            "context_window": 500000,
+                            "max_completion_tokens": 8192,
+                        },
+                    },
+                    "grok-4.5": {"info": {"id": "grok-4.5", "name": "Grok 4.5"}},
+                },
+            }
+        )
+    )
+
+    listing = grok_cli_auth.read_models_cache_file(cache)
+
+    assert listing["models"] == ["grok-4.6", "grok-4.5"]
+    assert listing["default"] == ""
+    assert listing["source"] == "cache"
+    assert "api_key" not in json.dumps(listing["details"])
+    assert listing["details"]["grok-4.6"]["context_window"] == 500000
+
+
+def test_read_models_cache_file_ignores_api_key_auth(tmp_path):
+    cache = tmp_path / "models_cache.json"
+    cache.write_text(
+        json.dumps(
+            {
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "auth_method": "api_key",
+                "models": {"grok-4.6": {"info": {"id": "grok-4.6"}}},
+            }
+        )
+    )
+
+    listing = grok_cli_auth.read_models_cache_file(cache)
+
+    assert listing["models"] == []
 
 
 def test_grok_cli_picker_uses_live_cli_catalog(monkeypatch):
@@ -463,7 +624,7 @@ def test_grok_cli_picker_uses_live_cli_catalog(monkeypatch):
     assert list(models) == ["grok-build", "grok-4.5", "grok-composer-2.5-fast"]
     composer = models["grok-composer-2.5-fast"]
     assert composer.provider == "grok-cli"
-    assert "grok models" in composer.description
+    assert "Grok CLI catalog" in composer.description
     assert composer.context_window == 0
     assert composer.max_output == 0
     assert composer.capabilities == []

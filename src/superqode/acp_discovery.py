@@ -705,15 +705,21 @@ class ACPDiscovery:
                     id="gpt-4o", name="GPT-4o", provider="openai", description="Multimodal GPT"
                 ),
             ],
-            # Grok Build follows the signed-in account's current default. The
-            # bare "grok-build" id is the CLI's own default-model alias; the
-            # rest are real xAI model ids a user can pin explicitly.
+            # Grok Build follows the signed-in account's current default.
+            # grok-4.6 is the live consumer default; grok-build remains an alias.
             "grok": [
                 AgentModel(
-                    id="grok-build",
-                    name="Grok Build (account default)",
+                    id="grok-4.6",
+                    name="Grok 4.6",
                     provider="xai",
-                    description="Official Grok Build default alias, currently Grok 4.5",
+                    description="Current Grok subscription default",
+                    context_window=500000,
+                ),
+                AgentModel(
+                    id="grok-build",
+                    name="Grok Build (account alias)",
+                    provider="xai",
+                    description="Official Grok Build default-model alias",
                     context_window=500000,
                 ),
                 AgentModel(

@@ -979,7 +979,8 @@ class ModelCatalogMixin:
         except Exception:  # noqa: BLE001 - CLI probing is best-effort
             pass
         live = bool(listing.get("models"))
-        default_id = str(listing.get("default") or "grok-build")
+        default_id = str(listing.get("default") or grok_cli_auth.DEFAULT_SUBSCRIPTION_MODEL)
+        source = str(listing.get("source") or "")
         models = get_models_for_provider("grok-cli")
 
         t = Text()
@@ -991,7 +992,11 @@ class ModelCatalogMixin:
             t.append(f"{info.context_display:>6s}  ", style=THEME["muted"])
             t.append(f"{info.description}\n", style=THEME["dim"])
         t.append("\n  Source: ", style=THEME["muted"])
-        if live:
+        if live and source == "cache":
+            t.append("~/.grok/models_cache.json (signed-in CLI cache)\n", style=THEME["text"])
+        elif live and source == "proxy":
+            t.append("CLI chat proxy /models\n", style=THEME["text"])
+        elif live:
             t.append("`grok models` (signed-in CLI catalog)\n", style=THEME["text"])
         elif shutil.which("grok") is None:
             t.append("builtin fallback: Grok CLI not installed\n", style=THEME["warning"])

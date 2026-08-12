@@ -419,6 +419,12 @@ class PureMode:
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
+        permission_manager = self._permission_manager_for_runtime()
+        if permission_manager is not None:
+            runtime_kwargs["permission_manager"] = permission_manager
+        approval_mode = self._approval_mode_for_runtime()
+        if approval_mode:
+            runtime_kwargs["approval_mode"] = approval_mode
 
         self._dispose_runtime()
         self._runtime = create_runtime(
@@ -453,6 +459,40 @@ class PureMode:
         self._harness_session = None
         self._harness_session_id = ""
         self._sync_harness_session_fields()
+
+    def _permission_manager_for_runtime(self):
+        """Permission manager from the active harness, if one can be compiled."""
+        spec = getattr(self, "_harness_spec", None)
+        if spec is None:
+            definition = getattr(self, "_harness_definition", None)
+            spec = getattr(definition, "spec", None) if definition is not None else None
+        if spec is None:
+            return None
+        try:
+            from superqode.harness.compiler import compile_to_headless_profile
+            from superqode.tools.permissions import PermissionManager
+
+            return PermissionManager(compile_to_headless_profile(spec).permissions)
+        except Exception:  # noqa: BLE001 - vendor CLIs still run without it
+            return None
+
+    def _approval_mode_for_runtime(self) -> str:
+        """Map a harness approval profile onto VendorCLIRuntime's three modes."""
+        spec = getattr(self, "_harness_spec", None)
+        if spec is None:
+            definition = getattr(self, "_harness_definition", None)
+            spec = getattr(definition, "spec", None) if definition is not None else None
+        profile = str(
+            getattr(getattr(spec, "execution_policy", None), "approval_profile", "") or ""
+        )
+        profile = profile.strip().lower()
+        if profile in {"deny", "plan"}:
+            return "deny"
+        if profile in {"auto", "yolo", "bypass"}:
+            return "auto"
+        if profile in {"ask", "balanced", "default"}:
+            return "ask"
+        return ""
 
     def _dispose_runtime(self) -> None:
         """Close and detach the current runtime without blocking a running UI loop."""

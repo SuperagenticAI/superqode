@@ -1070,12 +1070,12 @@ class HelpersMixin(
                 "grok",
                 log,
                 on_success=on_login_success,
-                reason="The Grok CLI session looks expired (sessions last ~7 days).",
+                reason="The Grok CLI session looks expired (the CLI file has no fresh token).",
                 force=True,
             )
             if started:
                 return False
-            log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
+            log.add_error("The Grok CLI session looks expired.")
             log.add_info("Run `grok login` again, then re-run :connect grok.")
             return False
         # Login state may have changed since the last catalog probe.

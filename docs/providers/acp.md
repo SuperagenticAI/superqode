@@ -122,7 +122,7 @@ superqode connect acp grok
 
 Use `grok login --device-auth` on SSH or a headless machine. `:connect grok`
 and `:connect acp grok` both start Grok Build over ACP; Grok Build follows the
-signed-in account's default model (currently Grok 4.5).
+signed-in account's live default (currently grok-4.6 on consumer plans).
 
 To run **SuperQode's own harness** on the same subscription instead of Grok
 Build, use `:grok api [model]`: it imports the session token into SuperQode and

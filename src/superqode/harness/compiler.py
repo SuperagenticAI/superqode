@@ -89,7 +89,25 @@ def _permission_config_from_spec(spec: HarnessSpec) -> PermissionConfig:
         groups[ToolGroup.SHELL] = Permission.DENY
     if not spec.execution_policy.allow_network:
         groups[ToolGroup.NETWORK] = Permission.DENY
-    return PermissionConfig(default=default, groups=groups)
+    allow_patterns: list[str] = []
+    deny_patterns: list[str] = []
+    extra = spec.execution_policy.config if isinstance(spec.execution_policy.config, dict) else {}
+    allow_patterns.extend(str(item) for item in extra.get("allow_patterns", []) or [])
+    deny_patterns.extend(str(item) for item in extra.get("deny_patterns", []) or [])
+    for rule in spec.execution_policy.permission_rules or ():
+        target = str(rule.pattern or "").strip() or str(rule.tool or "").strip()
+        if not target or target == "*":
+            continue
+        if rule.action == "deny":
+            deny_patterns.append(target)
+        elif rule.action == "allow":
+            allow_patterns.append(target)
+    return PermissionConfig(
+        default=default,
+        groups=groups,
+        allow_patterns=allow_patterns,
+        deny_patterns=deny_patterns,
+    )
 
 
 def _tool_names_from_spec(spec: HarnessSpec) -> list[str] | None:

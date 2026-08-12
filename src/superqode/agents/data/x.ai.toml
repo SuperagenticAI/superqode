@@ -57,16 +57,19 @@ determined by xAI for the signed-in account.
 
 ## Models
 
-Grok Build defaults to its `grok-build` alias (currently Grok 4.5). Pin a
-specific model from SuperQode with `:grok connect grok-4.5` or
-`:grok connect grok-build-0.1`; the hint is forwarded through ACP.
+Grok Build follows the signed-in account's live default (currently grok-4.6
+on consumer subscriptions). Pin a specific model from SuperQode with
+`:grok connect grok-4.6` or `:grok connect grok-4.5`; the hint is forwarded
+through ACP. The `grok-build` id remains a CLI alias when the binary accepts it.
 
 ## Direct API on your subscription (opt-in)
 
 `:grok api [model]` imports the local `grok login` session token into
 SuperQode's own auth store and connects the `grok-cli` provider against the
 CLI chat proxy documented by xAI. Remove it anytime with `:grok api off`.
-CLI sessions last about 7 days; re-run `grok login` when they expire.
+The CLI refreshes `~/.grok/auth.json` in place (sessions last hours, not
+days). SuperQode re-reads that file; re-run `grok login` only if the CLI
+itself has no session.
 
 ## BYOK
 

@@ -262,7 +262,8 @@ two routes on the same `grok login`:
   is the default subscription route: the vendor's agent owns the loop.
 - `:grok api [model]` runs **SuperQode's own harness** on the subscription. It
   imports the `grok login` session and talks to the CLI chat proxy, so
-  `core`/`workbench`, SuperQode's tools, and memory drive Grok 4.5.
+  `core`/`workbench`, SuperQode's tools, and memory drive the live catalog
+  default (currently grok-4.6).
 
 ```bash
 # Install the official xAI CLI if needed (macOS/Linux/WSL)
@@ -281,7 +282,7 @@ Inside the TUI:
 ```text
 :connect grok                 # Grok Build, xAI's own agent (ACP), default
 :grok api                     # SuperQode's harness on the subscription (opt-in)
-:grok api grok-4.5            # ...pinned to a specific model
+:grok api grok-4.6            # ...pinned to a specific model
 :grok model                   # ...or pick from a menu of subscription models
 :grok models                  # list the signed-in CLI's model catalog
 ```
@@ -315,8 +316,9 @@ Enterprise proxies are honored via `GROK_CLI_CHAT_PROXY_BASE_URL`.
 
 Notes:
 
-- CLI sessions last about 7 days; when the token expires, run `grok login`
-  again, then reconnect.
+- The CLI refreshes `~/.grok/auth.json` in place (hours, not days). SuperQode
+  re-reads that file when the imported snapshot is near expiry. Run
+  `grok login` only if the CLI itself has no session.
 - Usage counts against your subscription and model eligibility is enforced by
   xAI per tier. The `:grok api` route is intended for interactive use. For
   automation or benchmarking, use `XAI_API_KEY` BYOK.

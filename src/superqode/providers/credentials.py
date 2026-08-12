@@ -31,6 +31,11 @@ def provider_api_key(provider_def: ProviderDef) -> Optional[str]:
         if value:
             return value
 
+    if provider_def.id == "grok-cli":
+        from .grok_cli_auth import resolve_provider_token
+
+        return resolve_provider_token()
+
     local_auth = get_local_auth(provider_def.id)
     if isinstance(local_auth, ApiAuth):
         return local_auth.key or None

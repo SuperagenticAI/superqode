@@ -66,8 +66,9 @@ def test_acp_discovery_grok_models_lead_with_account_default():
     models = asyncio.run(ACPDiscovery()._get_models(agent))
 
     ids = [m.id for m in models]
-    # The CLI's default alias must come first; explicit ids follow.
-    assert ids[0] == "grok-build"
+    # Live consumer default first; grok-build remains an alias.
+    assert ids[0] == "grok-4.6"
+    assert "grok-build" in ids
     assert "grok-4.5" in ids
     assert "grok-build-0.1" in ids
 

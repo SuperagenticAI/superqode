@@ -290,7 +290,7 @@ because the ACP channel is a separate connection source.
 
 ```text
 :runtime copilot-cli    # GitHub Copilot on your subscription (copilot login)
-:runtime grok-cli       # Grok on your subscription (grok login)
+:runtime grok-cli       # Grok Build headless (`grok -p`); :connect grok stays ACP
 ```
 
 `copilot-cli` and `grok-cli` drive the vendor's documented non-interactive mode
@@ -311,8 +311,8 @@ and stated on the first turn rather than applied quietly:
 | Approval mode | Grok | Copilot |
 | --- | --- | --- |
 | `auto` | `--permission-mode bypassPermissions` | `--allow-all-tools` |
-| `ask` | `--permission-mode acceptEdits` | `--allow-all-tools` |
-| `deny` | `--permission-mode plan` | `--allow-all-tools` |
+| `ask` | `--permission-mode auto` | `--allow-all-tools` |
+| `deny` | `--permission-mode dontAsk` | `--allow-all-tools` |
 
 Copilot's CLI requires `--allow-all-tools` for non-interactive use and offers
 no gradation, so every approval mode resolves to the same flags and the runtime

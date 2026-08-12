@@ -1846,7 +1846,7 @@ class AgentRunMixin:
                 return
         elif agent_type == "grok":
             command = "grok agent stdio"
-            model_display = f"grok/{model}" if model and model != "auto" else "grok/grok-build"
+            model_display = f"grok/{model}" if model and model != "auto" else "grok/grok-4.6"
             if shutil.which("grok") is None:
                 self._call_ui(self._stop_thinking)
                 self._call_ui(log.add_error, "Grok CLI not found. Install it before connecting.")

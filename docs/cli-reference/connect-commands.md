@@ -152,7 +152,10 @@ Runs **Grok Build**, xAI's own coding agent, on your Grok subscription over ACP
 
 To run **SuperQode's own harness** on the same subscription instead, use
 `:grok api [model]`: it imports the CLI session into `~/.superqode/auth.json`
-and routes through the `grok-cli` provider (CLI chat proxy). See
+and routes through the `grok-cli` provider (CLI chat proxy). The `grok-cli`
+*runtime* (`:runtime grok-cli`) is the headless `grok -p` path and is not
+what `:connect grok` opens. See
+[xAI Grok](../providers/grok.md) and
 [BYOK Providers](../providers/byok.md#grok-subscription-official-cli).
 
 ### byok

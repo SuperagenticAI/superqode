@@ -188,6 +188,10 @@ class SuperQodeAgent(UnifiedAgent):
         # Create agent runtime (on_thinking will be set via send_message if provided).
         # role_config.runtime is honored if set; otherwise resolve from env / default.
         runtime_name = resolve_runtime_name(cli=getattr(self.role_config, "runtime", None))
+        runtime_kwargs: Dict[str, Any] = {}
+        permission_manager = getattr(self.role_config, "permission_manager", None)
+        if permission_manager is not None:
+            runtime_kwargs["permission_manager"] = permission_manager
         self._runtime = create_runtime(
             runtime_name,
             gateway=gateway,
@@ -196,6 +200,7 @@ class SuperQodeAgent(UnifiedAgent):
             parallel_tools=parallel_tools,
             mcp_executor=mcp_executor,
             mcp_tools=mcp_tool_defs,
+            **runtime_kwargs,
         )
         # Backward-compat: callers / tests poke at _agent_loop for AgentLoop internals.
         # Available only for the builtin runtime.

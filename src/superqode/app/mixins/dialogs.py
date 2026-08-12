@@ -992,7 +992,7 @@ class DialogsMixin:
         log.write_feedback(t)
 
     def _show_grok_status(self, log) -> None:
-        """Show local Grok CLI readiness without reading or displaying credentials."""
+        """Show local Grok CLI readiness. Cheap: no catalog probe, no token import."""
         grok_path = shutil.which("grok")
         auth_path = Path.home() / ".grok" / "auth.json"
         has_api_key = bool(os.environ.get("XAI_API_KEY"))
@@ -1024,14 +1024,31 @@ class DialogsMixin:
             t.append("imported (:grok api off to remove)\n", style=THEME["success"])
         elif token.get("imported"):
             t.append(
-                "imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"]
+                "imported but expired — the CLI may already have refreshed; retry :grok api\n",
+                style=THEME["warning"],
             )
         elif token.get("cli_login"):
             t.append("available: run :grok api to use SuperQode's harness\n", style=THEME["dim"])
         else:
             t.append("not imported\n", style=THEME["dim"])
         t.append("    Default   ", style=THEME["muted"])
-        t.append("Grok Build (currently Grok 4.5)\n", style=THEME["text"])
+        try:
+            from superqode.providers.grok_cli_auth import (
+                DEFAULT_SUBSCRIPTION_MODEL,
+                peek_cached_cli_models,
+            )
+
+            listing = peek_cached_cli_models() or {}
+            live_default = str(listing.get("default") or "")
+            if live_default:
+                t.append(f"{live_default}\n", style=THEME["text"])
+            else:
+                t.append(
+                    f"{DEFAULT_SUBSCRIPTION_MODEL} (run :grok models for the live catalog)\n",
+                    style=THEME["text"],
+                )
+        except Exception:  # noqa: BLE001 - status must never crash
+            t.append("grok-4.6\n", style=THEME["text"])
         t.append("\n  Commands:\n", style=THEME["muted"])
         t.append("    grok login                ", style=THEME["cyan"])
         t.append("sign in to an eligible X/SuperGrok account\n", style=THEME["muted"])

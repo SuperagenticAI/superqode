@@ -739,18 +739,19 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         id="grok",
         harness_openness="closed",
         model_openness="Grok models",
-        transport="ACP",
+        transport="ACP or CLI",
         label="Grok subscription",
         description=(
             "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, "
-            "over ACP). SuperQode harness on the same plan: :grok api"
+            "over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness "
+            "on the same plan: :grok api"
         ),
-        # Subscriptions default to the vendor's own agent. Running SuperQode's
-        # harness on this plan is the explicit opt-in `:grok api [model]`
-        # (grok-cli provider).
+        # Interactive Subscriptions stay on ACP. runtime= is the print/CI path
+        # only — do not prefer grok-cli the way Copilot prefers its SDK.
         connector="acp",
         menu=CONNECT_MENU_VENDORS,
         acp_agent="grok",
+        runtime="grok-cli",
         detect=_grok_cli_ready,
         unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
     ),

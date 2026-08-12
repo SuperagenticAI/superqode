@@ -462,6 +462,8 @@ def test_grok_profile_defaults_to_grok_build_acp():
 
     assert grok.connector == "acp"
     assert grok.acp_agent == "grok"
+    # Print/CI path only — Subscriptions must not prefer this over ACP.
+    assert grok.runtime == "grok-cli"
     assert "subscription" in grok.label.lower()
     # Points users to the SuperQode-harness opt-in.
     assert ":grok api" in grok.description

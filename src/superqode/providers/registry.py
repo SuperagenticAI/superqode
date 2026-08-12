@@ -233,12 +233,17 @@ PROVIDERS: Dict[str, ProviderDef] = {
         default_base_url="https://cli-chat-proxy.grok.com/v1",
         docs_url="https://x.ai/cli",
         example_models=[
-            "grok-build",
+            "grok-4.6",
             "grok-4.5",
             "grok-4.3",
+            "grok-build",
             "grok-build-0.1",
         ],
-        notes="Uses your `grok login` session via :connect grok. Subscription usage; interactive use only. Grok Build ACP: :connect acp grok.",
+        notes=(
+            "SuperQode harness on a `grok login` session via :grok api "
+            "(provider grok-cli). Interactive Grok Build is :connect grok (ACP). "
+            "Headless vendor loop is :runtime grok-cli."
+        ),
         dynamic=True,  # per-request api_base/api_key routing, no env mutation
         extra_headers={
             "X-XAI-Token-Auth": "xai-grok-cli",

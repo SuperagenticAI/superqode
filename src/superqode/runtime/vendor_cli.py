@@ -70,25 +70,173 @@ def parse_copilot_event(obj: dict) -> list[HarnessEvent]:
     return []
 
 
+_GROK_TERMINAL_TOOL_STATUSES = frozenset(
+    {"completed", "complete", "failed", "error", "cancelled", "canceled"}
+)
+# Patterns that already look like Grok's rule DSL are passed through as-is.
+_GROK_RULE_PREFIXES = (
+    "Bash(",
+    "Edit(",
+    "Write(",
+    "Read(",
+    "Grep(",
+    "WebFetch(",
+    "MCPTool(",
+)
+# SuperQode tool ids we can name as a Grok prefix without inventing a glob.
+_GROK_TOOL_RULES = {
+    "bash": "Bash",
+    "read_file": "Read",
+    "read": "Read",
+    "list_directory": "Read",
+    "list_dir": "Read",
+    "write_file": "Write",
+    "write": "Write",
+    "edit_file": "Edit",
+    "edit": "Edit",
+    "grep": "Grep",
+    "fetch": "WebFetch",
+    "web_fetch": "WebFetch",
+}
+
+
+def grok_rule_from_pattern(pattern: str) -> str | None:
+    """Translate one SuperQode allow/deny pattern into a Grok ``--allow``/``--deny`` rule.
+
+    Only exact Grok DSL (``Bash(rm*)``) and a small tool-name map are forwarded.
+    An unrecognized glob is dropped rather than guessed — a bad translation
+    would silently over-allow.
+    """
+    text = str(pattern or "").strip()
+    if not text:
+        return None
+    if text.startswith(_GROK_RULE_PREFIXES) or text in {
+        "Bash",
+        "Edit",
+        "Write",
+        "Read",
+        "Grep",
+        "WebFetch",
+        "MCPTool",
+    }:
+        return text
+    mapped = _GROK_TOOL_RULES.get(text)
+    return mapped
+
+
+def _grok_plan_todos(entries: Any) -> list[dict[str, str]]:
+    todos: list[dict[str, str]] = []
+    if not isinstance(entries, list):
+        return todos
+    for index, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            continue
+        content = str(entry.get("content") or entry.get("step") or entry.get("text") or "").strip()
+        if not content:
+            continue
+        todos.append(
+            {
+                "id": str(entry.get("id") or index),
+                "content": content,
+                "status": str(entry.get("status") or "pending"),
+                "priority": str(entry.get("priority") or "medium"),
+            }
+        )
+    return todos
+
+
+def _grok_end_data(obj: dict, *, status: str, error: str | None = None) -> dict[str, Any]:
+    """Spend-safe payload for ``end`` / ``error``. Absent cost is not treated as free."""
+    data: dict[str, Any] = {
+        "status": status,
+        "stop_reason": obj.get("stopReason") or obj.get("stop_reason"),
+        "session_id": obj.get("sessionId") or obj.get("session_id"),
+        "request_id": obj.get("requestId") or obj.get("request_id"),
+        "usage": obj.get("usage") or {},
+        "num_turns": obj.get("num_turns"),
+        "model_usage": obj.get("modelUsage") or obj.get("model_usage") or {},
+    }
+    if error:
+        data["error"] = error
+    cost_partial = bool(obj.get("cost_is_partial") or obj.get("usage_is_incomplete"))
+    if cost_partial:
+        data["cost_is_partial"] = True
+        if obj.get("usage_is_incomplete"):
+            data["usage_is_incomplete"] = True
+    elif "total_cost_usd" in obj:
+        data["total_cost_usd"] = obj.get("total_cost_usd")
+        if "total_cost_usd_ticks" in obj:
+            data["total_cost_usd_ticks"] = obj.get("total_cost_usd_ticks")
+    return data
+
+
 def parse_grok_event(obj: dict) -> list[HarnessEvent]:
-    """Grok CLI ``--output-format streaming-json``."""
+    """Grok CLI ``--output-format streaming-json`` (ACP session updates as NDJSON)."""
     kind = str(obj.get("type") or "")
     if kind == "text":
         return _text_event(str(obj.get("data") or ""))
     if kind == "thought":
         return [HarnessEvent(type="thinking", data={"text": str(obj.get("data") or "")})]
-    if kind == "end":
+    if kind == "tool_call":
         return [
             HarnessEvent(
-                type="turn_complete",
+                type="tool_call",
                 data={
-                    "status": "completed",
-                    "stop_reason": obj.get("stopReason"),
-                    "session_id": obj.get("sessionId"),
-                    "usage": obj.get("usage") or {},
+                    "tool_name": str(obj.get("toolName") or obj.get("title") or "tool"),
+                    "tool_call_id": obj.get("toolCallId") or obj.get("tool_call_id"),
+                    "args": obj.get("rawInput") if isinstance(obj.get("rawInput"), dict) else {},
+                    "kind": obj.get("kind"),
+                    "title": obj.get("title"),
+                    "status": obj.get("status"),
                 },
             )
         ]
+    if kind == "tool_call_update":
+        status = str(obj.get("status") or "").strip().lower()
+        if status not in _GROK_TERMINAL_TOOL_STATUSES:
+            return []
+        raw_output = obj.get("rawOutput")
+        if raw_output is None:
+            output = ""
+        elif isinstance(raw_output, str):
+            output = raw_output
+        else:
+            output = json.dumps(raw_output, ensure_ascii=False)
+        failed = status in {"failed", "error", "cancelled", "canceled"}
+        return [
+            HarnessEvent(
+                type="tool_result",
+                data={
+                    "tool_name": str(obj.get("toolName") or ""),
+                    "tool_call_id": obj.get("toolCallId") or obj.get("tool_call_id"),
+                    "success": not failed,
+                    "output": output,
+                    "status": status,
+                },
+            )
+        ]
+    if kind == "plan":
+        todos = _grok_plan_todos(obj.get("entries"))
+        return [HarnessEvent(type="plan_update", data={"todos": todos})] if todos else []
+    if kind == "usage":
+        # Per-response ledger. PureMode has no turn_usage handler; spend is
+        # flushed on ``end``. Keep the event for callers that inspect the
+        # stream, without inventing a cost.
+        usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
+        return [HarnessEvent(type="turn_usage", data=dict(usage))] if usage else []
+    if kind == "available_commands":
+        # Session ads belong on runtime metadata, not a harness event.
+        return []
+    if kind == "error":
+        message = str(obj.get("message") or obj.get("data") or "Grok reported an error")
+        return [
+            HarnessEvent(
+                type="turn_complete",
+                data=_grok_end_data(obj, status="failed", error=message),
+            )
+        ]
+    if kind == "end":
+        return [HarnessEvent(type="turn_complete", data=_grok_end_data(obj, status="completed"))]
     return []
 
 
@@ -186,11 +334,13 @@ VENDOR_CLI_SPECS: dict[str, VendorCLISpec] = {
         session_flag="--resume",
         permission_flags={
             "auto": ("--permission-mode", "bypassPermissions"),
-            # Headless cannot prompt, so "ask" maps to the most conservative
-            # mode that still makes progress: edits are auto-approved, arbitrary
-            # execution is not silently bypassed.
-            "ask": ("--permission-mode", "acceptEdits"),
-            "deny": ("--permission-mode", "plan"),
+            # Headless cannot prompt. ``auto`` is Grok's classifier (blocks or
+            # escalates) rather than ``acceptEdits``, which silently accepts
+            # every write. SuperQode still will not pop a permission card.
+            "ask": ("--permission-mode", "auto"),
+            # ``plan`` is a documented no-op (same effects as default).
+            # ``dontAsk`` restricts execution to pre-approved and read-only tools.
+            "deny": ("--permission-mode", "dontAsk"),
         },
         parser="grok",
     ),
@@ -308,14 +458,15 @@ class VendorCLIRuntime:
         spec: VendorCLISpec,
         config: Any = None,
         approval_mode: str = "auto",
+        permission_manager: Any = None,
         **_unused: Any,
     ) -> None:
         """Build the runtime.
 
-        Extra keyword arguments are accepted and ignored: the runtime registry
-        passes shared plumbing (``gateway``, ``permission_manager``,
-        ``approval_callback``) to every runtime, and a vendor CLI owns its own
-        loop so it needs none of it. Every other runtime does the same.
+        Extra keyword arguments are accepted and ignored except
+        ``permission_manager``. Callers that have one (PureMode, headless,
+        the harness backend) should pass it so Grok ``--allow``/``--deny``
+        can project SuperQode patterns. The factory does not invent one.
         """
         if shutil.which(spec.binary) is None:
             raise RuntimeNotInstalledError(
@@ -326,11 +477,14 @@ class VendorCLIRuntime:
         #: SuperQode approval mode ("auto" / "ask" / "deny"), translated into
         #: the vendor's own permission vocabulary for each turn.
         self.approval_mode = approval_mode
+        self.permission_manager = permission_manager or _unused.get("permission_manager")
         self.stripped_api_keys: list[str] = []
         self._session_id: str | None = None
         self._process: Any = None
         self._cancelled = False
         self._announced_permissions = False
+        self._tool_names: dict[str, str] = {}
+        self._session_commands: dict[str, Any] = {}
 
     @property
     def name(self) -> str:
@@ -350,6 +504,7 @@ class VendorCLIRuntime:
             "structured_events": True,
             "model": getattr(self.config, "model", "") or "cli-default",
             "session_id": self._session_id,
+            "available_commands": dict(self._session_commands) if self._session_commands else {},
         }
 
     def build_command(self, prompt: str) -> list[str]:
@@ -366,6 +521,7 @@ class VendorCLIRuntime:
             argv.extend([self.spec.session_flag, self._session_id])
 
         argv.extend(self.spec.flags_for_approval(self.approval_mode))
+        argv.extend(self._policy_flags())
 
         if self.spec.prompt_flag:
             argv.extend([self.spec.prompt_flag, prompt])
@@ -387,12 +543,20 @@ class VendorCLIRuntime:
         flags = " ".join(self.spec.flags_for_approval(mode)) or "the vendor default"
 
         if self.spec.has_gradated_permissions:
-            detail = (
-                f"{self.spec.label} runs non-interactively here, so SuperQode's "
-                f"'{mode}' approval mode is applied as {self.spec.label}'s own "
-                f"setting ({flags}) for the whole turn rather than prompting per "
-                "tool call."
-            )
+            if self.spec.vendor == "grok":
+                detail = (
+                    f"Grok runs non-interactively here. SuperQode's '{mode}' "
+                    f"approval mode is Grok's {flags} for the whole turn. "
+                    "Deny/allow rules, not per-tool prompts, are what bind. "
+                    "Use :connect grok (ACP) for permission cards."
+                )
+            else:
+                detail = (
+                    f"{self.spec.label} runs non-interactively here, so SuperQode's "
+                    f"'{mode}' approval mode is applied as {self.spec.label}'s own "
+                    f"setting ({flags}) for the whole turn rather than prompting per "
+                    "tool call."
+                )
         else:
             detail = (
                 f"{self.spec.label} runs non-interactively here, which its CLI "
@@ -401,6 +565,37 @@ class VendorCLIRuntime:
                 "approval mode. Use the ACP route if you want per-tool prompts."
             )
         return HarnessEvent(type="thinking", data={"text": detail})
+
+    def _policy_flags(self) -> tuple[str, ...]:
+        """Grok ``--allow``/``--deny`` rules projected from SuperQode patterns."""
+        if self.spec.vendor != "grok":
+            return ()
+        config = getattr(self.permission_manager, "config", None)
+        if config is None:
+            return ()
+        flags: list[str] = []
+        for pattern in getattr(config, "deny_patterns", None) or []:
+            rule = grok_rule_from_pattern(str(pattern))
+            if rule:
+                flags.extend(["--deny", rule])
+        for pattern in getattr(config, "allow_patterns", None) or []:
+            rule = grok_rule_from_pattern(str(pattern))
+            if rule:
+                flags.extend(["--allow", rule])
+        return tuple(flags)
+
+    def _annotate_event(self, event: HarnessEvent) -> HarnessEvent:
+        """Fill tool names from earlier ``tool_call`` lines; keep session ads."""
+        if event.type == "tool_call":
+            tool_id = event.data.get("tool_call_id")
+            name = str(event.data.get("tool_name") or "")
+            if tool_id and name:
+                self._tool_names[str(tool_id)] = name
+        elif event.type == "tool_result":
+            tool_id = event.data.get("tool_call_id")
+            if tool_id and not event.data.get("tool_name"):
+                event.data["tool_name"] = self._tool_names.get(str(tool_id), "tool")
+        return event
 
     async def run_harness_events(self, prompt: str) -> AsyncIterator[HarnessEvent]:
         """Stream one turn as normalized harness events."""
@@ -458,6 +653,9 @@ class VendorCLIRuntime:
         if self._cancelled:
             yield HarnessEvent(type="turn_complete", data={"status": "cancelled"})
             return
+        if returncode in (130, 143):
+            yield HarnessEvent(type="turn_complete", data={"status": "cancelled"})
+            return
         if returncode != 0:
             stderr = b""
             if self._process.stderr is not None:
@@ -501,8 +699,13 @@ class VendorCLIRuntime:
                 continue
             if not isinstance(obj, dict):
                 continue
+            if str(obj.get("type") or "") == "available_commands":
+                self._session_commands = {
+                    "tools": list(obj.get("tools") or []),
+                    "commands": list(obj.get("commands") or []),
+                }
             for event in parser(obj):
-                yield event
+                yield self._annotate_event(event)
 
     async def run_streaming(self, prompt: str) -> AsyncIterator[str]:
         """Assistant text only, for callers that do not consume harness events.

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.93] - 2026-08-12
+
+### Added
+
+- The Grok headless subscription runtime (`:runtime grok-cli`) now projects
+  SuperQode allow/deny patterns onto Grok's `--allow`/`--deny` rule DSL when
+  a permission manager is available (TUI PureMode, headless, and harness
+  backend). Unknown globs are dropped rather than guessed.
+
+### Changed
+
+- Grok routes are named as four distinct products: Grok Build over ACP
+  (`:connect grok`), the headless vendor loop (`:runtime grok-cli`), SuperQode
+  harness on the plan (`:grok api`, the `grok-cli` provider), and xAI BYOK.
+  Subscriptions still open ACP. The `grok-cli` runtime is print/CI only.
+- The Grok subscription catalog prefers `~/.grok/models_cache.json` when it
+  is a recent session cache, then the CLI chat-proxy `/models` endpoint, then
+  `grok models`. The shipped fallback default is grok-4.6. `grok-build`
+  remains a CLI alias. `:grok models` names the source it actually used.
+
+### Fixed
+
+- `:runtime grok-cli` now renders the full `grok -p --output-format
+  streaming-json` stream: tool calls, tool results, plans, usage, errors,
+  and spend fields on `end`. Previously only text, thought, and end survived,
+  so Grok appeared to think and then answer with no tools. SIGINT/SIGTERM
+  (exit 130/143) is cancelled, not failed.
+- SuperQode `deny` maps to Grok `dontAsk`. The old `plan` mapping was a
+  documented no-op. `ask` maps to Grok's classifier (`auto`) rather than
+  `acceptEdits`. The first-turn notice says rules bind, not per-tool prompts.
+- `:grok api` reads the current `~/.grok/auth.json` schema
+  (`{issuer}::{client_id}` plus the legacy sign-in URL), prefers `expires_at`
+  (hours, not a 7-day mtime guess), never copies `refresh_token`, and
+  re-reads the CLI file only to refresh a snapshot that `:grok api` already
+  imported. Status and models cannot silently re-import a token after
+  `:grok api off`.
+- `:grok status` no longer probes the live catalog on the TUI event loop.
+
 ## [0.2.92] - 2026-08-12
 
 ### Added

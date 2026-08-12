@@ -8,8 +8,9 @@ SuperQode-owned harness.
 
 | Route | Primary command | Authentication | Harness owner |
 | --- | --- | --- | --- |
-| Grok Build | `:connect grok` | `grok login` | xAI Grok Build |
-| Grok subscription model route | `:grok api [model]` | Local Grok CLI session | SuperQode |
+| Grok Build (ACP) | `:connect grok` | `grok login` | xAI Grok Build |
+| Grok headless CLI | `:runtime grok-cli` | `grok login` (no token copy) | xAI Grok Build |
+| Grok subscription models | `:grok api [model]` | Local Grok CLI session | SuperQode |
 | xAI BYOK | `:connect byok xai <model>` | `XAI_API_KEY` | SuperQode |
 
 These routes use the same vendor account family but provide different agent
@@ -61,8 +62,12 @@ Use the authenticated Grok CLI session while keeping the SuperQode harness:
 ```
 
 The `:grok api` command imports the CLI session into SuperQode's local auth
-store and selects the `grok-cli` provider. The active SuperQode HarnessSpec
-owns tools, context, memory, approvals, workflow, evidence, and evaluation.
+store and selects the `grok-cli` **provider** (the CLI chat proxy). That is a
+different product from the `grok-cli` **runtime**, which drives `grok -p`.
+The active SuperQode HarnessSpec owns tools, context, memory, approvals,
+workflow, evidence, and evaluation. SuperQode re-reads `~/.grok/auth.json`
+when the imported snapshot is near expiry; it does not spend the CLI refresh
+token.
 
 The installed CLI's model catalog is authoritative:
 

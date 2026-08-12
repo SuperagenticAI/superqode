@@ -230,7 +230,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
 | Google Gemini | Antigravity CLI, Google AI Studio BYOK, Google ADK runtime | `:connect antigravity`, `:connect byok google <model>`, `:runtime adk` |
 | GitHub Copilot | Copilot SDK, Copilot CLI ACP | `:connect copilot`, `:connect copilot-cli`, `:connect acp copilot` |
-| xAI Grok | Grok Build ACP, Grok subscription model route, xAI BYOK | `:connect grok`, `:grok api [model]`, `:connect byok xai <model>` |
+| xAI Grok | Grok Build ACP, Grok headless CLI, Grok subscription models, xAI BYOK | `:connect grok`, `:runtime grok-cli`, `:grok api [model]`, `:connect byok xai <model>` |
 | OpenCode | OpenCode ACP, OpenCode Zen BYOK | `:connect acp opencode`, `:connect byok opencode <model>` |
 | Z.AI GLM | Z.AI BYOK, GLM Coding Plan ACP | `:connect byok zai <model>`, `:connect glm-cli`, `:connect acp glm` |
 | Poolside | Pool CLI ACP, Laguna S 2.1 through DwarfStar or llama.cpp | `:connect acp poolside`, `:connect local ds4 laguna-s-2.1` |
@@ -355,8 +355,9 @@ The built-in provider registry contains these hosted routes:
 | Cloudflare AI Gateway | `cloudflare` | Baseten | `baseten` |
 | Modal | `modal` |  |  |
 
-`grok-cli` is an authenticated subscription route used by `:grok api`; it is
-not an API-key BYOK provider.
+The `grok-cli` *provider* is an authenticated subscription route used by
+`:grok api`; it is not an API-key BYOK provider. The `grok-cli` *runtime* is
+the headless `grok -p` vendor loop (`:runtime grok-cli`).
 
 Check provider setup and discover current models:
 
