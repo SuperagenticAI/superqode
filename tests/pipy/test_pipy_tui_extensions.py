@@ -53,13 +53,35 @@ def test_pipy_carries_a_permissions_warning():
     assert "no sandbox" in items["pipy"].warning
 
 
-def test_host_permission_harnesses_carry_warnings():
-    """Harnesses that delegate host tool execution warn before selection."""
+def test_harnesses_with_execution_caveats_carry_warnings():
+    """Every harness whose execution model is not the default warns before selection.
+
+    Two kinds qualify, and the warning text distinguishes them: harnesses that
+    delegate tool execution to the host, and RLM kernels that confine it. A new
+    harness in either group must state which it is, so this asserts the exact
+    set rather than a minimum.
+    """
     items = harness_picker_items(include_all=True)
 
     warned = {item.id for item in items if item.warning}
 
-    assert warned == {"pipy", "prime-agent-python", "rlm"}
+    assert warned == {"pipy", "prime-agent-python", "rlm", "rlm-docker", "rlm-monty"}
+
+
+def test_host_permission_harnesses_name_host_permissions():
+    """The harnesses that run tools as the SuperQode process say so up front."""
+    items = {item.id: item for item in harness_picker_items(include_all=True)}
+
+    for harness_id in ("pipy", "prime-agent-python", "rlm"):
+        assert "permissions" in items[harness_id].warning.lower()
+
+
+def test_confined_rlm_kernels_name_their_boundary():
+    """The sandboxed RLM kernels advertise the boundary, not host permissions."""
+    items = {item.id: item for item in harness_picker_items(include_all=True)}
+
+    assert "container" in items["rlm-docker"].warning.lower()
+    assert "network" in items["rlm-monty"].warning.lower()
 
 
 def test_pipy_appears_with_the_native_harnesses():
