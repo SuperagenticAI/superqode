@@ -354,7 +354,14 @@ class RLMCommandMixin:
             log.add_info("Docker networking is disabled unless allow_network is enabled.")
             return
         log.add_error(f"The sandbox profile is not set from :rlm sandbox ({argument!r} ignored).")
-        log.add_info("Set runtime.config.sandbox in the harness spec, then reconnect.")
+        # The profile is fixed when the session connects, so point at the
+        # switch that reconnects rather than leaving the user to write YAML.
+        switch = {"docker": "rlm-docker", "monty": "rlm-monty", "host": "rlm"}.get(argument)
+        if switch:
+            log.add_info(f"Switch to the built-in profile with :harness switch {switch}")
+        else:
+            log.add_info("Built-in profiles: :harness switch rlm | rlm-docker | rlm-monty")
+        log.add_info("Or set runtime.config.sandbox in your own harness spec, then reconnect.")
 
 
 __all__ = ["RLMCommandMixin"]

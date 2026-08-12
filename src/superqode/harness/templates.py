@@ -202,7 +202,8 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
         name=name,
         description=(
             "Built-in recursive coding harness: one persistent Python tool, "
-            "child agents, and a sandboxable kernel."
+            "child agents, and a kernel that runs on the host, in Docker, or "
+            "under Pydantic Monty."
         ),
         flavor=HarnessFlavor.CODING,
         runtime=RuntimeSpec(
@@ -257,6 +258,97 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
                 "the SuperQode process, with no approval prompts or sandbox."
             ),
         },
+    )
+
+
+def rlm_docker_template(*, name: str = "rlm-docker") -> HarnessSpec:
+    """Native RLM with the Python kernel isolated in a container.
+
+    The sandbox profile is only reachable through a HarnessSpec, so shipping
+    the two isolation profiles as templates is what makes them selectable
+    without hand-authoring YAML.
+    """
+    base = rlm_template(name=name)
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "Recursive coding harness with the Python kernel in a Docker "
+                "container. Writes are allowed, networking is off."
+            ),
+            "runtime": RuntimeSpec(
+                backend="rlm",
+                config={
+                    **base.runtime.config,
+                    "sandbox": "docker",
+                    "sandbox_image": "python:3.12-slim",
+                    "allow_network": False,
+                    "allow_write": True,
+                },
+            ),
+            "execution_policy": ExecutionPolicySpec(
+                sandbox="docker",
+                approval_profile="none",
+                allow_read=True,
+                allow_write=True,
+                allow_shell=True,
+                allow_network=False,
+            ),
+            "metadata": {
+                **base.metadata,
+                "template": "rlm-docker",
+                # The host template warns about running as the SuperQode
+                # process. That warning is exactly what this profile removes.
+                "pure_permissions": False,
+                "selection_warning": (
+                    "Docker Python: the kernel runs inside a container with "
+                    "networking disabled. Requires a running Docker daemon."
+                ),
+            },
+        }
+    )
+
+
+def rlm_monty_template(*, name: str = "rlm-monty") -> HarnessSpec:
+    """Native RLM restricted to read-only analysis under Pydantic Monty."""
+    base = rlm_template(name=name)
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "Recursive analysis harness on Pydantic Monty: persistent "
+                "Python, repository reads, and semantic subcalls only."
+            ),
+            "runtime": RuntimeSpec(
+                backend="rlm",
+                config={
+                    **base.runtime.config,
+                    "sandbox": "monty",
+                    "allow_network": False,
+                    "allow_write": False,
+                },
+            ),
+            "execution_policy": ExecutionPolicySpec(
+                sandbox="monty",
+                approval_profile="none",
+                allow_read=True,
+                allow_write=False,
+                allow_shell=False,
+                allow_network=False,
+            ),
+            "agents": (AgentSpec(id="rlm", role="recursive-analysis", tools=("python",)),),
+            "metadata": {
+                **base.metadata,
+                "template": "rlm-monty",
+                "pure_permissions": False,
+                "read_only": True,
+                "selection_warning": (
+                    "Monty Python: no filesystem, subprocess, network, or "
+                    "third-party imports. Writes, shell and rlm.run refuse. "
+                    "Needs the 'monty' extra."
+                ),
+            },
+        }
     )
 
 
@@ -624,6 +716,10 @@ BUILTIN_TEMPLATES = {
     "no_tool": no_tool_template,
     "pipy": pipy_template,
     "rlm": rlm_template,
+    "rlm-docker": rlm_docker_template,
+    "rlm_docker": rlm_docker_template,
+    "rlm-monty": rlm_monty_template,
+    "rlm_monty": rlm_monty_template,
     "prime-agent-python": prime_agent_python_template,
     "tau": tau_template,
     "gemma4-coding": gemma4_coding_template,

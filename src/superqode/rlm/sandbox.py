@@ -183,6 +183,9 @@ class RLMSandboxConfig:
             lines.append(f"env         {', '.join(self.env_allowlist)}")
         else:
             lines.append("env         full host environment")
+        # `doctor` is not a subcommand anyone guesses, so the plain status has
+        # to be what advertises that other profiles exist at all.
+        lines.append("profiles    host, docker, monty (:rlm sandbox doctor)")
         if not self.isolated:
             lines.append(
                 "isolation   none. Python runs as the SuperQode process, so these "

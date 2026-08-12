@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.92] - 2026-08-12
+
+### Added
+
+- The Docker and Monty execution profiles ship as built-in harness templates.
+  `rlm-docker` and `rlm-monty` are selectable with `:harness switch`, so an
+  isolated RLM kernel no longer requires hand-authoring a harness
+  specification. Repository-owned specifications remain the way to tune the
+  limits each profile enforces.
+
+### Changed
+
+- The RLM sandbox status names the profiles that exist rather than only the
+  one in use, and `:rlm sandbox <profile>` points at the built-in template
+  that selects it instead of describing a file to edit.
+- The built-in RLM harness description names its host, Docker and Monty
+  execution profiles.
+
+### Fixed
+
+- The missing-Monty error suggested an installation command that cannot reach
+  a `uv tool` environment, which is how the documented installation path
+  installs SuperQode.
+
 ## [0.2.91] - 2026-08-11
 
 ### Added

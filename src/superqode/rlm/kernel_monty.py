@@ -183,7 +183,10 @@ def load_monty() -> Any:
     except ImportError as error:  # pragma: no cover - depends on the environment
         raise MontyUnavailableError(
             "The monty RLM sandbox needs the optional 'pydantic-monty' dependency. "
-            "Install it with: uv pip install 'superqode[monty]'"
+            # The documented install path is `uv tool install superqode`, and
+            # `uv pip install` does not reach a uv tool environment.
+            "Install it with: uv tool install --force 'superqode[monty]' "
+            "(or `uv pip install 'superqode[monty]'` in a virtualenv)."
         ) from error
 
 
