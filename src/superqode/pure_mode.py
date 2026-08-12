@@ -30,7 +30,12 @@ from .providers.model_specs import (
     split_provider_model_ref,
 )
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
-from .runtime import AgentRuntime, create_runtime, resolve_runtime_name
+from .runtime import (
+    AgentRuntime,
+    create_runtime,
+    is_vendor_cli_runtime,
+    resolve_runtime_name,
+)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -419,12 +424,18 @@ class PureMode:
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
-        permission_manager = self._permission_manager_for_runtime()
-        if permission_manager is not None:
-            runtime_kwargs["permission_manager"] = permission_manager
-        approval_mode = self._approval_mode_for_runtime()
-        if approval_mode:
-            runtime_kwargs["approval_mode"] = approval_mode
+        # Only vendor CLI runtimes take these. ``builtin`` forwards unknown
+        # kwargs straight to AgentLoop, which has no ``approval_mode``; and the
+        # SDK runtimes treat ``permission_manager is None`` as "route tool calls
+        # to the interactive approval card", so injecting one here would turn
+        # their per-tool prompts into silent auto-accepts.
+        if is_vendor_cli_runtime(self.runtime_name):
+            permission_manager = self._permission_manager_for_runtime()
+            if permission_manager is not None:
+                runtime_kwargs["permission_manager"] = permission_manager
+            approval_mode = self._approval_mode_for_runtime()
+            if approval_mode:
+                runtime_kwargs["approval_mode"] = approval_mode
 
         self._dispose_runtime()
         self._runtime = create_runtime(

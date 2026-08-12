@@ -152,6 +152,19 @@ def _vendor_cli_spec(runtime_name: str):
     return spec if spec is not None and spec.name == runtime_name else None
 
 
+def is_vendor_cli_runtime(name: str | None) -> bool:
+    """True when ``name`` is a subscription runtime that drives a vendor CLI.
+
+    Callers use this to decide whether SuperQode's permission policy can be
+    projected onto the child process. Only these runtimes accept
+    ``permission_manager`` / ``approval_mode``: ``builtin`` forwards unknown
+    kwargs to AgentLoop, and the SDK runtimes read ``permission_manager is
+    None`` as "prompt the user per tool".
+    """
+    resolved = (name or "").strip().lower()
+    return bool(resolved) and _vendor_cli_spec(resolved) is not None
+
+
 def _vendor_cli_factory(vendor: str) -> Callable[..., AgentRuntime]:
     """Build a subscription runtime that drives one vendor's own CLI."""
 

@@ -476,3 +476,74 @@ class TestSpecTable:
     def test_every_spec_has_install_help(self):
         for spec in VENDOR_CLI_SPECS.values():
             assert spec.install_hint.strip()
+
+
+class TestPolicyKwargsAreVendorCLIOnly:
+    """``permission_manager`` / ``approval_mode`` must not reach other runtimes.
+
+    ``builtin`` forwards unknown kwargs straight to AgentLoop, which has no
+    ``approval_mode`` parameter, so passing it broke every connect. The SDK
+    runtimes read ``permission_manager is None`` as "prompt the user per tool",
+    so injecting one silently downgraded their approval cards to auto-accept.
+    """
+
+    def test_only_vendor_cli_runtimes_are_selected(self):
+        from superqode.runtime import is_vendor_cli_runtime
+
+        assert is_vendor_cli_runtime("grok-cli")
+        assert is_vendor_cli_runtime("copilot-cli")
+        # copilot-sdk resolves to the copilot vendor but is not its CLI runtime.
+        for name in ("builtin", "codex-sdk", "copilot-sdk", "claude-agent-sdk", "adk", "", None):
+            assert not is_vendor_cli_runtime(name)
+
+    def test_builtin_runtime_rejects_approval_mode(self):
+        """Guards the kwarg that AgentLoop cannot accept."""
+        from superqode.agent.loop import AgentLoop
+
+        assert "approval_mode" not in AgentLoop.__init__.__code__.co_varnames
+
+    def test_pure_mode_connect_does_not_pass_policy_kwargs_to_builtin(self, monkeypatch):
+        import superqode.pure_mode as pure_mode_module
+        from superqode.pure_mode import PureMode
+
+        seen: dict = {}
+
+        def fake_create_runtime(name, **kwargs):
+            seen["name"] = name
+            seen["kwargs"] = kwargs
+            raise RuntimeError("stop after capture")
+
+        monkeypatch.setattr(pure_mode_module, "create_runtime", fake_create_runtime)
+        pure = PureMode()
+        # `core` is built-in with a builtin backend, so `_harness_spec` stays
+        # None and connect() reaches create_runtime. Without pinning it, the
+        # active harness depends on Path.cwd() and connect() can return early.
+        pure.select_harness("core")
+        with pytest.raises(RuntimeError, match="stop after capture"):
+            pure.connect("openai", "gpt-4o")
+
+        assert seen["name"] == "builtin"
+        assert "approval_mode" not in seen["kwargs"]
+        assert "permission_manager" not in seen["kwargs"]
+
+    def test_pure_mode_connect_passes_policy_kwargs_to_grok_cli(self, monkeypatch):
+        import superqode.pure_mode as pure_mode_module
+        from superqode.pure_mode import PureMode
+
+        seen: dict = {}
+
+        def fake_create_runtime(name, **kwargs):
+            seen["name"] = name
+            seen["kwargs"] = kwargs
+            raise RuntimeError("stop after capture")
+
+        monkeypatch.setattr(pure_mode_module, "create_runtime", fake_create_runtime)
+        pure = PureMode(runtime="grok-cli")
+        pure.select_harness("core")
+        with pytest.raises(RuntimeError, match="stop after capture"):
+            pure.connect("grok-cli", "grok-4.6")
+
+        assert seen["name"] == "grok-cli"
+        # The default `core` harness is a balanced profile -> SuperQode "ask".
+        assert seen["kwargs"].get("approval_mode") == "ask"
+        assert seen["kwargs"].get("permission_manager") is not None

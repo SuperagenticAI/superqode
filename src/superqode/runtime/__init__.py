@@ -20,6 +20,7 @@ from .errors import (
 from .registry import (
     RuntimeInfo,
     create_runtime,
+    is_vendor_cli_runtime,
     known_runtime_names,
     list_runtimes,
     resolve_runtime_name,
@@ -35,6 +36,7 @@ __all__ = [
     "RuntimeNotInstalledError",
     "UnknownRuntimeError",
     "create_runtime",
+    "is_vendor_cli_runtime",
     "known_runtime_names",
     "list_runtimes",
     "resolve_runtime_name",
