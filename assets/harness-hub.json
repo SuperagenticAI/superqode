@@ -1,0 +1,5220 @@
+{
+  "schema_version": "1.4",
+  "generated_at": "2026-08-14T23:11:19.581656+00:00",
+  "count": 90,
+  "categories": [
+    "SuperQode harnesses",
+    "Coding agents",
+    "ACP agents",
+    "Optional integrations",
+    "Model and task presets",
+    "Ecosystem watch"
+  ],
+  "items": [
+    {
+      "id": "core",
+      "name": "Core",
+      "description": "Lean native coding harness with read, write, edit, and bash.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch core",
+        ":harness show core",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run core \"Describe your task\"",
+        "superqode harness show core"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "core",
+      "popularity_rank": 220,
+      "setup_steps": []
+    },
+    {
+      "id": "rlm",
+      "name": "RLM",
+      "description": "Built-in recursive coding harness: one persistent Python tool, child agents, and a kernel that runs on the host, in Docker, or under Pydantic Monty.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Host Python permissions: RLM Python runs with the permissions of the SuperQode process, with no approval prompts or sandbox.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/advanced/rlm/",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm",
+        ":harness show rlm",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm \"Describe your task\"",
+        "superqode harness show rlm"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Structured run events"
+      ],
+      "based_on": "rlm",
+      "popularity_rank": 250,
+      "setup_steps": []
+    },
+    {
+      "id": "pipy",
+      "name": "PiPy",
+      "description": "Event-first loop, parallel tools, session tree, pure host permissions.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "pipy",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "exact-resume",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Pure host permissions: PiPy runs tools with the permissions of the process, with no approval prompts and no sandbox, matching pi.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/advanced/pipy/",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch pipy",
+        ":harness show pipy",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run pipy \"Describe your task\"",
+        "superqode harness show pipy"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "pipy",
+      "popularity_rank": 240,
+      "setup_steps": []
+    },
+    {
+      "id": "workbench",
+      "name": "Workbench",
+      "description": "Feature-rich native coding harness with the full workbench toolset.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch workbench",
+        ":harness show workbench",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run workbench \"Describe your task\"",
+        "superqode harness show workbench"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "workbench",
+      "popularity_rank": 230,
+      "setup_steps": []
+    },
+    {
+      "id": "no-tool",
+      "name": "No Tool",
+      "description": "Model-only reasoning harness with no tools or repository access.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch no-tool",
+        ":harness show no-tool",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run no-tool \"Describe your task\"",
+        "superqode harness show no-tool"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: deny",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "no-tool",
+      "popularity_rank": 260,
+      "setup_steps": []
+    },
+    {
+      "id": "codex",
+      "name": "Codex subscription",
+      "description": "Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "codex-sdk",
+      "source": "connection:runtime",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install \"superqode[codex-sdk]\", then run `codex login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://openai.com/codex/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/codex/",
+      "install_command": "uv tool install \"superqode[codex-sdk]\", then run `codex login`",
+      "tui_commands": [
+        ":connect codex",
+        ":codex status",
+        ":codex models",
+        ":codex sessions"
+      ],
+      "cli_commands": [
+        "superqode harness run codex \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "OpenAI models",
+        "via SDK",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Codex",
+      "popularity_rank": 10,
+      "setup_steps": [
+        {
+          "title": "Install the SuperQode Codex integration",
+          "command": "uv tool install \"superqode[codex-sdk]\"",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your OpenAI account",
+          "command": "codex login",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "claude",
+      "name": "Claude Agent SDK (API key)",
+      "description": "Compatibility route for the Anthropic API-key runtime; prefer BYOK",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "claude-agent-sdk",
+      "source": "connection:runtime",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.anthropic.com/claude-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/anthropic-claude/",
+      "install_command": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
+      "tui_commands": [
+        ":connect claude",
+        ":harness switch claude",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run claude \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Claude Agent SDK (API key)",
+      "popularity_rank": 20,
+      "setup_steps": [
+        {
+          "title": "Complete the required setup",
+          "command": "",
+          "description": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY"
+        }
+      ]
+    },
+    {
+      "id": "kimi-code",
+      "name": "Kimi Code",
+      "description": "Moonshot AI's first-party coding agent through its official ACP server",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "kimi",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, then run `kimi` and complete `/login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/MoonshotAI/kimi-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/kimi/",
+      "install_command": "run `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, then run `kimi` and complete `/login`",
+      "tui_commands": [
+        ":connect kimi-code",
+        ":harness switch kimi-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run kimi-code \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "open weights",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Kimi Code",
+      "popularity_rank": 90,
+      "setup_steps": [
+        {
+          "title": "Install Kimi Code",
+          "command": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+          "description": ""
+        },
+        {
+          "title": "Authenticate inside Kimi Code",
+          "command": "kimi",
+          "description": "When Kimi opens, enter /login and complete the account flow."
+        }
+      ]
+    },
+    {
+      "id": "qwen-code",
+      "name": "Qwen Code",
+      "description": "QwenLM's first-party open-source coding agent through its stable ACP mode",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "qwen",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/QwenLM/qwen-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/qwen-code/",
+      "install_command": "run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`",
+      "tui_commands": [
+        ":connect qwen-code",
+        ":harness switch qwen-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run qwen-code \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "open weights",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Qwen Code",
+      "popularity_rank": 100,
+      "setup_steps": [
+        {
+          "title": "Install Qwen Code",
+          "command": "npm install -g @qwen-code/qwen-code",
+          "description": ""
+        },
+        {
+          "title": "Authenticate your Qwen account",
+          "command": "qwen auth",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity CLI",
+      "description": "Use Google's Antigravity agent with your Google Sign-In",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "antigravity-cli",
+      "source": "connection:runtime",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install or update agy from https://antigravity.google/docs/cli-install (SuperQode requires 1.1.1+)",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://antigravity.google/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/antigravity/",
+      "install_command": "install or update agy from https://antigravity.google/docs/cli-install (SuperQode requires 1.1.1+)",
+      "tui_commands": [
+        ":connect antigravity",
+        ":agy status",
+        ":agy agents",
+        ":agy models",
+        ":agy plugin list"
+      ],
+      "cli_commands": [
+        "superqode harness run antigravity \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "Gemini models",
+        "via CLI",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Antigravity CLI",
+      "popularity_rank": 50,
+      "setup_steps": [
+        {
+          "title": "Install or update Antigravity CLI",
+          "command": "",
+          "description": "Follow the official CLI installation guide. SuperQode requires agy 1.1.1 or newer: https://antigravity.google/docs/cli-install"
+        },
+        {
+          "title": "Complete Google Sign-In",
+          "command": "agy",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "grok",
+      "name": "Grok subscription",
+      "description": "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness on the same plan: :grok api",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "grok-cli",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://x.ai/cli",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/grok/",
+      "install_command": "install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
+      "tui_commands": [
+        ":connect grok",
+        ":grok status",
+        ":grok models",
+        ":grok api"
+      ],
+      "cli_commands": [
+        "superqode harness run grok \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "Grok models",
+        "via ACP or CLI",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Grok",
+      "popularity_rank": 80,
+      "setup_steps": [
+        {
+          "title": "Install the official Grok CLI",
+          "command": "",
+          "description": "Use the installation instructions at https://x.ai/cli."
+        },
+        {
+          "title": "Authenticate your account",
+          "command": "grok login",
+          "description": "Device authentication is also available with grok login --device-auth."
+        }
+      ]
+    },
+    {
+      "id": "copilot",
+      "name": "GitHub Copilot",
+      "description": "Use your Copilot plan; prefers the SDK for per-tool approvals and resumable sessions, otherwise uses the official CLI directly",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "copilot-sdk",
+      "source": "connection:copilot",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install \"superqode[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/features/copilot",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/github-copilot/",
+      "install_command": "uv tool install \"superqode[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "tui_commands": [
+        ":connect copilot",
+        ":copilot status",
+        ":copilot models",
+        ":copilot sessions"
+      ],
+      "cli_commands": [
+        "superqode harness run copilot \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via SDK or CLI",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "GitHub Copilot",
+      "popularity_rank": 40,
+      "setup_steps": [
+        {
+          "title": "Recommended: install the SuperQode Copilot SDK integration",
+          "command": "uv tool install \"superqode[copilot-sdk]\"",
+          "description": ""
+        },
+        {
+          "title": "Alternative: install the official GitHub Copilot CLI",
+          "command": "npm install -g @github/copilot",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with GitHub Copilot",
+          "command": "copilot login",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor subscription",
+      "description": "Use Cursor Agent over ACP through the account already signed in to Cursor CLI",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "cursor",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install with `curl https://cursor.com/install -fsS | bash`, then run `cursor-agent login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://cursor.com/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "install_command": "install with `curl https://cursor.com/install -fsS | bash`, then run `cursor-agent login`",
+      "tui_commands": [
+        ":connect cursor",
+        ":harness switch cursor",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run cursor \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Cursor",
+      "popularity_rank": 30,
+      "setup_steps": [
+        {
+          "title": "Install Cursor Agent",
+          "command": "curl https://cursor.com/install -fsS | bash",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your Cursor account",
+          "command": "cursor-agent login",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "amp",
+      "name": "Amp subscription",
+      "description": "Use Amp through its local account login and ACP adapter",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "amp",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install Amp and run `amp login`, then install its adapter with `uv tool install acp-amp`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://ampcode.com/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "install_command": "install Amp and run `amp login`, then install its adapter with `uv tool install acp-amp`",
+      "tui_commands": [
+        ":connect amp",
+        ":harness switch amp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run amp \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Amp",
+      "popularity_rank": 70,
+      "setup_steps": [
+        {
+          "title": "Install Amp and authenticate",
+          "command": "amp login",
+          "description": ""
+        },
+        {
+          "title": "Install the SuperQode ACP adapter",
+          "command": "uv tool install acp-amp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "muse",
+      "name": "Muse Code",
+      "description": "Use Meta's Muse Code agent with your Meta account sign-in",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "external-cli",
+      "source": "connection:external-cli",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "on macOS or Linux, install with `curl -fsSL https://dev.meta.ai/install.sh | bash`, then run `muse login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://dev.meta.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/muse-code/",
+      "install_command": "on macOS or Linux, install with `curl -fsSL https://dev.meta.ai/install.sh | bash`, then run `muse login`",
+      "tui_commands": [
+        ":connect muse",
+        ":muse status",
+        ":muse login"
+      ],
+      "cli_commands": [
+        "superqode harness run muse \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "Muse Spark models",
+        "via CLI",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Muse Code",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Muse Code on macOS or Linux",
+          "command": "curl -fsSL https://dev.meta.ai/install.sh | bash",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your Meta account",
+          "command": "muse login",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "prime-agent",
+      "name": "Prime Agent (RLM)",
+      "description": "Prime Intellect's RLM coding agent hosted by prime-agent-python-client, on a subscription provider or local model. ACP remains available from :connect acp prime-agent",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "prime-rpc",
+      "source": "connection:prime-rpc",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install with `curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`, then run `prime-agent` and use its `/login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/prime-agent/",
+      "install_command": "install with `curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`, then run `prime-agent` and use its `/login`",
+      "tui_commands": [
+        ":prime connect",
+        ":prime status",
+        ":prime models",
+        ":prime agents",
+        ":prime local"
+      ],
+      "cli_commands": [
+        "superqode harness run prime-agent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "multi-model",
+        "via Python RPC",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Prime Agent (RLM)",
+      "popularity_rank": 170,
+      "setup_steps": [
+        {
+          "title": "Install Prime Agent",
+          "command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+          "description": ""
+        },
+        {
+          "title": "Authenticate inside Prime Agent",
+          "command": "prime-agent",
+          "description": "When Prime Agent opens, enter /login and follow the provider sign-in flow."
+        }
+      ]
+    },
+    {
+      "id": "devin",
+      "name": "Devin",
+      "description": "Cognition's Devin CLI on your Devin account, through its native ACP server",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "devin",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `curl -fsSL https://cli.devin.ai/install.sh | bash`, then run `devin auth login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://devin.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/devin/",
+      "install_command": "run `curl -fsSL https://cli.devin.ai/install.sh | bash`, then run `devin auth login`",
+      "tui_commands": [
+        ":connect devin",
+        ":harness switch devin",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run devin \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Devin",
+      "popularity_rank": 110,
+      "setup_steps": [
+        {
+          "title": "Install Devin CLI",
+          "command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your Devin account",
+          "command": "devin auth login",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "droid",
+      "name": "Factory Droid subscription",
+      "description": "Use Factory Droid through its locally authenticated CLI and ACP mode",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "droid",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install Factory Droid, then complete the vendor CLI sign-in",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://factory.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "install_command": "install Factory Droid, then complete the vendor CLI sign-in",
+      "tui_commands": [
+        ":connect droid",
+        ":harness switch droid",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run droid \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "any model + BYOK",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Factory Droid",
+      "popularity_rank": 120,
+      "setup_steps": [
+        {
+          "title": "Install Factory Droid",
+          "command": "",
+          "description": "Follow the official installation instructions at https://factory.ai/."
+        },
+        {
+          "title": "Authenticate the Droid CLI",
+          "command": "",
+          "description": "Complete Factory's CLI sign-in flow before connecting from SuperQode."
+        }
+      ]
+    },
+    {
+      "id": "kiro",
+      "name": "Kiro subscription",
+      "description": "Use a Kiro or Amazon Q Developer plan over ACP through Kiro CLI sign-in",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "kiro",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install Kiro CLI from https://kiro.dev/docs/cli/, then sign in with your Kiro or Amazon Q Developer account",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://kiro.dev/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "install_command": "install Kiro CLI from https://kiro.dev/docs/cli/, then sign in with your Kiro or Amazon Q Developer account",
+      "tui_commands": [
+        ":connect kiro",
+        ":harness switch kiro",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run kiro \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Kiro",
+      "popularity_rank": 160,
+      "setup_steps": [
+        {
+          "title": "Install Kiro CLI",
+          "command": "",
+          "description": "Follow the official guide at https://kiro.dev/docs/cli/."
+        },
+        {
+          "title": "Authenticate your account",
+          "command": "",
+          "description": "Sign in with your Kiro or Amazon Q Developer account."
+        }
+      ]
+    },
+    {
+      "id": "glm-cli",
+      "name": "GLM Coding Plan",
+      "description": "Use a paid GLM Coding Plan through its authenticated ACP agent",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "glm",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `npm install -g glm-acp-agent`, then set your Z.AI key for the agent",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://z.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/zai/",
+      "install_command": "run `npm install -g glm-acp-agent`, then set your Z.AI key for the agent",
+      "tui_commands": [
+        ":connect glm-cli",
+        ":harness switch glm-cli",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run glm-cli \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "GLM models",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "GLM Coding Plan",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install the GLM ACP agent",
+          "command": "npm install -g glm-acp-agent",
+          "description": ""
+        },
+        {
+          "title": "Configure authentication",
+          "command": "",
+          "description": "Provide the Z.AI API key used by the GLM agent."
+        }
+      ]
+    },
+    {
+      "id": "acp:amp",
+      "name": "Amp (ACP)",
+      "description": "AI coding agent by Ampcode. Works in any codebase with full ACP support via acp-amp adapter.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install acp-amp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://ampcode.com",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://ampcode.com",
+      "install_command": "uv tool install acp-amp",
+      "tui_commands": [
+        ":connect acp amp",
+        ":harness switch acp:amp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:amp \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Amp agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Amp",
+          "command": "uv tool install acp-amp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:cursor",
+      "name": "Cursor (ACP)",
+      "description": "AI-powered code editor with ACP support via its agent CLI.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl https://cursor.com/install -fsS | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://cursor.com/docs/cli/acp",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://cursor.com/docs/cli/acp",
+      "install_command": "curl https://cursor.com/install -fsS | bash",
+      "tui_commands": [
+        ":connect acp cursor",
+        ":harness switch acp:cursor",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:cursor \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Cursor agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Cursor",
+          "command": "curl https://cursor.com/install -fsS | bash",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:copilot",
+      "name": "GitHub Copilot (ACP)",
+      "description": "AI coding assistant with ACP support in public preview.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @github/copilot",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/features/copilot",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/features/copilot",
+      "install_command": "npm install -g @github/copilot",
+      "tui_commands": [
+        ":connect acp copilot",
+        ":harness switch acp:copilot",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:copilot \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "GitHub Copilot agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install GitHub Copilot",
+          "command": "npm install -g @github/copilot",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:grok",
+      "name": "Grok Build (ACP)",
+      "description": "xAI's official Grok Build coding agent, connected through its native ACP server.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://x.ai/cli/install.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://x.ai/cli",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://x.ai/cli",
+      "install_command": "curl -fsSL https://x.ai/cli/install.sh | bash",
+      "tui_commands": [
+        ":connect acp grok",
+        ":harness switch acp:grok",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:grok \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Grok Build agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Grok Build",
+          "command": "curl -fsSL https://x.ai/cli/install.sh | bash",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:opencode",
+      "name": "OpenCode (ACP)",
+      "description": "The AI coding agent built for the terminal with client/server architecture and ACP support via adapter.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm i -g opencode-ai",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://opencode.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://opencode.ai/",
+      "install_command": "npm i -g opencode-ai",
+      "tui_commands": [
+        ":connect acp opencode",
+        ":harness switch acp:opencode",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:opencode \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "OpenCode agent",
+      "popularity_rank": 60,
+      "setup_steps": [
+        {
+          "title": "Install OpenCode",
+          "command": "npm i -g opencode-ai",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:devin",
+      "name": "Devin (ACP)",
+      "description": "Cognition's Devin CLI coding agent, connected through its native ACP server.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.devin.ai/cli",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.devin.ai/cli",
+      "install_command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+      "tui_commands": [
+        ":connect acp devin",
+        ":harness switch acp:devin",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:devin \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Devin agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Devin",
+          "command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:droid",
+      "name": "Factory Droid (ACP)",
+      "description": "AI coding agent by Factory with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g droid",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://factory.ai/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://factory.ai/",
+      "install_command": "npm install -g droid",
+      "tui_commands": [
+        ":connect acp droid",
+        ":harness switch acp:droid",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:droid \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Factory Droid agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Factory Droid",
+          "command": "npm install -g droid",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:fast-agent",
+      "name": "fast-agent (ACP)",
+      "description": "Create and interact with sophisticated Agents and Workflows in minutes. MCP native.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install -U fast-agent-mcp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/evalstate/fast-agent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/evalstate/fast-agent",
+      "install_command": "uv tool install -U fast-agent-mcp",
+      "tui_commands": [
+        ":connect acp fast-agent",
+        ":harness switch acp:fast-agent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:fast-agent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "fast-agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install fast-agent",
+          "command": "uv tool install -U fast-agent-mcp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:gemini",
+      "name": "Gemini CLI (ACP)",
+      "description": "Google's Gemini CLI ACP implementation. Consumer Google AI Pro/Ultra/free Code Assist users should migrate to Antigravity CLI; enterprise/API-key ACP users can keep this route.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm i -g @google/gemini-cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/google-gemini/gemini-cli",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/google-gemini/gemini-cli",
+      "install_command": "npm i -g @google/gemini-cli",
+      "tui_commands": [
+        ":connect acp gemini",
+        ":harness switch acp:gemini",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:gemini \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Gemini CLI agent",
+      "popularity_rank": 55,
+      "setup_steps": [
+        {
+          "title": "Install Gemini CLI",
+          "command": "npm i -g @google/gemini-cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:hermes",
+      "name": "Hermes Agent (ACP)",
+      "description": "Open-source coding agent by Nous Research with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install 'hermes-agent[acp]'",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+      "install_command": "uv tool install 'hermes-agent[acp]'",
+      "tui_commands": [
+        ":connect acp hermes",
+        ":harness switch acp:hermes",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:hermes \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Hermes Agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Hermes Agent",
+          "command": "uv tool install 'hermes-agent[acp]'",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:openhands",
+      "name": "OpenHands (ACP)",
+      "description": "AI coding agent platform by All-Hands-AI with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install openhands",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
+      "install_command": "pip install openhands",
+      "tui_commands": [
+        ":connect acp openhands",
+        ":harness switch acp:openhands",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:openhands \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "OpenHands agent",
+      "popularity_rank": 150,
+      "setup_steps": [
+        {
+          "title": "Install OpenHands",
+          "command": "pip install openhands",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:prime-agent",
+      "name": "Prime Agent (ACP)",
+      "description": "Self-improving RLM agent for coding and long-running autonomous tasks. A persistent IPython kernel is the single model-facing tool.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "install_command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+      "tui_commands": [
+        ":connect acp prime-agent",
+        ":harness switch acp:prime-agent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:prime-agent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Prime Agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Prime Agent",
+          "command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:claude",
+      "name": "Claude Code (ACP)",
+      "description": "Unleash Claude's raw power directly in your terminal. Search million-line codebases instantly.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @agentclientprotocol/claude-agent-acp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.anthropic.com/claude-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://www.anthropic.com/claude-code",
+      "install_command": "npm install -g @agentclientprotocol/claude-agent-acp",
+      "tui_commands": [
+        ":connect acp claude",
+        ":harness switch acp:claude",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:claude \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Claude Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Claude Code",
+          "command": "npm install -g @agentclientprotocol/claude-agent-acp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:cline",
+      "name": "Cline (ACP)",
+      "description": "AI coding assistant for the terminal with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @cline/cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://cline.bot/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://cline.bot/",
+      "install_command": "npm install -g @cline/cli",
+      "tui_commands": [
+        ":connect acp cline",
+        ":harness switch acp:cline",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:cline \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Cline agent",
+      "popularity_rank": 130,
+      "setup_steps": [
+        {
+          "title": "Install Cline",
+          "command": "npm install -g @cline/cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:codex",
+      "name": "Codex (ACP)",
+      "description": "OpenAI's code generation agent with streaming terminal output and community adapters.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @agentclientprotocol/codex-acp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://openai.com/codex",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://openai.com/codex",
+      "install_command": "npm install -g @agentclientprotocol/codex-acp",
+      "tui_commands": [
+        ":connect acp codex",
+        ":harness switch acp:codex",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:codex \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Codex agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Codex",
+          "command": "npm install -g @agentclientprotocol/codex-acp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:goose",
+      "name": "Goose (ACP)",
+      "description": "Goose is a developer tool that helps you write code faster by automating repetitive tasks.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pipx install goose-ai",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/block/goose",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/block/goose",
+      "install_command": "pipx install goose-ai",
+      "tui_commands": [
+        ":connect acp goose",
+        ":harness switch acp:goose",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:goose \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Goose agent",
+      "popularity_rank": 140,
+      "setup_steps": [
+        {
+          "title": "Install Goose",
+          "command": "pipx install goose-ai",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:harn",
+      "name": "Harn (ACP)",
+      "description": "Agent pipeline runtime that serves .harn workflows as a native ACP coding agent.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "# Harn\n\nHarn runs `.harn` agent pipelines and exposes them through ACP over standard input and output.\n\n## Installation\n\nInstall Harn from its official releases, then run `harn serve acp`.\nSee https://github.com/burin-labs/harn.\n",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://harnlang.com",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://harnlang.com",
+      "install_command": "# Harn\n\nHarn runs `.harn` agent pipelines and exposes them through ACP over standard input and output.\n\n## Installation\n\nInstall Harn from its official releases, then run `harn serve acp`.\nSee https://github.com/burin-labs/harn.\n",
+      "tui_commands": [
+        ":connect acp harn",
+        ":harness switch acp:harn",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:harn \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Harn agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Set up Harn",
+          "command": "",
+          "description": "# Harn\n\nHarn runs `.harn` agent pipelines and exposes them through ACP over standard input and output.\n\n## Installation\n\nInstall Harn from its official releases, then run `harn serve acp`.\nSee https://github.com/burin-labs/harn.\n"
+        }
+      ]
+    },
+    {
+      "id": "acp:kilo",
+      "name": "Kilo (ACP)",
+      "description": "Open-source coding agent with a terminal CLI, broad model support, and native ACP mode.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @kilocode/cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://kilo.ai",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://kilo.ai",
+      "install_command": "npm install -g @kilocode/cli",
+      "tui_commands": [
+        ":connect acp kilo",
+        ":harness switch acp:kilo",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:kilo \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Kilo agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Kilo",
+          "command": "npm install -g @kilocode/cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:kimi",
+      "name": "Kimi Code (ACP)",
+      "description": "Moonshot AI's first-party open-source coding agent with a native ACP server.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/MoonshotAI/kimi-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/MoonshotAI/kimi-code",
+      "install_command": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+      "tui_commands": [
+        ":connect acp kimi",
+        ":harness switch acp:kimi",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:kimi \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Kimi Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Kimi Code",
+          "command": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:pi",
+      "name": "Pi (ACP)",
+      "description": "AI coding agent with ACP support via pi-acp adapter.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @earendil-works/pi-coding-agent && npm install -g pi-acp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/earendil-works/pi",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/earendil-works/pi",
+      "install_command": "npm install -g @earendil-works/pi-coding-agent && npm install -g pi-acp",
+      "tui_commands": [
+        ":connect acp pi",
+        ":harness switch acp:pi",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:pi \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Pi agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Pi",
+          "command": "npm install -g @earendil-works/pi-coding-agent && npm install -g pi-acp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:qwen",
+      "name": "Qwen Code (ACP)",
+      "description": "AI coding agent by QwenLM with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @qwen-code/qwen-code",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/QwenLM/qwen-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/QwenLM/qwen-code",
+      "install_command": "npm install -g @qwen-code/qwen-code",
+      "tui_commands": [
+        ":connect acp qwen",
+        ":harness switch acp:qwen",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:qwen \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Qwen Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Qwen Code",
+          "command": "npm install -g @qwen-code/qwen-code",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:agentpool",
+      "name": "AgentPool (ACP)",
+      "description": "Multi-agent system with ACP support for coding tasks.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install agentpool[coding]",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://phil65.github.io/agentpool/advanced/acp-integration/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://phil65.github.io/agentpool/advanced/acp-integration/",
+      "install_command": "pip install agentpool[coding]",
+      "tui_commands": [
+        ":connect acp agentpool",
+        ":harness switch acp:agentpool",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:agentpool \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "AgentPool agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install AgentPool",
+          "command": "pip install agentpool[coding]",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:auggie",
+      "name": "Auggie (Augment Code) (ACP)",
+      "description": "An AI agent that brings Augment Code's power to the terminal with ACP support for Zed, Neovim, and Emacs.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:enterprise",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @augmentcode/auggie",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.augmentcode.com/product/CLI",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://www.augmentcode.com/product/CLI",
+      "install_command": "npm install -g @augmentcode/auggie",
+      "tui_commands": [
+        ":connect acp auggie",
+        ":harness switch acp:auggie",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:auggie \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Auggie (Augment Code) agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Auggie (Augment Code)",
+          "command": "npm install -g @augmentcode/auggie",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:autodev",
+      "name": "AutoDev Xiuper (ACP)",
+      "description": "AI-native multi-agent development platform (Kotlin Multiplatform) with ACP and A2A support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @xiuper/cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/phodal/auto-dev",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/phodal/auto-dev",
+      "install_command": "npm install -g @xiuper/cli",
+      "tui_commands": [
+        ":connect acp autodev",
+        ":harness switch acp:autodev",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:autodev \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "AutoDev Xiuper agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install AutoDev Xiuper",
+          "command": "npm install -g @xiuper/cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:blackbox",
+      "name": "Blackbox AI (ACP)",
+      "description": "AI coding assistant with terminal CLI, multi-provider support and ACP.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://blackbox.ai/install.sh | sh",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.blackbox.ai/features/blackbox-cli/introduction",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.blackbox.ai/features/blackbox-cli/introduction",
+      "install_command": "curl -fsSL https://blackbox.ai/install.sh | sh",
+      "tui_commands": [
+        ":connect acp blackbox",
+        ":harness switch acp:blackbox",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:blackbox \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Blackbox AI agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Blackbox AI",
+          "command": "curl -fsSL https://blackbox.ai/install.sh | sh",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:bub",
+      "name": "Bub (ACP)",
+      "description": "AI coding agent with ACP support via bub-acp-server adapter.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "bub install bub-acp-server@main",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/bubbuild/bub",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/bubbuild/bub",
+      "install_command": "bub install bub-acp-server@main",
+      "tui_commands": [
+        ":connect acp bub",
+        ":harness switch acp:bub",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:bub \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Bub agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Bub",
+          "command": "bub install bub-acp-server@main",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:cagent",
+      "name": "cagent (ACP)",
+      "description": "A powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install cagent",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/cagent/cagent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/cagent/cagent",
+      "install_command": "pip install cagent",
+      "tui_commands": [
+        ":connect acp cagent",
+        ":harness switch acp:cagent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:cagent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "cagent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install cagent",
+          "command": "pip install cagent",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:codeassistant",
+      "name": "Code Assistant (ACP)",
+      "description": "An AI coding assistant built in Rust for autonomous code analysis and modification.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "cargo install code-assistant",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/codeassistant/codeassistant",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/codeassistant/codeassistant",
+      "install_command": "cargo install code-assistant",
+      "tui_commands": [
+        ":connect acp codeassistant",
+        ":harness switch acp:codeassistant",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:codeassistant \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Code Assistant agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Code Assistant",
+          "command": "cargo install code-assistant",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:codebuddy",
+      "name": "CodeBuddy Code (ACP)",
+      "description": "Tencent Cloud's CodeBuddy terminal coding agent with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @tencent-ai/codebuddy-code",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.codebuddy.cn/cli/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://www.codebuddy.cn/cli/",
+      "install_command": "npm install -g @tencent-ai/codebuddy-code",
+      "tui_commands": [
+        ":connect acp codebuddy",
+        ":harness switch acp:codebuddy",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:codebuddy \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "CodeBuddy Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install CodeBuddy Code",
+          "command": "npm install -g @tencent-ai/codebuddy-code",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:cortex",
+      "name": "Cortex Code (ACP)",
+      "description": "Snowflake's Cortex Code terminal agent through its native ACP server.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:enterprise",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "# Cortex Code\n\nCortex Code provides an ACP server for Snowflake development workflows.\n\n## Installation\n\nInstall and authenticate Cortex Code using Snowflake's documentation, then run\n`cortex acp serve`.\n",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code",
+      "install_command": "# Cortex Code\n\nCortex Code provides an ACP server for Snowflake development workflows.\n\n## Installation\n\nInstall and authenticate Cortex Code using Snowflake's documentation, then run\n`cortex acp serve`.\n",
+      "tui_commands": [
+        ":connect acp cortex",
+        ":harness switch acp:cortex",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:cortex \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Cortex Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Set up Cortex Code",
+          "command": "",
+          "description": "# Cortex Code\n\nCortex Code provides an ACP server for Snowflake development workflows.\n\n## Installation\n\nInstall and authenticate Cortex Code using Snowflake's documentation, then run\n`cortex acp serve`.\n"
+        }
+      ]
+    },
+    {
+      "id": "acp:crow",
+      "name": "crow-cli (ACP)",
+      "description": "AI coding agent CLI with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g crow-cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://crow-ai.dev",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://crow-ai.dev",
+      "install_command": "npm install -g crow-cli",
+      "tui_commands": [
+        ":connect acp crow",
+        ":harness switch acp:crow",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:crow \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "crow-cli agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install crow-cli",
+          "command": "npm install -g crow-cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:deepagents",
+      "name": "DeepAgents (ACP)",
+      "description": "LangChain's general-purpose and coding agent exposed through its ACP package.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g deepagents-acp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.langchain.com/oss/javascript/deepagents/overview",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.langchain.com/oss/javascript/deepagents/overview",
+      "install_command": "npm install -g deepagents-acp",
+      "tui_commands": [
+        ":connect acp deepagents",
+        ":harness switch acp:deepagents",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:deepagents \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "DeepAgents agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install DeepAgents",
+          "command": "npm install -g deepagents-acp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:dirac",
+      "name": "Dirac (ACP)",
+      "description": "Open-source coding agent focused on efficient parallel edits and lower model cost.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g dirac-cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://dirac.run",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://dirac.run",
+      "install_command": "npm install -g dirac-cli",
+      "tui_commands": [
+        ":connect acp dirac",
+        ":harness switch acp:dirac",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:dirac \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Dirac agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Dirac",
+          "command": "npm install -g dirac-cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:fount",
+      "name": "fount (ACP)",
+      "description": "AI coding agent with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "cargo install fount",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/steve02081504/fount",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/steve02081504/fount",
+      "install_command": "cargo install fount",
+      "tui_commands": [
+        ":connect acp fount",
+        ":harness switch acp:fount",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:fount \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "fount agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install fount",
+          "command": "cargo install fount",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:glm",
+      "name": "GLM Agent (ACP)",
+      "description": "Community ACP coding agent using GLM models as its reasoning engine.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g glm-acp-agent",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/stefandevo/glm-acp-agent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/stefandevo/glm-acp-agent",
+      "install_command": "npm install -g glm-acp-agent",
+      "tui_commands": [
+        ":connect acp glm",
+        ":harness switch acp:glm",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:glm \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "GLM Agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install GLM Agent",
+          "command": "npm install -g glm-acp-agent",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:junie",
+      "name": "JetBrains Junie (ACP)",
+      "description": "JetBrains' AI agent with ACP support across their entire IDE ecosystem.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:enterprise",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @jetbrains/junie",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.jetbrains.com/junie/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://www.jetbrains.com/junie/",
+      "install_command": "npm install -g @jetbrains/junie",
+      "tui_commands": [
+        ":connect acp junie",
+        ":harness switch acp:junie",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:junie \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "JetBrains Junie agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install JetBrains Junie",
+          "command": "npm install -g @jetbrains/junie",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:kiro",
+      "name": "Kiro CLI (ACP)",
+      "description": "Agentic coding CLI with full ACP support for editor integration.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://cli.kiro.dev/install | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://kiro.dev/docs/cli/acp/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://kiro.dev/docs/cli/acp/",
+      "install_command": "curl -fsSL https://cli.kiro.dev/install | bash",
+      "tui_commands": [
+        ":connect acp kiro",
+        ":harness switch acp:kiro",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:kiro \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Kiro CLI agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Kiro CLI",
+          "command": "curl -fsSL https://cli.kiro.dev/install | bash",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:llmlingagent",
+      "name": "LLMling-Agent (ACP)",
+      "description": "A framework for creating and managing LLM-powered agents to provide structured interactions.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install llmling-agent",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/llmling/llmling-agent",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/llmling/llmling-agent",
+      "install_command": "pip install llmling-agent",
+      "tui_commands": [
+        ":connect acp llmlingagent",
+        ":harness switch acp:llmlingagent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:llmlingagent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "LLMling-Agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install LLMling-Agent",
+          "command": "pip install llmling-agent",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:minion",
+      "name": "Minion Code (ACP)",
+      "description": "Lightweight AI coding agent with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install minionx && pip install -e .",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/femto/minion-code",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/femto/minion-code",
+      "install_command": "pip install minionx && pip install -e .",
+      "tui_commands": [
+        ":connect acp minion",
+        ":harness switch acp:minion",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:minion \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Minion Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Minion Code",
+          "command": "pip install minionx && pip install -e .",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:mistral-vibe",
+      "name": "Mistral Vibe (ACP)",
+      "description": "Agentic coding tool from Mistral AI with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install mistral-vibe",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/mistralai/mistral-vibe",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/mistralai/mistral-vibe",
+      "install_command": "pip install mistral-vibe",
+      "tui_commands": [
+        ":connect acp mistral-vibe",
+        ":harness switch acp:mistral-vibe",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:mistral-vibe \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Mistral Vibe agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Mistral Vibe",
+          "command": "pip install mistral-vibe",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:openclaw",
+      "name": "OpenClaw (ACP)",
+      "description": "OpenClaw ACP-compatible agent listed by the official Agent Client Protocol documentation.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.openclaw.ai",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.openclaw.ai",
+      "install_command": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n",
+      "tui_commands": [
+        ":connect acp openclaw",
+        ":harness switch acp:openclaw",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:openclaw \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "OpenClaw agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Set up OpenClaw",
+          "command": "",
+          "description": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n"
+        }
+      ]
+    },
+    {
+      "id": "acp:poolside",
+      "name": "Poolside (ACP)",
+      "description": "AI coding agent by Poolside with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:enterprise",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @poolsideai/pool",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/poolsideai/pool",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/poolsideai/pool",
+      "install_command": "npm install -g @poolsideai/pool",
+      "tui_commands": [
+        ":connect acp poolside",
+        ":harness switch acp:poolside",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:poolside \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Poolside agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Poolside",
+          "command": "npm install -g @poolsideai/pool",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:qoder",
+      "name": "Qoder CLI (ACP)",
+      "description": "AI coding CLI with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g qoder-cli",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.qoder.com/cli/acp",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.qoder.com/cli/acp",
+      "install_command": "npm install -g qoder-cli",
+      "tui_commands": [
+        ":connect acp qoder",
+        ":harness switch acp:qoder",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:qoder \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Qoder CLI agent",
+      "popularity_rank": 180,
+      "setup_steps": [
+        {
+          "title": "Install Qoder CLI",
+          "command": "npm install -g qoder-cli",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:sigit",
+      "name": "siGit Code (ACP)",
+      "description": "AI coding agent by siGit with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g sigit",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/getsigit/sigit",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/getsigit/sigit",
+      "install_command": "npm install -g sigit",
+      "tui_commands": [
+        ":connect acp sigit",
+        ":harness switch acp:sigit",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:sigit \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "siGit Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install siGit Code",
+          "command": "npm install -g sigit",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:stakpak",
+      "name": "Stakpak (ACP)",
+      "description": "An ACP-compatible agent focused on providing comprehensive code assistance and collaboration features.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install stakpak",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/stakpak/stakpak",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/stakpak/stakpak",
+      "install_command": "pip install stakpak",
+      "tui_commands": [
+        ":connect acp stakpak",
+        ":harness switch acp:stakpak",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:stakpak \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Stakpak agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Stakpak",
+          "command": "pip install stakpak",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:stdio-bus",
+      "name": "stdio Bus (ACP)",
+      "description": "ACP-compatible tool bus for connecting AI agents to development tools.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "cargo install stdio-bus",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/stdiobus/stdiobus",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/stdiobus/stdiobus",
+      "install_command": "cargo install stdio-bus",
+      "tui_commands": [
+        ":connect acp stdio-bus",
+        ":harness switch acp:stdio-bus",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:stdio-bus \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "stdio Bus agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install stdio Bus",
+          "command": "cargo install stdio-bus",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "acp:vtcode",
+      "name": "VT Code (ACP)",
+      "description": "A versatile coding agent implementing ACP for seamless integration with compatible development environments.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g vtcode-acp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/vtcode/vtcode",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/vtcode/vtcode",
+      "install_command": "npm install -g vtcode-acp",
+      "tui_commands": [
+        ":connect acp vtcode",
+        ":harness switch acp:vtcode",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:vtcode \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "VT Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install VT Code",
+          "command": "npm install -g vtcode-acp",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "tau",
+      "name": "Tau (Hugging Face)",
+      "description": "Hugging Face Tau event-first agent in read-only preview mode; sessions and progress remain visible in SuperQode.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "tau",
+      "source": "optional:tau",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "exact-resume",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install \"superqode[tau]\"",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/advanced/tau/",
+      "install_command": "uv tool install \"superqode[tau]\"",
+      "tui_commands": [
+        ":harness switch tau",
+        ":harness show tau",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run tau \"Describe your task\"",
+        "superqode harness show tau"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: deny",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "tau",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "deepseek-harness",
+      "name": "DeepSeek Harness",
+      "description": "DeepSeek Harness coding agent hosted over JSON-RPC; DeepSeek owns the loop, tools, and sandbox.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "deepseek-harness",
+      "source": "optional:deepseek-harness",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "warning": "DeepSeek Harness executes its own tools, so SuperQode approvals do not gate them. Routes come from DeepSeek's composition, not SuperQode's model catalog.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/advanced/deepseek-harness/",
+      "install_command": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "tui_commands": [
+        ":harness switch deepseek-harness",
+        ":harness show deepseek-harness",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run deepseek-harness \"Describe your task\"",
+        "superqode harness show deepseek-harness"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "deepseek-harness",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "benchmark-coding",
+      "name": "benchmark-coding",
+      "description": "Autonomous coding harness for headless benchmark runs: never asks the user, investigates exhaustively, always attempts and verifies a fix.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch benchmark-coding",
+        ":harness show benchmark-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run benchmark-coding \"Describe your task\"",
+        "superqode harness show benchmark-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: yolo",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "benchmark-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "rlm-docker",
+      "name": "rlm-docker",
+      "description": "Recursive coding harness with the Python kernel in a Docker container. Writes are allowed, networking is off.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Docker Python: the kernel runs inside a container with networking disabled. Requires a running Docker daemon.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm-docker",
+        ":harness show rlm-docker",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-docker \"Describe your task\"",
+        "superqode harness show rlm-docker"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python"
+      ],
+      "policies": [
+        "Sandbox: docker",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Structured run events"
+      ],
+      "based_on": "rlm-docker",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "rlm-monty",
+      "name": "rlm-monty",
+      "description": "Recursive analysis harness on Pydantic Monty: persistent Python, repository reads, and semantic subcalls only.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Monty Python: no filesystem, subprocess, network, or third-party imports. Writes, shell and rlm.run refuse. Needs the 'monty' extra.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm-monty",
+        ":harness show rlm-monty",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-monty \"Describe your task\"",
+        "superqode harness show rlm-monty"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python"
+      ],
+      "policies": [
+        "Sandbox: monty",
+        "Approvals: none",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Structured run events"
+      ],
+      "based_on": "rlm-monty",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "prime-agent-python",
+      "name": "prime-agent-python",
+      "description": "Prime Agent RLM coding loop hosted by prime-agent-python-client over RPC.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "prime-agent",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "exact-resume",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Prime Agent owns tool execution and runs with the permissions of the SuperQode process.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch prime-agent-python",
+        ":harness show prime-agent-python",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run prime-agent-python \"Describe your task\"",
+        "superqode harness show prime-agent-python"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "prime-agent-python",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "gemma4-coding",
+      "name": "gemma4-coding",
+      "description": "Gemma4 local coding harness tuned for strict JSON tool calls.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "gemma4-local",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch gemma4-coding",
+        ":harness show gemma4-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run gemma4-coding \"Describe your task\"",
+        "superqode harness show gemma4-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "gemma4-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "gemma4-no-tool",
+      "name": "gemma4-no-tool",
+      "description": "Gemma4 local reasoning harness with no repository tools.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "gemma4-local",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch gemma4-no-tool",
+        ":harness show gemma4-no-tool",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run gemma4-no-tool \"Describe your task\"",
+        "superqode harness show gemma4-no-tool"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: deny",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "gemma4-no-tool",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "ds4-coding",
+      "name": "ds4-coding",
+      "description": "DS4 local coding harness tuned for compact JSON tool calls.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "ds4-local",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch ds4-coding",
+        ":harness show ds4-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run ds4-coding \"Describe your task\"",
+        "superqode harness show ds4-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "ds4-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "ds4-fast-local",
+      "name": "ds4-fast-local",
+      "description": "Compact DS4 coding harness for fast local iteration.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "ds4-local",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch ds4-fast-local",
+        ":harness show ds4-fast-local",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run ds4-fast-local \"Describe your task\"",
+        "superqode harness show ds4-fast-local"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "ds4-fast-local",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "qwen-coding",
+      "name": "qwen-coding",
+      "description": "Qwen-Coder local coding harness: low temperature, native tools.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "ollama",
+      "model": "qwen3-coder",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch qwen-coding",
+        ":harness show qwen-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run qwen-coding \"Describe your task\"",
+        "superqode harness show qwen-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "qwen-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "glm-coding",
+      "name": "glm-coding",
+      "description": "GLM local/endpoint coding harness: strong agentic coder, native tools.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "glm-4.6",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch glm-coding",
+        ":harness show glm-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run glm-coding \"Describe your task\"",
+        "superqode harness show glm-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "glm-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "glm52-coding",
+      "name": "glm52-coding",
+      "description": "GLM-5.2 long-horizon coding harness via the first-party Z.AI general API.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "zai",
+      "model": "glm-5.2",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch glm52-coding",
+        ":harness show glm52-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run glm52-coding \"Describe your task\"",
+        "superqode harness show glm52-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "glm52-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "minimax-coding",
+      "name": "minimax-coding",
+      "description": "MiniMax local/endpoint coding harness: long-context reasoning with measured tool behavior.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "minimax",
+      "model": "minimax-m1",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch minimax-coding",
+        ":harness show minimax-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run minimax-coding \"Describe your task\"",
+        "superqode harness show minimax-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "minimax-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "kimi-coding",
+      "name": "kimi-coding",
+      "description": "Stable Kimi-family coding harness with long context, max reasoning, native tools, and cache-friendly extended history.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "moonshot",
+      "model": "kimi-k3",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch kimi-coding",
+        ":harness show kimi-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run kimi-coding \"Describe your task\"",
+        "superqode harness show kimi-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "kimi-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "kimi-k3-coding",
+      "name": "kimi-k3-coding",
+      "description": "Kimi K3 long-horizon coding harness with 1M context, max reasoning, native tools, and cache-friendly extended history.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "moonshot",
+      "model": "kimi-k3",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch kimi-k3-coding",
+        ":harness show kimi-k3-coding",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run kimi-k3-coding \"Describe your task\"",
+        "superqode harness show kimi-k3-coding"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "local_code_search",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "kimi-k3-coding",
+      "popularity_rank": 500,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:zcode",
+      "name": "ZCode",
+      "description": "Z.AI's official desktop coding harness for GLM-5.3, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://zcode.z.ai/en",
+      "repository": "",
+      "interface": "Desktop application",
+      "support_note": "Direct SuperQode integration is pending. ZCode currently runs as an independent desktop harness and does not document an ACP server, headless CLI, or external agent SDK.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "Z Code",
+        "Z.AI ZCode",
+        "official GLM-5.3 harness"
+      ],
+      "docs_url": "https://zcode.z.ai/en/docs/welcome",
+      "install_command": "Download the official application for macOS, Windows, or Linux from zcode.z.ai.",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [
+        "workspace files",
+        "terminal commands",
+        "browser automation",
+        "MCP servers",
+        "Git review"
+      ],
+      "policies": [
+        "ZCode owns its agent loop, permissions, tools, and task history",
+        "ZCode authentication and Coding Plan quota remain with Z.AI",
+        "No commands are executed by SuperQode until an official connector exists"
+      ],
+      "capabilities": [
+        "Official GLM-5.3 harness",
+        "Long-horizon tasks",
+        "Multi-agent workflows",
+        "Browser automation",
+        "Remote control"
+      ],
+      "based_on": "Z.AI ZCode Agent",
+      "popularity_rank": 65,
+      "setup_steps": [
+        {
+          "title": "Install ZCode independently",
+          "command": "",
+          "description": "Download the official desktop application for macOS, Windows, or Linux. It currently runs outside SuperQode."
+        },
+        {
+          "title": "Connect a Z.AI account or model provider",
+          "command": "",
+          "description": "Complete authentication inside ZCode's onboarding flow."
+        }
+      ]
+    },
+    {
+      "id": "ecosystem:qm",
+      "name": "QM",
+      "description": "Y Combinator's open-source multiplayer agent harness for company work, with interchangeable Pi, OpenCode, Codex, and Claude Code loops.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/yc-software/qm",
+      "repository": "",
+      "interface": "External project",
+      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "Y Combinator QM",
+        "multiplayer agent harness"
+      ],
+      "docs_url": "https://github.com/yc-software/qm",
+      "install_command": "",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [],
+      "capabilities": [
+        "External ecosystem project"
+      ],
+      "based_on": "Independent project",
+      "popularity_rank": 700,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:harness-new",
+      "name": "harness.new",
+      "description": "Tensorlake's durable-sandbox playground for launching several coding-agent harnesses.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.harness.new/",
+      "repository": "",
+      "interface": "External project",
+      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "Tensorlake Harness",
+        "instant agent sandboxes"
+      ],
+      "docs_url": "https://www.harness.new/",
+      "install_command": "",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [],
+      "capabilities": [
+        "External ecosystem project"
+      ],
+      "based_on": "Independent project",
+      "popularity_rank": 700,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:replicas",
+      "name": "Replicas",
+      "description": "A cloud background-agent platform that runs Codex or Claude Code in isolated environments and returns pull requests.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.ycombinator.com/companies/replicas",
+      "repository": "",
+      "interface": "External project",
+      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "background coding agents"
+      ],
+      "docs_url": "https://www.ycombinator.com/companies/replicas",
+      "install_command": "",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [],
+      "capabilities": [
+        "External ecosystem project"
+      ],
+      "based_on": "Independent project",
+      "popularity_rank": 700,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:synth",
+      "name": "Synth",
+      "description": "A harness and context optimization platform for evaluating coding-agent loops across models and task datasets.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.ycombinator.com/companies/synth-3",
+      "repository": "",
+      "interface": "External project",
+      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "coding harness optimization"
+      ],
+      "docs_url": "https://www.ycombinator.com/companies/synth-3",
+      "install_command": "",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [],
+      "capabilities": [
+        "External ecosystem project"
+      ],
+      "based_on": "Independent project",
+      "popularity_rank": 700,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:better-harness",
+      "name": "Better Harness",
+      "description": "Qoder's cross-agent project for evaluating and improving coding workflows across Claude Code, Codex, Cursor, and other agents.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/QoderAI/better-harness",
+      "repository": "",
+      "interface": "External project",
+      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "Qoder Better Harness"
+      ],
+      "docs_url": "https://github.com/QoderAI/better-harness",
+      "install_command": "",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [],
+      "capabilities": [
+        "External ecosystem project"
+      ],
+      "based_on": "Independent project",
+      "popularity_rank": 700,
+      "setup_steps": []
+    },
+    {
+      "id": "ecosystem:jcode",
+      "name": "jcode",
+      "description": "An MIT-licensed terminal coding harness written in Rust, focused on low memory use, fast start, and parallel agent swarms.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://jcode.sh",
+      "repository": "https://github.com/1jehuang/jcode",
+      "interface": "Terminal harness",
+      "support_note": "Not yet runnable from SuperQode, but unlike a desktop-only harness jcode documents a headless `jcode run`, a TypeScript SDK, and a versioned harness API, so a SuperQode route is buildable once it is implemented and tested.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "jcode.sh",
+        "Rust coding agent",
+        "RAM efficient harness"
+      ],
+      "docs_url": "https://jcode.sh/docs",
+      "install_command": "curl -fsSL https://jcode.sh/install | bash",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [
+        "workspace files",
+        "terminal commands",
+        "MCP servers",
+        "semantic memory"
+      ],
+      "policies": [
+        "jcode owns its agent loop, tools, and session state",
+        "Model provider credentials remain with jcode's own configuration",
+        "No commands are executed by SuperQode until a connector is built and tested"
+      ],
+      "capabilities": [
+        "Terminal coding harness",
+        "Headless runs",
+        "Parallel agent swarms",
+        "TypeScript SDK",
+        "MCP tools"
+      ],
+      "based_on": "jcode (Rust, MIT)",
+      "popularity_rank": 68,
+      "setup_steps": [
+        {
+          "title": "Install jcode independently",
+          "command": "curl -fsSL https://jcode.sh/install | bash",
+          "description": "Binaries are published for macOS, Linux, and Windows."
+        },
+        {
+          "title": "Configure a model provider",
+          "command": "",
+          "description": "jcode connects to Anthropic, OpenAI, or OpenRouter with its own keys."
+        }
+      ]
+    }
+  ]
+}
