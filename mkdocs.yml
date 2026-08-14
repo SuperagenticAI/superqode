@@ -205,6 +205,7 @@ nav:
     - π PiPy: advanced/pipy.md
     - 🐍 Native RLM: advanced/rlm.md
     - 🐍 Prime Agent Python Client: prime-agent-python-client.md
+    - 🐋 DeepSeek Harness: advanced/deepseek-harness.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md
     - 🌀 RLM Code Integration: advanced/rlm-code.md
     - 🔬 RLM Routes Compared: advanced/rlm-routes.md

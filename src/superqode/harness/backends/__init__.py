@@ -9,6 +9,11 @@ from .base import (
     HarnessBackendResult,
 )
 from .deepagents import DeepAgentsHarnessBackend
+from .dsh import (
+    DSHHarnessBackend,
+    DSHSettings,
+    dsh_installation_status,
+)
 from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .prime_agent import (
@@ -47,6 +52,8 @@ __all__ = [
     "ADKHarnessBackend",
     "ClaudeAgentSDKHarnessBackend",
     "CodexSDKHarnessBackend",
+    "DSHHarnessBackend",
+    "DSHSettings",
     "DeepAgentsHarnessBackend",
     "ManagedAgentHarnessBackend",
     "OpenAIAgentsHarnessBackend",
@@ -60,6 +67,7 @@ __all__ = [
     "TauHarnessBackend",
     "backend_capabilities",
     "create_harness_backend",
+    "dsh_installation_status",
     "inspect_harness_backend",
     "known_harness_backend_names",
     "prime_agent_installation_status",

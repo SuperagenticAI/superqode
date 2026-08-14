@@ -111,8 +111,8 @@ behavior without leaving SuperQode:
 ```
 
 The picker includes SuperQode native harnesses, project HarnessSpecs, vendor
-and ACP coding agents, optional integrations such as Hugging Face Tau,
-installed and registry harnesses, and model presets.
+and ACP coding agents, optional integrations such as Hugging Face Tau and
+DeepSeek Harness, installed and registry harnesses, and model presets.
 
 For a safe local-first setup:
 

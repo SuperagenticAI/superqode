@@ -333,6 +333,7 @@ uv tool install "superqode[<extra>]"
 | `pydanticai-logfire` | PydanticAI runtime with Logfire instrumentation |
 | `rlm-code` | RLM Code recursive harness backend |
 | `tau` | Hugging Face Tau Harness Protocol adapter and read-only TUI preset |
+| `deepseek-harness` | DeepSeek Harness runtime and TUI preset (macOS arm64 and Linux x86_64/aarch64) |
 | `mem0` | Mem0 memory provider |
 | `supermemory` | Supermemory provider |
 | `memory-providers` | Mem0 and Supermemory together |

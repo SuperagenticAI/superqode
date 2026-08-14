@@ -18,6 +18,7 @@ supports it.
 | DeepAgents | `uv tool install "superqode[deepagents]"` | `runtime.backend: deepagents` | `superqode runtime doctor deepagents` | [Agent Runtimes](../runtimes.md#deepagents) |
 | RLM Code | `uv tool install "superqode[rlm-code]"` | `runtime.backend: rlm-code` | `superqode harness protocol describe rlm-code` | [RLM Code](../advanced/rlm-code.md) |
 | Hugging Face Tau | `uv tool install "superqode[tau]"` | `:tau use` or `:harness switch tau` | `:tau status` | [Hugging Face Tau](../advanced/tau.md) |
+| DeepSeek Harness | `uv tool install "superqode[deepseek-harness]"` | `:harness switch deepseek-harness` | `superqode harness doctor --spec <file>` | [DeepSeek Harness](../advanced/deepseek-harness.md) |
 
 ## Omnigent compatibility
 

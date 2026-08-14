@@ -12,6 +12,12 @@ from .base import (
     HarnessBackendIssue,
 )
 from .deepagents import DeepAgentsHarnessBackend
+from .dsh import (
+    DSH_BACKEND_ALIASES,
+    DSH_BACKEND_NAME,
+    DSHHarnessBackend,
+    dsh_installation_status,
+)
 from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .prime_agent import PrimeAgentHarnessBackend, prime_agent_installation_status
@@ -37,6 +43,7 @@ _OPTIONAL_BACKENDS = {
     "copilot-sdk",
     "claude-agent-sdk",
     "deepagents",
+    "deepseek-harness",
     "google-agent-engine",
     "pipy",
     "pydanticai",
@@ -64,6 +71,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return ClaudeAgentSDKHarnessBackend()
     if resolved == "deepagents":
         return DeepAgentsHarnessBackend()
+    if resolved in {DSH_BACKEND_NAME, *DSH_BACKEND_ALIASES}:
+        return DSHHarnessBackend()
     if resolved == "pydanticai":
         return PydanticAIHarnessBackend()
     if resolved == "prime-agent":
@@ -176,6 +185,13 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         from ..tau_adapter import tau_installation_status
 
         available, issue = tau_installation_status()
+        return replace(
+            capabilities,
+            availability="available" if available else "missing",
+            install_hint=None if available else issue,
+        )
+    if capabilities.backend == DSH_BACKEND_NAME:
+        available, issue = dsh_installation_status()
         return replace(
             capabilities,
             availability="available" if available else "missing",

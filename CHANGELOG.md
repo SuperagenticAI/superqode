@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.94] - 2026-08-14
+
+### Added
+
+- DeepSeek Harness runs as an optional harness backend
+  (`runtime.backend: deepseek-harness`, installed with
+  `uv tool install "superqode[deepseek-harness]"`). DeepSeek keeps ownership of
+  its agent loop, tools, prompts, compaction, and sandbox; SuperQode launches
+  the runtime and normalizes its JSON-RPC stream into harness events. The
+  `deepseek-harness-sdk` distribution ships DeepSeek's compiled TypeScript
+  runtime as a Python platform wheel, so the route needs no Node.js. The
+  dependency is marked for the three platforms DeepSeek publishes wheels for
+  (macOS arm64, Linux x86_64/aarch64) and reports as missing elsewhere.
+- A `deepseek-harness` preset in the harness catalogue and
+  `harness list-templates`, selectable from `:connect` under Other Harnesses or
+  with `:harness switch deepseek-harness`. It needs no harness file and no
+  Cordis composition, because the SDK injects DeepSeek's own bundled
+  composition. `dsh` and `deepseek` resolve to the same preset, and
+  `runtime.backend: dsh` keeps working.
+- A connected local or OpenAI-compatible route is bridged onto the runtime's
+  endpoint configuration, so connecting to `ollama/qwen3.5:9b` and switching to
+  this harness runs on Ollama. The DeepSeek route name is preserved because the
+  bundled composition registers only `deepseek-official`. Providers with their
+  own wire format, such as Anthropic and Google, are left alone.
+
+### Notes
+
+- DeepSeek Harness executes its own tools, so SuperQode approval profiles do not
+  gate them. Use `DSH_PERMISSION_MODE` for the control the runtime enforces. The
+  preset defaults it to `workspace-write` and carries a selection warning.
+- DeepSeek Harness is an upstream developer preview; the SDK pin
+  (`>=0.1.0rc6,<0.2.0`) should move deliberately.
+
 ## [0.2.93] - 2026-08-12
 
 ### Added

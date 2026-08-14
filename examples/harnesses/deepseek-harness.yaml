@@ -1,0 +1,30 @@
+name: deepseek-harness-coder
+inherits: coding
+
+runtime:
+  backend: deepseek-harness
+  config:
+    deepseek_harness:
+      # DeepSeek's own permission mode is the control the runtime enforces.
+      env:
+        DSH_PERMISSION_MODE: workspace-write
+      session_root: .superqode/deepseek-harness/sessions
+      prompt_timeout: 900
+      max_tokens: 49152
+      # No cordis file is set, so the SDK injects DeepSeek's bundled default
+      # composition. Set `cordis:` only to run a composition you maintain.
+
+execution_policy:
+  sandbox: local
+  approval_profile: none
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: true
+
+workflow:
+  mode: single
+
+metadata:
+  example: deepseek-harness
+  best_for: coding through the DeepSeek Harness runtime over JSON-RPC

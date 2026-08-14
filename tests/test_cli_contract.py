@@ -37,7 +37,9 @@ EXPECTED_COMMAND_COUNT = 263
 # so no Click command was added and the count is unchanged.
 # Rebaselined for the native RLM harness, which adds `harness-rlm` to the
 # `--connect` choice list after `harness-core`. No Click command was added.
-EXPECTED_HELP_TREE_SHA256 = "ff8c9583a1e22ecdddd56116c875eba5c0e6f95e064b60bf4a31622fdc380662"
+# Rebaselined for the DeepSeek Harness preset, which adds `deepseek-harness` to
+# the `harness init --template` choice list. No Click command was added.
+EXPECTED_HELP_TREE_SHA256 = "6891f2e2af430a3d62a9830b46a3740f02345385cd22d5e5b44fba4862439174"
 
 
 def _render_help_tree() -> tuple[int, str]:

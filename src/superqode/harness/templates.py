@@ -439,6 +439,65 @@ def tau_template(*, name: str = "tau") -> HarnessSpec:
     )
 
 
+def deepseek_harness_template(*, name: str = "deepseek-harness") -> HarnessSpec:
+    """DeepSeek Harness hosted through its Python SDK over JSON-RPC.
+
+    No Cordis composition is configured on purpose. The SDK injects DeepSeek's
+    own bundled default composition whenever none is supplied, so the preset
+    stays zero-config and the plugin graph remains upstream's to maintain.
+    """
+    return HarnessSpec(
+        name=name,
+        description=(
+            "DeepSeek Harness coding agent hosted over JSON-RPC; DeepSeek owns "
+            "the loop, tools, and sandbox."
+        ),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(
+            backend="deepseek-harness",
+            # workspace-write is the narrower of DeepSeek's two permission
+            # modes and is the control the runtime actually enforces.
+            config={"deepseek_harness": {"env": {"DSH_PERMISSION_MODE": "workspace-write"}}},
+        ),
+        model_policy=ModelPolicySpec(
+            profile="dsh",
+            config={
+                "tool_profile": "core",
+                "dsh_uses_own_provider_catalog": True,
+            },
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="local",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(
+            AgentSpec(
+                id="deepseek",
+                role="implementation",
+                tools=("read", "write", "edit", "bash"),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "deepseek-harness",
+            "builtin_harness": True,
+            "category": "workflow",
+            "python_client": "deepseek-harness-sdk",
+            "rich_stream_events": True,
+            "optional_dependency": "deepseek-harness-sdk",
+            "selection_warning": (
+                "DeepSeek Harness executes its own tools, so SuperQode approvals "
+                "do not gate them. Routes come from DeepSeek's composition, not "
+                "SuperQode's model catalog."
+            ),
+        },
+    )
+
+
 def gemma4_coding_template() -> HarnessSpec:
     """Gemma4-optimized coding harness starting point."""
     base = coding_template(name="gemma4-coding")
@@ -722,6 +781,9 @@ BUILTIN_TEMPLATES = {
     "rlm_monty": rlm_monty_template,
     "prime-agent-python": prime_agent_python_template,
     "tau": tau_template,
+    "deepseek-harness": deepseek_harness_template,
+    # Underscore keys stay out of list-templates, matching the other aliases.
+    "deepseek_harness": deepseek_harness_template,
     "gemma4-coding": gemma4_coding_template,
     "gemma4-no-tool": gemma4_no_tool_template,
     "gemma4-no_tool": gemma4_no_tool_template,

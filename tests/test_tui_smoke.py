@@ -6020,10 +6020,10 @@ def test_connect_picker_can_open_harness_catalog():
     assert kwargs["include_all"] is False
     assert kwargs["clear_log"] is False
     assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
-    assert [entry.id for entry in kwargs["catalog_entries"]] == ["tau"]
+    assert [entry.id for entry in kwargs["catalog_entries"]] == ["tau", "deepseek-harness"]
 
 
-def test_other_harnesses_profile_dispatch_opens_focused_tau_picker():
+def test_other_harnesses_profile_dispatch_opens_focused_optional_picker():
     from superqode.providers.connection_profiles import get_connection_profile
 
     app = make_app()
@@ -6034,7 +6034,7 @@ def test_other_harnesses_profile_dispatch_opens_focused_tau_picker():
     app._dispatch_connection_profile(get_connection_profile("other-harnesses"), log)
 
     assert len(calls) == 1
-    assert [entry.id for entry in calls[0][1]["catalog_entries"]] == ["tau"]
+    assert [entry.id for entry in calls[0][1]["catalog_entries"]] == ["tau", "deepseek-harness"]
     assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
 
 

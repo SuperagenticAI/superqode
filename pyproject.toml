@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.93"
+version = "0.2.94"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -171,6 +171,13 @@ tau = [
     # Hugging Face's Python port of Pi. Keep the fast-moving pre-1.0 API
     # bounded to the adapter version tested by SuperQode.
     "tau-ai>=0.3.3,<0.4.0",
+]
+deepseek-harness = [
+    # DeepSeek Harness, driven over JSON-RPC. The SDK pulls a same-version
+    # platform wheel carrying the compiled runtime, which DeepSeek publishes
+    # only for macOS arm64 and Linux x86_64/aarch64. The marker keeps the extra
+    # installable on other platforms instead of failing to resolve there.
+    "deepseek-harness-sdk>=0.1.0rc6,<0.2.0; (sys_platform == 'darwin' and platform_machine == 'arm64') or (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64')",
 ]
 mem0 = [
     "mem0ai>=2.0.4,<3.0.0",

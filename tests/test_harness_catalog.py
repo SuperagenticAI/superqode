@@ -58,8 +58,9 @@ def test_recommended_catalogue_hides_pinned_and_specialized_presets(tmp_path):
 def test_optional_catalogue_contains_tau_without_main_or_acp_harnesses(tmp_path):
     optional = {entry.id: entry for entry in optional_harnesses(tmp_path)}
 
-    assert list(optional) == ["tau"]
+    assert list(optional) == ["tau", "deepseek-harness"]
     assert optional["tau"].source == "optional:tau"
+    assert optional["deepseek-harness"].source == "optional:deepseek-harness"
     assert "core" not in optional
     assert "copilot" not in optional
 

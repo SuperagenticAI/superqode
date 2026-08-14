@@ -65,7 +65,15 @@ def test_harnesses_with_execution_caveats_carry_warnings():
 
     warned = {item.id for item in items if item.warning}
 
-    assert warned == {"pipy", "prime-agent-python", "rlm", "rlm-docker", "rlm-monty"}
+    assert warned == {
+        "pipy",
+        "prime-agent-python",
+        "rlm",
+        "rlm-docker",
+        "rlm-monty",
+        # Delegates tool execution to DeepSeek's own runtime and permission mode.
+        "deepseek-harness",
+    }
 
 
 def test_host_permission_harnesses_name_host_permissions():
