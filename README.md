@@ -11,8 +11,9 @@
 <h3 align="center">The harness layer for coding agents.</h3>
 
 <p align="center">
-  Build your own harnesses or connect the agents you already use: open-source,
-  proprietary, local, or hosted.
+  The Harness Hub where coding harnesses are discovered, built, inspected,
+  run, evaluated, and optimized through one rich, browsable terminal
+  experience.
 </p>
 
 <p align="center">Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
@@ -43,8 +44,9 @@
 ## What is SuperQode?
 
 SuperQode is the open-source, terminal-first harness layer for coding agents.
-Build your own harnesses, run SuperQode's native harnesses, or connect the
-coding agents you already use.
+Its Harness Hub brings SuperQode native harnesses, established coding agents,
+ACP agents, presets, optional runtimes, and your own repository HarnessSpecs
+into one place. Build your own, or connect the coding agents you already use.
 
 Run local or hosted models and the coding agents you already use through one
 inspectable, portable HarnessSpec while keeping tools, policies, sessions, and
@@ -101,18 +103,28 @@ Then work normally:
 Summarize this repository and identify the smallest safe improvement.
 ```
 
-Open the unified Harness Switcher when you want to change the complete agent
-behavior without leaving SuperQode:
+Open the browsable Harness Hub to discover, inspect, and use an agent or
+harness without leaving SuperQode:
 
 ```text
+:hub
 :harness
 :harness switch
 :harness switch qwen-code --fork
 ```
 
-The picker includes SuperQode native harnesses, project HarnessSpecs, vendor
-and ACP coding agents, optional integrations such as Hugging Face Tau and
-DeepSeek Harness, installed and registry harnesses, and model presets.
+The mouse- and keyboard-enabled Hub includes SuperQode native harnesses,
+project HarnessSpecs, vendor and ACP coding agents, optional integrations such
+as Hugging Face Tau and DeepSeek Harness, registry entries, and model presets.
+Use `:activity` to revisit important results and their next actions.
+
+The same catalog is available to scripts and documentation:
+
+```bash
+sq hub
+sq hub list --json
+sq hub show codex
+```
 
 For a safe local-first setup:
 

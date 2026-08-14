@@ -25,6 +25,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "harness",
         "help",
         "home",
+        "hub",
         "memory",
         "skills",
     }

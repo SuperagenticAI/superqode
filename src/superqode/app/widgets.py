@@ -376,8 +376,9 @@ class ColorfulStatusBar(Static):
             - (3 if right.plain else 0)
             - 2
         )
-        # Connect/disconnect takes the room first: exit is also on Ctrl+C and
-        # in the footer, while this is the only control for the session.
+        # Connect/disconnect takes the room first. Hub is permanent product
+        # navigation rather than a command users have to discover, and Exit
+        # remains the final window-style control.
         # Controls lead the row, where a browser puts its toolbar, and the
         # state they act on follows.
         controls = Text()
@@ -398,6 +399,20 @@ class ColorfulStatusBar(Static):
                 room -= cost
                 placed = True
                 break
+
+        if placed:
+            # Keep enough room for the compact Exit control. On a busy row the
+            # Hub label compacts to its icon before Exit disappears.
+            compact_exit_cost = cell_len("⏻") + 3
+            for label in ("⚓ Hub", "⚓"):
+                cost = cell_len(label) + 3
+                if room >= cost + compact_exit_cost:
+                    self._append_button(
+                        controls, label, "#a855f7", "hub", separator=False, gap=True
+                    )
+                    room -= cost
+                    break
+
         # Never the lone survivor: a row too tight for the session control has
         # no business still offering the one that closes the app.
         if placed:
@@ -958,6 +973,7 @@ class HintsBar(Static):
         if self.connected:
             hints = [
                 ("⏏", ":disconnect", THEME["pink"]),
+                ("⚓", ":hub", THEME["link"]),
                 ("🧠", ":memory", THEME["link"]),
                 ("📊", ":eval", THEME["link"]),
                 ("⚡", ":skills", THEME["link"]),
@@ -967,6 +983,7 @@ class HintsBar(Static):
         else:
             hints = [
                 ("🔌", ":connect", THEME["pink"]),
+                ("⚓", ":hub", THEME["link"]),
                 ("🏠", ":home", THEME["link"]),
                 ("?", ":help", THEME["link"]),
             ]

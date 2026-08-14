@@ -132,6 +132,22 @@ class HelperStartupMixin:
                 "connection",
             ),
             PaletteCommand(
+                "harness_hub",
+                "Harness Hub",
+                "Discover, inspect, use, compare, and build coding harnesses",
+                "⚓",
+                ":hub",
+                "harness",
+            ),
+            PaletteCommand(
+                "activity",
+                "Activity",
+                "Revisit important results and state changes from this session",
+                "●",
+                ":activity",
+                "session",
+            ),
+            PaletteCommand(
                 "tour",
                 "Guided Tour",
                 "The ladder from someone else's agent to a harness you own",
@@ -768,7 +784,7 @@ class HelperStartupMixin:
             pass
 
     def _maybe_reveal_next_capability(self, log: ConversationLog) -> None:
-        """Show at most one unseen capability, then mark it seen."""
+        """Reveal one contextual capability as a revisit-able product outcome."""
         if getattr(self, "_revealed_this_session", False):
             return
         try:
@@ -781,13 +797,21 @@ class HelperStartupMixin:
             return
 
         self._revealed_this_session = True
-        t = Text()
-        t.append("\n  ○ ", style=THEME["purple"])
-        t.append(hint.headline, style=f"bold {THEME['text']}")
-        t.append("\n    ", style="")
-        t.append(hint.command, style=f"bold {THEME['cyan']}")
-        t.append(f"   {hint.detail}\n", style=THEME["muted"])
-        log.write(t)
+        from superqode.app.outcomes import Outcome, OutcomeAction, OutcomeSeverity
+
+        self._present_outcome(
+            Outcome(
+                title=hint.headline,
+                summary=hint.detail,
+                details=(f"Try {hint.command}", "You can reopen this from :activity."),
+                severity=OutcomeSeverity.INFORMATION,
+                actions=(OutcomeAction("try", "Try it", hint.command, primary=True),),
+                source="Suggested next step",
+            ),
+            log=log,
+            focus=False,
+            receipt=False,
+        )
         try:
             mark_hint_shown(hint.id)
         except Exception:  # noqa: BLE001 - showing beats crashing

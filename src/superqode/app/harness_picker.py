@@ -15,6 +15,14 @@ VENDOR_HARNESS_IDS = (
     "antigravity",
     "grok",
     "copilot",
+    "cursor",
+    "amp",
+    "muse",
+    "prime-agent",
+    "devin",
+    "droid",
+    "kiro",
+    "glm-cli",
 )
 VENDOR_ACP_AGENT_NAMES = frozenset({"kimi", "qwen"})
 ACP_BROWSER_ID = "acp:all"
@@ -85,13 +93,11 @@ def _vendor_item(profile) -> HarnessPickerItem:
     extra = python_extras.get(str(profile.runtime or ""))
     if extra:
         try:
-            from superqode.runtime import list_runtimes
+            # Ask about this one package only. The full list_runtimes() probe
+            # shells out to every vendor CLI, which cost the picker seconds.
+            from superqode.runtime import optional_package_installed
 
-            runtime = next(
-                (item for item in list_runtimes() if item.name == profile.runtime),
-                None,
-            )
-            if runtime is None or not runtime.installed:
+            if not optional_package_installed(profile.runtime):
                 install_extra = extra
         except Exception:
             install_extra = extra
@@ -291,6 +297,7 @@ def harness_picker_items(
     root: str | Path = ".",
     *,
     include_all: bool = True,
+    expand_protocol_catalog: bool = False,
     native_entries=None,
 ) -> list[HarnessPickerItem]:
     """Build the complete, section-ordered interactive picker inventory."""
@@ -329,7 +336,11 @@ def harness_picker_items(
         if profile is not None:
             vendors.append(_vendor_item(profile))
     all_acp_items = acp_picker_items(include_registry=True)
-    acp_items = [*acp_picker_items(), _acp_browser_item(len(all_acp_items))]
+    acp_items = (
+        all_acp_items
+        if expand_protocol_catalog
+        else [*acp_picker_items(), _acp_browser_item(len(all_acp_items))]
+    )
     return [*managed, *vendors, *acp_items, *optional, *presets, *projects]
 
 

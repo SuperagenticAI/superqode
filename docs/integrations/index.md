@@ -12,6 +12,9 @@ diagnostic command, and link to the detailed feature guide.
 The [Connect guide](../concepts/modes.md) explains how to select an active
 coding agent, model, provider, or harness. The pages in this section cover
 installation and operation of the systems connected to those execution paths.
+The [Harness Hub](../harness-hub.md) presents the usable coding-agent and
+harness inventory as one searchable terminal product surface, including local
+readiness, provenance, setup guidance, and project-owned HarnessSpecs.
 
 ## Integration categories
 

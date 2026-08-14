@@ -124,6 +124,8 @@ class SlashCommandMixin:
             self._run_cli_group("profiles", args or "list", log, "Profiles command")
         elif c == "home":
             self._go_home(log)
+        elif c == "activity":
+            self._activity_cmd(log)
         elif c == "disconnect":
             self._disconnect_everything(log)
         elif c == "acp":
@@ -1447,14 +1449,6 @@ class SlashCommandMixin:
         if getattr(self, "is_busy", False):
             # Type-ahead: queue the message and send it when the agent is free.
             self._enqueue_message(text)
-            return
-
-        # Hub (model-search) mode: a typed line is a model name to look up, so
-        # the user can browse the catalog without retyping ":local search".
-        if getattr(self, "_hub_mode", False):
-            log.add_user(text)
-            self._last_user_message = text
-            self.run_worker(self._local_search(text, log))
             return
 
         # Chat mode: a raw, direct-to-model conversation. No repo context, no

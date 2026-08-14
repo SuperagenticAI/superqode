@@ -133,8 +133,10 @@ def test_the_hints_bar_carries_the_connection_slot():
 
     bar.connected = False
     assert ":connect" in bar.render().plain
+    assert ":hub" in bar.render().plain
     bar.connected = True
     assert ":disconnect" in bar.render().plain
+    assert ":hub" in bar.render().plain
 
 
 def test_hint_entries_are_clickable():
@@ -142,7 +144,7 @@ def test_hint_entries_are_clickable():
 
     links = {span.style for span in rendered.spans if "superqode://cmd/" in str(span.style)}
     assert any("home" in str(style) for style in links)
-    for command in (":home", ":help"):
+    for command in (":home", ":hub", ":help"):
         assert command in rendered.plain
 
 
@@ -194,8 +196,17 @@ def test_the_controls_sit_beside_the_identity():
 
     # Identity keeps the corner; the controls sit beside it, still on the left.
     assert rendered.plain.startswith("SuperQode")
-    assert "[⏏ Disconnect] [⏻ Exit]" in rendered.plain
+    assert "[⏏ Disconnect] [⚓ Hub] [⏻ Exit]" in rendered.plain
     assert rendered.plain.index("[⏏") < rendered.plain.index("openai")
+
+
+def test_the_hub_is_a_permanent_top_level_control():
+    rendered = _bar(interaction_mode="build")._render_for_width(120)
+
+    assert "[⚓ Hub]" in rendered.plain
+    assert any("cmd/hub" in str(span.style) for span in rendered.spans)
+    assert rendered.plain.index("Connect") < rendered.plain.index("Hub")
+    assert rendered.plain.index("Hub") < rendered.plain.index("Exit")
 
 
 @pytest.mark.parametrize("width", [60, 72, 90, 100, 110, 115, 120, 140, 200])

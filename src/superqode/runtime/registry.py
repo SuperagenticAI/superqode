@@ -262,6 +262,25 @@ def runtime_extra(name: str | None) -> str | None:
     return spec.split("[", 1)[1].rstrip("]").strip() or None
 
 
+def optional_package_installed(name: str | None) -> bool | None:
+    """Report whether one optional-package runtime is importable.
+
+    ``list_runtimes`` answers this too, but only by probing every runtime,
+    including the vendor CLIs that shell out to ``devin version`` and
+    ``agy --version``.  Callers that care about a single Python extra must not
+    pay for those subprocesses.  Returns None when ``name`` is not an
+    optional-package runtime, so the caller can fall back to the full probe.
+    """
+    entry = _OPTIONAL_PACKAGES.get((name or "").strip().lower())
+    if entry is None:
+        return None
+    try:
+        importlib.import_module(entry[0])
+    except ImportError:
+        return False
+    return True
+
+
 def create_runtime(name: str | None, **kwargs: Any) -> AgentRuntime:
     """Construct a runtime by name.
 

@@ -4276,7 +4276,7 @@ class CommandImplMixin:
         if kind == "harness":
             active = self._active_harness_reference()
             return active in {item.id, str(getattr(item, "path", "") or "")}
-        if kind == "acp-browser":
+        if kind in {"acp-browser", "ecosystem"}:
             return False
         if kind == "acp":
             from superqode.app.session_state import get_session
@@ -5686,47 +5686,6 @@ class CommandImplMixin:
             log.add_error(f"Run failed: {response.error}")
         elif response.content:
             log.add_info(response.content)
-
-    def _hub_cmd(self, args: str, log: ConversationLog):
-        """Model-search mode: type a model name to find it (no `:local search`).
-
-        ``:hub`` toggles the mode; ``:hub <name>`` does a one-shot search.
-        """
-        arg = (args or "").strip()
-        low = arg.lower()
-
-        if low in ("off", "stop", "exit"):
-            self._hub_mode = False
-            log.add_info("Model search OFF. Back to normal input.")
-            return
-        if low in ("on", "start"):
-            self._hub_mode = True
-        elif arg:
-            # One-shot search; do not change the mode.
-            self.run_worker(self._local_search(arg, log))
-            return
-        else:
-            self._hub_mode = not getattr(self, "_hub_mode", False)
-
-        if self._hub_mode:
-            t = Text()
-            t.append("\n  🔎 Model search ON\n", style=f"bold {THEME['cyan']}")
-            t.append(
-                "  Just type a model name to find it in the trusted catalog.\n",
-                style=THEME["muted"],
-            )
-            t.append(
-                "  Shows size, fit for your hardware, and the get-command.\n", style=THEME["muted"]
-            )
-            t.append("  Add ", style=THEME["muted"])
-            t.append("--hub", style=f"bold {THEME['cyan']}")
-            t.append(" on a line for the latest live from Hugging Face.\n", style=THEME["muted"])
-            t.append("  Turn off with ", style=THEME["muted"])
-            t.append(":hub off", style=f"bold {THEME['cyan']}")
-            t.append("\n", style="")
-            log.write(t)
-        else:
-            log.add_info("Model search OFF. Back to normal input.")
 
     def _chat_cmd(self, args: str, log: ConversationLog):
         """Toggle raw direct-to-model chat mode (no repo context, no tools)."""

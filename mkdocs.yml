@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "The open-source, terminal-first harness layer for building native coding-agent harnesses and connecting open-source or proprietary agents."
+site_description: "The Harness Hub where coding harnesses are discovered, built, inspected, run, evaluated, and optimized through one rich, browsable terminal experience."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -154,6 +154,7 @@ nav:
       - 📋 Product Capabilities: product-capabilities.md
 
   - 🔌 Connect:
+    - ⚓ Harness Hub: harness-hub.md
     - 🧭 All Connections: concepts/modes.md
     - ⚙️ Configure SuperQode:
       - 🧭 Configuration Guide: getting-started/configuration.md
@@ -296,6 +297,7 @@ nav:
       - 🔧 MCP: cli-reference/mcp-command.md
       - 🔌 Plugins: cli-reference/plugins-commands.md
       - ⚓ Harness: cli-reference/harness-commands.md
+      - 🧭 Hub: cli-reference/hub-commands.md
       - 💻 Local: cli-reference/local-commands.md
       - ⚡ Runtime: cli-reference/runtime-commands.md
       - 🏖️ Sandbox: cli-reference/sandbox-commands.md

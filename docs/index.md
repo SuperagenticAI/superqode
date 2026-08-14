@@ -13,7 +13,7 @@ hide:
 
 <p class="sq-kicker"><span class="sq-gradient-text">The Harness Layer</span> for Coding Agents</p>
 
-<p class="sq-tagline">Build your own harnesses, run SuperQode's native harnesses, or connect the agents you already use: open-source, proprietary, local, or hosted.</p>
+<p class="sq-tagline">The Harness Hub where coding harnesses are discovered, built, inspected, run, evaluated, and optimized through one rich, browsable terminal experience.</p>
 
 <p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
@@ -26,6 +26,7 @@ hide:
 </p>
 
 [Start Coding](getting-started/first-session.md){ .md-button .md-button--primary }
+[Explore the Harness Hub](harness-hub.md){ .md-button }
 [Choose an Agent, Model, or Harness](concepts/modes.md){ .md-button }
 [Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button }
 [Optimize Local Models](local-agentic-coding.md){ .md-button }
@@ -74,17 +75,21 @@ Ask for repository work as you would in another coding agent:
 Summarize this repository and identify the smallest safe improvement.
 ```
 
-Switch the complete harness without leaving the session:
+Open the Harness Hub to browse, inspect, and switch the complete harness
+without leaving the session:
 
 ```text
+:hub
 :harness
 :harness switch
 :harness switch qwen-code --fork
 ```
 
-The Harness Switcher includes SuperQode's native harnesses, project
-HarnessSpecs, vendor and ACP coding agents, model presets, installed and
-registry harnesses, and optional integrations such as Hugging Face Tau.
+The mouse- and keyboard-enabled Hub includes SuperQode's native harnesses,
+project HarnessSpecs, vendor and ACP coding agents, model presets, installed
+and registry harnesses, and optional integrations such as Hugging Face Tau.
+It uses focused details and a session Activity screen so important outcomes do
+not disappear below the transcript.
 
 For noninteractive execution and CI, see the headless examples below. Build a
 repository-owned HarnessSpec only when you want to make the working behavior

@@ -5,6 +5,12 @@ from __future__ import annotations
 from time import monotonic
 from typing import Literal
 
+from superqode.app.outcomes import (
+    Outcome,
+    OutcomeAction,
+    OutcomeSeverity,
+    OutcomeStore,
+)
 from superqode.app.widgets import ConversationLog
 
 
@@ -21,6 +27,96 @@ class FeedbackMixin:
         "error": 5.0,
     }
     _TRANSITION_DEDUPE_SECONDS = 3.0
+
+    def _outcome_store(self) -> OutcomeStore:
+        """Return the session activity store, creating it lazily."""
+        store = getattr(self, "_product_outcomes", None)
+        if store is None:
+            store = OutcomeStore()
+            self._product_outcomes = store
+        return store
+
+    def _present_outcome(
+        self,
+        outcome: Outcome,
+        *,
+        log: ConversationLog | None = None,
+        focus: bool = True,
+        receipt: bool = True,
+    ) -> Outcome:
+        """Present a structured result in focus and preserve it in Activity."""
+        self._outcome_store().add(outcome, read=focus)
+        if receipt:
+            if log is None:
+                try:
+                    log = self.query_one("#log", ConversationLog)
+                except Exception:
+                    log = None
+            if log is not None:
+                writer = {
+                    OutcomeSeverity.SUCCESS: "add_success",
+                    OutcomeSeverity.INFORMATION: "add_meta",
+                    OutcomeSeverity.WARNING: "add_warning",
+                    OutcomeSeverity.ERROR: "add_error",
+                }[outcome.severity]
+                getattr(log, writer)(outcome.receipt)
+
+        if focus:
+            try:
+                from superqode.widgets.outcome_screen import OutcomeScreen
+
+                self.push_screen(
+                    OutcomeScreen(outcome),
+                    callback=lambda selection: self._handle_outcome_selection(selection, log),
+                )
+                return outcome
+            except Exception:
+                # Mounted lightweight tests and non-Textual callers still get
+                # a notification and transcript receipt.
+                pass
+
+        try:
+            self.notify(
+                outcome.summary,
+                title=outcome.title,
+                severity=(
+                    "information"
+                    if outcome.severity == OutcomeSeverity.SUCCESS
+                    else outcome.severity.value
+                ),
+                timeout=self._TRANSITION_TIMEOUTS[outcome.severity.value],
+                markup=False,
+            )
+        except Exception:
+            pass
+        return outcome
+
+    def _handle_outcome_selection(self, selection, log: ConversationLog | None) -> None:
+        """Run a command selected from an outcome screen."""
+        command = str(getattr(selection, "command", "") or "")
+        if not command:
+            return
+        if log is None:
+            try:
+                log = self.query_one("#log", ConversationLog)
+            except Exception:
+                return
+        self._handle_command(command, log)
+
+    def _activity_cmd(self, log: ConversationLog) -> None:
+        """Open focused session activity instead of searching the transcript."""
+        try:
+            from superqode.widgets.outcome_screen import ActivityScreen
+
+            outcomes = self._outcome_store().list()
+            self.push_screen(
+                ActivityScreen(outcomes),
+                callback=lambda selection: self._handle_outcome_selection(selection, log),
+            )
+            for outcome in outcomes:
+                self._outcome_store().mark_read(outcome.id)
+        except Exception as exc:
+            log.add_error(f"Could not open Activity: {exc}")
 
     def _announce_model_ready(
         self,
@@ -44,7 +140,7 @@ class FeedbackMixin:
             detail=" · ".join(detail_parts),
             severity="success",
             log=log,
-            popup=False,
+            popup=True,
             dedupe_key=f"model:{source}:{model_id}",
         )
 
@@ -64,7 +160,7 @@ class FeedbackMixin:
             severity="success",
             log=log,
             persist=False,
-            popup=False,
+            popup=True,
             dedupe_key=f"local-ready:{provider}:{model}",
         )
 
@@ -112,7 +208,10 @@ class FeedbackMixin:
                 item_key: timestamp for item_key, timestamp in recent.items() if timestamp >= cutoff
             }
 
-        show_popup = severity in {"warning", "error"} if popup is None else popup
+        # A completed state change must be visible without scrolling.  Routine
+        # information may stay quiet, but success, warning and error all get a
+        # short popup in addition to the persistent status/transcript state.
+        show_popup = severity != "information" if popup is None else popup
         if show_popup:
             body_parts = [primary]
             if detail:
@@ -152,6 +251,25 @@ class FeedbackMixin:
                 getattr(log, writer_name)(receipt)
                 if guidance:
                     log.add_meta(guidance, icon="→")
+
+            try:
+                self._outcome_store().add(
+                    Outcome(
+                        title=title,
+                        summary=primary,
+                        details=tuple(part for part in (detail, guidance) if part),
+                        severity=OutcomeSeverity(severity),
+                        source="state change",
+                        actions=(
+                            (OutcomeAction("recover", "Run recovery", guidance),)
+                            if guidance.startswith(":")
+                            else ()
+                        ),
+                    ),
+                    read=show_popup,
+                )
+            except Exception:
+                pass
 
         if restore_focus:
             try:

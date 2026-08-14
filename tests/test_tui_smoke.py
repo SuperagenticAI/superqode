@@ -449,6 +449,7 @@ def test_an_unconnected_workspace_is_still_told_to_connect():
     bar = HintsBar()
     bar.connected = False
     assert ":connect" in bar.render().plain
+    assert ":hub" in bar.render().plain
 
 
 def test_welcome_compacts_for_narrow_terminals():
@@ -541,6 +542,7 @@ def test_hints_bar_is_navigation_only():
     text = render_plain(HintsBar().render())
 
     assert ":connect" in text
+    assert ":hub" in text
     assert ":home" in text
     assert ":help" in text
     for configuration in (":mode", ":harness", ":work", ":memory", ":init"):
@@ -565,6 +567,7 @@ def test_every_hint_responds_to_a_click():
     assert ":exit" not in rendered.plain
     assert "🏠 :home" in rendered.plain
     assert "🔌 :connect" in rendered.plain
+    assert "⚓ :hub" in rendered.plain
     assert "? :help" in rendered.plain
 
 
@@ -1281,7 +1284,9 @@ def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):
     assert "opencode/nemotron-3-ultra-free" in rendered
     assert "rt acp" in rendered
     assert "Model: not connected" not in rendered
-    assert notifications == []
+    assert len(notifications) == 1
+    assert notifications[0][1]["title"] == "Model ready"
+    assert "Nemotron 3 Ultra Free" in notifications[0][0]
     assert any("Model ready: Nemotron 3 Ultra Free" in str(item) for item in log.items)
 
 
@@ -1982,8 +1987,8 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
 
 def test_harness_switch_vendor_alias_dispatches_connection_profile(monkeypatch):
     monkeypatch.setattr(
-        "superqode.runtime.list_runtimes",
-        lambda: [SimpleNamespace(name="codex-sdk", installed=True)],
+        "superqode.runtime.optional_package_installed",
+        lambda name: name == "codex-sdk",
     )
     app = make_app()
     log = FakeLog()
@@ -2095,11 +2100,8 @@ def test_harness_picker_browse_all_opens_acp_registry():
 
 def test_harness_picker_dispatches_vendor_agent_even_when_setup_is_needed(monkeypatch):
     monkeypatch.setattr(
-        "superqode.runtime.list_runtimes",
-        lambda: [
-            SimpleNamespace(name=name, installed=True)
-            for name in ("codex-sdk", "claude-agent-sdk", "copilot-sdk")
-        ],
+        "superqode.runtime.optional_package_installed",
+        lambda name: name in {"codex-sdk", "claude-agent-sdk", "copilot-sdk"},
     )
     app = make_app()
     log = FakeLog()

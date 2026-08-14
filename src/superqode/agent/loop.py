@@ -188,6 +188,69 @@ def _message_to_tuple(m: "AgentMessage") -> Tuple:
     return (m.role, content, tool_calls_tuple, m.tool_call_id, m.name, m.reasoning_content)
 
 
+class _StreamedToolCalls:
+    """Merge streamed tool-call deltas into whole calls.
+
+    OpenAI-style streams send a tool call's ``name`` and ``id`` in its first
+    delta only; every delta after that carries an ``index`` and one slice of
+    the arguments JSON. Providers differ in how finely they slice: Ollama and
+    Gemini emit a finished call in a single delta, while llama.cpp splits one
+    call across seven. Grouping by ``index`` handles both, since a whole call
+    simply opens a slot nothing else appends to.
+
+    A delta with neither ``index`` nor ``id`` is passed through untouched, so
+    a provider that streams some other way keeps the previous behaviour rather
+    than having unrelated calls merged together.
+    """
+
+    def __init__(self) -> None:
+        self._calls: List[Any] = []
+        self._slots: Dict[Any, Dict[str, Any]] = {}
+
+    def add(self, deltas: Any) -> None:
+        """Fold one chunk's tool calls into the accumulated set."""
+        for tc in deltas or []:
+            if not isinstance(tc, dict):
+                self._calls.append(tc)
+                continue
+            # index may legitimately be 0, so test for absence, not falsiness.
+            key = tc.get("index")
+            if key is None:
+                key = tc.get("id")
+            if key is None:
+                self._calls.append(dict(tc))
+                continue
+            slot = self._slots.get(key)
+            if slot is None:
+                slot = dict(tc)
+                slot["function"] = dict(tc.get("function") or {})
+                self._slots[key] = slot
+                self._calls.append(slot)
+                continue
+            self._merge(slot, tc)
+
+    @staticmethod
+    def _merge(slot: Dict[str, Any], tc: Dict[str, Any]) -> None:
+        """Append a continuation delta onto the call it belongs to."""
+        function = slot.setdefault("function", {})
+        incoming = tc.get("function") or {}
+        if incoming.get("name") and not function.get("name"):
+            function["name"] = incoming["name"]
+        fragment = incoming.get("arguments")
+        if fragment:
+            function["arguments"] = (function.get("arguments") or "") + fragment
+        if tc.get("id") and not slot.get("id"):
+            slot["id"] = tc["id"]
+
+    def finalize(self) -> List[Any]:
+        """Return the completed calls, with empty arguments as valid JSON."""
+        for slot in self._slots.values():
+            function = slot.get("function")
+            if isinstance(function, dict) and not function.get("arguments"):
+                function["arguments"] = "{}"
+        return self._calls
+
+
 def _code_intent_keyword_re() -> re.Pattern[str]:
     """Word-boundary code intent (``coding`` must not match ``code``)."""
     return re.compile(
@@ -2775,6 +2838,7 @@ class AgentLoop:
             # Stream response
             full_content = ""
             tool_calls = []
+            streamed_tool_calls = _StreamedToolCalls()
             had_content = False
             stream_finish_reason: Optional[str] = None
             stream_usage_chunk = None
@@ -2834,7 +2898,7 @@ class AgentLoop:
                         yield chunk.content
 
                     if chunk.tool_calls:
-                        tool_calls.extend(chunk.tool_calls)
+                        streamed_tool_calls.add(chunk.tool_calls)
 
                     if chunk.finish_reason:
                         stream_finish_reason = chunk.finish_reason
@@ -2844,6 +2908,12 @@ class AgentLoop:
                     # provider request rather than once per emitted text chunk.
                     if chunk.usage is not None or chunk.cost is not None:
                         stream_usage_chunk = chunk
+
+                # Deltas only become whole tool calls once the stream ends.
+                # A stream that raises leaves them here unread, so the
+                # non-streaming retry below starts from complete calls rather
+                # than extending half-merged fragments.
+                tool_calls.extend(streamed_tool_calls.finalize())
 
                 if stream_usage_chunk is not None:
                     record_usage(stream_usage_chunk)

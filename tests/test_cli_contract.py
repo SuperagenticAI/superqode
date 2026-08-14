@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 263
+EXPECTED_COMMAND_COUNT = 266
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -39,7 +39,15 @@ EXPECTED_COMMAND_COUNT = 263
 # `--connect` choice list after `harness-core`. No Click command was added.
 # Rebaselined for the DeepSeek Harness preset, which adds `deepseek-harness` to
 # the `harness init --template` choice list. No Click command was added.
-EXPECTED_HELP_TREE_SHA256 = "6891f2e2af430a3d62a9830b46a3740f02345385cd22d5e5b44fba4862439174"
+# Rebaselined for the public Harness Hub: `hub`, `hub list`, and `hub show`
+# expose the same versioned catalog used by the TUI and publication builds.
+# Rebaselined for `hub --readiness`, whose choices now cover every published
+# state (`supported` and `not-supported` were unreachable, `discover` matched
+# nothing). Only the choice list changed, so no Click command was added.
+# Rebaselined again after the Hub narrowed to harnesses only: model-access and
+# inference routes left the catalog, so `supported` became unreachable and was
+# dropped from the choice list. Still no Click command added.
+EXPECTED_HELP_TREE_SHA256 = "89f5810bcada30703c1e8decc3a716b588148471800b0ea160ce4dd14dce4065"
 
 
 def _render_help_tree() -> tuple[int, str]:

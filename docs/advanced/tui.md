@@ -14,6 +14,8 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
 - **Agent Switcher**: Switch between agents
+- **Harness Hub**: Browse, inspect, use, and build harnesses with mouse or keyboard
+- **Focused Results**: Important outcomes open above the transcript and remain in Activity
 - **Command Palette**: Quick actions
 - **Status Bar**: Session status at a glance
 - **Optional Vim Navigation**: Modal keyboard control for the transcript, panes, searches, and pickers
@@ -80,11 +82,15 @@ Summarize what changed.
 
 ## State Change Notifications
 
-Consequential selections use three coordinated surfaces:
+Consequential selections use four coordinated surfaces:
 
 1. A temporary notification identifies the completed action and active value.
 2. The top status bar retains the active runtime, agent, model, harness, and mode.
-3. The conversation transcript stores a compact receipt for later review.
+3. Focused result screens show details and recovery actions above the transcript.
+4. `:activity` keeps session outcomes and their primary actions available for review.
+
+The conversation transcript still stores a compact durable receipt, but it is
+not the only place a user must look for an important result.
 
 This applies to provider connections, ACP agents, model selection, local model readiness,
 harness changes, session resume, and interaction mode changes. Connection errors remain
@@ -136,8 +142,12 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:local airplane prepare` - Create a strict no-network local harness
 - `:local airplane smoke` - Verify offline harness and local search readiness
 - `:local smoke` - Run non-destructive local coding readiness checks
-- `:local search <name>` - Find a model + how to get it on every engine (size + fit)
-- `:hub`: Enter model-search mode and type a model name (off by default)
+- `:local search <name>` - Find a model + how to get it on every engine (`:hub model <name>` is a migration alias)
+- `:hub` - Open the full-screen Harness Hub
+- `:hub ready` - Open the Hub filtered to harnesses ready on this machine
+- `:hub setup` - Open the Hub filtered to entries that need setup
+- `:hub custom` - Open the Hub filtered to repository-owned harnesses
+- `:activity` - Revisit important results, state changes, and their next actions
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)
@@ -213,11 +223,11 @@ show status, or display its local help where supported.
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
-| Harness and delivery | `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
-| Sessions and history | `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
+| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
+| Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a` |
-| Local systems and memory | `:local`, `:hub`, `:memory` |
+| Local systems and memory | `:local`, `:memory` |
 | Configuration and services | `:init`, `:config`, `:serve`, `:daemon`, `:export`, `:theme` |
 | Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |
 

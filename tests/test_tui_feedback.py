@@ -87,7 +87,7 @@ def test_transition_feedback_has_toast_receipt_guidance_and_deduplication() -> N
 
 
 @pytest.mark.asyncio
-async def test_model_transition_uses_transcript_without_popup(monkeypatch) -> None:
+async def test_model_transition_is_visible_without_scrolling(monkeypatch) -> None:
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     async with app.run_test(size=(58, 24), notifications=True) as pilot:
@@ -101,7 +101,7 @@ async def test_model_transition_uses_transcript_without_popup(monkeypatch) -> No
         )
         await pilot.pause(0.1)
 
-        assert len(app._notifications) == 0
+        assert len(app._notifications) == 1
         assert "Model ready" in "\n".join(line.text for line in log.lines)
 
 

@@ -77,6 +77,18 @@ npm install -g glm-acp-agent
 | Use GLM models inside the SuperQode harness | `:connect zai` |
 | Use the community GLM agent loop | `:connect glm-cli` |
 
+## ZCode
+
+[ZCode](https://zcode.z.ai/en) is Z.AI's official desktop harness for GLM-5.3.
+It is discoverable in the SuperQode Harness Hub under **Coming soon**, but it is
+not the same integration as either route above. ZCode currently owns its own
+desktop agent loop, tools, permissions, browser automation, review flow, and
+task history.
+
+SuperQode does not claim direct ZCode support until Z.AI publishes a supported
+ACP server, headless CLI, or external agent SDK. Use `:hub coming` to inspect
+the tracked entry and its official documentation.
+
 ## GLM-5.2 harness
 
 The `glm52-coding` template uses the first-party Z.AI route, GLM-family model

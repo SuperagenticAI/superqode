@@ -172,7 +172,11 @@ from superqode.app.mixins.explore import ExploreMixin
 from superqode.app.mixins.tour import TourMixin
 
 
+from superqode.app.mixins.harness_hub import HarnessHubMixin
+
+
 class SuperQodeApp(
+    HarnessHubMixin,
     ExploreMixin,
     BuildHarnessMixin,
     TourMixin,
@@ -352,7 +356,6 @@ class SuperQodeApp(
     _plan_mode_enabled: bool = False  # Keep native BYOK/local prompts in plan-only mode
     _chat_mode: bool = False  # Raw direct-to-model chat: no repo context, no tools, speed metrics
     _chat_history: list = None  # Conversation buffer used only while chat mode is on
-    _hub_mode: bool = False  # Model-search mode: typed lines search the model catalog
     _force_plan_once: bool = False  # Run the next native prompt as plan-only
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
     _pending_plan_request: str = ""  # Last planned request available for approval/execution

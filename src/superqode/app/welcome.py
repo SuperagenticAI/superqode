@@ -168,6 +168,8 @@ def render_welcome(
         items.append(next_text)
 
         footer = Text()
+        footer.append(":hub", style=f"bold {THEME['cyan']}")
+        footer.append(" harnesses  •  ", style=THEME["muted"])
         footer.append(":explore", style=f"bold {THEME['cyan']}")
         footer.append(" capabilities  •  ", style=THEME["muted"])
         footer.append(":tour", style=f"bold {THEME['cyan']}")

@@ -35,6 +35,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `doctor` | [Doctor Command](doctor-command.md) |
 | `factory` | [Factory Commands](factory-commands.md) |
 | `harness` | [Harness Commands](harness-commands.md) |
+| `hub` | [Hub Commands](hub-commands.md) |
 | `init` | [Init Commands](init-commands.md) |
 | `local` | [Local Commands](local-commands.md) |
 | `mcp` | [MCP Command](mcp-command.md) |

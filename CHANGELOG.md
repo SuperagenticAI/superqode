@@ -7,7 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.94] - 2026-08-14
+## [0.2.95] - 2026-08-15
+
+### Added
+
+- The Harness Hub, a full-screen terminal browser for every harness SuperQode
+  can run, opened with `:hub` or the `⚓ Hub` button in the top toolbar. It
+  supports search, filters (Ready, Needs setup, Your harnesses, Coming soon),
+  and a details pane covering runtime, provenance, continuity, declared tools,
+  policies, installation and authentication steps, and the TUI and shell
+  commands for each entry. Clicking a row selects and previews it; activating a
+  harness requires the explicit Use button or Enter on the highlighted row, so
+  browsing with a mouse never switches harness by accident.
+- Every HarnessSpec entry also carries the commands that measure and improve
+  it, shown as Evaluate and Optimize blocks beside the commands that run it.
+  Vendor and ACP entries show neither, because the connected agent owns its own
+  loop.
+- `sq hub`, `sq hub list`, and `sq hub show` expose the same inventory to
+  scripts and documentation builds. `--json` emits a versioned index and
+  `--public` produces a publication-safe snapshot whose readiness is structural
+  rather than measured on the exporting machine.
+- `:activity` and focused result screens, so a consequential outcome no longer
+  depends on the bottom of the transcript. Results remain revisitable for the
+  session with their primary recovery or next-step action.
+- Cursor, Amp, Muse Code, Prime Agent, Devin, Factory Droid, Kiro, and the GLM
+  Coding Plan appear as vendor entries in the harness picker.
+- ZCode and jcode are indexed under Ecosystem watch. Neither is runnable from
+  SuperQode, and each entry states why: ZCode documents no ACP server, headless
+  CLI, or external SDK, while jcode documents a headless `jcode run`, a
+  TypeScript SDK, and a versioned harness API, so a route is buildable once one
+  is implemented and tested.
+
+### Fixed
+
+- Streamed tool calls are merged back into whole calls. Providers that send a
+  tool call's name and id in the first delta and then dribble the arguments
+  JSON across later deltas (llama.cpp) produced one usable call plus a run of
+  nameless ones, which executed, failed, and returned a null name that the
+  server rejected outright. Deltas are now grouped by `index`, falling back to
+  `id` and then to the previous append behaviour, so providers that send a
+  finished call per chunk (Ollama, Gemini) are unaffected and parallel tool
+  calls stay separate.
+- Tool-call normalization preserves the streamed `index` and omits null `name`
+  and `id` values instead of writing them into the message sent back to the
+  provider.
+- Opening the harness picker or the Hub no longer blocks the terminal for
+  seconds. Checking whether one optional Python package was installed went
+  through a probe of every runtime, which shelled out to each vendor CLI.
+
+### Changed
+
+- `:hub` opens the Harness Hub. Model search has the explicit name
+  `:local search <model>`, with `:hub model <model>` kept as a migration alias.
 
 ### Added
 

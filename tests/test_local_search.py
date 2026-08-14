@@ -207,8 +207,10 @@ def test_search_cli_hub_unavailable_is_graceful(monkeypatch):
     assert result.exit_code == 0  # never crashes on a hub failure
 
 
-def test_hub_mode_toggle_and_one_shot():
+def test_hub_opens_harness_browser_and_keeps_explicit_model_search(monkeypatch):
     from superqode.app_main import SuperQodeApp
+    from superqode.app.harness_picker import HarnessPickerItem
+    from superqode.app.mixins import harness_hub
 
     class _L:
         def add_info(self, t):
@@ -221,37 +223,45 @@ def test_hub_mode_toggle_and_one_shot():
             pass
 
     app = SuperQodeApp.__new__(SuperQodeApp)
-    app._hub_mode = False
     app._started = []
+    app._record_milestone = lambda *_args: None
+    app._harness_picker_item_is_current = lambda _item: False
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
     app.run_worker = lambda coro: (app._started.append(coro), coro.close())
+    monkeypatch.setattr(
+        harness_hub,
+        "harness_picker_items",
+        lambda *_args, **_kwargs: [
+            HarnessPickerItem(
+                id="core",
+                display_name="Core",
+                description="Default harness",
+                runtime="builtin",
+                source="built-in",
+                group="SuperQode harnesses",
+                available=True,
+                issue="",
+                continuity="same-session",
+            )
+        ],
+    )
 
     SuperQodeApp._hub_cmd(app, "", _L())
-    assert app._hub_mode is True  # :hub toggles on
-    SuperQodeApp._hub_cmd(app, "off", _L())
-    assert app._hub_mode is False  # :hub off
-    SuperQodeApp._hub_cmd(app, "qwen3-coder", _L())
-    assert app._hub_mode is False  # one-shot does not change mode
-    assert len(app._started) == 1  # ...but schedules a search
+    assert pushed and pushed[0][0].__class__.__name__ == "HarnessHubScreen"
+    SuperQodeApp._hub_cmd(app, "model qwen3-coder", _L())
+    assert len(app._started) == 1
 
 
-def test_hub_mode_routes_typed_text_to_search(monkeypatch):
+def test_model_search_mode_is_fully_removed():
+    """:hub is a browser now; no leftover state may intercept typed prompts."""
+    import inspect
+
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
     from superqode.app_main import SuperQodeApp
 
-    monkeypatch.setattr(SuperQodeApp, "is_busy", False, raising=False)
-
-    class _L:
-        def add_user(self, t):
-            pass
-
-    app = SuperQodeApp.__new__(SuperQodeApp)
-    app._hub_mode = True
-    app._started = []
-    app.run_worker = lambda coro: (app._started.append(coro), coro.close())
-    app._handle_agent_question_input = lambda t, log: False
-    app._enqueue_message = lambda t: None
-
-    SuperQodeApp._handle_message(app, "qwen3-coder", _L())
-    assert len(app._started) == 1  # typed name went to model search, not the agent
+    assert not hasattr(SuperQodeApp, "_hub_mode")
+    assert "_hub_mode" not in inspect.getsource(SlashCommandMixin._handle_message)
 
 
 def test_tui_local_search_renders():

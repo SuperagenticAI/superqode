@@ -1147,6 +1147,11 @@ from superqode.commands.harness import harness
 cli_main.add_command(harness, name="harness")
 
 
+from superqode.commands.hub import hub
+
+cli_main.add_command(hub, name="hub")
+
+
 from superqode.commands.plugins import plugins
 
 cli_main.add_command(plugins, name="plugins")

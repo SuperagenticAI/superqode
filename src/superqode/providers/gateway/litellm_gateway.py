@@ -1048,11 +1048,21 @@ class LiteLLMGateway(GatewayInterface):
                     # Object format (e.g., ChatCompletionDeltaToolCall) - convert to dict
                     tc_dict: Dict[str, Any] = {"type": getattr(tc, "type", None) or "function"}
 
-                    # Extract id if present
-                    if hasattr(tc, "id"):
-                        tc_dict["id"] = getattr(tc, "id", None)
-                    elif hasattr(tc, "tool_call_id"):
-                        tc_dict["id"] = getattr(tc, "tool_call_id", None)
+                    # Extract id if present. Continuation deltas carry the
+                    # attribute set to None; omit the key rather than sending
+                    # a null id back to the provider on the next turn.
+                    call_id = getattr(tc, "id", None)
+                    if call_id is None:
+                        call_id = getattr(tc, "tool_call_id", None)
+                    if call_id is not None:
+                        tc_dict["id"] = call_id
+
+                    # Streamed deltas carry the position of the call they belong
+                    # to. It is the only key tying an arguments fragment back to
+                    # the call that opened it, so it has to survive normalization.
+                    index = getattr(tc, "index", None)
+                    if index is not None:
+                        tc_dict["index"] = index
 
                     # Extract function info
                     if hasattr(tc, "function"):
@@ -1060,14 +1070,22 @@ class LiteLLMGateway(GatewayInterface):
                         if isinstance(func, dict):
                             tc_dict["function"] = func
                         else:
-                            # Function object - extract fields
+                            # Function object - extract fields. A streamed
+                            # continuation delta *has* these attributes and
+                            # holds None in them, so hasattr() passes and the
+                            # getattr default never fires. Omit the key instead
+                            # of writing null: strict parsers (llama.cpp) reject
+                            # a null name, and consumers already default a
+                            # missing key to "{}".
                             func_dict = {}
-                            if hasattr(func, "name"):
-                                func_dict["name"] = getattr(func, "name", "")
-                            if hasattr(func, "arguments"):
-                                func_dict["arguments"] = getattr(func, "arguments", "{}")
-                            elif hasattr(func, "argument"):
-                                func_dict["arguments"] = getattr(func, "argument", "{}")
+                            name = getattr(func, "name", None)
+                            if name is not None:
+                                func_dict["name"] = name
+                            arguments = getattr(func, "arguments", None)
+                            if arguments is None:
+                                arguments = getattr(func, "argument", None)
+                            if arguments is not None:
+                                func_dict["arguments"] = arguments
                             tc_dict["function"] = func_dict
                     elif hasattr(tc, "name") or hasattr(tc, "function_name"):
                         # Tool call might have name directly
