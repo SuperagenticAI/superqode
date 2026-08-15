@@ -1,18 +1,21 @@
 # SuperQode and Omnigent
 
-If you already understand Omnigent, this page maps familiar concepts to
-SuperQode, explains where its terminal workflow differs, and shows how the two
-configuration formats can work together.
+Omnigent is Databricks' open-source meta-harness, released in June 2026 under
+Apache 2.0 and offered as a managed service on Databricks. If you already know
+it, this page maps familiar concepts to SuperQode, states plainly where each
+project is stronger, and shows how the two can work together.
 
-This page is an orientation guide, not a product ranking or feature scorecard.
-Both projects make multiple coding-agent harnesses easier to use, but they
-organize the work around different primary experiences.
+Both orchestrate coding-agent harnesses, and they answer different questions.
+**Omnigent governs what an agent may do right now.** Its runner wraps any agent
+in a sandboxed session behind a uniform API, and its server applies policy and
+shares the session across devices. **SuperQode measures whether a harness change
+was an improvement.** It scores harnesses against each other on fixed tasks,
+optimizes them, and gates a candidate on held-out evidence before it becomes the
+harness a team relies on.
 
-In one sentence: both projects orchestrate coding-agent harnesses. Omnigent
-places the persistent collaborative session at the center of its experience,
-while SuperQode provides a terminal-first harness layer across native,
-open-source, and proprietary coding agents, including repository delivery,
-evaluation, governance, and guarded optimization around that session.
+A team can reasonably use both. Adopting Omnigent for runtime control does not
+answer whether last quarter's harness changes helped, and that is the question
+SuperQode exists to answer.
 
 ## The shared idea
 
@@ -26,6 +29,44 @@ Omnigent and SuperQode start from several similar beliefs:
 - custom and local agents should fit beside established coding agents
 
 An Omnigent user will therefore recognize many SuperQode concepts: declarative agent configuration, harness and model selection, persistent sessions, child workers, tools, policies, sandboxes, and terminal execution.
+
+## Feature comparison
+
+Read as two clusters. Omnigent leads on breadth of control at run time.
+SuperQode leads on evidence gathered over time.
+
+| Capability | Omnigent | SuperQode |
+| --- | --- | --- |
+| Harness switching | Yes, one line of YAML | Yes, `:harness switch` |
+| Conformance and drift detection | Harness Test Bench, eleven probes across three transports | `harness drift`, seven declarations checked against what resolves |
+| Outcome benchmarking | Stated non-goal | HarnessBench: fixed model, several harnesses, checksummed evidence |
+| Optimization loop | Not provided | GEPA Omni, meta-harness, skill optimization |
+| Evaluation-gated promotion | Policies apply on load | `harness promote` stage, canary, activate, rollback |
+| Regression gate | Not provided | Seesaw gate fails a candidate that breaks solved work |
+| Policy breadth | Six categories including PII scanning, repository access, workspace access, risk scoring | Sandbox, approvals, shell and network stance, checks |
+| Cost governance | Per-user budgets, soft thresholds, downgrade behaviour | Thinner |
+| Per-agent integration depth | Native bridges with cost tracking, permissions, resume | ACP and CLI routes |
+| Real-time collaboration | Shared sessions, co-driving, forking | Not offered |
+| Managed hosting | Databricks service in beta | Self-hosted |
+
+### The benchmark distinction
+
+Both projects ship something called a bench, and they measure different things.
+
+Omnigent's Harness Test Bench validates **conformance**: whether a harness does
+what it declares, across streaming, tool calling, policy denial, model override
+and interrupt. It reports drift when observed behaviour disagrees with a
+declaration. Its documented non-goals are explicit that it is not a performance
+benchmark.
+
+SuperQode's HarnessBench measures **outcome**: with the same tasks and the same
+model, what changes when only the harness changes. The result is a publishable
+package containing the manifest, every raw repetition, an aggregate scorecard
+and checksums.
+
+Conformance asks whether a harness is honest. Outcome asks whether it is good.
+A team that wants both needs both projects, or it needs SuperQode, which now
+covers conformance through `harness drift` as well.
 
 ## Where the workflows differ
 
@@ -263,10 +304,11 @@ unified harness workflow.
 
 ## A concise public description
 
-> SuperQode shares Omnigent's multi-harness foundation and provides a distinct
-> terminal-first unified harness workflow. Sessions can continue across
-> harnesses, branch into independent approaches, and feed repository-owned
-> WorkOrders, evaluation, governance, and guarded optimization.
+> Omnigent governs what a coding agent may do right now. SuperQode measures
+> whether a change to the harness was an improvement, and gates the change on
+> that evidence. Sessions continue across harnesses, branch into independent
+> approaches, and feed repository-owned WorkOrders, evaluation, governance and
+> guarded optimization.
 
 ## Official Omnigent references
 
@@ -276,3 +318,4 @@ unified harness workflow.
 - [Mobile](https://omnigent.ai/docs/interact/mobile)
 - [Desktop App](https://omnigent.ai/docs/interact/desktop)
 - [Omnigent on Databricks](https://docs.databricks.com/aws/en/omnigent/)
+- [Omnigent source](https://github.com/omnigent-ai/omnigent)

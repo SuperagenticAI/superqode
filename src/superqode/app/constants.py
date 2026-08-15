@@ -794,6 +794,7 @@ COMMANDS = [
     ":harness status",
     ":harness inspect",
     ":harness doctor",
+    ":harness drift",
     ":harness graph",
     ":harness replay",
     ":harness fork",

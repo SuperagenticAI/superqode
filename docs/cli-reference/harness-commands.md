@@ -389,6 +389,32 @@ superqode harness doctor --spec harness.yaml
 | `--store PATH` | Override harness event store directory |
 | `--json` | Emit JSON |
 
+### `harness drift`
+
+Check whether a harness does what its spec declares. `doctor` asks whether a
+harness can run; `drift` asks whether the harness that resolved is the one the
+spec described.
+
+Each declaration is compared against what actually resolves: the runtime, the
+sandbox, every declared tool, the shell and write stances against the tools that
+need them, the event store behind declared observability, and whether a checks
+block that promises to fail a run has any step to fail on.
+
+Exits non-zero when a declaration does not hold, so it can gate a pipeline.
+
+```bash
+superqode harness drift --spec harness.yaml
+superqode harness drift --spec harness.yaml --json
+```
+
+| Option | Description |
+| --- | --- |
+| `--spec PATH` | Spec file (required) |
+| `--json` | Emit JSON |
+
+Tools published by an MCP server are registered when that server connects, so
+they are reported as supplied at run time rather than counted as drift.
+
 ### `harness test`
 
 Run a quick readiness probe. Without `--live`, this validates spec loading, doctor checks, and kernel initialization. With `--live`, it also sends a small prompt to the configured model and returns a compact failure digest.

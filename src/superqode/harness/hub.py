@@ -645,27 +645,35 @@ def _supplemental_records() -> list[HubRecord]:
             "https://jcode.sh",
             ("jcode.sh", "Rust coding agent", "RAM efficient harness"),
         ),
+        (
+            "ecosystem:aider",
+            "Aider",
+            "Long-running Apache-2.0 terminal harness for AI pair programming, built around Git as the unit of change.",
+            "https://github.com/Aider-AI/aider",
+            ("aider", "AI pair programming", "git-native coding agent"),
+        ),
+        (
+            "ecosystem:crush",
+            "Crush",
+            "Charm's terminal coding harness with multi-provider model switching, LSP context, MCP servers and reusable agent skills.",
+            "https://github.com/charmbracelet/crush",
+            ("charm crush", "glamourous agentic coding"),
+        ),
+        (
+            "ecosystem:plandex",
+            "Plandex",
+            "MIT-licensed terminal harness aimed at large multi-file tasks, with a durable plan the agent works through.",
+            "https://github.com/plandex-ai/plandex",
+            ("plandex", "large project coding agent"),
+        ),
+        (
+            "ecosystem:roo-code",
+            "Roo Code",
+            "Apache-2.0 editor-based harness offering a team of specialised agent modes inside the IDE.",
+            "https://github.com/RooCodeInc/Roo-Code",
+            ("roo code", "roocode", "agent modes"),
+        ),
     )
-    local_install = {
-        "inference:ollama": "brew install ollama  # or use ollama.com/download",
-        "inference:lmstudio": "Install LM Studio, load a model, then start its local server",
-        "inference:mlx": "uv pip install mlx-lm",
-        "inference:vllm": "uv pip install vllm",
-        "inference:sglang": 'uv pip install "sglang[all]"',
-        "inference:tgi": "uv pip install text-generation",
-        "inference:llama.cpp": "brew install llama.cpp  # or build ggml-org/llama.cpp",
-        "inference:ds4": "superqode local doctor",
-    }
-    local_start = {
-        "inference:ollama": "ollama serve",
-        "inference:lmstudio": "lms server start",
-        "inference:mlx": "superqode providers mlx server",
-        "inference:vllm": "vllm serve <model>",
-        "inference:sglang": "python -m sglang.launch_server --model-path <model>",
-        "inference:tgi": "text-generation-launcher --model-id <model>",
-        "inference:llama.cpp": "llama-server -hf <model-repository>",
-        "inference:ds4": "superqode local serve ds4 --model <model>",
-    }
 
     records: list[HubRecord] = []
     records.extend(

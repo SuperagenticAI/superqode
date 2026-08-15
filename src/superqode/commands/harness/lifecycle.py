@@ -666,6 +666,30 @@ def harness_diff(left, right, json_output):
         click.echo(f"{change['path']}: {change.get('left')!r} -> {change.get('right')!r}")
 
 
+@harness.command("drift")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_drift(spec_path, json_output):
+    """Check whether a harness does what its spec declares.
+
+    ``doctor`` asks whether a harness can run. This asks whether the resolved
+    harness matches its own promises, so a spec claiming a sandbox that is not
+    installed, or a tool that silently gets dropped, fails here instead of in
+    production. Exits non-zero on drift so it can gate a pipeline.
+    """
+    from superqode.harness import load_harness_spec
+    from superqode.harness.drift import DRIFT_DRIFT, detect_drift, render_drift
+
+    spec = load_harness_spec(spec_path)
+    report = detect_drift(spec)
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(render_drift(report))
+    if report.status == DRIFT_DRIFT:
+        raise click.exceptions.Exit(1)
+
+
 @harness.command("doctor")
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")

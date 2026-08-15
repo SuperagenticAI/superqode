@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.96] - 2026-08-15
+
+### Added
+
+- `superqode harness drift` checks whether a harness does what its spec
+  declares. `doctor` answers whether a harness can run; drift answers whether
+  the harness that resolved is the one the spec described. Seven declarations
+  are compared against what actually resolves: the runtime backend, the sandbox
+  provider, every declared tool, the shell and write stances against the tools
+  that need them, the event store behind declared observability, and whether a
+  checks block promising to fail a run has any step to fail on. Exits non-zero
+  on drift so it can gate a pipeline, with `--json` for automation and
+  `:harness drift` in the terminal.
+- Tools published by an MCP server are reported as supplied at run time rather
+  than counted as drift, because a static check cannot see a server that has
+  not connected yet.
+- Aider, Crush, Plandex, and Roo Code are indexed in the Harness Hub under
+  Ecosystem watch, taking the public catalog to 94 entries.
+
+### Fixed
+
+- A HarnessSpec declaring a tool that cannot be resolved was silently losing it.
+  `ToolRegistry.filtered` keeps only the names that exist and drops the rest
+  without complaint, so a typo removed a tool with no warning anywhere. Drift
+  now reports it.
+
+### Changed
+
+- The Omnigent comparison page states where each project is stronger instead of
+  declining to compare them. It covers the distinction between conformance
+  benchmarking, which asks whether a harness is honest, and outcome
+  benchmarking, which asks whether it is good.
+
 ## [0.2.95] - 2026-08-15
 
 ### Added

@@ -346,6 +346,10 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "DriftCheck",
+    "DriftReport",
+    "detect_drift",
+    "render_drift",
     # Agent harness specs
     "AgentSpec",
     "ChecksSpec",

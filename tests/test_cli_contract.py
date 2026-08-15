@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 266
+EXPECTED_COMMAND_COUNT = 267
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -47,7 +47,9 @@ EXPECTED_COMMAND_COUNT = 266
 # Rebaselined again after the Hub narrowed to harnesses only: model-access and
 # inference routes left the catalog, so `supported` became unreachable and was
 # dropped from the choice list. Still no Click command added.
-EXPECTED_HELP_TREE_SHA256 = "89f5810bcada30703c1e8decc3a716b588148471800b0ea160ce4dd14dce4065"
+# Rebaselined for `harness drift`, which compares a spec's declarations against
+# what actually resolves. One Click command added, so the count moves to 267.
+EXPECTED_HELP_TREE_SHA256 = "58755a466e802d842ba950912f3d2d65f258c1695953b2dec052e66b47c9315f"
 
 
 def _render_help_tree() -> tuple[int, str]:
