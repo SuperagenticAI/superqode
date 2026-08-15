@@ -13,6 +13,7 @@ HARNESS_TEMPLATE_CHOICES = (
     "ds4-coding",
     "ds4-fast-local",
     "deepseek-harness",
+    "deepagents",
 )
 
 WORKFLOW_PRESET_CHOICES = (

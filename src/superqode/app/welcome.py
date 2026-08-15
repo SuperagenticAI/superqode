@@ -207,9 +207,9 @@ def render_welcome(
 
     desc_text = Text(justify=align)
     if width is None or width >= 48:
-        headline = "THE UNIFIED HARNESS LAYER FOR CODING AGENTS"
+        headline = "THE HARNESS LAYER FOR CODING AGENTS"
     elif width >= 33:
-        headline = "UNIFIED HARNESS LAYER"
+        headline = "THE HARNESS LAYER"
     elif width >= 19:
         headline = "HARNESS LAYER"
     else:

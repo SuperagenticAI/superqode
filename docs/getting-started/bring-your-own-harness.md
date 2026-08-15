@@ -124,6 +124,7 @@ superqode harness init my-coder -t qwen-coding
 | `tau` | Hugging Face Tau event-first harness (optional, read-only preset) |
 | `prime-agent-python` | Prime Agent RLM loop hosted by prime-agent-python-client over RPC |
 | `deepseek-harness` | DeepSeek Harness runtime hosted by deepseek-harness-sdk over JSON-RPC |
+| `deepagents` | LangChain DeepAgents graph, filesystem backend, and subagents through the DeepAgents SDK |
 
 List them anytime with `superqode harness list-templates`.
 

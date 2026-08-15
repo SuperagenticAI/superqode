@@ -20,7 +20,13 @@ from textual.widgets import Button, Footer, Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from superqode.app.harness_picker import HarnessPickerItem
-from superqode.harness.hub import REFERENCE_ONLY_KINDS, hub_record, readiness_label
+from superqode.harness.hub import (
+    REFERENCE_ONLY_KINDS,
+    hub_record,
+    is_open_source,
+    openness_label,
+    readiness_label,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         Binding("b", "build", "Build"),
         Binding("a", "filter_all", "All", show=False),
         Binding("r", "filter_ready", "Ready", show=False),
+        Binding("o", "filter_open", "Open source", show=False),
     ]
 
     CSS = """
@@ -130,7 +137,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     }
     """
 
-    FILTERS = ("all", "ready", "setup", "custom", "coming")
+    FILTERS = ("all", "ready", "setup", "open", "custom", "coming")
 
     def __init__(
         self,
@@ -161,6 +168,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             yield Button("All", id="hub-filter-all")
             yield Button("Ready", id="hub-filter-ready")
             yield Button("Needs setup", id="hub-filter-setup")
+            yield Button("Open source", id="hub-filter-open")
             yield Button("Your harnesses", id="hub-filter-custom")
             yield Button("Coming soon", id="hub-filter-coming")
 
@@ -192,6 +200,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             return item.available
         if self.filter_name == "setup":
             return not item.available and item.kind not in REFERENCE_ONLY_KINDS
+        if self.filter_name == "open":
+            return is_open_source(item)
         if self.filter_name == "custom":
             return item.group == "Project harnesses" or item.source in {"file", "registry"}
         if self.filter_name == "coming":
@@ -304,6 +314,12 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             ("Runtime", item.runtime or "Defined by the harness"),
             ("Continuity", item.continuity.replace("-", " ")),
             ("Source", item.source),
+            # The license is the more useful half when it is known, so show it
+            # rather than repeating the word "Open source" next to itself.
+            (
+                "Licensing",
+                record.license if record.license else openness_label(record.openness),
+            ),
         )
         for label, value in rows:
             text.append(f"{label:<13}", style="#71717a")
@@ -469,6 +485,10 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
     def action_filter_ready(self) -> None:
         self.filter_name = "ready"
+        self._refresh_items()
+
+    def action_filter_open(self) -> None:
+        self.filter_name = "open"
         self._refresh_items()
 
     def action_close(self) -> None:

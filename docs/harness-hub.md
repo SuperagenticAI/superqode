@@ -26,8 +26,8 @@ Launch SuperQode in a repository and enter:
 The Hub is a full terminal screen rather than a block appended to the
 conversation. Use the mouse or keyboard to:
 
-- search names, runtimes, sources, and descriptions
-- filter to **Ready**, **Needs setup**, **Your harnesses**, or
+- search names, runtimes, sources, licenses, and descriptions
+- filter to **Ready**, **Needs setup**, **Open source**, **Your harnesses**, or
   **Coming soon**
 - inspect setup, runtime, provenance, and session-continuity details
 - use an available harness or follow its setup route
@@ -44,7 +44,7 @@ session. Buttons and rows are also mouse-enabled.
 | SuperQode harnesses | Native harnesses such as the core, workbench, workflow, and recursive routes available in the installed release |
 | Coding agents | Managed connections to established vendor coding agents |
 | ACP agents | Installed, featured, recent, and registry-discoverable Agent Client Protocol agents |
-| Optional integrations | Harness runtimes that require an explicit optional dependency or external setup |
+| Optional integrations | Harness runtimes that require an explicit optional dependency or external setup, such as LangChain DeepAgents and Hugging Face Tau |
 | Model and task presets | Ready-made configurations for a model family or task shape |
 | Ecosystem watch | Relevant external harness projects that are discoverable but not yet supported by SuperQode |
 | Project harnesses | Repository-owned HarnessSpecs discovered from the current project |
@@ -61,6 +61,46 @@ observability sinks, and chat channels are all real integrations, but someone
 opening the Hub is choosing a harness, not assembling a dependency list. Those
 live in the [integration catalog](integrations/index.md), and models are
 selected with `:connect` once a harness is active.
+
+### Open source harnesses
+
+Whether a harness is open source is a property of the harness itself, not of
+the route SuperQode takes to it. OpenCode arrives over ACP, Codex arrives as a
+vendor connection, DeepAgents arrives as an optional runtime, and Aider is not
+runnable from SuperQode at all, yet all four are open source. Openness is
+therefore a filter rather than a category, so nothing has to move out of the
+category that explains how to connect it.
+
+```text
+:hub
+```
+
+Press `o`, or select **Open source**. From the CLI:
+
+```bash
+superqode hub list --openness open
+superqode hub list --openness closed
+superqode hub show deepagents
+```
+
+Each record carries `openness`, `license`, and `repository`. Four sources
+answer the question, in order of precedence:
+
+| Source | Applies to |
+| --- | --- |
+| A license SuperQode has verified against the project's published metadata | Any entry |
+| The `open-source` tag in the bundled ACP agent catalog | ACP agents |
+| The `harness_openness` field on the vendor connection profile | Vendor coding agents |
+| SuperQode's own Apache-2.0 source | SuperQode harnesses and presets |
+
+Anything none of these can answer stays blank and is reported as **Not
+published** rather than assumed either way. Two cases this protects:
+a source-available license such as the Functional Source License is not
+reported as open source, and a repository's own HarnessSpec is never given a
+license SuperQode has no way to know.
+
+Openness says nothing about readiness, support, or security. It answers one
+question: can you read and fork the code that runs the loop.
 
 In the terminal these states are measured on the machine you are using. In the
 published snapshot they cannot be, so `--public` reports the structural answer

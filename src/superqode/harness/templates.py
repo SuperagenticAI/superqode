@@ -498,6 +498,59 @@ def deepseek_harness_template(*, name: str = "deepseek-harness") -> HarnessSpec:
     )
 
 
+def deepagents_template(*, name: str = "deepagents") -> HarnessSpec:
+    """LangChain DeepAgents hosted through its Python SDK.
+
+    DeepAgents brings its own filesystem backend, ``execute`` tool, subagent
+    graph, skills, and memory. The preset therefore declares the policy the
+    adapter can actually honour rather than one SuperQode would enforce itself.
+    """
+    return HarnessSpec(
+        name=name,
+        description=(
+            "LangChain DeepAgents coding harness over the DeepAgents SDK; "
+            "DeepAgents owns the graph, filesystem backend, and subagents."
+        ),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="deepagents"),
+        model_policy=ModelPolicySpec(
+            profile="deepagents",
+            config={"tool_profile": "core"},
+        ),
+        # allow_shell must stay True: the adapter rejects specs without it
+        # because DeepAgents exposes `execute` with its filesystem backend.
+        execution_policy=ExecutionPolicySpec(
+            sandbox="local",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(
+            AgentSpec(
+                id="deepagents",
+                role="implementation",
+                tools=("read", "write", "edit", "bash"),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "deepagents",
+            "builtin_harness": True,
+            "category": "workflow",
+            "python_client": "deepagents",
+            "rich_stream_events": True,
+            "optional_dependency": "deepagents>=0.7.0,<0.8.0",
+            "selection_warning": (
+                "DeepAgents runs its own filesystem and execute tools, so "
+                "SuperQode approvals do not gate them. Model routes resolve "
+                "through LangChain's provider strings."
+            ),
+        },
+    )
+
+
 def gemma4_coding_template() -> HarnessSpec:
     """Gemma4-optimized coding harness starting point."""
     base = coding_template(name="gemma4-coding")
@@ -784,6 +837,7 @@ BUILTIN_TEMPLATES = {
     "deepseek-harness": deepseek_harness_template,
     # Underscore keys stay out of list-templates, matching the other aliases.
     "deepseek_harness": deepseek_harness_template,
+    "deepagents": deepagents_template,
     "gemma4-coding": gemma4_coding_template,
     "gemma4-no-tool": gemma4_no_tool_template,
     "gemma4-no_tool": gemma4_no_tool_template,

@@ -177,6 +177,7 @@ nav:
       - 👷 Cognition Devin: providers/devin.md
       - 🌙 Kimi & Kimi Code: providers/kimi.md
       - Q Qwen Code: providers/qwen-code.md
+      - 🦜 LangChain DeepAgents: providers/deepagents.md
       - τ Hugging Face Tau: advanced/tau.md
     - 🧠 Models & Providers:
       - 🧭 Provider Overview: providers/index.md

@@ -58,9 +58,10 @@ def test_recommended_catalogue_hides_pinned_and_specialized_presets(tmp_path):
 def test_optional_catalogue_contains_tau_without_main_or_acp_harnesses(tmp_path):
     optional = {entry.id: entry for entry in optional_harnesses(tmp_path)}
 
-    assert list(optional) == ["tau", "deepseek-harness"]
+    assert list(optional) == ["tau", "deepseek-harness", "deepagents"]
     assert optional["tau"].source == "optional:tau"
     assert optional["deepseek-harness"].source == "optional:deepseek-harness"
+    assert optional["deepagents"].source == "optional:deepagents"
     assert "core" not in optional
     assert "copilot" not in optional
 
@@ -80,3 +81,19 @@ def test_kimi_family_route_is_curated_and_versioned_preset_stays_pinned(tmp_path
 def test_unknown_harness_suggests_close_catalogue_match(tmp_path):
     with pytest.raises(ValueError, match="Did you mean.*kimi-k3-coding"):
         resolve_harness("kmi-k3-coding", root=tmp_path)
+
+
+def test_deepagents_resolves_by_id_and_alias_without_the_package_installed(tmp_path):
+    """A missing optional dependency is a setup hint, never a resolution error.
+
+    The entry has to stay browsable so the Hub can tell the user how to get it.
+    """
+    entry = resolve_harness("deepagents", root=tmp_path)
+
+    assert entry.id == "deepagents"
+    assert entry.runtime == "deepagents"
+    assert entry.source == "optional:deepagents"
+    assert resolve_harness("deep-agents", root=tmp_path).id == "deepagents"
+    assert resolve_harness("langchain-deepagents", root=tmp_path).id == "deepagents"
+    if not entry.available:
+        assert entry.issue

@@ -184,7 +184,7 @@ The `tau` backend is selectable in `:harness` after installing
 Tau's write, edit, and shell tools do not yet pass through SuperQode's approval
 manager. See [Hugging Face Tau Integration](tau.md).
 
-The `deepagents` backend is intentionally not used for no-tool harnesses. DeepAgents 0.6 is built around a
+The `deepagents` backend is intentionally not used for no-tool harnesses. DeepAgents 0.7 is built around a
 tool-capable deep-agent stack, so SuperQode rejects no-tool specs for that backend and directs users to the
 native runtime for model-only runs.
 

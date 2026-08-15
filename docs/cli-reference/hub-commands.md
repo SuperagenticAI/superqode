@@ -10,13 +10,15 @@ List the complete catalog. The filters are also accepted by `hub list`.
 superqode hub [OPTIONS]
 sq hub --search codex
 sq hub --readiness ready
+sq hub --openness open
 ```
 
 | Option | Description |
 | --- | --- |
-| `--search`, `-s` | Search identity, name, description, category, runtime, source, provider, and model |
+| `--search`, `-s` | Search identity, name, description, category, runtime, source, provider, model, license, and repository |
 | `--readiness` | Filter to `ready`, `setup-required`, `supported`, or `not-supported` |
 | `--category` | Filter by an exact Hub category |
+| `--openness` | Filter to `open` or `closed` harness implementations. Entries whose licensing SuperQode cannot verify match neither value |
 | `--json` | Emit the versioned Hub index |
 | `--public` | Exclude repository and user-registry harnesses, and report machine-independent readiness, for a publication-safe snapshot |
 
@@ -28,6 +30,7 @@ List or filter the catalog explicitly. This is the recommended form for scripts.
 superqode hub list
 superqode hub list --search acp
 superqode hub list --readiness setup-required
+superqode hub list --openness open
 superqode hub list --json
 superqode hub list --public --json
 ```
@@ -35,7 +38,7 @@ superqode hub list --public --json
 ## hub show
 
 Show one entry's readiness, integration level, runtime, continuity behavior,
-description, setup guidance, and warnings.
+openness, license, repository, description, setup guidance, and warnings.
 
 ```bash
 superqode hub show codex

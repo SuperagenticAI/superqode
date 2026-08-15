@@ -146,6 +146,7 @@ def test_registry_has_expected_profiles():
         "glm-cli",
         "qwen-code",
         "kimi-code",
+        "deepagents-code",
         "acp",
         "harness-core",
         "harness-rlm",
@@ -464,15 +465,27 @@ def test_grok_profile_defaults_to_grok_build_acp():
     assert grok.acp_agent == "grok"
     # Print/CI path only — Subscriptions must not prefer this over ACP.
     assert grok.runtime == "grok-cli"
-    assert "subscription" in grok.label.lower()
     # Points users to the SuperQode-harness opt-in.
     assert ":grok api" in grok.description
 
 
 def test_lookup_by_id_and_label():
     assert get_connection_profile("codex").id == "codex"
-    assert get_connection_profile("Codex subscription").id == "codex"
+    assert get_connection_profile("Codex").id == "codex"
     assert get_connection_profile("nope") is None
+
+
+def test_vendor_labels_are_the_product_name_alone():
+    """The Subscriptions screen says what a row is, not what screen it is on.
+
+    Six rows used to append "subscription" to the product name while nine did
+    not, so the same screen read inconsistently and the longest labels were the
+    ones carrying a word the heading already supplied.
+    """
+    labels = [profile.label for profile in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)]
+
+    assert not [label for label in labels if "subscription" in label.lower()]
+    assert {"Codex", "Cursor", "Amp", "Grok", "Factory Droid", "Kiro"} <= set(labels)
 
 
 def test_codex_detect_uses_local_codex_auth(monkeypatch, tmp_path):

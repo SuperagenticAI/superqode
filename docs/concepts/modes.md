@@ -189,6 +189,7 @@ direct profile, so the submenu never becomes a required step:
 :connect glm-cli
 :connect qwen-code
 :connect kimi-code
+:connect deepagents-code
 ```
 
 Only vendor-plan and vendor-managed sign-in routes appear in this submenu.
@@ -236,6 +237,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | Poolside | Pool CLI ACP, Laguna S 2.1 through DwarfStar or llama.cpp | `:connect acp poolside`, `:connect local ds4 laguna-s-2.1` |
 | Moonshot AI Kimi | Kimi Code ACP, Moonshot BYOK | `:connect kimi-code`, `:connect byok moonshot kimi-k3` |
 | Alibaba Qwen | Qwen Code ACP, DashScope BYOK, local Qwen models | `:connect qwen-code`, `:connect byok alibaba <model>`, `:connect local ollama qwen3:8b` |
+| LangChain [DeepAgents](../providers/deepagents.md) | Deep Agents Code ACP, DeepAgents SDK runtime, bare Deep Agent ACP | `:connect deepagents-code`, `superqode harness run deepagents "..."`, `:connect acp deepagents` |
 | DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
 | Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
 | MiniMax | MiniMax BYOK, local MiniMax model paths | `:connect byok minimax <model>`, `:connect local <provider> <model>` |
@@ -293,22 +295,22 @@ definitions.
 | CodeBuddy Code | `codebuddy` | Codex | `codex` |
 | GitHub Copilot | `copilot` | Cortex Code | `cortex` |
 | crow-cli | `crow` | Cursor | `cursor` |
-| DeepAgents | `deepagents` | Devin | `devin` |
-| Dirac | `dirac` | Factory Droid | `droid` |
-| fast-agent | `fast-agent` | fount | `fount` |
-| Gemini CLI | `gemini` | GLM Agent | `glm` |
-| Goose | `goose` | Grok Build | `grok` |
-| Harn | `harn` | Hermes Agent | `hermes` |
-| JetBrains Junie | `junie` | Kilo | `kilo` |
-| Kimi Code | `kimi` | Kiro CLI | `kiro` |
-| LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
-| Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
-| OpenCode | `opencode` | OpenHands | `openhands` |
-| Pi | `pi` | Poolside | `poolside` |
-| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
-| Qwen Code | `qwen` | siGit Code | `sigit` |
-| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
-| VT Code | `vtcode` | | |
+| DeepAgents | `deepagents` | Deep Agents Code | `deepagents-code` |
+| Devin | `devin` | Dirac | `dirac` |
+| Factory Droid | `droid` | fast-agent | `fast-agent` |
+| fount | `fount` | Gemini CLI | `gemini` |
+| GLM Agent | `glm` | Goose | `goose` |
+| Grok Build | `grok` | Harn | `harn` |
+| Hermes Agent | `hermes` | JetBrains Junie | `junie` |
+| Kilo | `kilo` | Kimi Code | `kimi` |
+| Kiro CLI | `kiro` | LLMling-Agent | `llmlingagent` |
+| Minion Code | `minion` | Mistral Vibe | `mistral-vibe` |
+| OpenClaw | `openclaw` | OpenCode | `opencode` |
+| OpenHands | `openhands` | Pi | `pi` |
+| Poolside | `poolside` | Prime Agent | `prime-agent` |
+| Qoder CLI | `qoder` | Qwen Code | `qwen` |
+| siGit Code | `sigit` | Stakpak | `stakpak` |
+| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
 
 Inspect installation and authentication requirements:
 

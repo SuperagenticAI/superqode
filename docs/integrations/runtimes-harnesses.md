@@ -15,7 +15,7 @@ supports it.
 | OpenAI Agents SDK | `uv tool install "superqode[openai-agents]"` | `runtime.backend: openai-agents` | `superqode runtime doctor openai-agents` | [Python Runtimes](../advanced/python-runtimes.md) |
 | PydanticAI | `uv tool install "superqode[pydanticai]"` | `runtime.backend: pydanticai` | `superqode runtime doctor pydanticai` | [Python Runtimes](../advanced/python-runtimes.md) |
 | PydanticAI with Logfire | `uv tool install "superqode[pydanticai-logfire]"` | Enable PydanticAI tracing in the HarnessSpec | `superqode runtime doctor pydanticai` | [Agent Runtimes](../runtimes.md#pydanticai) |
-| DeepAgents | `uv tool install "superqode[deepagents]"` | `runtime.backend: deepagents` | `superqode runtime doctor deepagents` | [Agent Runtimes](../runtimes.md#deepagents) |
+| DeepAgents | `uv tool install "superqode[deepagents]"` | `runtime.backend: deepagents` or `:harness switch deepagents` | `superqode runtime doctor deepagents` | [LangChain DeepAgents](../providers/deepagents.md) |
 | RLM Code | `uv tool install "superqode[rlm-code]"` | `runtime.backend: rlm-code` | `superqode harness protocol describe rlm-code` | [RLM Code](../advanced/rlm-code.md) |
 | Hugging Face Tau | `uv tool install "superqode[tau]"` | `:tau use` or `:harness switch tau` | `:tau status` | [Hugging Face Tau](../advanced/tau.md) |
 | DeepSeek Harness | `uv tool install "superqode[deepseek-harness]"` | `:harness switch deepseek-harness` | `superqode harness doctor --spec <file>` | [DeepSeek Harness](../advanced/deepseek-harness.md) |

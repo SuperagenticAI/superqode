@@ -7,15 +7,26 @@ from pathlib import Path
 
 import click
 
-from superqode.harness.hub import READINESS_VALUES
+from superqode.harness.hub import OPENNESS_VALUES, READINESS_VALUES
 
 
-def _catalog(*, query: str, readiness: str | None, category: str, public: bool = False) -> dict:
+def _catalog(
+    *,
+    query: str,
+    readiness: str | None,
+    category: str,
+    openness: str | None = "",
+    public: bool = False,
+) -> dict:
     from superqode.harness.hub import build_hub_index, filter_hub_records
 
     payload = build_hub_index(Path.cwd(), public=public)
     payload["items"] = filter_hub_records(
-        payload["items"], query=query, readiness=readiness, category=category
+        payload["items"],
+        query=query,
+        readiness=readiness,
+        category=category,
+        openness=openness,
     )
     payload["count"] = len(payload["items"])
     payload["categories"] = list(dict.fromkeys(item["category"] for item in payload["items"]))
@@ -47,6 +58,12 @@ def _filters(function):
         is_flag=True,
         help="Exclude repository and user-registry harnesses for publication",
     )(function)
+    function = click.option(
+        "--openness",
+        type=click.Choice(list(OPENNESS_VALUES)),
+        default=None,
+        help="Filter to harnesses whose implementation is open source or proprietary",
+    )(function)
     function = click.option("--category", default="", help="Filter by exact Hub category")(function)
     function = click.option(
         "--readiness",
@@ -72,6 +89,7 @@ def hub(
     query: str,
     readiness: str | None,
     category: str,
+    openness: str | None,
     public_catalog: bool,
 ):
     """Discover every harness available through SuperQode."""
@@ -81,6 +99,7 @@ def hub(
                 query=query,
                 readiness=readiness,
                 category=category,
+                openness=openness,
                 public=public_catalog,
             ),
             json_output=json_output,
@@ -94,6 +113,7 @@ def hub_list(
     query: str,
     readiness: str | None,
     category: str,
+    openness: str | None,
     public_catalog: bool,
 ):
     """List or search the complete Harness Hub."""
@@ -102,6 +122,7 @@ def hub_list(
             query=query,
             readiness=readiness,
             category=category,
+            openness=openness,
             public=public_catalog,
         ),
         json_output=json_output,
@@ -128,6 +149,9 @@ def hub_show(harness_id: str, json_output: bool):
         ("Integration", "integration_level"),
         ("Runtime", "runtime"),
         ("Continuity", "continuity"),
+        ("Openness", "openness"),
+        ("License", "license"),
+        ("Repository", "repository"),
         ("Description", "description"),
         ("Setup", "setup"),
         ("Warning", "warning"),

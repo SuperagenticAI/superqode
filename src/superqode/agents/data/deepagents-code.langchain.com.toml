@@ -1,0 +1,48 @@
+# Schema defined in agent_schema.py
+# https://github.com/langchain-ai/deepagents/tree/main/libs/code
+#
+# Distinct from deepagents.langchain.com, which runs the JavaScript
+# `deepagents-acp` package with a bare Deep Agent. This entry is the prebuilt
+# Python coding agent, which exposes itself over ACP with `dcode --acp`.
+identity = "deepagents-code.langchain.com"
+name = "Deep Agents Code"
+short_name = "deepagents-code"
+url = "https://docs.langchain.com/deepagents-code"
+protocol = "acp"
+author_name = "LangChain"
+author_url = "https://langchain.com"
+publisher_name = "LangChain"
+publisher_url = "https://github.com/langchain-ai/deepagents"
+type = "coding"
+description = "LangChain's MIT-licensed terminal coding agent, built on the Deep Agents SDK, with persistent memory, skills, subagents, and approval controls."
+tags = ["open-source", "terminal-first", "official-acp", "framework"]
+catalog_tier = "featured"
+run_command."*" = "dcode --acp"
+
+help = '''
+# Deep Agents Code
+
+The prebuilt coding agent from LangChain's Deep Agents project. `dcode --acp`
+runs it as an ACP server over standard input and output.
+
+## Installation
+
+```bash
+curl -LsSf https://langch.in/dcode | bash
+```
+
+Model provider extras are selected at install time:
+
+```bash
+DEEPAGENTS_CODE_EXTRAS="ollama,openrouter" curl -LsSf https://langch.in/dcode | bash
+```
+
+## Authentication
+
+Run `dcode` once and complete `/auth` to connect a provider. OpenAI, Anthropic,
+and Gemini are included by default.
+'''
+
+[actions."*".install]
+command = "curl -LsSf https://langch.in/dcode | bash"
+description = "Install Deep Agents Code"

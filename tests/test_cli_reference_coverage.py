@@ -243,6 +243,7 @@ def test_every_connection_profile_has_a_sidebar_page():
         "kiro": "concepts/modes.md",
         "kimi-code": "providers/kimi.md",
         "qwen-code": "providers/qwen-code.md",
+        "deepagents-code": "providers/deepagents.md",
         "antigravity": "providers/antigravity.md",
         "muse": "concepts/modes.md",
         "prime-agent": "providers/prime-agent.md",

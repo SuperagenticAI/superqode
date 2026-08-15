@@ -149,6 +149,7 @@ def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeyp
                 "built-in-template",
                 "optional:tau",
                 "optional:deepseek-harness",
+                "optional:deepagents",
                 "file",
                 "registry",
             }
@@ -291,7 +292,7 @@ def test_selecting_muse_reports_readiness_instead_of_failing():
     assert not [item for item in log.items if str(item).startswith("ERROR")]
 
 
-def test_the_subscriptions_category_holds_all_fourteen_plans_codex_first():
+def test_the_subscriptions_category_holds_every_plan_codex_first():
     """Plan order is fixed, so a product sits in the same place everywhere."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
@@ -310,6 +311,7 @@ def test_the_subscriptions_category_holds_all_fourteen_plans_codex_first():
         "glm-cli",
         "qwen-code",
         "kimi-code",
+        "deepagents-code",
     ]
 
 

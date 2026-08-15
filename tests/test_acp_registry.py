@@ -157,3 +157,27 @@ def test_registry_tiers_are_stable_for_public_aliases():
     assert registry_catalog_tier("codex-acp", "codex") == "featured"
     assert registry_catalog_tier("devin", "devin") == "enterprise"
     assert registry_catalog_tier("glm-acp-agent", "glm") == "all"
+
+
+def test_deep_agents_code_is_registered_as_its_own_agent():
+    """`dcode --acp` is the prebuilt coding agent, not the bare JS Deep Agent.
+
+    Both are shipped, so they need separate identities: `deepagents` runs the
+    JavaScript `deepagents-acp` package with a general-purpose agent, while
+    `deepagents-code` runs LangChain's terminal coding agent.
+    """
+    code = get_registry_agent_by_short_name("deepagents-code")
+    general = get_registry_agent_by_short_name("deepagents")
+
+    assert code is not None and general is not None
+    assert code["identity"] != general["identity"]
+    assert code["run_command"] == "dcode --acp"
+    assert code["installation_command"] == "curl -LsSf https://langch.in/dcode | bash"
+    assert registry_catalog_tier(code["identity"], code["short_name"]) == "featured"
+
+
+def test_open_source_tags_survive_the_toml_to_metadata_conversion():
+    """The Hub reads openness from these tags instead of keeping a second list."""
+    agent = get_registry_agent_by_short_name("deepagents-code")
+
+    assert "open-source" in agent["tags"]

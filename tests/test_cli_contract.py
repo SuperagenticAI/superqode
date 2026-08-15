@@ -49,7 +49,11 @@ EXPECTED_COMMAND_COUNT = 267
 # dropped from the choice list. Still no Click command added.
 # Rebaselined for `harness drift`, which compares a spec's declarations against
 # what actually resolves. One Click command added, so the count moves to 267.
-EXPECTED_HELP_TREE_SHA256 = "58755a466e802d842ba950912f3d2d65f258c1695953b2dec052e66b47c9315f"
+# Rebaselined for first-party DeepAgents support and the Hub openness filter:
+# `deepagents` joins the `harness init --template` choices, `deepagents-code`
+# joins the registry-derived `--connect` choices, and `hub` gains `--openness`.
+# All three widen existing option lists, so the count stays at 267.
+EXPECTED_HELP_TREE_SHA256 = "0e7e7bd4ff13da595c769bc8fa944f0b8c743869345c5b37b9c821fbf6eb56df"
 
 
 def _render_help_tree() -> tuple[int, str]:

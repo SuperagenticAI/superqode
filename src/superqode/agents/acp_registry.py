@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import platform
 from pathlib import Path
-from typing import Any, TypedDict, Literal
+from typing import Any, NotRequired, TypedDict, Literal
 
 from .official_acp import OFFICIAL_ACP_AGENTS
 
@@ -36,6 +36,10 @@ class AgentMetadata(TypedDict):
     installation_command: str
     installation_instructions: str
     requirements: list[str]
+    #: Catalog tags carried straight from the registry entry. The Hub reads
+    #: ``open-source`` from here rather than keeping a second list of which
+    #: agents are open.
+    tags: NotRequired[list[str]]
 
 
 # Python fallback used if TOML data cannot be loaded.
@@ -370,6 +374,7 @@ def _agent_metadata_from_toml(agent: dict[str, Any]) -> AgentMetadata | None:
         "installation_command": install_command,
         "installation_instructions": agent.get("help", ""),
         "requirements": [],
+        "tags": [str(tag) for tag in agent.get("tags", []) if str(tag).strip()],
     }
 
 

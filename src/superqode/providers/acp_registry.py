@@ -35,6 +35,7 @@ FEATURED_AGENT_IDS = frozenset(
         "codex",
         "copilot",
         "cursor",
+        "deepagents-code",
         "github-copilot-cli",
         "goose",
         "grok-build",

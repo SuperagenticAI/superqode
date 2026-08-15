@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import importlib.util
 import inspect
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ...agent.loop import AgentMessage, AgentResponse
-from ...providers.model_specs import normalize_model_for_provider, normalize_provider_id
+from ...providers.model_specs import (
+    HUGGINGFACE_PROVIDER,
+    normalize_model_for_provider,
+    normalize_provider_id,
+)
 from ..compiler import compile_to_headless_profile
 from ..events import HarnessEvent
 from ..model_policy import resolve_harness_model_policy
@@ -80,6 +87,43 @@ class DeepAgentsHarnessBackend:
         )
 
 
+DEEPAGENTS_MIN_VERSION = (0, 7, 0)
+DEEPAGENTS_MAX_VERSION = (0, 8, 0)
+_SUPPORTED_RANGE = "deepagents>=0.7.0,<0.8"
+
+
+def deepagents_installation_status() -> tuple[bool, str]:
+    """Return whether a supported DeepAgents release is importable.
+
+    Discovery calls this on every catalog listing, so it must never import
+    DeepAgents itself: the package pulls in the whole LangChain stack and would
+    cost the picker seconds. A spec probe plus package metadata answers the
+    same question without paying that price.
+    """
+    try:
+        installed = importlib.util.find_spec("deepagents") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        installed = False
+    if not installed:
+        from superqode.providers.env_introspect import install_command
+
+        return False, install_command("deepagents")
+    try:
+        version = importlib.metadata.version("deepagents")
+    except importlib.metadata.PackageNotFoundError:
+        return False, "deepagents is importable, but its package metadata is missing"
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
+    if match is None:
+        return (
+            False,
+            f"DeepAgents version {version!r} cannot be validated; install {_SUPPORTED_RANGE}",
+        )
+    parsed = tuple(int(part) for part in match.groups())
+    if parsed < DEEPAGENTS_MIN_VERSION or parsed >= DEEPAGENTS_MAX_VERSION:
+        return False, f"DeepAgents {version} is unsupported; install {_SUPPORTED_RANGE}"
+    return True, ""
+
+
 def _load_deepagents():
     try:
         from deepagents.backends import FilesystemBackend
@@ -88,7 +132,7 @@ def _load_deepagents():
     except ImportError as exc:
         raise ImportError(
             "The deepagents backend requires the optional 'deepagents' package. "
-            "Install SuperQode with the DeepAgents extra or install deepagents directly."
+            f"Install SuperQode with the DeepAgents extra or install {_SUPPORTED_RANGE} directly."
         ) from exc
     return create_deep_agent, FilesystemBackend, FilesystemPermission
 
@@ -135,13 +179,24 @@ def _create_agent_for_request(request: HarnessBackendRequest) -> tuple[Any, dict
 
 
 def _model_spec(provider: str, model: str) -> str:
+    """Build the ``provider:model`` string LangChain's ``init_chat_model`` wants.
+
+    SuperQode separates provider from model before a request reaches a backend,
+    so ``model`` is normally bare. A colon inside it therefore belongs to the
+    model name rather than marking it as already qualified: Ollama writes its
+    version tag that way (``qwen3.5:2b``), as does a Hugging Face inference
+    provider suffix. Only an exact ``<provider>:`` prefix means the string is
+    already complete, so that is what the pass-through checks. Treating any
+    colon as a provider separator dropped the prefix and left LangChain unable
+    to infer a provider for every tagged local model.
+    """
     provider = normalize_provider_id(provider)
     model = normalize_model_for_provider(provider, model)
-    if provider == "huggingface":
-        return f"{provider}:{model}"
-    if ":" in model:
+    if not provider:
         return model
-    return f"{provider}:{model}" if provider else model
+    if provider == HUGGINGFACE_PROVIDER or not model.startswith(f"{provider}:"):
+        return f"{provider}:{model}"
+    return model
 
 
 def _subagent_specs(

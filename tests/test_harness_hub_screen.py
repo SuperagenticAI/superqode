@@ -195,3 +195,31 @@ async def test_outcome_and_activity_screens_return_clicked_actions() -> None:
         await pilot.click("#activity-open")
         await pilot.pause()
         assert activity_selected == [OutcomeSelection("use", ":harness switch codex")]
+
+
+@pytest.mark.asyncio
+async def test_open_source_filter_selects_open_harnesses_across_every_route() -> None:
+    """Openness cuts across the Hub's route-based categories.
+
+    A native harness, a vendor connection and an optional runtime are three
+    different categories, so a filter that only worked inside one of them would
+    not answer "which of these can I read the source of?".
+    """
+    from superqode.app.harness_picker import harness_picker_items
+
+    items = harness_picker_items(".")
+    app = App()
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.push_screen(HarnessHubScreen(items, initial_filter="open"))
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, HarnessHubScreen)
+
+        shown = {item.id for item in screen.filtered_items}
+        assert {"workbench", "deepagents", "deepagents-code", "codex"} <= shown
+        assert not shown & {"cursor", "devin", "kiro"}
+
+        await pilot.click("#hub-filter-all")
+        await pilot.pause()
+        assert len(screen.filtered_items) > len(shown)

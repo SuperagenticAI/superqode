@@ -10,8 +10,9 @@ from typing import Any, Iterable
 from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
 
 
-HUB_SCHEMA_VERSION = "1.4"
+HUB_SCHEMA_VERSION = "1.5"
 DOCS_BASE = "https://superagenticai.github.io/superqode/"
+PROJECT_REPOSITORY = "https://github.com/SuperagenticAI/superqode"
 
 # One vocabulary for every surface. The terminal, the CLI and the website all
 # describe the same state with the same words, so a user who reads "Needs
@@ -25,6 +26,17 @@ READINESS_VALUES = tuple(READINESS_LABELS)
 
 # Harnesses SuperQode cannot run: browsable and inspectable, never selectable.
 REFERENCE_ONLY_KINDS = frozenset({"ecosystem"})
+
+OPENNESS_LABELS = {
+    "open": "Open source",
+    "closed": "Proprietary",
+}
+OPENNESS_VALUES = tuple(OPENNESS_LABELS)
+
+
+def openness_label(openness: str) -> str:
+    """Return the public label for an openness value, or an honest unknown."""
+    return OPENNESS_LABELS.get(openness, "Not published")
 
 
 def readiness_label(readiness: str) -> str:
@@ -48,6 +60,8 @@ _DOCS_BY_ID = {
     "pipy": f"{DOCS_BASE}advanced/pipy/",
     "tau": f"{DOCS_BASE}advanced/tau/",
     "deepseek-harness": f"{DOCS_BASE}advanced/deepseek-harness/",
+    "deepagents": f"{DOCS_BASE}providers/deepagents/",
+    "deepagents-code": f"{DOCS_BASE}providers/deepagents/",
 }
 
 _HOMEPAGE_BY_ID = {
@@ -66,6 +80,7 @@ _HOMEPAGE_BY_ID = {
     "glm-cli": "https://z.ai/",
     "qwen-code": "https://github.com/QwenLM/qwen-code",
     "kimi-code": "https://github.com/MoonshotAI/kimi-code",
+    "deepagents-code": "https://docs.langchain.com/deepagents-code",
 }
 
 _COMMANDS_BY_ID = {
@@ -92,6 +107,69 @@ _COMMANDS_BY_ID = {
         ":prime local",
     ),
     "muse": (":connect muse", ":muse status", ":muse login"),
+}
+
+
+@dataclass(frozen=True)
+class HubOpenness:
+    """What is publicly known about a harness implementation's source.
+
+    Openness describes the harness's own licensing, not SuperQode's route to
+    it and not the model behind it. An agent stays open whether it is reached
+    over ACP, as an optional runtime, or not at all yet.
+    """
+
+    openness: str
+    license: str = ""
+    repository: str = ""
+
+
+_PROJECT_OPENNESS = HubOpenness("open", "Apache-2.0", PROJECT_REPOSITORY)
+
+# Verified against each project's published license metadata. Anything absent
+# here resolves through the fallbacks in ``_resolve_openness`` and, failing
+# those, stays unknown. A harness is never reported as open on a guess.
+#
+# Deliberately absent: Charm's Crush ships under the Functional Source License,
+# which is source-available rather than OSI open source, so it must not appear
+# under an open-source filter.
+_LANGCHAIN_DEEPAGENTS = HubOpenness("open", "MIT", "https://github.com/langchain-ai/deepagents")
+_OPENNESS_BY_ID: dict[str, HubOpenness] = {
+    "deepagents": _LANGCHAIN_DEEPAGENTS,
+    "deepagents-code": _LANGCHAIN_DEEPAGENTS,
+    "acp:deepagents": _LANGCHAIN_DEEPAGENTS,
+    "acp:deepagents-code": _LANGCHAIN_DEEPAGENTS,
+    "tau": HubOpenness("open", "MIT", "https://github.com/huggingface/tau"),
+    "deepseek-harness": HubOpenness(
+        "open", "MIT", "https://github.com/deepseek-ai/deepseek-harness"
+    ),
+    "codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
+    "acp:codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
+    "acp:gemini": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
+    "acp:goose": HubOpenness("open", "Apache-2.0", "https://github.com/aaif-goose/goose"),
+    "acp:cline": HubOpenness("open", "Apache-2.0", "https://github.com/cline/cline"),
+    "acp:opencode": HubOpenness("open", "MIT", "https://github.com/opencode-ai/opencode"),
+    "acp:openhands": HubOpenness("open", "MIT", "https://github.com/OpenHands/OpenHands"),
+    "qwen-code": HubOpenness("open", "Apache-2.0", "https://github.com/QwenLM/qwen-code"),
+    "acp:qwen": HubOpenness("open", "Apache-2.0", "https://github.com/QwenLM/qwen-code"),
+    "kimi-code": HubOpenness("open", "MIT", "https://github.com/MoonshotAI/kimi-code"),
+    "acp:kimi": HubOpenness("open", "MIT", "https://github.com/MoonshotAI/kimi-code"),
+    "prime-agent": HubOpenness("open", "MIT", "https://github.com/PrimeIntellect-ai/prime-agent"),
+    "acp:prime-agent": HubOpenness(
+        "open", "MIT", "https://github.com/PrimeIntellect-ai/prime-agent"
+    ),
+    "ecosystem:aider": HubOpenness("open", "Apache-2.0", "https://github.com/Aider-AI/aider"),
+    "ecosystem:plandex": HubOpenness("open", "MIT", "https://github.com/plandex-ai/plandex"),
+    "ecosystem:roo-code": HubOpenness(
+        "open", "Apache-2.0", "https://github.com/RooCodeInc/Roo-Code"
+    ),
+    "ecosystem:jcode": HubOpenness("open", "MIT", "https://github.com/1jehuang/jcode"),
+    "ecosystem:qm": HubOpenness("open", "MIT", "https://github.com/yc-software/qm"),
+    "ecosystem:better-harness": HubOpenness(
+        "open", "MIT", "https://github.com/QoderAI/better-harness"
+    ),
+    # A download-only desktop application with no published source.
+    "ecosystem:zcode": HubOpenness("closed"),
 }
 
 
@@ -215,6 +293,14 @@ _SETUP_STEPS_BY_ID = {
             "When Kimi opens, enter /login and complete the account flow.",
         ),
     ),
+    "deepagents-code": (
+        HubSetupStep("Install Deep Agents Code", "curl -LsSf https://langch.in/dcode | bash"),
+        HubSetupStep(
+            "Connect a model provider",
+            "dcode",
+            "When Deep Agents Code opens, enter /auth and connect any provider it supports.",
+        ),
+    ),
 }
 
 _POPULARITY_RANK = {
@@ -237,10 +323,12 @@ _POPULARITY_RANK = {
     "kiro": 160,
     "prime-agent": 170,
     "acp:qoder": 180,
+    "deepagents-code": 185,
     "core": 220,
     "workbench": 230,
     "pipy": 240,
     "rlm": 250,
+    "deepagents": 255,
     "no-tool": 260,
 }
 
@@ -393,6 +481,8 @@ class HubRecord:
     based_on: str = ""
     popularity_rank: int = 500
     setup_steps: tuple[HubSetupStep, ...] = ()
+    openness: str = ""
+    license: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -402,6 +492,55 @@ def _readiness(item: HarnessPickerItem) -> str:
     if item.kind == "acp-browser":
         return "discover"
     return "ready" if item.available else "setup-required"
+
+
+def _openness_from_acp_tags(item: HarnessPickerItem) -> HubOpenness | None:
+    """Read the registry's own ``open-source`` tag for an ACP agent.
+
+    The ACP catalog already records this per agent, so an agent SuperQode has
+    not license-checked by hand is still reported honestly: open, with the
+    license left blank rather than invented.
+    """
+    if item.kind != "acp" or not isinstance(item.target, dict):
+        return None
+    tags = item.target.get("tags")
+    if not isinstance(tags, (list, tuple)):
+        return None
+    if "open-source" not in {str(tag).strip().casefold() for tag in tags}:
+        return None
+    url = str(item.target.get("publisher_url") or item.target.get("url") or "")
+    return HubOpenness("open", "", url if "github.com" in url else "")
+
+
+def _resolve_openness(item: HarnessPickerItem, integration_level: str) -> HubOpenness:
+    """Resolve openness from the most specific source that actually knows.
+
+    Order: a verified entry, then the ACP registry's own tag, then the vendor
+    connection profile that already curates this, then SuperQode's own code.
+    A repository HarnessSpec is left unknown on purpose: SuperQode has no way
+    to know how a user licenses their own project.
+    """
+    verified = _OPENNESS_BY_ID.get(item.id)
+    if verified is not None:
+        return verified
+    tagged = _openness_from_acp_tags(item)
+    if tagged is not None:
+        return tagged
+    declared = str(getattr(item.target, "harness_openness", "") or "")
+    if declared:
+        return HubOpenness(declared)
+    if integration_level in {"native", "preset"}:
+        return _PROJECT_OPENNESS
+    return HubOpenness("")
+
+
+def is_open_source(item: HarnessPickerItem) -> bool:
+    """Whether this entry's harness implementation is known to be open source.
+
+    Exposed for the terminal filter, which must not build a full record for
+    every row on every keystroke.
+    """
+    return _resolve_openness(item, _integration_level(item)).openness == "open"
 
 
 def _integration_level(item: HarnessPickerItem) -> str:
@@ -543,7 +682,9 @@ def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
             "internal loop",
         ),
         "capabilities": capabilities,
-        "based_on": item.display_name.replace(" subscription", ""),
+        # Vendor labels are the product name on its own, so the display name is
+        # already what this route is based on.
+        "based_on": item.display_name,
     }
 
 
@@ -554,6 +695,8 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
     details = (
         _connection_details(item) if item.kind in {"connection", "acp"} else _native_details(item)
     )
+    integration_level = _integration_level(item)
+    openness = _resolve_openness(item, integration_level)
     return HubRecord(
         id=item.id,
         name=item.display_name,
@@ -563,7 +706,7 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
         runtime=item.runtime,
         source=item.source,
         readiness=_readiness(item),
-        integration_level=_integration_level(item),
+        integration_level=integration_level,
         continuity=item.continuity,
         provider=item.provider,
         model=item.model,
@@ -571,7 +714,7 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
         warning=item.warning,
         project_path=(str(item.path) if include_local_paths and item.path is not None else ""),
         homepage=str(details.get("homepage") or ""),
-        repository=str(details.get("repository") or ""),
+        repository=str(details.get("repository") or openness.repository or ""),
         docs_url=str(details.get("docs_url") or _DOCS_BY_ID.get(item.id, "")),
         install_command=str(details.get("install_command") or item.issue),
         tui_commands=tuple(details.get("tui_commands") or ()),
@@ -584,6 +727,8 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
         based_on=str(details.get("based_on") or ""),
         popularity_rank=_POPULARITY_RANK.get(item.id, 500),
         setup_steps=tuple(details.get("setup_steps") or ()),
+        openness=openness.openness,
+        license=openness.license,
     )
 
 
@@ -697,7 +842,11 @@ def _supplemental_records() -> list[HubRecord]:
             last_verified="2026-08-14",
             aliases=aliases,
             docs_url=_ECOSYSTEM_DETAILS.get(item_id, {}).get("docs_url", homepage),
-            repository=_ECOSYSTEM_DETAILS.get(item_id, {}).get("repository", ""),
+            repository=_ECOSYSTEM_DETAILS.get(item_id, {}).get(
+                "repository", _OPENNESS_BY_ID.get(item_id, HubOpenness("")).repository
+            ),
+            openness=_OPENNESS_BY_ID.get(item_id, HubOpenness("")).openness,
+            license=_OPENNESS_BY_ID.get(item_id, HubOpenness("")).license,
             install_command=_ECOSYSTEM_DETAILS.get(item_id, {}).get("install_command", ""),
             tools=_ECOSYSTEM_DETAILS.get(item_id, {}).get("tools", ()),
             policies=_ECOSYSTEM_DETAILS.get(item_id, {}).get("policies", ()),
@@ -804,16 +953,20 @@ def filter_hub_records(
     query: str = "",
     readiness: str | None = "",
     category: str = "",
+    openness: str | None = "",
 ) -> list[dict[str, Any]]:
     """Filter serialized records with the same broad discovery vocabulary as the TUI."""
     needle = query.strip().casefold()
     wanted_readiness = (readiness or "").strip().casefold()
     wanted_category = category.strip().casefold()
+    wanted_openness = (openness or "").strip().casefold()
     matched: list[dict[str, Any]] = []
     for record in records:
         if wanted_readiness and str(record.get("readiness", "")).casefold() != wanted_readiness:
             continue
         if wanted_category and str(record.get("category", "")).casefold() != wanted_category:
+            continue
+        if wanted_openness and str(record.get("openness", "")).casefold() != wanted_openness:
             continue
         if needle:
             haystack = " ".join(
@@ -838,6 +991,9 @@ def filter_hub_records(
                     "policies",
                     "capabilities",
                     "based_on",
+                    "openness",
+                    "license",
+                    "repository",
                 )
             ).casefold()
             if needle not in haystack:
@@ -848,11 +1004,17 @@ def filter_hub_records(
 
 __all__ = [
     "HUB_SCHEMA_VERSION",
+    "OPENNESS_LABELS",
+    "OPENNESS_VALUES",
     "READINESS_LABELS",
     "READINESS_VALUES",
+    "PROJECT_REPOSITORY",
+    "HubOpenness",
     "HubRecord",
     "build_hub_index",
     "filter_hub_records",
     "hub_record",
+    "is_open_source",
+    "openness_label",
     "readiness_label",
 ]

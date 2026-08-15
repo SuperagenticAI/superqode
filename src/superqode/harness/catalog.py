@@ -20,6 +20,7 @@ from .spec import HarnessSpec
 from .templates import (
     BUILTIN_TEMPLATES,
     core_template,
+    deepagents_template,
     deepseek_harness_template,
     no_tool_template,
     pipy_template,
@@ -152,11 +153,14 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     rlm = rlm_template()
     tau = tau_template()
     dsh = deepseek_harness_template()
+    deepagents = deepagents_template()
+    from .backends.deepagents import deepagents_installation_status
     from .backends.dsh import dsh_installation_status
     from .tau_adapter import tau_installation_status
 
     tau_available, tau_issue = tau_installation_status()
     dsh_available, dsh_issue = dsh_installation_status()
+    deepagents_available, deepagents_issue = deepagents_installation_status()
     workflows = (
         HarnessDefinition(
             id="core",
@@ -214,6 +218,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     reserved.update(alias for entry in workflows for alias in entry.aliases)
     reserved.add("tau")
     reserved.add("deepseek-harness")
+    reserved.add("deepagents")
     presets: list[HarnessDefinition] = []
     seen_factories: set[object] = set()
     for template_id, factory in BUILTIN_TEMPLATES.items():
@@ -261,9 +266,21 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         available=dsh_available,
         issue=dsh_issue,
     )
+    deepagents_entry = HarnessDefinition(
+        id="deepagents",
+        display_name="DeepAgents",
+        description=deepagents.description,
+        runtime=deepagents.runtime.backend,
+        source="optional:deepagents",
+        spec=deepagents,
+        loop_policy=workbench_loop_policy(),
+        aliases=("deep-agents", "langchain-deepagents"),
+        available=deepagents_available,
+        issue=deepagents_issue,
+    )
     # Keep optional first-party harness integrations on the first picker page.
     # They remain visible with a setup hint when their dependency is missing.
-    return workflows + (tau_entry, dsh_entry) + tuple(presets)
+    return workflows + (tau_entry, dsh_entry, deepagents_entry) + tuple(presets)
 
 
 def _candidate_paths(root: Path) -> Iterable[Path]:

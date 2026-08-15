@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.96"
+version = "0.2.97"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -155,7 +155,7 @@ vendor-sdks = [
     "protobuf>=7.35.0",
 ]
 deepagents = [
-    "deepagents>=0.6.0,<0.7.0",
+    "deepagents>=0.7.0,<0.8.0",
 ]
 pydanticai = [
     "pydantic-ai>=1.98.0,<2.0.0",

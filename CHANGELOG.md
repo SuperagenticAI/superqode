@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.97] - 2026-08-16
+
+### Added
+
+- First-party support for LangChain DeepAgents, through the two routes it
+  actually ships as. `deepagents` is a selectable harness backed by the
+  DeepAgents SDK, so the runtime adapter that already existed is now visible in
+  `:hub`, in the harness picker, in `:connect other-harnesses`, and in
+  `superqode hub list` instead of being reachable only by hand-writing a spec
+  with `runtime.backend: deepagents`. `deepagents-code` connects the prebuilt
+  `dcode` terminal coding agent over its own ACP server, placing it in the Hub
+  next to Codex and Claude Code. `superqode harness init <name> --template
+  deepagents` starts a repository-owned spec from the same preset.
+- The Harness Hub can filter to open-source harnesses. Openness describes the
+  harness implementation rather than SuperQode's route to it, so OpenCode over
+  ACP, Codex as a vendor connection, DeepAgents as an optional runtime, and
+  Aider on the ecosystem watchlist all answer the same question without leaving
+  the category that explains how to connect them. Press `o` in `:hub`, or use
+  `superqode hub list --openness open`. Records gained `openness`, `license`,
+  and `repository` fields, taking the Hub index to schema 1.5.
+- Openness resolves from four sources in precedence order: a license verified
+  against the project's published metadata, the `open-source` tag already
+  carried by the bundled ACP catalog, the `harness_openness` field already
+  curated on vendor connection profiles, and SuperQode's own Apache-2.0 source.
+  Anything none of them can answer stays blank and reads as "Not published".
+  A source-available license is not reported as open source, and a repository's
+  own HarnessSpec is never given a license SuperQode has no way to know.
+
+### Fixed
+
+- The DeepAgents backend could not drive a local Ollama model. It treated any
+  colon in a model name as a provider separator, but Ollama writes its version
+  tag that way, so `qwen3.5:2b` lost its prefix and LangChain reported
+  `Unable to infer model provider`. Since SuperQode splits provider from model
+  before a request reaches a backend, only an exact `<provider>:` prefix now
+  counts as already qualified. Verified end to end against a live local model.
+
+### Changed
+
+- The welcome screen headline reads "THE HARNESS LAYER FOR CODING AGENTS",
+  matching the README, the website, and the PyPI description. It was the last
+  surface still saying "unified", so the product described itself one way on
+  first launch and another way everywhere else. The narrow-terminal fallback
+  drops to "THE HARNESS LAYER" for the same reason.
+- Vendor rows on the Subscriptions screen are named for the product alone.
+  `Codex subscription`, `Cursor subscription`, `Amp subscription`,
+  `Grok subscription`, `Factory Droid subscription`, and `Kiro subscription`
+  become `Codex`, `Cursor`, `Amp`, `Grok`, `Factory Droid`, and `Kiro`. Nine of
+  the fifteen rows already read that way, so the screen was inconsistent, and
+  the heading above them already says these are subscriptions. Profile ids and
+  every `:connect <id>` command are unchanged. The plan-menu route `plan-grok`
+  keeps the name `Grok subscription`, which now also removes a collision where
+  two different profiles answered to the same label.
+- The `deepagents` extra now requires `deepagents>=0.7.0,<0.8.0`. An
+  out-of-range install reports a version problem naming the required range
+  rather than claiming the package is missing.
+
 ## [0.2.96] - 2026-08-15
 
 ### Added

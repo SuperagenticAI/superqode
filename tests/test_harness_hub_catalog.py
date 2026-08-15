@@ -315,3 +315,92 @@ def test_full_hub_exposes_get_started_tools_policies_and_popularity():
         "Authenticate with GitHub Copilot",
     ]
     assert by_id["copilot"]["setup_steps"][2]["command"] == "copilot login"
+
+
+def test_openness_is_resolved_from_the_most_specific_source_that_knows():
+    """Openness describes the harness implementation, never SuperQode's route.
+
+    Four sources answer this, in order: a license SuperQode has verified, the
+    ACP registry's own tag, the vendor profile that already curates it, and
+    SuperQode's own Apache-2.0 code.
+    """
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+
+    verified = by_id["deepagents"]
+    assert (verified["openness"], verified["license"]) == ("open", "MIT")
+    assert verified["repository"] == "https://github.com/langchain-ai/deepagents"
+
+    # Tagged in the ACP registry but not license-checked by hand: open, with
+    # the license left blank rather than invented.
+    assert by_id["acp:bub"]["openness"] == "open"
+    assert by_id["acp:bub"]["license"] == ""
+
+    # Curated on the vendor connection profile.
+    assert by_id["cursor"]["openness"] == "closed"
+
+    # SuperQode's own harnesses and presets.
+    assert (by_id["workbench"]["openness"], by_id["workbench"]["license"]) == (
+        "open",
+        "Apache-2.0",
+    )
+    assert by_id["glm-coding"]["openness"] == "open"
+
+
+def test_a_harness_is_never_reported_as_open_on_a_guess():
+    """Source-available and unverified entries must not read as open source.
+
+    Charm ships Crush under the Functional Source License, so an open-source
+    filter that included it would be telling the user something false.
+    """
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+
+    assert by_id["ecosystem:crush"]["openness"] == ""
+    assert by_id["ecosystem:crush"]["license"] == ""
+    assert all(
+        record["openness"] in {"open", "closed", ""}
+        for record in build_hub_index(public=True)["items"]
+    )
+
+
+def test_project_harnesses_never_claim_a_licence_superqode_cannot_know():
+    payload = build_hub_index(
+        items=[_item(id="mine", group="Project harnesses", source="file", kind="harness")]
+    )
+
+    assert payload["items"][0]["integration_level"] == "custom"
+    assert payload["items"][0]["openness"] == ""
+    assert payload["items"][0]["license"] == ""
+
+
+def test_openness_filter_selects_only_entries_known_to_be_open():
+    records = build_hub_index(public=True)["items"]
+
+    matched = filter_hub_records(records, openness="open")
+
+    assert matched
+    assert {record["openness"] for record in matched} == {"open"}
+    ids = {record["id"] for record in matched}
+    assert {"deepagents", "deepagents-code", "acp:opencode", "workbench"} <= ids
+    assert not ids & {"cursor", "devin", "ecosystem:crush"}
+
+
+def test_hub_list_filters_by_openness_from_the_cli():
+    result = CliRunner().invoke(hub, ["list", "--openness", "open", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["count"] > 0
+    assert {item["openness"] for item in payload["items"]} == {"open"}
+
+
+def test_every_hub_entry_has_a_unique_id():
+    """Native, vendor, ACP, and ecosystem routes are merged into one list.
+
+    A repeated id would make two different harnesses collide in the Hub, in
+    `hub show`, and in the published catalog. DeepAgents ships as four separate
+    routes, which is exactly the shape that would trip over this.
+    """
+    ids = [item["id"] for item in build_hub_index(public=True)["items"]]
+
+    assert len(ids) == len(set(ids))
+    assert {"deepagents", "deepagents-code", "acp:deepagents", "acp:deepagents-code"} <= set(ids)

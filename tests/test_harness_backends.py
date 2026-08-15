@@ -136,6 +136,31 @@ def test_deepagents_model_spec_normalizes_hf_shorthand():
     )
 
 
+def test_deepagents_model_spec_keeps_the_provider_for_a_tagged_local_model():
+    """An Ollama version tag is part of the model name, not a provider separator.
+
+    Dropping the prefix for anything containing a colon left LangChain with
+    `qwen3.5:2b` and no provider to infer, which failed every local model whose
+    name carries a tag. That is nearly all of them.
+    """
+    from superqode.harness.backends.deepagents import _model_spec
+
+    assert _model_spec("ollama", "qwen3.5:2b") == "ollama:qwen3.5:2b"
+    assert _model_spec("ollama", "qwen3:8b") == "ollama:qwen3:8b"
+    assert _model_spec("ollama", "gemma4") == "ollama:gemma4"
+
+
+def test_deepagents_model_spec_does_not_double_prefix_a_qualified_model():
+    from superqode.harness.backends.deepagents import _model_spec
+
+    assert _model_spec("anthropic", "anthropic:claude-sonnet-4-6") == (
+        "anthropic:claude-sonnet-4-6"
+    )
+    assert _model_spec("openai", "gpt-5.5") == "openai:gpt-5.5"
+    # With no provider to add there is nothing to qualify, so the model stands.
+    assert _model_spec("", "anthropic:claude-sonnet-4-6") == "anthropic:claude-sonnet-4-6"
+
+
 def test_create_harness_backend_returns_deepagents_adapter():
     backend = create_harness_backend("deepagents")
 
@@ -695,3 +720,54 @@ async def test_runtime_harness_backend_preserves_rich_runtime_events(monkeypatch
     assert [event.type for event in events[:2]] == ["model_delta", "tool_call"]
     assert events[0].session_id == "s"
     assert events[-1].type == "end"
+
+
+def test_deepagents_status_reports_the_install_command_when_absent(monkeypatch):
+    from superqode.harness.backends import deepagents as deepagents_backend
+
+    monkeypatch.setattr(deepagents_backend.importlib.util, "find_spec", lambda _name: None)
+
+    available, issue = deepagents_backend.deepagents_installation_status()
+
+    assert available is False
+    assert issue == 'uv tool install "superqode[deepagents]"'
+
+
+def test_deepagents_status_rejects_a_release_outside_the_tested_range(monkeypatch):
+    """The adapter targets the 0.7 API, so 0.6 must report a version problem.
+
+    Reporting "not installed" there would send the user to an install command
+    they have already run.
+    """
+    from superqode.harness.backends import deepagents as deepagents_backend
+
+    monkeypatch.setattr(deepagents_backend.importlib.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(deepagents_backend.importlib.metadata, "version", lambda _name: "0.6.1")
+
+    available, issue = deepagents_backend.deepagents_installation_status()
+
+    assert available is False
+    assert "0.6.1" in issue
+    assert "deepagents>=0.7.0,<0.8" in issue
+
+
+def test_deepagents_status_accepts_a_supported_release(monkeypatch):
+    from superqode.harness.backends import deepagents as deepagents_backend
+
+    monkeypatch.setattr(deepagents_backend.importlib.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(deepagents_backend.importlib.metadata, "version", lambda _name: "0.7.6")
+
+    assert deepagents_backend.deepagents_installation_status() == (True, "")
+
+
+def test_deepagents_template_is_runnable_by_its_own_backend():
+    """The shipped preset must satisfy the adapter's own preconditions."""
+    from superqode.harness.templates import get_harness_template
+
+    spec = get_harness_template("deepagents")
+    inspection = inspect_harness_backend("deepagents", spec)
+
+    assert spec.runtime.backend == "deepagents"
+    # The adapter rejects specs that block the shell, so the preset cannot.
+    assert spec.execution_policy.allow_shell is True
+    assert inspection.issues == ()

@@ -34,7 +34,7 @@ explicit user action. See the
 | `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
 | `antigravity-sdk` | `uv tool install "superqode[antigravity-sdk]"` | Google Antigravity SDK runtime using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. This is separate from the signed-in `agy` CLI route. |
 | `antigravity-managed` | included | Google-hosted Antigravity agent over the Gemini Interactions API using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. |
-| `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
+| `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.7 runtime for graph and middleware-heavy coding harnesses. Also available as the built-in `deepagents` harness. |
 | `pydanticai` | `uv tool install "superqode[pydanticai]"` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
 ### Vendor SDK Bundle
@@ -128,11 +128,11 @@ Option 4 opens the vendor screen. Esc returns to the screen above:
 ```text
 :connect subscriptions
   US Coding Agents
-  [1] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
+  [1] Codex                Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
   [2] Cursor               Use the Cursor plan signed in to Cursor CLI
   [3] Amp                  Use the Amp plan signed in to Amp CLI
   [4] Antigravity CLI      Use Google's agent harness with your Google Sign-In
-  [5] Grok subscription    Use Grok Build through the signed-in Grok CLI
+  [5] Grok                 Use Grok Build through the signed-in Grok CLI
   [6] GitHub Copilot       Use your plan through the SDK or official CLI
   [7] Gemini CLI           Use Google's Gemini CLI through its vendor sign-in
   [8] Devin                Use Cognition's Devin CLI through devin acp
@@ -632,7 +632,13 @@ model_policy:
 
 ### `deepagents`
 
-Wraps DeepAgents 0.6 through `create_deep_agent(...)`. This backend is useful when you want DeepAgents graph state, middleware, filesystem backend behavior, and subagent patterns behind a SuperQode `HarnessSpec`.
+Wraps DeepAgents 0.7 through `create_deep_agent(...)`. This backend is useful when you want DeepAgents graph state, middleware, filesystem backend behavior, and subagent patterns behind a SuperQode `HarnessSpec`.
+
+It is also a selectable harness. `superqode harness run deepagents "..."` and
+`:harness switch deepagents` use the shipped preset, and
+`superqode harness init <name> --template deepagents` starts a repository-owned
+spec from it. See [LangChain DeepAgents](providers/deepagents.md) for the
+complete route, including the `dcode` coding agent.
 
 SuperQode maps:
 
@@ -647,6 +653,7 @@ Current limits:
 
 - No-tool specs are rejected. Use `builtin` for model-only harnesses.
 - Specs with `allow_shell=false` are rejected for now because DeepAgents exposes `execute` when using the filesystem backend.
+- SuperQode targets the DeepAgents 0.7 API. Another release reports a version problem rather than a missing package, so the required upgrade or downgrade is named directly.
 - DeepAgents remains optional. Use it when you want DeepAgents behavior behind a SuperQode harness.
 
 ## Embedding

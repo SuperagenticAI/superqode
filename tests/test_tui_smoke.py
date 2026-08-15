@@ -354,7 +354,7 @@ def test_welcome_uses_unified_harness_positioning():
 
     text = render_plain(welcome)
 
-    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" in text
+    assert "THE HARNESS LAYER FOR CODING AGENTS" in text
     # No command list here. The prompt placeholder names the first command and
     # the bar under it carries them as controls, so the home screen is the
     # product, not a menu.
@@ -380,7 +380,7 @@ def test_welcome_uses_unified_harness_positioning():
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
     lines = [line.strip() for line in text.splitlines()]
-    headline_index = lines.index("THE UNIFIED HARNESS LAYER FOR CODING AGENTS")
+    headline_index = lines.index("THE HARNESS LAYER FOR CODING AGENTS")
     capabilities_index = lines.index(
         "Harnesses · Context · Memory · Tools · Evaluations · Control loops"
     )
@@ -412,7 +412,7 @@ def test_welcome_shows_workspace_state_with_a_single_next_step():
     assert "Task" not in text
     assert ":explore" in text
     assert ":tour" in text
-    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" not in text
+    assert "THE HARNESS LAYER FOR CODING AGENTS" not in text
     assert "Interoperability:" not in text
 
 
@@ -456,7 +456,7 @@ def test_welcome_compacts_for_narrow_terminals():
     text = render_plain(render_welcome([], width=50))
 
     assert "SuperQode" in text
-    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" in text
+    assert "THE HARNESS LAYER FOR CODING AGENTS" in text
     assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
@@ -470,8 +470,8 @@ def test_welcome_uses_one_line_headlines_at_small_widths():
     compact = render_plain(render_welcome([], width=36))
     narrow = render_plain(render_welcome([], width=24))
 
-    assert "UNIFIED HARNESS LAYER" in compact
-    assert "THE UNIFIED HARNESS LAYER FOR CODING AGENTS" not in compact
+    assert "THE HARNESS LAYER" in compact
+    assert "THE HARNESS LAYER FOR CODING AGENTS" not in compact
     assert "HARNESS LAYER" in narrow
     assert "CODING AGENTS" not in narrow
 
@@ -5974,7 +5974,12 @@ def test_legacy_subscriptions_menu_name_still_lands_on_the_vendor_screen():
     app._show_connect_type_picker(log, menu="subscriptions")
 
     assert app._connect_menu == "vendors"
-    assert "Codex subscription" in render_plain(log.items[-1])
+    rendered = render_plain(log.items[-1])
+    assert "Subscriptions" in rendered
+    # The heading already says these are subscriptions, so a row is the bare
+    # product name.
+    assert "Codex" in rendered
+    assert "Codex subscription" not in rendered
 
 
 def test_agents_picker_returns_to_the_root_screen():
@@ -6022,7 +6027,11 @@ def test_connect_picker_can_open_harness_catalog():
     assert kwargs["include_all"] is False
     assert kwargs["clear_log"] is False
     assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
-    assert [entry.id for entry in kwargs["catalog_entries"]] == ["tau", "deepseek-harness"]
+    assert [entry.id for entry in kwargs["catalog_entries"]] == [
+        "tau",
+        "deepseek-harness",
+        "deepagents",
+    ]
 
 
 def test_other_harnesses_profile_dispatch_opens_focused_optional_picker():
@@ -6036,7 +6045,11 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker():
     app._dispatch_connection_profile(get_connection_profile("other-harnesses"), log)
 
     assert len(calls) == 1
-    assert [entry.id for entry in calls[0][1]["catalog_entries"]] == ["tau", "deepseek-harness"]
+    assert [entry.id for entry in calls[0][1]["catalog_entries"]] == [
+        "tau",
+        "deepseek-harness",
+        "deepagents",
+    ]
     assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
 
 

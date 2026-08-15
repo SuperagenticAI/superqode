@@ -219,6 +219,11 @@ def _qwen_code_ready() -> bool:
     return shutil.which("qwen") is not None
 
 
+def _deepagents_code_ready() -> bool:
+    """LangChain's Deep Agents Code CLI is available for ACP."""
+    return shutil.which("dcode") is not None
+
+
 def _antigravity_cli_ready() -> bool:
     """The CLI exists and meets the minimum safe subprocess version."""
     from superqode.runtime.antigravity_status import probe_antigravity_cli
@@ -634,7 +639,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="open",
         model_openness="OpenAI models",
         transport="SDK",
-        label="Codex subscription",
+        label="Codex",
         description="Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)",
         connector="runtime",
         menu=CONNECT_MENU_VENDORS,
@@ -649,7 +654,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="closed",
         model_openness="multi-model",
         transport="ACP",
-        label="Cursor subscription",
+        label="Cursor",
         description=(
             "Use Cursor Agent over ACP through the account already signed in to Cursor CLI"
         ),
@@ -668,7 +673,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="closed",
         model_openness="multi-model",
         transport="ACP",
-        label="Amp subscription",
+        label="Amp",
         description="Use Amp through its local account login and ACP adapter",
         connector="acp",
         menu=CONNECT_MENU_VENDORS,
@@ -740,7 +745,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="closed",
         model_openness="Grok models",
         transport="ACP or CLI",
-        label="Grok subscription",
+        label="Grok",
         description=(
             "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, "
             "over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness "
@@ -805,7 +810,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="closed",
         model_openness="any model + BYOK",
         transport="ACP",
-        label="Factory Droid subscription",
+        label="Factory Droid",
         description="Use Factory Droid through its locally authenticated CLI and ACP mode",
         connector="acp",
         menu=CONNECT_MENU_VENDORS,
@@ -819,7 +824,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         harness_openness="closed",
         model_openness="multi-model",
         transport="ACP",
-        label="Kiro subscription",
+        label="Kiro",
         description=("Use a Kiro or Amazon Q Developer plan over ACP through Kiro CLI sign-in"),
         connector="acp",
         menu=CONNECT_MENU_VENDORS,
@@ -875,6 +880,22 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=(
             "run `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, "
             "then run `kimi` and complete `/login`"
+        ),
+    ),
+    ConnectionProfile(
+        id="deepagents-code",
+        harness_openness="open",
+        model_openness="any model",
+        transport="ACP",
+        label="Deep Agents Code",
+        description=("LangChain's MIT-licensed terminal coding agent over its own ACP server"),
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="deepagents-code",
+        self_contained=True,
+        detect=_deepagents_code_ready,
+        unavailable_hint=(
+            "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`"
         ),
     ),
 ]
