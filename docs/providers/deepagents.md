@@ -76,6 +76,29 @@ SuperQode targets the DeepAgents 0.7 API. Any other release reports a version
 problem rather than a missing package, so an upgrade or downgrade is named
 directly.
 
+### Provider Integration Packages
+
+DeepAgents resolves the model with LangChain's `init_chat_model`, which
+requires the matching LangChain integration package to be importable. The
+runtime bundles `langchain-anthropic` and `langchain-google-genai` only, so
+local providers fail with an `ImportError` such as:
+
+```text
+ImportError: Initializing ChatOllama requires the langchain-ollama package.
+Please install it with `pip install langchain-ollama`
+```
+
+Install the integration package for your provider into the same tool
+environment (use `--force` because `superqode` is already installed):
+
+```bash
+uv tool install "superqode[deepagents]" --with langchain-ollama --force
+```
+
+Use the equivalent package for other local providers, for example
+`langchain-openai` for LM Studio, MLX, or llama.cpp OpenAI-compatible
+endpoints. Then re-run `:retry` in an existing session.
+
 ### Run The Built-In Preset
 
 ```bash

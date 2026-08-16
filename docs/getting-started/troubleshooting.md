@@ -199,6 +199,25 @@ uv tool install "superqode[adk]"
 uv tool install "superqode[codex-sdk]"
 ```
 
+### LangChain runtime can't initialize a local provider
+
+The `deepagents` and `pydanticai` runtimes resolve models through LangChain,
+which imports the integration package per provider. Only Anthropic and Gemini
+ship with the runtime, so an Ollama model fails with:
+
+```text
+ImportError: Initializing ChatOllama requires the langchain-ollama package.
+```
+
+Install the matching package into the tool environment:
+
+```bash
+uv tool install "superqode[deepagents]" --with langchain-ollama --force
+```
+
+and use `:retry` in the session. See
+[Provider Integration Packages](../providers/deepagents.md#provider-integration-packages).
+
 ### A run did something unexpected
 
 Inspect persisted events:
