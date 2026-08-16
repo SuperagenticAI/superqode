@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.4",
-  "generated_at": "2026-08-15T17:06:55.429277+00:00",
-  "count": 94,
+  "schema_version": "1.5",
+  "generated_at": "2026-08-16T00:04:44.562729+00:00",
+  "count": 97,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -28,7 +28,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -74,7 +74,9 @@
       ],
       "based_on": "core",
       "popularity_rank": 220,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "rlm",
@@ -93,7 +95,7 @@
       "warning": "Host Python permissions: RLM Python runs with the permissions of the SuperQode process, with no approval prompts or sandbox.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -136,7 +138,9 @@
       ],
       "based_on": "rlm",
       "popularity_rank": 250,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "pipy",
@@ -155,7 +159,7 @@
       "warning": "Pure host permissions: PiPy runs tools with the permissions of the process, with no approval prompts and no sandbox, matching pi.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -201,7 +205,9 @@
       ],
       "based_on": "pipy",
       "popularity_rank": 240,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "workbench",
@@ -220,7 +226,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -277,7 +283,9 @@
       ],
       "based_on": "workbench",
       "popularity_rank": 230,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "no-tool",
@@ -296,7 +304,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -336,11 +344,13 @@
       ],
       "based_on": "no-tool",
       "popularity_rank": 260,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "codex",
-      "name": "Codex subscription",
+      "name": "Codex",
       "description": "Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)",
       "category": "Coding agents",
       "kind": "connection",
@@ -355,7 +365,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://openai.com/codex/",
-      "repository": "",
+      "repository": "https://github.com/openai/codex",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -399,7 +409,9 @@
           "command": "codex login",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "claude",
@@ -453,7 +465,9 @@
           "command": "",
           "description": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY"
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "kimi-code",
@@ -472,7 +486,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/MoonshotAI/kimi-code",
-      "repository": "",
+      "repository": "https://github.com/MoonshotAI/kimi-code",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -515,7 +529,9 @@
           "command": "kimi",
           "description": "When Kimi opens, enter /login and complete the account flow."
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "qwen-code",
@@ -534,7 +550,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/QwenLM/qwen-code",
-      "repository": "",
+      "repository": "https://github.com/QwenLM/qwen-code",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -577,7 +593,9 @@
           "command": "qwen auth",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "antigravity",
@@ -641,11 +659,13 @@
           "command": "agy",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "grok",
-      "name": "Grok subscription",
+      "name": "Grok",
       "description": "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness on the same plan: :grok api",
       "category": "Coding agents",
       "kind": "connection",
@@ -704,7 +724,9 @@
           "command": "grok login",
           "description": "Device authentication is also available with grok login --device-auth."
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "copilot",
@@ -772,11 +794,13 @@
           "command": "copilot login",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "cursor",
-      "name": "Cursor subscription",
+      "name": "Cursor",
       "description": "Use Cursor Agent over ACP through the account already signed in to Cursor CLI",
       "category": "Coding agents",
       "kind": "connection",
@@ -834,11 +858,13 @@
           "command": "cursor-agent login",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "amp",
-      "name": "Amp subscription",
+      "name": "Amp",
       "description": "Use Amp through its local account login and ACP adapter",
       "category": "Coding agents",
       "kind": "connection",
@@ -896,7 +922,9 @@
           "command": "uv tool install acp-amp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "muse",
@@ -958,7 +986,9 @@
           "command": "muse login",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "prime-agent",
@@ -977,7 +1007,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
-      "repository": "",
+      "repository": "https://github.com/PrimeIntellect-ai/prime-agent",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1022,7 +1052,9 @@
           "command": "prime-agent",
           "description": "When Prime Agent opens, enter /login and follow the provider sign-in flow."
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "devin",
@@ -1084,11 +1116,13 @@
           "command": "devin auth login",
           "description": ""
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "droid",
-      "name": "Factory Droid subscription",
+      "name": "Factory Droid",
       "description": "Use Factory Droid through its locally authenticated CLI and ACP mode",
       "category": "Coding agents",
       "kind": "connection",
@@ -1146,11 +1180,13 @@
           "command": "",
           "description": "Complete Factory's CLI sign-in flow before connecting from SuperQode."
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "kiro",
-      "name": "Kiro subscription",
+      "name": "Kiro",
       "description": "Use a Kiro or Amazon Q Developer plan over ACP through Kiro CLI sign-in",
       "category": "Coding agents",
       "kind": "connection",
@@ -1208,7 +1244,9 @@
           "command": "",
           "description": "Sign in with your Kiro or Amazon Q Developer account."
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "glm-cli",
@@ -1270,7 +1308,73 @@
           "command": "",
           "description": "Provide the Z.AI API key used by the GLM agent."
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
+    },
+    {
+      "id": "deepagents-code",
+      "name": "Deep Agents Code",
+      "description": "LangChain's MIT-licensed terminal coding agent over its own ACP server",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "deepagents-code",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.langchain.com/deepagents-code",
+      "repository": "https://github.com/langchain-ai/deepagents",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/deepagents/",
+      "install_command": "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`",
+      "tui_commands": [
+        ":connect deepagents-code",
+        ":harness switch deepagents-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run deepagents-code \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "any model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Deep Agents Code",
+      "popularity_rank": 185,
+      "setup_steps": [
+        {
+          "title": "Install Deep Agents Code",
+          "command": "curl -LsSf https://langch.in/dcode | bash",
+          "description": ""
+        },
+        {
+          "title": "Connect a model provider",
+          "command": "dcode",
+          "description": "When Deep Agents Code opens, enter /auth and connect any provider it supports."
+        }
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:amp",
@@ -1323,7 +1427,9 @@
           "command": "uv tool install acp-amp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:cursor",
@@ -1376,7 +1482,64 @@
           "command": "curl https://cursor.com/install -fsS | bash",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
+    },
+    {
+      "id": "acp:deepagents-code",
+      "name": "Deep Agents Code (ACP)",
+      "description": "LangChain's MIT-licensed terminal coding agent, built on the Deep Agents SDK, with persistent memory, skills, subagents, and approval controls.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -LsSf https://langch.in/dcode | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.langchain.com/deepagents-code",
+      "repository": "https://github.com/langchain-ai/deepagents",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.langchain.com/deepagents-code",
+      "install_command": "curl -LsSf https://langch.in/dcode | bash",
+      "tui_commands": [
+        ":connect acp deepagents-code",
+        ":harness switch acp:deepagents-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:deepagents-code \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Deep Agents Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Deep Agents Code",
+          "command": "curl -LsSf https://langch.in/dcode | bash",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:copilot",
@@ -1429,7 +1592,9 @@
           "command": "npm install -g @github/copilot",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:grok",
@@ -1482,7 +1647,9 @@
           "command": "curl -fsSL https://x.ai/cli/install.sh | bash",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:opencode",
@@ -1501,7 +1668,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://opencode.ai/",
-      "repository": "",
+      "repository": "https://github.com/opencode-ai/opencode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1535,7 +1702,9 @@
           "command": "npm i -g opencode-ai",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:devin",
@@ -1588,7 +1757,9 @@
           "command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:droid",
@@ -1641,7 +1812,9 @@
           "command": "npm install -g droid",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:fast-agent",
@@ -1694,7 +1867,9 @@
           "command": "uv tool install -U fast-agent-mcp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:gemini",
@@ -1713,7 +1888,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/google-gemini/gemini-cli",
-      "repository": "",
+      "repository": "https://github.com/google-gemini/gemini-cli",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1747,7 +1922,9 @@
           "command": "npm i -g @google/gemini-cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:hermes",
@@ -1800,7 +1977,9 @@
           "command": "uv tool install 'hermes-agent[acp]'",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:openhands",
@@ -1819,7 +1998,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
-      "repository": "",
+      "repository": "https://github.com/OpenHands/OpenHands",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1853,7 +2032,9 @@
           "command": "pip install openhands",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:prime-agent",
@@ -1872,7 +2053,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
-      "repository": "",
+      "repository": "https://github.com/PrimeIntellect-ai/prime-agent",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1906,7 +2087,9 @@
           "command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:claude",
@@ -1959,7 +2142,9 @@
           "command": "npm install -g @agentclientprotocol/claude-agent-acp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:cline",
@@ -1978,7 +2163,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://cline.bot/",
-      "repository": "",
+      "repository": "https://github.com/cline/cline",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2012,7 +2197,9 @@
           "command": "npm install -g @cline/cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:codex",
@@ -2031,7 +2218,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://openai.com/codex",
-      "repository": "",
+      "repository": "https://github.com/openai/codex",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2065,7 +2252,9 @@
           "command": "npm install -g @agentclientprotocol/codex-acp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:goose",
@@ -2084,7 +2273,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/block/goose",
-      "repository": "",
+      "repository": "https://github.com/aaif-goose/goose",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2118,7 +2307,9 @@
           "command": "pipx install goose-ai",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:harn",
@@ -2171,7 +2362,9 @@
           "command": "",
           "description": "# Harn\n\nHarn runs `.harn` agent pipelines and exposes them through ACP over standard input and output.\n\n## Installation\n\nInstall Harn from its official releases, then run `harn serve acp`.\nSee https://github.com/burin-labs/harn.\n"
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:kilo",
@@ -2224,7 +2417,9 @@
           "command": "npm install -g @kilocode/cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:kimi",
@@ -2243,7 +2438,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/MoonshotAI/kimi-code",
-      "repository": "",
+      "repository": "https://github.com/MoonshotAI/kimi-code",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2277,7 +2472,9 @@
           "command": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:pi",
@@ -2296,7 +2493,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/earendil-works/pi",
-      "repository": "",
+      "repository": "https://github.com/earendil-works/pi",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2330,7 +2527,9 @@
           "command": "npm install -g @earendil-works/pi-coding-agent && npm install -g pi-acp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:qwen",
@@ -2349,7 +2548,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/QwenLM/qwen-code",
-      "repository": "",
+      "repository": "https://github.com/QwenLM/qwen-code",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2383,7 +2582,9 @@
           "command": "npm install -g @qwen-code/qwen-code",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:agentpool",
@@ -2436,7 +2637,9 @@
           "command": "pip install agentpool[coding]",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:auggie",
@@ -2489,7 +2692,9 @@
           "command": "npm install -g @augmentcode/auggie",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:autodev",
@@ -2508,7 +2713,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/phodal/auto-dev",
-      "repository": "",
+      "repository": "https://github.com/phodal/auto-dev",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2542,7 +2747,9 @@
           "command": "npm install -g @xiuper/cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:blackbox",
@@ -2595,7 +2802,9 @@
           "command": "curl -fsSL https://blackbox.ai/install.sh | sh",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:bub",
@@ -2614,7 +2823,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/bubbuild/bub",
-      "repository": "",
+      "repository": "https://github.com/bubbuild/bub",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2648,7 +2857,9 @@
           "command": "bub install bub-acp-server@main",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:cagent",
@@ -2701,7 +2912,9 @@
           "command": "pip install cagent",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:codeassistant",
@@ -2754,7 +2967,9 @@
           "command": "cargo install code-assistant",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:codebuddy",
@@ -2807,7 +3022,9 @@
           "command": "npm install -g @tencent-ai/codebuddy-code",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:cortex",
@@ -2860,7 +3077,9 @@
           "command": "",
           "description": "# Cortex Code\n\nCortex Code provides an ACP server for Snowflake development workflows.\n\n## Installation\n\nInstall and authenticate Cortex Code using Snowflake's documentation, then run\n`cortex acp serve`.\n"
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:crow",
@@ -2913,7 +3132,9 @@
           "command": "npm install -g crow-cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:deepagents",
@@ -2932,7 +3153,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://docs.langchain.com/oss/javascript/deepagents/overview",
-      "repository": "",
+      "repository": "https://github.com/langchain-ai/deepagents",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -2966,7 +3187,9 @@
           "command": "npm install -g deepagents-acp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:dirac",
@@ -3019,7 +3242,9 @@
           "command": "npm install -g dirac-cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:fount",
@@ -3038,7 +3263,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/steve02081504/fount",
-      "repository": "",
+      "repository": "https://github.com/steve02081504/fount",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3072,7 +3297,9 @@
           "command": "cargo install fount",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:glm",
@@ -3125,7 +3352,9 @@
           "command": "npm install -g glm-acp-agent",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:junie",
@@ -3178,7 +3407,9 @@
           "command": "npm install -g @jetbrains/junie",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:kiro",
@@ -3231,7 +3462,9 @@
           "command": "curl -fsSL https://cli.kiro.dev/install | bash",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:llmlingagent",
@@ -3284,7 +3517,9 @@
           "command": "pip install llmling-agent",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:minion",
@@ -3303,7 +3538,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/femto/minion-code",
-      "repository": "",
+      "repository": "https://github.com/femto/minion-code",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3337,7 +3572,9 @@
           "command": "pip install minionx && pip install -e .",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:mistral-vibe",
@@ -3390,7 +3627,9 @@
           "command": "pip install mistral-vibe",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:openclaw",
@@ -3443,7 +3682,9 @@
           "command": "",
           "description": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n"
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:poolside",
@@ -3496,7 +3737,9 @@
           "command": "npm install -g @poolsideai/pool",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:qoder",
@@ -3549,7 +3792,9 @@
           "command": "npm install -g qoder-cli",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:sigit",
@@ -3568,7 +3813,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/getsigit/sigit",
-      "repository": "",
+      "repository": "https://github.com/getsigit/sigit",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3602,7 +3847,9 @@
           "command": "npm install -g sigit",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:stakpak",
@@ -3655,7 +3902,9 @@
           "command": "pip install stakpak",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "acp:stdio-bus",
@@ -3674,7 +3923,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/stdiobus/stdiobus",
-      "repository": "",
+      "repository": "https://github.com/stdiobus/stdiobus",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3708,7 +3957,9 @@
           "command": "cargo install stdio-bus",
           "description": ""
         }
-      ]
+      ],
+      "openness": "open",
+      "license": ""
     },
     {
       "id": "acp:vtcode",
@@ -3761,7 +4012,9 @@
           "command": "npm install -g vtcode-acp",
           "description": ""
         }
-      ]
+      ],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "tau",
@@ -3780,7 +4033,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/huggingface/tau",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3822,7 +4075,9 @@
       ],
       "based_on": "tau",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "deepseek-harness",
@@ -3841,7 +4096,7 @@
       "warning": "DeepSeek Harness executes its own tools, so SuperQode approvals do not gate them. Routes come from DeepSeek's composition, not SuperQode's model catalog.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/deepseek-ai/deepseek-harness",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3886,7 +4141,75 @@
       ],
       "based_on": "deepseek-harness",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
+    },
+    {
+      "id": "deepagents",
+      "name": "DeepAgents",
+      "description": "LangChain DeepAgents coding harness over the DeepAgents SDK; DeepAgents owns the graph, filesystem backend, and subagents.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "deepagents",
+      "source": "optional:deepagents",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "DeepAgents runs its own filesystem and execute tools, so SuperQode approvals do not gate them. Model routes resolve through LangChain's provider strings.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/langchain-ai/deepagents",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/deepagents/",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch deepagents",
+        ":harness show deepagents",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run deepagents \"Describe your task\"",
+        "superqode harness show deepagents"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "deepagents",
+      "popularity_rank": 255,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "benchmark-coding",
@@ -3905,7 +4228,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3961,7 +4284,9 @@
       ],
       "based_on": "benchmark-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "rlm-docker",
@@ -3980,7 +4305,7 @@
       "warning": "Docker Python: the kernel runs inside a container with networking disabled. Requires a running Docker daemon.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4023,7 +4348,9 @@
       ],
       "based_on": "rlm-docker",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "rlm-monty",
@@ -4042,7 +4369,7 @@
       "warning": "Monty Python: no filesystem, subprocess, network, or third-party imports. Writes, shell and rlm.run refuse. Needs the 'monty' extra.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4085,7 +4412,9 @@
       ],
       "based_on": "rlm-monty",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "prime-agent-python",
@@ -4104,7 +4433,7 @@
       "warning": "Prime Agent owns tool execution and runs with the permissions of the SuperQode process.",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4149,7 +4478,9 @@
       ],
       "based_on": "prime-agent-python",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "gemma4-coding",
@@ -4168,7 +4499,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4224,7 +4555,9 @@
       ],
       "based_on": "gemma4-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "gemma4-no-tool",
@@ -4243,7 +4576,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4283,7 +4616,9 @@
       ],
       "based_on": "gemma4-no-tool",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "ds4-coding",
@@ -4302,7 +4637,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4358,7 +4693,9 @@
       ],
       "based_on": "ds4-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "ds4-fast-local",
@@ -4377,7 +4714,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4433,7 +4770,9 @@
       ],
       "based_on": "ds4-fast-local",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "qwen-coding",
@@ -4452,7 +4791,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4508,7 +4847,9 @@
       ],
       "based_on": "qwen-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "glm-coding",
@@ -4527,7 +4868,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4583,7 +4924,9 @@
       ],
       "based_on": "glm-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "glm52-coding",
@@ -4602,7 +4945,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4659,7 +5002,9 @@
       ],
       "based_on": "glm52-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "minimax-coding",
@@ -4678,7 +5023,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4734,7 +5079,9 @@
       ],
       "based_on": "minimax-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "kimi-coding",
@@ -4753,7 +5100,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4810,7 +5157,9 @@
       ],
       "based_on": "kimi-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "kimi-k3-coding",
@@ -4829,7 +5178,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "",
-      "repository": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -4886,7 +5235,9 @@
       ],
       "based_on": "kimi-k3-coding",
       "popularity_rank": 500,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "ecosystem:zcode",
@@ -4952,7 +5303,9 @@
           "command": "",
           "description": "Complete authentication inside ZCode's onboarding flow."
         }
-      ]
+      ],
+      "openness": "closed",
+      "license": ""
     },
     {
       "id": "ecosystem:qm",
@@ -4971,7 +5324,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/yc-software/qm",
-      "repository": "",
+      "repository": "https://github.com/yc-software/qm",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -4992,7 +5345,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "ecosystem:harness-new",
@@ -5032,7 +5387,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "ecosystem:replicas",
@@ -5071,7 +5428,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "ecosystem:synth",
@@ -5110,7 +5469,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "ecosystem:better-harness",
@@ -5129,7 +5490,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/QoderAI/better-harness",
-      "repository": "",
+      "repository": "https://github.com/QoderAI/better-harness",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -5149,7 +5510,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "ecosystem:jcode",
@@ -5214,7 +5577,9 @@
           "command": "",
           "description": "jcode connects to Anthropic, OpenAI, or OpenRouter with its own keys."
         }
-      ]
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "ecosystem:aider",
@@ -5233,7 +5598,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/Aider-AI/aider",
-      "repository": "",
+      "repository": "https://github.com/Aider-AI/aider",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -5255,7 +5620,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "ecosystem:crush",
@@ -5295,7 +5662,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "",
+      "license": ""
     },
     {
       "id": "ecosystem:plandex",
@@ -5314,7 +5683,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/plandex-ai/plandex",
-      "repository": "",
+      "repository": "https://github.com/plandex-ai/plandex",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -5335,7 +5704,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "ecosystem:roo-code",
@@ -5354,7 +5725,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/RooCodeInc/Roo-Code",
-      "repository": "",
+      "repository": "https://github.com/RooCodeInc/Roo-Code",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -5376,7 +5747,9 @@
       ],
       "based_on": "Independent project",
       "popularity_rank": 700,
-      "setup_steps": []
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     }
   ]
 }
