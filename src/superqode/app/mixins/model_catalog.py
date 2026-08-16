@@ -21,7 +21,11 @@ from superqode.design_system import (
     COLORS as SQ_COLORS,
     GRADIENT_PURPLE,
 )
-from superqode.providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+from superqode.providers.models import (
+    LATEST_GOOGLE_FLASH_3_6_MODEL,
+    LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_PRO_MODEL,
+)
 
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.recipes import PromptCompletionCandidate
@@ -76,6 +80,13 @@ class ModelCatalogMixin:
         """Get Gemini models list - synced with providers/models.py."""
         return [
             {
+                "id": LATEST_GOOGLE_FLASH_MODEL,
+                "name": "Gemini 3.7 Flash",
+                "context": 1000000,
+                "desc": "Latest stable Gemini 3.7 Flash from models.dev - 1M context",
+                "recommended": True,
+            },
+            {
                 "id": LATEST_GOOGLE_PRO_MODEL,
                 "name": "Gemini 3.1 Pro Preview",
                 "context": 2000000,
@@ -83,10 +94,10 @@ class ModelCatalogMixin:
                 "recommended": True,
             },
             {
-                "id": LATEST_GOOGLE_FLASH_MODEL,
+                "id": LATEST_GOOGLE_FLASH_3_6_MODEL,
                 "name": "Gemini 3.6 Flash",
                 "context": 1000000,
-                "desc": "Latest stable Gemini Flash - 1M context",
+                "desc": "Gemini 3.6 Flash - 1M context",
                 "recommended": True,
             },
         ]
@@ -1453,10 +1464,12 @@ class ModelCatalogMixin:
                     "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
+                    "gemini-3.7-flash",
                     "gemini-3.6-flash",
                     "gemini-3.5-flash-lite",
                     "gemini-3.5-flash",
                     "gemini-3.1-pro",
+                    "gemini 3.7",
                     "gemini 3.5",
                     "gemini 3.1",
                     "claude-opus-4-8",
@@ -1969,10 +1982,12 @@ class ModelCatalogMixin:
                 "5.3",
                 "gpt-5.2",
                 "5.2",
+                "gemini-3.7-flash",
                 "gemini-3.6-flash",
                 "gemini-3.5-flash-lite",
                 "gemini-3.5-flash",
                 "gemini-3.1-pro",
+                "gemini 3.7",
                 "gemini 3.5",
                 "gemini 3.1",
                 "glm-4.7",

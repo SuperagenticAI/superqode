@@ -756,9 +756,12 @@ class AgentRunMixin:
                 else:
                     raise
 
+        in_flight_args: dict[str, list[dict]] = {}
+
         def on_tool_call(name: str, args: dict):
             """Handle tool call - calm mode folds it into the live throbber."""
             _record_tool_activity(name, args)
+            in_flight_args.setdefault(name, []).append(args or {})
             if self._is_calm_output():
                 _safe_call(self._calm_tool_running, name, args, log)
                 return
@@ -778,12 +781,15 @@ class AgentRunMixin:
             """Handle tool result - calm mode shows one tidy line; verbose full."""
             from superqode.tools.base import ToolResult
 
+            call_args_list = in_flight_args.get(name)
+            call_args = call_args_list.pop(0) if call_args_list else {}
+
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
                 _complete_tool_activity(name, status)
                 if self._is_calm_output():
                     meta = result.metadata or {}
-                    done_args = {"path": meta.get("path")} if meta.get("path") else {}
+                    done_args = {**call_args, **meta}
                     _safe_call(self._calm_tool_done, name, done_args, log, result.success)
                     return
                 output = result.output if result.output else result.error
@@ -828,7 +834,7 @@ class AgentRunMixin:
             else:
                 _complete_tool_activity(name, "success")
                 if self._is_calm_output():
-                    _safe_call(self._calm_tool_done, name, {}, log, True)
+                    _safe_call(self._calm_tool_done, name, call_args, log, True)
                     return
                 output_str = str(result) if result else ""
 
@@ -3888,6 +3894,9 @@ class AgentRunMixin:
             or args.get("command")
             or args.get("pattern")
             or args.get("query")
+            or args.get("url")
+            or args.get("task")
+            or args.get("name")
             or ""
         )
         target = str(target).strip()
@@ -3896,6 +3905,8 @@ class AgentRunMixin:
             target = "/".join(parts[-2:]) if len(parts) > 1 else parts[-1]
         if len(target) > 52:
             target = "…" + target[-51:]
+        if not target and name:
+            target = name
         return verb, target
 
     def _maybe_show_thinking_hint(self, log: ConversationLog) -> None:
@@ -3914,9 +3925,10 @@ class AgentRunMixin:
     def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
         """Update the live throbber with the in-progress action."""
         verb, target = self._calm_verb_target(name, args)
-        icon = self._CALM_VERB_ICONS.get(verb, "✷")
+        icons = getattr(self, "_CALM_VERB_ICONS", {})
+        icon = icons.get(verb, "⚡")
         label = verb.capitalize()
-        status = f"{icon} {label} {target}…" if target else f"{icon} {label}…"
+        status = f"{icon} {label}: {target}…" if target else f"{icon} {label}…"
         self._set_thinking_status(status)
         self._maybe_show_thinking_hint(log)
 
@@ -3926,7 +3938,7 @@ class AgentRunMixin:
         """Commit one tidy line for a finished tool (no raw output/diff)."""
         verb, target = self._calm_verb_target(name, args)
         self._calm_actions = getattr(self, "_calm_actions", 0) + 1
-        icon = "✷" if ok else "✗"
+        icon = "✓" if ok else "✗"
         color = THEME["success"] if ok else THEME["error"]
         t = Text()
         t.append(f"  {icon} ", style=f"bold {color}")

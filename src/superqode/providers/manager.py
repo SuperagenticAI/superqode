@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 
 from .models import (
+    LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
@@ -654,7 +655,13 @@ class ProviderManager:
                 models=[
                     ModelInfo(
                         LATEST_GOOGLE_FLASH_MODEL,
-                        "Gemini 3.6 Flash (Latest)",
+                        "Gemini 3.7 Flash (Latest)",
+                        "google",
+                        context_size=1_048_576,
+                    ),
+                    ModelInfo(
+                        LATEST_GOOGLE_FLASH_3_6_MODEL,
+                        "Gemini 3.6 Flash",
                         "google",
                         context_size=1_048_576,
                     ),

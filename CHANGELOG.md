@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.98] - 2026-08-16
+
+### Added
+
+- Added support for Gemini 3.7 Flash (`gemini-3.7-flash`) in the Google BYOK catalog, default model constants, and TUI model pickers.
+- Dynamic models.dev Gemini model discovery so newly fetched Gemini models from `models.dev` are preserved instead of filtered out.
+
+### Improved
+
+- Upgraded calm mode tool activity presentation in TUI:
+  - Tool arguments (e.g. bash commands, file paths, search patterns) are preserved across execution so tool completion lines always show their target (e.g., `✓ run pytest...` or `✓ edit src/app.py`).
+  - Clear checkmark (`✓`) and failure (`✗`) indicators replace repeating ambiguous `✷` symbols.
+  - Live bottom status throbber displays active tool verb and target details (e.g., `⚡ Run: pytest tests/...` or `📄 Read: models.py…`).
+
 ## [0.2.97] - 2026-08-16
 
 ### Added

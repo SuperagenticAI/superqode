@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
-LATEST_GOOGLE_FLASH_MODEL = "gemini-3.6-flash"
+LATEST_GOOGLE_FLASH_MODEL = "gemini-3.7-flash"
+LATEST_GOOGLE_FLASH_3_6_MODEL = "gemini-3.6-flash"
 LATEST_GOOGLE_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
 LATEST_GOOGLE_STANDARD_FLASH_MODEL = "gemini-3.5-flash"
 LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
@@ -29,6 +30,7 @@ LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
 # lifecycle-reviewed BYOK chat/coding catalog and its display order.
 LATEST_GOOGLE_MODEL_IDS = (
     LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
     LATEST_GOOGLE_STANDARD_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
@@ -629,6 +631,27 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GOOGLE
     # =========================================================================
     "google": {
+        "gemini-3.7-flash": ModelInfo(
+            id="gemini-3.7-flash",
+            name="Gemini 3.7 Flash",
+            provider="google",
+            input_price=1.50,
+            output_price=7.50,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest Gemini 3.7 Flash model for coding and agentic execution",
+            recommended_for=["coding", "agentic workflows", "general"],
+            released="2026-08-01",
+        ),
         "gemini-3.6-flash": ModelInfo(
             id="gemini-3.6-flash",
             name="Gemini 3.6 Flash",
@@ -1547,9 +1570,21 @@ def get_models_for_provider(
 
 def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
     """Return Google's lifecycle-reviewed BYOK chat/coding models newest-first."""
-    return {
-        model_id: models[model_id] for model_id in LATEST_GOOGLE_MODEL_IDS if model_id in models
-    }
+    result = {}
+    for model_id in LATEST_GOOGLE_MODEL_IDS:
+        if model_id in models:
+            result[model_id] = models[model_id]
+    for model_id, info in models.items():
+        if model_id not in result:
+            model_id_lower = model_id.lower()
+            name_lower = (info.name or "").lower()
+            if (
+                ("gemini" in model_id_lower or "gemini" in name_lower)
+                and "gpt" not in model_id_lower
+                and "gpt" not in name_lower
+            ):
+                result[model_id] = info
+    return result
 
 
 def _current_hosted_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:

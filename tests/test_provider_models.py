@@ -17,6 +17,7 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
     models = get_models_for_provider("google")
 
     assert list(models) == [
+        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
@@ -208,6 +209,7 @@ def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
     full_catalog = get_models_for_provider("google", include_all=True)
 
     expected = [
+        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
