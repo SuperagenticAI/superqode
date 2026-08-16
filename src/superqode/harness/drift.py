@@ -137,16 +137,27 @@ def _runtime_check(spec: HarnessSpec) -> DriftCheck:
 
 
 def _sandbox_check(spec: HarnessSpec) -> DriftCheck:
-    """A declared sandbox that is not present silently downgrades isolation."""
+    """A declared sandbox that is not present silently downgrades isolation.
+
+    ``local`` (the spec default) promises no OS isolation, so it is always
+    satisfiable and must not depend on whether ``bwrap`` or ``sandbox-exec``
+    happens to be installed. Only an explicitly isolated backend such as
+    ``local-os``, ``docker``, or ``podman`` can be unavailable on this machine,
+    and that is what drift calls out: the run falls back to a weaker boundary
+    than the spec promised.
+    """
     declared = _enum_value(getattr(spec.execution_policy, "sandbox", "local"))
-    # The spec writes "local"; the provider registry calls the same thing
-    # "local-os". Comparing the raw strings would report drift on every spec
-    # that asks for local execution.
-    probed = "local-os" if declared == "local" else declared
+    if declared in {"", "none", "local"}:
+        detail = (
+            "available without isolation; use only as an explicit development fallback"
+            if declared == "local"
+            else "The spec does not request a sandbox."
+        )
+        return _check("sandbox", declared, declared, detail=detail)
     try:
         from superqode.sandbox.execution import sandbox_provider_status
 
-        status = sandbox_provider_status(probed)
+        status = sandbox_provider_status(declared)
     except Exception as exc:  # noqa: BLE001 - reporting beats crashing
         return _check(
             "sandbox",
