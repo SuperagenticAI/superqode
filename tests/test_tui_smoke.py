@@ -5906,7 +5906,30 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
     assert "Build your own harness" in text
 
 
-def test_connect_agents_screen_keeps_the_first_choice_progressive():
+@pytest.mark.parametrize(
+    "menu_version,rows,helper",
+    [
+        (
+            "v1",
+            [(1, "Subscriptions"), (2, "ACP agents"), (3, "Other harnesses")],
+            None,
+        ),
+        (
+            "v2",
+            [
+                (1, "Subscriptions"),
+                (2, "ACP"),
+                (3, "Open harnesses"),
+                (4, "Closed harnesses"),
+            ],
+            "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
+        ),
+    ],
+)
+def test_connect_agents_screen_keeps_the_first_choice_progressive(
+    menu_version, rows, helper, monkeypatch
+):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
@@ -5920,11 +5943,11 @@ def test_connect_agents_screen_keeps_the_first_choice_progressive():
     assert "China Coding Agents" not in rendered
     assert "Claude Code subscription" not in rendered
 
-    assert picker_rows(rendered) == [
-        (1, "Subscriptions"),
-        (2, "ACP agents"),
-        (3, "Other harnesses"),
-    ]
+    assert picker_rows(rendered) == rows
+    if menu_version == "v1":
+        assert (4, "Closed harnesses") not in picker_rows(rendered)
+    if helper:
+        assert helper in rendered
     # The long vendor and ACP catalogs remain one deliberate choice deeper.
     assert "Codex subscription" not in rendered
     assert "Browse all ACP agents" not in rendered
@@ -6004,53 +6027,83 @@ def test_agents_picker_returns_to_the_root_screen():
     assert app.action_connect_menu_back() is False
 
 
-def test_connect_picker_can_open_harness_catalog():
+@pytest.mark.parametrize("menu_version", ["v1", "v2"])
+def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app.query_one = lambda *args, **kwargs: log
     app._show_connect_type_picker(log, menu="agents")
     rendered = render_plain(log.items[-1])
-    assert (3, "Other harnesses") in picker_rows(rendered)
+    third_label = "Other harnesses" if menu_version == "v1" else "Open harnesses"
+    assert (3, third_label) in picker_rows(rendered)
 
     app._awaiting_connect_type = True
-    app.query_one = lambda *args, **kwargs: log
-    calls = []
-    app._show_harness_picker = lambda target_log, **kwargs: calls.append((target_log, kwargs))
+    if menu_version == "v1":
+        calls = []
+        app._show_harness_picker = lambda target_log, **kwargs: calls.append((target_log, kwargs))
+
+        app.action_browse_harnesses_from_connect()
+
+        assert app._awaiting_connect_type is False
+        assert len(calls) == 1
+        target_log, kwargs = calls[0]
+        assert target_log is log
+        assert kwargs["include_all"] is False
+        assert kwargs["clear_log"] is False
+        assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
+        assert [entry.id for entry in kwargs["catalog_entries"]] == [
+            "tau",
+            "deepseek-harness",
+            "deepagents",
+        ]
+        return
 
     app.action_browse_harnesses_from_connect()
-
-    assert app._awaiting_connect_type is False
-    assert len(calls) == 1
-    target_log, kwargs = calls[0]
-    assert target_log is log
-    assert kwargs["include_all"] is False
-    assert kwargs["clear_log"] is False
-    assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
-    assert [entry.id for entry in kwargs["catalog_entries"]] == [
-        "tau",
-        "deepseek-harness",
-        "deepagents",
+    assert app._awaiting_connect_type is True
+    assert app._connect_menu == "open-harnesses"
+    assert picker_rows(render_plain(log.items[-1])) == [
+        (1, "Tau (Hugging Face)"),
+        (2, "DeepSeek Harness"),
+        (3, "DeepAgents (SDK)"),
     ]
 
 
-def test_other_harnesses_profile_dispatch_opens_focused_optional_picker():
+@pytest.mark.parametrize("menu_version", ["v1", "v2"])
+def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_version, monkeypatch):
     from superqode.providers.connection_profiles import get_connection_profile
 
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     app = make_app()
     log = FakeLog()
-    calls = []
-    app._show_harness_picker = lambda target_log, **kwargs: calls.append((target_log, kwargs))
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    if menu_version == "v1":
+        calls = []
+        app._show_harness_picker = lambda target_log, **kwargs: calls.append((target_log, kwargs))
+
+        app._dispatch_connection_profile(get_connection_profile("other-harnesses"), log)
+
+        assert len(calls) == 1
+        assert [entry.id for entry in calls[0][1]["catalog_entries"]] == [
+            "tau",
+            "deepseek-harness",
+            "deepagents",
+        ]
+        assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
+        return
 
     app._dispatch_connection_profile(get_connection_profile("other-harnesses"), log)
-
-    assert len(calls) == 1
-    assert [entry.id for entry in calls[0][1]["catalog_entries"]] == [
-        "tau",
-        "deepseek-harness",
-        "deepagents",
+    assert app._connect_menu == "open-harnesses"
+    rendered = render_plain(log.items[-1])
+    assert "Other harnesses now live under Open harnesses." in rendered
+    assert picker_rows(rendered) == [
+        (1, "Tau (Hugging Face)"),
+        (2, "DeepSeek Harness"),
+        (3, "DeepAgents (SDK)"),
     ]
-    assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
 
 
 def test_byok_completion_hides_legacy_github_copilot_provider():
@@ -6059,6 +6112,7 @@ def test_byok_completion_hides_legacy_github_copilot_provider():
     values = {candidate.value for candidate in app._provider_completion_candidates(local=False)}
 
     assert "github-copilot" not in values
+    assert "factory" not in values
     assert "openai" in values
 
 

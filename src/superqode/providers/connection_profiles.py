@@ -11,7 +11,11 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     byok         the BYOK provider/model picker, optionally pinned to one provider
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
-    harness-picker optional non-ACP harness integrations
+    harness-picker optional non-ACP harness integrations (v1 Other)
+    open-harness-picker  Open category (catalog list_entries("open"))
+    closed-harness-picker Closed category (catalog list_entries("closed"))
+    key-harness  SuperQode-hosted open adapter; switch then CONNECT_MENU_KEY_MODELS
+    vendor-key   Closed vendor API key, then attach that vendor's process
     subscription-picker vendor plans authenticated by their own local CLI/OAuth state
     external-cli a local vendor TUI that does not expose ACP/headless events yet
 
@@ -40,7 +44,7 @@ import importlib.util
 import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -52,8 +56,11 @@ CONNECT_MENU_ROOT = "root"
 CONNECT_MENU_AGENTS = "agents"
 CONNECT_MENU_VENDORS = "vendors"
 CONNECT_MENU_ACP = "acp-agents"
+CONNECT_MENU_OPEN = "open-harnesses"
+CONNECT_MENU_CLOSED = "closed-harnesses"
 CONNECT_MENU_HARNESS = "harness"
 CONNECT_MENU_MODELS = "models"
+CONNECT_MENU_KEY_MODELS = "key-models"
 CONNECT_MENU_PLAN = "plan"
 CONNECT_MENU_BUILD = "build"
 #: ``:connect subscriptions`` maps to the vendor plan list.
@@ -63,8 +70,11 @@ CONNECT_MENUS = (
     CONNECT_MENU_AGENTS,
     CONNECT_MENU_VENDORS,
     CONNECT_MENU_ACP,
+    CONNECT_MENU_OPEN,
+    CONNECT_MENU_CLOSED,
     CONNECT_MENU_HARNESS,
     CONNECT_MENU_MODELS,
+    CONNECT_MENU_KEY_MODELS,
     CONNECT_MENU_PLAN,
     CONNECT_MENU_BUILD,
 )
@@ -77,28 +87,51 @@ _LEGACY_MENUS = {
 }
 
 #: Each screen's parent, so Esc walks back the way the user came.
+#: KEY_MODELS is omitted: its parent is KeyHarnessSession.return_menu.
 _MENU_PARENTS = {
     CONNECT_MENU_VENDORS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_ACP: CONNECT_MENU_AGENTS,
+    CONNECT_MENU_OPEN: CONNECT_MENU_AGENTS,
+    CONNECT_MENU_CLOSED: CONNECT_MENU_AGENTS,
     CONNECT_MENU_MODELS: CONNECT_MENU_HARNESS,
     CONNECT_MENU_PLAN: CONNECT_MENU_MODELS,
 }
 
 
-def parent_menu(menu: str) -> str:
-    """Return the screen to show when the user backs out of ``menu``."""
-    return _MENU_PARENTS.get(normalize_menu(menu), CONNECT_MENU_ROOT)
+def connect_menu_version() -> str:
+    """Resolved ``v1``/``v2`` connect IA. Compiled default stays v1 until PR 6."""
+    from superqode.providers.harness_catalog import parse_connect_menu_flag
+
+    return parse_connect_menu_flag()
+
+
+def parent_menu(menu: str, *, return_menu: str | None = None) -> str:
+    """Return the screen to show when the user backs out of ``menu``.
+
+    ``CONNECT_MENU_KEY_MODELS`` is not a static parent. It returns to the
+    Open or Closed list the user came from (``KeyHarnessSession.return_menu``).
+    """
+    name = normalize_menu(menu)
+    if name == CONNECT_MENU_KEY_MODELS:
+        dest = str(return_menu or "").strip()
+        if dest in {CONNECT_MENU_OPEN, CONNECT_MENU_CLOSED}:
+            return dest
+        return CONNECT_MENU_OPEN
+    return _MENU_PARENTS.get(name, CONNECT_MENU_ROOT)
 
 
 def normalize_menu(menu: str | None) -> str:
     """Return a menu that has rows.
 
     Superseded names map to their successor; anything unrecognised falls back
-    to the root menu rather than rendering an empty screen.
+    to the root menu rather than rendering an empty screen. ``other-harnesses``
+    is a profile in v1, not a menu; under v2 it aliases the Open list.
     """
     name = str(menu or "").strip().lower()
     if name in CONNECT_MENUS:
         return name
+    if name == "other-harnesses" and connect_menu_version() == "v2":
+        return CONNECT_MENU_OPEN
     return _LEGACY_MENUS.get(name, CONNECT_MENU_ROOT)
 
 
@@ -331,6 +364,11 @@ def _amp_cli_ready() -> bool:
 def _droid_cli_ready() -> bool:
     """Factory Droid is installed; the CLI owns its account authentication."""
     return shutil.which("droid") is not None
+
+
+def _junie_cli_ready() -> bool:
+    """JetBrains Junie CLI is installed; Junie owns JetBrains-account login."""
+    return shutil.which("junie") is not None
 
 
 def _kiro_cli_ready() -> bool:
@@ -742,7 +780,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="grok",
-        harness_openness="closed",
+        harness_openness="open",
         model_openness="Grok models",
         transport="ACP or CLI",
         label="Grok",
@@ -898,38 +936,213 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
             "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`"
         ),
     ),
+    ConnectionProfile(
+        id="junie",
+        harness_openness="closed",
+        model_openness="multi-model",
+        transport="ACP",
+        label="Junie",
+        description=(
+            "JetBrains Junie through its CLI and ACP server on your JetBrains AI account"
+        ),
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="junie",
+        self_contained=True,
+        detect=_junie_cli_ready,
+        unavailable_hint="run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
+    ),
 ]
 
-# The three kinds of existing harness. Each category owns its own screen,
-# since a vendor plan, an ACP process and a non-ACP integration are connected
-# in different ways.
+# Existing-harness categories. v1 is three rows (Subscriptions / ACP / Other).
+# v2 replaces Other with Open, and adds Closed only once that list has members.
+_AGENT_SUBSCRIPTIONS = ConnectionProfile(
+    id="agent-subscriptions",
+    label="Subscriptions",
+    description="Vendor plans you sign in to: Codex, Claude Code, Copilot, Cursor and more",
+    connector="vendor-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_ACP = ConnectionProfile(
+    id="agent-acp",
+    label="ACP agents",
+    description="OpenCode, Goose, Aider, Cline and every other ACP agent",
+    connector="acp-picker",
+    menu=CONNECT_MENU_AGENTS,
+    transport="ACP",
+    detect=lambda: True,
+)
+_OTHER_HARNESSES = ConnectionProfile(
+    id="other-harnesses",
+    label="Other harnesses",
+    description="Optional non-ACP integrations, including Hugging Face Tau",
+    connector="harness-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_OPEN = ConnectionProfile(
+    id="agent-open-harnesses",
+    label="Open harnesses",
+    description=(
+        "Open-source harnesses on GitHub. Connect with your API key or a local "
+        "model — same key flow as SuperQode's own harnesses."
+    ),
+    connector="open-harness-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_CLOSED = ConnectionProfile(
+    id="agent-closed-harnesses",
+    label="Closed harnesses",
+    description=(
+        "Proprietary harnesses. Connect with that vendor's API key or a local "
+        "endpoint. You can still run open models through their API."
+    ),
+    connector="closed-harness-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_SUBSCRIPTIONS_V2 = ConnectionProfile(
+    id="agent-subscriptions",
+    label="Subscriptions",
+    description="Vendor plans you sign in to. Uses the plan, never a leftover API key.",
+    connector="vendor-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_ACP_V2 = ConnectionProfile(
+    id="agent-acp",
+    label="ACP",
+    description=(
+        "Agents that speak Agent Client Protocol. They keep their own login. "
+        "OpenCode, Goose, Aider, Cline, and the live catalog."
+    ),
+    connector="acp-picker",
+    menu=CONNECT_MENU_AGENTS,
+    transport="ACP",
+    detect=lambda: True,
+)
+# v2 alias: :connect other-harnesses opens Open, with a one-line notice.
+_OTHER_HARNESSES_V2 = ConnectionProfile(
+    id="other-harnesses",
+    label="Other harnesses",
+    description="Now listed under Open harnesses.",
+    connector="open-harness-picker",
+    detect=lambda: True,
+)
+# :connect open-harnesses / :connect closed-harnesses resolve even when the
+# Closed row is omitted from the existing-harness screen.
+_OPEN_HARNESSES_ALIAS = ConnectionProfile(
+    id="open-harnesses",
+    label="Open harnesses",
+    description=_AGENT_OPEN.description,
+    connector="open-harness-picker",
+    detect=lambda: True,
+)
+_CLOSED_HARNESSES_ALIAS = ConnectionProfile(
+    id="closed-harnesses",
+    label="Closed harnesses",
+    description=_AGENT_CLOSED.description,
+    connector="closed-harness-picker",
+    detect=lambda: True,
+)
+
 _AGENT_CATEGORY_PROFILES: List[ConnectionProfile] = [
-    ConnectionProfile(
-        id="agent-subscriptions",
-        label="Subscriptions",
-        description="Vendor plans you sign in to: Codex, Claude Code, Copilot, Cursor and more",
-        connector="vendor-picker",
-        menu=CONNECT_MENU_AGENTS,
-        detect=lambda: True,
-    ),
-    ConnectionProfile(
-        id="agent-acp",
-        label="ACP agents",
-        description="OpenCode, Goose, Aider, Cline and every other ACP agent",
-        connector="acp-picker",
-        menu=CONNECT_MENU_AGENTS,
-        transport="ACP",
-        detect=lambda: True,
-    ),
-    ConnectionProfile(
-        id="other-harnesses",
-        label="Other harnesses",
-        description="Optional non-ACP integrations, including Hugging Face Tau",
-        connector="harness-picker",
-        menu=CONNECT_MENU_AGENTS,
-        detect=lambda: True,
-    ),
+    _AGENT_SUBSCRIPTIONS,
+    _AGENT_ACP,
+    _OTHER_HARNESSES,
 ]
+
+
+def _const_detect(ready: bool) -> Callable[[], bool]:
+    """Bind a boolean into a detect() probe without a late-binding lambda."""
+
+    def _probe() -> bool:
+        return ready
+
+    return _probe
+
+
+def _always_ready() -> bool:
+    return True
+
+
+def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
+    """Open/Closed leaf rows from a live catalog query, not an import-time snapshot."""
+    from superqode.harness.catalog import optional_harnesses
+    from superqode.providers.harness_catalog import list_entries
+
+    screen = CONNECT_MENU_OPEN if menu == "open" else CONNECT_MENU_CLOSED
+    optional = {entry.id: entry for entry in optional_harnesses()}
+    profiles: List[ConnectionProfile] = []
+    for entry in list_entries(menu):
+        harness_id = entry.harness_id or entry.id
+        definition = optional.get(harness_id)
+        auth_spec = next((spec for spec in entry.auth if spec.detect is not None), None)
+        key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
+        if definition is not None:
+            detect = _const_detect(bool(definition.available))
+            hint = definition.issue
+        elif auth_spec is not None:
+            detect = auth_spec.detect
+            hint = auth_spec.unavailable_hint
+        else:
+            detect = _always_ready
+            hint = ""
+        profiles.append(
+            ConnectionProfile(
+                id=entry.id,
+                label=entry.label,
+                description=entry.description,
+                connector=(key_spec.connector if key_spec is not None else "key-harness"),
+                menu=screen,
+                runtime=harness_id,
+                acp_agent=entry.acp_agent,
+                harness_openness=entry.openness if entry.openness in {"open", "closed"} else "",
+                transport="ACP" if entry.acp_agent else "",
+                detect=detect,
+                unavailable_hint=hint,
+            )
+        )
+    return profiles
+
+
+def _agent_category_profiles() -> List[ConnectionProfile]:
+    """Existing-harness rows for the current connect-menu flag."""
+    if connect_menu_version() != "v2":
+        return list(_AGENT_CATEGORY_PROFILES)
+    rows = [_AGENT_SUBSCRIPTIONS_V2, _AGENT_ACP_V2, _AGENT_OPEN]
+    from superqode.providers.harness_catalog import list_entries
+
+    if list_entries("closed"):
+        rows.append(_AGENT_CLOSED)
+    return rows
+
+
+def _flat_profiles() -> List[ConnectionProfile]:
+    """Completion/registry list. v2 swaps Other for Open; Closed appears when drawn."""
+    if connect_menu_version() != "v2":
+        profiles = list(_PROFILES)
+    else:
+        replacements = {
+            "other-harnesses": _AGENT_OPEN,
+            "agent-subscriptions": _AGENT_SUBSCRIPTIONS_V2,
+            "agent-acp": _AGENT_ACP_V2,
+        }
+        profiles = [replacements.get(profile.id, profile) for profile in _PROFILES]
+        from superqode.providers.harness_catalog import list_entries
+
+        if list_entries("closed"):
+            with_closed: List[ConnectionProfile] = []
+            for profile in profiles:
+                with_closed.append(profile)
+                if profile.id == "agent-open-harnesses":
+                    with_closed.append(_AGENT_CLOSED)
+            profiles = with_closed
+    # Closed key-path ids (:connect droid-key) are catalog-driven, not vendors.
+    return [*profiles, *_catalog_harness_profiles("closed")]
+
 
 # ``:connect acp`` predates the categories and still opens the ACP catalogue.
 _ACP_MENU_PROFILES: List[ConnectionProfile] = [
@@ -987,8 +1200,10 @@ _LEGACY_PROFILES: List[ConnectionProfile] = [
         connector="runtime",
         runtime="claude-agent-sdk",
         self_contained=True,
-        detect=lambda: importlib.util.find_spec("claude_agent_sdk") is not None
-        and bool(os.environ.get("ANTHROPIC_API_KEY")),
+        detect=lambda: (
+            importlib.util.find_spec("claude_agent_sdk") is not None
+            and bool(os.environ.get("ANTHROPIC_API_KEY"))
+        ),
         unavailable_hint=missing_extra_hint(
             "claude-agent-sdk", suffix="then set ANTHROPIC_API_KEY"
         ),
@@ -1015,15 +1230,28 @@ _LEGACY_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-_BY_ID = {p.id: p for p in (*_PROFILES, *_LEGACY_PROFILES)}
+_BY_ID = {
+    p.id: p
+    for p in (
+        *_PROFILES,
+        *_LEGACY_PROFILES,
+        _AGENT_OPEN,
+        _AGENT_CLOSED,
+        _OPEN_HARNESSES_ALIAS,
+        _CLOSED_HARNESSES_ALIAS,
+    )
+}
 
 _BY_MENU = {
     CONNECT_MENU_ROOT: _ROOT_PROFILES,
     CONNECT_MENU_AGENTS: _AGENT_CATEGORY_PROFILES,
     CONNECT_MENU_VENDORS: _AGENT_PROFILES,
     CONNECT_MENU_ACP: _ACP_MENU_PROFILES,
+    CONNECT_MENU_OPEN: (),
+    CONNECT_MENU_CLOSED: (),
     CONNECT_MENU_HARNESS: _HARNESS_PROFILES,
     CONNECT_MENU_MODELS: _MODEL_PROFILES,
+    CONNECT_MENU_KEY_MODELS: (),
     CONNECT_MENU_PLAN: _PLAN_PROFILES,
     CONNECT_MENU_BUILD: _BUILD_PROFILES,
 }
@@ -1046,6 +1274,14 @@ CONNECT_MENU_TITLES = {
         "ACP agents",
         "Agents that speak Agent Client Protocol.",
     ),
+    CONNECT_MENU_OPEN: (
+        "Open harnesses",
+        "Open-source harnesses. Connect with your API key or a local model.",
+    ),
+    CONNECT_MENU_CLOSED: (
+        "Closed harnesses",
+        "Proprietary harnesses. Connect with that vendor's API key or a local endpoint.",
+    ),
     CONNECT_MENU_HARNESS: (
         "Select a harness",
         "Step 1 of 2. You choose the model next.",
@@ -1053,6 +1289,10 @@ CONNECT_MENU_TITLES = {
     CONNECT_MENU_MODELS: (
         "Select a model",
         "Step 2 of 2. Where the model comes from.",
+    ),
+    CONNECT_MENU_KEY_MODELS: (
+        "Select a model",
+        "Local or your API key. This harness does not use a SuperQode plan.",
     ),
     CONNECT_MENU_PLAN: (
         "Subscription",
@@ -1064,25 +1304,72 @@ CONNECT_MENU_TITLES = {
     ),
 }
 
+_V2_AGENTS_TITLE = (
+    "Existing harnesses",
+    "Pick how you authenticate. Open is about the harness source, not the model.",
+)
+_V2_AGENTS_TITLE_WITH_CLOSED = (
+    "Existing harnesses",
+    "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
+)
+
+
+def connect_menu_titles() -> dict:
+    """Titles for the current connect-menu flag. v2 rewrites the agents helper."""
+    titles = dict(CONNECT_MENU_TITLES)
+    if connect_menu_version() == "v2":
+        from superqode.providers.harness_catalog import list_entries
+
+        # The design sentence names Closed; omit that clause while the row is hidden.
+        titles[CONNECT_MENU_AGENTS] = (
+            _V2_AGENTS_TITLE_WITH_CLOSED if list_entries("closed") else _V2_AGENTS_TITLE
+        )
+    return titles
+
 
 def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfile]:
     """Profiles for one ``:connect`` menu, or every visible profile.
 
     ``menu=None`` returns the flat list (root, agents, models, build) used for
     completion and name lookup. Pass a menu id to get exactly what that screen
-    shows, in display order.
+    shows, in display order. The agents screen and the flat list branch on
+    ``SUPERQODE_CONNECT_MENU``.
     """
     if menu is None:
-        return list(_PROFILES)
+        return _flat_profiles()
+    if menu == CONNECT_MENU_AGENTS:
+        return _agent_category_profiles()
+    if menu == CONNECT_MENU_OPEN:
+        return _catalog_harness_profiles("open")
+    if menu == CONNECT_MENU_CLOSED:
+        return _catalog_harness_profiles("closed")
+    if menu == CONNECT_MENU_KEY_MODELS:
+        # A derived list. Never mutate _MODEL_PROFILES; Plan stays on the
+        # native SuperQode-harness path.
+        return [
+            replace(profile, menu=CONNECT_MENU_KEY_MODELS)
+            for profile in _MODEL_PROFILES
+            if profile.id in {"local", "byok"}
+        ]
     return list(_BY_MENU.get(menu, ()))
 
 
 def get_connection_profile(id_or_label: str) -> Optional[ConnectionProfile]:
     """Look up a profile by id (preferred) or, failing that, by label match."""
     key = (id_or_label or "").strip().lower()
+    if key == "other-harnesses":
+        return _OTHER_HARNESSES_V2 if connect_menu_version() == "v2" else _OTHER_HARNESSES
+    if key == "agent-subscriptions":
+        return _AGENT_SUBSCRIPTIONS_V2 if connect_menu_version() == "v2" else _AGENT_SUBSCRIPTIONS
+    if key == "agent-acp":
+        return _AGENT_ACP_V2 if connect_menu_version() == "v2" else _AGENT_ACP
     if key in _BY_ID:
         return _BY_ID[key]
-    for profile in _PROFILES:
+    catalog_rows = (*_catalog_harness_profiles("open"), *_catalog_harness_profiles("closed"))
+    for profile in catalog_rows:
+        if profile.id == key or profile.label.lower() == key:
+            return profile
+    for profile in (*_flat_profiles(), *_LEGACY_PROFILES, _AGENT_OPEN, _AGENT_CLOSED):
         if profile.label.lower() == key:
             return profile
     return None
@@ -1106,7 +1393,15 @@ AGENT_READINESS_GROUPS = ("Ready now", "One step away", "Installable", "More")
 #: Connectors that navigate to another screen rather than connecting anything.
 #: They are pinned last so they never compete with named products for the top
 #: of the list, and they carry no readiness of their own.
-_BROWSE_CONNECTORS = frozenset({"acp-picker", "harness-picker", "plan-picker"})
+_BROWSE_CONNECTORS = frozenset(
+    {
+        "acp-picker",
+        "harness-picker",
+        "plan-picker",
+        "open-harness-picker",
+        "closed-harness-picker",
+    }
+)
 
 
 def group_profiles_by_readiness(
@@ -1213,14 +1508,19 @@ __all__ = [
     "CONNECT_MENU_AGENTS",
     "CONNECT_MENU_BUILD",
     "CONNECT_MENU_ACP",
+    "CONNECT_MENU_CLOSED",
     "CONNECT_MENU_HARNESS",
+    "CONNECT_MENU_KEY_MODELS",
     "CONNECT_MENU_MODELS",
+    "CONNECT_MENU_OPEN",
     "CONNECT_MENU_PLAN",
     "CONNECT_MENU_ROOT",
     "CONNECT_MENU_SUBSCRIPTIONS",
     "CONNECT_MENU_VENDORS",
     "CONNECT_MENU_TITLES",
     "ConnectionProfile",
+    "connect_menu_titles",
+    "connect_menu_version",
     "detected_sources",
     "group_profiles_by_readiness",
     "list_connection_profiles",

@@ -31,12 +31,26 @@ def test_root_menu_asks_one_question_in_three_answers():
     assert all(p.group == "" for p in list_connection_profiles(CONNECT_MENU_ROOT))
 
 
-def test_agents_menu_holds_three_existing_harness_categories():
-    assert connection_profile_ids(menu=CONNECT_MENU_AGENTS) == [
-        "agent-subscriptions",
-        "agent-acp",
-        "other-harnesses",
-    ]
+@pytest.mark.parametrize(
+    "menu_version,expected",
+    [
+        ("v1", ["agent-subscriptions", "agent-acp", "other-harnesses"]),
+        (
+            "v2",
+            [
+                "agent-subscriptions",
+                "agent-acp",
+                "agent-open-harnesses",
+                "agent-closed-harnesses",
+            ],
+        ),
+    ],
+)
+def test_agents_menu_holds_existing_harness_categories(menu_version, expected, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
+    assert connection_profile_ids(menu=CONNECT_MENU_AGENTS) == expected
+    if menu_version == "v1":
+        assert "agent-closed-harnesses" not in connection_profile_ids(menu=CONNECT_MENU_AGENTS)
 
 
 def test_agents_carry_openness_and_transport_badges():
@@ -123,65 +137,95 @@ def test_models_and_build_menus_cover_the_other_two_rungs():
     assert get_connection_profile("build-import").connector == "harness-import"
 
 
-def test_registry_has_expected_profiles():
+_FLAT_PROFILE_IDS_V1 = [
+    "agents",
+    "models",
+    "build",
+    "agent-subscriptions",
+    "agent-acp",
+    "other-harnesses",
+    "codex",
+    "cursor",
+    "amp",
+    "antigravity",
+    "muse",
+    "prime-agent",
+    "grok",
+    "copilot",
+    "devin",
+    "droid",
+    "kiro",
+    "glm-cli",
+    "qwen-code",
+    "kimi-code",
+    "deepagents-code",
+    "junie",
+    "acp",
+    "harness-core",
+    "harness-rlm",
+    "harness-pipy",
+    "harness-workbench",
+    "harness-presets",
+    "harness-repo",
+    "local",
+    "byok",
+    "plan",
+    "plan-zai",
+    "plan-grok",
+    "plan-copilot",
+    "plan-moonshot",
+    "plan-qwen",
+    "plan-opencode",
+    "plan-ollama-cloud",
+    "plan-deepseek",
+    "plan-minimax",
+    "build-import",
+    "build-preset",
+    "build-wizard",
+    "build-blank",
+    "droid-key",
+    "junie-key",
+    "muse-key",
+    "zcode",
+    "qoder-key",
+    "poolside-key",
+]
+
+
+@pytest.mark.parametrize("menu_version", ["v1", "v2"])
+def test_registry_has_expected_profiles(menu_version, monkeypatch):
     # The flat list is root order first, then each submenu in root order.
-    assert connection_profile_ids() == [
-        "agents",
-        "models",
-        "build",
-        "agent-subscriptions",
-        "agent-acp",
-        "other-harnesses",
-        "codex",
-        "cursor",
-        "amp",
-        "antigravity",
-        "muse",
-        "prime-agent",
-        "grok",
-        "copilot",
-        "devin",
-        "droid",
-        "kiro",
-        "glm-cli",
-        "qwen-code",
-        "kimi-code",
-        "deepagents-code",
-        "acp",
-        "harness-core",
-        "harness-rlm",
-        "harness-pipy",
-        "harness-workbench",
-        "harness-presets",
-        "harness-repo",
-        "local",
-        "byok",
-        "plan",
-        "plan-zai",
-        "plan-grok",
-        "plan-copilot",
-        "plan-moonshot",
-        "plan-qwen",
-        "plan-opencode",
-        "plan-ollama-cloud",
-        "plan-deepseek",
-        "plan-minimax",
-        "build-import",
-        "build-preset",
-        "build-wizard",
-        "build-blank",
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
+    expected = [
+        "agent-open-harnesses" if menu_version == "v2" and pid == "other-harnesses" else pid
+        for pid in _FLAT_PROFILE_IDS_V1
     ]
+    if menu_version == "v2":
+        open_at = expected.index("agent-open-harnesses")
+        expected.insert(open_at + 1, "agent-closed-harnesses")
+    assert connection_profile_ids() == expected
+    if menu_version == "v1":
+        assert "agent-closed-harnesses" not in connection_profile_ids()
+    else:
+        assert "agent-closed-harnesses" in connection_profile_ids()
+    assert "droid-key" in connection_profile_ids()
     assert "copilot-acp" in connection_profile_ids(include_legacy=True)
 
 
-def test_old_root_ids_still_resolve():
+@pytest.mark.parametrize("menu_version", ["v1", "v2"])
+def test_old_root_ids_still_resolve(menu_version, monkeypatch):
     """Anyone with ``:connect subscriptions`` in muscle memory keeps working."""
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     for old_id in ("subscriptions", "local", "byok", "acp", "other-harnesses"):
         assert get_connection_profile(old_id) is not None
 
     subscriptions = get_connection_profile("subscriptions")
     assert subscriptions.connector == "vendor-picker"
     assert subscriptions.available is True
+    assert get_connection_profile("agent-open-harnesses") is not None
+    assert get_connection_profile("open-harnesses") is not None
+    assert get_connection_profile("agent-closed-harnesses") is not None
+    assert get_connection_profile("closed-harnesses") is not None
 
 
 def test_devin_and_glm_are_acp_subscription_profiles():
@@ -323,12 +367,166 @@ def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
     assert acp.acp_agent == "copilot"
 
 
-def test_other_harnesses_profile_opens_non_acp_harness_picker():
+@pytest.mark.parametrize(
+    "menu_version,connector",
+    [
+        ("v1", "harness-picker"),
+        ("v2", "open-harness-picker"),
+    ],
+)
+def test_other_harnesses_profile_opens_non_acp_harness_picker(menu_version, connector, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     profile = get_connection_profile("other-harnesses")
 
-    assert profile.connector == "harness-picker"
-    assert "tau" in profile.description.lower()
+    assert profile.connector == connector
     assert profile.available is True
+    if menu_version == "v1":
+        assert "tau" in profile.description.lower()
+
+
+def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    rows = [(p.id, p.label, p.connector) for p in list_connection_profiles(CONNECT_MENU_OPEN)]
+    ids = {row[0] for row in rows}
+    assert ("tau", "Tau (Hugging Face)", "key-harness") in rows
+    assert ("deepseek-harness", "DeepSeek Harness", "key-harness") in rows
+    assert ("deepagents", "DeepAgents (SDK)", "key-harness") in rows
+    for required in (
+        "opencode-key",
+        "prime-agent-key",
+        "jcode",
+        "grok-key",
+        "qwen-code-key",
+        "goose-key",
+        "cline-key",
+        "openhands-key",
+        "letta",
+        "warp",
+    ):
+        assert required in ids
+    assert get_connection_profile("letta").connector == "key-harness"
+    assert get_connection_profile("warp").connector == "key-harness"
+    hidden = {
+        "opencode",
+        "prime-agent",
+        "droid",
+        "droid-key",
+        "grok",
+        "muse",
+        "gemini",
+        "gemini-cli",
+        "deepagents-code",
+        "junie",
+        "junie-key",
+    }
+    assert hidden.isdisjoint(ids)
+
+
+def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED, CONNECT_MENU_VENDORS
+
+    rows = list_connection_profiles(CONNECT_MENU_CLOSED)
+    ids = {p.id for p in rows}
+    assert "droid-key" in ids
+    assert "junie-key" in ids
+    assert "muse-key" in ids
+    assert "qoder-key" in ids
+    assert "poolside-key" in ids
+    assert "zcode" in ids
+    droid_key = next(p for p in rows if p.id == "droid-key")
+    assert (droid_key.connector, droid_key.acp_agent, droid_key.menu) == (
+        "vendor-key",
+        "droid",
+        CONNECT_MENU_CLOSED,
+    )
+    assert get_connection_profile("agent-closed-harnesses").connector == "closed-harness-picker"
+    assert "droid-key" not in connection_profile_ids(menu=CONNECT_MENU_VENDORS)
+    droid = get_connection_profile("droid")
+    droid_key = get_connection_profile("droid-key")
+    assert droid.menu == CONNECT_MENU_VENDORS
+    assert droid.connector == "acp"
+    assert droid_key.menu == CONNECT_MENU_CLOSED
+    assert droid_key.connector == "vendor-key"
+    assert "install Factory Droid" in droid_key.unavailable_hint
+
+
+def test_droid_key_reuses_the_droid_cli_probe(monkeypatch):
+    import superqode.providers.harness_catalog as catalog
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    monkeypatch.setattr(catalog.shutil, "which", lambda name: None)
+    missing = get_connection_profile("droid-key")
+    assert missing.available is False
+
+    monkeypatch.setattr(
+        catalog.shutil, "which", lambda name: "/usr/bin/droid" if name == "droid" else None
+    )
+    ready = get_connection_profile("droid-key")
+    assert ready.available is True
+
+
+def test_v2_category_copy_matches_the_design(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
+
+    by_id = {p.id: p for p in list_connection_profiles(CONNECT_MENU_AGENTS)}
+    assert by_id["agent-subscriptions"].description == (
+        "Vendor plans you sign in to. Uses the plan, never a leftover API key."
+    )
+    assert by_id["agent-acp"].label == "ACP"
+    assert by_id["agent-acp"].description == (
+        "Agents that speak Agent Client Protocol. They keep their own login. "
+        "OpenCode, Goose, Aider, Cline, and the live catalog."
+    )
+    assert by_id["agent-closed-harnesses"].label == "Closed harnesses"
+    from superqode.providers.connection_profiles import connect_menu_titles, CONNECT_MENU_AGENTS
+
+    title, subtitle = connect_menu_titles()[CONNECT_MENU_AGENTS]
+    assert "Open vs Closed" in subtitle
+
+
+def test_optional_harnesses_is_still_the_v1_other_source():
+    from superqode.harness import optional_harnesses
+
+    ids = [entry.id for entry in optional_harnesses(".")]
+    assert ids == ["tau", "deepseek-harness", "deepagents"]
+
+
+def test_open_rows_surface_optional_harness_setup_hints(monkeypatch):
+    from superqode.harness.catalog import optional_harnesses
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    missing = [
+        replace(entry, available=False, issue='uv tool install "superqode[tau]"')
+        if entry.id == "tau"
+        else entry
+        for entry in optional_harnesses()
+    ]
+    monkeypatch.setattr(
+        "superqode.harness.catalog.optional_harnesses",
+        lambda root=".": missing,
+    )
+    tau = next(p for p in list_connection_profiles(CONNECT_MENU_OPEN) if p.id == "tau")
+    assert tau.available is False
+    assert "superqode[tau]" in tau.unavailable_hint
+
+
+def test_open_menu_reads_list_entries_live(monkeypatch):
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+    from superqode.providers.harness_catalog import get_entry
+
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    live = [get_entry("tau")]
+    monkeypatch.setattr(
+        "superqode.providers.harness_catalog.list_entries",
+        lambda menu: live if menu == "open" else [],
+    )
+    rows = list_connection_profiles(CONNECT_MENU_OPEN)
+    assert [p.id for p in rows] == ["tau"]
 
 
 def test_antigravity_profile_is_signed_in_cli_runtime_connector():
@@ -465,6 +663,8 @@ def test_grok_profile_defaults_to_grok_build_acp():
     assert grok.acp_agent == "grok"
     # Print/CI path only — Subscriptions must not prefer this over ACP.
     assert grok.runtime == "grok-cli"
+    # Grok Build is Apache-2.0; SuperGrok login stays on Subscriptions.
+    assert grok.harness_openness == "open"
     # Points users to the SuperQode-harness opt-in.
     assert ":grok api" in grok.description
 
@@ -597,6 +797,9 @@ class _DispatchStub:
     def _show_local_provider_picker(self, log):
         self.calls.append(("local",))
 
+    def _begin_vendor_key(self, profile, log):
+        self.calls.append(("vendor-key", profile.id))
+
     def _show_agents(self, log):
         self.calls.append(("acp-picker",))
 
@@ -633,6 +836,14 @@ def test_dispatch_codex_routes_to_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("codex"), log=None)
     assert ("runtime", "codex-sdk") in stub.calls
+
+
+def test_dispatch_droid_key_is_vendor_key_not_subscription(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("droid-key"), log=None)
+
+    assert ("vendor-key", "droid-key") in stub.calls
+    assert ("acp", "droid") not in stub.calls
 
 
 def test_dispatch_kimi_and_qwen_route_to_official_acp_agents(_dispatch):
@@ -993,6 +1204,7 @@ def test_connect_profiles_in_commands_and_completion():
         "antigravity",
         "grok",
         "droid",
+        "droid-key",
         "kiro",
         "other-harnesses",
         "byok",
@@ -1001,6 +1213,17 @@ def test_connect_profiles_in_commands_and_completion():
     } <= values
     assert "zai" not in values
     assert "copilot-acp" not in values
+
+
+def test_v2_completion_lists_open_instead_of_other(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.app_main import SuperQodeApp
+
+    values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
+    assert "agent-open-harnesses" in values
+    assert "other-harnesses" not in values
+    assert "agent-closed-harnesses" in values
+    assert "droid-key" in values
 
 
 def test_copilot_login_starts_the_consent_gated_vendor_flow():

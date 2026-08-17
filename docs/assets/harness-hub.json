@@ -1,7 +1,7 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-08-16T00:04:44.562729+00:00",
-  "count": 97,
+  "generated_at": "2026-08-17T07:30:53.007540+00:00",
+  "count": 99,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -680,7 +680,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://x.ai/cli",
-      "repository": "",
+      "repository": "https://github.com/xai-org/grok-build",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -706,7 +706,7 @@
         "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
       ],
       "capabilities": [
-        "closed harness",
+        "open harness",
         "Grok models",
         "via ACP or CLI",
         "Managed connection from SuperQode"
@@ -725,8 +725,8 @@
           "description": "Device authentication is also available with grok login --device-auth."
         }
       ],
-      "openness": "closed",
-      "license": ""
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "copilot",
@@ -4029,7 +4029,7 @@
       "continuity": "exact-resume",
       "provider": "",
       "model": "",
-      "setup": "uv tool install \"superqode[tau]\"",
+      "setup": "",
       "warning": "",
       "project_path": "",
       "homepage": "",
@@ -4039,7 +4039,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://superagenticai.github.io/superqode/advanced/tau/",
-      "install_command": "uv tool install \"superqode[tau]\"",
+      "install_command": "",
       "tui_commands": [
         ":harness switch tau",
         ":harness show tau",
@@ -4092,7 +4092,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "setup": "",
       "warning": "DeepSeek Harness executes its own tools, so SuperQode approvals do not gate them. Routes come from DeepSeek's composition, not SuperQode's model catalog.",
       "project_path": "",
       "homepage": "",
@@ -4102,7 +4102,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://superagenticai.github.io/superqode/advanced/deepseek-harness/",
-      "install_command": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "install_command": "",
       "tui_commands": [
         ":harness switch deepseek-harness",
         ":harness show deepseek-harness",
@@ -5580,6 +5580,140 @@
       ],
       "openness": "open",
       "license": "MIT"
+    },
+    {
+      "id": "ecosystem:letta",
+      "name": "Letta Code",
+      "description": "Letta's Apache-2.0 memory-first coding harness. Agents keep identity and learn across sessions through the `letta` CLI, desktop app, or Letta Cloud.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.letta.com/",
+      "repository": "https://github.com/letta-ai/letta-code",
+      "interface": "Terminal harness",
+      "support_note": "Not yet launched from SuperQode. Letta Code is a published CLI (`npm install -g @letta-ai/letta-code`, then `letta`). Configure a provider with /connect or Letta Cloud with /login. SuperQode does not speak Letta ACP from this row yet.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "letta",
+        "letta-code",
+        "MemGPT coding agent"
+      ],
+      "docs_url": "https://docs.letta.com/letta-code/cli",
+      "install_command": "npm install -g @letta-ai/letta-code",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [
+        "workspace files",
+        "terminal commands",
+        "skills",
+        "memory",
+        "subagents"
+      ],
+      "policies": [
+        "Letta Code owns its agent loop, memory, and session state",
+        "Provider keys and Letta Cloud credentials stay in Letta's own config",
+        "No commands are executed by SuperQode until an ACP or CLI attach ships"
+      ],
+      "capabilities": [
+        "Memory-first coding harness",
+        "Interactive CLI",
+        "Letta Cloud sync",
+        "Skills and subagents",
+        "Model-agnostic /connect"
+      ],
+      "based_on": "Letta Code (Apache-2.0)",
+      "popularity_rank": 72,
+      "setup_steps": [
+        {
+          "title": "Install Letta Code",
+          "command": "npm install -g @letta-ai/letta-code",
+          "description": ""
+        },
+        {
+          "title": "Connect a model",
+          "command": "letta",
+          "description": "Inside Letta, run /connect for a provider key or /login for Letta Cloud."
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "ecosystem:warp",
+      "name": "Warp Agent",
+      "description": "Warp's AGPL-3.0 Agent CLI \u2014 the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.warp.dev/agent-cli",
+      "repository": "https://github.com/warpdotdev/warp",
+      "interface": "Terminal harness",
+      "support_note": "Not yet launched from SuperQode. Warp Agent CLI is a standalone `warp` binary (`curl -fsSL https://app.warp.dev/download/agent-cli | bash`). Sign in or export WARP_API_KEY. SuperQode cannot attach it until an ACP or CLI connector ships.",
+      "last_verified": "2026-08-14",
+      "aliases": [
+        "warp",
+        "warp agent cli",
+        "warp terminal agent"
+      ],
+      "docs_url": "https://docs.warp.dev/agents/cli/",
+      "install_command": "curl -fsSL https://app.warp.dev/download/agent-cli | bash",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [
+        "workspace files",
+        "terminal commands",
+        "codebase index",
+        "model routing"
+      ],
+      "policies": [
+        "Warp Agent owns its loop, permissions, and model routing",
+        "Warp account or WARP_API_KEY remains with Warp",
+        "No commands are executed by SuperQode until a connector is built and tested"
+      ],
+      "capabilities": [
+        "Standalone Agent CLI",
+        "Warp Terminal harness",
+        "Model routing",
+        "Cloud handoff (Oz)"
+      ],
+      "based_on": "Warp Agent (AGPL-3.0)",
+      "popularity_rank": 70,
+      "setup_steps": [
+        {
+          "title": "Install Warp Agent CLI",
+          "command": "curl -fsSL https://app.warp.dev/download/agent-cli | bash",
+          "description": ""
+        },
+        {
+          "title": "Authenticate",
+          "command": "warp",
+          "description": "Sign in with your Warp account, or export WARP_API_KEY."
+        }
+      ],
+      "openness": "open",
+      "license": "AGPL-3.0"
     },
     {
       "id": "ecosystem:aider",

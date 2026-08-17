@@ -3901,6 +3901,9 @@ class CommandImplMixin:
 
         fork_session = False
         if sub in ("load", "use", "use-all", "switch"):
+            clearer = getattr(self, "_clear_acp_extra_env", None)
+            if callable(clearer):
+                clearer()
             try:
                 switch_tokens = shlex.split(subargs)
             except ValueError as exc:
@@ -4038,7 +4041,18 @@ class CommandImplMixin:
 
         primary = str(entry.spec.model_policy.primary or "")
         needs_model = False
-        if entry.runtime == "prime-agent" and auto_connect:
+        key_session = getattr(self, "_key_harness_session", None)
+        matcher = getattr(self, "_key_harness_session_matches", None)
+        if key_session is not None and callable(matcher) and not matcher(entry.id):
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
+            key_session = None
+        if key_session is not None:
+            # Open/Closed switch-and-model always collects Local/BYOK. Do not
+            # reuse the previous SuperQode route or a spec primary.
+            needs_model = True
+        elif entry.runtime == "prime-agent" and auto_connect:
             connected = self._connect_prime_rpc(
                 primary,
                 log,
@@ -4241,7 +4255,10 @@ class CommandImplMixin:
         follows is restated here. ``previous`` keeps the "from X" detail that
         would otherwise be scrolled away with it.
         """
-        from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_KEY_MODELS,
+            CONNECT_MENU_MODELS,
+        )
 
         switched = f"Harness switched: {display_name}"
         if previous and previous != display_name:
@@ -4250,12 +4267,25 @@ class CommandImplMixin:
         if tool_count == 0:
             # A no-tool harness cannot read or edit files; say so explicitly.
             note += " This harness has no tools: it can discuss code, not change it."
+        route = getattr(self, "_pending_key_harness_route", None)
+        self._pending_key_harness_route = None
+        key_session = getattr(self, "_key_harness_session", None)
+        # A leftover pending route without a session is from a failed last
+        # reconnect; never apply it onto Core or another harness.
+        if route and key_session is not None:
+            mode, provider, model = route
+            if mode == "local":
+                self._connect_local_mode(provider, model, log)
+            else:
+                self._connect_byok_mode(provider, model, log)
+            return
+        menu = CONNECT_MENU_KEY_MODELS if key_session is not None else CONNECT_MENU_MODELS
         self._connect_context_note = note
         try:
             # A clean screen, not an append: the note above carries the "X is
             # active" confirmation into this screen's header, so nothing is
             # lost by replacing the harness list the user just chose from.
-            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
+            self._show_connect_type_picker(log, menu=menu)
         except Exception:  # noqa: BLE001 - fall back to naming the command
             self._connect_context_note = ""
             log.add_info(
@@ -4686,6 +4716,9 @@ class CommandImplMixin:
         choice = text.strip().lower()
         if choice in {"n", "no", "cancel", "skip", "q"}:
             self._awaiting_harness_install = None
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
             log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
             return True
         if choice not in {"", "y", "yes", "install", "ok"}:

@@ -301,6 +301,11 @@ class SlashCommandMixin:
                 self._awaiting_byok_model = False
                 if hasattr(self, "_byok_selected_provider"):
                     delattr(self, "_byok_selected_provider")
+                # A leftover Open-row session would hide Plan on the next
+                # SuperQode harness switch. Bare :connect starts over.
+                clearer = getattr(self, "_clear_key_harness_session", None)
+                if callable(clearer):
+                    clearer()
                 # Show picker to choose acp, byok, or local
                 self._show_connect_type_picker(log)
             else:

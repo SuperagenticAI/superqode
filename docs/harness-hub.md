@@ -167,6 +167,23 @@ so the Hub marks it **Integration pending** rather than presenting a false
 setup command. This is separate from SuperQode's supported `:connect zai`
 general-API route and the community `:connect glm-cli` ACP agent.
 
+### Letta Code
+
+[Letta Code](https://www.letta.com/) is indexed under **Ecosystem watch** as
+Letta's Apache-2.0 memory-first coding harness. Install with
+`npm install -g @letta-ai/letta-code` and run `letta`. From Connect it is an
+Open row (`:connect letta`): configure a provider with `/connect` or Letta
+Cloud with `/login`. SuperQode does not launch the Letta loop from that row
+yet.
+
+### Warp Agent
+
+[Warp Agent CLI](https://www.warp.dev/agent-cli) is indexed under **Ecosystem
+watch** as Warp's AGPL-3.0 standalone agent (`warp`). From Connect it is an
+Open row (`:connect warp`). Install with
+`curl -fsSL https://app.warp.dev/download/agent-cli | bash`, then sign in or
+export `WARP_API_KEY`. SuperQode does not attach Warp from that row yet.
+
 ### jcode
 
 [jcode](https://jcode.sh) is indexed under **Ecosystem watch** as an

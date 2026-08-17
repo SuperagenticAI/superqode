@@ -16,6 +16,7 @@ from typing import Iterable
 #: Milestones the TUI records. Names are stable; they are persisted.
 MILESTONES = (
     "connected",  # any successful connection
+    "connected_closed_harness",  # Closed key path (Factory droid-key)
     "task_completed",  # the agent finished a run
     "second_session",  # came back to the same repository
     "switched_harness",  # changed harness at least once
@@ -30,6 +31,7 @@ MILESTONES = (
     "hit_an_error",  # a run or a check failed
     "used_skill",  # a local skill was loaded into a run
     "used_mcp",  # an MCP server is attached
+    "connected_open_harness",  # Open-harness key/local connect succeeded
 )
 
 

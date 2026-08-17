@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from superqode.providers.connection_profiles import (
     CONNECT_MENU_BUILD,
     CONNECT_MENU_HARNESS,
@@ -32,6 +34,12 @@ class FakeLog:
     def add_error(self, message):
         self.items.append(f"ERROR {message}")
 
+    def add_warning(self, message):
+        self.items.append(f"WARN {message}")
+
+    def add_system(self, message):
+        self.items.append(f"SYSTEM {message}")
+
 
 class DispatchStub:
     """Records what a profile selection actually did."""
@@ -51,6 +59,15 @@ class DispatchStub:
 
     def _show_connect_type_picker(self, log, menu=None, **kwargs):
         self.menus.append(menu)
+
+    def _begin_key_harness(self, profile, log):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        ConnectMixin._begin_key_harness(self, profile, log)
+
+    def _begin_vendor_key(self, profile, log):
+        self.vendor_keys = getattr(self, "vendor_keys", [])
+        self.vendor_keys.append(profile.id)
 
 
 def _card_renderer():
@@ -229,21 +246,77 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
 # --- existing harnesses: subscriptions and ACP are different kinds ------------
 
 
-def test_existing_harnesses_is_three_categories_you_step_into():
-    """Existing harnesses split into three categories by connection kind."""
+@pytest.mark.parametrize(
+    "menu_version,expected",
+    [
+        (
+            "v1",
+            [
+                ("agent-subscriptions", "Subscriptions"),
+                ("agent-acp", "ACP agents"),
+                ("other-harnesses", "Other harnesses"),
+            ],
+        ),
+        (
+            "v2",
+            [
+                ("agent-subscriptions", "Subscriptions"),
+                ("agent-acp", "ACP"),
+                ("agent-open-harnesses", "Open harnesses"),
+                ("agent-closed-harnesses", "Closed harnesses"),
+            ],
+        ),
+    ],
+)
+def test_existing_harnesses_is_three_categories_you_step_into(menu_version, expected, monkeypatch):
+    """Existing harnesses split by connection kind; v2 replaces Other with Open/Closed."""
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
-    assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == [
-        ("agent-subscriptions", "Subscriptions"),
-        ("agent-acp", "ACP agents"),
-        ("other-harnesses", "Other harnesses"),
-    ]
+    assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == expected
+    if menu_version == "v1":
+        assert "Closed harnesses" not in {
+            p.label for p in list_connection_profiles(CONNECT_MENU_AGENTS)
+        }
 
 
 def test_each_category_opens_its_own_screen():
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     assert dispatch("agent-subscriptions").menus == [CONNECT_MENU_VENDORS]
+
+
+def test_open_category_opens_the_open_list():
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    assert dispatch("agent-open-harnesses").menus == [CONNECT_MENU_OPEN]
+    assert dispatch("open-harnesses").menus == [CONNECT_MENU_OPEN]
+
+
+def test_closed_category_opens_the_closed_list():
+    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED
+
+    assert dispatch("agent-closed-harnesses").menus == [CONNECT_MENU_CLOSED]
+    assert dispatch("closed-harnesses").menus == [CONNECT_MENU_CLOSED]
+
+
+def test_selecting_droid_key_uses_vendor_key_not_harness_switch():
+    stub = dispatch("droid-key")
+    assert stub.harness_commands == []
+    assert getattr(stub, "vendor_keys", []) == ["droid-key"]
+
+
+def test_other_harnesses_aliases_to_open_under_v2(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    assert dispatch("other-harnesses").menus == [CONNECT_MENU_OPEN]
+
+
+def test_selecting_an_open_row_switches_that_optional_harness():
+    assert dispatch("tau").harness_commands == ["switch tau"]
+    assert dispatch("deepseek-harness").harness_commands == ["switch deepseek-harness"]
+    assert dispatch("deepagents").harness_commands == ["switch deepagents"]
 
 
 def test_the_acp_category_opens_the_original_catalogue_screen():
@@ -379,15 +452,25 @@ def test_back_walks_the_path_the_user_took():
     from superqode.providers.connection_profiles import (
         CONNECT_MENU_ACP,
         CONNECT_MENU_AGENTS,
+        CONNECT_MENU_CLOSED,
+        CONNECT_MENU_OPEN,
         CONNECT_MENU_VENDORS,
         parent_menu,
     )
 
     assert parent_menu(CONNECT_MENU_VENDORS) == CONNECT_MENU_AGENTS
     assert parent_menu(CONNECT_MENU_ACP) == CONNECT_MENU_AGENTS
+    assert parent_menu(CONNECT_MENU_OPEN) == CONNECT_MENU_AGENTS
+    assert parent_menu(CONNECT_MENU_CLOSED) == CONNECT_MENU_AGENTS
     assert parent_menu(CONNECT_MENU_AGENTS) == CONNECT_MENU_ROOT
     assert parent_menu(CONNECT_MENU_PLAN) == CONNECT_MENU_MODELS
     assert parent_menu(CONNECT_MENU_MODELS) == CONNECT_MENU_HARNESS
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+
+    assert parent_menu(CONNECT_MENU_KEY_MODELS) == CONNECT_MENU_OPEN
+    assert (
+        parent_menu(CONNECT_MENU_KEY_MODELS, return_menu=CONNECT_MENU_CLOSED) == CONNECT_MENU_CLOSED
+    )
 
 
 def test_legacy_menu_names_land_on_the_right_category():
@@ -404,12 +487,41 @@ def test_legacy_menu_names_land_on_the_right_category():
     assert normalize_menu("nonsense") == CONNECT_MENU_ROOT
 
 
+def test_v2_normalizes_other_harnesses_to_the_open_menu(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_OPEN,
+        CONNECT_MENU_ROOT,
+        normalize_menu,
+    )
+
+    assert normalize_menu("other-harnesses") == CONNECT_MENU_OPEN
+    assert normalize_menu("open-harnesses") == CONNECT_MENU_OPEN
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v1")
+    assert normalize_menu("other-harnesses") == CONNECT_MENU_ROOT
+
+
 def test_model_step_offers_local_key_and_subscription():
     # BYOK is the term people search for; the parenthetical is what it means.
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
         ("local", "Local"),
         ("byok", "BYOK (use your own API key)"),
         ("plan", "Subscription"),
+    ]
+
+
+def test_key_models_menu_is_local_and_byok_without_plan():
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+
+    assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_KEY_MODELS)] == [
+        ("local", "Local"),
+        ("byok", "BYOK (use your own API key)"),
+    ]
+    # Native model list is untouched: Plan stays on SuperQode's own harness path.
+    assert [p.id for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
+        "local",
+        "byok",
+        "plan",
     ]
 
 
@@ -448,6 +560,572 @@ def test_back_from_the_harness_step_returns_to_the_root():
     assert stub.menus == [CONNECT_MENU_ROOT]
 
 
+def test_selecting_an_available_open_row_starts_a_key_harness_session(monkeypatch):
+    from types import SimpleNamespace
+
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    monkeypatch.setattr(
+        "superqode.harness.resolve_harness",
+        lambda *args, **kwargs: SimpleNamespace(available=False),
+    )
+
+    class Stub(DispatchStub):
+        def __init__(self):
+            super().__init__()
+            self._key_harness_session = None
+            self._pending_key_harness_route = None
+
+        def _prompt_model_for_harness(self, *args, **kwargs):
+            raise AssertionError("switch should be the real _harness_cmd in this test")
+
+    stub = Stub()
+    ConnectMixin._begin_key_harness(stub, get_connection_profile("tau"), FakeLog())
+    assert stub.harness_commands == ["switch tau"]
+    session = stub._key_harness_session
+    assert isinstance(session, KeyHarnessSession)
+    assert session.entry_id == "tau"
+    assert session.after_auth == "switch-and-model"
+    assert session.return_menu == CONNECT_MENU_OPEN
+    assert session.openness == "open"
+
+
+@pytest.mark.parametrize("profile_id", ("jcode", "letta", "warp", "goose-key"))
+def test_setup_card_rows_render_without_unknown_theme_keys(profile_id):
+    """Open rows that cannot launch must still paint a card on click/Enter."""
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self.harness_commands = []
+
+        def _harness_cmd(self, args, log):
+            self.harness_commands.append(args)
+
+        def _begin_vendor_key(self, profile, log):
+            raise AssertionError("setup-card rows must not take the vendor-key path")
+
+    stub = Stub()
+    log = FakeLog()
+    ConnectMixin._begin_key_harness(stub, get_connection_profile(profile_id), log)
+    assert stub.harness_commands == []
+    body = "\n".join(log.items)
+    assert get_connection_profile(profile_id).label in body
+    assert "does not start its loop" in body
+
+
+def test_reset_connect_states_keeps_key_harness_session():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+    session = KeyHarnessSession(
+        entry_id="tau",
+        openness="open",
+        auth_spec=spec,
+        return_menu="open-harnesses",
+        after_auth="switch-and-model",
+    )
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._key_harness_session = session
+            self._awaiting_byok_provider = True
+
+    stub = Stub()
+    stub._reset_connect_selection_states()
+    assert stub._key_harness_session is session
+    assert stub._awaiting_byok_provider is False
+
+
+def test_esc_from_key_models_keeps_session_esc_to_agents_clears_it():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_AGENTS,
+        CONNECT_MENU_KEY_MODELS,
+        CONNECT_MENU_OPEN,
+    )
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+    session = KeyHarnessSession(
+        entry_id="tau",
+        openness="open",
+        auth_spec=spec,
+        return_menu=CONNECT_MENU_OPEN,
+        after_auth="switch-and-model",
+    )
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._awaiting_connect_type = True
+            self._connect_menu = CONNECT_MENU_KEY_MODELS
+            self._key_harness_session = session
+            self.menus = []
+
+        def query_one(self, *args, **kwargs):
+            return FakeLog()
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.menus.append(menu)
+            self._connect_menu = menu
+
+    stub = Stub()
+    assert stub.action_connect_menu_back() is True
+    assert stub.menus == [CONNECT_MENU_OPEN]
+    assert stub._key_harness_session is session
+
+    assert stub.action_connect_menu_back() is True
+    assert stub.menus[-1] == CONNECT_MENU_AGENTS
+    assert stub._key_harness_session is None
+
+
+def test_return_to_model_step_reopens_key_models_when_session_is_set():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("deepseek-harness")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="deepseek-harness",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self.menus = []
+
+        def query_one(self, *args, **kwargs):
+            return FakeLog()
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.menus.append(menu)
+
+    stub = Stub()
+    stub._return_to_model_step()
+    assert stub.menus == [CONNECT_MENU_KEY_MODELS]
+
+
+def test_prompt_model_for_harness_uses_key_models_when_session_is_set():
+    from superqode.app.mixins.commands_impl import CommandImplMixin
+    from superqode.app.mixins.connect import KeyHarnessSession
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("deepagents")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+
+    class Stub(CommandImplMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="deepagents",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self.menus = []
+            self._connect_context_note = ""
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.menus.append(menu)
+
+    stub = Stub()
+    stub._prompt_model_for_harness("DeepAgents (SDK)", FakeLog())
+    assert stub.menus == [CONNECT_MENU_KEY_MODELS]
+    assert "deepagents-code" not in (stub._connect_context_note or "").lower()
+
+
+def test_connect_last_dispatches_acp_agent_not_profile_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self.acp = []
+            self.dispatched = []
+            self.byok = []
+
+        def _connect_acp_cmd(self, name, log):
+            self.acp.append(name)
+
+        def _dispatch_connection_profile(self, profile, log):
+            self.dispatched.append(profile.id)
+
+        def _connect_byok_mode(self, provider, model, log, *args, **kwargs):
+            self.byok.append((provider, model))
+
+    stub = Stub()
+    stub._save_connection_config(
+        category="acp",
+        auth_mode="acp",
+        harness_id="",
+        profile_id="",
+        acp_agent="opencode",
+        openness="",
+        provider="anthropic",
+        model="ignored",
+        transport="ACP",
+        after_auth="",
+    )
+    stub._connect_last(FakeLog())
+    assert stub.acp == ["opencode"]
+    assert stub.dispatched == []
+    assert stub.byok == []
+
+
+def test_connect_last_applies_route_only_for_switch_and_model(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.commands_impl import CommandImplMixin
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin, CommandImplMixin):
+        def __init__(self):
+            self.routes = []
+            self.harness_commands = []
+            self._key_harness_session = None
+            self._pending_key_harness_route = None
+            self._connect_context_note = ""
+
+        def _harness_cmd(self, args, log):
+            self.harness_commands.append(args)
+            self._prompt_model_for_harness("Tau", log)
+
+        def _connect_byok_mode(self, provider, model, log, *args, **kwargs):
+            self.routes.append(("byok", provider, model))
+
+        def _connect_local_mode(self, provider, model, log, *args, **kwargs):
+            self.routes.append(("local", provider, model))
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.routes.append(("menu", menu))
+
+    stub = Stub()
+    stub._save_connection_config(
+        category="open-harnesses",
+        auth_mode="byok",
+        harness_id="tau",
+        profile_id="tau",
+        acp_agent="",
+        openness="open",
+        provider="anthropic",
+        model="claude-sonnet-4-6",
+        transport="harness-protocol",
+        after_auth="switch-and-model",
+    )
+    stub._connect_last(FakeLog())
+    assert stub.harness_commands == ["switch tau"]
+    assert stub.routes == [("byok", "anthropic", "claude-sonnet-4-6")]
+    assert stub._pending_key_harness_route is None
+
+
+def test_connect_last_missing_extra_keeps_route_until_resume(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.commands_impl import CommandImplMixin
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin, CommandImplMixin):
+        def __init__(self):
+            self.routes = []
+            self.harness_commands = []
+            self._key_harness_session = None
+            self._pending_key_harness_route = None
+            self._connect_context_note = ""
+
+        def _harness_cmd(self, args, log):
+            self.harness_commands.append(args)
+            # Extra missing: install prompt, no model step yet.
+
+        def _connect_byok_mode(self, provider, model, log, *args, **kwargs):
+            self.routes.append(("byok", provider, model))
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.routes.append(("menu", menu))
+
+    stub = Stub()
+    stub._save_connection_config(
+        category="open-harnesses",
+        auth_mode="byok",
+        harness_id="tau",
+        profile_id="tau",
+        acp_agent="",
+        openness="open",
+        provider="anthropic",
+        model="claude-sonnet-4-6",
+        transport="harness-protocol",
+        after_auth="switch-and-model",
+    )
+    stub._connect_last(FakeLog())
+    assert stub.harness_commands == ["switch tau"]
+    assert stub.routes == []
+    assert stub._key_harness_session is not None
+    assert stub._key_harness_session.entry_id == "tau"
+    assert stub._pending_key_harness_route == ("byok", "anthropic", "claude-sonnet-4-6")
+
+    stub._prompt_model_for_harness("Tau", FakeLog())
+    assert stub.routes == [("byok", "anthropic", "claude-sonnet-4-6")]
+    assert stub._pending_key_harness_route is None
+
+
+def test_dispatch_non_key_connectors_clear_the_key_session():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="tau",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self._pending_key_harness_route = ("byok", "anthropic", "x")
+            self.menus = []
+
+        def _open_connect_screen(self, log):
+            pass
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.menus.append(menu)
+
+        def _harness_cmd(self, args, log):
+            pass
+
+    stub = Stub()
+    stub._dispatch_connection_profile(get_connection_profile("models"), FakeLog())
+    assert stub._key_harness_session is None
+    assert stub._pending_key_harness_route is None
+
+
+def test_bare_connect_clears_the_key_session():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+
+    class Stub(ConnectMixin, SlashCommandMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="tau",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self._pending_key_harness_route = ("byok", "anthropic", "x")
+            self._awaiting_byok_provider = False
+            self._awaiting_byok_model = False
+            self._acp_client = None
+            self.menus = []
+
+        def _record_ex_command(self, cmd, c):
+            pass
+
+        def set_timer(self, *args, **kwargs):
+            pass
+
+        def _ensure_input_focus(self):
+            pass
+
+        def _show_connect_type_picker(self, log, menu=None, **kwargs):
+            self.menus.append(menu or "root")
+
+    stub = Stub()
+    stub._handle_command(":connect", FakeLog())
+    assert stub._key_harness_session is None
+    assert stub._pending_key_harness_route is None
+
+
+def test_install_cancel_clears_key_session():
+    from superqode.app.mixins.commands_impl import CommandImplMixin
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+
+    class Stub(ConnectMixin, CommandImplMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="tau",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self._pending_key_harness_route = ("byok", "anthropic", "x")
+            self._awaiting_harness_install = {"id": "tau"}
+
+    stub = Stub()
+    assert stub._handle_harness_install_input("n", FakeLog()) is True
+    assert stub._key_harness_session is None
+    assert stub._pending_key_harness_route is None
+    assert stub._awaiting_harness_install is None
+
+
+def test_acp_subscription_persist_uses_subscriptions_category(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._acp_subscription_vendor = "droid"
+            self._connecting_profile_id = "droid"
+            self.current_provider = ""
+            self.current_model = ""
+
+    stub = Stub()
+    stub._persist_acp_connection("droid")
+    saved = stub._load_connection_config()
+    assert saved["category"] == "subscriptions"
+    assert saved["auth_mode"] == "subscription"
+    assert saved["profile_id"] == "droid"
+    assert saved["acp_agent"] == "droid"
+
+    stub._acp_subscription_vendor = None
+    stub._connecting_profile_id = ""
+    stub._persist_acp_connection("opencode")
+    saved = stub._load_connection_config()
+    assert saved["category"] == "acp"
+    assert saved["auth_mode"] == "acp"
+    assert saved["profile_id"] == ""
+    assert saved["acp_agent"] == "opencode"
+
+
+def test_key_harness_allowlist_filters_dsh_and_deepagents():
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.providers.harness_catalog import get_entry
+
+    class Stub(ConnectMixin):
+        def __init__(self, entry_id):
+            entry = get_entry(entry_id)
+            spec = next(s for s in entry.auth if s.mode == "byok")
+            self._key_harness_session = KeyHarnessSession(
+                entry_id=entry_id,
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+
+    tau = Stub("tau")
+    assert tau._key_harness_allowlist("byok") is None
+    assert tau._key_harness_allowlist("local") is None
+
+    dsh = Stub("deepseek-harness")
+    assert dsh._key_harness_allowlist("byok") == frozenset({"deepseek"})
+    assert "anthropic" not in dsh._key_harness_allowlist("local")
+
+    sdk = Stub("deepagents")
+    assert sdk._key_harness_allowlist("byok") == frozenset({"anthropic", "google"})
+    assert sdk._key_harness_allowlist("local") == frozenset(
+        {"ollama", "lmstudio", "mlx", "llamacpp", "openai-compatible"}
+    )
+
+
+def test_finish_open_connect_records_milestone_and_clears_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path / "progress"))
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+    from superqode.app.progress import MILESTONES, clear_progress_cache
+    from superqode.providers.harness_catalog import get_entry
+
+    assert "connected_open_harness" in MILESTONES
+    clear_progress_cache()
+    entry = get_entry("tau")
+    spec = next(s for s in entry.auth if s.mode == "byok")
+    configured = []
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._key_harness_session = KeyHarnessSession(
+                entry_id="tau",
+                openness="open",
+                auth_spec=spec,
+                return_menu="open-harnesses",
+                after_auth="switch-and-model",
+            )
+            self.milestones = []
+
+        def _record_milestone(self, name):
+            self.milestones.append(name)
+
+        def _sync_tau_after_key_connect(self, provider, model, log):
+            configured.append((provider, model))
+
+    stub = Stub()
+    stub._finish_successful_model_connect("anthropic", "claude-sonnet-4-6", "byok", FakeLog())
+    assert configured == [("anthropic", "claude-sonnet-4-6")]
+    assert stub.milestones == ["connected_open_harness"]
+    assert stub._key_harness_session is None
+    saved = stub._load_connection_config()
+    assert saved["category"] == "open-harnesses"
+    assert saved["harness_id"] == "tau"
+    assert saved["provider"] == "anthropic"
+    assert saved["after_auth"] == "switch-and-model"
+    assert "key" not in saved
+    clear_progress_cache()
+
+
+def test_connection_persist_never_writes_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        pass
+
+    stub = Stub()
+    stub._save_byok_config("anthropic", "claude-sonnet-4-6")
+    stub._save_connection_config(
+        category="open-harnesses",
+        auth_mode="byok",
+        harness_id="tau",
+        profile_id="tau",
+        acp_agent="",
+        openness="open",
+        provider="anthropic",
+        model="claude-sonnet-4-6",
+        transport="harness-protocol",
+        after_auth="switch-and-model",
+    )
+    saved = stub._read_user_config()
+    assert saved["byok"]["last_provider"] == "anthropic"
+    assert saved["connection"]["harness_id"] == "tau"
+    blob = str(saved)
+    assert "sk-" not in blob
+    assert "api_key" not in blob
+    assert "secret" not in blob.lower()
+
+
+def test_back_from_open_returns_to_existing_harnesses():
+    from superqode.app_main import SuperQodeApp
+    from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS, CONNECT_MENU_OPEN
+
+    class BackStub(DispatchStub):
+        _awaiting_connect_type = True
+        _connect_menu = CONNECT_MENU_OPEN
+
+        def query_one(self, *args, **kwargs):
+            return FakeLog()
+
+    stub = BackStub()
+    assert SuperQodeApp.action_connect_menu_back(stub) is True
+    assert stub.menus == [CONNECT_MENU_AGENTS]
+
+
 # --- nothing that used to work stopped working --------------------------------
 
 
@@ -467,6 +1145,7 @@ def test_every_pre_existing_connect_id_still_resolves():
         "copilot",
         "devin",
         "droid",
+        "droid-key",
         "kiro",
         "glm-cli",
         "qwen-code",

@@ -68,6 +68,9 @@ class ProviderDef:
     # replaced per request: "{model}" → model id, "{cli_version}" → installed
     # Grok CLI version (for grok-cli / subscription proxy).
     extra_headers: Dict[str, str] = field(default_factory=dict)
+    # True when this id exists so `auth login` / auth.json can store a vendor
+    # harness key. Hidden from `:connect byok` — SuperQode does not run the loop.
+    harness_only: bool = False
 
 
 # =============================================================================
@@ -195,6 +198,19 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "The live model list follows models.dev."
         ),
         dynamic=True,
+    ),
+    "factory": ProviderDef(
+        # Credential slot for Factory Droid's FACTORY_API_KEY (`:connect droid-key`).
+        # SuperQode does not run Factory's loop; excluded from the BYOK picker.
+        id="factory",
+        name="Factory",
+        tier=ProviderTier.TIER2,
+        category=ProviderCategory.US_LABS,
+        env_vars=["FACTORY_API_KEY"],
+        litellm_prefix="",
+        docs_url="https://factory.ai/product/cli",
+        notes="Factory Droid API key. Use :connect droid-key, not :connect byok.",
+        harness_only=True,
     ),
     "poolside": ProviderDef(
         id="poolside",

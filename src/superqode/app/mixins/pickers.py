@@ -21,14 +21,15 @@ class PickerNavigationMixin:
 
     @staticmethod
     def _picker_link_style(style: str, number: int, *, handle: bool = False) -> str:
-        """Add a Textual/Rich link target to a picker style.
+        """Return a picker span style without an OSC-8 hyperlink.
 
-        ``handle`` marks the span a mouse user aims at. It carries no styling
-        of its own: colour alone says what is clickable, and an underline read
-        as a rule smeared across the row.
+        Terminals treat ``link superqode://pick/N`` as a real URL and pop a
+        ⌘-click tooltip over the list. Clicks still select the row: they are
+        resolved from the ``[n]`` header in ``_click_selects_picker_row``.
+        The ↗ is the only “this is clickable” mark.
         """
-        del handle
-        return f"{style} link superqode://pick/{number}"
+        del number, handle
+        return style
 
     def _append_picker_dot(self, target: Text, number: int, *, highlighted: bool) -> None:
         """Write the click dot that opens a row.

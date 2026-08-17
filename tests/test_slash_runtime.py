@@ -119,6 +119,19 @@ def test_textual_completion_includes_harness_runtime_connect_and_session_command
     ]
 
 
+def test_other_harnesses_stays_in_v1_completion_and_resolves_under_v2(monkeypatch):
+    """v1 completion keeps Other; v2 still accepts the id as an Open alias."""
+    from superqode.app.constants import COMMANDS, CONNECT_COMPLETION_COMMANDS
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    assert ":connect other-harnesses" in COMMANDS
+    assert ":connect other-harnesses" in CONNECT_COMPLETION_COMMANDS
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v1")
+    assert get_connection_profile("other-harnesses").connector == "harness-picker"
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    assert get_connection_profile("other-harnesses").connector == "open-harness-picker"
+
+
 def test_runtime_in_prompt_completion_commands():
     """The live prompt completion panel filters COMMANDS — ':runtime' must be
     there (regression: it was only in slash_complete, so typing ':runtime' in

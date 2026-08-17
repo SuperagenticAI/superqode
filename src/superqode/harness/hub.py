@@ -62,6 +62,7 @@ _DOCS_BY_ID = {
     "deepseek-harness": f"{DOCS_BASE}advanced/deepseek-harness/",
     "deepagents": f"{DOCS_BASE}providers/deepagents/",
     "deepagents-code": f"{DOCS_BASE}providers/deepagents/",
+    "junie": f"{DOCS_BASE}concepts/modes/",
 }
 
 _HOMEPAGE_BY_ID = {
@@ -81,6 +82,9 @@ _HOMEPAGE_BY_ID = {
     "qwen-code": "https://github.com/QwenLM/qwen-code",
     "kimi-code": "https://github.com/MoonshotAI/kimi-code",
     "deepagents-code": "https://docs.langchain.com/deepagents-code",
+    "junie": "https://www.jetbrains.com/junie/",
+    "ecosystem:letta": "https://www.letta.com/",
+    "ecosystem:warp": "https://www.warp.dev/agent-cli",
 }
 
 _COMMANDS_BY_ID = {
@@ -143,6 +147,10 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "deepseek-harness": HubOpenness(
         "open", "MIT", "https://github.com/deepseek-ai/deepseek-harness"
     ),
+    "droid": HubOpenness("closed"),
+    "grok": HubOpenness("open", "Apache-2.0", "https://github.com/xai-org/grok-build"),
+    "muse": HubOpenness("closed"),
+    "junie": HubOpenness("closed"),
     "codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:gemini": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
@@ -164,6 +172,8 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
         "open", "Apache-2.0", "https://github.com/RooCodeInc/Roo-Code"
     ),
     "ecosystem:jcode": HubOpenness("open", "MIT", "https://github.com/1jehuang/jcode"),
+    "ecosystem:letta": HubOpenness("open", "Apache-2.0", "https://github.com/letta-ai/letta-code"),
+    "ecosystem:warp": HubOpenness("open", "AGPL-3.0", "https://github.com/warpdotdev/warp"),
     "ecosystem:qm": HubOpenness("open", "MIT", "https://github.com/yc-software/qm"),
     "ecosystem:better-harness": HubOpenness(
         "open", "MIT", "https://github.com/QoderAI/better-harness"
@@ -251,6 +261,13 @@ _SETUP_STEPS_BY_ID = {
     "devin": (
         HubSetupStep("Install Devin CLI", "curl -fsSL https://cli.devin.ai/install.sh | bash"),
         HubSetupStep("Authenticate with your Devin account", "devin auth login"),
+    ),
+    "junie": (
+        HubSetupStep("Install Junie CLI", "npm install -g @jetbrains/junie"),
+        HubSetupStep(
+            "Authenticate with your JetBrains account",
+            description="Sign in with Junie CLI using your JetBrains AI / Junie plan.",
+        ),
     ),
     "droid": (
         HubSetupStep(
@@ -438,6 +455,81 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
             HubSetupStep(
                 "Configure a model provider",
                 description="jcode connects to Anthropic, OpenAI, or OpenRouter with its own keys.",
+            ),
+        ),
+    },
+    "ecosystem:letta": {
+        "interface": "Terminal harness",
+        "support_note": (
+            "Not yet launched from SuperQode. Letta Code is a published CLI "
+            "(`npm install -g @letta-ai/letta-code`, then `letta`). Configure "
+            "a provider with /connect or Letta Cloud with /login. SuperQode "
+            "does not speak Letta ACP from this row yet."
+        ),
+        "docs_url": "https://docs.letta.com/letta-code/cli",
+        "repository": "https://github.com/letta-ai/letta-code",
+        "install_command": "npm install -g @letta-ai/letta-code",
+        "tools": ("workspace files", "terminal commands", "skills", "memory", "subagents"),
+        "policies": (
+            "Letta Code owns its agent loop, memory, and session state",
+            "Provider keys and Letta Cloud credentials stay in Letta's own config",
+            "No commands are executed by SuperQode until an ACP or CLI attach ships",
+        ),
+        "capabilities": (
+            "Memory-first coding harness",
+            "Interactive CLI",
+            "Letta Cloud sync",
+            "Skills and subagents",
+            "Model-agnostic /connect",
+        ),
+        "based_on": "Letta Code (Apache-2.0)",
+        "popularity_rank": 72,
+        "setup_steps": (
+            HubSetupStep(
+                "Install Letta Code",
+                command="npm install -g @letta-ai/letta-code",
+            ),
+            HubSetupStep(
+                "Connect a model",
+                command="letta",
+                description="Inside Letta, run /connect for a provider key or /login for Letta Cloud.",
+            ),
+        ),
+    },
+    "ecosystem:warp": {
+        "interface": "Terminal harness",
+        "support_note": (
+            "Not yet launched from SuperQode. Warp Agent CLI is a standalone "
+            "`warp` binary (`curl -fsSL https://app.warp.dev/download/agent-cli | bash`). "
+            "Sign in or export WARP_API_KEY. SuperQode cannot attach it until "
+            "an ACP or CLI connector ships."
+        ),
+        "docs_url": "https://docs.warp.dev/agents/cli/",
+        "repository": "https://github.com/warpdotdev/warp",
+        "install_command": "curl -fsSL https://app.warp.dev/download/agent-cli | bash",
+        "tools": ("workspace files", "terminal commands", "codebase index", "model routing"),
+        "policies": (
+            "Warp Agent owns its loop, permissions, and model routing",
+            "Warp account or WARP_API_KEY remains with Warp",
+            "No commands are executed by SuperQode until a connector is built and tested",
+        ),
+        "capabilities": (
+            "Standalone Agent CLI",
+            "Warp Terminal harness",
+            "Model routing",
+            "Cloud handoff (Oz)",
+        ),
+        "based_on": "Warp Agent (AGPL-3.0)",
+        "popularity_rank": 70,
+        "setup_steps": (
+            HubSetupStep(
+                "Install Warp Agent CLI",
+                command="curl -fsSL https://app.warp.dev/download/agent-cli | bash",
+            ),
+            HubSetupStep(
+                "Authenticate",
+                command="warp",
+                description="Sign in with your Warp account, or export WARP_API_KEY.",
             ),
         ),
     },
@@ -789,6 +881,20 @@ def _supplemental_records() -> list[HubRecord]:
             "An MIT-licensed terminal coding harness written in Rust, focused on low memory use, fast start, and parallel agent swarms.",
             "https://jcode.sh",
             ("jcode.sh", "Rust coding agent", "RAM efficient harness"),
+        ),
+        (
+            "ecosystem:letta",
+            "Letta Code",
+            "Letta's Apache-2.0 memory-first coding harness. Agents keep identity and learn across sessions through the `letta` CLI, desktop app, or Letta Cloud.",
+            "https://www.letta.com/",
+            ("letta", "letta-code", "MemGPT coding agent"),
+        ),
+        (
+            "ecosystem:warp",
+            "Warp Agent",
+            "Warp's AGPL-3.0 Agent CLI — the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+            "https://www.warp.dev/agent-cli",
+            ("warp", "warp agent cli", "warp terminal agent"),
         ),
         (
             "ecosystem:aider",

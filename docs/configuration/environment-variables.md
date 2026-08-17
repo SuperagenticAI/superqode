@@ -52,6 +52,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_RLM_SESSION_DIR` | path | `<rlm dir>/sessions` | Where the native RLM harness stores its session trees. |
 | `SUPERQODE_PURE_PERMISSIONS_HEADLESS` | `1` to allow | unset | Allow a harness with no approvals or sandbox, such as PiPy, to run headless. Unattended runs have no reviewer, so this must be set deliberately. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
+| `SUPERQODE_CONNECT_MENU` | `v1`/`v2` | `v1` | Connect existing-harness layout. `v1` keeps Other harnesses; `v2` shows Open (and Closed once that list is non-empty). Overrides `connect_menu` in `~/.superqode/config.json`. |
 | `SUPERQODE_STDIN_WAIT` | seconds | `0.2` | How long a headless run waits for piped stdin before deciding none was sent. |
 | `SUPERQODE_RUNTIME` | runtime id | `builtin` | Select the default runtime adapter when no CLI or project runtime is set. |
 | `SUPERQODE_COPILOT_TIMEOUT` | seconds | `600` | Maximum wait for one GitHub Copilot SDK prompt turn. |
