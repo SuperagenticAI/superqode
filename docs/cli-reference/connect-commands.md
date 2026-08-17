@@ -37,6 +37,8 @@ superqode -C PROFILE [COMMAND]
 | `droid-key` | Factory Droid with `FACTORY_API_KEY` (Closed harnesses). Child process only; not the Droid CLI login. |
 | `junie` | JetBrains Junie on your JetBrains AI account over ACP. |
 | `junie-key` | Junie with `JETBRAINS_API_KEY` (Closed harnesses). Child process only; not the Junie CLI login. |
+| `letta` | Letta Code setup card (Open harnesses). Install `letta`, then `/connect` or `/login`. SuperQode does not start the Letta loop from this row yet. |
+| `warp` | Warp Agent CLI setup card (Open harnesses). Install `warp`, then sign in or set `WARP_API_KEY`. SuperQode does not attach Warp from this row yet. |
 | `kiro` | Kiro or Amazon Q Developer subscription through the signed-in Kiro CLI ACP mode. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |

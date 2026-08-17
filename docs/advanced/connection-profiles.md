@@ -31,11 +31,26 @@ Brings your own API key. Opens a cloud provider picker, then model selector. Use
 Opens the vendor screen below. Always available. Esc returns to the root
 screen.
 
-### 5. Other Harnesses (connector: harness-picker)
+### 5. Other Harnesses (connector: harness-picker) / Open and Closed (v2)
 
-Opens a focused list of optional harness integrations that are neither main
-connection profiles nor ACP agents. Hugging Face Tau appears here with its live
-installation status.
+`v1` (default) opens **Other harnesses**: optional integrations that are
+neither main connection profiles nor ACP agents. Hugging Face Tau appears
+here with its live installation status.
+
+`v2` (`SUPERQODE_CONNECT_MENU=v2` or `"connect_menu": "v2"` in
+`~/.superqode/config.json`) replaces that row with two lists. Open vs Closed
+is the harness source, not the model family.
+
+- **Open harnesses** (`:connect open-harnesses`): OSI-licensed harnesses.
+  Connect with a provider key or a local model. Includes Tau, DeepSeek
+  Harness, DeepAgents SDK, OpenCode, Prime Agent, jcode, Grok Build, Qwen
+  Code, fast-agent, Pi, Goose, Cline, OpenHands, Mistral Vibe, Hermes Agent,
+  Letta Code, Warp Agent, and Kimi Code.
+- **Closed harnesses** (`:connect closed-harnesses`): proprietary harnesses
+  on that vendor's key. Includes Factory Droid, Junie, Muse Code, Qoder CLI,
+  Poolside, and ZCode (inspect only).
+
+`:connect other-harnesses` still works on v2; it opens the Open list.
 
 ## Subscriptions Screen (`:connect subscriptions`)
 
@@ -147,7 +162,9 @@ Direct shortcuts:
 - `:connect glm-cli` - GLM Coding Plan through ACP
 - `:connect copilot` - prefer the official SDK, with installed CLI/ACP fallback
 - `:connect acp copilot` - advanced Copilot CLI ACP compatibility path
-- `:connect other-harnesses` - browse optional non-ACP harnesses such as Tau
+- `:connect other-harnesses` - v1: optional non-ACP harnesses such as Tau; v2: opens Open harnesses
+- `:connect open-harnesses` - Open list (v2)
+- `:connect closed-harnesses` - Closed list (v2)
 - `:copilot models` - list models available to the signed-in Copilot account
 - `:runtime claude-agent-sdk` - explicit Anthropic API-key SDK runtime
 - `:connect antigravity` - use `agy` headless mode with its Google Sign-In/keyring

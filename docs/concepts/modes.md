@@ -190,19 +190,33 @@ direct profile, so the submenu never becomes a required step:
 :connect qwen-code
 :connect kimi-code
 :connect deepagents-code
+:connect junie
 ```
 
 Only vendor-plan and vendor-managed sign-in routes appear in this submenu.
 API-key-only routes remain under `:connect byok`; transport alternatives such
 as the Copilot CLI remain in the ACP picker. Factory Droid's own key is a
 Closed harness (`:connect droid-key`), not a Subscriptions row and not
-SuperQode BYOK.
+SuperQode BYOK. Junie has both: `:connect junie` on Subscriptions and
+`:connect junie-key` on Closed.
 
-Optional non-ACP harness integrations sit at the bottom of the same screen:
+The rest of the existing-harness screen depends on the connect menu flag
+(`SUPERQODE_CONNECT_MENU` or `connect_menu` in `~/.superqode/config.json`).
+`v1` (the compiled default) keeps **Other harnesses**. `v2` replaces that
+row with **Open harnesses** and **Closed harnesses**:
 
 ```text
 :connect other-harnesses
+:connect open-harnesses
+:connect closed-harnesses
+:connect letta
+:connect warp
 ```
+
+Open is OSI-licensed harnesses on a key or local model. Closed is proprietary
+harnesses on that vendor's key. Setup-card rows such as Letta Code and Warp
+Agent are listed so you can find them; SuperQode does not start their loop
+from that row yet.
 
 Pre-ladder names still resolve, so muscle memory and older documentation keep
 working. `:connect subscriptions` lands on the vendor subscription screen, and
