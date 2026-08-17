@@ -590,6 +590,21 @@ class TestFactoryKeyPath:
         assert stub._acp_extra_env is None
         assert stub._pending_vendor_key is None
 
+    def test_unrelated_attach_failure_does_not_drop_droid_key_staging(self):
+        """An earlier exclusive worker must not wipe a newer droid-key pin."""
+        from superqode.app.mixins.connect import ConnectMixin
+
+        stub = ConnectMixin()
+        stub._set_acp_extra_env({"FACTORY_API_KEY": "child-only"}, "droid")
+        stub._pending_vendor_key = {
+            "agent": "droid",
+            "note": "API key path — not your Droid CLI login.",
+        }
+        stub._abandon_vendor_key_attach("opencode")
+        assert stub._acp_extra_env == {"FACTORY_API_KEY": "child-only"}
+        assert stub._acp_extra_env_agent == "droid"
+        assert stub._pending_vendor_key["agent"] == "droid"
+
     def test_harness_only_factory_is_rejected_from_byok(self):
         from superqode.app.mixins.connect import ConnectMixin
 

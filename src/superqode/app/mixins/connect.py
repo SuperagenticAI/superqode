@@ -487,14 +487,15 @@ class ConnectMixin:
         )
 
     def _abandon_vendor_key_attach(self, agent_id: str) -> None:
-        """Drop a pending Closed-key attach that never landed."""
+        """Drop a pending Closed-key attach that never landed.
+
+        An exclusive worker that fails for a *different* agent must not
+        touch a newer droid-key staging that was queued after it.
+        """
         pending = getattr(self, "_pending_vendor_key", None)
         requested = (agent_id or "").strip().lower()
         if isinstance(pending, dict) and (pending.get("agent") or "") == requested:
             self._clear_acp_extra_env()
-            return
-        self._pending_vendor_key = None
-        self._retain_acp_extra_env_for(agent_id)
 
     def _redirect_harness_only_provider(self, provider: str, log: ConversationLog) -> bool:
         """Reject SuperQode-loop BYOK for harness-only credential slots."""
