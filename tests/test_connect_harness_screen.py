@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from superqode.providers.connection_profiles import (
     CONNECT_MENU_BUILD,
     CONNECT_MENU_HARNESS,
@@ -51,6 +53,11 @@ class DispatchStub:
 
     def _show_connect_type_picker(self, log, menu=None, **kwargs):
         self.menus.append(menu)
+
+    def _begin_key_harness(self, profile, log):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        ConnectMixin._begin_key_harness(self, profile, log)
 
 
 def _card_renderer():
@@ -229,21 +236,62 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
 # --- existing harnesses: subscriptions and ACP are different kinds ------------
 
 
-def test_existing_harnesses_is_three_categories_you_step_into():
-    """Existing harnesses split into three categories by connection kind."""
+@pytest.mark.parametrize(
+    "menu_version,expected",
+    [
+        (
+            "v1",
+            [
+                ("agent-subscriptions", "Subscriptions"),
+                ("agent-acp", "ACP agents"),
+                ("other-harnesses", "Other harnesses"),
+            ],
+        ),
+        (
+            "v2",
+            [
+                ("agent-subscriptions", "Subscriptions"),
+                ("agent-acp", "ACP agents"),
+                ("agent-open-harnesses", "Open harnesses"),
+            ],
+        ),
+    ],
+)
+def test_existing_harnesses_is_three_categories_you_step_into(menu_version, expected, monkeypatch):
+    """Existing harnesses split by connection kind; v2 replaces Other with Open."""
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
-    assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == [
-        ("agent-subscriptions", "Subscriptions"),
-        ("agent-acp", "ACP agents"),
-        ("other-harnesses", "Other harnesses"),
-    ]
+    assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == expected
+    assert "Closed harnesses" not in {
+        p.label for p in list_connection_profiles(CONNECT_MENU_AGENTS)
+    }
 
 
 def test_each_category_opens_its_own_screen():
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     assert dispatch("agent-subscriptions").menus == [CONNECT_MENU_VENDORS]
+
+
+def test_open_category_opens_the_open_list():
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    assert dispatch("agent-open-harnesses").menus == [CONNECT_MENU_OPEN]
+    assert dispatch("open-harnesses").menus == [CONNECT_MENU_OPEN]
+
+
+def test_other_harnesses_aliases_to_open_under_v2(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    assert dispatch("other-harnesses").menus == [CONNECT_MENU_OPEN]
+
+
+def test_selecting_an_open_row_switches_that_optional_harness():
+    assert dispatch("tau").harness_commands == ["switch tau"]
+    assert dispatch("deepseek-harness").harness_commands == ["switch deepseek-harness"]
+    assert dispatch("deepagents").harness_commands == ["switch deepagents"]
 
 
 def test_the_acp_category_opens_the_original_catalogue_screen():
@@ -379,12 +427,16 @@ def test_back_walks_the_path_the_user_took():
     from superqode.providers.connection_profiles import (
         CONNECT_MENU_ACP,
         CONNECT_MENU_AGENTS,
+        CONNECT_MENU_CLOSED,
+        CONNECT_MENU_OPEN,
         CONNECT_MENU_VENDORS,
         parent_menu,
     )
 
     assert parent_menu(CONNECT_MENU_VENDORS) == CONNECT_MENU_AGENTS
     assert parent_menu(CONNECT_MENU_ACP) == CONNECT_MENU_AGENTS
+    assert parent_menu(CONNECT_MENU_OPEN) == CONNECT_MENU_AGENTS
+    assert parent_menu(CONNECT_MENU_CLOSED) == CONNECT_MENU_AGENTS
     assert parent_menu(CONNECT_MENU_AGENTS) == CONNECT_MENU_ROOT
     assert parent_menu(CONNECT_MENU_PLAN) == CONNECT_MENU_MODELS
     assert parent_menu(CONNECT_MENU_MODELS) == CONNECT_MENU_HARNESS
@@ -402,6 +454,20 @@ def test_legacy_menu_names_land_on_the_right_category():
     assert normalize_menu("acp") == CONNECT_MENU_ACP
     assert normalize_menu("byok") == CONNECT_MENU_MODELS
     assert normalize_menu("nonsense") == CONNECT_MENU_ROOT
+
+
+def test_v2_normalizes_other_harnesses_to_the_open_menu(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_OPEN,
+        CONNECT_MENU_ROOT,
+        normalize_menu,
+    )
+
+    assert normalize_menu("other-harnesses") == CONNECT_MENU_OPEN
+    assert normalize_menu("open-harnesses") == CONNECT_MENU_OPEN
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v1")
+    assert normalize_menu("other-harnesses") == CONNECT_MENU_ROOT
 
 
 def test_model_step_offers_local_key_and_subscription():
@@ -446,6 +512,22 @@ def test_back_from_the_harness_step_returns_to_the_root():
     stub = BackStub()
     assert SuperQodeApp.action_connect_menu_back(stub) is True
     assert stub.menus == [CONNECT_MENU_ROOT]
+
+
+def test_back_from_open_returns_to_existing_harnesses():
+    from superqode.app_main import SuperQodeApp
+    from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS, CONNECT_MENU_OPEN
+
+    class BackStub(DispatchStub):
+        _awaiting_connect_type = True
+        _connect_menu = CONNECT_MENU_OPEN
+
+        def query_one(self, *args, **kwargs):
+            return FakeLog()
+
+    stub = BackStub()
+    assert SuperQodeApp.action_connect_menu_back(stub) is True
+    assert stub.menus == [CONNECT_MENU_AGENTS]
 
 
 # --- nothing that used to work stopped working --------------------------------

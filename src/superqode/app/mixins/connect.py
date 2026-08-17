@@ -30,9 +30,9 @@ from superqode.app.session_state import get_session
 
 def _menu_history_label(menu: str) -> str:
     """Title of a connect screen, for the back control's tooltip."""
-    from superqode.providers.connection_profiles import CONNECT_MENU_TITLES
+    from superqode.providers.connection_profiles import connect_menu_titles
 
-    entry = CONNECT_MENU_TITLES.get(menu)
+    entry = connect_menu_titles().get(menu)
     if isinstance(entry, (tuple, list)) and entry:
         return str(entry[0])
     return str(entry or "Connect")
@@ -207,11 +207,19 @@ class ConnectMixin:
         self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
 
     def action_browse_harnesses_from_connect(self) -> None:
-        """Leave the connection picker and open optional non-ACP harnesses."""
+        """H / typed harness: Other picker in v1, Open list in v2."""
         if not getattr(self, "_awaiting_connect_type", False):
             return
-        self._awaiting_connect_type = False
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_OPEN,
+            connect_menu_version,
+        )
+
         log = self.query_one("#log", ConversationLog)
+        if connect_menu_version() == "v2":
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_OPEN)
+            return
+        self._awaiting_connect_type = False
         log.clear()
         self._show_other_harnesses(log, clear_log=False)
 
@@ -232,6 +240,18 @@ class ConnectMixin:
             catalog_entries=entries,
             subtitle="Optional non-ACP harness integrations",
         )
+
+    def _begin_key_harness(self, profile, log: ConversationLog) -> None:
+        """Connect an Open/Closed catalog row.
+
+        SuperQode-hosted adapters (Tau, DSH, DeepAgents SDK) already switch
+        like the Other picker. The Local/BYOK model step is PR 3.
+        """
+        harness_id = getattr(profile, "runtime", None) or getattr(profile, "id", "")
+        if not harness_id:
+            log.add_error("This open harness has no switch target.")
+            return
+        self._harness_cmd(f"switch {harness_id}", log)
 
     #: Vendor-specific controls available after connecting, as
     #: (name matchers, command, description).
@@ -472,6 +492,18 @@ class ConnectMixin:
             self._show_agents(log)
         elif conn == "harness-picker":
             self._show_other_harnesses(log)
+        elif conn == "open-harness-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+            if getattr(profile, "id", "") == "other-harnesses":
+                self._connect_context_note = "Other harnesses now live under Open harnesses."
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_OPEN)
+        elif conn == "closed-harness-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_CLOSED)
+        elif conn == "key-harness":
+            self._begin_key_harness(profile, log)
         elif conn in {"agent-picker", "subscription-picker"}:
             from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
@@ -2031,9 +2063,8 @@ class ConnectMixin:
                   fresh render, and to the current screen while navigating it.
         """
         from superqode.providers.connection_profiles import (
-            CONNECT_MENU_AGENTS,
             CONNECT_MENU_ROOT,
-            CONNECT_MENU_TITLES,
+            connect_menu_titles,
             detected_sources,
             grouped_menu_profiles,
             normalize_menu,
@@ -2073,7 +2104,7 @@ class ConnectMixin:
             delattr(self, "_byok_connect_list")
 
         is_root = menu == CONNECT_MENU_ROOT
-        title, subtitle = CONNECT_MENU_TITLES.get(menu, ("Connect", ""))
+        title, subtitle = connect_menu_titles().get(menu, ("Connect", ""))
 
         t = Text()
         t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
