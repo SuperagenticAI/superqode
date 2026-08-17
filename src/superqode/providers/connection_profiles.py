@@ -761,7 +761,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="grok",
-        harness_openness="closed",
+        harness_openness="open",
         model_openness="Grok models",
         transport="ACP or CLI",
         label="Grok",
@@ -968,6 +968,26 @@ _AGENT_CLOSED = ConnectionProfile(
     menu=CONNECT_MENU_AGENTS,
     detect=lambda: True,
 )
+_AGENT_SUBSCRIPTIONS_V2 = ConnectionProfile(
+    id="agent-subscriptions",
+    label="Subscriptions",
+    description="Vendor plans you sign in to. Uses the plan, never a leftover API key.",
+    connector="vendor-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
+_AGENT_ACP_V2 = ConnectionProfile(
+    id="agent-acp",
+    label="ACP",
+    description=(
+        "Agents that speak Agent Client Protocol. They keep their own login. "
+        "OpenCode, Goose, Aider, Cline, and the live catalog."
+    ),
+    connector="acp-picker",
+    menu=CONNECT_MENU_AGENTS,
+    transport="ACP",
+    detect=lambda: True,
+)
 # v2 alias: :connect other-harnesses opens Open, with a one-line notice.
 _OTHER_HARNESSES_V2 = ConnectionProfile(
     id="other-harnesses",
@@ -1000,14 +1020,40 @@ _AGENT_CATEGORY_PROFILES: List[ConnectionProfile] = [
 ]
 
 
+def _const_detect(ready: bool) -> Callable[[], bool]:
+    """Bind a boolean into a detect() probe without a late-binding lambda."""
+
+    def _probe() -> bool:
+        return ready
+
+    return _probe
+
+
+def _always_ready() -> bool:
+    return True
+
+
 def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
-    """Open/Closed leaf rows from the join catalog, not a hardcoded id list."""
+    """Open/Closed leaf rows from a live catalog query, not an import-time snapshot."""
+    from superqode.harness.catalog import optional_harnesses
     from superqode.providers.harness_catalog import list_entries
 
     screen = CONNECT_MENU_OPEN if menu == "open" else CONNECT_MENU_CLOSED
+    optional = {entry.id: entry for entry in optional_harnesses()}
     profiles: List[ConnectionProfile] = []
     for entry in list_entries(menu):
         harness_id = entry.harness_id or entry.id
+        definition = optional.get(harness_id)
+        auth_spec = next((spec for spec in entry.auth if spec.detect is not None), None)
+        if definition is not None:
+            detect = _const_detect(bool(definition.available))
+            hint = definition.issue
+        elif auth_spec is not None:
+            detect = auth_spec.detect
+            hint = auth_spec.unavailable_hint
+        else:
+            detect = _always_ready
+            hint = ""
         profiles.append(
             ConnectionProfile(
                 id=entry.id,
@@ -1017,21 +1063,18 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
                 menu=screen,
                 runtime=harness_id,
                 harness_openness=entry.openness if entry.openness in {"open", "closed"} else "",
-                detect=lambda: True,
+                detect=detect,
+                unavailable_hint=hint,
             )
         )
     return profiles
-
-
-_OPEN_HARNESS_PROFILES: List[ConnectionProfile] = _catalog_harness_profiles("open")
-_CLOSED_HARNESS_PROFILES: List[ConnectionProfile] = _catalog_harness_profiles("closed")
 
 
 def _agent_category_profiles() -> List[ConnectionProfile]:
     """Existing-harness rows for the current connect-menu flag."""
     if connect_menu_version() != "v2":
         return list(_AGENT_CATEGORY_PROFILES)
-    rows = [_AGENT_SUBSCRIPTIONS, _AGENT_ACP, _AGENT_OPEN]
+    rows = [_AGENT_SUBSCRIPTIONS_V2, _AGENT_ACP_V2, _AGENT_OPEN]
     from superqode.providers.harness_catalog import list_entries
 
     if list_entries("closed"):
@@ -1043,13 +1086,12 @@ def _flat_profiles() -> List[ConnectionProfile]:
     """Completion/registry list. v2 swaps Other for Open; Closed stays hidden."""
     if connect_menu_version() != "v2":
         return list(_PROFILES)
-    rewritten: List[ConnectionProfile] = []
-    for profile in _PROFILES:
-        if profile.id == "other-harnesses":
-            rewritten.append(_AGENT_OPEN)
-            continue
-        rewritten.append(profile)
-    return rewritten
+    replacements = {
+        "other-harnesses": _AGENT_OPEN,
+        "agent-subscriptions": _AGENT_SUBSCRIPTIONS_V2,
+        "agent-acp": _AGENT_ACP_V2,
+    }
+    return [replacements.get(profile.id, profile) for profile in _PROFILES]
 
 # ``:connect acp`` predates the categories and still opens the ACP catalogue.
 _ACP_MENU_PROFILES: List[ConnectionProfile] = [
@@ -1144,8 +1186,6 @@ _BY_ID = {
         _AGENT_CLOSED,
         _OPEN_HARNESSES_ALIAS,
         _CLOSED_HARNESSES_ALIAS,
-        *_OPEN_HARNESS_PROFILES,
-        *_CLOSED_HARNESS_PROFILES,
     )
 }
 
@@ -1154,8 +1194,8 @@ _BY_MENU = {
     CONNECT_MENU_AGENTS: _AGENT_CATEGORY_PROFILES,
     CONNECT_MENU_VENDORS: _AGENT_PROFILES,
     CONNECT_MENU_ACP: _ACP_MENU_PROFILES,
-    CONNECT_MENU_OPEN: _OPEN_HARNESS_PROFILES,
-    CONNECT_MENU_CLOSED: _CLOSED_HARNESS_PROFILES,
+    CONNECT_MENU_OPEN: (),
+    CONNECT_MENU_CLOSED: (),
     CONNECT_MENU_HARNESS: _HARNESS_PROFILES,
     CONNECT_MENU_MODELS: _MODEL_PROFILES,
     CONNECT_MENU_PLAN: _PLAN_PROFILES,
@@ -1208,6 +1248,10 @@ CONNECT_MENU_TITLES = {
 
 _V2_AGENTS_TITLE = (
     "Existing harnesses",
+    "Pick how you authenticate. Open is about the harness source, not the model.",
+)
+_V2_AGENTS_TITLE_WITH_CLOSED = (
+    "Existing harnesses",
     "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
 )
 
@@ -1216,7 +1260,12 @@ def connect_menu_titles() -> dict:
     """Titles for the current connect-menu flag. v2 rewrites the agents helper."""
     titles = dict(CONNECT_MENU_TITLES)
     if connect_menu_version() == "v2":
-        titles[CONNECT_MENU_AGENTS] = _V2_AGENTS_TITLE
+        from superqode.providers.harness_catalog import list_entries
+
+        # The design sentence names Closed; omit that clause while the row is hidden.
+        titles[CONNECT_MENU_AGENTS] = (
+            _V2_AGENTS_TITLE_WITH_CLOSED if list_entries("closed") else _V2_AGENTS_TITLE
+        )
     return titles
 
 
@@ -1233,9 +1282,9 @@ def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfi
     if menu == CONNECT_MENU_AGENTS:
         return _agent_category_profiles()
     if menu == CONNECT_MENU_OPEN:
-        return list(_OPEN_HARNESS_PROFILES)
+        return _catalog_harness_profiles("open")
     if menu == CONNECT_MENU_CLOSED:
-        return list(_CLOSED_HARNESS_PROFILES)
+        return _catalog_harness_profiles("closed")
     return list(_BY_MENU.get(menu, ()))
 
 
@@ -1244,16 +1293,17 @@ def get_connection_profile(id_or_label: str) -> Optional[ConnectionProfile]:
     key = (id_or_label or "").strip().lower()
     if key == "other-harnesses":
         return _OTHER_HARNESSES_V2 if connect_menu_version() == "v2" else _OTHER_HARNESSES
+    if key == "agent-subscriptions":
+        return _AGENT_SUBSCRIPTIONS_V2 if connect_menu_version() == "v2" else _AGENT_SUBSCRIPTIONS
+    if key == "agent-acp":
+        return _AGENT_ACP_V2 if connect_menu_version() == "v2" else _AGENT_ACP
     if key in _BY_ID:
         return _BY_ID[key]
-    for profile in (
-        *_flat_profiles(),
-        *_LEGACY_PROFILES,
-        _AGENT_OPEN,
-        _AGENT_CLOSED,
-        *_OPEN_HARNESS_PROFILES,
-        *_CLOSED_HARNESS_PROFILES,
-    ):
+    catalog_rows = (*_catalog_harness_profiles("open"), *_catalog_harness_profiles("closed"))
+    for profile in catalog_rows:
+        if profile.id == key or profile.label.lower() == key:
+            return profile
+    for profile in (*_flat_profiles(), *_LEGACY_PROFILES, _AGENT_OPEN, _AGENT_CLOSED):
         if profile.label.lower() == key:
             return profile
     return None

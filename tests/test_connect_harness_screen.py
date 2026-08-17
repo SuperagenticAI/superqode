@@ -251,7 +251,7 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
             "v2",
             [
                 ("agent-subscriptions", "Subscriptions"),
-                ("agent-acp", "ACP agents"),
+                ("agent-acp", "ACP"),
                 ("agent-open-harnesses", "Open harnesses"),
             ],
         ),

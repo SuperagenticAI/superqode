@@ -5907,18 +5907,22 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "menu_version,third_row,helper",
+    "menu_version,rows,helper",
     [
-        ("v1", (3, "Other harnesses"), None),
+        (
+            "v1",
+            [(1, "Subscriptions"), (2, "ACP agents"), (3, "Other harnesses")],
+            None,
+        ),
         (
             "v2",
-            (3, "Open harnesses"),
-            "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
+            [(1, "Subscriptions"), (2, "ACP"), (3, "Open harnesses")],
+            "Pick how you authenticate. Open is about the harness source, not the model.",
         ),
     ],
 )
 def test_connect_agents_screen_keeps_the_first_choice_progressive(
-    menu_version, third_row, helper, monkeypatch
+    menu_version, rows, helper, monkeypatch
 ):
     monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     app = make_app()
@@ -5934,11 +5938,7 @@ def test_connect_agents_screen_keeps_the_first_choice_progressive(
     assert "China Coding Agents" not in rendered
     assert "Claude Code subscription" not in rendered
 
-    assert picker_rows(rendered) == [
-        (1, "Subscriptions"),
-        (2, "ACP agents"),
-        third_row,
-    ]
+    assert picker_rows(rendered) == rows
     assert (4, "Closed harnesses") not in picker_rows(rendered)
     if helper:
         assert helper in rendered
