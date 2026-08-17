@@ -148,7 +148,8 @@ def _local_ids_with_base_url() -> Tuple[str, ...]:
 # included because their ProviderDefs expose a URL.
 _DSH_LOCAL_PROVIDERS = _local_ids_with_base_url()
 
-# Documented LangChain extras: langchain-ollama, langchain-openai.
+# Documented LangChain extras: langchain-ollama (Ollama) and langchain-openai
+# (LM Studio, MLX, llama.cpp, and generic OpenAI-compat endpoints).
 _DEEPAGENTS_LOCAL_PROVIDERS = (
     "ollama",
     "lmstudio",

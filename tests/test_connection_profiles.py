@@ -393,11 +393,60 @@ def test_v2_closed_menu_exists_but_is_empty(monkeypatch):
     assert get_connection_profile("agent-closed-harnesses").connector == "closed-harness-picker"
 
 
+def test_v2_category_copy_matches_the_design(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
+
+    by_id = {p.id: p for p in list_connection_profiles(CONNECT_MENU_AGENTS)}
+    assert by_id["agent-subscriptions"].description == (
+        "Vendor plans you sign in to. Uses the plan, never a leftover API key."
+    )
+    assert by_id["agent-acp"].label == "ACP"
+    assert by_id["agent-acp"].description == (
+        "Agents that speak Agent Client Protocol. They keep their own login. "
+        "OpenCode, Goose, Aider, Cline, and the live catalog."
+    )
+
+
 def test_optional_harnesses_is_still_the_v1_other_source():
     from superqode.harness import optional_harnesses
 
     ids = [entry.id for entry in optional_harnesses(".")]
     assert ids == ["tau", "deepseek-harness", "deepagents"]
+
+
+def test_open_rows_surface_optional_harness_setup_hints(monkeypatch):
+    from superqode.harness.catalog import optional_harnesses
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    missing = [
+        replace(entry, available=False, issue='uv tool install "superqode[tau]"')
+        if entry.id == "tau"
+        else entry
+        for entry in optional_harnesses()
+    ]
+    monkeypatch.setattr(
+        "superqode.harness.catalog.optional_harnesses",
+        lambda root=".": missing,
+    )
+    tau = next(p for p in list_connection_profiles(CONNECT_MENU_OPEN) if p.id == "tau")
+    assert tau.available is False
+    assert "superqode[tau]" in tau.unavailable_hint
+
+
+def test_open_menu_reads_list_entries_live(monkeypatch):
+    from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+    from superqode.providers.harness_catalog import get_entry
+
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
+    live = [get_entry("tau")]
+    monkeypatch.setattr(
+        "superqode.providers.harness_catalog.list_entries",
+        lambda menu: live if menu == "open" else [],
+    )
+    rows = list_connection_profiles(CONNECT_MENU_OPEN)
+    assert [p.id for p in rows] == ["tau"]
 
 
 def test_antigravity_profile_is_signed_in_cli_runtime_connector():
@@ -534,6 +583,8 @@ def test_grok_profile_defaults_to_grok_build_acp():
     assert grok.acp_agent == "grok"
     # Print/CI path only — Subscriptions must not prefer this over ACP.
     assert grok.runtime == "grok-cli"
+    # Grok Build is Apache-2.0; SuperGrok login stays on Subscriptions.
+    assert grok.harness_openness == "open"
     # Points users to the SuperQode-harness opt-in.
     assert ":grok api" in grok.description
 
