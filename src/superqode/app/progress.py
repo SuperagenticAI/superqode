@@ -30,6 +30,7 @@ MILESTONES = (
     "hit_an_error",  # a run or a check failed
     "used_skill",  # a local skill was loaded into a run
     "used_mcp",  # an MCP server is attached
+    "connected_open_harness",  # Open-harness key/local connect succeeded
 )
 
 

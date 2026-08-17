@@ -14,7 +14,7 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     harness-picker optional non-ACP harness integrations (v1 Other)
     open-harness-picker  Open category (catalog list_entries("open"))
     closed-harness-picker Closed category (catalog list_entries("closed"))
-    key-harness  SuperQode-hosted open adapter; switch today, model step in PR 3
+    key-harness  SuperQode-hosted open adapter; switch then CONNECT_MENU_KEY_MODELS
     subscription-picker vendor plans authenticated by their own local CLI/OAuth state
     external-cli a local vendor TUI that does not expose ACP/headless events yet
 
@@ -43,7 +43,7 @@ import importlib.util
 import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -59,6 +59,7 @@ CONNECT_MENU_OPEN = "open-harnesses"
 CONNECT_MENU_CLOSED = "closed-harnesses"
 CONNECT_MENU_HARNESS = "harness"
 CONNECT_MENU_MODELS = "models"
+CONNECT_MENU_KEY_MODELS = "key-models"
 CONNECT_MENU_PLAN = "plan"
 CONNECT_MENU_BUILD = "build"
 #: ``:connect subscriptions`` maps to the vendor plan list.
@@ -72,6 +73,7 @@ CONNECT_MENUS = (
     CONNECT_MENU_CLOSED,
     CONNECT_MENU_HARNESS,
     CONNECT_MENU_MODELS,
+    CONNECT_MENU_KEY_MODELS,
     CONNECT_MENU_PLAN,
     CONNECT_MENU_BUILD,
 )
@@ -84,6 +86,7 @@ _LEGACY_MENUS = {
 }
 
 #: Each screen's parent, so Esc walks back the way the user came.
+#: KEY_MODELS is omitted: its parent is KeyHarnessSession.return_menu.
 _MENU_PARENTS = {
     CONNECT_MENU_VENDORS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_ACP: CONNECT_MENU_AGENTS,
@@ -101,9 +104,19 @@ def connect_menu_version() -> str:
     return parse_connect_menu_flag()
 
 
-def parent_menu(menu: str) -> str:
-    """Return the screen to show when the user backs out of ``menu``."""
-    return _MENU_PARENTS.get(normalize_menu(menu), CONNECT_MENU_ROOT)
+def parent_menu(menu: str, *, return_menu: str | None = None) -> str:
+    """Return the screen to show when the user backs out of ``menu``.
+
+    ``CONNECT_MENU_KEY_MODELS`` is not a static parent. It returns to the
+    Open or Closed list the user came from (``KeyHarnessSession.return_menu``).
+    """
+    name = normalize_menu(menu)
+    if name == CONNECT_MENU_KEY_MODELS:
+        dest = str(return_menu or "").strip()
+        if dest in {CONNECT_MENU_OPEN, CONNECT_MENU_CLOSED}:
+            return dest
+        return CONNECT_MENU_OPEN
+    return _MENU_PARENTS.get(name, CONNECT_MENU_ROOT)
 
 
 def normalize_menu(menu: str | None) -> str:
@@ -1093,6 +1106,7 @@ def _flat_profiles() -> List[ConnectionProfile]:
     }
     return [replacements.get(profile.id, profile) for profile in _PROFILES]
 
+
 # ``:connect acp`` predates the categories and still opens the ACP catalogue.
 _ACP_MENU_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
@@ -1149,8 +1163,10 @@ _LEGACY_PROFILES: List[ConnectionProfile] = [
         connector="runtime",
         runtime="claude-agent-sdk",
         self_contained=True,
-        detect=lambda: importlib.util.find_spec("claude_agent_sdk") is not None
-        and bool(os.environ.get("ANTHROPIC_API_KEY")),
+        detect=lambda: (
+            importlib.util.find_spec("claude_agent_sdk") is not None
+            and bool(os.environ.get("ANTHROPIC_API_KEY"))
+        ),
         unavailable_hint=missing_extra_hint(
             "claude-agent-sdk", suffix="then set ANTHROPIC_API_KEY"
         ),
@@ -1198,6 +1214,7 @@ _BY_MENU = {
     CONNECT_MENU_CLOSED: (),
     CONNECT_MENU_HARNESS: _HARNESS_PROFILES,
     CONNECT_MENU_MODELS: _MODEL_PROFILES,
+    CONNECT_MENU_KEY_MODELS: (),
     CONNECT_MENU_PLAN: _PLAN_PROFILES,
     CONNECT_MENU_BUILD: _BUILD_PROFILES,
 }
@@ -1235,6 +1252,10 @@ CONNECT_MENU_TITLES = {
     CONNECT_MENU_MODELS: (
         "Select a model",
         "Step 2 of 2. Where the model comes from.",
+    ),
+    CONNECT_MENU_KEY_MODELS: (
+        "Select a model",
+        "Local or your API key. This harness does not use a SuperQode plan.",
     ),
     CONNECT_MENU_PLAN: (
         "Subscription",
@@ -1285,6 +1306,14 @@ def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfi
         return _catalog_harness_profiles("open")
     if menu == CONNECT_MENU_CLOSED:
         return _catalog_harness_profiles("closed")
+    if menu == CONNECT_MENU_KEY_MODELS:
+        # A derived list. Never mutate _MODEL_PROFILES; Plan stays on the
+        # native SuperQode-harness path.
+        return [
+            replace(profile, menu=CONNECT_MENU_KEY_MODELS)
+            for profile in _MODEL_PROFILES
+            if profile.id in {"local", "byok"}
+        ]
     return list(_BY_MENU.get(menu, ()))
 
 
@@ -1444,6 +1473,7 @@ __all__ = [
     "CONNECT_MENU_ACP",
     "CONNECT_MENU_CLOSED",
     "CONNECT_MENU_HARNESS",
+    "CONNECT_MENU_KEY_MODELS",
     "CONNECT_MENU_MODELS",
     "CONNECT_MENU_OPEN",
     "CONNECT_MENU_PLAN",

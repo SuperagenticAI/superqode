@@ -101,6 +101,14 @@ def get_entry(entry_id: str) -> Optional[HarnessCatalogEntry]:
     return None
 
 
+def auth_allowlist(entry: HarnessCatalogEntry, mode: str) -> Optional[Tuple[str, ...]]:
+    """Picker ids for ``mode``. ``None`` = all native; ``()`` = hide; else allow-list."""
+    spec = next((item for item in entry.auth if item.mode == mode), None)
+    if spec is None:
+        return ()
+    return spec.byok_providers if mode == "byok" else spec.local_providers
+
+
 def parse_connect_menu_flag(
     env: Mapping[str, str] | None = None,
     *,
@@ -723,6 +731,7 @@ __all__ = [
     "HarnessAuthSpec",
     "HarnessCatalogEntry",
     "Openness",
+    "auth_allowlist",
     "get_entry",
     "list_entries",
     "parse_connect_menu_flag",

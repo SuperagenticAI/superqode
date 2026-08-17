@@ -4038,7 +4038,11 @@ class CommandImplMixin:
 
         primary = str(entry.spec.model_policy.primary or "")
         needs_model = False
-        if entry.runtime == "prime-agent" and auto_connect:
+        if getattr(self, "_key_harness_session", None) is not None:
+            # Open/Closed switch-and-model always collects Local/BYOK. Do not
+            # reuse the previous SuperQode route or a spec primary.
+            needs_model = True
+        elif entry.runtime == "prime-agent" and auto_connect:
             connected = self._connect_prime_rpc(
                 primary,
                 log,
@@ -4241,7 +4245,10 @@ class CommandImplMixin:
         follows is restated here. ``previous`` keeps the "from X" detail that
         would otherwise be scrolled away with it.
         """
-        from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_KEY_MODELS,
+            CONNECT_MENU_MODELS,
+        )
 
         switched = f"Harness switched: {display_name}"
         if previous and previous != display_name:
@@ -4250,12 +4257,23 @@ class CommandImplMixin:
         if tool_count == 0:
             # A no-tool harness cannot read or edit files; say so explicitly.
             note += " This harness has no tools: it can discuss code, not change it."
+        route = getattr(self, "_pending_key_harness_route", None)
+        self._pending_key_harness_route = None
+        if route:
+            mode, provider, model = route
+            if mode == "local":
+                self._connect_local_mode(provider, model, log)
+            else:
+                self._connect_byok_mode(provider, model, log)
+            return
+        key_session = getattr(self, "_key_harness_session", None)
+        menu = CONNECT_MENU_KEY_MODELS if key_session is not None else CONNECT_MENU_MODELS
         self._connect_context_note = note
         try:
             # A clean screen, not an append: the note above carries the "X is
             # active" confirmation into this screen's header, so nothing is
             # lost by replacing the harness list the user just chose from.
-            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
+            self._show_connect_type_picker(log, menu=menu)
         except Exception:  # noqa: BLE001 - fall back to naming the command
             self._connect_context_note = ""
             log.add_info(
