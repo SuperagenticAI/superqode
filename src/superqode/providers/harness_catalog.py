@@ -109,8 +109,7 @@ def parse_connect_menu_flag(
     """Resolve ``v1``/``v2``: env overrides config.json overrides the compiled default.
 
     Reads ``connect_menu`` from raw JSON so unknown keys are not dropped by the
-    typed Config schema. Invalid values fall through. The TUI does not consult
-    this in PR 1.
+    typed Config schema. Invalid values fall through.
     """
     source = os.environ if env is None else env
     raw = str(source.get(CONNECT_MENU_ENV, "") or "").strip().lower()
@@ -408,7 +407,6 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="ecosystem:jcode",
         readiness="setup-required",
         vendor_owned=True,
-        show_in_open=True,
     ),
     HarnessCatalogEntry(
         id="droid",
@@ -462,7 +460,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             "acp-attach",
             env_vars=("GROK_CODE_XAI_API_KEY",),
             optional_env=("XAI_API_KEY",),
-            byok_providers=None,
+            byok_providers=(),
             local_providers=_DSH_LOCAL_PROVIDERS,
         ),
         acp_agent="grok",
