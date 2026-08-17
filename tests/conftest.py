@@ -6,6 +6,17 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _default_connect_menu_v1(monkeypatch):
+    """Keep connect IA on v1 unless a test opts into v2.
+
+    ``parse_connect_menu_flag`` also reads ``~/.superqode/config.json``. Pinning
+    the env here stops a developer's local ``connect_menu`` from flipping every
+    existing-harness assertion.
+    """
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v1")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_progress_state(tmp_path, monkeypatch):
     """Keep milestone state out of the real home directory.
 
