@@ -956,6 +956,9 @@ class SuperQodeApp(
             return
         if getattr(self, "_awaiting_harness_install", None):
             self._awaiting_harness_install = None
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
             log = self.query_one("#log", ConversationLog)
             log.add_info("Harness installation cancelled.")
             return

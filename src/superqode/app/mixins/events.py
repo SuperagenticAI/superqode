@@ -431,6 +431,9 @@ class EventHandlerMixin:
                 self._awaiting_harness_confirmation = False
                 self._awaiting_harness_install = None
                 self._awaiting_dependency_install = None
+                clearer = getattr(self, "_clear_key_harness_session", None)
+                if callable(clearer):
+                    clearer()
                 self._harness_wizard_state = None
                 self._awaiting_local_server_start = None
                 self._awaiting_local_dep_install = None

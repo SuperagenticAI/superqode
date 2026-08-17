@@ -305,42 +305,40 @@ class ConnectMixin:
             subtitle="Optional non-ACP harness integrations",
         )
 
-    def _begin_key_harness(self, profile, log: ConversationLog) -> None:
+    def _begin_key_harness(
+        self, profile, log: ConversationLog, *, apply_route: tuple | None = None
+    ) -> None:
         """Connect an Open/Closed catalog row.
 
         ``switch-and-model`` (Tau, DSH, DeepAgents SDK) switches the hosted
         adapter then opens ``CONNECT_MENU_KEY_MODELS``. Other ``after_auth``
-        values ship in later PRs.
+        values ship in later PRs. The session is set before the extra check so
+        a first-run install resume still opens KEY_MODELS, not native Plan.
         """
-        from pathlib import Path
-
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_CLOSED,
             CONNECT_MENU_OPEN,
         )
         from superqode.providers.harness_catalog import get_entry
 
+        def _drop_pending() -> None:
+            self._pending_key_harness_route = None
+
         entry = get_entry(getattr(profile, "id", ""))
         if entry is None:
+            _drop_pending()
             log.add_error("This open harness has no catalog entry.")
             return
         key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
         after_auth = key_spec.after_auth if key_spec is not None else ""
         if after_auth != "switch-and-model":
+            _drop_pending()
             log.add_info("This connection path is not available yet.")
             return
         harness_id = entry.harness_id or getattr(profile, "runtime", None) or entry.id
         if not harness_id:
+            _drop_pending()
             log.add_error("This open harness has no switch target.")
-            return
-        try:
-            from superqode.harness import resolve_harness
-
-            definition = resolve_harness(harness_id, root=Path.cwd())
-        except Exception:  # noqa: BLE001 - missing extras still get the switch prompt
-            definition = None
-        if definition is not None and not definition.available:
-            self._harness_cmd(f"switch {harness_id}", log)
             return
         return_menu = getattr(profile, "menu", "") or CONNECT_MENU_OPEN
         if return_menu not in {CONNECT_MENU_OPEN, CONNECT_MENU_CLOSED}:
@@ -352,12 +350,31 @@ class ConnectMixin:
             return_menu=return_menu,
             after_auth=after_auth,
         )
+        self._pending_key_harness_route = apply_route
         self._harness_cmd(f"switch {harness_id}", log)
 
     def _clear_key_harness_session(self) -> None:
         """Drop the Open/Closed key flow. Safe to call when none is active."""
         self._key_harness_session = None
         self._pending_key_harness_route = None
+
+    def _key_harness_session_matches(self, harness_id: str = "") -> bool:
+        """True when the in-flight key session is for this (or the active) harness."""
+        session = getattr(self, "_key_harness_session", None)
+        if session is None:
+            return False
+        target = str(harness_id or "").strip()
+        if not target:
+            getter = getattr(self, "_active_harness_reference", None)
+            if callable(getter):
+                try:
+                    target = str(getter() or "").strip()
+                except Exception:  # noqa: BLE001 - matching must never break connect
+                    target = ""
+        if not target:
+            return True
+        name = Path(target).name
+        return session.entry_id in {target, name} or target.endswith(session.entry_id)
 
     def _key_harness_allowlist(self, mode: str) -> frozenset[str] | None:
         """Picker filter for the active key-harness. ``None`` means all native."""
@@ -541,10 +558,21 @@ class ConnectMixin:
         Enter used to clear while a click or typed number did not, so the same
         choice landed on a clean screen or under the old list depending on how
         it was made.
+
+        ``KeyHarnessSession`` survives the reset so Local/BYOK from KEY_MODELS
+        still know which harness they belong to. Any other connector ends that
+        flow so a later Core switch does not inherit KEY_MODELS / persist.
         """
         self._reset_connect_selection_states()
         self._open_connect_screen(log)
         conn = profile.connector
+        if conn not in {"byok", "local", "key-harness"}:
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
+            else:
+                self._key_harness_session = None
+                self._pending_key_harness_route = None
         if getattr(profile, "id", "") == "copilot-acp" and log is not None:
             log.add_info(
                 "`:connect copilot-acp` now points at `:connect copilot-cli`. "
@@ -598,6 +626,7 @@ class ConnectMixin:
         elif conn == "acp":
             # A specific ACP agent by short_name (Claude, Grok Build, …).
             self._apply_subscription_billing_policy(profile, log)
+            self._connecting_profile_id = getattr(profile, "id", "") or ""
             self._connect_acp_cmd(profile.acp_agent or "", log)
         elif conn == "byok":
             session = getattr(self, "_key_harness_session", None)
@@ -2214,8 +2243,7 @@ class ConnectMixin:
             profile = get_connection_profile(profile_id)
             if profile is not None:
                 if after_auth == "switch-and-model" and provider and model:
-                    self._pending_key_harness_route = (auth_mode, provider, model)
-                    self._begin_key_harness(profile, log)
+                    self._begin_key_harness(profile, log, apply_route=(auth_mode, provider, model))
                 else:
                     self._dispatch_connection_profile(profile, log)
                 return
@@ -2961,11 +2989,43 @@ class ConnectMixin:
 
         self._update_user_config(_mutate)
 
+    def _persist_acp_connection(self, acp_agent: str) -> None:
+        """Write connection.* for an ACP attach. Subscriptions keep their category."""
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        connecting_id = str(getattr(self, "_connecting_profile_id", "") or "")
+        self._connecting_profile_id = ""
+        vendor = getattr(self, "_acp_subscription_vendor", None)
+        if vendor:
+            category, auth_mode, profile_id = "subscriptions", "subscription", connecting_id
+        else:
+            category, auth_mode = "acp", "acp"
+            known = get_connection_profile(connecting_id) if connecting_id else None
+            profile_id = known.id if known is not None else ""
+        self._save_connection_config(
+            category=category,
+            auth_mode=auth_mode,
+            harness_id="",
+            profile_id=profile_id,
+            acp_agent=acp_agent,
+            openness="",
+            provider=str(getattr(self, "current_provider", "") or ""),
+            model=str(getattr(self, "current_model", "") or ""),
+            transport="ACP",
+            after_auth="",
+        )
+
     def _finish_successful_model_connect(
         self, provider: str, model: str, mode: str, log: ConversationLog
     ) -> None:
         """Write connection.*, run Open-harness post-hooks, then drop the session."""
         key_session = getattr(self, "_key_harness_session", None)
+        matcher = getattr(self, "_key_harness_session_matches", None)
+        if key_session is not None and callable(matcher) and not matcher():
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
+            key_session = None
         if key_session is None:
             harness_id = str(
                 getattr(self, "current_harness", "")
@@ -3084,6 +3144,11 @@ class ConnectMixin:
         if command in {"refresh", "sync"}:
             self._refresh_acp_registry(log)
             return
+
+        # Typed `:connect acp <agent>` is the ACP catalog path. Dispatch of a
+        # Subscriptions row sets `_connecting_profile_id` before calling us.
+        if not getattr(self, "_connecting_profile_id", ""):
+            self._acp_subscription_vendor = None
 
         # Clear any existing BYOK connection when switching to ACP
         if hasattr(self, "_pure_mode") and self._pure_mode:
@@ -3278,24 +3343,7 @@ class ConnectMixin:
                     harness=str(agent.get("name") or self.current_agent),
                     model=self.current_model or "chosen by the agent",
                 )
-                persist = getattr(self, "_save_connection_config", None)
-                if callable(persist):
-                    from superqode.providers.connection_profiles import get_connection_profile
-
-                    short_name = str(self.current_agent or agent_id)
-                    profile = get_connection_profile(short_name)
-                    persist(
-                        category="acp",
-                        auth_mode="acp",
-                        harness_id="",
-                        profile_id=profile.id if profile is not None else "",
-                        acp_agent=short_name,
-                        openness="",
-                        provider=str(getattr(self, "current_provider", "") or ""),
-                        model=str(getattr(self, "current_model", "") or ""),
-                        transport="ACP",
-                        after_auth="",
-                    )
+                self._persist_acp_connection(str(self.current_agent or agent_id))
                 self._mark_onboarding_complete()
             else:
                 self._pending_harness_acp_transition = None
