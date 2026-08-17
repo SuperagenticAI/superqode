@@ -401,11 +401,21 @@ class ConnectMixin:
         t.append("\n  ", style=THEME["muted"])
         t.append(entry.label, style=f"bold {THEME['purple']}")
         t.append("\n\n", style=THEME["muted"])
-        t.append("  This harness is on the Open/Closed list so you can find it.\n", style=THEME["text"])
-        if getattr(entry, "id", "") == "zcode" or getattr(entry, "readiness", "") == "not-supported":
-            t.append("  SuperQode cannot launch it yet — there is no ACP, CLI, or key API.\n\n", style=THEME["text"])
+        t.append(
+            "  This harness is on the Open/Closed list so you can find it.\n", style=THEME["text"]
+        )
+        if (
+            getattr(entry, "id", "") == "zcode"
+            or getattr(entry, "readiness", "") == "not-supported"
+        ):
+            t.append(
+                "  SuperQode cannot launch it yet — there is no ACP, CLI, or key API.\n\n",
+                style=THEME["text"],
+            )
         else:
-            t.append("  SuperQode does not start its loop from this row yet.\n\n", style=THEME["text"])
+            t.append(
+                "  SuperQode does not start its loop from this row yet.\n\n", style=THEME["text"]
+            )
         note = str(getattr(entry, "support_note", "") or "")
         if note:
             t.append(f"  {note}\n\n", style=THEME["muted"])
@@ -416,9 +426,15 @@ class ConnectMixin:
         if env_vars:
             t.append("  Key:     ", style=THEME["muted"])
             t.append(f"{' or '.join(env_vars)}\n", style=THEME["yellow"])
-            t.append("  Set that in the harness itself, then attach over ACP if it is installed.\n", style=THEME["text"])
+            t.append(
+                "  Set that in the harness itself, then attach over ACP if it is installed.\n",
+                style=THEME["text"],
+            )
         else:
-            t.append("  Configure a provider key or local model in the harness, then return.\n", style=THEME["text"])
+            t.append(
+                "  Configure a provider key or local model in the harness, then return.\n",
+                style=THEME["text"],
+            )
         agent = getattr(entry, "acp_agent", "") or ""
         if agent:
             t.append("  ACP:     ", style=THEME["muted"])
@@ -427,7 +443,9 @@ class ConnectMixin:
         if writer is not None:
             writer(t)
         elif log is not None:
-            log.add_info(f"Set up {entry.label} in the harness, then :connect acp {agent or entry.id}.")
+            log.add_info(
+                f"Set up {entry.label} in the harness, then :connect acp {agent or entry.id}."
+            )
 
     def _write_api_key_required_panel(
         self,

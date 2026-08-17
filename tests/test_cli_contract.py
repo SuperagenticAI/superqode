@@ -55,7 +55,9 @@ EXPECTED_COMMAND_COUNT = 267
 # All three widen existing option lists, so the count stays at 267.
 # Rebaselined for Factory Droid's Closed key path: `droid-key` joins the
 # registry-derived `--connect` choices. No Click command was added.
-EXPECTED_HELP_TREE_SHA256 = "a94cc501212208557d85d384a851ed9310f92a5b74d9c596671bd63228a236f1"
+# Rebaselined for Junie, Letta, Warp, and the rest of the Open/Closed catalog
+# ids on the registry-derived `--connect` choice list. No Click command added.
+EXPECTED_HELP_TREE_SHA256 = "ab45868031da469c8e6dcfdca76ab6af98f8c4a020b51b5689f6bafe221763ba"
 
 
 def _render_help_tree() -> tuple[int, str]:

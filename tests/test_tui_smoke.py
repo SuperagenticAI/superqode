@@ -5825,7 +5825,7 @@ def picker_rows(rendered: str) -> list[tuple[int, str]]:
     """
     rows = []
     for line in rendered.split("\n"):
-        match = re.match(r"\s*(?:[▶●○]\s+)?\[(\d+)\]\s+(.+?)(?:\s{2,}.*)?$", line)
+        match = re.match(r"\s*(?:[▶●○]\s+)?\[\s*(\d+)\s*\]\s+(.+?)(?:\s{2,}.*)?$", line)
         if match:
             rows.append((int(match.group(1)), match.group(2).strip().removesuffix("↗").strip()))
     return rows
@@ -6061,13 +6061,13 @@ def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
         ]
         return
 
+    from superqode.providers.harness_catalog import list_entries
+
     app.action_browse_harnesses_from_connect()
     assert app._awaiting_connect_type is True
     assert app._connect_menu == "open-harnesses"
     assert picker_rows(render_plain(log.items[-1])) == [
-        (1, "Tau (Hugging Face)"),
-        (2, "DeepSeek Harness"),
-        (3, "DeepAgents (SDK)"),
+        (index, entry.label) for index, entry in enumerate(list_entries("open"), start=1)
     ]
 
 
@@ -6095,14 +6095,14 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
         assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
         return
 
+    from superqode.providers.harness_catalog import list_entries
+
     app._dispatch_connection_profile(get_connection_profile("other-harnesses"), log)
     assert app._connect_menu == "open-harnesses"
     rendered = render_plain(log.items[-1])
     assert "Other harnesses now live under Open harnesses." in rendered
     assert picker_rows(rendered) == [
-        (1, "Tau (Hugging Face)"),
-        (2, "DeepSeek Harness"),
-        (3, "DeepAgents (SDK)"),
+        (index, entry.label) for index, entry in enumerate(list_entries("open"), start=1)
     ]
 
 
@@ -6765,6 +6765,9 @@ def test_connect_bare_model_resolves_provider(monkeypatch):
             self.connected = []
             self.shown = []
 
+        def _redirect_harness_only_provider(self, provider, log):
+            return False
+
         def _connect_byok_mode(self, provider, model, log):
             self.connected.append((provider, model))
 
@@ -6815,6 +6818,9 @@ def test_connect_bare_model_prefers_curated_provider_over_gateways(monkeypatch):
     class _Stub:
         def __init__(self):
             self.connected = []
+
+        def _redirect_harness_only_provider(self, provider, log):
+            return False
 
         def _connect_byok_mode(self, provider, model, log):
             self.connected.append((provider, model))

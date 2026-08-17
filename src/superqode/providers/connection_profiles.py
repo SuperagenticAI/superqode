@@ -942,9 +942,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         model_openness="multi-model",
         transport="ACP",
         label="Junie",
-        description=(
-            "JetBrains Junie through its CLI and ACP server on your JetBrains AI account"
-        ),
+        description=("JetBrains Junie through its CLI and ACP server on your JetBrains AI account"),
         connector="acp",
         menu=CONNECT_MENU_VENDORS,
         acp_agent="junie",

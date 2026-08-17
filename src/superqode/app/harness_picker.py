@@ -24,6 +24,7 @@ VENDOR_HARNESS_IDS = (
     "kiro",
     "glm-cli",
     "deepagents-code",
+    "junie",
 )
 VENDOR_ACP_AGENT_NAMES = frozenset({"kimi", "qwen", "deepagents-code"})
 ACP_BROWSER_ID = "acp:all"

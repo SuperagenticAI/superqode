@@ -385,6 +385,7 @@ def test_the_subscriptions_category_holds_every_plan_codex_first():
         "qwen-code",
         "kimi-code",
         "deepagents-code",
+        "junie",
     ]
 
 

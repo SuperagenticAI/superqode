@@ -253,8 +253,8 @@ that matches the account, runtime, and harness ownership required for the task.
 | Z.AI | ZCode desktop harness, inspect only until a CLI/ACP surface exists | `:connect zcode` |
 | Cognition | Devin ACP, Devin CLI runtime | `:connect devin`, `:connect acp devin`, `:runtime devin-cli` |
 | JetBrains | Junie on a JetBrains AI plan, or `JETBRAINS_API_KEY` on Closed | `:connect junie`, `:connect junie-key`, `:connect acp junie` |
-| Letta | Letta Code on Open — Letta Cloud, a provider key, or a local model | `:connect letta` |
-| Warp | Warp Agent CLI on Open — Warp account or `WARP_API_KEY` | `:connect warp` |
+| Letta | Letta Code on Open: Letta Cloud, a provider key, or a local model | `:connect letta` |
+| Warp | Warp Agent CLI on Open: Warp account or `WARP_API_KEY` | `:connect warp` |
 | Amazon | Amazon Bedrock BYOK, Kiro/Amazon Q Developer subscription through ACP | `:connect byok amazon-bedrock <model>`, `:connect kiro`, `:connect acp kiro` |
 
 Product names in this table identify connection paths, not bundled

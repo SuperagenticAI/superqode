@@ -409,6 +409,12 @@ def test_direct_grok_byok_connection_imports_cli_session_first():
     calls = []
 
     class _Stub:
+        def _redirect_harness_only_provider(self, provider, log):
+            return False
+
+        def _clear_acp_extra_env(self):
+            return None
+
         def _import_grok_token(self, log, *, on_login_success=None):
             calls.append(on_login_success)
             return False
