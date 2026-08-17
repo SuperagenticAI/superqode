@@ -243,13 +243,18 @@ that matches the account, runtime, and harness ownership required for the task.
 | DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
 | Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
 | MiniMax | MiniMax BYOK, local MiniMax model paths | `:connect byok minimax <model>`, `:connect local <provider> <model>` |
-| Meta | [Muse Code](../providers/muse-code.md) sign-in, Meta first-party BYOK, local Meta model paths | `:connect muse`, `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
+| Meta | [Muse Code](../providers/muse-code.md) sign-in, Meta first-party BYOK, local Meta model paths | `:connect muse`, `:connect muse-key`, `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
 | Cursor | Cursor subscription through Cursor CLI ACP | `:connect cursor`, `:connect acp cursor` |
 | Amp | Amp subscription through its ACP adapter | `:connect amp`, `:connect acp amp` |
 | Cline | Cline CLI ACP | `:connect acp cline` |
 | Factory | Factory Droid subscription through ACP, or `FACTORY_API_KEY` on Closed | `:connect droid`, `:connect droid-key`, `:connect acp droid` |
+| Qoder | Qoder CLI personal access token on Closed | `:connect qoder-key` |
+| Poolside | Poolside API key or local OpenAI-compat on Closed | `:connect poolside-key` |
+| Z.AI | ZCode desktop harness, inspect only until a CLI/ACP surface exists | `:connect zcode` |
 | Cognition | Devin ACP, Devin CLI runtime | `:connect devin`, `:connect acp devin`, `:runtime devin-cli` |
-| JetBrains | Junie ACP | `:connect acp junie` |
+| JetBrains | Junie on a JetBrains AI plan, or `JETBRAINS_API_KEY` on Closed | `:connect junie`, `:connect junie-key`, `:connect acp junie` |
+| Letta | Letta Code on Open — Letta Cloud, a provider key, or a local model | `:connect letta` |
+| Warp | Warp Agent CLI on Open — Warp account or `WARP_API_KEY` | `:connect warp` |
 | Amazon | Amazon Bedrock BYOK, Kiro/Amazon Q Developer subscription through ACP | `:connect byok amazon-bedrock <model>`, `:connect kiro`, `:connect acp kiro` |
 
 Product names in this table identify connection paths, not bundled

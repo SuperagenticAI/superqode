@@ -180,6 +180,16 @@ class TestUserNotice:
         assert "Closed harnesses" in joined
         assert ":connect byok" not in joined
 
+    def test_junie_notice_points_at_closed_key_path(self):
+        assert closed_key_profile_id("junie") == "junie-key"
+        lines = subscription_notice("Junie", ["JETBRAINS_API_KEY"], vendor="junie")
+
+        joined = " ".join(lines)
+        assert "JETBRAINS_API_KEY" in joined
+        assert ":connect junie-key" in joined
+        assert "Closed harnesses" in joined
+        assert ":connect byok" not in joined
+
     def test_notice_never_contains_a_secret_value(self):
         lines = subscription_notice("Grok", ["XAI_API_KEY"])
 

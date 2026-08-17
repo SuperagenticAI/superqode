@@ -366,6 +366,11 @@ def _droid_cli_ready() -> bool:
     return shutil.which("droid") is not None
 
 
+def _junie_cli_ready() -> bool:
+    """JetBrains Junie CLI is installed; Junie owns JetBrains-account login."""
+    return shutil.which("junie") is not None
+
+
 def _kiro_cli_ready() -> bool:
     """Kiro CLI is installed; its OAuth/IAM login remains vendor-managed."""
     return shutil.which("kiro-cli") is not None
@@ -930,6 +935,22 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=(
             "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`"
         ),
+    ),
+    ConnectionProfile(
+        id="junie",
+        harness_openness="closed",
+        model_openness="multi-model",
+        transport="ACP",
+        label="Junie",
+        description=(
+            "JetBrains Junie through its CLI and ACP server on your JetBrains AI account"
+        ),
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="junie",
+        self_contained=True,
+        detect=_junie_cli_ready,
+        unavailable_hint="run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
     ),
 ]
 

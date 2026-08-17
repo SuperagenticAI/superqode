@@ -331,9 +331,13 @@ class ConnectMixin:
             return
         key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
         after_auth = key_spec.after_auth if key_spec is not None else ""
+        if after_auth in {"vendor-key-acp", "vendor-key-cli"}:
+            _drop_pending()
+            self._begin_vendor_key(profile, log)
+            return
         if after_auth != "switch-and-model":
             _drop_pending()
-            log.add_info("This connection path is not available yet.")
+            self._write_harness_setup_card(log, entry, key_spec)
             return
         harness_id = entry.harness_id or getattr(profile, "runtime", None) or entry.id
         if not harness_id:
@@ -390,6 +394,40 @@ class ConnectMixin:
         if allowed is None:
             return None
         return frozenset(allowed)
+
+    def _write_harness_setup_card(self, log: ConversationLog, entry, spec) -> None:
+        """Honest card for a listed harness SuperQode cannot launch yet."""
+        t = Text()
+        t.append("\n  ", style=THEME["muted"])
+        t.append(entry.label, style=f"bold {THEME['purple']}")
+        t.append("\n\n", style=THEME["muted"])
+        t.append("  This harness is on the Open/Closed list so you can find it.\n", style=THEME["text"])
+        if getattr(entry, "id", "") == "zcode" or getattr(entry, "readiness", "") == "not-supported":
+            t.append("  SuperQode cannot launch it yet — there is no ACP, CLI, or key API.\n\n", style=THEME["text"])
+        else:
+            t.append("  SuperQode does not start its loop from this row yet.\n\n", style=THEME["text"])
+        note = str(getattr(entry, "support_note", "") or "")
+        if note:
+            t.append(f"  {note}\n\n", style=THEME["muted"])
+        if getattr(entry, "repository", ""):
+            t.append("  Source:  ", style=THEME["muted"])
+            t.append(f"{entry.repository}\n", style=THEME["cyan"])
+        env_vars = tuple(getattr(spec, "env_vars", ()) or ()) if spec is not None else ()
+        if env_vars:
+            t.append("  Key:     ", style=THEME["muted"])
+            t.append(f"{' or '.join(env_vars)}\n", style=THEME["yellow"])
+            t.append("  Set that in the harness itself, then attach over ACP if it is installed.\n", style=THEME["text"])
+        else:
+            t.append("  Configure a provider key or local model in the harness, then return.\n", style=THEME["text"])
+        agent = getattr(entry, "acp_agent", "") or ""
+        if agent:
+            t.append("  ACP:     ", style=THEME["muted"])
+            t.append(f":connect acp {agent}\n", style=THEME["cyan"])
+        writer = getattr(log, "write_feedback", None) or getattr(log, "write", None)
+        if writer is not None:
+            writer(t)
+        elif log is not None:
+            log.add_info(f"Set up {entry.label} in the harness, then :connect acp {agent or entry.id}.")
 
     def _write_api_key_required_panel(
         self,
@@ -2634,14 +2672,7 @@ class ConnectMixin:
             t.append("Esc", style=THEME["purple"])
             t.append(" back  ", style=THEME["dim"])
         t.append("•  ", style=THEME["dim"])
-        # The hint is worth a word, not a wrapped second line on a narrow
-        # terminal. Esc back costs ten columns, so the budget differs by menu.
-        if content_width >= (70 if is_root else 80):
-            t.append("click ", style=THEME["dim"])
-            t.append("↗", style=f"bold {THEME['purple']}")
-            t.append(" or type a number\n", style=THEME["dim"])
-        else:
-            t.append("or type a number\n", style=THEME["dim"])
+        t.append("or type a number\n", style=THEME["dim"])
 
         if preserve_log:
             # Opened underneath something the user still needs to read, such as

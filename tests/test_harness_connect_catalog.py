@@ -12,18 +12,44 @@ from superqode.providers.harness_catalog import (
 )
 
 
-def test_tau_dsh_deepagents_are_the_only_visible_open_rows():
+def test_visible_open_rows_include_the_full_key_set():
     ids = [entry.id for entry in list_entries("open")]
-    assert ids == ["tau", "deepseek-harness", "deepagents"]
+    for required in (
+        "tau",
+        "deepseek-harness",
+        "deepagents",
+        "opencode-key",
+        "prime-agent-key",
+        "jcode",
+        "grok-key",
+        "qwen-code-key",
+        "fast-agent",
+        "pi",
+        "goose-key",
+        "cline-key",
+        "openhands-key",
+        "mistral-vibe-key",
+        "hermes-key",
+        "letta",
+        "warp",
+        "kimi-code-key",
+    ):
+        assert required in ids
+    assert "deepagents-code" not in ids
+    assert "gemini" not in ids
     for entry in list_entries("open"):
         assert entry.openness == "open"
         assert entry.list_visible is True
-        assert entry.wired is True
 
 
-def test_closed_list_is_factory_droid_key():
+def test_closed_list_includes_factory_muse_qoder_poolside():
     ids = [entry.id for entry in list_entries("closed")]
-    assert ids == ["droid-key"]
+    assert "droid-key" in ids
+    assert "junie-key" in ids
+    assert "muse-key" in ids
+    assert "qoder-key" in ids
+    assert "poolside-key" in ids
+    assert "zcode" in ids
     droid_key = get_entry("droid-key")
     assert droid_key is not None
     assert droid_key.openness == "closed"
@@ -77,7 +103,7 @@ def test_grok_openness_is_open_via_hub_id():
 
 
 def test_droid_and_muse_openness_is_closed():
-    for entry_id in ("droid", "droid-key", "muse", "muse-key"):
+    for entry_id in ("droid", "droid-key", "muse", "muse-key", "junie", "junie-key"):
         entry = get_entry(entry_id)
         assert entry is not None
         assert entry.hub_id is not None
@@ -123,6 +149,26 @@ def test_droid_key_is_closed_not_vendors():
     assert "vendors" not in droid_key.connect_menus()
     assert "closed" in droid_key.connect_menus()
     assert "open" not in droid_key.connect_menus()
+
+
+def test_letta_and_warp_are_visible_open_setup_cards():
+    letta = get_entry("letta")
+    warp = get_entry("warp")
+    assert letta is not None
+    assert warp is not None
+    assert letta in list_entries("open")
+    assert warp in list_entries("open")
+    assert letta.openness == warp.openness == "open"
+    assert letta.license == "Apache-2.0"
+    assert warp.license == "AGPL-3.0"
+    assert letta.hub_id == "ecosystem:letta"
+    assert warp.hub_id == "ecosystem:warp"
+    assert letta.auth[0].after_auth == "setup-card"
+    assert warp.auth[0].after_auth == "setup-card"
+    assert "LETTA_API_KEY" in letta.auth[0].env_vars
+    assert "WARP_API_KEY" in warp.auth[0].env_vars
+    assert "closed" not in letta.connect_menus()
+    assert "closed" not in warp.connect_menus()
 
 
 def test_gemini_cli_is_not_an_open_row():

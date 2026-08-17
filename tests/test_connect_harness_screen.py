@@ -591,6 +591,30 @@ def test_selecting_an_available_open_row_starts_a_key_harness_session(monkeypatc
     assert session.openness == "open"
 
 
+@pytest.mark.parametrize("profile_id", ("jcode", "letta", "warp", "goose-key"))
+def test_setup_card_rows_render_without_unknown_theme_keys(profile_id):
+    """Open rows that cannot launch must still paint a card on click/Enter."""
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self.harness_commands = []
+
+        def _harness_cmd(self, args, log):
+            self.harness_commands.append(args)
+
+        def _begin_vendor_key(self, profile, log):
+            raise AssertionError("setup-card rows must not take the vendor-key path")
+
+    stub = Stub()
+    log = FakeLog()
+    ConnectMixin._begin_key_harness(stub, get_connection_profile(profile_id), log)
+    assert stub.harness_commands == []
+    body = "\n".join(log.items)
+    assert get_connection_profile(profile_id).label in body
+    assert "does not start its loop" in body
+
+
 def test_reset_connect_states_keeps_key_harness_session():
     from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
     from superqode.providers.harness_catalog import get_entry

@@ -163,6 +163,25 @@ def test_jcode_states_a_buildable_route_unlike_a_desktop_only_harness(monkeypatc
     assert "does not document" in by_id["ecosystem:zcode"]["support_note"]
 
 
+def test_letta_and_warp_are_open_ecosystem_clis(monkeypatch):
+    monkeypatch.setattr(
+        "superqode.harness.hub.harness_picker_items",
+        lambda *_args, **_kwargs: [_item()],
+    )
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+    letta = by_id["ecosystem:letta"]
+    warp = by_id["ecosystem:warp"]
+
+    assert letta["openness"] == "open"
+    assert letta["license"] == "Apache-2.0"
+    assert letta["repository"] == "https://github.com/letta-ai/letta-code"
+    assert "npm install -g @letta-ai/letta-code" in letta["install_command"]
+    assert warp["openness"] == "open"
+    assert warp["license"] == "AGPL-3.0"
+    assert warp["repository"] == "https://github.com/warpdotdev/warp"
+    assert "agent-cli" in warp["install_command"]
+
+
 def test_reference_only_entries_are_never_the_active_harness():
     from superqode.harness.hub import REFERENCE_ONLY_KINDS, hub_ecosystem_picker_items
 

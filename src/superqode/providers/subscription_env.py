@@ -38,6 +38,7 @@ VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
     # stored `muse login` session. META_MODEL_API_KEY is the BYOK provider key
     # and Muse never reads it, so it is deliberately not listed here.
     "muse": ("META_API_KEY",),
+    "junie": ("JETBRAINS_API_KEY",),
 }
 
 #: Profile ids and runtime names that mean the same vendor as a dict key above.
@@ -54,6 +55,7 @@ _VENDOR_ALIASES: Dict[str, str] = {
     "gemini-cli": "gemini",
     "muse-code": "muse",
     "muse-cli": "muse",
+    "junie-key": "junie",
 }
 
 #: Variables a user sets to deliberately opt a subscription route into an

@@ -135,6 +135,14 @@ Direct shortcuts:
 - `:connect devin` - Cognition Devin CLI over ACP
 - `:connect droid` - Factory Droid subscription through ACP
 - `:connect droid-key` - Factory Droid with `FACTORY_API_KEY` (Closed harnesses)
+- `:connect junie` - JetBrains Junie on a JetBrains AI / Junie plan (Subscriptions)
+- `:connect junie-key` - Junie with `JETBRAINS_API_KEY` (Closed harnesses)
+- `:connect muse-key` - Muse Code with `META_API_KEY` (Closed harnesses)
+- `:connect qoder-key` - Qoder CLI with `QODER_PERSONAL_ACCESS_TOKEN` (Closed harnesses)
+- `:connect poolside-key` - Poolside with `POOLSIDE_API_KEY` (Closed harnesses)
+- `:connect zcode` - ZCode inspect card (Closed harnesses; not launchable yet)
+- `:connect letta` - Letta Code setup card (Open harnesses; install `letta`, then `/connect` or `/login`)
+- `:connect warp` - Warp Agent CLI setup card (Open harnesses; install `warp`, then sign in or `WARP_API_KEY`)
 - `:connect kiro` - Kiro/Amazon Q Developer subscription through ACP
 - `:connect glm-cli` - GLM Coding Plan through ACP
 - `:connect copilot` - prefer the official SDK, with installed CLI/ACP fallback

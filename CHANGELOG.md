@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.99] - 2026-08-17
+
+### Added
+
+- Open and Closed connect lists for existing harnesses. Subscriptions stay
+  sign-in plans; Open is OSI-licensed harnesses with a key or local model;
+  Closed is proprietary harnesses with that vendor's key. `Other harnesses`
+  remains the v1 label. Set `SUPERQODE_CONNECT_MENU=v2` to use the new
+  categories, or `"connect_menu": "v2"` in `~/.superqode/config.json`.
+- Visible Open rows for Tau, DeepSeek Harness, DeepAgents SDK, OpenCode,
+  Prime Agent, jcode, Grok Build, Qwen Code, fast-agent, Pi, Goose, Cline,
+  OpenHands, Mistral Vibe, Hermes Agent, Letta Code, Warp Agent, and Kimi Code.
+- Visible Closed rows for Factory Droid, Junie, Muse Code, Qoder CLI,
+  Poolside, and ZCode (inspect only).
+- Letta Code (`:connect letta`) and Warp Agent CLI (`:connect warp`) as Open
+  setup cards. Junie is on Subscriptions (`:connect junie`) and Closed
+  (`:connect junie-key`).
+
+### Fixed
+
+- Selecting an Open/Closed setup-card row no longer crashes. The card used a
+  missing theme color.
+- Picker rows no longer emit OSC-8 `superqode://pick/` links, so terminals
+  stop covering the list with a ⌘-click tooltip. The ↗ stays as the click cue;
+  a click still selects the row by its `[n]` header.
+
 ## [0.2.98] - 2026-08-16
 
 ### Added

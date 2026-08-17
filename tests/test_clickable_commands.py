@@ -334,13 +334,13 @@ def _click_targets(rendered, number: str):
     ]
 
 
-def test_a_whole_picker_row_is_clickable_not_only_its_number():
-    """A mouse user aims at the name, not the bracketed digit."""
+def test_picker_rows_do_not_emit_osc8_pick_links():
+    """OSC-8 pick URLs make the terminal show a ⌘-click tooltip over the list."""
     rendered = _picker("agents")
-    targets = _click_targets(rendered, "2")
 
-    assert any("[2]" in target for target in targets)
-    assert any("ACP agents" == target for target in targets)
+    assert _click_targets(rendered, "1") == []
+    assert _click_targets(rendered, "2") == []
+    assert "ACP agents" in rendered.plain
 
 
 def test_descriptions_carry_no_link_style():
@@ -354,7 +354,7 @@ def test_descriptions_carry_no_link_style():
     rendered = _picker("agents")
     targets = _click_targets(rendered, "2")
 
-    assert not any("OpenCode" in target for target in targets)
+    assert targets == []
     assert "OpenCode" in rendered.plain  # still shown, just not linked
 
 
@@ -380,15 +380,18 @@ def test_a_click_on_a_description_still_selects_its_row():
     assert match.group(1) == re.match(r"\s*○ \[\s*(\d+)", lines[row_index]).group(1)
 
 
-def test_the_footer_says_rows_can_be_clicked():
-    assert "click ↗ or type a number" in _picker("agents").plain
+def test_the_footer_does_not_advertise_a_click_link():
+    footer = _picker("agents").plain
+
+    assert "or type a number" in footer
+    assert "click ↗" not in footer
 
 
 def test_every_row_carries_a_clickable_arrow():
     """The dot alone read as a bullet, so nothing said "click me".
 
-    The arrow sits at the end of the label, is the only strongly coloured span
-    on the row, and is itself a link target.
+    The arrow sits at the end of the label. It is a visual mark only — not an
+    OSC-8 link — so the terminal does not pop a ⌘-click tooltip over the list.
     """
     import re
 
@@ -398,7 +401,7 @@ def test_every_row_carries_a_clickable_arrow():
     assert len(rows) >= 10, "expected a long list to measure"
     # The arrow closes the label on every row, before any trailing marker.
     assert all(re.search(r"↗(\s|$)", line) for line in rows)
-    assert any(target == "↗" for target in _click_targets(rendered, "2"))
+    assert _click_targets(rendered, "2") == []
 
 
 def test_a_long_list_gives_every_row_the_same_height():
@@ -604,6 +607,12 @@ def test_nothing_is_underlined():
 
 def test_every_surface_offers_something_clickable():
     for name, rendered in _renderings().items():
+        if name.startswith("picker "):
+            # Picker rows stay clickable by position. They must not emit
+            # OSC-8 pick URLs — those pop a ⌘-click tooltip over the list.
+            assert "↗" in rendered.plain, f"{name}: no row arrow"
+            assert _clickable(rendered) == set()
+            continue
         assert _clickable(rendered), f"{name}: nothing clickable at all"
 
 

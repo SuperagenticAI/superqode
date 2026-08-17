@@ -159,6 +159,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "qwen-code",
     "kimi-code",
     "deepagents-code",
+    "junie",
     "acp",
     "harness-core",
     "harness-rlm",
@@ -183,6 +184,11 @@ _FLAT_PROFILE_IDS_V1 = [
     "build-wizard",
     "build-blank",
     "droid-key",
+    "junie-key",
+    "muse-key",
+    "zcode",
+    "qoder-key",
+    "poolside-key",
 ]
 
 
@@ -383,24 +389,39 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
     from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
 
     rows = [(p.id, p.label, p.connector) for p in list_connection_profiles(CONNECT_MENU_OPEN)]
-    assert rows == [
-        ("tau", "Tau (Hugging Face)", "key-harness"),
-        ("deepseek-harness", "DeepSeek Harness", "key-harness"),
-        ("deepagents", "DeepAgents (SDK)", "key-harness"),
-    ]
+    ids = {row[0] for row in rows}
+    assert ("tau", "Tau (Hugging Face)", "key-harness") in rows
+    assert ("deepseek-harness", "DeepSeek Harness", "key-harness") in rows
+    assert ("deepagents", "DeepAgents (SDK)", "key-harness") in rows
+    for required in (
+        "opencode-key",
+        "prime-agent-key",
+        "jcode",
+        "grok-key",
+        "qwen-code-key",
+        "goose-key",
+        "cline-key",
+        "openhands-key",
+        "letta",
+        "warp",
+    ):
+        assert required in ids
+    assert get_connection_profile("letta").connector == "key-harness"
+    assert get_connection_profile("warp").connector == "key-harness"
     hidden = {
         "opencode",
         "prime-agent",
-        "jcode",
         "droid",
         "droid-key",
         "grok",
         "muse",
-        "zcode",
         "gemini",
         "gemini-cli",
+        "deepagents-code",
+        "junie",
+        "junie-key",
     }
-    assert hidden.isdisjoint({row[0] for row in rows})
+    assert hidden.isdisjoint(ids)
 
 
 def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
@@ -408,9 +429,19 @@ def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
     from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED, CONNECT_MENU_VENDORS
 
     rows = list_connection_profiles(CONNECT_MENU_CLOSED)
-    assert [(p.id, p.connector, p.acp_agent, p.menu) for p in rows] == [
-        ("droid-key", "vendor-key", "droid", CONNECT_MENU_CLOSED),
-    ]
+    ids = {p.id for p in rows}
+    assert "droid-key" in ids
+    assert "junie-key" in ids
+    assert "muse-key" in ids
+    assert "qoder-key" in ids
+    assert "poolside-key" in ids
+    assert "zcode" in ids
+    droid_key = next(p for p in rows if p.id == "droid-key")
+    assert (droid_key.connector, droid_key.acp_agent, droid_key.menu) == (
+        "vendor-key",
+        "droid",
+        CONNECT_MENU_CLOSED,
+    )
     assert get_connection_profile("agent-closed-harnesses").connector == "closed-harness-picker"
     assert "droid-key" not in connection_profile_ids(menu=CONNECT_MENU_VENDORS)
     droid = get_connection_profile("droid")
