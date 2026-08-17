@@ -143,6 +143,9 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "deepseek-harness": HubOpenness(
         "open", "MIT", "https://github.com/deepseek-ai/deepseek-harness"
     ),
+    "droid": HubOpenness("closed"),
+    "grok": HubOpenness("open", "Apache-2.0", "https://github.com/xai-org/grok-build"),
+    "muse": HubOpenness("closed"),
     "codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:gemini": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
