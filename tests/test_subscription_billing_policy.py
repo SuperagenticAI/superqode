@@ -403,7 +403,10 @@ class TestFactoryKeyPath:
         assert stub.acp_calls == ["droid"]
         assert stub._acp_subscription_vendor is None
         assert stub._acp_extra_env == {"FACTORY_API_KEY": "from-store"}
+        assert stub._acp_extra_env_agent == "droid"
+        assert stub._pending_vendor_key["agent"] == "droid"
         assert "FACTORY_API_KEY" not in os.environ
+        assert stub._pending_vendor_key["note"] == "API key path — not your Droid CLI login."
 
     def test_begin_vendor_key_env_wins_and_does_not_setdefault(self, monkeypatch, tmp_path):
         from superqode.app.mixins.connect import ConnectMixin
@@ -432,6 +435,7 @@ class TestFactoryKeyPath:
         ConnectMixin._begin_vendor_key(stub, get_connection_profile("droid-key"), Log())
 
         assert stub._acp_extra_env == {"FACTORY_API_KEY": "from-env"}
+        assert stub._acp_extra_env_agent == "droid"
         assert os.environ["FACTORY_API_KEY"] == "from-env"
 
     def test_begin_vendor_key_missing_key_shows_panel(self, monkeypatch, tmp_path):
@@ -496,10 +500,110 @@ class TestFactoryKeyPath:
         assert PROVIDERS["factory"].env_vars == ["FACTORY_API_KEY"]
         assert "factory" not in connect_provider_ids()
 
-    def test_run_acp_agent_merges_session_extra_env(self):
-        """_run_acp_agent must merge `_acp_extra_env` when constructing ACPClient."""
-        source = Path(
-            __import__("superqode.app.mixins.agent_run", fromlist=["agent_run"]).__file__
-        ).read_text(encoding="utf-8")
-        assert 'getattr(self, "_acp_extra_env", None)' in source
-        assert "acp_extra_env = {**acp_extra_env, **dict(session_extra)}" in source
+    def test_extra_env_is_scoped_to_the_factory_agent(self):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        class Stub(ConnectMixin):
+            pass
+
+        stub = Stub()
+        stub._set_acp_extra_env({"FACTORY_API_KEY": "child-only"}, "droid")
+
+        assert stub._merge_acp_session_extra_env("droid") == {"FACTORY_API_KEY": "child-only"}
+        assert stub._merge_acp_session_extra_env("opencode") == {}
+        assert stub._merge_acp_session_extra_env("droid", {"OTHER": "x"}) == {
+            "OTHER": "x",
+            "FACTORY_API_KEY": "child-only",
+        }
+
+        stub._retain_acp_extra_env_for("opencode")
+        assert stub._acp_extra_env is None
+        assert stub._acp_extra_env_agent is None
+        assert stub._merge_acp_session_extra_env("droid") == {}
+
+    def test_named_acp_and_disconnect_clear_extra_env(self):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        class Stub(ConnectMixin):
+            def __init__(self):
+                self.agents = []
+
+            def _show_agents(self, log, **kwargs):
+                self.agents.append(kwargs)
+
+            def _connect_agent(self, name, model_hint=None):
+                self.agents.append(name)
+
+        stub = Stub()
+        stub._set_acp_extra_env({"FACTORY_API_KEY": "child-only"}, "droid")
+        ConnectMixin._connect_acp_cmd(stub, "opencode", log=None)
+        assert stub._acp_extra_env is None
+        assert stub._acp_extra_env_agent is None
+        assert stub.agents == ["opencode"]
+
+        stub._set_acp_extra_env({"FACTORY_API_KEY": "child-only"}, "droid")
+        stub._pending_vendor_key = {"agent": "droid"}
+        stub._clear_acp_extra_env()
+        assert stub._pending_vendor_key is None
+
+    def test_begin_vendor_key_does_not_record_success_before_attach(self, monkeypatch, tmp_path):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        monkeypatch.setenv("FACTORY_API_KEY", "from-env")
+        monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path))
+        recorded = []
+        monkeypatch.setattr(
+            "superqode.app.progress.record_milestone",
+            lambda name: recorded.append(name),
+        )
+
+        class Log:
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+        class Stub(ConnectMixin):
+            def _connect_acp_cmd(self, name, log):
+                pass
+
+        stub = Stub()
+        ConnectMixin._begin_vendor_key(stub, get_connection_profile("droid-key"), Log())
+        assert recorded == []
+        assert stub._pending_vendor_key["agent"] == "droid"
+
+        stub.current_agent = "droid"
+        stub.current_model = ""
+        ConnectMixin._finish_vendor_key_or_teach(stub, Log(), {"name": "Factory Droid"})
+        assert recorded == ["connected_closed_harness", "connected"]
+        assert stub._pending_vendor_key is None
+
+    def test_failed_attach_does_not_keep_the_inject(self):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        stub = ConnectMixin()
+        stub._set_acp_extra_env({"FACTORY_API_KEY": "child-only"}, "droid")
+        stub._pending_vendor_key = {"agent": "droid"}
+        stub._abandon_vendor_key_attach("droid")
+        assert stub._acp_extra_env is None
+        assert stub._pending_vendor_key is None
+
+    def test_harness_only_factory_is_rejected_from_byok(self):
+        from superqode.app.mixins.connect import ConnectMixin
+
+        messages = []
+
+        class Log:
+            def add_info(self, value):
+                messages.append(str(value))
+
+        class Stub(ConnectMixin):
+            pass
+
+        stub = Stub()
+        assert stub._redirect_harness_only_provider("factory", Log()) is True
+        joined = " ".join(messages)
+        assert ":connect droid-key" in joined
+        assert stub._redirect_harness_only_provider("openai", Log()) is False

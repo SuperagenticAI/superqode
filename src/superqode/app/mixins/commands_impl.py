@@ -3901,6 +3901,9 @@ class CommandImplMixin:
 
         fork_session = False
         if sub in ("load", "use", "use-all", "switch"):
+            clearer = getattr(self, "_clear_acp_extra_env", None)
+            if callable(clearer):
+                clearer()
             try:
                 switch_tokens = shlex.split(subargs)
             except ValueError as exc:

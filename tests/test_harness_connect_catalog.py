@@ -38,6 +38,8 @@ def test_closed_list_is_factory_droid_key():
     assert spec.byok_provider == "factory"
     assert spec.byok_providers == ()
     assert spec.local_providers == ()
+    assert spec.detect is not None
+    assert "install Factory Droid" in spec.unavailable_hint
 
 
 def test_deepagents_sdk_is_open_and_deepagents_code_is_not_on_open():

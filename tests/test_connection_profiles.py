@@ -419,6 +419,22 @@ def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
     assert droid.connector == "acp"
     assert droid_key.menu == CONNECT_MENU_CLOSED
     assert droid_key.connector == "vendor-key"
+    assert "install Factory Droid" in droid_key.unavailable_hint
+
+
+def test_droid_key_reuses_the_droid_cli_probe(monkeypatch):
+    import superqode.providers.harness_catalog as catalog
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    monkeypatch.setattr(catalog.shutil, "which", lambda name: None)
+    missing = get_connection_profile("droid-key")
+    assert missing.available is False
+
+    monkeypatch.setattr(
+        catalog.shutil, "which", lambda name: "/usr/bin/droid" if name == "droid" else None
+    )
+    ready = get_connection_profile("droid-key")
+    assert ready.available is True
 
 
 def test_v2_category_copy_matches_the_design(monkeypatch):

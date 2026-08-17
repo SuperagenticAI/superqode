@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Tuple
@@ -237,6 +238,11 @@ def _plan_auth(
     return tuple(specs)
 
 
+def _droid_binary_present() -> bool:
+    """Factory Droid CLI is on PATH. Same probe as the subscription row."""
+    return shutil.which("droid") is not None
+
+
 def _vendor_key_auth(
     profile_id: str,
     after_auth: AfterAuth,
@@ -246,6 +252,8 @@ def _vendor_key_auth(
     optional_env: Tuple[str, ...] = (),
     inject_env: bool = False,
     byok_provider: Optional[str] = None,
+    detect: Optional[Callable[[], bool]] = None,
+    unavailable_hint: str = "",
 ) -> Tuple[HarnessAuthSpec, ...]:
     # byok_providers=() hides the native model picker; the key is the vendor's.
     return (
@@ -260,6 +268,8 @@ def _vendor_key_auth(
             byok_providers=(),
             local_providers=(),
             inject_env=inject_env,
+            detect=detect,
+            unavailable_hint=unavailable_hint,
         ),
     )
 
@@ -442,6 +452,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             env_vars=("FACTORY_API_KEY",),
             inject_env=True,
             byok_provider="factory",
+            detect=_droid_binary_present,
+            unavailable_hint="install Factory Droid, then complete the vendor CLI sign-in",
         ),
         acp_agent="droid",
         hub_id="droid",

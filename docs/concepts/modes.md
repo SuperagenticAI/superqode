@@ -185,7 +185,6 @@ direct profile, so the submenu never becomes a required step:
 :connect copilot
 :connect devin
 :connect droid
-:connect droid-key
 :connect kiro
 :connect glm-cli
 :connect qwen-code
@@ -195,7 +194,9 @@ direct profile, so the submenu never becomes a required step:
 
 Only vendor-plan and vendor-managed sign-in routes appear in this submenu.
 API-key-only routes remain under `:connect byok`; transport alternatives such
-as the Copilot CLI remain in the ACP picker.
+as the Copilot CLI remain in the ACP picker. Factory Droid's own key is a
+Closed harness (`:connect droid-key`), not a Subscriptions row and not
+SuperQode BYOK.
 
 Optional non-ACP harness integrations sit at the bottom of the same screen:
 

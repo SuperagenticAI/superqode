@@ -424,6 +424,93 @@ class ConnectMixin:
         if writer is not None:
             writer(t)
 
+    def _clear_acp_extra_env(self) -> None:
+        """Drop a Closed-key inject. Safe to call when none is set."""
+        self._acp_extra_env = None
+        self._acp_extra_env_agent = None
+        self._pending_vendor_key = None
+
+    def _set_acp_extra_env(self, extra_env: dict[str, str], agent: str) -> None:
+        """Pin child-only extra env to one ACP agent short_name."""
+        self._acp_extra_env = dict(extra_env)
+        self._acp_extra_env_agent = (agent or "").strip().lower() or None
+
+    def _retain_acp_extra_env_for(self, agent_id: str) -> None:
+        """Keep extra env only when attaching the agent it was resolved for."""
+        owned = (getattr(self, "_acp_extra_env_agent", None) or "").strip().lower()
+        requested = (agent_id or "").strip().lower()
+        if owned and owned != requested:
+            self._clear_acp_extra_env()
+
+    def _merge_acp_session_extra_env(
+        self, agent_type: str, acp_extra_env: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        """Merge session extra env into the child env if it belongs to this agent."""
+        merged = dict(acp_extra_env or {})
+        extra = getattr(self, "_acp_extra_env", None) or {}
+        owned = (getattr(self, "_acp_extra_env_agent", None) or "").strip().lower()
+        current = (agent_type or "").strip().lower()
+        if extra and owned and owned == current:
+            merged.update(dict(extra))
+        return merged
+
+    def _finish_vendor_key_or_teach(self, log: ConversationLog, agent: dict) -> None:
+        """Teach after ACP attach; record Closed milestones only on success."""
+        pending = getattr(self, "_pending_vendor_key", None)
+        current = (getattr(self, "current_agent", None) or "").strip().lower()
+        if isinstance(pending, dict) and (pending.get("agent") or "") == current:
+            self._teach(
+                "_write_connection_teaching_card",
+                log,
+                label=str(pending.get("label") or agent.get("name") or current),
+                vendor_owned=bool(pending.get("vendor_owned", True)),
+                harness=str(pending.get("harness") or current),
+                model=getattr(self, "current_model", "") or "chosen by the agent",
+                note=str(pending.get("note") or ""),
+            )
+            try:
+                from superqode.app.progress import record_milestone
+
+                record_milestone("connected_closed_harness")
+                record_milestone("connected")
+            except Exception:  # noqa: BLE001 - progress must never block connect
+                pass
+            self._pending_vendor_key = None
+            return
+        self._teach(
+            "_write_connection_teaching_card",
+            log,
+            label=str(agent.get("name") or current),
+            vendor_owned=True,
+            harness=str(agent.get("name") or current),
+            model=getattr(self, "current_model", "") or "chosen by the agent",
+        )
+
+    def _abandon_vendor_key_attach(self, agent_id: str) -> None:
+        """Drop a pending Closed-key attach that never landed."""
+        pending = getattr(self, "_pending_vendor_key", None)
+        requested = (agent_id or "").strip().lower()
+        if isinstance(pending, dict) and (pending.get("agent") or "") == requested:
+            self._clear_acp_extra_env()
+            return
+        self._pending_vendor_key = None
+        self._retain_acp_extra_env_for(agent_id)
+
+    def _redirect_harness_only_provider(self, provider: str, log: ConversationLog) -> bool:
+        """Reject SuperQode-loop BYOK for harness-only credential slots."""
+        from superqode.providers.dynamic import resolve_provider_def
+
+        provider_id = normalize_provider_id(provider)
+        provider_def = resolve_provider_def(provider_id)
+        if provider_def is None or not getattr(provider_def, "harness_only", False):
+            return False
+        if log is not None:
+            log.add_info(
+                f"{provider_def.name} is not a SuperQode BYOK provider. "
+                "Use :connect droid-key to attach Factory Droid with FACTORY_API_KEY."
+            )
+        return True
+
     def _begin_vendor_key(self, profile, log: ConversationLog) -> None:
         """Closed key path: API Key Required, then vendor ACP with child-only env.
 
@@ -488,28 +575,21 @@ class ConnectMixin:
         # Key path is never a subscription: do not strip, do not inherit a
         # previous vendor pin. `_connect_acp_cmd` clears leftover extra_env;
         # we re-set it after, because ACPClient is built on the first prompt.
+        # Teaching and milestones wait until `_connect_agent` actually succeeds.
         self._acp_subscription_vendor = None
         agent = (entry.acp_agent if entry is not None else None) or getattr(
             profile, "acp_agent", ""
         )
+        # Named ACP attach clears leftover extra env; re-pin after it returns.
         self._connect_acp_cmd(agent or "", log)
-        self._acp_extra_env = extra_env
-        if log is not None:
-            log.add_info("API key path — not your Droid CLI login.")
-        self._teach(
-            "_write_connection_teaching_card",
-            log,
-            label=entry.label if entry is not None else profile.label,
-            vendor_owned=bool(entry.vendor_owned) if entry is not None else True,
-            harness=agent or "",
-        )
-        try:
-            from superqode.app.progress import record_milestone
-
-            record_milestone("connected_closed_harness")
-            record_milestone("connected")
-        except Exception:  # noqa: BLE001 - progress must never block connect
-            pass
+        self._pending_vendor_key = {
+            "agent": (agent or "").strip().lower(),
+            "label": entry.label if entry is not None else profile.label,
+            "vendor_owned": bool(entry.vendor_owned) if entry is not None else True,
+            "harness": agent or "",
+            "note": "API key path — not your Droid CLI login.",
+        }
+        self._set_acp_extra_env(extra_env, agent or "")
 
     #: Vendor-specific controls available after connecting, as
     #: (name matchers, command, description).
@@ -559,6 +639,7 @@ class ConnectMixin:
         vendor_owned: bool,
         harness: str = "",
         model: str = "",
+        note: str = "",
     ) -> None:
         """Summarise the connection and the commands now available."""
         if log is None:
@@ -567,6 +648,8 @@ class ConnectMixin:
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
         t.append(f"Connected — {label}\n\n", style=f"bold {THEME['text']}")
+        if note:
+            t.append(f"    {note}\n\n", style=THEME["muted"])
 
         t.append("    Harness   ", style=THEME["dim"])
         if vendor_owned:
@@ -1816,6 +1899,9 @@ class ConnectMixin:
 
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        if self._redirect_harness_only_provider(provider, log):
+            return
+        self._clear_acp_extra_env()
         if provider == "grok-cli":
             # The BYOK provider/model picker can reach this route without
             # passing through `:grok api`. Refresh the imported CLI credential
@@ -2226,6 +2312,8 @@ class ConnectMixin:
         # :connect <provider>[/<model>] (direct connect with / separator)
         if args:
             legacy_provider = args.split("/", 1)[0].split(maxsplit=1)[0]
+            if self._redirect_harness_only_provider(legacy_provider, log):
+                return
             if normalize_provider_id(legacy_provider) == "github-copilot":
                 log.add_info(
                     "The legacy GitHub Copilot BYOK route is hidden from discovery. "
@@ -3272,9 +3360,9 @@ class ConnectMixin:
         if not getattr(self, "_connecting_profile_id", ""):
             self._acp_subscription_vendor = None
         # A named ACP attach must not inherit a previous Closed-key inject.
-        # vendor-key re-sets `_acp_extra_env` after this returns; the client
-        # is constructed later, on the first prompt.
-        self._acp_extra_env = None
+        # vendor-key re-sets extra env after this returns; the client is
+        # constructed later, on the first prompt.
+        self._clear_acp_extra_env()
 
         # Clear any existing BYOK connection when switching to ACP
         if hasattr(self, "_pure_mode") and self._pure_mode:
@@ -3314,6 +3402,7 @@ class ConnectMixin:
     @work(exclusive=True)
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
         log = self.query_one("#log", ConversationLog)
+        self._retain_acp_extra_env_for(agent_id)
 
         try:
             from superqode.agents.discovery import get_agent_by_short_name_async
@@ -3461,18 +3550,13 @@ class ConnectMixin:
                 )
                 if callable(announce_harness_switch):
                     announce_harness_switch(log, agent)
-                self._teach(
-                    "_write_connection_teaching_card",
-                    log,
-                    label=str(agent.get("name") or self.current_agent),
-                    vendor_owned=True,
-                    harness=str(agent.get("name") or self.current_agent),
-                    model=self.current_model or "chosen by the agent",
-                )
-                self._persist_acp_connection(str(self.current_agent or agent_id))
+                self._finish_vendor_key_or_teach(log, agent)
+                if not getattr(self, "_pending_vendor_key", None):
+                    self._persist_acp_connection(str(self.current_agent or agent_id))
                 self._mark_onboarding_complete()
             else:
                 self._pending_harness_acp_transition = None
+                self._abandon_vendor_key_attach(agent_id)
                 self._announce_transition(
                     title="Agent not found",
                     primary=agent_id,
@@ -3483,6 +3567,7 @@ class ConnectMixin:
                 )
         except Exception as e:
             self._pending_harness_acp_transition = None
+            self._abandon_vendor_key_attach(agent_id)
             self._announce_transition(
                 title="Connection failed",
                 primary=agent_id,
