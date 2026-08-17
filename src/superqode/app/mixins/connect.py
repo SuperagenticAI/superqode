@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 import asyncio
+import json
+import logging
 import os
 import shutil
 import textwrap
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
 from textual import work
 from rich.text import Text
 from rich.panel import Panel
@@ -26,6 +31,32 @@ from superqode.app.widgets import (
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.recipes import PromptCompletionCandidate
 from superqode.app.session_state import get_session
+from superqode.providers.harness_catalog import HarnessAuthSpec
+
+_CONNECT_LOG = logging.getLogger("superqode.connect")
+_CONNECTION_KEYS = (
+    "category",
+    "auth_mode",
+    "harness_id",
+    "profile_id",
+    "acp_agent",
+    "openness",
+    "provider",
+    "model",
+    "transport",
+    "after_auth",
+)
+
+
+@dataclass
+class KeyHarnessSession:
+    """In-flight Open/Closed key path. Survives ``_reset_connect_selection_states``."""
+
+    entry_id: str
+    openness: str
+    auth_spec: HarnessAuthSpec
+    return_menu: str
+    after_auth: str
 
 
 def _menu_history_label(menu: str) -> str:
@@ -160,17 +191,42 @@ class ConnectMixin:
         Returns True when it handled the request, so Esc/`:back` can fall
         through to cancelling the picker on the root screen.
         """
-        from superqode.providers.connection_profiles import CONNECT_MENU_ROOT, parent_menu
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_AGENTS,
+            CONNECT_MENU_KEY_MODELS,
+            CONNECT_MENU_ROOT,
+            parent_menu,
+        )
 
         if not getattr(self, "_awaiting_connect_type", False):
             return False
+
+        def _end_key_session() -> None:
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
+            else:
+                self._key_harness_session = None
+                self._pending_key_harness_route = None
+
         current = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
         if current == CONNECT_MENU_ROOT:
+            _end_key_session()
             return False
         # Each screen declares its parent, so Esc walks the path the user
         # actually took instead of jumping back to the start.
+        session = getattr(self, "_key_harness_session", None)
+        dest = parent_menu(
+            current,
+            return_menu=getattr(session, "return_menu", None),
+        )
+        # Esc to the existing-harness screen ends the Open/Closed key flow.
+        if dest == CONNECT_MENU_AGENTS or current == CONNECT_MENU_AGENTS:
+            _end_key_session()
+        elif current != CONNECT_MENU_KEY_MODELS and dest == CONNECT_MENU_ROOT:
+            _end_key_session()
         log = self.query_one("#log", ConversationLog)
-        self._show_connect_type_picker(log, menu=parent_menu(current))
+        self._show_connect_type_picker(log, menu=dest)
         return True
 
     def _show_own_harness_catalog(self, log: ConversationLog, profile_id: str = "") -> None:
@@ -200,11 +256,19 @@ class ConnectMixin:
 
     def _return_to_model_step(self) -> None:
         """Reopen the model screen after backing out of a provider list."""
-        from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_KEY_MODELS,
+            CONNECT_MENU_MODELS,
+        )
 
         log = self.query_one("#log", ConversationLog)
         log.clear()
-        self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
+        menu = (
+            CONNECT_MENU_KEY_MODELS
+            if getattr(self, "_key_harness_session", None) is not None
+            else CONNECT_MENU_MODELS
+        )
+        self._show_connect_type_picker(log, menu=menu)
 
     def action_browse_harnesses_from_connect(self) -> None:
         """H / typed harness: Other picker in v1, Open list in v2."""
@@ -244,14 +308,71 @@ class ConnectMixin:
     def _begin_key_harness(self, profile, log: ConversationLog) -> None:
         """Connect an Open/Closed catalog row.
 
-        SuperQode-hosted adapters (Tau, DSH, DeepAgents SDK) already switch
-        like the Other picker. The Local/BYOK model step is PR 3.
+        ``switch-and-model`` (Tau, DSH, DeepAgents SDK) switches the hosted
+        adapter then opens ``CONNECT_MENU_KEY_MODELS``. Other ``after_auth``
+        values ship in later PRs.
         """
-        harness_id = getattr(profile, "runtime", None) or getattr(profile, "id", "")
+        from pathlib import Path
+
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_CLOSED,
+            CONNECT_MENU_OPEN,
+        )
+        from superqode.providers.harness_catalog import get_entry
+
+        entry = get_entry(getattr(profile, "id", ""))
+        if entry is None:
+            log.add_error("This open harness has no catalog entry.")
+            return
+        key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
+        after_auth = key_spec.after_auth if key_spec is not None else ""
+        if after_auth != "switch-and-model":
+            log.add_info("This connection path is not available yet.")
+            return
+        harness_id = entry.harness_id or getattr(profile, "runtime", None) or entry.id
         if not harness_id:
             log.add_error("This open harness has no switch target.")
             return
+        try:
+            from superqode.harness import resolve_harness
+
+            definition = resolve_harness(harness_id, root=Path.cwd())
+        except Exception:  # noqa: BLE001 - missing extras still get the switch prompt
+            definition = None
+        if definition is not None and not definition.available:
+            self._harness_cmd(f"switch {harness_id}", log)
+            return
+        return_menu = getattr(profile, "menu", "") or CONNECT_MENU_OPEN
+        if return_menu not in {CONNECT_MENU_OPEN, CONNECT_MENU_CLOSED}:
+            return_menu = CONNECT_MENU_OPEN
+        self._key_harness_session = KeyHarnessSession(
+            entry_id=entry.id,
+            openness=entry.openness,
+            auth_spec=key_spec,
+            return_menu=return_menu,
+            after_auth=after_auth,
+        )
         self._harness_cmd(f"switch {harness_id}", log)
+
+    def _clear_key_harness_session(self) -> None:
+        """Drop the Open/Closed key flow. Safe to call when none is active."""
+        self._key_harness_session = None
+        self._pending_key_harness_route = None
+
+    def _key_harness_allowlist(self, mode: str) -> frozenset[str] | None:
+        """Picker filter for the active key-harness. ``None`` means all native."""
+        session = getattr(self, "_key_harness_session", None)
+        if session is None:
+            return None
+        from superqode.providers.harness_catalog import auth_allowlist, get_entry
+
+        entry = get_entry(session.entry_id)
+        if entry is None:
+            return None
+        allowed = auth_allowlist(entry, mode)
+        if allowed is None:
+            return None
+        return frozenset(allowed)
 
     #: Vendor-specific controls available after connecting, as
     #: (name matchers, command, description).
@@ -356,7 +477,11 @@ class ConnectMixin:
         log.write(t)
 
     def _reset_connect_selection_states(self) -> None:
-        """Clear transient connect-flow selection state so flows don't interfere."""
+        """Clear transient connect-flow selection state so flows don't interfere.
+
+        Must not clear ``_key_harness_session``. That object lives until a
+        successful connect, an explicit cancel, or Esc back to the agents menu.
+        """
         from superqode.providers.connection_profiles import CONNECT_MENU_ROOT
 
         self._awaiting_connect_type = False
@@ -475,6 +600,11 @@ class ConnectMixin:
             self._apply_subscription_billing_policy(profile, log)
             self._connect_acp_cmd(profile.acp_agent or "", log)
         elif conn == "byok":
+            session = getattr(self, "_key_harness_session", None)
+            if session is not None and session.after_auth == "acp-attach":
+                # PR 5 collects a key then attaches ACP. Until that lands,
+                # keep the picker so the user can still choose a provider.
+                pass
             provider = getattr(profile, "byok_provider", None)
             if provider:
                 self._connect_byok_cmd(provider, log)
@@ -485,6 +615,9 @@ class ConnectMixin:
             self._show_byok_providers(log)
             self.set_timer(0.3, lambda: setattr(self, "_just_showed_byok_picker", False))
         elif conn == "local":
+            session = getattr(self, "_key_harness_session", None)
+            if session is not None and session.after_auth == "acp-attach":
+                pass
             self._local_highlighted_provider_index = 0
             self._local_highlighted_model_index = 0
             self._show_local_provider_picker(log)
@@ -1594,6 +1727,17 @@ class ConnectMixin:
 
         provider_name = provider_def.name if provider_def else provider.upper()
 
+        key_session = getattr(self, "_key_harness_session", None)
+        allowlist = getattr(self, "_key_harness_allowlist", None)
+        if key_session is not None and key_session.after_auth == "switch-and-model":
+            is_local_pick = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
+            allowed = (
+                allowlist("local" if is_local_pick else "byok") if callable(allowlist) else None
+            )
+            if allowed is not None and provider not in allowed:
+                log.add_error(f"{provider} is not available for {key_session.entry_id}.")
+                return
+
         # Show experimental warning for vLLM and SGLang
         if provider in ("vllm", "sglang"):
             t = Text()
@@ -1800,6 +1944,9 @@ class ConnectMixin:
             model=model,
             host=local_host,
         )
+        finish = getattr(self, "_finish_successful_model_connect", None)
+        if callable(finish):
+            finish(provider, model, exec_mode, log)
 
         if is_local:
             self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
@@ -1865,12 +2012,22 @@ class ConnectMixin:
             persist=False,
             dedupe_key=f"connection:{mode}:{provider}:{model}",
         )
+        vendor_owned = False
+        harness = str(getattr(self, "current_harness", "") or "core")
+        key_session = getattr(self, "_key_harness_session", None)
+        if key_session is not None:
+            from superqode.providers.harness_catalog import get_entry
+
+            catalog = get_entry(key_session.entry_id)
+            if catalog is not None:
+                vendor_owned = catalog.vendor_owned
+                harness = catalog.label
         self._teach(
             "_write_connection_teaching_card",
             log,
             label=f"{provider_name or provider} · {model}",
-            vendor_owned=False,
-            harness=str(getattr(self, "current_harness", "") or "core"),
+            vendor_owned=vendor_owned,
+            harness=harness,
             model=f"{provider}/{model}" if provider else model,
         )
         self._mark_onboarding_complete()
@@ -2037,9 +2194,33 @@ class ConnectMixin:
         log.write(t)
 
     def _connect_last(self, log: ConversationLog):
-        """Connect to the last used provider/model."""
-        config = self._load_byok_config()
+        """Reconnect the last saved connection, then fall back to byok.last_*."""
+        connection = self._load_connection_config()
+        category = str(connection.get("category") or "")
+        auth_mode = str(connection.get("auth_mode") or "")
+        after_auth = str(connection.get("after_auth") or "")
+        acp_agent = str(connection.get("acp_agent") or "")
+        profile_id = str(connection.get("profile_id") or "")
+        provider = str(connection.get("provider") or "")
+        model = str(connection.get("model") or "")
 
+        if category == "acp" or (auth_mode == "acp" and not after_auth):
+            if acp_agent:
+                self._connect_acp_cmd(acp_agent, log)
+                return
+        elif profile_id:
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            profile = get_connection_profile(profile_id)
+            if profile is not None:
+                if after_auth == "switch-and-model" and provider and model:
+                    self._pending_key_harness_route = (auth_mode, provider, model)
+                    self._begin_key_harness(profile, log)
+                else:
+                    self._dispatch_connection_profile(profile, log)
+                return
+
+        config = self._load_byok_config()
         if config.get("last_provider") and config.get("last_model"):
             self._connect_byok_mode(config["last_provider"], config["last_model"], log)
         else:
@@ -2337,7 +2518,12 @@ class ConnectMixin:
 
         # Get providers with free models
         free_providers = get_free_providers()
-        visible_provider_ids = set(connect_provider_ids())
+        provider_ids = list(connect_provider_ids())
+        allowlist = getattr(self, "_key_harness_allowlist", None)
+        allowed = allowlist("byok") if callable(allowlist) else None
+        if allowed is not None:
+            provider_ids = [pid for pid in provider_ids if pid in allowed]
+        visible_provider_ids = set(provider_ids)
         free_provider_ids = set(free_providers.keys()) & visible_provider_ids
 
         data_source = get_data_source()
@@ -2399,7 +2585,7 @@ class ConnectMixin:
         show_all_hosts = bool(getattr(self, "_byok_show_all_providers", False))
         providers_by_category = {}
         collapsed_hosts = 0
-        for pid in connect_provider_ids():
+        for pid in provider_ids:
             pdef = resolve_provider_def(pid)
             if pdef is None:
                 continue
@@ -2425,7 +2611,7 @@ class ConnectMixin:
         # not have to find "openai" inside a category list to use it, and
         # leading with their own working setup is the fastest possible start.
         ready_infos = []
-        for pid in connect_provider_ids():
+        for pid in provider_ids:
             pdef = resolve_provider_def(pid)
             if pdef is None or not pdef.env_vars:
                 continue
@@ -2697,57 +2883,184 @@ class ConnectMixin:
         # Reconnect with new model
         self._connect_byok_mode(provider, model, log)
 
-    def _load_byok_config(self) -> dict:
-        """Load BYOK config from file."""
-        import json
-        from pathlib import Path
+    def _user_config_path(self) -> Path:
+        return Path.home() / ".superqode" / "config.json"
 
-        config_path = Path.home() / ".superqode" / "config.json"
+    def _read_user_config(self) -> dict:
+        """Raw ~/.superqode/config.json. Unknown keys must not be dropped."""
+        path = self._user_config_path()
         try:
-            if config_path.exists():
-                data = json.loads(config_path.read_text())
-                return data.get("byok", {})
+            if path.exists():
+                data = json.loads(path.read_text())
+                if isinstance(data, dict):
+                    return data
         except Exception:
             pass
         return {}
 
+    def _update_user_config(self, mutate: Callable[[dict], None]) -> None:
+        """Read-modify-write user config.json. Same helper as byok.* persist."""
+        path = self._user_config_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = self._read_user_config()
+            mutate(data)
+            path.write_text(json.dumps(data, indent=2))
+        except Exception:
+            pass
+
+    def _load_byok_config(self) -> dict:
+        """Load BYOK config from file."""
+        raw = self._read_user_config().get("byok", {})
+        return raw if isinstance(raw, dict) else {}
+
     def _save_byok_config(self, provider: str, model: str):
         """Save BYOK config to file."""
-        import json
-        from pathlib import Path
 
-        config_path = Path.home() / ".superqode" / "config.json"
-        try:
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Load existing config
-            data = {}
-            if config_path.exists():
-                data = json.loads(config_path.read_text())
-
-            # Update BYOK section
-            if "byok" not in data:
-                data["byok"] = {}
-
-            data["byok"]["last_provider"] = provider
-            data["byok"]["last_model"] = model
-
-            # Update history
-            history = data["byok"].get("history", [])
+        def _mutate(data: dict) -> None:
+            byok = data.get("byok")
+            if not isinstance(byok, dict):
+                byok = {}
+                data["byok"] = byok
+            byok["last_provider"] = provider
+            byok["last_model"] = model
+            history = byok.get("history", [])
+            if not isinstance(history, list):
+                history = []
             entry = f"{provider}/{model}"
             if entry in history:
                 history.remove(entry)
             history.insert(0, entry)
-            data["byok"]["history"] = history[:20]  # Keep last 20
+            byok["history"] = history[:20]
 
-            config_path.write_text(json.dumps(data, indent=2))
-        except Exception:
-            pass
+        self._update_user_config(_mutate)
 
     def _load_byok_history(self) -> list:
         """Load BYOK connection history."""
         config = self._load_byok_config()
         return config.get("history", [])
+
+    def _load_connection_config(self) -> dict:
+        """Last existing-harness / model connection. Never contains secrets."""
+        raw = self._read_user_config().get("connection", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {key: raw[key] for key in _CONNECTION_KEYS if key in raw}
+
+    def _save_connection_config(self, **fields: str) -> None:
+        """Persist connection.* via the same RMW helper as byok.*. No secrets."""
+
+        def _mutate(data: dict) -> None:
+            current = data.get("connection")
+            if not isinstance(current, dict):
+                current = {}
+            for key in _CONNECTION_KEYS:
+                if key in fields:
+                    current[key] = str(fields[key] or "")
+            data["connection"] = current
+
+        self._update_user_config(_mutate)
+
+    def _finish_successful_model_connect(
+        self, provider: str, model: str, mode: str, log: ConversationLog
+    ) -> None:
+        """Write connection.*, run Open-harness post-hooks, then drop the session."""
+        key_session = getattr(self, "_key_harness_session", None)
+        if key_session is None:
+            harness_id = str(
+                getattr(self, "current_harness", "")
+                or os.getenv("SUPERQODE_HARNESS", "core")
+                or "core"
+            )
+            self._save_connection_config(
+                category="models",
+                auth_mode=mode,
+                harness_id=harness_id,
+                profile_id="",
+                acp_agent="",
+                openness="",
+                provider=provider,
+                model=model,
+                transport="",
+                after_auth="",
+            )
+            return
+
+        from superqode.providers.harness_catalog import get_entry
+
+        entry = get_entry(key_session.entry_id)
+        self._save_connection_config(
+            category=key_session.return_menu,
+            auth_mode=mode,
+            harness_id=key_session.entry_id,
+            profile_id=key_session.entry_id,
+            acp_agent=(entry.acp_agent if entry is not None else "") or "",
+            openness=key_session.openness,
+            provider=provider,
+            model=model,
+            transport="harness-protocol",
+            after_auth=key_session.after_auth,
+        )
+        _CONNECT_LOG.info(
+            "connect.completed category=%s auth_mode=%s harness_id=%s provider=%s after_auth=%s",
+            key_session.return_menu,
+            mode,
+            key_session.entry_id,
+            provider,
+            key_session.after_auth,
+        )
+        if key_session.entry_id == "tau":
+            self._sync_tau_after_key_connect(provider, model, log)
+        if key_session.openness == "open":
+            record = getattr(self, "_record_milestone", None)
+            if callable(record):
+                record("connected_open_harness")
+        self._clear_key_harness_session()
+
+    def _sync_tau_after_key_connect(self, provider: str, model: str, log: ConversationLog) -> None:
+        """Copy the SuperQode route into Tau without reconnecting."""
+        from superqode.providers.credentials import provider_api_key
+        from superqode.providers.dynamic import resolve_base_url, resolve_provider_def
+        from superqode.providers.registry import ProviderCategory
+
+        provider_def = resolve_provider_def(provider)
+        if provider_def is None:
+            return
+        openai_url = getattr(self, "_tau_openai_base_url", None)
+        base_url = (
+            openai_url(provider, resolve_base_url(provider_def))
+            if callable(openai_url)
+            else resolve_base_url(provider_def)
+        )
+        api_key_env = (
+            provider_def.env_vars[0]
+            if provider_def.env_vars
+            else f"{provider.upper().replace('-', '_')}_API_KEY"
+        )
+        credential = provider_api_key(provider_def)
+        if (
+            not credential
+            and provider_def.category == ProviderCategory.LOCAL
+            and not provider_def.env_vars
+        ):
+            credential = provider
+        if not credential:
+            return
+        try:
+            from superqode.harness.tau_management import configure_tau_provider
+
+            configure_tau_provider(
+                provider_name=provider,
+                display_name=provider_def.name,
+                model=model,
+                base_url=base_url,
+                api_key_env=api_key_env,
+                credential=credential,
+                docs_url=provider_def.docs_url,
+            )
+        except Exception as exc:  # noqa: BLE001 - connect already succeeded
+            if log is not None:
+                log.add_warning(f"Tau is connected, but :tau login could not sync: {exc}")
 
     def _connect_acp_cmd(self, args: str, log: ConversationLog):
         """Handle :connect acp command - Connect to ACP agent."""
@@ -2965,6 +3278,24 @@ class ConnectMixin:
                     harness=str(agent.get("name") or self.current_agent),
                     model=self.current_model or "chosen by the agent",
                 )
+                persist = getattr(self, "_save_connection_config", None)
+                if callable(persist):
+                    from superqode.providers.connection_profiles import get_connection_profile
+
+                    short_name = str(self.current_agent or agent_id)
+                    profile = get_connection_profile(short_name)
+                    persist(
+                        category="acp",
+                        auth_mode="acp",
+                        harness_id="",
+                        profile_id=profile.id if profile is not None else "",
+                        acp_agent=short_name,
+                        openness="",
+                        provider=str(getattr(self, "current_provider", "") or ""),
+                        model=str(getattr(self, "current_model", "") or ""),
+                        transport="ACP",
+                        after_auth="",
+                    )
                 self._mark_onboarding_complete()
             else:
                 self._pending_harness_acp_transition = None

@@ -105,3 +105,28 @@ def test_gemini_cli_is_not_an_open_row():
     assert get_entry("gemini-cli") is None
     assert all("gemini" not in entry.id for entry in HARNESS_CATALOG)
     assert all(entry.id != "gemini" for entry in list_entries("open"))
+
+
+def test_switch_and_model_allowlists_match_the_hosted_adapters():
+    from superqode.providers.harness_catalog import auth_allowlist
+
+    tau = get_entry("tau")
+    dsh = get_entry("deepseek-harness")
+    sdk = get_entry("deepagents")
+
+    assert auth_allowlist(tau, "byok") is None
+    assert auth_allowlist(tau, "local") is None
+    assert auth_allowlist(dsh, "byok") == ("deepseek",)
+    dsh_local = auth_allowlist(dsh, "local")
+    assert dsh_local
+    assert "anthropic" not in dsh_local
+    assert "google" not in dsh_local
+    assert auth_allowlist(sdk, "byok") == ("anthropic", "google")
+    assert auth_allowlist(sdk, "local") == (
+        "ollama",
+        "lmstudio",
+        "mlx",
+        "llamacpp",
+        "openai-compatible",
+    )
+    assert "deepagents-code" not in (auth_allowlist(sdk, "byok") or ())
