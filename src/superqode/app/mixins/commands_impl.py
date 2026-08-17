@@ -4038,7 +4038,14 @@ class CommandImplMixin:
 
         primary = str(entry.spec.model_policy.primary or "")
         needs_model = False
-        if getattr(self, "_key_harness_session", None) is not None:
+        key_session = getattr(self, "_key_harness_session", None)
+        matcher = getattr(self, "_key_harness_session_matches", None)
+        if key_session is not None and callable(matcher) and not matcher(entry.id):
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
+            key_session = None
+        if key_session is not None:
             # Open/Closed switch-and-model always collects Local/BYOK. Do not
             # reuse the previous SuperQode route or a spec primary.
             needs_model = True
@@ -4259,14 +4266,16 @@ class CommandImplMixin:
             note += " This harness has no tools: it can discuss code, not change it."
         route = getattr(self, "_pending_key_harness_route", None)
         self._pending_key_harness_route = None
-        if route:
+        key_session = getattr(self, "_key_harness_session", None)
+        # A leftover pending route without a session is from a failed last
+        # reconnect; never apply it onto Core or another harness.
+        if route and key_session is not None:
             mode, provider, model = route
             if mode == "local":
                 self._connect_local_mode(provider, model, log)
             else:
                 self._connect_byok_mode(provider, model, log)
             return
-        key_session = getattr(self, "_key_harness_session", None)
         menu = CONNECT_MENU_KEY_MODELS if key_session is not None else CONNECT_MENU_MODELS
         self._connect_context_note = note
         try:
@@ -4704,6 +4713,9 @@ class CommandImplMixin:
         choice = text.strip().lower()
         if choice in {"n", "no", "cancel", "skip", "q"}:
             self._awaiting_harness_install = None
+            clearer = getattr(self, "_clear_key_harness_session", None)
+            if callable(clearer):
+                clearer()
             log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
             return True
         if choice not in {"", "y", "yes", "install", "ok"}:
