@@ -100,7 +100,29 @@ def subscription_child_env(
     return source, stripped
 
 
-def subscription_notice(vendor_label: str, stripped: Iterable[str]) -> List[str]:
+def closed_key_profile_id(vendor: str) -> Optional[str]:
+    """Profile id for this vendor's Closed key path, if one is drawn."""
+    from superqode.providers.harness_catalog import HARNESS_CATALOG
+
+    key = resolve_vendor(vendor)
+    if key is None:
+        return None
+    for entry in HARNESS_CATALOG:
+        if not entry.list_visible or entry.openness != "closed":
+            continue
+        if (entry.acp_agent or "").lower() != key:
+            continue
+        if any(spec.after_auth == "vendor-key-acp" for spec in entry.auth):
+            return entry.id
+    return None
+
+
+def subscription_notice(
+    vendor_label: str,
+    stripped: Iterable[str],
+    *,
+    vendor: str = "",
+) -> List[str]:
     """User-facing lines explaining which keys were ignored, and why.
 
     Returns an empty list when nothing was stripped, so callers can simply
@@ -111,9 +133,17 @@ def subscription_notice(vendor_label: str, stripped: Iterable[str]) -> List[str]
         return []
     joined = ", ".join(names)
     plural = "keys are" if len(names) > 1 else "key is"
+    closed_id = closed_key_profile_id(vendor) if vendor else None
+    if closed_id:
+        spend_hint = (
+            f"Use :connect {closed_id} (Closed harnesses) if you want to spend "
+            "that API key instead."
+        )
+    else:
+        spend_hint = "Use :connect byok if you want to spend that API key instead."
     return [
         f"{joined} {'are' if len(names) > 1 else 'is'} set in this environment.",
         f"This is a subscription connection, so the API {plural} ignored and "
         f"{vendor_label} uses your subscription login instead.",
-        "Use :connect byok if you want to spend that API key instead.",
+        spend_hint,
     ]

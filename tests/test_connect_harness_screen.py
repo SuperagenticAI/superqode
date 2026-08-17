@@ -65,6 +65,10 @@ class DispatchStub:
 
         ConnectMixin._begin_key_harness(self, profile, log)
 
+    def _begin_vendor_key(self, profile, log):
+        self.vendor_keys = getattr(self, "vendor_keys", [])
+        self.vendor_keys.append(profile.id)
+
 
 def _card_renderer():
     """A real instance, so the card's helper methods bind to it."""
@@ -259,19 +263,21 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
                 ("agent-subscriptions", "Subscriptions"),
                 ("agent-acp", "ACP"),
                 ("agent-open-harnesses", "Open harnesses"),
+                ("agent-closed-harnesses", "Closed harnesses"),
             ],
         ),
     ],
 )
 def test_existing_harnesses_is_three_categories_you_step_into(menu_version, expected, monkeypatch):
-    """Existing harnesses split by connection kind; v2 replaces Other with Open."""
+    """Existing harnesses split by connection kind; v2 replaces Other with Open/Closed."""
     monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == expected
-    assert "Closed harnesses" not in {
-        p.label for p in list_connection_profiles(CONNECT_MENU_AGENTS)
-    }
+    if menu_version == "v1":
+        assert "Closed harnesses" not in {
+            p.label for p in list_connection_profiles(CONNECT_MENU_AGENTS)
+        }
 
 
 def test_each_category_opens_its_own_screen():
@@ -285,6 +291,19 @@ def test_open_category_opens_the_open_list():
 
     assert dispatch("agent-open-harnesses").menus == [CONNECT_MENU_OPEN]
     assert dispatch("open-harnesses").menus == [CONNECT_MENU_OPEN]
+
+
+def test_closed_category_opens_the_closed_list():
+    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED
+
+    assert dispatch("agent-closed-harnesses").menus == [CONNECT_MENU_CLOSED]
+    assert dispatch("closed-harnesses").menus == [CONNECT_MENU_CLOSED]
+
+
+def test_selecting_droid_key_uses_vendor_key_not_harness_switch():
+    stub = dispatch("droid-key")
+    assert stub.harness_commands == []
+    assert getattr(stub, "vendor_keys", []) == ["droid-key"]
 
 
 def test_other_harnesses_aliases_to_open_under_v2(monkeypatch):
@@ -1102,6 +1121,7 @@ def test_every_pre_existing_connect_id_still_resolves():
         "copilot",
         "devin",
         "droid",
+        "droid-key",
         "kiro",
         "glm-cli",
         "qwen-code",

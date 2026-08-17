@@ -391,6 +391,126 @@ class ConnectMixin:
             return None
         return frozenset(allowed)
 
+    def _write_api_key_required_panel(
+        self,
+        log: ConversationLog,
+        *,
+        provider_name: str,
+        env_vars: list[str] | tuple[str, ...],
+        login_id: str,
+        docs_url: str = "",
+        retry: str = "",
+    ) -> None:
+        """Reuse the BYOK API Key Required card for a vendor harness key."""
+        names = [name for name in env_vars if name]
+        t = Text()
+        t.append("\n  ⚠️  ", style=THEME["warning"])
+        t.append("API Key Required\n\n", style=f"bold {THEME['warning']}")
+        t.append("  Provider: ", style=THEME["muted"])
+        t.append(f"{provider_name}\n", style=THEME["text"])
+        t.append("  Required: ", style=THEME["muted"])
+        t.append(f"{' or '.join(names)}\n", style=THEME["yellow"])
+        t.append("  Recommended: ", style=THEME["muted"])
+        t.append(f"superqode auth login {login_id}\n", style=THEME["cyan"])
+        if names:
+            t.append("  Or export:   ", style=THEME["muted"])
+            t.append(f"export {names[0]}='your-api-key'\n", style=THEME["cyan"])
+        t.append("  Get a key:   ", style=THEME["muted"])
+        t.append(f"{docs_url or f'{provider_name} website'}\n", style=THEME["cyan"])
+        if retry:
+            t.append("  Retry:       ", style=THEME["muted"])
+            t.append(f"{retry}\n", style=THEME["success"])
+        writer = getattr(log, "write_feedback", None) or getattr(log, "write", None)
+        if writer is not None:
+            writer(t)
+
+    def _begin_vendor_key(self, profile, log: ConversationLog) -> None:
+        """Closed key path: API Key Required, then vendor ACP with child-only env.
+
+        Resolves env then auth.json. Never setdefault into the SuperQode process
+        — that would make a later subscription connect see and strip the key.
+        """
+        from superqode.providers.credentials import provider_api_key
+        from superqode.providers.harness_catalog import get_entry
+        from superqode.providers.registry import PROVIDERS
+
+        entry = get_entry(getattr(profile, "id", ""))
+        spec = None
+        if entry is not None:
+            spec = next(
+                (item for item in entry.auth if item.after_auth == "vendor-key-acp"),
+                None,
+            )
+            if spec is None:
+                spec = next((item for item in entry.auth if item.mode == "byok"), None)
+        if spec is None:
+            if log is not None:
+                log.add_error("This closed harness has no API-key path.")
+            return
+
+        provider_id = spec.byok_provider or ""
+        provider_def = PROVIDERS.get(provider_id) if provider_id else None
+        resolved = provider_api_key(provider_def) if provider_def is not None else None
+        if not resolved:
+            for name in spec.env_vars:
+                value = os.environ.get(name)
+                if value:
+                    resolved = value
+                    break
+
+        login_id = provider_id
+        if not login_id and spec.env_vars:
+            login_id = spec.env_vars[0].split("_")[0].lower()
+        if not resolved:
+            if log is not None:
+                if provider_def is not None:
+                    provider_name = provider_def.name
+                elif entry is not None:
+                    provider_name = entry.label
+                else:
+                    provider_name = profile.label
+                self._write_api_key_required_panel(
+                    log,
+                    provider_name=provider_name,
+                    env_vars=spec.env_vars,
+                    login_id=login_id,
+                    docs_url=(provider_def.docs_url if provider_def else ""),
+                    retry=f":connect {getattr(profile, 'id', '')}",
+                )
+            return
+
+        extra_env: dict[str, str] = {}
+        if spec.inject_env:
+            for name in spec.env_vars:
+                extra_env[name] = resolved
+                break
+
+        # Key path is never a subscription: do not strip, do not inherit a
+        # previous vendor pin. `_connect_acp_cmd` clears leftover extra_env;
+        # we re-set it after, because ACPClient is built on the first prompt.
+        self._acp_subscription_vendor = None
+        agent = (entry.acp_agent if entry is not None else None) or getattr(
+            profile, "acp_agent", ""
+        )
+        self._connect_acp_cmd(agent or "", log)
+        self._acp_extra_env = extra_env
+        if log is not None:
+            log.add_info("API key path — not your Droid CLI login.")
+        self._teach(
+            "_write_connection_teaching_card",
+            log,
+            label=entry.label if entry is not None else profile.label,
+            vendor_owned=bool(entry.vendor_owned) if entry is not None else True,
+            harness=agent or "",
+        )
+        try:
+            from superqode.app.progress import record_milestone
+
+            record_milestone("connected_closed_harness")
+            record_milestone("connected")
+        except Exception:  # noqa: BLE001 - progress must never block connect
+            pass
+
     #: Vendor-specific controls available after connecting, as
     #: (name matchers, command, description).
     _VENDOR_COMMANDS: tuple[tuple[tuple[str, ...], str, str], ...] = (
@@ -666,6 +786,8 @@ class ConnectMixin:
             self._show_connect_type_picker(log, menu=CONNECT_MENU_CLOSED)
         elif conn == "key-harness":
             self._begin_key_harness(profile, log)
+        elif conn == "vendor-key":
+            self._begin_vendor_key(profile, log)
         elif conn in {"agent-picker", "subscription-picker"}:
             from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
@@ -1057,7 +1179,7 @@ class ConnectMixin:
             return
 
         stripped = diverting_api_keys(vendor)
-        for line in subscription_notice(getattr(profile, "label", vendor), stripped):
+        for line in subscription_notice(getattr(profile, "label", vendor), stripped, vendor=vendor):
             log.add_info(line)
 
     def _connect_copilot_subscription(self, profile, log: ConversationLog) -> None:
@@ -3149,6 +3271,10 @@ class ConnectMixin:
         # Subscriptions row sets `_connecting_profile_id` before calling us.
         if not getattr(self, "_connecting_profile_id", ""):
             self._acp_subscription_vendor = None
+        # A named ACP attach must not inherit a previous Closed-key inject.
+        # vendor-key re-sets `_acp_extra_env` after this returns; the client
+        # is constructed later, on the first prompt.
+        self._acp_extra_env = None
 
         # Clear any existing BYOK connection when switching to ACP
         if hasattr(self, "_pure_mode") and self._pure_mode:

@@ -88,6 +88,16 @@ and a completed `devin auth login`. Devin owns its own credential store.
 
 Uses Factory Droid through its locally authenticated CLI and ACP mode.
 
+### Factory Droid API key (connector: vendor-key, profile: droid-key)
+
+Uses Factory Droid with `FACTORY_API_KEY` from the environment or
+`superqode auth login factory`. The key is injected into the child ACP process
+only. This is the Closed harnesses row, not the Droid CLI login.
+
+```text
+:connect droid-key
+```
+
 ### Kiro Subscription (connector: acp, agent: kiro)
 
 Uses a Kiro or Amazon Q Developer plan through Kiro CLI's vendor-managed sign-in.
@@ -124,6 +134,7 @@ Direct shortcuts:
 - `:connect acp gemini` - Google Gemini CLI over ACP (API-key route, not a subscription)
 - `:connect devin` - Cognition Devin CLI over ACP
 - `:connect droid` - Factory Droid subscription through ACP
+- `:connect droid-key` - Factory Droid with `FACTORY_API_KEY` (Closed harnesses)
 - `:connect kiro` - Kiro/Amazon Q Developer subscription through ACP
 - `:connect glm-cli` - GLM Coding Plan through ACP
 - `:connect copilot` - prefer the official SDK, with installed CLI/ACP fallback

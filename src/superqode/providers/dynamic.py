@@ -134,9 +134,18 @@ def connect_provider_ids() -> List[str]:
 
     Legacy direct routes remain resolvable for saved configuration, but they
     should not compete with a maintained first-party connection profile.
+    Harness-only slots (`auth login factory`) are not SuperQode-loop BYOK.
     """
     hidden = {"github-copilot"}
-    return [provider_id for provider_id in all_provider_ids() if provider_id not in hidden]
+    ids: List[str] = []
+    for provider_id in all_provider_ids():
+        if provider_id in hidden:
+            continue
+        curated = PROVIDERS.get(provider_id)
+        if curated is not None and curated.harness_only:
+            continue
+        ids.append(provider_id)
+    return ids
 
 
 def is_curated_provider(provider_id: str) -> bool:

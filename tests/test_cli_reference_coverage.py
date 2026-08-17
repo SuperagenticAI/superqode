@@ -240,6 +240,7 @@ def test_every_connection_profile_has_a_sidebar_page():
         "amp": "concepts/modes.md",
         "devin": "providers/devin.md",
         "droid": "concepts/modes.md",
+        "droid-key": "concepts/modes.md",
         "kiro": "concepts/modes.md",
         "kimi-code": "providers/kimi.md",
         "qwen-code": "providers/qwen-code.md",

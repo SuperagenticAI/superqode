@@ -245,6 +245,7 @@ def _vendor_key_auth(
     env_vars: Tuple[str, ...],
     optional_env: Tuple[str, ...] = (),
     inject_env: bool = False,
+    byok_provider: Optional[str] = None,
 ) -> Tuple[HarnessAuthSpec, ...]:
     # byok_providers=() hides the native model picker; the key is the vendor's.
     return (
@@ -255,6 +256,7 @@ def _vendor_key_auth(
             after_auth=after_auth,
             env_vars=env_vars,
             optional_env=optional_env,
+            byok_provider=byok_provider,
             byok_providers=(),
             local_providers=(),
             inject_env=inject_env,
@@ -439,10 +441,13 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             connector="vendor-key",
             env_vars=("FACTORY_API_KEY",),
             inject_env=True,
+            byok_provider="factory",
         ),
         acp_agent="droid",
         hub_id="droid",
         vendor_owned=True,
+        wired=True,
+        list_visible=True,
     ),
     HarnessCatalogEntry(
         id="grok",

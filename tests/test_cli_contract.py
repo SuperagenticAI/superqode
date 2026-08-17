@@ -53,7 +53,9 @@ EXPECTED_COMMAND_COUNT = 267
 # `deepagents` joins the `harness init --template` choices, `deepagents-code`
 # joins the registry-derived `--connect` choices, and `hub` gains `--openness`.
 # All three widen existing option lists, so the count stays at 267.
-EXPECTED_HELP_TREE_SHA256 = "0e7e7bd4ff13da595c769bc8fa944f0b8c743869345c5b37b9c821fbf6eb56df"
+# Rebaselined for Factory Droid's Closed key path: `droid-key` joins the
+# registry-derived `--connect` choices. No Click command was added.
+EXPECTED_HELP_TREE_SHA256 = "a94cc501212208557d85d384a851ed9310f92a5b74d9c596671bd63228a236f1"
 
 
 def _render_help_tree() -> tuple[int, str]:

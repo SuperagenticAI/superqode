@@ -1969,6 +1969,12 @@ class AgentRunMixin:
                 return
             model_display = f"{agent_type}/{model}" if model else f"{agent_type}/auto"
 
+        # Closed/Open key paths set this at :connect time. Merge last so the
+        # child sees the resolved key; never setdefault into SuperQode's env.
+        session_extra = getattr(self, "_acp_extra_env", None) or {}
+        if session_extra:
+            acp_extra_env = {**acp_extra_env, **dict(session_extra)}
+
         mode_label = {"auto": "🟢 AUTO", "ask": "🟡 ASK", "deny": "🔴 DENY"}.get(
             self.approval_mode, "🟡 ASK"
         )

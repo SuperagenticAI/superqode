@@ -34,6 +34,7 @@ superqode -C PROFILE [COMMAND]
 | `antigravity` | Self-contained `agy` runtime using Google Sign-In and the OS keyring. |
 | `grok` | Grok Build (xAI's own agent) on your Grok subscription over ACP (`grok agent stdio`). Requires the `grok` binary and `grok login`. To run SuperQode's harness on the same subscription instead, use `:grok api`. |
 | `droid` | Factory Droid subscription through the authenticated Droid CLI ACP mode. |
+| `droid-key` | Factory Droid with `FACTORY_API_KEY` (Closed harnesses). Child process only; not the Droid CLI login. |
 | `kiro` | Kiro or Amazon Q Developer subscription through the signed-in Kiro CLI ACP mode. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |

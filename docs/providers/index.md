@@ -135,7 +135,8 @@ subscriptions` still opens the same screen:
 | Kimi Code | `:connect kimi-code` |
 
 API-key-only integrations, including the Anthropic and Z.AI general APIs, are
-listed under BYOK rather than Subscriptions.
+listed under BYOK rather than Subscriptions. Factory Droid's own key is a
+Closed harness, not BYOK: `:connect droid-key`.
 
 Claude Pro and Max are intentionally not listed as SuperQode subscription
 connections. Anthropic documents those plans for its first-party Claude Code

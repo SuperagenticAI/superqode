@@ -185,6 +185,7 @@ direct profile, so the submenu never becomes a required step:
 :connect copilot
 :connect devin
 :connect droid
+:connect droid-key
 :connect kiro
 :connect glm-cli
 :connect qwen-code
@@ -245,7 +246,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | Cursor | Cursor subscription through Cursor CLI ACP | `:connect cursor`, `:connect acp cursor` |
 | Amp | Amp subscription through its ACP adapter | `:connect amp`, `:connect acp amp` |
 | Cline | Cline CLI ACP | `:connect acp cline` |
-| Factory | Factory Droid subscription through ACP | `:connect droid`, `:connect acp droid` |
+| Factory | Factory Droid subscription through ACP, or `FACTORY_API_KEY` on Closed | `:connect droid`, `:connect droid-key`, `:connect acp droid` |
 | Cognition | Devin ACP, Devin CLI runtime | `:connect devin`, `:connect acp devin`, `:runtime devin-cli` |
 | JetBrains | Junie ACP | `:connect acp junie` |
 | Amazon | Amazon Bedrock BYOK, Kiro/Amazon Q Developer subscription through ACP | `:connect byok amazon-bedrock <model>`, `:connect kiro`, `:connect acp kiro` |
@@ -356,6 +357,10 @@ The built-in provider registry contains these hosted routes:
 | Azure OpenAI | `azure` | Google Vertex AI | `vertex` |
 | Cloudflare AI Gateway | `cloudflare` | Baseten | `baseten` |
 | Modal | `modal` |  |  |
+
+Factory (`factory`) is a harness-only credential slot for
+`:connect droid-key` (`superqode auth login factory`). It is not listed
+under `:connect byok`.
 
 The `grok-cli` *provider* is an authenticated subscription route used by
 `:grok api`; it is not an API-key BYOK provider. The `grok-cli` *runtime* is

@@ -16,6 +16,7 @@ import pytest
 from superqode.providers.subscription_env import (
     EXPLICIT_OPT_IN_ENVS,
     VENDOR_API_KEY_ENVS,
+    closed_key_profile_id,
     diverting_api_keys,
     resolve_vendor,
     subscription_child_env,
@@ -169,6 +170,16 @@ class TestUserNotice:
         assert "subscription" in joined
         assert ":connect byok" in joined
 
+    def test_droid_notice_points_at_closed_key_path(self):
+        assert closed_key_profile_id("droid") == "droid-key"
+        lines = subscription_notice("Factory Droid", ["FACTORY_API_KEY"], vendor="droid")
+
+        joined = " ".join(lines)
+        assert "FACTORY_API_KEY" in joined
+        assert ":connect droid-key" in joined
+        assert "Closed harnesses" in joined
+        assert ":connect byok" not in joined
+
     def test_notice_never_contains_a_secret_value(self):
         lines = subscription_notice("Grok", ["XAI_API_KEY"])
 
@@ -265,3 +276,230 @@ class TestConnectFlowInformsTheUser:
 
         assert stub._acp_subscription_vendor is None
         assert messages == []
+
+    def test_droid_subscription_strips_factory_key_and_points_at_droid_key(self, monkeypatch):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        monkeypatch.setenv("FACTORY_API_KEY", "factory-secret")
+        messages = []
+
+        class Log:
+            def add_info(self, value):
+                messages.append(str(value))
+
+        class Stub(ConnectMixin):
+            pass
+
+        stub = Stub()
+        ConnectMixin._apply_subscription_billing_policy(
+            stub, get_connection_profile("droid"), Log()
+        )
+
+        assert stub._acp_subscription_vendor == "droid"
+        joined = " ".join(messages)
+        assert "FACTORY_API_KEY" in joined
+        assert ":connect droid-key" in joined
+        assert "factory-secret" not in joined
+
+
+class TestFactoryKeyPath:
+    def test_subscription_child_still_strips_factory_key(self):
+        env = {"PATH": "/usr/bin", "FACTORY_API_KEY": "factory-secret"}
+
+        child, stripped = subscription_child_env("droid", env)
+
+        assert stripped == ["FACTORY_API_KEY"]
+        assert "FACTORY_API_KEY" not in child
+        assert child["PATH"] == "/usr/bin"
+
+    def test_acp_subscription_client_starts_without_factory_key(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FACTORY_API_KEY", "factory-secret")
+        captured = {}
+
+        async def fake_exec(cmd, **kwargs):
+            captured["env"] = kwargs.get("env", {})
+            raise RuntimeError("stop after env capture")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_shell", fake_exec)
+        from superqode.acp.client import ACPClient
+
+        client = ACPClient(
+            project_root=tmp_path,
+            command="true",
+            subscription_vendor="droid",
+            startup_timeout=1.0,
+        )
+        asyncio.run(client.start())
+
+        assert "FACTORY_API_KEY" not in captured["env"]
+        assert client.stripped_api_keys == ["FACTORY_API_KEY"]
+
+    def test_key_path_injects_factory_key_child_only(self, tmp_path, monkeypatch):
+        """auth.json key reaches the child via extra_env, never the parent."""
+        monkeypatch.delenv("FACTORY_API_KEY", raising=False)
+        captured = {}
+
+        async def fake_exec(cmd, **kwargs):
+            captured["env"] = kwargs.get("env", {})
+            raise RuntimeError("stop after env capture")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_shell", fake_exec)
+        from superqode.acp.client import ACPClient
+
+        client = ACPClient(
+            project_root=tmp_path,
+            command="true",
+            extra_env={"FACTORY_API_KEY": "from-auth-json"},
+            startup_timeout=1.0,
+        )
+        asyncio.run(client.start())
+
+        assert captured["env"].get("FACTORY_API_KEY") == "from-auth-json"
+        assert "FACTORY_API_KEY" not in __import__("os").environ
+        assert client.stripped_api_keys == []
+
+    def test_begin_vendor_key_sets_child_extra_env_from_auth_json(self, monkeypatch, tmp_path):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.auth import ApiAuth, LocalAuthStorage
+        from superqode.providers.connection_profiles import get_connection_profile
+        import superqode.auth as auth_module
+
+        monkeypatch.delenv("FACTORY_API_KEY", raising=False)
+        monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+        auth_module._storage.set("factory", ApiAuth(key="from-store"))
+        monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path))
+
+        class Log:
+            def __init__(self):
+                self.messages = []
+                self.panels = []
+
+            def add_info(self, value):
+                self.messages.append(str(value))
+
+            def add_error(self, value):
+                self.messages.append(str(value))
+
+            def write(self, value):
+                self.panels.append(value)
+
+            def write_feedback(self, value):
+                self.panels.append(value)
+
+        class Stub(ConnectMixin):
+            def __init__(self):
+                self.acp_calls = []
+
+            def _connect_acp_cmd(self, name, log):
+                self.acp_calls.append(name)
+
+        stub = Stub()
+        profile = get_connection_profile("droid-key")
+        ConnectMixin._begin_vendor_key(stub, profile, Log())
+
+        import os
+
+        assert stub.acp_calls == ["droid"]
+        assert stub._acp_subscription_vendor is None
+        assert stub._acp_extra_env == {"FACTORY_API_KEY": "from-store"}
+        assert "FACTORY_API_KEY" not in os.environ
+
+    def test_begin_vendor_key_env_wins_and_does_not_setdefault(self, monkeypatch, tmp_path):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.auth import ApiAuth, LocalAuthStorage
+        from superqode.providers.connection_profiles import get_connection_profile
+        import superqode.auth as auth_module
+        import os
+
+        monkeypatch.setenv("FACTORY_API_KEY", "from-env")
+        monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+        auth_module._storage.set("factory", ApiAuth(key="from-store"))
+        monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path))
+
+        class Log:
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+        class Stub(ConnectMixin):
+            def _connect_acp_cmd(self, name, log):
+                pass
+
+        stub = Stub()
+        ConnectMixin._begin_vendor_key(stub, get_connection_profile("droid-key"), Log())
+
+        assert stub._acp_extra_env == {"FACTORY_API_KEY": "from-env"}
+        assert os.environ["FACTORY_API_KEY"] == "from-env"
+
+    def test_begin_vendor_key_missing_key_shows_panel(self, monkeypatch, tmp_path):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+        import superqode.auth as auth_module
+        from superqode.auth import LocalAuthStorage
+
+        monkeypatch.delenv("FACTORY_API_KEY", raising=False)
+        monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+
+        class Log:
+            def __init__(self):
+                self.panels = []
+
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+            def write_feedback(self, value):
+                self.panels.append(value.plain if hasattr(value, "plain") else str(value))
+
+        class Stub(ConnectMixin):
+            def __init__(self):
+                self.acp_calls = []
+
+            def _connect_acp_cmd(self, name, log):
+                self.acp_calls.append(name)
+
+        stub = Stub()
+        log = Log()
+        ConnectMixin._begin_vendor_key(stub, get_connection_profile("droid-key"), log)
+
+        assert stub.acp_calls == []
+        assert getattr(stub, "_acp_extra_env", None) in (None, {})
+        rendered = " ".join(str(panel) for panel in log.panels)
+        assert "API Key Required" in rendered
+        assert "FACTORY_API_KEY" in rendered
+        assert "superqode auth login factory" in rendered
+        assert ":connect droid-key" in rendered
+
+    def test_droid_key_is_not_a_vendors_subscription_profile(self):
+        from superqode.providers.connection_profiles import (
+            CONNECT_MENU_VENDORS,
+            get_connection_profile,
+            connection_profile_ids,
+        )
+
+        profile = get_connection_profile("droid-key")
+        assert profile.menu != CONNECT_MENU_VENDORS
+        assert profile.connector == "vendor-key"
+        assert "droid-key" not in connection_profile_ids(menu=CONNECT_MENU_VENDORS)
+
+    def test_factory_provider_is_harness_only_and_hidden_from_byok(self):
+        from superqode.providers.dynamic import connect_provider_ids
+        from superqode.providers.registry import PROVIDERS
+
+        assert "factory" in PROVIDERS
+        assert PROVIDERS["factory"].harness_only is True
+        assert PROVIDERS["factory"].env_vars == ["FACTORY_API_KEY"]
+        assert "factory" not in connect_provider_ids()
+
+    def test_run_acp_agent_merges_session_extra_env(self):
+        """_run_acp_agent must merge `_acp_extra_env` when constructing ACPClient."""
+        source = Path(
+            __import__("superqode.app.mixins.agent_run", fromlist=["agent_run"]).__file__
+        ).read_text(encoding="utf-8")
+        assert 'getattr(self, "_acp_extra_env", None)' in source
+        assert "acp_extra_env = {**acp_extra_env, **dict(session_extra)}" in source

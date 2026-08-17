@@ -5916,8 +5916,13 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
         ),
         (
             "v2",
-            [(1, "Subscriptions"), (2, "ACP"), (3, "Open harnesses")],
-            "Pick how you authenticate. Open is about the harness source, not the model.",
+            [
+                (1, "Subscriptions"),
+                (2, "ACP"),
+                (3, "Open harnesses"),
+                (4, "Closed harnesses"),
+            ],
+            "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
         ),
     ],
 )
@@ -5939,7 +5944,8 @@ def test_connect_agents_screen_keeps_the_first_choice_progressive(
     assert "Claude Code subscription" not in rendered
 
     assert picker_rows(rendered) == rows
-    assert (4, "Closed harnesses") not in picker_rows(rendered)
+    if menu_version == "v1":
+        assert (4, "Closed harnesses") not in picker_rows(rendered)
     if helper:
         assert helper in rendered
     # The long vendor and ACP catalogs remain one deliberate choice deeper.
@@ -6106,6 +6112,7 @@ def test_byok_completion_hides_legacy_github_copilot_provider():
     values = {candidate.value for candidate in app._provider_completion_candidates(local=False)}
 
     assert "github-copilot" not in values
+    assert "factory" not in values
     assert "openai" in values
 
 

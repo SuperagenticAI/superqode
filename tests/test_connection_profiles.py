@@ -35,13 +35,22 @@ def test_root_menu_asks_one_question_in_three_answers():
     "menu_version,expected",
     [
         ("v1", ["agent-subscriptions", "agent-acp", "other-harnesses"]),
-        ("v2", ["agent-subscriptions", "agent-acp", "agent-open-harnesses"]),
+        (
+            "v2",
+            [
+                "agent-subscriptions",
+                "agent-acp",
+                "agent-open-harnesses",
+                "agent-closed-harnesses",
+            ],
+        ),
     ],
 )
 def test_agents_menu_holds_existing_harness_categories(menu_version, expected, monkeypatch):
     monkeypatch.setenv("SUPERQODE_CONNECT_MENU", menu_version)
     assert connection_profile_ids(menu=CONNECT_MENU_AGENTS) == expected
-    assert "agent-closed-harnesses" not in connection_profile_ids(menu=CONNECT_MENU_AGENTS)
+    if menu_version == "v1":
+        assert "agent-closed-harnesses" not in connection_profile_ids(menu=CONNECT_MENU_AGENTS)
 
 
 def test_agents_carry_openness_and_transport_badges():
@@ -173,6 +182,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "build-preset",
     "build-wizard",
     "build-blank",
+    "droid-key",
 ]
 
 
@@ -184,8 +194,15 @@ def test_registry_has_expected_profiles(menu_version, monkeypatch):
         "agent-open-harnesses" if menu_version == "v2" and pid == "other-harnesses" else pid
         for pid in _FLAT_PROFILE_IDS_V1
     ]
+    if menu_version == "v2":
+        open_at = expected.index("agent-open-harnesses")
+        expected.insert(open_at + 1, "agent-closed-harnesses")
     assert connection_profile_ids() == expected
-    assert "agent-closed-harnesses" not in connection_profile_ids()
+    if menu_version == "v1":
+        assert "agent-closed-harnesses" not in connection_profile_ids()
+    else:
+        assert "agent-closed-harnesses" in connection_profile_ids()
+    assert "droid-key" in connection_profile_ids()
     assert "copilot-acp" in connection_profile_ids(include_legacy=True)
 
 
@@ -376,6 +393,7 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
         "prime-agent",
         "jcode",
         "droid",
+        "droid-key",
         "grok",
         "muse",
         "zcode",
@@ -385,12 +403,22 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
     assert hidden.isdisjoint({row[0] for row in rows})
 
 
-def test_v2_closed_menu_exists_but_is_empty(monkeypatch):
+def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
     monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v2")
-    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED
+    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED, CONNECT_MENU_VENDORS
 
-    assert list_connection_profiles(CONNECT_MENU_CLOSED) == []
+    rows = list_connection_profiles(CONNECT_MENU_CLOSED)
+    assert [(p.id, p.connector, p.acp_agent, p.menu) for p in rows] == [
+        ("droid-key", "vendor-key", "droid", CONNECT_MENU_CLOSED),
+    ]
     assert get_connection_profile("agent-closed-harnesses").connector == "closed-harness-picker"
+    assert "droid-key" not in connection_profile_ids(menu=CONNECT_MENU_VENDORS)
+    droid = get_connection_profile("droid")
+    droid_key = get_connection_profile("droid-key")
+    assert droid.menu == CONNECT_MENU_VENDORS
+    assert droid.connector == "acp"
+    assert droid_key.menu == CONNECT_MENU_CLOSED
+    assert droid_key.connector == "vendor-key"
 
 
 def test_v2_category_copy_matches_the_design(monkeypatch):
@@ -406,6 +434,11 @@ def test_v2_category_copy_matches_the_design(monkeypatch):
         "Agents that speak Agent Client Protocol. They keep their own login. "
         "OpenCode, Goose, Aider, Cline, and the live catalog."
     )
+    assert by_id["agent-closed-harnesses"].label == "Closed harnesses"
+    from superqode.providers.connection_profiles import connect_menu_titles, CONNECT_MENU_AGENTS
+
+    title, subtitle = connect_menu_titles()[CONNECT_MENU_AGENTS]
+    assert "Open vs Closed" in subtitle
 
 
 def test_optional_harnesses_is_still_the_v1_other_source():
@@ -717,6 +750,9 @@ class _DispatchStub:
     def _show_local_provider_picker(self, log):
         self.calls.append(("local",))
 
+    def _begin_vendor_key(self, profile, log):
+        self.calls.append(("vendor-key", profile.id))
+
     def _show_agents(self, log):
         self.calls.append(("acp-picker",))
 
@@ -753,6 +789,14 @@ def test_dispatch_codex_routes_to_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("codex"), log=None)
     assert ("runtime", "codex-sdk") in stub.calls
+
+
+def test_dispatch_droid_key_is_vendor_key_not_subscription(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("droid-key"), log=None)
+
+    assert ("vendor-key", "droid-key") in stub.calls
+    assert ("acp", "droid") not in stub.calls
 
 
 def test_dispatch_kimi_and_qwen_route_to_official_acp_agents(_dispatch):
@@ -1113,6 +1157,7 @@ def test_connect_profiles_in_commands_and_completion():
         "antigravity",
         "grok",
         "droid",
+        "droid-key",
         "kiro",
         "other-harnesses",
         "byok",
@@ -1130,7 +1175,8 @@ def test_v2_completion_lists_open_instead_of_other(monkeypatch):
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
     assert "agent-open-harnesses" in values
     assert "other-harnesses" not in values
-    assert "agent-closed-harnesses" not in values
+    assert "agent-closed-harnesses" in values
+    assert "droid-key" in values
 
 
 def test_copilot_login_starts_the_consent_gated_vendor_flow():

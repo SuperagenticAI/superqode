@@ -15,6 +15,7 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     open-harness-picker  Open category (catalog list_entries("open"))
     closed-harness-picker Closed category (catalog list_entries("closed"))
     key-harness  SuperQode-hosted open adapter; switch then CONNECT_MENU_KEY_MODELS
+    vendor-key   Closed vendor API key, then attach that vendor's process
     subscription-picker vendor plans authenticated by their own local CLI/OAuth state
     external-cli a local vendor TUI that does not expose ACP/headless events yet
 
@@ -1058,6 +1059,7 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
         harness_id = entry.harness_id or entry.id
         definition = optional.get(harness_id)
         auth_spec = next((spec for spec in entry.auth if spec.detect is not None), None)
+        key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
         if definition is not None:
             detect = _const_detect(bool(definition.available))
             hint = definition.issue
@@ -1072,10 +1074,12 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
                 id=entry.id,
                 label=entry.label,
                 description=entry.description,
-                connector="key-harness",
+                connector=(key_spec.connector if key_spec is not None else "key-harness"),
                 menu=screen,
                 runtime=harness_id,
+                acp_agent=entry.acp_agent,
                 harness_openness=entry.openness if entry.openness in {"open", "closed"} else "",
+                transport="ACP" if entry.acp_agent else "",
                 detect=detect,
                 unavailable_hint=hint,
             )
@@ -1096,15 +1100,27 @@ def _agent_category_profiles() -> List[ConnectionProfile]:
 
 
 def _flat_profiles() -> List[ConnectionProfile]:
-    """Completion/registry list. v2 swaps Other for Open; Closed stays hidden."""
+    """Completion/registry list. v2 swaps Other for Open; Closed appears when drawn."""
     if connect_menu_version() != "v2":
-        return list(_PROFILES)
-    replacements = {
-        "other-harnesses": _AGENT_OPEN,
-        "agent-subscriptions": _AGENT_SUBSCRIPTIONS_V2,
-        "agent-acp": _AGENT_ACP_V2,
-    }
-    return [replacements.get(profile.id, profile) for profile in _PROFILES]
+        profiles = list(_PROFILES)
+    else:
+        replacements = {
+            "other-harnesses": _AGENT_OPEN,
+            "agent-subscriptions": _AGENT_SUBSCRIPTIONS_V2,
+            "agent-acp": _AGENT_ACP_V2,
+        }
+        profiles = [replacements.get(profile.id, profile) for profile in _PROFILES]
+        from superqode.providers.harness_catalog import list_entries
+
+        if list_entries("closed"):
+            with_closed: List[ConnectionProfile] = []
+            for profile in profiles:
+                with_closed.append(profile)
+                if profile.id == "agent-open-harnesses":
+                    with_closed.append(_AGENT_CLOSED)
+            profiles = with_closed
+    # Closed key-path ids (:connect droid-key) are catalog-driven, not vendors.
+    return [*profiles, *_catalog_harness_profiles("closed")]
 
 
 # ``:connect acp`` predates the categories and still opens the ACP catalogue.

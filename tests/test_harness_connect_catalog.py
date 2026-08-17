@@ -21,8 +21,23 @@ def test_tau_dsh_deepagents_are_the_only_visible_open_rows():
         assert entry.wired is True
 
 
-def test_closed_list_is_empty():
-    assert list_entries("closed") == []
+def test_closed_list_is_factory_droid_key():
+    ids = [entry.id for entry in list_entries("closed")]
+    assert ids == ["droid-key"]
+    droid_key = get_entry("droid-key")
+    assert droid_key is not None
+    assert droid_key.openness == "closed"
+    assert droid_key.wired is True
+    assert droid_key.list_visible is True
+    assert droid_key.vendor_owned is True
+    spec = droid_key.auth[0]
+    assert spec.after_auth == "vendor-key-acp"
+    assert spec.connector == "vendor-key"
+    assert spec.env_vars == ("FACTORY_API_KEY",)
+    assert spec.inject_env is True
+    assert spec.byok_provider == "factory"
+    assert spec.byok_providers == ()
+    assert spec.local_providers == ()
 
 
 def test_deepagents_sdk_is_open_and_deepagents_code_is_not_on_open():
@@ -98,6 +113,14 @@ def test_factory_subscription_implies_vendors_membership():
     assert droid is not None
     assert "subscription" in droid.modes()
     assert "vendors" in droid.connect_menus()
+
+
+def test_droid_key_is_closed_not_vendors():
+    droid_key = get_entry("droid-key")
+    assert droid_key is not None
+    assert "vendors" not in droid_key.connect_menus()
+    assert "closed" in droid_key.connect_menus()
+    assert "open" not in droid_key.connect_menus()
 
 
 def test_gemini_cli_is_not_an_open_row():
