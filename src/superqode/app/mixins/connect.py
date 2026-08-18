@@ -57,6 +57,11 @@ class KeyHarnessSession:
     auth_spec: HarnessAuthSpec
     return_menu: str
     after_auth: str
+    # The switch target, which is a HarnessDefinition id and need not equal
+    # ``entry_id``. The harness switch reports back in this namespace, so
+    # matching on the catalog id alone would drop the session for any row
+    # whose ``harness_id`` differs.
+    harness_id: str = ""
 
 
 def _menu_history_label(menu: str) -> str:
@@ -132,11 +137,26 @@ class ConnectMixin:
         screen rather than the registry.
         """
         from superqode.providers.connection_profiles import (
+            CONNECT_MENU_KEY_MODELS,
             CONNECT_MENU_ROOT,
             display_ordered_profiles,
         )
 
-        return display_ordered_profiles(getattr(self, "_connect_menu", CONNECT_MENU_ROOT))
+        menu = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
+        profiles = display_ordered_profiles(menu)
+        if menu != CONNECT_MENU_KEY_MODELS:
+            return profiles
+        # A harness that allows no providers for a mode must not offer the row:
+        # selecting it would open a picker with nothing in it.
+        offered = [row for row in profiles if self._key_models_row_offered(row.id)]
+        return offered or profiles
+
+    def _key_models_row_offered(self, row_id: str) -> bool:
+        """False when the active key-harness allows no provider for this row."""
+        if row_id not in {"local", "byok"}:
+            return True
+        allowed = self._key_harness_allowlist(row_id)
+        return allowed is None or bool(allowed)
 
     def action_navigate_connect_type_up(self):
         """Navigate to previous connection type (arrow up)."""
@@ -201,17 +221,9 @@ class ConnectMixin:
         if not getattr(self, "_awaiting_connect_type", False):
             return False
 
-        def _end_key_session() -> None:
-            clearer = getattr(self, "_clear_key_harness_session", None)
-            if callable(clearer):
-                clearer()
-            else:
-                self._key_harness_session = None
-                self._pending_key_harness_route = None
-
         current = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
         if current == CONNECT_MENU_ROOT:
-            _end_key_session()
+            self._clear_key_harness_session()
             return False
         # Each screen declares its parent, so Esc walks the path the user
         # actually took instead of jumping back to the start.
@@ -222,9 +234,9 @@ class ConnectMixin:
         )
         # Esc to the existing-harness screen ends the Open/Closed key flow.
         if dest == CONNECT_MENU_AGENTS or current == CONNECT_MENU_AGENTS:
-            _end_key_session()
+            self._clear_key_harness_session()
         elif current != CONNECT_MENU_KEY_MODELS and dest == CONNECT_MENU_ROOT:
-            _end_key_session()
+            self._clear_key_harness_session()
         log = self.query_one("#log", ConversationLog)
         self._show_connect_type_picker(log, menu=dest)
         return True
@@ -311,12 +323,15 @@ class ConnectMixin:
         """Connect an Open/Closed catalog row.
 
         ``switch-and-model`` (Tau, DSH, DeepAgents SDK) switches the hosted
-        adapter then opens ``CONNECT_MENU_KEY_MODELS``. Other ``after_auth``
-        values ship in later PRs. The session is set before the extra check so
-        a first-run install resume still opens KEY_MODELS, not native Plan.
+        adapter then opens ``CONNECT_MENU_KEY_MODELS``. ``acp-attach`` opens the
+        same model step without switching, because the agent keeps its own loop
+        and only needs the credentials the picker resolves. The session is set
+        before the extra check so a first-run install resume still opens
+        KEY_MODELS, not native Plan.
         """
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_CLOSED,
+            CONNECT_MENU_KEY_MODELS,
             CONNECT_MENU_OPEN,
         )
         from superqode.providers.harness_catalog import get_entry
@@ -335,12 +350,13 @@ class ConnectMixin:
             _drop_pending()
             self._begin_vendor_key(profile, log)
             return
-        if after_auth != "switch-and-model":
+        attaches = after_auth == "acp-attach" and bool(entry.acp_agent)
+        if after_auth != "switch-and-model" and not attaches:
             _drop_pending()
             self._write_harness_setup_card(log, entry, key_spec)
             return
         harness_id = entry.harness_id or getattr(profile, "runtime", None) or entry.id
-        if not harness_id:
+        if not harness_id and not attaches:
             _drop_pending()
             log.add_error("This open harness has no switch target.")
             return
@@ -353,8 +369,25 @@ class ConnectMixin:
             auth_spec=key_spec,
             return_menu=return_menu,
             after_auth=after_auth,
+            harness_id=str(harness_id or ""),
         )
         self._pending_key_harness_route = apply_route
+        if attaches:
+            # No harness switch: the agent already owns its loop, so the only
+            # question left is which credentials it is handed.
+            if apply_route:
+                self._pending_key_harness_route = None
+                mode, provider, model = apply_route
+                if mode == "local":
+                    self._connect_local_mode(provider, model, log)
+                else:
+                    self._connect_byok_mode(provider, model, log)
+                return
+            if self._attach_key_harness_from_env(entry, key_spec, log):
+                return
+            self._connect_context_note = f"{entry.label} runs its own loop. Choose its model."
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_KEY_MODELS)
+            return
         self._harness_cmd(f"switch {harness_id}", log)
 
     def _clear_key_harness_session(self) -> None:
@@ -363,7 +396,12 @@ class ConnectMixin:
         self._pending_key_harness_route = None
 
     def _key_harness_session_matches(self, harness_id: str = "") -> bool:
-        """True when the in-flight key session is for this (or the active) harness."""
+        """True when the in-flight key session is for this (or the active) harness.
+
+        The caller reports a harness id or a spec path, so both the file name
+        and its stem count as the same harness. ``harness_id`` is compared as
+        well as ``entry_id`` because a switch answers in the harness namespace.
+        """
         session = getattr(self, "_key_harness_session", None)
         if session is None:
             return False
@@ -377,8 +415,10 @@ class ConnectMixin:
                     target = ""
         if not target:
             return True
-        name = Path(target).name
-        return session.entry_id in {target, name} or target.endswith(session.entry_id)
+        path = Path(target)
+        # Never a suffix test: `endswith` made a `my-tau` harness match `tau`.
+        candidates = {target, path.name, path.stem}
+        return bool(candidates & {session.entry_id, session.harness_id or session.entry_id})
 
     def _key_harness_allowlist(self, mode: str) -> frozenset[str] | None:
         """Picker filter for the active key-harness. ``None`` means all native."""
@@ -422,20 +462,28 @@ class ConnectMixin:
         if getattr(entry, "repository", ""):
             t.append("  Source:  ", style=THEME["muted"])
             t.append(f"{entry.repository}\n", style=THEME["cyan"])
+        agent = getattr(entry, "acp_agent", "") or ""
         env_vars = tuple(getattr(spec, "env_vars", ()) or ()) if spec is not None else ()
         if env_vars:
             t.append("  Key:     ", style=THEME["muted"])
             t.append(f"{' or '.join(env_vars)}\n", style=THEME["yellow"])
-            t.append(
-                "  Set that in the harness itself, then attach over ACP if it is installed.\n",
-                style=THEME["text"],
-            )
+            if agent:
+                t.append(
+                    "  Set that in the harness itself, then attach over ACP if it is installed.\n",
+                    style=THEME["text"],
+                )
+            else:
+                # No ACP server to hand a child env to: the vendor CLI is the
+                # only thing that reads this key, so say where to put it.
+                t.append(
+                    "  Export it in the shell you run the harness from; it reads the key itself.\n",
+                    style=THEME["text"],
+                )
         else:
             t.append(
                 "  Configure a provider key or local model in the harness, then return.\n",
                 style=THEME["text"],
             )
-        agent = getattr(entry, "acp_agent", "") or ""
         if agent:
             t.append("  ACP:     ", style=THEME["muted"])
             t.append(f":connect acp {agent}\n", style=THEME["cyan"])
@@ -466,13 +514,18 @@ class ConnectMixin:
         t.append(f"{provider_name}\n", style=THEME["text"])
         t.append("  Required: ", style=THEME["muted"])
         t.append(f"{' or '.join(names)}\n", style=THEME["yellow"])
-        t.append("  Recommended: ", style=THEME["muted"])
-        t.append(f"superqode auth login {login_id}\n", style=THEME["cyan"])
+        # `superqode auth login` only accepts a real ProviderDef id. Naming a
+        # vendor SuperQode has no provider for (jetbrains, qoder) prints a
+        # command that answers "Unknown provider", so export leads instead.
+        if login_id:
+            t.append("  Recommended: ", style=THEME["muted"])
+            t.append(f"superqode auth login {login_id}\n", style=THEME["cyan"])
         if names:
-            t.append("  Or export:   ", style=THEME["muted"])
+            t.append("  Or export:   " if login_id else "  Set it with: ", style=THEME["muted"])
             t.append(f"export {names[0]}='your-api-key'\n", style=THEME["cyan"])
-        t.append("  Get a key:   ", style=THEME["muted"])
-        t.append(f"{docs_url or f'{provider_name} website'}\n", style=THEME["cyan"])
+        if docs_url:
+            t.append("  Get a key:   ", style=THEME["muted"])
+            t.append(f"{docs_url}\n", style=THEME["cyan"])
         if retry:
             t.append("  Retry:       ", style=THEME["muted"])
             t.append(f"{retry}\n", style=THEME["success"])
@@ -568,15 +621,295 @@ class ConnectMixin:
             )
         return True
 
+    def _resolve_vendor_key(self, spec) -> tuple[str, object, str]:
+        """Resolve a vendor harness key. Returns ``(key, provider_def, login_id)``.
+
+        A stored credential wins over the environment, so a key put there with
+        ``superqode auth login`` is found. ``login_id`` stays empty unless a
+        real ProviderDef backs it: guessing one from the variable name
+        (JETBRAINS_API_KEY -> jetbrains) names a provider that does not exist.
+        """
+        from superqode.providers.credentials import provider_api_key
+        from superqode.providers.registry import PROVIDERS
+
+        provider_id = (getattr(spec, "byok_provider", "") or "") if spec is not None else ""
+        provider_def = PROVIDERS.get(provider_id) if provider_id else None
+        resolved = provider_api_key(provider_def) if provider_def is not None else None
+        if not resolved:
+            for name in getattr(spec, "env_vars", ()) or ():
+                value = os.environ.get(name)
+                if value:
+                    resolved = value
+                    break
+        return (resolved or ""), provider_def, (provider_id if provider_def is not None else "")
+
+    def _write_vendor_key_required(self, log: ConversationLog, profile, entry, spec) -> None:
+        """API Key Required for a vendor harness, named the way the user found it."""
+        _resolved, provider_def, login_id = self._resolve_vendor_key(spec)
+        if provider_def is not None:
+            provider_name = provider_def.name
+        elif entry is not None:
+            provider_name = entry.label
+        else:
+            provider_name = profile.label
+        docs_url = str(getattr(provider_def, "docs_url", "") or "")
+        if not docs_url and entry is not None:
+            docs_url = entry.homepage or entry.repository or ""
+        self._write_api_key_required_panel(
+            log,
+            provider_name=provider_name,
+            env_vars=spec.env_vars,
+            login_id=login_id,
+            docs_url=docs_url,
+            retry=f":connect {getattr(profile, 'id', '')}",
+        )
+
+    def _require_vendor_key(self, profile, log: ConversationLog, after_auth: str) -> bool:
+        """True when this row's vendor key is present; otherwise write the panel.
+
+        Shared by the ACP and CLI closed-key paths so both gate on the same
+        credential lookup and print the same card when it is missing.
+        """
+        from superqode.providers.harness_catalog import get_entry
+
+        entry = get_entry(getattr(profile, "id", ""))
+        spec = None
+        if entry is not None:
+            spec = next((item for item in entry.auth if item.after_auth == after_auth), None)
+        if spec is None:
+            if log is not None:
+                log.add_error("This closed harness has no API-key path.")
+            return False
+        resolved, _provider_def, _login_id = self._resolve_vendor_key(spec)
+        if not resolved:
+            if log is not None:
+                self._write_vendor_key_required(log, profile, entry, spec)
+            return False
+        return True
+
+    def _key_harness_child_env(self, spec, provider_def, model: str) -> dict[str, str]:
+        """Credentials for an Open row's ACP child, named from declared data only.
+
+        Two shapes, both stated by the catalog rather than guessed here:
+
+        * the harness reads its own variable (``GROK_CODE_XAI_API_KEY``), so
+          ``spec.env_vars`` names every slot the key is written to;
+        * the harness is model-agnostic and reads the provider's documented
+          variable, so ``ProviderDef.env_vars`` names it instead.
+
+        A base URL is only passed under ``spec.base_url_env``, which is the
+        catalog stating that this harness reads that variable. The provider's
+        own ``base_url_env`` is deliberately not a fallback: ``OLLAMA_HOST``
+        describes Ollama's client, not what a third-party agent reads, and an
+        endpoint under a name the agent ignores fails silently instead of
+        saying the model choice did not reach it.
+        """
+        from superqode.providers.credentials import provider_api_key
+        from superqode.providers.dynamic import resolve_base_url
+
+        extra: dict[str, str] = {}
+        key = provider_api_key(provider_def) or ""
+        names = tuple(getattr(spec, "env_vars", ()) or ()) or tuple(
+            getattr(provider_def, "env_vars", ()) or ()
+        )
+        if key:
+            for name in names:
+                extra[name] = key
+        base_url_env = getattr(spec, "base_url_env", "") or ""
+        base_url = resolve_base_url(provider_def) if base_url_env else ""
+        if base_url and base_url_env:
+            extra[base_url_env] = base_url
+        return extra
+
+    def _attach_key_harness_over_acp(
+        self, provider: str, model: str, provider_def, log: ConversationLog
+    ) -> bool:
+        """Hand the chosen model to an Open row's own agent over ACP.
+
+        Returns True when the attach owns this selection, so the caller stops
+        before starting SuperQode's own loop. The agent runs the loop here; the
+        model picker only decided which credentials it is given.
+        """
+        from superqode.providers.harness_catalog import get_entry
+        from superqode.providers.registry import ProviderCategory
+
+        session = getattr(self, "_key_harness_session", None)
+        if session is None or session.after_auth != "acp-attach":
+            return False
+        entry = get_entry(session.entry_id)
+        agent = (entry.acp_agent if entry is not None else "") or ""
+        if entry is None or not agent:
+            # Nothing to attach to. Fall through so the picker still connects
+            # SuperQode's own loop rather than dead-ending on the selection.
+            return False
+        spec = next((item for item in entry.auth if item.mode in {"byok", "local"}), None)
+        is_local = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
+
+        extra_env = self._key_harness_child_env(spec, provider_def, model)
+        if not extra_env and not is_local:
+            # A cloud provider with no resolvable key would attach an agent that
+            # fails on its first model call, so ask for the key instead.
+            if log is not None:
+                self._write_api_key_required_panel(
+                    log,
+                    provider_name=(provider_def.name if provider_def else provider),
+                    env_vars=(
+                        tuple(getattr(spec, "env_vars", ()) or ())
+                        or tuple(getattr(provider_def, "env_vars", ()) or ())
+                    ),
+                    login_id=provider,
+                    docs_url=str(getattr(provider_def, "docs_url", "") or ""),
+                    retry=f":connect {entry.id}",
+                )
+            return True
+
+        if not extra_env and log is not None:
+            # A local endpoint neither the catalog nor the provider names a
+            # variable for. Attaching is still right, but saying nothing would
+            # imply the picked model reached the agent.
+            log.add_info(
+                f"{entry.label} keeps its own model configuration: SuperQode knows no "
+                f"environment variable it reads for {provider}. Set {model or 'the model'} "
+                "inside the agent if it does not already use it."
+            )
+        self._finish_key_harness_attach(
+            entry,
+            agent,
+            extra_env,
+            log,
+            provider=provider,
+            model=model,
+            auth_mode="local" if is_local else "byok",
+        )
+        return True
+
+    def _attach_key_harness_from_env(self, entry, spec, log: ConversationLog) -> bool:
+        """Attach straight away when the harness's own key is already exported.
+
+        Rows like Grok Build hide the provider picker (``byok_providers=()``)
+        because the key is the vendor's, not a provider choice. Asking such a
+        user to pick a model would be a step with one wrong answer, so an
+        exported ``GROK_CODE_XAI_API_KEY`` connects directly.
+        """
+        agent = (getattr(entry, "acp_agent", "") or "") if entry is not None else ""
+        if not agent or spec is None:
+            return False
+        names = (*(spec.env_vars or ()), *(spec.optional_env or ()))
+        extra_env = {}
+        for name in names:
+            value = os.environ.get(name, "").strip()
+            if value:
+                extra_env[name] = value
+                break
+        if not extra_env:
+            return False
+        base_url_env = getattr(spec, "base_url_env", "") or ""
+        if base_url_env:
+            base_url = os.environ.get(base_url_env, "").strip()
+            if base_url:
+                extra_env[base_url_env] = base_url
+        self._finish_key_harness_attach(
+            entry,
+            agent,
+            extra_env,
+            log,
+            provider="",
+            model="",
+            auth_mode="byok",
+        )
+        return True
+
+    def _finish_key_harness_attach(
+        self,
+        entry,
+        agent: str,
+        extra_env: dict[str, str],
+        log: ConversationLog,
+        *,
+        provider: str,
+        model: str,
+        auth_mode: str,
+    ) -> None:
+        """Attach the agent, pin its child env, then record and end the session."""
+        session = getattr(self, "_key_harness_session", None)
+        return_menu = getattr(session, "return_menu", "") or ""
+        openness = getattr(session, "openness", "") or ""
+        after_auth = getattr(session, "after_auth", "") or "acp-attach"
+
+        # Not a subscription: nothing to strip, and no vendor pin to inherit.
+        self._acp_subscription_vendor = None
+        self._connecting_profile_id = entry.id
+        # A named attach clears leftover extra env, so pin ours after it returns.
+        self._connect_acp_cmd(agent, log)
+        if provider and model:
+            note = f"{provider}/{model} through the agent's own loop."
+        elif provider:
+            note = f"{provider} through the agent's own loop."
+        else:
+            note = "API key path, through the agent's own loop."
+        self._pending_vendor_key = {
+            "agent": agent.strip().lower(),
+            "label": entry.label,
+            "vendor_owned": bool(entry.vendor_owned),
+            "harness": agent,
+            "note": note,
+        }
+        if extra_env:
+            self._set_acp_extra_env(extra_env, agent)
+        self._save_connection_config(
+            category=return_menu,
+            auth_mode=auth_mode,
+            harness_id=entry.id,
+            profile_id=entry.id,
+            acp_agent=agent,
+            openness=openness,
+            provider=provider,
+            model=model,
+            transport="ACP",
+            after_auth=after_auth,
+        )
+        _CONNECT_LOG.info(
+            "connect.completed category=%s auth_mode=%s harness_id=%s provider=%s after_auth=%s",
+            return_menu,
+            auth_mode,
+            entry.id,
+            provider,
+            after_auth,
+        )
+        if openness == "open":
+            record = getattr(self, "_record_milestone", None)
+            if callable(record):
+                record("connected_open_harness")
+        self._clear_key_harness_session()
+
+    def _begin_vendor_key_cli(self, profile, log: ConversationLog) -> None:
+        """Closed key path for a harness SuperQode cannot drive over ACP.
+
+        Muse Code has no ACP server and no headless mode SuperQode consumes, so
+        the key cannot be handed to a child process here. Gate on the key, then
+        state plainly that the user runs the vendor CLI and it reads that key.
+        """
+        from superqode.providers.harness_catalog import get_entry
+
+        if not self._require_vendor_key(profile, log, "vendor-key-cli"):
+            return
+        entry = get_entry(getattr(profile, "id", ""))
+        spec = None
+        if entry is not None:
+            spec = next(
+                (item for item in entry.auth if item.after_auth == "vendor-key-cli"),
+                None,
+            )
+        self._write_harness_setup_card(log, entry, spec)
+
     def _begin_vendor_key(self, profile, log: ConversationLog) -> None:
         """Closed key path: API Key Required, then vendor ACP with child-only env.
 
-        Resolves env then auth.json. Never setdefault into the SuperQode process
-        — that would make a later subscription connect see and strip the key.
+        Resolves a stored credential then env. Never setdefault into the
+        SuperQode process — that would make a later subscription connect see
+        and strip the key.
         """
-        from superqode.providers.credentials import provider_api_key
         from superqode.providers.harness_catalog import get_entry
-        from superqode.providers.registry import PROVIDERS
 
         entry = get_entry(getattr(profile, "id", ""))
         spec = None
@@ -592,35 +925,10 @@ class ConnectMixin:
                 log.add_error("This closed harness has no API-key path.")
             return
 
-        provider_id = spec.byok_provider or ""
-        provider_def = PROVIDERS.get(provider_id) if provider_id else None
-        resolved = provider_api_key(provider_def) if provider_def is not None else None
-        if not resolved:
-            for name in spec.env_vars:
-                value = os.environ.get(name)
-                if value:
-                    resolved = value
-                    break
-
-        login_id = provider_id
-        if not login_id and spec.env_vars:
-            login_id = spec.env_vars[0].split("_")[0].lower()
+        resolved, _provider_def, _login_id = self._resolve_vendor_key(spec)
         if not resolved:
             if log is not None:
-                if provider_def is not None:
-                    provider_name = provider_def.name
-                elif entry is not None:
-                    provider_name = entry.label
-                else:
-                    provider_name = profile.label
-                self._write_api_key_required_panel(
-                    log,
-                    provider_name=provider_name,
-                    env_vars=spec.env_vars,
-                    login_id=login_id,
-                    docs_url=(provider_def.docs_url if provider_def else ""),
-                    retry=f":connect {getattr(profile, 'id', '')}",
-                )
+                self._write_vendor_key_required(log, profile, entry, spec)
             return
 
         extra_env: dict[str, str] = {}
@@ -827,12 +1135,7 @@ class ConnectMixin:
         self._open_connect_screen(log)
         conn = profile.connector
         if conn not in {"byok", "local", "key-harness"}:
-            clearer = getattr(self, "_clear_key_harness_session", None)
-            if callable(clearer):
-                clearer()
-            else:
-                self._key_harness_session = None
-                self._pending_key_harness_route = None
+            self._clear_key_harness_session()
         if getattr(profile, "id", "") == "copilot-acp" and log is not None:
             log.add_info(
                 "`:connect copilot-acp` now points at `:connect copilot-cli`. "
@@ -889,11 +1192,8 @@ class ConnectMixin:
             self._connecting_profile_id = getattr(profile, "id", "") or ""
             self._connect_acp_cmd(profile.acp_agent or "", log)
         elif conn == "byok":
-            session = getattr(self, "_key_harness_session", None)
-            if session is not None and session.after_auth == "acp-attach":
-                # PR 5 collects a key then attaches ACP. Until that lands,
-                # keep the picker so the user can still choose a provider.
-                pass
+            # An acp-attach session keeps this picker: the selection is diverted
+            # to the agent in _connect_byok_mode rather than at the menu.
             provider = getattr(profile, "byok_provider", None)
             if provider:
                 self._connect_byok_cmd(provider, log)
@@ -904,9 +1204,6 @@ class ConnectMixin:
             self._show_byok_providers(log)
             self.set_timer(0.3, lambda: setattr(self, "_just_showed_byok_picker", False))
         elif conn == "local":
-            session = getattr(self, "_key_harness_session", None)
-            if session is not None and session.after_auth == "acp-attach":
-                pass
             self._local_highlighted_provider_index = 0
             self._local_highlighted_model_index = 0
             self._show_local_provider_picker(log)
@@ -971,10 +1268,15 @@ class ConnectMixin:
         elif conn == "harness-blank":
             self._scaffold_blank_harness(log)
         elif conn == "external-cli":
-            if getattr(profile, "id", "") == "antigravity":
+            profile_id = getattr(profile, "id", "")
+            if profile_id == "antigravity":
                 self._antigravity_cmd("connect", log)
-            elif getattr(profile, "id", "") == "muse":
+            elif profile_id == "muse":
                 self._show_muse_connect(log)
+            elif profile_id == "muse-key":
+                # Closed key row, not the account row: gate on META_API_KEY,
+                # then say what SuperQode can and cannot do with it.
+                self._begin_vendor_key_cli(profile, log)
             else:
                 log.add_error(
                     f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}"
@@ -2022,15 +2324,20 @@ class ConnectMixin:
         provider_name = provider_def.name if provider_def else provider.upper()
 
         key_session = getattr(self, "_key_harness_session", None)
-        allowlist = getattr(self, "_key_harness_allowlist", None)
-        if key_session is not None and key_session.after_auth == "switch-and-model":
+        if key_session is not None and key_session.after_auth in {
+            "switch-and-model",
+            "acp-attach",
+        }:
             is_local_pick = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
-            allowed = (
-                allowlist("local" if is_local_pick else "byok") if callable(allowlist) else None
-            )
+            allowed = self._key_harness_allowlist("local" if is_local_pick else "byok")
             if allowed is not None and provider not in allowed:
                 log.add_error(f"{provider} is not available for {key_session.entry_id}.")
                 return
+
+        # An Open row that ends in an ACP attach never runs the SuperQode loop:
+        # the picker only chose which credentials the agent is handed.
+        if self._attach_key_harness_over_acp(provider, model, provider_def, log):
+            return
 
         # Show experimental warning for vLLM and SGLang
         if provider in ("vllm", "sglang"):
@@ -2542,7 +2849,6 @@ class ConnectMixin:
             CONNECT_MENU_ROOT,
             connect_menu_titles,
             detected_sources,
-            grouped_menu_profiles,
             normalize_menu,
         )
 
@@ -2605,8 +2911,10 @@ class ConnectMixin:
                 t.append(" · ".join(found), style=THEME["cyan"])
                 t.append("\n\n", style="")
 
-        # Grouping is per-menu; most screens are flat.
-        ordered = grouped_menu_profiles(menu)
+        # Grouping is per-menu; most screens are flat. Drawn from the same
+        # helper selection indexes, so a filtered row cannot be numbered here
+        # and then chosen as something else.
+        ordered = [("", self._connect_menu_profiles())]
 
         # Row numbers, the highlight, arrow keys and typed numbers all count
         # screen position, so a label always matches the row it sits on.
@@ -2807,8 +3115,7 @@ class ConnectMixin:
         # Get providers with free models
         free_providers = get_free_providers()
         provider_ids = list(connect_provider_ids())
-        allowlist = getattr(self, "_key_harness_allowlist", None)
-        allowed = allowlist("byok") if callable(allowlist) else None
+        allowed = self._key_harness_allowlist("byok")
         if allowed is not None:
             provider_ids = [pid for pid in provider_ids if pid in allowed]
         visible_provider_ids = set(provider_ids)
@@ -3172,7 +3479,10 @@ class ConnectMixin:
         self._connect_byok_mode(provider, model, log)
 
     def _user_config_path(self) -> Path:
-        return Path.home() / ".superqode" / "config.json"
+        """The same file `connect_menu` is read from, resolved in one place."""
+        from superqode.providers.harness_catalog import user_config_path
+
+        return user_config_path()
 
     def _read_user_config(self) -> dict:
         """Raw ~/.superqode/config.json. Unknown keys must not be dropped."""
@@ -3280,11 +3590,8 @@ class ConnectMixin:
     ) -> None:
         """Write connection.*, run Open-harness post-hooks, then drop the session."""
         key_session = getattr(self, "_key_harness_session", None)
-        matcher = getattr(self, "_key_harness_session_matches", None)
-        if key_session is not None and callable(matcher) and not matcher():
-            clearer = getattr(self, "_clear_key_harness_session", None)
-            if callable(clearer):
-                clearer()
+        if key_session is not None and not self._key_harness_session_matches():
+            self._clear_key_harness_session()
             key_session = None
         if key_session is None:
             harness_id = str(
@@ -3312,7 +3619,7 @@ class ConnectMixin:
         self._save_connection_config(
             category=key_session.return_menu,
             auth_mode=mode,
-            harness_id=key_session.entry_id,
+            harness_id=key_session.harness_id or key_session.entry_id,
             profile_id=key_session.entry_id,
             acp_agent=(entry.acp_agent if entry is not None else "") or "",
             openness=key_session.openness,

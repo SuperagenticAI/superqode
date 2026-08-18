@@ -135,9 +135,7 @@ class HelperExitLifecycleMixin:
             self._agent_process = None
 
         # A Closed-key inject must not survive disconnect / :home.
-        clearer = getattr(self, "_clear_acp_extra_env", None)
-        if callable(clearer):
-            clearer()
+        self._clear_acp_extra_env()
 
         # Stop ACP client if running
         if self._acp_client is not None:

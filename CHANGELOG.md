@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.100] - 2026-08-18
+
+### Added
+
+- Open rows that end in an ACP attach now connect instead of printing a setup
+  card. `:connect opencode-key`, `:connect fast-agent`, and `:connect pi` ask
+  for a key or local model and hand it to the agent's own loop.
+  `:connect grok-key` and `:connect qwen-code-key` attach straight away when
+  the harness's own key is already exported, and ask for a model otherwise.
+  Credentials go to the agent process only, never into the SuperQode
+  environment, and a key is passed only under a variable that is known to be
+  read: the one the catalog records for that harness, or the provider's own
+  documented variable for a model-agnostic agent. Picking a local endpoint that
+  neither names still attaches the agent and says the model has to be set
+  inside it.
+- The model step hides a row that offers nothing. Grok Build's key is xAI's
+  own, so its screen lists Local without an empty BYOK picker behind it.
+- `:connect poolside-key` offers the local endpoint its row already promised.
+  Poolside names the variable for a standalone endpoint, so it now takes the
+  same attach path: the exported key connects directly, and a local pick sets
+  `POOLSIDE_STANDALONE_BASE_URL`.
+- Open and Closed rows show the harness licence, so `AGPL-3.0` and `MIT` are
+  told apart in the picker. A licence SuperQode has not verified draws no
+  badge rather than an empty one.
+
+### Fixed
+
+- Qoder and Poolside report whether their CLI is installed. Every other vendor
+  row probes PATH, so those two claimed to be ready on any machine and then
+  failed at the attach.
+- A key-harness session is no longer dropped when the harness id differs from
+  the catalog row id. The session recorded only the row id, while a harness
+  switch answers in the harness namespace. Matching also stopped using a
+  suffix test, which made a `my-tau` harness match `tau`.
+- Six visible rows told the Hub nothing about themselves, so `:hub` and
+  `hub list --openness` disagreed with the Open and Closed lists about the same
+  harness. A test now requires every drawn row to state its openness in both
+  places.
+
+- `:connect muse-key` no longer answers `Unsupported external CLI profile`.
+  The Closed key row shares Muse's `external-cli` connector, which matched only
+  the account row by id, so `META_API_KEY` was never read. It now asks for the
+  key and then states that Muse Code is run directly.
+- Open rows are selectable from the shell. `--connect` and tab completion
+  validate against the flat profile list, which carried the Closed catalog rows
+  but not the Open ones, so `--connect droid-key` worked while
+  `--connect tau` was rejected as an invalid choice.
+- Vendor key rows find a key stored with `superqode auth login`. Only
+  `droid-key` named its provider, so `poolside-key` skipped the credential
+  store and asked for `POOLSIDE_API_KEY` again.
+- The API Key Required card no longer recommends a login for a provider that
+  does not exist. `login_id` was guessed from the variable name, so
+  `junie-key` printed `superqode auth login jetbrains` and `qoder-key` printed
+  `superqode auth login qoder`, both of which answer `Unknown provider`.
+- `docs/assets/harness-hub.json` includes the Junie record. The published
+  snapshot was exported before that profile landed, and a test now compares it
+  against the generated index.
+
+### Changed
+
+- `connect_menu` is read once per config file rather than on every picker row,
+  keyed by modification time and size so an edit still takes effect. The TUI
+  and the flag now resolve `~/.superqode/config.json` through one helper.
+- Connect helpers are called directly instead of through `getattr` probes.
+  The indirection let a rename silently no-op at some call sites and fall back
+  to inline state clearing at others.
+
 ## [0.2.99] - 2026-08-17
 
 ### Added

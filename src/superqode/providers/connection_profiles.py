@@ -162,6 +162,9 @@ class ConnectionProfile:
     harness_openness: str = ""  # "open" | "closed"
     model_openness: str = ""  # "open weights" | "closed" | "multi-model" | "any model"
     transport: str = ""  # "ACP" | "SDK" | "CLI"
+    # SPDX id when SuperQode has verified it. Blank is not "no licence": it is
+    # a licence we have not checked, so the badge is simply omitted.
+    license: str = ""
 
     @property
     def available(self) -> bool:
@@ -195,6 +198,9 @@ class ConnectionProfile:
             value
             for value in (
                 f"{self.harness_openness} harness" if self.harness_openness else "",
+                # The whole point of the Open list is what you may do with the
+                # source, and AGPL-3.0 against MIT is the answer to that.
+                self.license,
                 self.model_openness,
                 f"via {self.transport}" if self.transport else "",
             )
@@ -1098,6 +1104,7 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
                 runtime=harness_id,
                 acp_agent=entry.acp_agent,
                 harness_openness=entry.openness if entry.openness in {"open", "closed"} else "",
+                license=entry.license,
                 transport="ACP" if entry.acp_agent else "",
                 detect=detect,
                 unavailable_hint=hint,
@@ -1116,6 +1123,18 @@ def _agent_category_profiles() -> List[ConnectionProfile]:
     if list_entries("closed"):
         rows.append(_AGENT_CLOSED)
     return rows
+
+
+def _dedupe_by_id(profiles: List[ConnectionProfile]) -> List[ConnectionProfile]:
+    """First occurrence wins, so a hand-written profile beats its catalog row."""
+    seen: set[str] = set()
+    unique: List[ConnectionProfile] = []
+    for profile in profiles:
+        if profile.id in seen:
+            continue
+        seen.add(profile.id)
+        unique.append(profile)
+    return unique
 
 
 def _flat_profiles() -> List[ConnectionProfile]:
@@ -1138,8 +1157,16 @@ def _flat_profiles() -> List[ConnectionProfile]:
                 if profile.id == "agent-open-harnesses":
                     with_closed.append(_AGENT_CLOSED)
             profiles = with_closed
-    # Closed key-path ids (:connect droid-key) are catalog-driven, not vendors.
-    return [*profiles, *_catalog_harness_profiles("closed")]
+    # Open and Closed key-path ids (:connect tau, :connect droid-key) are
+    # catalog-driven rather than hand-written. Both belong here or `--connect`
+    # and tab completion accept one category and reject the other.
+    return _dedupe_by_id(
+        [
+            *profiles,
+            *_catalog_harness_profiles("open"),
+            *_catalog_harness_profiles("closed"),
+        ]
+    )
 
 
 # ``:connect acp`` predates the categories and still opens the ACP catalogue.

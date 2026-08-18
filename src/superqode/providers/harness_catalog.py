@@ -24,7 +24,19 @@ AfterAuth = str  # switch-and-model | acp-attach | vendor-key-acp | vendor-key-c
 CONNECT_MENU_DEFAULT = "v1"
 CONNECT_MENU_VALUES = frozenset({"v1", "v2"})
 CONNECT_MENU_ENV = "SUPERQODE_CONNECT_MENU"
-_USER_CONFIG_PATH = Path.home() / ".superqode" / "config.json"
+
+#: Parsed ``connect_menu`` per config file, keyed by path and invalidated by
+#: (mtime, size). Editing the file still takes effect on the next read.
+_CONNECT_MENU_CACHE: dict[Path, Tuple[Tuple[int, int], Optional[str]]] = {}
+
+
+def user_config_path() -> Path:
+    """``~/.superqode/config.json``, resolved once per call rather than at import.
+
+    The TUI writes this file through the same path, so both sides must agree
+    even when ``HOME`` is redirected, as it is under test.
+    """
+    return Path.home() / ".superqode" / "config.json"
 
 
 @dataclass(frozen=True)
@@ -124,7 +136,7 @@ def parse_connect_menu_flag(
     raw = str(source.get(CONNECT_MENU_ENV, "") or "").strip().lower()
     if raw in CONNECT_MENU_VALUES:
         return raw
-    path = _USER_CONFIG_PATH if config_path is None else config_path
+    path = user_config_path() if config_path is None else config_path
     from_file = _connect_menu_from_config(path)
     if from_file is not None:
         return from_file
@@ -132,6 +144,26 @@ def parse_connect_menu_flag(
 
 
 def _connect_menu_from_config(path: Path) -> Optional[str]:
+    """Read ``connect_menu``, caching per (path, mtime, size).
+
+    ``connect_menu_version()`` is consulted while drawing every picker row, so
+    an uncached read means a stat and a parse per keystroke. The environment is
+    still checked live above, which is what tests vary.
+    """
+    try:
+        stat = path.stat()
+        stamp = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+    cached = _CONNECT_MENU_CACHE.get(path)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    value = _read_connect_menu(path)
+    _CONNECT_MENU_CACHE[path] = (stamp, value)
+    return value
+
+
+def _read_connect_menu(path: Path) -> Optional[str]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError):
@@ -177,12 +209,15 @@ def _key_auth(
     after_auth: AfterAuth,
     *,
     connector: str = "key-harness",
+    byok_provider: Optional[str] = None,
     byok_providers: Optional[Tuple[str, ...]] = None,
     local_providers: Optional[Tuple[str, ...]] = None,
     env_vars: Tuple[str, ...] = (),
     optional_env: Tuple[str, ...] = (),
     base_url_env: Optional[str] = None,
     inject_env: bool = False,
+    detect: Optional[Callable[[], bool]] = None,
+    unavailable_hint: str = "",
 ) -> Tuple[HarnessAuthSpec, ...]:
     return (
         HarnessAuthSpec(
@@ -193,9 +228,12 @@ def _key_auth(
             env_vars=env_vars,
             optional_env=optional_env,
             base_url_env=base_url_env,
+            byok_provider=byok_provider,
             byok_providers=byok_providers,
             local_providers=(),
             inject_env=inject_env,
+            detect=detect,
+            unavailable_hint=unavailable_hint,
         ),
         HarnessAuthSpec(
             mode="local",
@@ -205,9 +243,12 @@ def _key_auth(
             env_vars=env_vars,
             optional_env=optional_env,
             base_url_env=base_url_env,
+            byok_provider=byok_provider,
             byok_providers=(),
             local_providers=local_providers,
             inject_env=inject_env,
+            detect=detect,
+            unavailable_hint=unavailable_hint,
         ),
     )
 
@@ -246,6 +287,16 @@ def _droid_binary_present() -> bool:
 def _junie_binary_present() -> bool:
     """Junie CLI is on PATH. Same probe as the subscription row."""
     return shutil.which("junie") is not None
+
+
+def _qoder_binary_present() -> bool:
+    """Qoder CLI is on PATH. The ACP agent runs `qoder acp`."""
+    return shutil.which("qoder") is not None
+
+
+def _poolside_binary_present() -> bool:
+    """Poolside's Pool CLI is on PATH. The ACP agent runs `pool acp`."""
+    return shutil.which("pool") is not None
 
 
 def _vendor_key_auth(
@@ -550,6 +601,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         label="Muse Code (API key)",
         description="Muse Code with META_API_KEY. Not SuperQode's Meta BYOK provider.",
         openness="closed",
+        homepage="https://dev.meta.ai/",
         auth=_vendor_key_auth(
             "muse-key",
             "vendor-key-cli",
@@ -558,6 +610,12 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             inject_env=True,
         ),
         hub_id="muse",
+        readiness="setup-required",
+        support_note=(
+            "Muse Code has no ACP server or headless mode SuperQode can drive, "
+            "so run `muse` yourself. It prefers META_API_KEY over a stored "
+            "`muse login` session, so the key is what gets billed."
+        ),
         vendor_owned=True,
         list_visible=True,
     ),
@@ -641,6 +699,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             ),
         ),
         acp_agent="fast-agent",
+        hub_id="acp:fast-agent",
         vendor_owned=True,
         list_visible=True,
     ),
@@ -666,6 +725,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             ),
         ),
         acp_agent="pi",
+        hub_id="acp:pi",
         vendor_owned=True,
         list_visible=True,
     ),
@@ -733,6 +793,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         openness="open",
         license="Apache-2.0",
         repository="https://github.com/mistralai/mistral-vibe",
+        acp_agent="mistral-vibe",
+        hub_id="acp:mistral-vibe",
         auth=_key_auth(
             "mistral-vibe-key",
             "setup-card",
@@ -751,6 +813,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         openness="open",
         license="MIT",
         repository="https://github.com/nousresearch/hermes-agent",
+        acp_agent="hermes",
+        hub_id="acp:hermes",
         auth=_key_auth(
             "hermes-key",
             "setup-card",
@@ -834,14 +898,18 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         label="Qoder CLI (API key)",
         description="Proprietary Qoder CLI with QODER_PERSONAL_ACCESS_TOKEN.",
         openness="closed",
+        homepage="https://qoder.com",
         auth=_vendor_key_auth(
             "qoder-key",
             "vendor-key-acp",
             connector="vendor-key",
             env_vars=("QODER_PERSONAL_ACCESS_TOKEN",),
             inject_env=True,
+            detect=_qoder_binary_present,
+            unavailable_hint="run `npm install -g qoder-cli`, then sign in with Qoder CLI",
         ),
         acp_agent="qoder",
+        hub_id="acp:qoder",
         vendor_owned=True,
         list_visible=True,
     ),
@@ -850,18 +918,27 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         label="Poolside (API key)",
         description="Poolside with POOLSIDE_API_KEY or a local OpenAI-compat endpoint.",
         openness="closed",
+        homepage="https://poolside.ai",
+        # `acp-attach`, not `vendor-key-acp`: Poolside names the variable for a
+        # standalone endpoint, so the local half of this row is real. The key
+        # path still connects without a model step when the key is exported.
         auth=_key_auth(
             "poolside-key",
-            "vendor-key-acp",
-            connector="vendor-key",
+            "acp-attach",
             env_vars=("POOLSIDE_API_KEY",),
             optional_env=("POOLSIDE_STANDALONE_BASE_URL",),
             base_url_env="POOLSIDE_STANDALONE_BASE_URL",
+            # Poolside is a real ProviderDef, so `superqode auth login poolside`
+            # stores a key this row must find rather than demand again.
+            byok_provider="poolside",
             byok_providers=("poolside",),
             local_providers=_POOLSIDE_LOCAL_PROVIDERS,
             inject_env=True,
+            detect=_poolside_binary_present,
+            unavailable_hint="run `npm install -g @poolsideai/pool`, then sign in with Pool CLI",
         ),
         acp_agent="poolside",
+        hub_id="acp:poolside",
         vendor_owned=True,
         list_visible=True,
     ),

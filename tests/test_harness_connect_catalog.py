@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from superqode.harness.hub import _OPENNESS_BY_ID
 from superqode.providers.harness_catalog import (
     CONNECT_MENU_DEFAULT,
@@ -118,6 +120,21 @@ def test_catalog_openness_matches_hub_when_hub_id_is_set():
         assert entry.openness == _OPENNESS_BY_ID[entry.hub_id].openness, entry.id
 
 
+def test_every_drawn_row_states_its_openness_to_the_hub_as_well():
+    """A row without a `hub_id` skipped the agreement check above.
+
+    Six visible rows had none, so `:hub` and `hub list --openness` disagreed
+    with the Open and Closed lists about the same harness.
+    """
+    unlinked = [
+        entry.id
+        for entry in HARNESS_CATALOG
+        if entry.list_visible and entry.openness in {"open", "closed"} and not entry.hub_id
+    ]
+
+    assert unlinked == [], f"these drawn rows tell the Hub nothing: {unlinked}"
+
+
 def test_connect_menu_flag_defaults_to_v1(monkeypatch, tmp_path):
     monkeypatch.delenv("SUPERQODE_CONNECT_MENU", raising=False)
     assert parse_connect_menu_flag(config_path=tmp_path / "missing.json") == "v1"
@@ -201,3 +218,92 @@ def test_switch_and_model_allowlists_match_the_hosted_adapters():
         "openai-compatible",
     )
     assert "deepagents-code" not in (auth_allowlist(sdk, "byok") or ())
+
+
+def test_a_closed_row_reports_whether_its_cli_is_installed():
+    """Qoder and Poolside claimed "ready" on any machine.
+
+    Factory and Junie probe PATH, so the two rows without a probe were the odd
+    ones out: the list said ready and the attach then failed.
+    """
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_CLOSED,
+        list_connection_profiles,
+    )
+
+    for entry_id in ("qoder-key", "poolside-key"):
+        entry = get_entry(entry_id)
+        spec = next(item for item in entry.auth if item.detect is not None)
+        assert spec.unavailable_hint
+
+    unprobed = [
+        profile.id
+        for profile in list_connection_profiles(CONNECT_MENU_CLOSED)
+        if profile.acp_agent and profile.detect is None
+    ]
+    assert unprobed == []
+
+
+def test_poolside_offers_the_local_endpoint_its_row_promises():
+    """The row said "or a local OpenAI-compat endpoint" and could not do it.
+
+    `vendor-key-acp` goes straight to the key card, so the declared provider
+    lists were unreachable. Poolside names the variable for a standalone
+    endpoint, so the local half is real and the row now uses the attach path.
+    """
+    from superqode.providers.harness_catalog import auth_allowlist
+
+    entry = get_entry("poolside-key")
+    spec = next(item for item in entry.auth if item.mode == "local")
+
+    assert spec.after_auth == "acp-attach"
+    assert spec.connector == "key-harness"
+    assert spec.base_url_env == "POOLSIDE_STANDALONE_BASE_URL"
+    assert spec.byok_provider == "poolside"
+    assert auth_allowlist(entry, "byok") == ("poolside",)
+    assert auth_allowlist(entry, "local")
+
+
+def test_the_connect_menu_flag_is_not_reread_on_every_row(tmp_path, monkeypatch):
+    """`connect_menu_version()` runs while drawing each picker row.
+
+    An uncached read meant a stat and a JSON parse per keystroke. The cache is
+    keyed by mtime and size, so editing the file still takes effect.
+    """
+    monkeypatch.delenv("SUPERQODE_CONNECT_MENU", raising=False)
+    config = tmp_path / "config.json"
+    config.write_text('{"connect_menu": "v2"}', encoding="utf-8")
+
+    reads = []
+    real_read_text = Path.read_text
+
+    def counting_read_text(self, *args, **kwargs):
+        if self == config:
+            reads.append(1)
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", counting_read_text)
+
+    for _ in range(5):
+        assert parse_connect_menu_flag(config_path=config) == "v2"
+    assert len(reads) == 1
+
+    # A later edit is still picked up: the stamp changes with the contents.
+    config.write_text('{"connect_menu": "v1"}', encoding="utf-8")
+    assert parse_connect_menu_flag(config_path=config) == "v1"
+    assert len(reads) == 2
+
+
+def test_both_readers_agree_on_where_the_user_config_lives(monkeypatch, tmp_path):
+    """The TUI writes this file and the flag reads it; one path, not two."""
+    from superqode.app.mixins.connect import ConnectMixin
+    from superqode.providers.harness_catalog import user_config_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    class Stub(ConnectMixin):
+        pass
+
+    assert Stub()._user_config_path() == user_config_path()
+    assert user_config_path() == tmp_path / ".superqode" / "config.json"

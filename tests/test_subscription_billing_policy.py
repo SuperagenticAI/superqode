@@ -489,6 +489,96 @@ class TestFactoryKeyPath:
         assert "superqode auth login factory" in rendered
         assert ":connect droid-key" in rendered
 
+    def test_the_panel_only_recommends_a_login_for_a_real_provider(self, monkeypatch, tmp_path):
+        """`login_id` used to be guessed from the variable name.
+
+        JETBRAINS_API_KEY became `superqode auth login jetbrains`, and
+        QODER_PERSONAL_ACCESS_TOKEN became `... login qoder`. Neither is a
+        ProviderDef, so both answer "Unknown provider".
+        """
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+        import superqode.auth as auth_module
+        from superqode.auth import LocalAuthStorage
+        from superqode.providers.registry import PROVIDERS
+
+        monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+        for name in ("JETBRAINS_API_KEY", "QODER_PERSONAL_ACCESS_TOKEN"):
+            monkeypatch.delenv(name, raising=False)
+
+        class Log:
+            def __init__(self):
+                self.panels = []
+
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+            def write_feedback(self, value):
+                self.panels.append(value.plain if hasattr(value, "plain") else str(value))
+
+        class Stub(ConnectMixin):
+            def _connect_acp_cmd(self, name, log):
+                pass
+
+        for profile_id in ("junie-key", "qoder-key"):
+            log = Log()
+            ConnectMixin._begin_vendor_key(Stub(), get_connection_profile(profile_id), log)
+            rendered = " ".join(str(panel) for panel in log.panels)
+            assert "API Key Required" in rendered
+            assert f":connect {profile_id}" in rendered
+            assert "superqode auth login" not in rendered
+            assert "export " in rendered
+
+        assert "jetbrains" not in PROVIDERS
+        assert "qoder" not in PROVIDERS
+
+    def test_poolside_key_finds_a_stored_credential(self, monkeypatch, tmp_path):
+        """Poolside is a real ProviderDef, so `auth login poolside` must count.
+
+        Only `droid-key` named its provider, so every other vendor row skipped
+        the credential store and demanded the environment variable again.
+        """
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+        import superqode.auth as auth_module
+        from superqode.auth import ApiAuth, LocalAuthStorage
+
+        storage = LocalAuthStorage(tmp_path / "auth.json")
+        storage.set("poolside", ApiAuth(key="stored-poolside-key"))
+        monkeypatch.setattr(auth_module, "_storage", storage)
+        monkeypatch.delenv("POOLSIDE_API_KEY", raising=False)
+
+        class Log:
+            def __init__(self):
+                self.panels = []
+
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+            def write_feedback(self, value):
+                self.panels.append(value.plain if hasattr(value, "plain") else str(value))
+
+        class Stub(ConnectMixin):
+            def __init__(self):
+                self.acp_calls = []
+
+            def _connect_acp_cmd(self, name, log):
+                self.acp_calls.append(name)
+
+        stub = Stub()
+        log = Log()
+        ConnectMixin._begin_vendor_key(stub, get_connection_profile("poolside-key"), log)
+
+        assert log.panels == []
+        assert stub.acp_calls == ["poolside"]
+        assert stub._acp_extra_env == {"POOLSIDE_API_KEY": "stored-poolside-key"}
+
     def test_droid_key_is_not_a_vendors_subscription_profile(self):
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_VENDORS,

@@ -51,6 +51,11 @@ class DispatchStub:
     def _reset_connect_selection_states(self):
         pass
 
+    def _clear_key_harness_session(self):
+        # The app always has this; a stub that dispatches has to model it.
+        self._key_harness_session = None
+        self._pending_key_harness_route = None
+
     def _open_connect_screen(self, log):
         pass
 
@@ -363,6 +368,51 @@ def test_selecting_muse_reports_readiness_instead_of_failing():
 
     assert stub.shown == 1
     assert not [item for item in log.items if str(item).startswith("ERROR")]
+
+
+def test_the_muse_key_row_gates_on_the_key_instead_of_erroring(monkeypatch):
+    """`muse-key` shares Muse's external-cli connector but is not the plan row.
+
+    The branch matched `muse` and `antigravity` by id, so the Closed key row
+    fell through to "Unsupported external CLI profile" and META_API_KEY was
+    never read.
+    """
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.delenv("META_API_KEY", raising=False)
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class KeyStub(DispatchStub, ConnectMixin):
+        """DispatchStub's recorders win; ConnectMixin supplies the real key path."""
+
+        def __init__(self):
+            super().__init__()
+            self.cards = []
+
+        def _write_api_key_required_panel(self, log, **kwargs):
+            self.cards.append(("panel", kwargs))
+
+        def _write_harness_setup_card(self, log, entry, spec):
+            self.cards.append(("setup", entry.id))
+
+    stub = KeyStub()
+    log = FakeLog()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("muse-key"), log)
+
+    assert not [item for item in log.items if str(item).startswith("ERROR")]
+    assert [kind for kind, _ in stub.cards] == ["panel"]
+    _kind, kwargs = stub.cards[0]
+    assert kwargs["env_vars"] == ("META_API_KEY",)
+    assert kwargs["retry"] == ":connect muse-key"
+    # No `meta` login: META_API_KEY is Muse's own key, not the BYOK slot.
+    assert kwargs["login_id"] == ""
+
+    monkeypatch.setenv("META_API_KEY", "sk-muse-test")
+    stub = KeyStub()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("muse-key"), FakeLog())
+
+    assert stub.cards == [("setup", "muse-key")]
 
 
 def test_the_subscriptions_category_holds_every_plan_codex_first():
@@ -1285,3 +1335,252 @@ def test_both_copilot_entries_ask_the_account():
         profile = get_connection_profile(profile_id)
         assert profile.connector == "copilot", profile_id
         assert profile.runtime == "copilot-sdk", profile_id
+
+
+# --- Open rows that end in an ACP attach ---------------------------------------
+
+
+class AttachStub:
+    """Records the attach without starting an agent or drawing a screen."""
+
+    def __init__(self):
+        from superqode.providers.connection_profiles import CONNECT_MENU_OPEN
+
+        self.acp = []
+        self.menus = []
+        self.saved = {}
+        self.milestones = []
+        self._acp_extra_env = None
+        self._connect_menu = CONNECT_MENU_OPEN
+
+    def _connect_acp_cmd(self, name, log):
+        self.acp.append(name)
+
+    def _show_connect_type_picker(self, log, menu=None, **kwargs):
+        self.menus.append(menu)
+        self._connect_menu = menu
+
+    def _save_connection_config(self, **fields):
+        self.saved = fields
+
+    def _record_milestone(self, name):
+        self.milestones.append(name)
+
+
+def _attach_stub():
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(AttachStub, ConnectMixin):
+        pass
+
+    return Stub()
+
+
+def _clear_key_envs(monkeypatch):
+    for name in (
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GROK_CODE_XAI_API_KEY",
+        "XAI_API_KEY",
+        "QWEN_API_KEY",
+        "DASHSCOPE_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_an_acp_attach_row_asks_for_a_model_instead_of_a_setup_card(monkeypatch):
+    """`acp-attach` used to fall through to "SuperQode does not start its loop"."""
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+
+    _clear_key_envs(monkeypatch)
+    stub = _attach_stub()
+    stub._begin_key_harness(get_connection_profile("opencode-key"), FakeLog())
+
+    assert stub.menus == [CONNECT_MENU_KEY_MODELS]
+    assert stub._key_harness_session.entry_id == "opencode-key"
+    assert stub._key_harness_session.after_auth == "acp-attach"
+
+
+def test_choosing_a_provider_hands_its_key_to_the_agent(monkeypatch, tmp_path):
+    """The picker chooses credentials for the agent, not a SuperQode loop."""
+    import superqode.auth as auth_module
+    from superqode.auth import LocalAuthStorage
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+    stub = _attach_stub()
+    stub._begin_key_harness(get_connection_profile("opencode-key"), FakeLog())
+    handled = stub._attach_key_harness_over_acp(
+        "anthropic", "claude-opus-4-8", resolve_provider_def("anthropic"), FakeLog()
+    )
+
+    assert handled is True
+    assert stub.acp == ["opencode"]
+    assert stub._acp_extra_env == {"ANTHROPIC_API_KEY": "sk-ant-test"}
+    assert stub._acp_extra_env_agent == "opencode"
+    assert stub.saved["harness_id"] == "opencode-key"
+    assert stub.saved["acp_agent"] == "opencode"
+    assert stub.saved["transport"] == "ACP"
+    assert stub.saved["model"] == "claude-opus-4-8"
+    assert "connected_open_harness" in stub.milestones
+    # The session ends on success, so a later Core switch cannot inherit it.
+    assert stub._key_harness_session is None
+
+
+def test_a_missing_cloud_key_asks_for_it_rather_than_attaching(monkeypatch, tmp_path):
+    """An agent attached without a key fails on its first model call."""
+    import superqode.auth as auth_module
+    from superqode.auth import LocalAuthStorage
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+
+    class Log(FakeLog):
+        def write_feedback(self, value):
+            self.write(value)
+
+    stub = _attach_stub()
+    log = Log()
+    stub._begin_key_harness(get_connection_profile("opencode-key"), FakeLog())
+    handled = stub._attach_key_harness_over_acp(
+        "openai", "gpt-5", resolve_provider_def("openai"), log
+    )
+
+    assert handled is True
+    assert stub.acp == []
+    rendered = " ".join(str(item) for item in log.items)
+    assert "API Key Required" in rendered
+    assert ":connect opencode-key" in rendered
+
+
+def test_a_row_that_hides_byok_offers_only_the_local_step(monkeypatch):
+    """Grok Build's key is xAI's own, so there is no provider to choose."""
+    _clear_key_envs(monkeypatch)
+    stub = _attach_stub()
+    stub._begin_key_harness(get_connection_profile("grok-key"), FakeLog())
+
+    assert [row.id for row in stub._connect_menu_profiles()] == ["local"]
+
+
+def test_an_exported_vendor_key_attaches_without_a_model_step(monkeypatch):
+    """A step with one right answer is not a question worth asking."""
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setenv("GROK_CODE_XAI_API_KEY", "xai-test")
+
+    stub = _attach_stub()
+    stub._begin_key_harness(get_connection_profile("grok-key"), FakeLog())
+
+    assert stub.menus == []
+    assert stub.acp == ["grok"]
+    assert stub._acp_extra_env == {"GROK_CODE_XAI_API_KEY": "xai-test"}
+    assert stub._key_harness_session is None
+
+
+def test_a_local_pick_never_invents_a_variable_the_agent_may_not_read(monkeypatch):
+    """`OLLAMA_HOST` describes Ollama's client, not what Qwen Code reads.
+
+    Passing an endpoint under a name the agent ignores would look like the
+    model choice landed. Only a catalog-declared `base_url_env` is passed, so
+    the honest outcome here is an attach plus a line saying what was not set.
+    """
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    stub = _attach_stub()
+    log = FakeLog()
+    stub._begin_key_harness(get_connection_profile("qwen-code-key"), FakeLog())
+    handled = stub._attach_key_harness_over_acp(
+        "ollama", "qwen3:8b", resolve_provider_def("ollama"), log
+    )
+
+    assert handled is True
+    assert stub.acp == ["qwen"]
+    assert not stub._acp_extra_env
+    notice = " ".join(str(item) for item in log.items)
+    assert "keeps its own model configuration" in notice
+    assert "qwen3:8b" in notice
+
+
+def test_a_declared_base_url_env_is_still_passed():
+    """DeepSeek Harness names the variable, so the endpoint is safe to set."""
+    from superqode.app.mixins.connect import ConnectMixin
+    from superqode.providers.dynamic import resolve_provider_def
+    from superqode.providers.harness_catalog import get_entry
+
+    entry = get_entry("deepseek-harness")
+    spec = next(item for item in entry.auth if item.mode == "local")
+    extra = ConnectMixin._key_harness_child_env(
+        _attach_stub(), spec, resolve_provider_def("ollama"), "qwen3:8b"
+    )
+
+    assert spec.base_url_env == "DEEPSEEK_BASE_URL"
+    assert extra["DEEPSEEK_BASE_URL"]
+
+
+def test_a_session_survives_a_harness_whose_id_differs_from_its_row(monkeypatch):
+    """The session matched on the catalog id, which is a different namespace.
+
+    A switch answers with a HarnessDefinition id or a spec path, so a row whose
+    `harness_id` differs from its `id` silently lost its session and dropped
+    the user into the native Plan step.
+    """
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+
+    class Stub(ConnectMixin):
+        pass
+
+    stub = Stub()
+    stub._key_harness_session = KeyHarnessSession(
+        entry_id="row-id",
+        openness="open",
+        auth_spec=None,
+        return_menu="open-harnesses",
+        after_auth="switch-and-model",
+        harness_id="adapter-id",
+    )
+
+    assert stub._key_harness_session_matches("adapter-id") is True
+    assert stub._key_harness_session_matches("row-id") is True
+    assert stub._key_harness_session_matches("/repo/harnesses/adapter-id.yaml") is True
+    assert stub._key_harness_session_matches("something-else") is False
+
+
+def test_a_longer_harness_name_is_not_the_one_the_session_holds():
+    """`endswith` made every `*-tau` harness look like `tau`."""
+    from superqode.app.mixins.connect import ConnectMixin, KeyHarnessSession
+
+    class Stub(ConnectMixin):
+        pass
+
+    stub = Stub()
+    stub._key_harness_session = KeyHarnessSession(
+        entry_id="tau",
+        openness="open",
+        auth_spec=None,
+        return_menu="open-harnesses",
+        after_auth="switch-and-model",
+        harness_id="tau",
+    )
+
+    assert stub._key_harness_session_matches("tau") is True
+    assert stub._key_harness_session_matches("my-tau") is False
+
+
+def test_the_open_list_states_the_licence_on_the_row():
+    """Openness is the point of the list, and AGPL against MIT is the answer."""
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_OPEN,
+        list_connection_profiles,
+    )
+
+    badges = {p.id: p.badges for p in list_connection_profiles(CONNECT_MENU_OPEN)}
+
+    assert "AGPL-3.0" in badges["warp"]
+    assert "MIT" in badges["tau"]
+    assert "Apache-2.0" in badges["goose-key"]
+    # Openness leads, then the licence that qualifies it.
+    assert badges["warp"][:2] == ["open harness", "AGPL-3.0"]

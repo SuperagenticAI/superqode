@@ -183,6 +183,26 @@ _FLAT_PROFILE_IDS_V1 = [
     "build-preset",
     "build-wizard",
     "build-blank",
+    # Open catalog rows, then Closed. Both are appended by _flat_profiles so
+    # `--connect` and completion accept every row the pickers draw.
+    "tau",
+    "deepseek-harness",
+    "deepagents",
+    "opencode-key",
+    "prime-agent-key",
+    "jcode",
+    "grok-key",
+    "qwen-code-key",
+    "fast-agent",
+    "pi",
+    "goose-key",
+    "cline-key",
+    "openhands-key",
+    "mistral-vibe-key",
+    "hermes-key",
+    "letta",
+    "warp",
+    "kimi-code-key",
     "droid-key",
     "junie-key",
     "muse-key",
@@ -210,6 +230,28 @@ def test_registry_has_expected_profiles(menu_version, monkeypatch):
         assert "agent-closed-harnesses" in connection_profile_ids()
     assert "droid-key" in connection_profile_ids()
     assert "copilot-acp" in connection_profile_ids(include_legacy=True)
+
+
+def test_every_drawn_catalog_row_is_selectable_from_the_shell():
+    """`--connect` validates against the flat list, so a row missing from it is
+    rejected by Click even though the TUI resolves it.
+
+    Closed rows were appended and Open rows were not, so `--connect droid-key`
+    worked while `--connect tau` failed with an invalid-choice error.
+    """
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_CLOSED,
+        CONNECT_MENU_OPEN,
+    )
+
+    choices = set(connection_profile_ids(include_legacy=True))
+    drawn = [
+        *list_connection_profiles(CONNECT_MENU_OPEN),
+        *list_connection_profiles(CONNECT_MENU_CLOSED),
+    ]
+
+    assert drawn, "the catalog menus must draw something"
+    assert [p.id for p in drawn if p.id not in choices] == []
 
 
 @pytest.mark.parametrize("menu_version", ["v1", "v2"])
@@ -744,6 +786,11 @@ class _DispatchStub:
 
     def _reset_connect_selection_states(self):
         self.calls.append(("reset",))
+
+    def _clear_key_harness_session(self):
+        # The app always has this; a stub that dispatches has to model it.
+        self._key_harness_session = None
+        self._pending_key_harness_route = None
 
     def _open_connect_screen(self, log):
         # Every dispatch starts a fresh screen; recorded so tests can assert it.

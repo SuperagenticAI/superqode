@@ -1219,8 +1219,7 @@ class LocalModelsMixin:
             for pid, pdef in local_providers.items()
             if pid not in unsupported_local_providers
         }
-        allowlist = getattr(self, "_key_harness_allowlist", None)
-        allowed = allowlist("local") if callable(allowlist) else None
+        allowed = self._key_harness_allowlist("local")
         if allowed is not None:
             local_providers = {pid: pdef for pid, pdef in local_providers.items() if pid in allowed}
 

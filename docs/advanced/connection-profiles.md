@@ -154,10 +154,15 @@ Direct shortcuts:
 - `:connect junie-key` - Junie with `JETBRAINS_API_KEY` (Closed harnesses)
 - `:connect muse-key` - Muse Code with `META_API_KEY` (Closed harnesses)
 - `:connect qoder-key` - Qoder CLI with `QODER_PERSONAL_ACCESS_TOKEN` (Closed harnesses)
-- `:connect poolside-key` - Poolside with `POOLSIDE_API_KEY` (Closed harnesses)
+- `:connect poolside-key` - Poolside with `POOLSIDE_API_KEY`, or a local endpoint through `POOLSIDE_STANDALONE_BASE_URL` (Closed harnesses)
 - `:connect zcode` - ZCode inspect card (Closed harnesses; not launchable yet)
 - `:connect letta` - Letta Code setup card (Open harnesses; install `letta`, then `/connect` or `/login`)
 - `:connect warp` - Warp Agent CLI setup card (Open harnesses; install `warp`, then sign in or `WARP_API_KEY`)
+- `:connect opencode-key` - pick a key or local model, then attach OpenCode over ACP with it (Open harnesses)
+- `:connect grok-key` - Grok Build with `GROK_CODE_XAI_API_KEY`, or a local endpoint (Open harnesses)
+- `:connect qwen-code-key` - Qwen Code with `QWEN_API_KEY` / `DASHSCOPE_API_KEY`, or a local endpoint (Open harnesses)
+- `:connect fast-agent` - pick a key or local model, then attach fast-agent over ACP with it (Open harnesses)
+- `:connect pi` - pick a key or local model, then attach Pi over ACP with it (Open harnesses)
 - `:connect kiro` - Kiro/Amazon Q Developer subscription through ACP
 - `:connect glm-cli` - GLM Coding Plan through ACP
 - `:connect copilot` - prefer the official SDK, with installed CLI/ACP fallback

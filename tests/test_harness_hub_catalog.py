@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -423,3 +424,27 @@ def test_every_hub_entry_has_a_unique_id():
 
     assert len(ids) == len(set(ids))
     assert {"deepagents", "deepagents-code", "acp:deepagents", "acp:deepagents-code"} <= set(ids)
+
+
+def test_published_snapshot_lists_every_hub_record():
+    """`docs/assets/harness-hub.json` is generated, so it goes stale silently.
+
+    The 0.2.99 snapshot shipped without the Junie record because the export was
+    run before the profile landed. Ids and openness are compared rather than
+    the whole payload: `generated_at` changes on every run, and readiness is
+    normalized per machine by `_publication_readiness`.
+
+    Regenerate with `uv run python scripts/export_hub_catalog.py`.
+    """
+    root = Path(__file__).resolve().parents[1]
+    published = json.loads(
+        (root / "docs" / "assets" / "harness-hub.json").read_text(encoding="utf-8")
+    )
+    current = build_hub_index(root, public=True)
+
+    published_openness = {item["id"]: item.get("openness", "") for item in published["items"]}
+    current_openness = {item["id"]: item.get("openness", "") for item in current["items"]}
+
+    assert published_openness == current_openness
+    assert published["count"] == current["count"]
+    assert published["schema_version"] == current["schema_version"]

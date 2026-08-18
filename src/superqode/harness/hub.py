@@ -158,6 +158,16 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "acp:cline": HubOpenness("open", "Apache-2.0", "https://github.com/cline/cline"),
     "acp:opencode": HubOpenness("open", "MIT", "https://github.com/opencode-ai/opencode"),
     "acp:openhands": HubOpenness("open", "MIT", "https://github.com/OpenHands/OpenHands"),
+    # Drawn on the Open and Closed connect lists, so the Hub has to agree with
+    # what those rows already state about the same harness.
+    "acp:fast-agent": HubOpenness("open", "Apache-2.0", "https://github.com/evalstate/fast-agent"),
+    "acp:pi": HubOpenness("open", "MIT", "https://github.com/earendil-works/pi"),
+    "acp:mistral-vibe": HubOpenness(
+        "open", "Apache-2.0", "https://github.com/mistralai/mistral-vibe"
+    ),
+    "acp:hermes": HubOpenness("open", "MIT", "https://github.com/nousresearch/hermes-agent"),
+    "acp:qoder": HubOpenness("closed"),
+    "acp:poolside": HubOpenness("closed"),
     "qwen-code": HubOpenness("open", "Apache-2.0", "https://github.com/QwenLM/qwen-code"),
     "acp:qwen": HubOpenness("open", "Apache-2.0", "https://github.com/QwenLM/qwen-code"),
     "kimi-code": HubOpenness("open", "MIT", "https://github.com/MoonshotAI/kimi-code"),

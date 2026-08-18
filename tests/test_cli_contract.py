@@ -57,7 +57,7 @@ EXPECTED_COMMAND_COUNT = 267
 # registry-derived `--connect` choices. No Click command was added.
 # Rebaselined for Junie, Letta, Warp, and the rest of the Open/Closed catalog
 # ids on the registry-derived `--connect` choice list. No Click command added.
-EXPECTED_HELP_TREE_SHA256 = "ab45868031da469c8e6dcfdca76ab6af98f8c4a020b51b5689f6bafe221763ba"
+EXPECTED_HELP_TREE_SHA256 = "1b8c8940d78a0742c9edf6911d47162a504643b79a0ce07e4c9a54a9bc7372c8"
 
 
 def _render_help_tree() -> tuple[int, str]:

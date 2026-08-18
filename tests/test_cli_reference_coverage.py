@@ -200,7 +200,7 @@ def test_connection_reference_covers_methods_profiles_providers_and_agents():
     assert "🧭 All Connections: concepts/modes.md" in mkdocs
 
 
-def test_every_connection_profile_has_a_sidebar_page():
+def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
     """Every root :connect profile should have a dedicated, navigable guide."""
 
     root = Path(__file__).resolve().parents[1]
@@ -257,9 +257,38 @@ def test_every_connection_profile_has_a_sidebar_page():
         "grok": "providers/grok.md",
         "glm-cli": "providers/zai.md",
         "other-harnesses": "cli-reference/harness-commands.md",
+        # v2 replaces the Other row with these two category rows.
+        "agent-open-harnesses": "concepts/modes.md",
+        "agent-closed-harnesses": "concepts/modes.md",
+        # Open catalog rows. Closed rows are listed with their vendor above.
+        "tau": "concepts/modes.md",
+        "deepseek-harness": "concepts/modes.md",
+        "deepagents": "providers/deepagents.md",
+        "opencode-key": "concepts/modes.md",
+        "prime-agent-key": "concepts/modes.md",
+        "jcode": "concepts/modes.md",
+        "grok-key": "concepts/modes.md",
+        "qwen-code-key": "concepts/modes.md",
+        "fast-agent": "concepts/modes.md",
+        "pi": "concepts/modes.md",
+        "goose-key": "concepts/modes.md",
+        "cline-key": "concepts/modes.md",
+        "openhands-key": "concepts/modes.md",
+        "mistral-vibe-key": "concepts/modes.md",
+        "hermes-key": "concepts/modes.md",
+        "letta": "concepts/modes.md",
+        "warp": "concepts/modes.md",
+        "kimi-code-key": "concepts/modes.md",
     }
 
-    assert set(profile_pages) == set(connection_profile_ids())
+    # Both menu versions, so flipping the default cannot ship undocumented ids.
+    # conftest pins v1, which would otherwise hide every v2-only row here.
+    documented = set(profile_pages)
+    published = set()
+    for version in ("v1", "v2"):
+        monkeypatch.setenv("SUPERQODE_CONNECT_MENU", version)
+        published |= set(connection_profile_ids())
+    assert published == documented
 
     missing_pages = []
     missing_navigation = []

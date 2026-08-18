@@ -109,7 +109,10 @@ Each vendor row also carries badges for harness licence, model openness, and
 transport, for example `open harness`, `open weights`, `ACP`. These are two
 independent facts rather than one category: Codex ships an Apache-2.0 harness
 that drives only OpenAI models, and Factory Droid is a closed harness that
-runs whatever model you bring.
+runs whatever model you bring. Open and Closed rows add the SPDX licence to
+that line when SuperQode has verified it, so `open harness · AGPL-3.0` and
+`open harness · MIT` are told apart without leaving the picker. A blank licence
+means unverified rather than absent, so no badge is drawn.
 
 Row numbers are screen positions. The displayed number, arrow-key highlight,
 mouse target, and typed number always select the same row. Named shortcuts such
@@ -213,10 +216,56 @@ row with **Open harnesses** and **Closed harnesses**:
 :connect warp
 ```
 
+Under `v2` the two category rows carry the same `agent-` prefix as the
+subscription and ACP rows, so every existing-harness category is selectable by
+its registry id as well as its short alias:
+
+```text
+:connect agent-open-harnesses
+:connect agent-closed-harnesses
+```
+
 Open is OSI-licensed harnesses on a key or local model. Closed is proprietary
 harnesses on that vendor's key. Setup-card rows such as Letta Code and Warp
 Agent are listed so you can find them; SuperQode does not start their loop
 from that row yet.
+
+| Open harness | License | Direct selection | What the row does today |
+| --- | --- | --- | --- |
+| Tau | MIT | `:connect tau` | Switches to the hosted Tau adapter, then asks for a key or local model |
+| DeepSeek Harness | MIT | `:connect deepseek-harness` | Switches to the hosted adapter, then DeepSeek BYOK or a local OpenAI-compatible URL |
+| DeepAgents SDK | MIT | `:connect deepagents` | Switches to the SDK adapter, then Anthropic, Google, or a documented local extra |
+| OpenCode | MIT | `:connect opencode-key` | Asks for a key or local model, then attaches OpenCode over ACP with it |
+| Prime Agent | MIT | `:connect prime-agent-key` | Setup card |
+| jcode | MIT | `:connect jcode` | Setup card |
+| Grok Build | Apache-2.0 | `:connect grok-key` | Attaches on an exported `GROK_CODE_XAI_API_KEY`, otherwise asks for a local endpoint |
+| Qwen Code | Apache-2.0 | `:connect qwen-code-key` | Attaches on an exported `QWEN_API_KEY` or `DASHSCOPE_API_KEY`, otherwise asks for a model |
+| fast-agent | Apache-2.0 | `:connect fast-agent` | Asks for a key or local model, then attaches fast-agent over ACP with it |
+| Pi | MIT | `:connect pi` | Asks for a key or local model, then attaches Pi over ACP with it |
+| Goose | Apache-2.0 | `:connect goose-key` | Setup card |
+| Cline | Apache-2.0 | `:connect cline-key` | Setup card |
+| OpenHands | MIT | `:connect openhands-key` | Setup card |
+| Mistral Vibe | Apache-2.0 | `:connect mistral-vibe-key` | Setup card |
+| Hermes Agent | MIT | `:connect hermes-key` | Setup card |
+| Letta Code | Apache-2.0 | `:connect letta` | Setup card |
+| Warp Agent | AGPL-3.0 | `:connect warp` | Setup card |
+| Kimi Code | MIT | `:connect kimi-code-key` | Setup card |
+
+Eight rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
+SuperQode-hosted adapter and then run the model you choose. OpenCode, Grok
+Build, Qwen Code, fast-agent, and Pi keep their own loop: the model step only
+decides which credentials they are handed, and SuperQode passes those to the
+agent process alone rather than exporting them into your shell.
+
+The remaining rows print a setup card naming the key or local model to
+configure in the harness itself. Every id in the table also works as
+`superqode --connect <id>` and completes in the TUI.
+
+A key is only ever passed under a variable that is known to be read: the one
+the catalog records for that harness, or the provider's own documented variable
+for a model-agnostic agent. When you pick a local endpoint that neither names,
+the agent still attaches and SuperQode says the model has to be set inside it,
+rather than exporting an endpoint under a name the agent ignores.
 
 Pre-ladder names still resolve, so muscle memory and older documentation keep
 working. `:connect subscriptions` lands on the vendor subscription screen, and

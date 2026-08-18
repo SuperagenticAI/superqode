@@ -3901,9 +3901,7 @@ class CommandImplMixin:
 
         fork_session = False
         if sub in ("load", "use", "use-all", "switch"):
-            clearer = getattr(self, "_clear_acp_extra_env", None)
-            if callable(clearer):
-                clearer()
+            self._clear_acp_extra_env()
             try:
                 switch_tokens = shlex.split(subargs)
             except ValueError as exc:
@@ -4042,11 +4040,8 @@ class CommandImplMixin:
         primary = str(entry.spec.model_policy.primary or "")
         needs_model = False
         key_session = getattr(self, "_key_harness_session", None)
-        matcher = getattr(self, "_key_harness_session_matches", None)
-        if key_session is not None and callable(matcher) and not matcher(entry.id):
-            clearer = getattr(self, "_clear_key_harness_session", None)
-            if callable(clearer):
-                clearer()
+        if key_session is not None and not self._key_harness_session_matches(entry.id):
+            self._clear_key_harness_session()
             key_session = None
         if key_session is not None:
             # Open/Closed switch-and-model always collects Local/BYOK. Do not
@@ -4716,9 +4711,7 @@ class CommandImplMixin:
         choice = text.strip().lower()
         if choice in {"n", "no", "cancel", "skip", "q"}:
             self._awaiting_harness_install = None
-            clearer = getattr(self, "_clear_key_harness_session", None)
-            if callable(clearer):
-                clearer()
+            self._clear_key_harness_session()
             log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
             return True
         if choice not in {"", "y", "yes", "install", "ok"}:
