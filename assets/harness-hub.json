@@ -1,7 +1,7 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-08-17T07:30:53.007540+00:00",
-  "count": 99,
+  "generated_at": "2026-08-18T00:57:18.801475+00:00",
+  "count": 100,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -1377,6 +1377,70 @@
       "license": "MIT"
     },
     {
+      "id": "junie",
+      "name": "Junie",
+      "description": "JetBrains Junie through its CLI and ACP server on your JetBrains AI account",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "junie",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://www.jetbrains.com/junie/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "install_command": "run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
+      "tui_commands": [
+        ":connect junie",
+        ":harness switch junie",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run junie \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Junie",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Junie CLI",
+          "command": "npm install -g @jetbrains/junie",
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your JetBrains account",
+          "command": "",
+          "description": "Sign in with Junie CLI using your JetBrains AI / Junie plan."
+        }
+      ],
+      "openness": "closed",
+      "license": ""
+    },
+    {
       "id": "acp:amp",
       "name": "Amp (ACP)",
       "description": "AI coding agent by Ampcode. Works in any codebase with full ACP support via acp-amp adapter.",
@@ -1833,7 +1897,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/evalstate/fast-agent",
-      "repository": "",
+      "repository": "https://github.com/evalstate/fast-agent",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1868,8 +1932,8 @@
           "description": ""
         }
       ],
-      "openness": "",
-      "license": ""
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:gemini",
@@ -1943,7 +2007,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
-      "repository": "",
+      "repository": "https://github.com/nousresearch/hermes-agent",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1979,7 +2043,7 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "MIT"
     },
     {
       "id": "acp:openhands",
@@ -2529,7 +2593,7 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "MIT"
     },
     {
       "id": "acp:qwen",
@@ -3593,7 +3657,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/mistralai/mistral-vibe",
-      "repository": "",
+      "repository": "https://github.com/mistralai/mistral-vibe",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -3628,8 +3692,8 @@
           "description": ""
         }
       ],
-      "openness": "",
-      "license": ""
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "acp:openclaw",
@@ -3738,7 +3802,7 @@
           "description": ""
         }
       ],
-      "openness": "",
+      "openness": "closed",
       "license": ""
     },
     {
@@ -3793,7 +3857,7 @@
           "description": ""
         }
       ],
-      "openness": "",
+      "openness": "closed",
       "license": ""
     },
     {
