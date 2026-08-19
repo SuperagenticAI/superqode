@@ -1584,3 +1584,153 @@ def test_the_open_list_states_the_licence_on_the_row():
     assert "Apache-2.0" in badges["goose-key"]
     # Openness leads, then the licence that qualifies it.
     assert badges["warp"][:2] == ["open harness", "AGPL-3.0"]
+
+
+# --- the Open row that ends in Prime's Python RPC ------------------------------
+
+
+class RpcStub(AttachStub):
+    """Records the Prime launch instead of starting the agent."""
+
+    def __init__(self):
+        super().__init__()
+        self.rpc = []
+
+    def _connect_prime_rpc(self, selector, log, **kwargs):
+        self.rpc.append((selector, kwargs.get("extra_env")))
+        return True
+
+
+def _rpc_stub():
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(RpcStub, ConnectMixin):
+        pass
+
+    return Stub()
+
+
+def test_the_prime_key_row_asks_for_a_model_instead_of_a_setup_card(monkeypatch):
+    """`vendor-key-rpc` was unimplemented, so its provider lists were unreachable."""
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr("superqode.providers.prime_agent.is_installed", lambda: True, raising=False)
+
+    stub = _rpc_stub()
+    stub._begin_key_harness(get_connection_profile("prime-agent-key"), FakeLog())
+
+    assert stub.menus == [CONNECT_MENU_KEY_MODELS]
+    assert stub._key_harness_session.after_auth == "vendor-key-rpc"
+    assert [row.id for row in stub._connect_menu_profiles()] == ["local", "byok"]
+
+
+def test_a_cloud_provider_reaches_prime_through_the_child_env(monkeypatch, tmp_path):
+    """Prime owns the loop; the picker only decides the credentials it gets."""
+    import superqode.auth as auth_module
+    from superqode.auth import LocalAuthStorage
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+    monkeypatch.setattr("superqode.providers.prime_agent.is_installed", lambda: True, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-prime")
+
+    stub = _rpc_stub()
+    stub._begin_key_harness(get_connection_profile("prime-agent-key"), FakeLog())
+    handled = stub._attach_key_harness_over_rpc(
+        "anthropic", "claude-opus-4-8", resolve_provider_def("anthropic"), FakeLog()
+    )
+
+    assert handled is True
+    assert stub.rpc == [("anthropic/claude-opus-4-8", {"ANTHROPIC_API_KEY": "sk-ant-prime"})]
+    assert stub.saved["transport"] == "Python RPC"
+    assert stub.saved["provider"] == "anthropic"
+    assert stub._key_harness_session is None
+
+
+def test_prime_is_never_launched_without_the_key_it_needs(monkeypatch, tmp_path):
+    import superqode.auth as auth_module
+    from superqode.auth import LocalAuthStorage
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(tmp_path / "auth.json"))
+    monkeypatch.setattr("superqode.providers.prime_agent.is_installed", lambda: True, raising=False)
+
+    class Log(FakeLog):
+        def write_feedback(self, value):
+            self.write(value)
+
+    stub = _rpc_stub()
+    log = Log()
+    stub._begin_key_harness(get_connection_profile("prime-agent-key"), FakeLog())
+    handled = stub._attach_key_harness_over_rpc(
+        "openai", "gpt-5", resolve_provider_def("openai"), log
+    )
+
+    assert handled is True
+    assert stub.rpc == []
+    assert "API Key Required" in " ".join(str(item) for item in log.items)
+
+
+def test_a_local_pick_is_registered_in_primes_own_models_file(monkeypatch, tmp_path):
+    """Prime is pointed at an endpoint through models.json, not an env variable.
+
+    The home override keeps this out of the developer's real Prime config.
+    """
+    import json
+
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    home = tmp_path / "prime-agent"
+    monkeypatch.setenv("PRIME_AGENT_CODING_AGENT_DIR", str(home))
+    monkeypatch.setattr("superqode.providers.prime_agent.is_installed", lambda: True, raising=False)
+
+    stub = _rpc_stub()
+    stub._begin_key_harness(get_connection_profile("prime-agent-key"), FakeLog())
+    handled = stub._attach_key_harness_over_rpc(
+        "ollama", "qwen3:8b", resolve_provider_def("ollama"), FakeLog()
+    )
+
+    assert handled is True
+    assert stub.rpc == [("ollama/qwen3:8b", {})]
+    registered = json.loads((home / "models.json").read_text())["providers"]["ollama"]
+    assert registered["baseUrl"].endswith("/v1")
+    assert registered["api"] == "openai-completions"
+    assert registered["models"] == [{"id": "qwen3:8b"}]
+    assert stub.saved["auth_mode"] == "local"
+
+
+def test_prime_is_not_launched_when_it_is_not_installed(monkeypatch):
+    from superqode.providers.dynamic import resolve_provider_def
+
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr(
+        "superqode.providers.prime_agent.is_installed", lambda: False, raising=False
+    )
+
+    stub = _rpc_stub()
+    log = FakeLog()
+    stub._begin_key_harness(get_connection_profile("prime-agent-key"), FakeLog())
+    handled = stub._attach_key_harness_over_rpc(
+        "anthropic", "claude-opus-4-8", resolve_provider_def("anthropic"), log
+    )
+
+    assert handled is True
+    assert stub.rpc == []
+    assert any("not installed" in str(item) for item in log.items)
+
+
+def test_prime_only_offers_local_engines_it_can_be_pointed_at():
+    """Prime needs a resolvable base URL, so the DSH list was too wide."""
+    from superqode.providers.dynamic import resolve_base_url, resolve_provider_def
+    from superqode.providers.harness_catalog import auth_allowlist, get_entry
+
+    allowed = auth_allowlist(get_entry("prime-agent-key"), "local")
+
+    assert allowed
+    assert "openai-compatible" not in allowed
+    for provider_id in allowed:
+        assert resolve_base_url(resolve_provider_def(provider_id)), provider_id

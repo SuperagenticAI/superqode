@@ -200,6 +200,11 @@ _DEEPAGENTS_LOCAL_PROVIDERS = (
 )
 
 _PRIME_BYOK_PROVIDERS = ("anthropic", "openai", "google", "groq", "openrouter")
+
+# Local engines SuperQode can hand Prime a base URL for. Narrower than the
+# DeepSeek Harness list: Prime is pointed at an endpoint by registering it in
+# its own models.json, so a provider with no resolvable URL cannot be offered.
+_PRIME_LOCAL_PROVIDERS = ("ollama", "lmstudio", "llamacpp", "vllm", "mlx")
 _QWEN_LOCAL_PROVIDERS = ("ollama", "vllm", "lmstudio")
 _POOLSIDE_LOCAL_PROVIDERS = ("ollama", "vllm", "llamacpp")
 
@@ -289,14 +294,43 @@ def _junie_binary_present() -> bool:
     return shutil.which("junie") is not None
 
 
-def _qoder_binary_present() -> bool:
-    """Qoder CLI is on PATH. The ACP agent runs `qoder acp`."""
-    return shutil.which("qoder") is not None
+def _prime_agent_present() -> bool:
+    """Prime Agent's own binary lookup, which is not a bare PATH name."""
+    try:
+        from superqode.providers import prime_agent
+
+        return bool(prime_agent.is_installed())
+    except Exception:  # noqa: BLE001 - a probe must never break the picker
+        return False
 
 
-def _poolside_binary_present() -> bool:
-    """Poolside's Pool CLI is on PATH. The ACP agent runs `pool acp`."""
-    return shutil.which("pool") is not None
+def acp_agent_binary_present(short_name: str) -> bool:
+    """Whether the command this ACP agent launches with is on PATH.
+
+    Read from the agent's own registry entry rather than hand-written per row:
+    the launcher is not always the obvious name (``pi`` attaches through
+    ``pi-acp``, fast-agent through ``uvx``), and a guess would report a row as
+    ready that cannot start.
+    """
+    try:
+        from superqode.agents.acp_registry import get_registry_agent_by_short_name
+
+        agent = get_registry_agent_by_short_name(short_name)
+    except Exception:  # noqa: BLE001 - a probe must never break the picker
+        return False
+    command = str((agent or {}).get("run_command", "") or "").strip()
+    if not command:
+        return False
+    return shutil.which(command.split()[0]) is not None
+
+
+def _acp_probe(short_name: str) -> Callable[[], bool]:
+    """Bind one agent's PATH probe without a late-binding lambda."""
+
+    def _probe() -> bool:
+        return acp_agent_binary_present(short_name)
+
+    return _probe
 
 
 def _vendor_key_auth(
@@ -427,6 +461,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         auth=_key_auth(
             "opencode-key",
             "acp-attach",
+            detect=_acp_probe("opencode"),
+            unavailable_hint="install OpenCode, then `opencode acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),
@@ -460,7 +496,12 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             "vendor-key-rpc",
             connector="key-harness",
             byok_providers=_PRIME_BYOK_PROVIDERS,
-            local_providers=_DSH_LOCAL_PROVIDERS,
+            local_providers=_PRIME_LOCAL_PROVIDERS,
+            detect=_prime_agent_present,
+            unavailable_hint=(
+                "install Prime Agent with "
+                "`curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`"
+            ),
         ),
         hub_id="prime-agent",
         vendor_owned=True,
@@ -576,6 +617,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         auth=_key_auth(
             "grok-key",
             "acp-attach",
+            detect=_acp_probe("grok"),
+            unavailable_hint="install Grok Build, then `grok agent stdio` must be runnable",
             env_vars=("GROK_CODE_XAI_API_KEY",),
             optional_env=("XAI_API_KEY",),
             byok_providers=(),
@@ -668,6 +711,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         auth=_key_auth(
             "qwen-code-key",
             "acp-attach",
+            detect=_acp_probe("qwen"),
+            unavailable_hint="run `npm install -g @qwen-code/qwen-code`, then `qwen --acp`",
             env_vars=("QWEN_API_KEY", "DASHSCOPE_API_KEY"),
             byok_providers=("alibaba",),
             local_providers=_QWEN_LOCAL_PROVIDERS,
@@ -694,6 +739,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             *_key_auth(
                 "fast-agent",
                 "acp-attach",
+                detect=_acp_probe("fast-agent"),
+                unavailable_hint="install uv so `uvx` can run fast-agent-acp",
                 byok_providers=None,
                 local_providers=None,
             ),
@@ -720,6 +767,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             *_key_auth(
                 "pi",
                 "acp-attach",
+                detect=_acp_probe("pi"),
+                unavailable_hint="install the Pi ACP adapter so `pi-acp` is on PATH",
                 byok_providers=None,
                 local_providers=None,
             ),
@@ -880,10 +929,15 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         openness="open",
         license="MIT",
         repository="https://github.com/MoonshotAI/kimi-code",
+        # Same shape as qwen-code-key: its own key variables plus an ACP agent,
+        # so the declared provider lists are reachable rather than decorative.
         auth=_key_auth(
             "kimi-code-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("kimi"),
+            unavailable_hint="install Kimi Code, then `kimi acp` must be runnable",
             env_vars=("MOONSHOT_API_KEY", "KIMI_API_KEY"),
+            byok_provider="moonshot",
             byok_providers=("moonshot",),
             local_providers=_QWEN_LOCAL_PROVIDERS,
         ),
@@ -905,7 +959,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             connector="vendor-key",
             env_vars=("QODER_PERSONAL_ACCESS_TOKEN",),
             inject_env=True,
-            detect=_qoder_binary_present,
+            detect=_acp_probe("qoder"),
             unavailable_hint="run `npm install -g qoder-cli`, then sign in with Qoder CLI",
         ),
         acp_agent="qoder",
@@ -934,7 +988,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             byok_providers=("poolside",),
             local_providers=_POOLSIDE_LOCAL_PROVIDERS,
             inject_env=True,
-            detect=_poolside_binary_present,
+            detect=_acp_probe("poolside"),
             unavailable_hint="run `npm install -g @poolsideai/pool`, then sign in with Pool CLI",
         ),
         acp_agent="poolside",

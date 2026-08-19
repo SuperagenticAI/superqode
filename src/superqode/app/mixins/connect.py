@@ -350,7 +350,11 @@ class ConnectMixin:
             _drop_pending()
             self._begin_vendor_key(profile, log)
             return
-        attaches = after_auth == "acp-attach" and bool(entry.acp_agent)
+        # Both hand the loop to someone else after the model step: one over ACP,
+        # one over Prime's Python RPC. Neither switches a SuperQode harness.
+        attaches = (after_auth == "acp-attach" and bool(entry.acp_agent)) or (
+            after_auth == "vendor-key-rpc"
+        )
         if after_auth != "switch-and-model" and not attaches:
             _drop_pending()
             self._write_harness_setup_card(log, entry, key_spec)
@@ -781,6 +785,110 @@ class ConnectMixin:
             model=model,
             auth_mode="local" if is_local else "byok",
         )
+        return True
+
+    def _attach_key_harness_over_rpc(
+        self, provider: str, model: str, provider_def, log: ConversationLog
+    ) -> bool:
+        """Run Prime Agent on the chosen model through its Python RPC backend.
+
+        Prime owns the loop here as much as an ACP agent does, but it is not an
+        ACP process: a cloud provider is handed its key in the child env, and a
+        local endpoint is registered in Prime's own ``models.json``, which is
+        the mechanism Prime documents for custom OpenAI-compatible servers.
+        """
+        from superqode.providers import prime_agent as prime
+        from superqode.providers.credentials import provider_api_key
+        from superqode.providers.dynamic import resolve_base_url
+        from superqode.providers.harness_catalog import get_entry
+        from superqode.providers.registry import ProviderCategory
+
+        session = getattr(self, "_key_harness_session", None)
+        if session is None or session.after_auth != "vendor-key-rpc":
+            return False
+        entry = get_entry(session.entry_id)
+        if entry is None:
+            return False
+        if not prime.is_installed():
+            if log is not None:
+                log.add_error("Prime Agent is not installed.")
+                log.add_info(f"Install: {prime.INSTALL_HINT}")
+            return True
+
+        is_local = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
+        extra_env: dict[str, str] = {}
+        if is_local:
+            base_url = resolve_base_url(provider_def) or ""
+            if not base_url:
+                if log is not None:
+                    log.add_error(
+                        f"SuperQode does not know a base URL for {provider}, "
+                        "so Prime cannot be pointed at it."
+                    )
+                return True
+            # Prime reads custom providers as OpenAI-compatible endpoints.
+            endpoint = base_url.rstrip("/")
+            if not endpoint.endswith("/v1"):
+                endpoint = f"{endpoint}/v1"
+            try:
+                _providers, _models, path = prime.merge_local_models(
+                    {provider: (endpoint, [model])}
+                )
+            except Exception as exc:  # noqa: BLE001 - report, never half-connect
+                if log is not None:
+                    log.add_error(f"Could not register {provider} with Prime Agent: {exc}")
+                return True
+            if log is not None:
+                log.add_info(f"Registered {provider}/{model} at {endpoint} in {path}.")
+        else:
+            key = provider_api_key(provider_def) or ""
+            names = tuple(getattr(provider_def, "env_vars", ()) or ())
+            if not key or not names:
+                if log is not None:
+                    self._write_api_key_required_panel(
+                        log,
+                        provider_name=(provider_def.name if provider_def else provider),
+                        env_vars=names,
+                        login_id=provider,
+                        docs_url=str(getattr(provider_def, "docs_url", "") or ""),
+                        retry=f":connect {entry.id}",
+                    )
+                return True
+            for name in names:
+                extra_env[name] = key
+
+        connected = self._connect_prime_rpc(
+            f"{provider}/{model}" if provider and model else model,
+            log,
+            extra_env=extra_env,
+        )
+        if not connected:
+            return True
+        self._save_connection_config(
+            category=session.return_menu,
+            auth_mode="local" if is_local else "byok",
+            harness_id=session.harness_id or session.entry_id,
+            profile_id=session.entry_id,
+            acp_agent="",
+            openness=session.openness,
+            provider=provider,
+            model=model,
+            transport="Python RPC",
+            after_auth=session.after_auth,
+        )
+        _CONNECT_LOG.info(
+            "connect.completed category=%s auth_mode=%s harness_id=%s provider=%s after_auth=%s",
+            session.return_menu,
+            "local" if is_local else "byok",
+            session.entry_id,
+            provider,
+            session.after_auth,
+        )
+        if session.openness == "open":
+            record = getattr(self, "_record_milestone", None)
+            if callable(record):
+                record("connected_open_harness")
+        self._clear_key_harness_session()
         return True
 
     def _attach_key_harness_from_env(self, entry, spec, log: ConversationLog) -> bool:
@@ -1292,8 +1400,13 @@ class ConnectMixin:
         pure=None,
         select_default: bool = True,
         session_id: str | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> bool:
-        """Connect Prime Agent through the native Python RPC HarnessSpec backend."""
+        """Connect Prime Agent through the native Python RPC HarnessSpec backend.
+
+        ``extra_env`` reaches the Prime process only, which is how the Open
+        key row hands over a provider key without exporting it here.
+        """
         from pathlib import Path
 
         from superqode.providers import prime_agent as prime
@@ -1330,6 +1443,9 @@ class ConnectMixin:
                         if str(gate).strip():
                             args.extend(("--autonomous-gate", str(gate).strip()))
                 environment.update(opts.env())
+            # Last, so a key resolved for this connection wins over a pinned
+            # launch option that happens to use the same name.
+            environment.update(dict(extra_env or {}))
             runtime = dataclasses.replace(
                 spec.runtime,
                 config={"prime_agent": {"args": args, "env": environment}},
@@ -2334,9 +2450,11 @@ class ConnectMixin:
                 log.add_error(f"{provider} is not available for {key_session.entry_id}.")
                 return
 
-        # An Open row that ends in an ACP attach never runs the SuperQode loop:
-        # the picker only chose which credentials the agent is handed.
+        # An Open row that ends in someone else's loop never runs the SuperQode
+        # one: the picker only chose which credentials that agent is handed.
         if self._attach_key_harness_over_acp(provider, model, provider_def, log):
+            return
+        if self._attach_key_harness_over_rpc(provider, model, provider_def, log):
             return
 
         # Show experimental warning for vLLM and SGLang

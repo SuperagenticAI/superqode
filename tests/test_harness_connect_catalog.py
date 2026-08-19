@@ -220,28 +220,64 @@ def test_switch_and_model_allowlists_match_the_hosted_adapters():
     assert "deepagents-code" not in (auth_allowlist(sdk, "byok") or ())
 
 
-def test_a_closed_row_reports_whether_its_cli_is_installed():
-    """Qoder and Poolside claimed "ready" on any machine.
+def test_every_attaching_row_reports_whether_its_agent_can_start():
+    """A row that cannot launch its agent must not read as ready.
 
-    Factory and Junie probe PATH, so the two rows without a probe were the odd
-    ones out: the list said ready and the attach then failed.
+    Only Factory and Junie probed PATH. Every other attaching row fell through
+    to the `_always_ready` default, so the list said ready on any machine and
+    the attach then failed. `detect is not None` does not catch this, because
+    the default is itself a callable: the probe has to be a real one.
     """
     from superqode.providers.connection_profiles import (
         CONNECT_MENU_CLOSED,
+        CONNECT_MENU_OPEN,
         list_connection_profiles,
     )
 
-    for entry_id in ("qoder-key", "poolside-key"):
-        entry = get_entry(entry_id)
-        spec = next(item for item in entry.auth if item.detect is not None)
-        assert spec.unavailable_hint
+    attaching = {
+        entry.id
+        for menu in ("open", "closed")
+        for entry in list_entries(menu)
+        for spec in entry.auth
+        if spec.mode in {"byok", "local"}
+        and spec.after_auth in {"acp-attach", "vendor-key-acp"}
+        and entry.acp_agent
+    }
+    assert attaching, "the catalog must draw some attaching rows"
 
-    unprobed = [
-        profile.id
-        for profile in list_connection_profiles(CONNECT_MENU_CLOSED)
-        if profile.acp_agent and profile.detect is None
+    profiles = {
+        profile.id: profile
+        for profile in (
+            *list_connection_profiles(CONNECT_MENU_OPEN),
+            *list_connection_profiles(CONNECT_MENU_CLOSED),
+        )
+    }
+    unconditional = [
+        row
+        for row in sorted(attaching)
+        if getattr(profiles[row].detect, "__name__", "") == "_always_ready"
     ]
-    assert unprobed == []
+    assert unconditional == [], f"these rows claim ready on any machine: {unconditional}"
+
+    missing_hint = [row for row in sorted(attaching) if not profiles[row].unavailable_hint]
+    assert missing_hint == [], f"these rows go unavailable without saying why: {missing_hint}"
+
+
+def test_an_agent_probe_uses_the_command_the_registry_launches():
+    """The launcher is not always the obvious name.
+
+    Pi attaches through `pi-acp` and fast-agent through `uvx`, so a probe
+    written from the agent's short name would report a row as ready that
+    cannot start.
+    """
+    from superqode.providers.harness_catalog import acp_agent_binary_present
+
+    from superqode.agents.acp_registry import get_registry_agent_by_short_name
+
+    assert get_registry_agent_by_short_name("pi")["run_command"].split()[0] == "pi-acp"
+    assert get_registry_agent_by_short_name("fast-agent")["run_command"].split()[0] == "uvx"
+    # An agent the registry does not know can never be reported as installed.
+    assert acp_agent_binary_present("not-a-real-agent") is False
 
 
 def test_poolside_offers_the_local_endpoint_its_row_promises():

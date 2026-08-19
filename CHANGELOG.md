@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.101] - 2026-08-19
+
+### Added
+
+- `:connect kimi-code-key` connects instead of printing a setup card. It
+  declared a Moonshot key, a BYOK provider, and a local list while sitting on
+  the setup-card route, so none of that was reachable. It now attaches over ACP
+  on an exported `MOONSHOT_API_KEY` or `KIMI_API_KEY`, and asks for a model
+  otherwise.
+- `:connect prime-agent-key` runs Prime Agent on the model you pick. Its
+  `vendor-key-rpc` route was never implemented, so its declared provider lists
+  were unreachable. A cloud provider's key now reaches the Prime process
+  through its child environment, and a local pick is registered in Prime's own
+  `models.json`, which is the mechanism Prime documents for custom
+  OpenAI-compatible endpoints. Its local list is narrowed to the engines
+  SuperQode can resolve a base URL for.
+
+### Fixed
+
+- Every attaching row reports whether its agent can actually start. 0.2.100
+  added probes for Factory, Junie, Qoder, and Poolside, but the rest still fell
+  through to a default that reports ready on any machine, so the list promised
+  a connection that failed at the attach. The probe reads the command the ACP
+  registry launches rather than the agent's name, because the two differ: Pi
+  attaches through `pi-acp` and fast-agent through `uvx`.
+
 ## [0.2.100] - 2026-08-18
 
 ### Added

@@ -236,7 +236,7 @@ from that row yet.
 | DeepSeek Harness | MIT | `:connect deepseek-harness` | Switches to the hosted adapter, then DeepSeek BYOK or a local OpenAI-compatible URL |
 | DeepAgents SDK | MIT | `:connect deepagents` | Switches to the SDK adapter, then Anthropic, Google, or a documented local extra |
 | OpenCode | MIT | `:connect opencode-key` | Asks for a key or local model, then attaches OpenCode over ACP with it |
-| Prime Agent | MIT | `:connect prime-agent-key` | Setup card |
+| Prime Agent | MIT | `:connect prime-agent-key` | Asks for a key or local model, then runs Prime through its Python RPC backend |
 | jcode | MIT | `:connect jcode` | Setup card |
 | Grok Build | Apache-2.0 | `:connect grok-key` | Attaches on an exported `GROK_CODE_XAI_API_KEY`, otherwise asks for a local endpoint |
 | Qwen Code | Apache-2.0 | `:connect qwen-code-key` | Attaches on an exported `QWEN_API_KEY` or `DASHSCOPE_API_KEY`, otherwise asks for a model |
@@ -249,13 +249,16 @@ from that row yet.
 | Hermes Agent | MIT | `:connect hermes-key` | Setup card |
 | Letta Code | Apache-2.0 | `:connect letta` | Setup card |
 | Warp Agent | AGPL-3.0 | `:connect warp` | Setup card |
-| Kimi Code | MIT | `:connect kimi-code-key` | Setup card |
+| Kimi Code | MIT | `:connect kimi-code-key` | Attaches on an exported `MOONSHOT_API_KEY` or `KIMI_API_KEY`, otherwise asks for a model |
 
-Eight rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
+Ten rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
 SuperQode-hosted adapter and then run the model you choose. OpenCode, Grok
-Build, Qwen Code, fast-agent, and Pi keep their own loop: the model step only
-decides which credentials they are handed, and SuperQode passes those to the
-agent process alone rather than exporting them into your shell.
+Build, Qwen Code, Kimi Code, fast-agent, Pi, and Prime Agent keep their own
+loop: the model step only decides which credentials they are handed, and
+SuperQode passes those to the agent process alone rather than exporting them
+into your shell. Prime is reached over its Python RPC backend rather than ACP,
+so a local pick is registered in Prime's own `models.json` instead of being
+passed as an environment variable.
 
 The remaining rows print a setup card naming the key or local model to
 configure in the harness itself. Every id in the table also works as
