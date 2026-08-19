@@ -112,6 +112,7 @@ def test_bundled_catalog_uses_current_acp_commands():
         "devin": "devin acp",
         "harn": "harn serve acp",
         "kilo": "kilo acp",
+        "fx": "fx acp",
     }
 
     for short_name, command in expected.items():

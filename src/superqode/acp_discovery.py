@@ -32,6 +32,7 @@ Supported Agents (27+ ACP Agents from Registry):
 - Corust (corust) - Rust partner agent
 - crow-cli (crow) - Minimal ACP Native Coding Agent
 - DimCode (dimcode) - Leading models at your command
+- fx (fx) - Vercel Labs experimental coding agent
 
 Features:
 - Auto-detection of installed agents
@@ -223,6 +224,24 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "requires_api_key": False,
         "api_key_env_vars": ["XAI_API_KEY", "GROK_CODE_XAI_API_KEY"],
         "check_command": ["grok", "--version"],
+    },
+    # =========================================================================
+    # fx - Vercel Labs experimental coding agent with native ACP
+    # =========================================================================
+    {
+        "name": "fx",
+        "short_name": "fx",
+        "command": ["fx", "acp"],
+        "icon": "fx",
+        "color": "#0070f3",
+        "description": (
+            "Vercel Labs' experimental native coding agent. "
+            "Uses Vercel AI Gateway credits after `fx login`."
+        ),
+        "website": "https://fx.sh",
+        "requires_api_key": False,
+        "api_key_env_vars": ["AI_GATEWAY_API_KEY"],
+        "check_command": ["fx", "--version"],
     },
     # =========================================================================
     # 4. JetBrains Junie - JetBrains AI Agent

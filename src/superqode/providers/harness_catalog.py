@@ -702,6 +702,61 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         wired=True,
     ),
     HarnessCatalogEntry(
+        id="fx",
+        label="fx",
+        description=(
+            "Vercel Labs' experimental coding agent on your Vercel login over ACP. "
+            "Uses AI Gateway credits."
+        ),
+        openness="open",
+        license="Apache-2.0",
+        repository="https://github.com/vercel-labs/fx",
+        homepage="https://fx.sh",
+        auth=_plan_auth("fx", connector="acp", include_acp=True),
+        acp_agent="fx",
+        hub_id="fx",
+        vendor_owned=True,
+        wired=True,
+        support_note=(
+            "fx is experimental. Every model request goes through Vercel AI Gateway. "
+            "There is no local-model path. SuperQode attaches over `fx acp` after "
+            "`fx login`. Spend a leftover Gateway key with :connect fx-key."
+        ),
+    ),
+    HarnessCatalogEntry(
+        id="fx-key",
+        label="fx (API key)",
+        description=(
+            "fx with AI_GATEWAY_API_KEY. Not a local model — every request "
+            "goes through Vercel AI Gateway."
+        ),
+        openness="open",
+        license="Apache-2.0",
+        repository="https://github.com/vercel-labs/fx",
+        homepage="https://fx.sh",
+        auth=_vendor_key_auth(
+            "fx-key",
+            "vendor-key-acp",
+            connector="vendor-key",
+            env_vars=("AI_GATEWAY_API_KEY",),
+            inject_env=True,
+            detect=_acp_probe("fx"),
+            unavailable_hint=(
+                "install with `curl -fsSL https://fx.sh/setup.sh | bash`, then "
+                "set AI_GATEWAY_API_KEY or run `fx setup`"
+            ),
+        ),
+        acp_agent="fx",
+        hub_id="fx",
+        vendor_owned=True,
+        wired=True,
+        list_visible=True,
+        support_note=(
+            "fx does not accept a SuperQode BYOK provider or a local model. "
+            "This row injects AI_GATEWAY_API_KEY into the fx ACP child only."
+        ),
+    ),
+    HarnessCatalogEntry(
         id="qwen-code-key",
         label="Qwen Code (API key)",
         description="Qwen Code with a DashScope key or an OpenAI-compat local endpoint.",

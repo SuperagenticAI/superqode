@@ -1,0 +1,76 @@
+# Schema defined in agent_schema.py
+# https://github.com/vercel-labs/fx
+#
+# fx is Vercel Labs' experimental Zig coding agent. SuperQode attaches over
+# ACP (`fx acp`). The Subscriptions row uses a local `fx login` session.
+# The Open row is `:connect fx-key` with AI_GATEWAY_API_KEY.
+
+identity = "fx.sh"
+name = "fx"
+short_name = "fx"
+url = "https://fx.sh"
+protocol = "acp"
+author_name = "Vercel Labs"
+author_url = "https://github.com/vercel-labs"
+publisher_name = "Vercel Labs"
+publisher_url = "https://github.com/vercel-labs/fx"
+type = "coding"
+description = "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits."
+tags = ["open-source", "subscription", "acp", "experimental"]
+catalog_tier = "featured"
+run_command."*" = "fx acp"
+api_key_env_vars = ["AI_GATEWAY_API_KEY"]
+
+help = '''
+# fx
+
+fx is Vercel Labs' Apache-2.0 coding agent. SuperQode starts its native ACP
+server with:
+
+```bash
+fx acp
+```
+
+Status is experimental. fx owns the loop, tools, permissions, skills, MCP,
+and sessions. Every model request goes through Vercel AI Gateway.
+
+## Install
+
+```bash
+curl -fsSL https://fx.sh/setup.sh | bash
+```
+
+## Subscription login
+
+Sign in with Vercel. That session spends the selected team's AI Gateway
+credits, not a leftover `AI_GATEWAY_API_KEY`.
+
+```bash
+fx login
+```
+
+On a headless machine, set `FX_NO_OPEN_BROWSER=1` before `fx login` so the
+authorization URL is printed instead of opened.
+
+Then connect in SuperQode with `:connect fx` or `superqode --connect fx`.
+The official CLI keeps the OAuth session in `~/.fx/auth.json`. SuperQode
+does not copy the token.
+
+## Models
+
+fx resolves models against the Vercel AI Gateway catalog. The compiled
+default is `zai/glm-5.2-fast`. There is no local-model path.
+
+## API key
+
+`fx setup` or `AI_GATEWAY_API_KEY` is fx's own key path. SuperQode's
+Subscriptions row strips `AI_GATEWAY_API_KEY` so a leftover key cannot
+divert the session onto metered Gateway billing. Spend that key with
+`:connect fx-key` (Open harnesses). It injects the variable into the
+`fx acp` child only. fx does not accept a SuperQode BYOK provider or a
+local model.
+'''
+
+[actions."*".install]
+command = "curl -fsSL https://fx.sh/setup.sh | bash"
+description = "Install the official fx CLI"

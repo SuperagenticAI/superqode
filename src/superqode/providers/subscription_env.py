@@ -39,6 +39,9 @@ VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
     # and Muse never reads it, so it is deliberately not listed here.
     "muse": ("META_API_KEY",),
     "junie": ("JETBRAINS_API_KEY",),
+    # OIDC is Vercel team identity, not a leftover metered key. Strip only
+    # the Gateway API key so a subscription connect stays on `fx login`.
+    "fx": ("AI_GATEWAY_API_KEY",),
 }
 
 #: Profile ids and runtime names that mean the same vendor as a dict key above.
@@ -56,6 +59,7 @@ _VENDOR_ALIASES: Dict[str, str] = {
     "muse-code": "muse",
     "muse-cli": "muse",
     "junie-key": "junie",
+    "fx-key": "fx",
 }
 
 #: Variables a user sets to deliberately opt a subscription route into an
@@ -102,21 +106,38 @@ def subscription_child_env(
     return source, stripped
 
 
-def closed_key_profile_id(vendor: str) -> Optional[str]:
-    """Profile id for this vendor's Closed key path, if one is drawn."""
+_VENDOR_KEY_AFTER_AUTH = frozenset({"vendor-key-acp", "vendor-key-cli"})
+
+
+def _vendor_key_entry(vendor: str):
+    """The drawn dedicated key row for this vendor, Open or Closed."""
     from superqode.providers.harness_catalog import HARNESS_CATALOG
 
     key = resolve_vendor(vendor)
     if key is None:
         return None
     for entry in HARNESS_CATALOG:
-        if not entry.list_visible or entry.openness != "closed":
+        if not entry.list_visible:
             continue
         if (entry.acp_agent or "").lower() != key:
             continue
-        if any(spec.after_auth == "vendor-key-acp" for spec in entry.auth):
-            return entry.id
+        if any(spec.after_auth in _VENDOR_KEY_AFTER_AUTH for spec in entry.auth):
+            return entry
     return None
+
+
+def vendor_key_profile_id(vendor: str) -> Optional[str]:
+    """Profile id for this vendor's dedicated key path, if one is drawn."""
+    entry = _vendor_key_entry(vendor)
+    return None if entry is None else entry.id
+
+
+def closed_key_profile_id(vendor: str) -> Optional[str]:
+    """Profile id for this vendor's Closed key path, if one is drawn."""
+    entry = _vendor_key_entry(vendor)
+    if entry is None or entry.openness != "closed":
+        return None
+    return entry.id
 
 
 def subscription_notice(
@@ -135,12 +156,10 @@ def subscription_notice(
         return []
     joined = ", ".join(names)
     plural = "keys are" if len(names) > 1 else "key is"
-    closed_id = closed_key_profile_id(vendor) if vendor else None
-    if closed_id:
-        spend_hint = (
-            f"Use :connect {closed_id} (Closed harnesses) if you want to spend "
-            "that API key instead."
-        )
+    entry = _vendor_key_entry(vendor) if vendor else None
+    if entry is not None:
+        menu = "Closed harnesses" if entry.openness == "closed" else "Open harnesses"
+        spend_hint = f"Use :connect {entry.id} ({menu}) if you want to spend that API key instead."
     else:
         spend_hint = "Use :connect byok if you want to spend that API key instead."
     return [

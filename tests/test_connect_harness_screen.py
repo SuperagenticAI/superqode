@@ -436,6 +436,7 @@ def test_the_subscriptions_category_holds_every_plan_codex_first():
         "kimi-code",
         "deepagents-code",
         "junie",
+        "fx",
     ]
 
 

@@ -133,6 +133,7 @@ subscriptions` still opens the same screen:
 | GLM Coding Plan | `:connect glm-cli` |
 | Qwen Code | `:connect qwen-code` |
 | Kimi Code | `:connect kimi-code` |
+| Vercel fx | `:connect fx`, `:connect fx-key`, `:fx` |
 
 API-key-only integrations, including the Anthropic and Z.AI general APIs, are
 listed under BYOK rather than Subscriptions. Factory Droid's own key is a

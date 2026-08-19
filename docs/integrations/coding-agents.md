@@ -25,6 +25,8 @@ and normalized events supported by each adapter.
 | Kimi Code | `uv tool install kimi-cli --no-cache`, then complete Kimi CLI setup | `:connect kimi-code` | `superqode agents doctor kimi` | [Kimi Code](../providers/kimi.md#kimi-code-subscription-and-acp) |
 | Qwen Code | `npm install -g @qwen-code/qwen-code`, then `qwen auth` | `:connect qwen-code` | `superqode agents doctor qwen` | [Qwen Code](../providers/qwen-code.md) |
 | Deep Agents Code | `curl -LsSf https://langch.in/dcode \| bash`, then `dcode` and `/auth` | `:connect deepagents-code` | `superqode agents doctor deepagents-code` | [LangChain DeepAgents](../providers/deepagents.md) |
+| fx | `curl -fsSL https://fx.sh/setup.sh \| bash`, then `fx login` | `:connect fx` | `superqode agents doctor fx` | [fx](../providers/fx.md) |
+| fx (API key) | `fx setup` or set `AI_GATEWAY_API_KEY` | `:connect fx-key` | `superqode agents doctor fx` | [fx](../providers/fx.md) |
 | Any installed ACP agent | Install the agent described by the ACP catalog | `:connect acp <agent>` | `superqode agents doctor <agent>` | [ACP Coding Agents](../providers/acp.md) |
 
 The `vendor-sdks` bundle is intended for environments that require all four

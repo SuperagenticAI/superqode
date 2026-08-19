@@ -194,6 +194,8 @@ direct profile, so the submenu never becomes a required step:
 :connect kimi-code
 :connect deepagents-code
 :connect junie
+:connect fx
+:fx
 ```
 
 Only vendor-plan and vendor-managed sign-in routes appear in this submenu.
@@ -250,15 +252,17 @@ from that row yet.
 | Letta Code | Apache-2.0 | `:connect letta` | Setup card |
 | Warp Agent | AGPL-3.0 | `:connect warp` | Setup card |
 | Kimi Code | MIT | `:connect kimi-code-key` | Attaches on an exported `MOONSHOT_API_KEY` or `KIMI_API_KEY`, otherwise asks for a model |
+| fx | Apache-2.0 | `:connect fx-key` | Attaches on `AI_GATEWAY_API_KEY` (or `fx setup`). No local model or SuperQode BYOK picker |
 
-Ten rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
+Eleven rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
 SuperQode-hosted adapter and then run the model you choose. OpenCode, Grok
-Build, Qwen Code, Kimi Code, fast-agent, Pi, and Prime Agent keep their own
-loop: the model step only decides which credentials they are handed, and
+Build, Qwen Code, Kimi Code, fast-agent, Pi, Prime Agent, and fx keep their
+own loop: the model step only decides which credentials they are handed, and
 SuperQode passes those to the agent process alone rather than exporting them
-into your shell. Prime is reached over its Python RPC backend rather than ACP,
-so a local pick is registered in Prime's own `models.json` instead of being
-passed as an environment variable.
+into your shell. fx skips the model picker entirely and injects
+`AI_GATEWAY_API_KEY` into the child. Prime is reached over its Python RPC
+backend rather than ACP, so a local pick is registered in Prime's own
+`models.json` instead of being passed as an environment variable.
 
 The remaining rows print a setup card naming the key or local model to
 configure in the harness itself. Every id in the table also works as
@@ -319,6 +323,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | Z.AI | ZCode desktop harness, inspect only until a CLI/ACP surface exists | `:connect zcode` |
 | Cognition | Devin ACP, Devin CLI runtime | `:connect devin`, `:connect acp devin`, `:runtime devin-cli` |
 | JetBrains | Junie on a JetBrains AI plan, or `JETBRAINS_API_KEY` on Closed | `:connect junie`, `:connect junie-key`, `:connect acp junie` |
+| Vercel fx | fx ACP on a Vercel login, or `AI_GATEWAY_API_KEY` on Open | `:connect fx`, `:connect fx-key`, `:connect acp fx` |
 | Letta | Letta Code on Open: Letta Cloud, a provider key, or a local model | `:connect letta` |
 | Warp | Warp Agent CLI on Open: Warp account or `WARP_API_KEY` | `:connect warp` |
 | Amazon | Amazon Bedrock BYOK, Kiro/Amazon Q Developer subscription through ACP | `:connect byok amazon-bedrock <model>`, `:connect kiro`, `:connect acp kiro` |
@@ -371,19 +376,20 @@ definitions.
 | DeepAgents | `deepagents` | Deep Agents Code | `deepagents-code` |
 | Devin | `devin` | Dirac | `dirac` |
 | Factory Droid | `droid` | fast-agent | `fast-agent` |
-| fount | `fount` | Gemini CLI | `gemini` |
-| GLM Agent | `glm` | Goose | `goose` |
-| Grok Build | `grok` | Harn | `harn` |
-| Hermes Agent | `hermes` | JetBrains Junie | `junie` |
-| Kilo | `kilo` | Kimi Code | `kimi` |
-| Kiro CLI | `kiro` | LLMling-Agent | `llmlingagent` |
-| Minion Code | `minion` | Mistral Vibe | `mistral-vibe` |
-| OpenClaw | `openclaw` | OpenCode | `opencode` |
-| OpenHands | `openhands` | Pi | `pi` |
-| Poolside | `poolside` | Prime Agent | `prime-agent` |
-| Qoder CLI | `qoder` | Qwen Code | `qwen` |
-| siGit Code | `sigit` | Stakpak | `stakpak` |
-| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
+| fount | `fount` | fx | `fx` |
+| Gemini CLI | `gemini` | GLM Agent | `glm` |
+| Goose | `goose` | Grok Build | `grok` |
+| Harn | `harn` | Hermes Agent | `hermes` |
+| JetBrains Junie | `junie` | Kilo | `kilo` |
+| Kimi Code | `kimi` | Kiro CLI | `kiro` |
+| LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
+| Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
+| OpenCode | `opencode` | OpenHands | `openhands` |
+| Pi | `pi` | Poolside | `poolside` |
+| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
+| Qwen Code | `qwen` | siGit Code | `sigit` |
+| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
+| VT Code | `vtcode` | | |
 
 Inspect installation and authentication requirements:
 

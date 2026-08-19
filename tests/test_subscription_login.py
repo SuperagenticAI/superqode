@@ -13,6 +13,10 @@ def test_get_login_spec_known_and_unknown():
     assert sl.get_login_spec("codex").id == "codex"
     assert sl.get_login_spec("GROK").id == "grok"
     assert sl.get_login_spec("copilot").login_args == ("login",)
+    assert sl.get_login_spec("fx").id == "fx"
+    assert sl.get_login_spec("fx").login_args == ("login",)
+    assert sl.FX_LOGIN.interactive_tty is True
+    assert sl.FX_LOGIN.env_key_fallbacks == ()
     with pytest.raises(KeyError):
         sl.get_login_spec("nope")
 

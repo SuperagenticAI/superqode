@@ -3932,8 +3932,8 @@ class CommandImplMixin:
         if profile is not None:
             if fork_session:
                 log.add_error(
-                    f"{profile.label} manages its own threads. Connect first, then use "
-                    f":{profile.id} fork or its session command."
+                    f"{profile.label} manages its own threads. Connect with "
+                    f":connect {profile.id} instead of forking."
                 )
                 return
             from superqode.app.harness_picker import harness_picker_items

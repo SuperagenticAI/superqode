@@ -66,7 +66,7 @@ Connect something, then work normally:
 
 ```text
 :connect                # local models, ACP agents, BYOK, or a vendor plan
-:connect codex          # or claude, copilot, grok, kimi-code, qwen-code
+:connect codex          # or claude, copilot, grok, kimi-code, qwen-code, fx
 ```
 
 ```text

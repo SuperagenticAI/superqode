@@ -13,6 +13,7 @@ from superqode.providers.connection_profiles import (
     CONNECT_MENU_MODELS,
     CONNECT_MENU_ROOT,
     CONNECT_MENU_SUBSCRIPTIONS,
+    CONNECT_MENU_VENDORS,
     ConnectionProfile,
     connection_profile_ids,
     get_connection_profile,
@@ -160,6 +161,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "kimi-code",
     "deepagents-code",
     "junie",
+    "fx",
     "acp",
     "harness-core",
     "harness-rlm",
@@ -192,6 +194,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "prime-agent-key",
     "jcode",
     "grok-key",
+    "fx-key",
     "qwen-code-key",
     "fast-agent",
     "pi",
@@ -382,6 +385,25 @@ def test_kimi_and_qwen_are_first_party_acp_profiles():
     assert qwen.badges == kimi.badges == ["open harness", "open weights", "via ACP"]
 
 
+def test_fx_is_a_first_party_acp_subscription():
+    fx = get_connection_profile("fx")
+
+    assert fx.connector == "acp"
+    assert fx.acp_agent == "fx"
+    assert fx.menu == CONNECT_MENU_VENDORS
+    assert fx.self_contained is True
+    assert fx.badges == ["open harness", "Apache-2.0", "AI Gateway models", "via ACP"]
+    assert "experimental" in fx.description.lower()
+    assert "fx.sh/setup.sh" in fx.unavailable_hint
+    assert "fx login" in fx.unavailable_hint
+
+    fx_key = get_connection_profile("fx-key")
+    assert fx_key.connector == "vendor-key"
+    assert fx_key.acp_agent == "fx"
+    assert fx_key.harness_openness == "open"
+    assert "AI_GATEWAY_API_KEY" in fx_key.description or "gateway" in fx_key.description.lower()
+
+
 def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
     profile = get_connection_profile("copilot")
     assert profile.label == "GitHub Copilot"
@@ -440,6 +462,7 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
         "prime-agent-key",
         "jcode",
         "grok-key",
+        "fx-key",
         "qwen-code-key",
         "goose-key",
         "cline-key",
@@ -462,6 +485,7 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
         "deepagents-code",
         "junie",
         "junie-key",
+        "fx",
     }
     assert hidden.isdisjoint(ids)
 
@@ -893,6 +917,14 @@ def test_dispatch_droid_key_is_vendor_key_not_subscription(_dispatch):
     assert ("acp", "droid") not in stub.calls
 
 
+def test_dispatch_fx_key_is_vendor_key_not_subscription(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("fx-key"), log=None)
+
+    assert ("vendor-key", "fx-key") in stub.calls
+    assert ("acp", "fx") not in stub.calls
+
+
 def test_dispatch_kimi_and_qwen_route_to_official_acp_agents(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("kimi-code"), log=None)
@@ -900,6 +932,83 @@ def test_dispatch_kimi_and_qwen_route_to_official_acp_agents(_dispatch):
 
     assert ("acp", "kimi") in stub.calls
     assert ("acp", "qwen") in stub.calls
+
+
+def test_fx_tui_status_and_help_do_not_attach():
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Log:
+        def __init__(self):
+            self.messages = []
+
+        def add_info(self, value):
+            self.messages.append(str(value))
+
+        def add_error(self, value):
+            self.messages.append(str(value))
+
+        def write(self, value):
+            self.messages.append(str(value))
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self.dispatched = []
+
+        def _dispatch_connection_profile(self, profile, log):
+            self.dispatched.append(profile.id)
+
+    stub = Stub()
+    log = Log()
+    ConnectMixin._fx_cmd(stub, "help", log)
+    ConnectMixin._fx_cmd(stub, "status", log)
+
+    assert stub.dispatched == []
+    assert any("Usage: :fx" in msg for msg in log.messages)
+
+
+def test_harness_switch_fx_fork_does_not_invent_a_fork_command():
+    from superqode.app_main import SuperQodeApp
+
+    class Log:
+        def __init__(self):
+            self.err = []
+
+        def add_error(self, value):
+            self.err.append(str(value))
+
+        def add_info(self, value):
+            pass
+
+    app = object.__new__(SuperQodeApp)
+    app._clear_acp_extra_env = lambda: None
+    log = Log()
+    SuperQodeApp._harness_cmd(app, "switch fx --fork", log)
+
+    assert log.err
+    assert ":fx fork" not in log.err[0]
+    assert ":connect fx" in log.err[0]
+
+
+def test_fx_tui_connect_dispatches_the_subscription_profile():
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self.dispatched = []
+
+        def _dispatch_connection_profile(self, profile, log):
+            self.dispatched.append(profile.id)
+
+    stub = Stub()
+    ConnectMixin._fx_cmd(stub, "connect", SimpleNamespace())
+    assert stub.dispatched == ["fx"]
+
+
+def test_dispatch_fx_routes_to_official_acp_agent(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("fx"), log=None)
+
+    assert ("acp", "fx") in stub.calls
 
 
 def test_dispatch_unavailable_first_party_acp_profile_shows_setup(_dispatch):

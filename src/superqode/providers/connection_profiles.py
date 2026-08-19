@@ -387,6 +387,11 @@ def _grok_cli_ready() -> bool:
     return shutil.which("grok") is not None and (Path.home() / ".grok" / "auth.json").exists()
 
 
+def _fx_cli_ready() -> bool:
+    """Official fx CLI installed with a local Vercel login."""
+    return shutil.which("fx") is not None and (Path.home() / ".fx" / "auth.json").exists()
+
+
 def _env_key_set(*names: str) -> bool:
     """Whether any of these API-key environment variables is set."""
     return any(os.environ.get(name, "").strip() for name in names)
@@ -955,6 +960,28 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         self_contained=True,
         detect=_junie_cli_ready,
         unavailable_hint="run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
+    ),
+    ConnectionProfile(
+        id="fx",
+        harness_openness="open",
+        model_openness="AI Gateway models",
+        transport="ACP",
+        license="Apache-2.0",
+        label="fx",
+        description=(
+            "Use Vercel Labs' experimental fx agent over ACP through the "
+            "account signed in with `fx login`. Models are billed as Vercel "
+            "AI Gateway credits"
+        ),
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="fx",
+        self_contained=True,
+        detect=_fx_cli_ready,
+        product_detect=lambda: shutil.which("fx") is not None,
+        unavailable_hint=(
+            "install with `curl -fsSL https://fx.sh/setup.sh | bash`, then run `fx login`"
+        ),
     ),
 ]
 

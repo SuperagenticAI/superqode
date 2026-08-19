@@ -63,6 +63,7 @@ _DOCS_BY_ID = {
     "deepagents": f"{DOCS_BASE}providers/deepagents/",
     "deepagents-code": f"{DOCS_BASE}providers/deepagents/",
     "junie": f"{DOCS_BASE}concepts/modes/",
+    "fx": f"{DOCS_BASE}providers/fx/",
 }
 
 _HOMEPAGE_BY_ID = {
@@ -85,6 +86,7 @@ _HOMEPAGE_BY_ID = {
     "junie": "https://www.jetbrains.com/junie/",
     "ecosystem:letta": "https://www.letta.com/",
     "ecosystem:warp": "https://www.warp.dev/agent-cli",
+    "fx": "https://fx.sh",
 }
 
 _COMMANDS_BY_ID = {
@@ -111,6 +113,7 @@ _COMMANDS_BY_ID = {
         ":prime local",
     ),
     "muse": (":connect muse", ":muse status", ":muse login"),
+    "fx": (":connect fx", ":connect fx-key", ":fx status", ":fx login"),
 }
 
 
@@ -172,6 +175,8 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "acp:qwen": HubOpenness("open", "Apache-2.0", "https://github.com/QwenLM/qwen-code"),
     "kimi-code": HubOpenness("open", "MIT", "https://github.com/MoonshotAI/kimi-code"),
     "acp:kimi": HubOpenness("open", "MIT", "https://github.com/MoonshotAI/kimi-code"),
+    "fx": HubOpenness("open", "Apache-2.0", "https://github.com/vercel-labs/fx"),
+    "acp:fx": HubOpenness("open", "Apache-2.0", "https://github.com/vercel-labs/fx"),
     "prime-agent": HubOpenness("open", "MIT", "https://github.com/PrimeIntellect-ai/prime-agent"),
     "acp:prime-agent": HubOpenness(
         "open", "MIT", "https://github.com/PrimeIntellect-ai/prime-agent"
@@ -328,6 +333,14 @@ _SETUP_STEPS_BY_ID = {
             "When Deep Agents Code opens, enter /auth and connect any provider it supports.",
         ),
     ),
+    "fx": (
+        HubSetupStep("Install fx", "curl -fsSL https://fx.sh/setup.sh | bash"),
+        HubSetupStep(
+            "Sign in with Vercel",
+            "fx login",
+            "On a headless machine, set FX_NO_OPEN_BROWSER=1 so the authorization URL is printed.",
+        ),
+    ),
 }
 
 _POPULARITY_RANK = {
@@ -351,6 +364,7 @@ _POPULARITY_RANK = {
     "prime-agent": 170,
     "acp:qoder": 180,
     "deepagents-code": 185,
+    "fx": 188,
     "core": 220,
     "workbench": 230,
     "pipy": 240,

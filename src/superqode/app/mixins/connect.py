@@ -682,7 +682,7 @@ class ConnectMixin:
             spec = next((item for item in entry.auth if item.after_auth == after_auth), None)
         if spec is None:
             if log is not None:
-                log.add_error("This closed harness has no API-key path.")
+                log.add_error("This harness has no API-key path.")
             return False
         resolved, _provider_def, _login_id = self._resolve_vendor_key(spec)
         if not resolved:
@@ -1011,11 +1011,12 @@ class ConnectMixin:
         self._write_harness_setup_card(log, entry, spec)
 
     def _begin_vendor_key(self, profile, log: ConversationLog) -> None:
-        """Closed key path: API Key Required, then vendor ACP with child-only env.
+        """Vendor key path: API Key Required, then vendor ACP with child-only env.
 
-        Resolves a stored credential then env. Never setdefault into the
-        SuperQode process — that would make a later subscription connect see
-        and strip the key.
+        Used by Closed rows and by Open rows that have a locked vendor key
+        (no SuperQode model picker). Resolves a stored credential then env.
+        Never setdefault into the SuperQode process — that would make a later
+        subscription connect see and strip the key.
         """
         from superqode.providers.harness_catalog import get_entry
 
@@ -1030,7 +1031,7 @@ class ConnectMixin:
                 spec = next((item for item in entry.auth if item.mode == "byok"), None)
         if spec is None:
             if log is not None:
-                log.add_error("This closed harness has no API-key path.")
+                log.add_error("This harness has no API-key path.")
             return
 
         resolved, _provider_def, _login_id = self._resolve_vendor_key(spec)
@@ -1060,7 +1061,11 @@ class ConnectMixin:
             "label": entry.label if entry is not None else profile.label,
             "vendor_owned": bool(entry.vendor_owned) if entry is not None else True,
             "harness": agent or "",
-            "note": "API key path — not your Droid CLI login.",
+            "note": (
+                "API key path — not your Droid CLI login."
+                if entry is not None and entry.id == "droid-key"
+                else "API key path — not your subscription login."
+            ),
         }
         self._set_acp_extra_env(extra_env, agent or "")
 
@@ -1076,6 +1081,7 @@ class ConnectMixin:
         (("claude",), ":claude", "Claude Agent SDK options"),
         (("devin",), ":acp devin", "Devin session controls"),
         (("droid", "factory"), ":acp droid", "Droid model and session controls"),
+        (("fx",), ":fx", "fx status, Vercel login, and connect"),
     )
 
     def _vendor_command_hints(self, *names: str) -> list[tuple[str, str]]:
@@ -1532,6 +1538,99 @@ class ConnectMixin:
             log.add_error(f"Unknown muse command: {action}")
             log.add_info("Usage: :muse [connect|login|status|help]")
 
+    def _fx_cmd(self, args: str, log: ConversationLog) -> None:
+        """Handle `:fx` subcommands.
+
+        Sign-in runs Vercel's own `fx login` through the shared subscription
+        login flow. SuperQode never copies `~/.fx/auth.json`.
+        """
+        sub = (args or "").strip().split(maxsplit=1)
+        action = sub[0].lower() if sub and sub[0].strip() else "status"
+
+        if action in {"login", "auth", "signin", "sign-in"}:
+            started = self._begin_subscription_login(
+                "fx",
+                log,
+                on_success=lambda: self._connect_fx(log),
+                reason="fx needs a Vercel login before it can spend AI Gateway credits.",
+            )
+            if not started:
+                log.add_info("fx already has a Vercel login.")
+                self._connect_fx(log)
+        elif action == "connect":
+            self._connect_fx(log)
+        elif action in {"status", "doctor"}:
+            self._show_fx_status(log)
+        elif action in {"help", "?"}:
+            log.add_info("Usage: :fx [connect|login|status|help]")
+        else:
+            log.add_error(f"Unknown fx command: {action}")
+            log.add_info("Usage: :fx [connect|login|status|help]")
+
+    def _connect_fx(self, log: ConversationLog) -> None:
+        """Attach fx over ACP through the Subscriptions profile."""
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        self._dispatch_connection_profile(get_connection_profile("fx"), log)
+
+    def _show_fx_status(self, log: ConversationLog) -> None:
+        """Report fx install, Vercel login, and leftover Gateway-key state."""
+        from superqode.providers.subscription_env import diverting_api_keys
+
+        installed = shutil.which("fx") is not None
+        signed_in = installed and (Path.home() / ".fx" / "auth.json").exists()
+        leftover_key = bool(diverting_api_keys("fx"))
+        auth_path = Path.home() / ".fx" / "auth.json"
+
+        t = Text()
+        t.append("\n  fx\n\n", style=f"bold {THEME['text']}")
+        t.append("    Status    ", style=THEME["muted"])
+        if not installed:
+            t.append("not installed\n", style=THEME["warning"])
+        elif signed_in:
+            t.append("installed, Vercel login found\n", style=THEME["success"])
+        else:
+            t.append("installed, no Vercel login detected\n", style=THEME["warning"])
+        t.append("    Harness   ", style=THEME["muted"])
+        t.append("fx owns the loop (Apache-2.0, experimental)\n", style=THEME["text"])
+        t.append("    Models    ", style=THEME["muted"])
+        t.append("Vercel AI Gateway credits\n", style=THEME["dim"])
+
+        if leftover_key:
+            t.append("\n  AI_GATEWAY_API_KEY is set in this environment.\n", style=THEME["warning"])
+            t.append("  :connect fx ignores it so the session stays on ", style=THEME["muted"])
+            t.append("fx login", style=THEME["cyan"])
+            t.append(".\n", style=THEME["muted"])
+            t.append("  Spend that key with ", style=THEME["muted"])
+            t.append(":connect fx-key", style=THEME["cyan"])
+            t.append(".\n", style=THEME["muted"])
+
+        if not installed:
+            t.append("\n  Install:\n", style=THEME["muted"])
+            t.append("    curl -fsSL https://fx.sh/setup.sh | bash\n", style=THEME["cyan"])
+            t.append("  Then sign in:\n", style=THEME["muted"])
+            t.append("    fx login\n", style=THEME["cyan"])
+            t.append("  Or from SuperQode: ", style=THEME["muted"])
+            t.append(":fx login\n", style=THEME["cyan"])
+            log.write(t)
+            return
+
+        if not signed_in:
+            t.append("\n  No credential found at ", style=THEME["muted"])
+            t.append(str(auth_path), style=THEME["dim"])
+            t.append(".\n", style=THEME["muted"])
+            t.append("  Sign in with Vercel's own CLI:\n", style=THEME["muted"])
+            t.append("    fx login\n", style=THEME["cyan"])
+            t.append("  Or run it from here: ", style=THEME["muted"])
+            t.append(":fx login\n", style=THEME["cyan"])
+        else:
+            t.append("\n  Connect with ", style=THEME["muted"])
+            t.append(":fx connect", style=THEME["cyan"])
+            t.append(" or ", style=THEME["muted"])
+            t.append(":connect fx", style=THEME["cyan"])
+            t.append(".\n", style=THEME["muted"])
+        log.write(t)
+
     def _interactive_login_handoff(self, spec, log: ConversationLog) -> None:
         """Give a vendor's interactive sign-in the real terminal.
 
@@ -1549,6 +1648,7 @@ class ConnectMixin:
 
         binary = binary_path(spec)
         if binary is None:
+            self._subscription_login_on_success = None
             log.add_error(f"The {spec.label} CLI is not installed.")
             for line in spec.install_hint.splitlines():
                 if line.strip():
@@ -1559,6 +1659,7 @@ class ConnectMixin:
             with self.app.suspend():
                 completed = subprocess.run(login_command(spec))
         except Exception as exc:  # noqa: BLE001 - surface any handoff failure
+            self._subscription_login_on_success = None
             log.add_error(f"Could not run `{spec.binary} login`: {exc}")
             return
 
@@ -1575,7 +1676,11 @@ class ConnectMixin:
                 log.add_info(f"`{spec.binary} login` exited {completed.returncode}.")
             if spec.id == "muse":
                 log.add_info(MUSE_BILLING_HINT)
-        if spec.id == "muse":
+        on_success = getattr(self, "_subscription_login_on_success", None)
+        self._subscription_login_on_success = None
+        if has_local_login(spec) and callable(on_success):
+            on_success()
+        elif spec.id == "muse":
             self._show_muse_connect(log)
 
     def _show_muse_connect(self, log: ConversationLog) -> None:

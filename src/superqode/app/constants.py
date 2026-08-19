@@ -34,6 +34,8 @@ CONNECT_COMPLETION_COMMANDS = (
     ":connect antigravity",
     ":connect devin",
     ":connect glm-cli",
+    ":connect fx",
+    ":connect fx-key",
     ":connect zai",
 )
 
@@ -170,6 +172,7 @@ AGENT_COLORS = {
     "claude-code": "#d97706",  # Anthropic Orange
     "codex": "#10b981",  # Green
     "grok": "#e5e7eb",  # xAI neutral, readable on the dark TUI
+    "fx": "#0070f3",  # Vercel blue
     "devin": "#93c5fd",  # Cognition navy, lightened for the dark TUI
     "junie": "#fe315d",  # JetBrains Pink
     "goose": "#8b5cf6",  # Block Purple
@@ -193,6 +196,7 @@ AGENT_ICONS = {
     "claude-code": "🧡",  # Orange heart - Anthropic's warm AI
     "codex": "📜",  # Scroll
     "grok": "G",  # Grok Build
+    "fx": "fx",  # Vercel fx
     "devin": "👷",  # Construction worker - Cognition's autonomous engineer
     "junie": "🧠",  # Brain - JetBrains intelligence
     "goose": "🦆",  # Duck - Block's Goose
@@ -332,6 +336,8 @@ COMMANDS = [
     ":connect glm-cli",
     ":connect qwen-code",
     ":connect kimi-code",
+    ":connect fx",
+    ":connect fx-key",
     ":connect acp featured",
     ":connect acp enterprise",
     ":connect acp all",
@@ -356,6 +362,10 @@ COMMANDS = [
     ":muse login",
     ":muse status",
     ":muse-code",
+    ":fx",
+    ":fx connect",
+    ":fx login",
+    ":fx status",
     ":pipy",
     ":pipy help",
     ":pipy compact",

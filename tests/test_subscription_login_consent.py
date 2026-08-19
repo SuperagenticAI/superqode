@@ -171,3 +171,87 @@ def test_existing_login_is_detected_and_never_relaunched(monkeypatch):
 
     assert started is False  # caller reports "already signed in"
     assert app.handoffs == []
+
+
+class _Suspend:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+
+def _handoff_stub():
+    from types import SimpleNamespace
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        def __init__(self):
+            self._subscription_login_on_success = None
+            self.app = SimpleNamespace(suspend=_Suspend)
+
+    return Stub()
+
+
+def test_interactive_handoff_fires_on_success_and_clears_it(monkeypatch):
+    """A registered callback must run after a successful TTY login, then drop.
+
+    The piped worker never runs for interactive_tty specs, so this is the only
+    path that can consume `_subscription_login_on_success` for fx and Prime.
+    """
+    from types import SimpleNamespace
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    stub = _handoff_stub()
+    fired = []
+    stub._subscription_login_on_success = lambda: fired.append("ok")
+    monkeypatch.setattr(sl, "binary_path", lambda spec: "/usr/bin/fx")
+    monkeypatch.setattr(sl, "login_command", lambda spec: ["fx", "login"])
+    monkeypatch.setattr(sl, "has_local_login", lambda spec: True)
+    monkeypatch.setattr("subprocess.run", lambda *_a, **_k: SimpleNamespace(returncode=0))
+
+    ConnectMixin._interactive_login_handoff(stub, sl.FX_LOGIN, _Log())
+
+    assert fired == ["ok"]
+    assert stub._subscription_login_on_success is None
+
+
+def test_interactive_handoff_clears_callback_when_login_fails(monkeypatch):
+    from types import SimpleNamespace
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    stub = _handoff_stub()
+    fired = []
+    stub._subscription_login_on_success = lambda: fired.append("ok")
+    monkeypatch.setattr(sl, "binary_path", lambda spec: "/usr/bin/fx")
+    monkeypatch.setattr(sl, "login_command", lambda spec: ["fx", "login"])
+    monkeypatch.setattr(sl, "has_local_login", lambda spec: False)
+    monkeypatch.setattr("subprocess.run", lambda *_a, **_k: SimpleNamespace(returncode=1))
+
+    ConnectMixin._interactive_login_handoff(stub, sl.FX_LOGIN, _Log())
+
+    assert fired == []
+    assert stub._subscription_login_on_success is None
+
+
+def test_interactive_handoff_muse_without_callback_still_shows_status(monkeypatch):
+    """Muse with no leftover callback still reaches the status screen."""
+    from types import SimpleNamespace
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    stub = _handoff_stub()
+    shown = []
+    stub._show_muse_connect = lambda log: shown.append("muse")
+    monkeypatch.setattr(sl, "binary_path", lambda spec: "/usr/bin/muse")
+    monkeypatch.setattr(sl, "login_command", lambda spec: ["muse", "login"])
+    monkeypatch.setattr(sl, "has_local_login", lambda spec: True)
+    monkeypatch.setattr("subprocess.run", lambda *_a, **_k: SimpleNamespace(returncode=0))
+
+    ConnectMixin._interactive_login_handoff(stub, sl.MUSE_LOGIN, _Log())
+
+    assert shown == ["muse"]
+    assert stub._subscription_login_on_success is None

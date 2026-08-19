@@ -24,6 +24,7 @@ def test_visible_open_rows_include_the_full_key_set():
         "prime-agent-key",
         "jcode",
         "grok-key",
+        "fx-key",
         "qwen-code-key",
         "fast-agent",
         "pi",
@@ -68,6 +69,41 @@ def test_closed_list_includes_factory_muse_qoder_poolside():
     assert spec.local_providers == ()
     assert spec.detect is not None
     assert "install Factory Droid" in spec.unavailable_hint
+
+
+def test_fx_subscription_stays_off_open_and_fx_key_is_the_open_row():
+    """fx login is Subscriptions; the Gateway key is a locked Open vendor-key row."""
+    fx = get_entry("fx")
+    fx_key = get_entry("fx-key")
+
+    assert fx is not None
+    assert fx.openness == "open"
+    assert fx.license == "Apache-2.0"
+    assert fx.wired is True
+    assert fx.list_visible is False
+    assert "subscription" in fx.modes()
+    assert "acp" in fx.modes()
+    assert "byok" not in fx.modes()
+    assert "local" not in fx.modes()
+    assert "open" not in fx.connect_menus()
+    assert fx not in list_entries("open")
+    assert fx.acp_agent == "fx"
+    assert fx.hub_id == "fx"
+
+    assert fx_key is not None
+    assert fx_key.openness == "open"
+    assert fx_key.list_visible is True
+    assert fx_key.wired is True
+    assert fx_key in list_entries("open")
+    spec = fx_key.auth[0]
+    assert spec.after_auth == "vendor-key-acp"
+    assert spec.connector == "vendor-key"
+    assert spec.env_vars == ("AI_GATEWAY_API_KEY",)
+    assert spec.inject_env is True
+    assert spec.byok_providers == ()
+    assert spec.local_providers == ()
+    assert fx_key.acp_agent == "fx"
+    assert fx_key.hub_id == "fx"
 
 
 def test_deepagents_sdk_is_open_and_deepagents_code_is_not_on_open():

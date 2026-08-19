@@ -143,6 +143,7 @@ Option 4 opens the vendor screen. Esc returns to the screen above:
   [11] GLM Coding Plan      Use the paid plan through its authenticated ACP agent
   [12] Qwen Code            Use QwenLM's signed-in first-party agent
   [13] Kimi Code            Use Moonshot AI's signed-in first-party agent
+  [14] fx                   Use Vercel Labs' fx agent after `fx login`
 ```
 
 The screen is reserved for vendor plans and vendor-managed sign-in. API-key-only
@@ -174,6 +175,8 @@ Direct commands and CLI:
 :connect amp              # Amp subscription through its ACP adapter
 :connect kimi-code        # Moonshot AI Kimi Code through its official ACP server
 :connect qwen-code        # Qwen Code through its stable ACP server
+:connect fx               # Vercel fx through fx acp after fx login
+:connect fx-key           # same agent with AI_GATEWAY_API_KEY (Open)
 :connect acp gemini       # Google Gemini CLI through gemini --acp
 :connect devin            # Cognition Devin CLI through devin acp
 :connect droid            # Factory Droid subscription through ACP

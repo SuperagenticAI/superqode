@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.102] - 2026-08-19
+
+### Added
+
+- `:connect fx` attaches Vercel Labs' experimental fx agent over `fx acp`
+  after a local `fx login`. The Subscriptions row spends the signed-in
+  Vercel team's AI Gateway credits and strips a leftover
+  `AI_GATEWAY_API_KEY` so the session cannot divert onto metered key
+  billing. `:connect fx-key` on Open injects that Gateway key into the
+  fx ACP child only, with no local model and no SuperQode BYOK picker.
+  `:connect acp fx` remains available. `:fx`, `:fx login`, `:fx connect`,
+  and `:fx status` are the TUI command surface.
+
 ## [0.2.101] - 2026-08-19
 
 ### Added

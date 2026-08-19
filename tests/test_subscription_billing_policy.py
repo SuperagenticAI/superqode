@@ -21,6 +21,7 @@ from superqode.providers.subscription_env import (
     resolve_vendor,
     subscription_child_env,
     subscription_notice,
+    vendor_key_profile_id,
 )
 
 
@@ -38,6 +39,7 @@ class TestVendorResolution:
             ("antigravity-cli", "antigravity"),
             ("muse-code", "muse"),
             ("muse-cli", "muse"),
+            ("fx", "fx"),
             ("GROK", "grok"),
             ("", None),
             ("not-a-vendor", None),
@@ -64,6 +66,19 @@ class TestKeyDetection:
         """
         assert diverting_api_keys("muse", {"META_API_KEY": "k"}) == ["META_API_KEY"]
         assert diverting_api_keys("muse", {"META_MODEL_API_KEY": "k"}) == []
+
+    def test_fx_strips_the_gateway_key_but_not_oidc(self):
+        """OIDC is Vercel team identity, not a leftover metered API key."""
+        env = {
+            "AI_GATEWAY_API_KEY": "gw-secret",
+            "VERCEL_OIDC_TOKEN": "oidc-secret",
+        }
+
+        assert diverting_api_keys("fx", env) == ["AI_GATEWAY_API_KEY"]
+        child, stripped = subscription_child_env("fx", env)
+        assert stripped == ["AI_GATEWAY_API_KEY"]
+        assert "AI_GATEWAY_API_KEY" not in child
+        assert child["VERCEL_OIDC_TOKEN"] == "oidc-secret"
 
     def test_unknown_vendor_never_strips_anything(self):
         env = {"OPENAI_API_KEY": "k"}
@@ -188,6 +203,18 @@ class TestUserNotice:
         assert "JETBRAINS_API_KEY" in joined
         assert ":connect junie-key" in joined
         assert "Closed harnesses" in joined
+        assert ":connect byok" not in joined
+
+    def test_fx_notice_points_at_the_open_key_path(self):
+        assert closed_key_profile_id("fx") is None
+        assert vendor_key_profile_id("fx") == "fx-key"
+        lines = subscription_notice("fx", ["AI_GATEWAY_API_KEY"], vendor="fx")
+
+        joined = " ".join(lines)
+        assert "AI_GATEWAY_API_KEY" in joined
+        assert ":connect fx-key" in joined
+        assert "Open harnesses" in joined
+        assert "Closed harnesses" not in joined
         assert ":connect byok" not in joined
 
     def test_notice_never_contains_a_secret_value(self):
@@ -417,6 +444,36 @@ class TestFactoryKeyPath:
         assert stub._pending_vendor_key["agent"] == "droid"
         assert "FACTORY_API_KEY" not in os.environ
         assert stub._pending_vendor_key["note"] == "API key path — not your Droid CLI login."
+
+    def test_begin_vendor_key_fx_injects_gateway_key_from_env(self, monkeypatch, tmp_path):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        monkeypatch.setenv("AI_GATEWAY_API_KEY", "gw-from-env")
+        monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path))
+
+        class Log:
+            def add_info(self, value):
+                pass
+
+            def add_error(self, value):
+                pass
+
+        class Stub(ConnectMixin):
+            def __init__(self):
+                self.acp_calls = []
+
+            def _connect_acp_cmd(self, name, log):
+                self.acp_calls.append(name)
+
+        stub = Stub()
+        ConnectMixin._begin_vendor_key(stub, get_connection_profile("fx-key"), Log())
+
+        assert stub.acp_calls == ["fx"]
+        assert stub._acp_subscription_vendor is None
+        assert stub._acp_extra_env == {"AI_GATEWAY_API_KEY": "gw-from-env"}
+        assert stub._pending_vendor_key["agent"] == "fx"
+        assert stub._pending_vendor_key["note"] == "API key path — not your subscription login."
 
     def test_begin_vendor_key_env_wins_and_does_not_setdefault(self, monkeypatch, tmp_path):
         from superqode.app.mixins.connect import ConnectMixin

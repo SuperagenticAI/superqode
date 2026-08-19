@@ -188,7 +188,8 @@ superqode connect acp amp
 ### Curated Agent Groups
 
 The featured catalog includes Codex, Claude Agent, OpenCode, Cursor, Cline,
-GitHub Copilot, Grok Build, Goose, Kimi Code, Qwen Code, Pi, Amp, Kilo and Harn.
+GitHub Copilot, Grok Build, Goose, Kimi Code, Qwen Code, Pi, Amp, Kilo, Harn
+and fx.
 
 The enterprise catalog includes Factory Droid, Devin, Cortex Code, Junie,
 Auggie and Poolside. Other official registry entries remain searchable through
@@ -204,6 +205,7 @@ Representative current ACP commands include:
 | GitHub Copilot | `copilot --acp --stdio` |
 | Goose | `goose acp` |
 | Grok Build | `grok agent stdio` |
+| fx | `fx acp` |
 | Kimi Code | `kimi acp` |
 | Prime Agent | `prime-agent --mode acp` |
 | Kilo | `kilo acp` |

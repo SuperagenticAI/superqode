@@ -156,6 +156,8 @@ class SlashCommandMixin:
             self._antigravity_cmd(args, log)
         elif c in ("muse", "muse-code"):
             self._muse_cmd(args, log)
+        elif c == "fx":
+            self._fx_cmd(args, log)
         elif c == "agy":
             self._agy_cmd(args, log)
         elif c == "approve":

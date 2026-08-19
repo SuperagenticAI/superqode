@@ -45,7 +45,7 @@ is the harness source, not the model family.
   Connect with a provider key or a local model. Includes Tau, DeepSeek
   Harness, DeepAgents SDK, OpenCode, Prime Agent, jcode, Grok Build, Qwen
   Code, fast-agent, Pi, Goose, Cline, OpenHands, Mistral Vibe, Hermes Agent,
-  Letta Code, Warp Agent, and Kimi Code.
+  Letta Code, Warp Agent, Kimi Code, and fx.
 - **Closed harnesses** (`:connect closed-harnesses`): proprietary harnesses
   on that vendor's key. Includes Factory Droid, Junie, Muse Code, Qoder CLI,
   Poolside, and ZCode (inspect only).
@@ -132,6 +132,24 @@ the `qwen` command and authentication from `qwen auth`.
 Runs Moonshot AI's first-party Kimi Code agent through `kimi acp`. Requires the
 `kimi` command and a completed Kimi Code `/login`.
 
+### fx (connector: acp, agent: fx)
+
+Runs Vercel Labs' experimental fx agent through `fx acp`. Requires the `fx`
+binary and a local `fx login` (`~/.fx/auth.json`). Models are billed as the
+signed-in Vercel team's AI Gateway credits. SuperQode strips
+`AI_GATEWAY_API_KEY` on this route so a leftover key cannot divert the
+session.
+
+### fx API key (connector: vendor-key, profile: fx-key)
+
+Uses fx with `AI_GATEWAY_API_KEY` from the environment or `fx setup`. The
+key is injected into the child ACP process only. This is the Open harnesses
+row, not the Vercel login, and not a SuperQode BYOK or local model picker.
+
+```text
+:connect fx-key
+```
+
 ## TUI Usage
 
 In the TUI, use `:connect` to open the root screen. Each profile shows
@@ -163,6 +181,11 @@ Direct shortcuts:
 - `:connect qwen-code-key` - Qwen Code with `QWEN_API_KEY` / `DASHSCOPE_API_KEY`, or a local endpoint (Open harnesses)
 - `:connect fast-agent` - pick a key or local model, then attach fast-agent over ACP with it (Open harnesses)
 - `:connect pi` - pick a key or local model, then attach Pi over ACP with it (Open harnesses)
+- `:connect fx` - Vercel fx on a Vercel login over ACP (AI Gateway credits)
+- `:connect fx-key` - fx with `AI_GATEWAY_API_KEY` (Open harnesses; not a local model)
+- `:fx` / `:fx status` - TUI readiness for install and Vercel login
+- `:fx login` - consent-gated `fx login`
+- `:fx connect` - same as `:connect fx`
 - `:connect kiro` - Kiro/Amazon Q Developer subscription through ACP
 - `:connect glm-cli` - GLM Coding Plan through ACP
 - `:connect copilot` - prefer the official SDK, with installed CLI/ACP fallback

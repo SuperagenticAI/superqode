@@ -64,6 +64,7 @@ already use:
 :connect copilot                       # GitHub Copilot plan (SDK or CLI)
 :connect kimi-code                     # Kimi Code through its official ACP server
 :connect qwen-code                     # Qwen Code through its official ACP server
+:connect fx                            # Vercel fx through fx acp after fx login
 :connect acp <agent>                   # any installed ACP coding agent
 :connect local ollama <open-model>     # a local server you run
 :connect byok <provider> <model>       # a hosted provider with an API key

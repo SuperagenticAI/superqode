@@ -135,6 +135,9 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:home` - Return to the SuperQode home screen from any picker or workflow
 - `:connect kimi-code` - Connect Moonshot AI's first-party Kimi Code ACP server
 - `:connect qwen-code` - Connect QwenLM's first-party Qwen Code ACP server
+- `:connect fx` - Connect Vercel Labs' experimental fx agent over ACP
+- `:connect fx-key` - Connect fx with `AI_GATEWAY_API_KEY` (Open harnesses)
+- `:harness switch fx` - Connect fx from the unified picker
 - `:connect local` - Open the local provider picker
 - `:connect byok` - Open the BYOK provider picker
 - `:local setup <name>` - TUI-first guide for model download, serving, context, harness, and smoke
@@ -189,6 +192,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
 - `:muse` (alias `:muse-code`) - Show Muse Code readiness; `:muse login` runs Meta's own browser sign-in (see [Meta Muse Code](../providers/muse-code.md))
+- `:fx` - Show fx readiness; `:fx login` runs Vercel's own `fx login`; `:fx connect` attaches over ACP (see [fx](../providers/fx.md))
 - `:grok` - Grok Build (xAI's agent) on your subscription; `:grok api` runs SuperQode's harness on the same plan; also status/login/models
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
@@ -220,7 +224,7 @@ show status, or display its local help where supported.
 | General operation | `:help`, `:keys`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
 | Discovery | `:explore`, `:capabilities`, `:tour` |
 | Connections and authentication | `:connect`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
-| Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:grok`, `:xai-grok`, `:runtime` |
+| Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
 | Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
@@ -530,6 +534,22 @@ Antigravity CLI handoff:
 :antigravity migrate
 :agy status
 ```
+
+fx (Vercel login over ACP):
+
+```text
+:connect fx                  # Subscriptions: fx acp after fx login
+:connect fx-key              # Open: AI_GATEWAY_API_KEY injected into fx acp
+:fx                          # readiness: install, Vercel login, leftover key
+:fx connect                  # same as :connect fx
+:fx login                    # consent-gated `fx login` (Vercel OAuth)
+:fx status                   # same readiness screen
+:harness switch fx
+```
+
+`:connect fx` runs fx, Vercel Labs' experimental coding agent, over ACP.
+Models are billed as the signed-in team's AI Gateway credits. A leftover
+`AI_GATEWAY_API_KEY` is ignored on that route; spend it with `:connect fx-key`.
 
 Grok subscription (official Grok CLI login):
 

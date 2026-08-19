@@ -250,6 +250,8 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "kiro": "concepts/modes.md",
         "kimi-code": "providers/kimi.md",
         "qwen-code": "providers/qwen-code.md",
+        "fx": "providers/fx.md",
+        "fx-key": "providers/fx.md",
         "deepagents-code": "providers/deepagents.md",
         "antigravity": "providers/antigravity.md",
         "muse": "concepts/modes.md",

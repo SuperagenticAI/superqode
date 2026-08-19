@@ -173,6 +173,14 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(
         ":muse status", "Check local Muse Code install and credential", category="workflow"
     ),
+    SlashCommand(":fx", "Show fx readiness and Vercel login state", category="workflow"),
+    SlashCommand(":fx connect", "Attach fx over ACP on your Vercel login", category="workflow"),
+    SlashCommand(
+        ":fx login",
+        "Sign in with Vercel using the official fx login",
+        category="workflow",
+    ),
+    SlashCommand(":fx status", "Check local fx install and Vercel login", category="workflow"),
     SlashCommand(":agy", "Alias for Antigravity CLI commands", category="workflow"),
     SlashCommand("/status", "Show runtime, model, harness, and session", category="workflow"),
     SlashCommand("/usage", "Show latest run usage and latency", category="workflow"),

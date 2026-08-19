@@ -199,12 +199,27 @@ PRIME_AGENT_LOGIN = SubscriptionLoginSpec(
     interactive_tty=True,
 )
 
+# Do not treat AI_GATEWAY_API_KEY as a subscription login. That key is the
+# Open :connect fx-key path; a leftover one must not skip `fx login`.
+FX_LOGIN = SubscriptionLoginSpec(
+    id="fx",
+    label="fx (Vercel)",
+    binary="fx",
+    auth_subpath=(".fx", "auth.json"),
+    login_args=("login",),
+    install_hint="Install it: curl -fsSL https://fx.sh/setup.sh | bash",
+    success_hint="fx login complete. Connecting…",
+    env_key_fallbacks=(),
+    interactive_tty=True,
+)
+
 _SPECS = {
     CODEX_LOGIN.id: CODEX_LOGIN,
     PRIME_AGENT_LOGIN.id: PRIME_AGENT_LOGIN,
     GROK_LOGIN.id: GROK_LOGIN,
     COPILOT_LOGIN.id: COPILOT_LOGIN,
     MUSE_LOGIN.id: MUSE_LOGIN,
+    FX_LOGIN.id: FX_LOGIN,
 }
 
 
@@ -536,6 +551,7 @@ __all__ = [
     "COPILOT_LOGIN",
     "GROK_LOGIN",
     "MUSE_LOGIN",
+    "FX_LOGIN",
     "MUSE_BILLING_HINT",
     "PRIME_AGENT_LOGIN",
     "DEFAULT_LOGIN_TIMEOUT_SECONDS",
