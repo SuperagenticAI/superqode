@@ -1,8 +1,13 @@
 """Vendor CLI runtime: subscription billing, permissions, and wire formats.
 
-The JSON fixtures are recorded from the real CLIs (Grok streaming-json and
+Most JSON fixtures are recorded from the real CLIs (Grok streaming-json and
 GitHub Copilot JSONL, both verified against live subscriptions), so the parsers
 stay honest without needing a vendor CLI installed in CI.
+
+The Warp fixtures are the exception: they are written from the documented
+``--output-format ndjson`` line shapes, and only the ``system``/``run_started``
+line has been seen from a live run. Replace them with a recording once a Warp
+plan with AI credits is available.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from superqode.runtime.vendor_cli import (
     parse_copilot_event,
     parse_generic_event,
     parse_grok_event,
+    parse_warp_event,
     spec_for,
 )
 
@@ -547,3 +553,165 @@ class TestPolicyKwargsAreVendorCLIOnly:
         # The default `core` harness is a balanced profile -> SuperQode "ask".
         assert seen["kwargs"].get("approval_mode") == "ask"
         assert seen["kwargs"].get("permission_manager") is not None
+
+
+class TestWarpWireFormat:
+    """`oz agent run --output-format ndjson`, one JSON object per line."""
+
+    def test_agent_text_becomes_assistant_output(self):
+        events = _events(parse_warp_event, '{"type":"agent","text":"Done."}')
+
+        assert [(e.type, e.data["text"]) for e in events] == [("model_delta", "Done.")]
+
+    def test_reasoning_is_not_assistant_output(self):
+        events = _events(parse_warp_event, '{"type":"agent_reasoning","text":"weighing"}')
+
+        assert [e.type for e in events] == ["thinking"]
+
+    def test_empty_text_yields_nothing(self):
+        assert _events(parse_warp_event, '{"type":"agent","text":""}') == []
+
+    def test_tool_call_keeps_warp_tool_name_and_args(self):
+        events = _events(
+            parse_warp_event,
+            '{"type":"tool_call","tool":"run_command","command":"ls -la"}',
+        )
+
+        assert len(events) == 1
+        assert events[0].type == "tool_call"
+        assert events[0].data["tool_name"] == "run_command"
+        assert events[0].data["args"] == {"command": "ls -la"}
+
+    def test_tool_result_is_successful_and_carries_payload(self):
+        events = _events(
+            parse_warp_event,
+            '{"type":"tool_result","tool":"grep","matches":3}',
+        )
+
+        assert events[0].type == "tool_result"
+        assert events[0].data["tool_name"] == "grep"
+        assert events[0].data["success"] is True
+        assert json.loads(events[0].data["output"]) == {"matches": 3}
+
+    def test_tool_error_is_a_failed_result_without_a_guessed_name(self):
+        events = _events(parse_warp_event, '{"type":"tool_error","error":"boom"}')
+
+        assert events[0].type == "tool_result"
+        assert events[0].data["success"] is False
+        assert events[0].data["output"] == "boom"
+        # Warp reports no tool call id, so the name must not be invented.
+        assert events[0].data["tool_name"] == ""
+
+    def test_tool_canceled_is_reported_as_cancelled(self):
+        events = _events(parse_warp_event, '{"type":"tool_canceled"}')
+
+        assert events[0].data["status"] == "cancelled"
+        assert events[0].data["success"] is False
+
+    def test_todos_become_a_plan_update(self):
+        events = _events(
+            parse_warp_event,
+            '{"type":"update_todos","todo_list":['
+            '{"title":"read code","description":""},'
+            '{"title":"write test","description":""}]}',
+        )
+
+        assert events[0].type == "plan_update"
+        assert [t["content"] for t in events[0].data["todos"]] == ["read code", "write test"]
+        assert {t["status"] for t in events[0].data["todos"]} == {"pending"}
+
+    def test_completed_todos_are_marked_completed(self):
+        events = _events(
+            parse_warp_event,
+            '{"type":"complete_todos","completed_todos":[{"title":"read code"}]}',
+        )
+
+        assert events[0].data["todos"][0]["status"] == "completed"
+
+    def test_todos_without_titles_produce_no_event(self):
+        assert _events(parse_warp_event, '{"type":"update_todos","todo_list":[]}') == []
+
+    def test_conversation_started_exposes_the_resume_id(self):
+        events = _events(
+            parse_warp_event,
+            '{"type":"system","event_type":"conversation_started","conversation_id":"abc123"}',
+        )
+
+        assert events[0].type == "runtime_event"
+        # `--conversation <ID>` resumes from this.
+        assert events[0].data["session_id"] == "abc123"
+
+    def test_run_started_is_a_runtime_event_not_a_session(self):
+        # Verified against a live `oz agent run`: this is the first line emitted.
+        events = _events(
+            parse_warp_event,
+            '{"type":"system","event_type":"run_started","run_id":"01a0",'
+            '"run_url":"https://oz.warp.dev/runs/01a0"}',
+        )
+
+        assert events[0].type == "runtime_event"
+        assert events[0].data["run_url"] == "https://oz.warp.dev/runs/01a0"
+        assert "session_id" not in events[0].data
+
+    def test_skill_and_subagent_keep_their_unrenamed_wire_tags(self):
+        skill = _events(parse_warp_event, '{"type":"SkillInvoked","name":"review"}')
+        subagent = _events(parse_warp_event, '{"type":"Subagent","task_id":"t1"}')
+
+        assert skill[0].data == {"event": "skill_invoked", "name": "review"}
+        assert subagent[0].data == {"event": "subagent", "task_id": "t1"}
+
+    def test_unknown_line_is_silent(self):
+        assert _events(parse_warp_event, '{"type":"something_new","x":1}') == []
+
+    def test_parser_emits_no_terminal_event(self):
+        """Warp's stream just ends; the runtime synthesizes turn_complete."""
+        for raw in (
+            '{"type":"agent","text":"hi"}',
+            '{"type":"system","event_type":"conversation_started","conversation_id":"a"}',
+        ):
+            assert all(e.type != "turn_complete" for e in _events(parse_warp_event, raw))
+
+
+class TestWarpSpec:
+    def test_spec_resolves_by_vendor_and_runtime_name(self):
+        assert spec_for("warp") is VENDOR_CLI_SPECS["warp"]
+        assert spec_for("warp-cli") is VENDOR_CLI_SPECS["warp"]
+
+    def test_binary_candidates_prefer_oz_over_the_bundled_path(self):
+        spec = VENDOR_CLI_SPECS["warp"]
+
+        assert spec.binary_candidates[0] == "oz"
+        assert spec.binary_candidates[-1].endswith("/Warp.app/Contents/Resources/bin/oz")
+
+    def test_permissions_are_pre_authorised_without_gradation(self):
+        spec = VENDOR_CLI_SPECS["warp"]
+
+        # Warp's permissions live in server-side `--profile` ids, so there is
+        # nothing to map auto/ask/deny onto.
+        assert spec.requires_pre_authorisation is True
+        assert spec.has_gradated_permissions is False
+        assert spec.flags_for_approval("deny") == ()
+
+    def test_superqode_model_names_are_not_forwarded_to_warp(self):
+        """Warp ids are its own namespace, so any SuperQode name fails the run."""
+        import types
+
+        spec = VENDOR_CLI_SPECS["warp"]
+        assert spec.model_flag is None
+
+        runtime = VendorCLIRuntime(
+            spec=spec, config=types.SimpleNamespace(model="gpt-5.4", working_directory=".")
+        )
+        argv = runtime.build_command("hi")
+
+        assert "--model" not in argv
+        assert "gpt-5.4" not in argv
+        assert argv[-6:] == ["agent", "run", "--output-format", "ndjson", "-p", "hi"]
+
+    def test_warp_api_key_is_never_stripped_from_the_child(self):
+        from superqode.providers.subscription_env import subscription_child_env
+
+        env, stripped = subscription_child_env("warp", {"WARP_API_KEY": "wk-1"})
+
+        assert stripped == []
+        assert env["WARP_API_KEY"] == "wk-1"

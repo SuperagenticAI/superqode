@@ -240,6 +240,141 @@ def parse_grok_event(obj: dict) -> list[HarnessEvent]:
     return []
 
 
+def _warp_payload(obj: dict, *drop: str) -> dict:
+    """Everything except the routing tags, which are the line's own payload."""
+    skip = {"type", *drop}
+    return {key: value for key, value in obj.items() if key not in skip}
+
+
+def _warp_todos(entries: Any, *, completed: bool) -> list[dict[str, str]]:
+    """Warp todos carry ``title``/``description`` and no id or status of their own."""
+    todos: list[dict[str, str]] = []
+    if not isinstance(entries, list):
+        return todos
+    for index, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            continue
+        content = str(entry.get("title") or "").strip()
+        if not content:
+            continue
+        todos.append(
+            {
+                "id": str(index),
+                "content": content,
+                "status": "completed" if completed else "pending",
+            }
+        )
+    return todos
+
+
+def _warp_system_event(obj: dict) -> list[HarnessEvent]:
+    """Warp ``system`` lines, sub-tagged by ``event_type``."""
+    event_type = str(obj.get("event_type") or "")
+    data: dict[str, Any] = {"event": event_type, **_warp_payload(obj, "event_type")}
+    if event_type == "conversation_started":
+        # ``--conversation <ID>`` resumes from this id, so hand it up under the
+        # name the runtime stores sessions by.
+        conversation_id = str(obj.get("conversation_id") or "")
+        if conversation_id:
+            data["session_id"] = conversation_id
+    return [HarnessEvent(type="runtime_event", data=data)]
+
+
+def parse_warp_event(obj: dict) -> list[HarnessEvent]:
+    """Warp Oz CLI ``--output-format ndjson``.
+
+    Every line is one object tagged by ``type``; tool lines carry a second
+    ``tool`` tag naming the tool, which is passed through rather than
+    translated into a SuperQode tool id.
+
+    Warp reports no per-call tool ids, so ``tool_error`` and ``tool_canceled``
+    cannot be correlated back to the call they belong to. Their tool name is
+    left empty rather than guessed at from ordering.
+
+    The format has no terminal event: the stream simply ends. ``turn_complete``
+    is synthesized by the runtime from the exit status.
+    """
+    kind = str(obj.get("type") or "")
+
+    if kind == "agent":
+        return _text_event(str(obj.get("text") or ""))
+    if kind == "agent_reasoning":
+        text = str(obj.get("text") or "")
+        return [HarnessEvent(type="thinking", data={"text": text})] if text else []
+    if kind == "tool_call":
+        return [
+            HarnessEvent(
+                type="tool_call",
+                data={
+                    "tool_name": str(obj.get("tool") or "tool"),
+                    "args": _warp_payload(obj, "tool"),
+                },
+            )
+        ]
+    if kind == "tool_result":
+        payload = _warp_payload(obj, "tool")
+        return [
+            HarnessEvent(
+                type="tool_result",
+                data={
+                    "tool_name": str(obj.get("tool") or ""),
+                    "success": True,
+                    "output": json.dumps(payload, ensure_ascii=False) if payload else "",
+                },
+            )
+        ]
+    if kind == "tool_error":
+        return [
+            HarnessEvent(
+                type="tool_result",
+                data={
+                    "tool_name": "",
+                    "success": False,
+                    "output": str(obj.get("error") or ""),
+                    "status": "failed",
+                },
+            )
+        ]
+    if kind == "tool_canceled":
+        return [
+            HarnessEvent(
+                type="tool_result",
+                data={"tool_name": "", "success": False, "output": "", "status": "cancelled"},
+            )
+        ]
+    if kind in {"update_todos", "complete_todos"}:
+        completed = kind == "complete_todos"
+        entries = obj.get("completed_todos") if completed else obj.get("todo_list")
+        todos = _warp_todos(entries, completed=completed)
+        return [HarnessEvent(type="plan_update", data={"todos": todos})] if todos else []
+    if kind == "system":
+        return _warp_system_event(obj)
+    if kind == "artifact_created":
+        return [
+            HarnessEvent(
+                type="runtime_event",
+                data={"event": "artifact_created", **_warp_payload(obj)},
+            )
+        ]
+    # These two variants are not renamed on the wire, so they arrive in the
+    # Rust variant's own casing rather than snake_case.
+    if kind == "SkillInvoked":
+        return [
+            HarnessEvent(
+                type="runtime_event",
+                data={"event": "skill_invoked", "name": str(obj.get("name") or "")},
+            )
+        ]
+    if kind == "Subagent":
+        return [
+            HarnessEvent(
+                type="runtime_event",
+                data={"event": "subagent", "task_id": str(obj.get("task_id") or "")},
+            )
+        ]
+    return []
+
+
 def parse_generic_event(obj: dict) -> list[HarnessEvent]:
     """Best-effort reader for Claude-Code-style ``stream-json`` and friends.
 
@@ -275,6 +410,7 @@ def parse_generic_event(obj: dict) -> list[HarnessEvent]:
 PARSERS: dict[str, Callable[[dict], list[HarnessEvent]]] = {
     "copilot": parse_copilot_event,
     "grok": parse_grok_event,
+    "warp": parse_warp_event,
     "generic": parse_generic_event,
 }
 
@@ -291,6 +427,11 @@ class VendorCLISpec:
     label: str
     binary: str
     install_hint: str
+    #: Executables to try when ``binary`` is not found, in order. Most vendors
+    #: ship one stable command and leave this empty. It exists for vendors that
+    #: are mid-rename, or that install outside PATH: entries may be absolute
+    #: paths, which ``shutil.which`` checks directly.
+    fallback_binaries: tuple[str, ...] = ()
     subcommand: tuple[str, ...] = ()
     #: Flag carrying the prompt; None means the prompt is positional.
     prompt_flag: str | None = "-p"
@@ -305,6 +446,23 @@ class VendorCLISpec:
     parser: str = "generic"
     #: True when the vendor refuses to run headlessly without pre-authorisation.
     requires_pre_authorisation: bool = False
+
+    @property
+    def binary_candidates(self) -> tuple[str, ...]:
+        """Executables to try, in order, most preferred first."""
+        return (self.binary, *self.fallback_binaries)
+
+    def resolve_binary(self) -> str | None:
+        """Absolute path to the first candidate present, or None if none are.
+
+        ``shutil.which`` checks a candidate containing a directory component
+        directly instead of searching PATH, so absolute fallbacks work here.
+        """
+        for candidate in self.binary_candidates:
+            found = shutil.which(candidate)
+            if found:
+                return found
+        return None
 
     def flags_for_approval(self, approval_mode: str | None) -> tuple[str, ...]:
         """Vendor permission flags for a SuperQode approval mode."""
@@ -419,6 +577,36 @@ VENDOR_CLI_SPECS: dict[str, VendorCLISpec] = {
         },
         parser="generic",
     ),
+    "warp": VendorCLISpec(
+        name="warp-cli",
+        vendor="warp",
+        label="Warp",
+        # Warp is renaming the CLI from `oz` to `warp`, but the `warp` binary
+        # shipping today is the interactive TUI with no prompt flag, so `oz`
+        # stays primary. The absolute path covers a macOS install where the
+        # user never ran the Command Palette's "Install Oz CLI Command".
+        binary="oz",
+        fallback_binaries=("oz-preview", "/Applications/Warp.app/Contents/Resources/bin/oz"),
+        install_hint=(
+            "install Warp from https://www.warp.dev, then run `oz login` (or export WARP_API_KEY)"
+        ),
+        subcommand=("agent", "run"),
+        prompt_flag="-p",
+        output_format=("--output-format", "ndjson"),
+        # Warp routes models server-side under ids of its own (`auto`,
+        # `gpt-5-4-high`, `claude-5-opus-medium`), listed by `oz model list`.
+        # A SuperQode provider/model name is never one of them, so forwarding
+        # it can only fail the run: Warp picks its own default instead until a
+        # model surface that speaks Warp's ids exists.
+        model_flag=None,
+        session_flag="--conversation",
+        # Warp's permissions live in server-side agent profiles selected by
+        # `--profile <ID>`, so there is no auto/ask/deny vocabulary to map
+        # onto. Headless runs are pre-authorised and the user is told so.
+        permission_flags={},
+        parser="warp",
+        requires_pre_authorisation=True,
+    ),
     "amp": VendorCLISpec(
         name="amp-cli",
         vendor="amp",
@@ -468,7 +656,7 @@ class VendorCLIRuntime:
         the harness backend) should pass it so Grok ``--allow``/``--deny``
         can project SuperQode patterns. The factory does not invent one.
         """
-        if shutil.which(spec.binary) is None:
+        if spec.resolve_binary() is None:
             raise RuntimeNotInstalledError(
                 f"{spec.label} CLI was not found on PATH. To use it: {spec.install_hint}."
             )
@@ -509,7 +697,7 @@ class VendorCLIRuntime:
 
     def build_command(self, prompt: str) -> list[str]:
         """Argv for one non-interactive turn."""
-        binary = shutil.which(self.spec.binary) or self.spec.binary
+        binary = self.spec.resolve_binary() or self.spec.binary
         argv: list[str] = [binary, *self.spec.subcommand]
         argv.extend(self.spec.output_format)
 
@@ -633,7 +821,10 @@ class VendorCLIRuntime:
             async for event in self._stream(parser):
                 if event.type == "turn_complete":
                     saw_terminal_event = True
-                    self._remember_session(event)
+                # Vendors that announce their session id up front (Warp's
+                # `conversation_started`) rather than at the end still need it
+                # captured for the resume flag.
+                self._remember_session(event)
                 yield event
         except asyncio.TimeoutError:
             self._kill()
