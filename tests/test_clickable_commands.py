@@ -340,7 +340,9 @@ def test_picker_rows_do_not_emit_osc8_pick_links():
 
     assert _click_targets(rendered, "1") == []
     assert _click_targets(rendered, "2") == []
-    assert "ACP agents" in rendered.plain
+    # v2 splits the old "Other harnesses" row and shortens "ACP agents" to "ACP".
+    assert "Open harnesses" in rendered.plain
+    assert "Closed harnesses" in rendered.plain
 
 
 def test_descriptions_carry_no_link_style():

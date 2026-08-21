@@ -31,15 +31,15 @@ Brings your own API key. Opens a cloud provider picker, then model selector. Use
 Opens the vendor screen below. Always available. Esc returns to the root
 screen.
 
-### 5. Other Harnesses (connector: harness-picker) / Open and Closed (v2)
+### 5. Open and Closed Harnesses
 
-`v1` (default) opens **Other harnesses**: optional integrations that are
-neither main connection profiles nor ACP agents. Hugging Face Tau appears
-here with its live installation status.
+`v2` is the default. The agents screen lists two harness sources rather than
+one combined row. Open vs Closed is the harness licence, not the model family.
 
-`v2` (`SUPERQODE_CONNECT_MENU=v2` or `"connect_menu": "v2"` in
-`~/.superqode/config.json`) replaces that row with two lists. Open vs Closed
-is the harness source, not the model family.
+`v1` (`SUPERQODE_CONNECT_MENU=v1` or `"connect_menu": "v1"` in
+`~/.superqode/config.json`) restores the older single **Other harnesses** row:
+optional integrations that are neither main connection profiles nor ACP
+agents, with Hugging Face Tau shown alongside its live installation status.
 
 - **Open harnesses** (`:connect open-harnesses`): OSI-licensed harnesses.
   Connect with a provider key or a local model. Includes Tau, DeepSeek
@@ -50,7 +50,7 @@ is the harness source, not the model family.
   on that vendor's key. Includes Factory Droid, Junie, Muse Code, Qoder CLI,
   Poolside, and ZCode (inspect only).
 
-`:connect other-harnesses` still works on v2; it opens the Open list.
+`:connect other-harnesses` still works; it opens the Open list.
 
 ## Subscriptions Screen (`:connect subscriptions`)
 

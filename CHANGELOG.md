@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.103] - 2026-08-21
+
+### Changed
+
+- Open and Closed harnesses are now the default connect layout. `:connect
+  agents` lists Subscriptions, ACP, Open harnesses, and Closed harnesses
+  instead of collapsing the last two into a single Other harnesses row. Open
+  vs Closed is the harness licence, not the model family. `:connect
+  other-harnesses` still works and opens the Open list, and
+  `SUPERQODE_CONNECT_MENU=v1` or `"connect_menu": "v1"` in
+  `~/.superqode/config.json` restores the previous layout.
+- The Warp Agent row states why it stays an Ecosystem watch entry rather than
+  an attach. Warp Agent's loop runs server-side and its open client is
+  AGPL-3.0, so there is no component to embed and no protocol to speak.
+  SuperQode will revisit an attach when an ACP surface or licence terms make
+  one clean.
+
 ## [0.2.102] - 2026-08-19
 
 ### Added

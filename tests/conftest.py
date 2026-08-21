@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import pytest
 
+from superqode.providers.harness_catalog import CONNECT_MENU_DEFAULT
+
 
 @pytest.fixture(autouse=True)
-def _default_connect_menu_v1(monkeypatch):
-    """Keep connect IA on v1 unless a test opts into v2.
+def _default_connect_menu(monkeypatch):
+    """Keep connect IA on the compiled default unless a test opts out.
 
     ``parse_connect_menu_flag`` also reads ``~/.superqode/config.json``. Pinning
     the env here stops a developer's local ``connect_menu`` from flipping every
-    existing-harness assertion.
+    existing-harness assertion. Tests covering the legacy IA set ``v1``
+    explicitly.
     """
-    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", "v1")
+    monkeypatch.setenv("SUPERQODE_CONNECT_MENU", CONNECT_MENU_DEFAULT)
 
 
 @pytest.fixture(autouse=True)

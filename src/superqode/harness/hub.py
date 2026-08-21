@@ -523,10 +523,11 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
     "ecosystem:warp": {
         "interface": "Terminal harness",
         "support_note": (
-            "Not yet launched from SuperQode. Warp Agent CLI is a standalone "
-            "`warp` binary (`curl -fsSL https://app.warp.dev/download/agent-cli | bash`). "
-            "Sign in or export WARP_API_KEY. SuperQode cannot attach it until "
-            "an ACP or CLI connector ships."
+            "Ecosystem watch: SuperQode does not attach Warp. Warp Agent's loop runs "
+            "server-side and the open client is AGPL-3.0, so there is nothing to embed "
+            "and no protocol to speak. Warp has said it plans to support ACP "
+            "(warpdotdev/warp#9233). SuperQode will revisit an attach when an ACP "
+            "surface or licence terms make one clean. Run Warp directly meanwhile."
         ),
         "docs_url": "https://docs.warp.dev/agents/cli/",
         "repository": "https://github.com/warpdotdev/warp",
@@ -535,7 +536,8 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
         "policies": (
             "Warp Agent owns its loop, permissions, and model routing",
             "Warp account or WARP_API_KEY remains with Warp",
-            "No commands are executed by SuperQode until a connector is built and tested",
+            "No commands are executed by SuperQode: no attach is built",
+            "Warp's client is AGPL-3.0 and SuperQode is Apache-2.0, so no code is shared",
         ),
         "capabilities": (
             "Standalone Agent CLI",

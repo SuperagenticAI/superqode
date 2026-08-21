@@ -60,7 +60,11 @@ EXPECTED_COMMAND_COUNT = 267
 # Rebaselined for fx Subscriptions (`fx`) and the Open Gateway-key row
 # (`fx-key`) on the registry-derived `--connect` choice list. No Click
 # command was added.
-EXPECTED_HELP_TREE_SHA256 = "b1a65614d5964606156491985599448d3a94dd62e30a9ad6bc3e93da1a5ad84b"
+# Rebaselined for the connect IA default moving to v2: the registry-derived
+# `--connect` choices now draw `agent-open-harnesses` and
+# `agent-closed-harnesses` where v1 drew `other-harnesses`. The legacy id
+# still resolves, so this swaps entries rather than adding a command.
+EXPECTED_HELP_TREE_SHA256 = "429ca0b490d573a23f4d078c3ae47d5affd2d25783527e89494d166727aec8a4"
 
 
 def _render_help_tree() -> tuple[int, str]:

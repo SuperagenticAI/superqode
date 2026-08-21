@@ -1,6 +1,6 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-08-19T01:35:19.853914+00:00",
+  "generated_at": "2026-08-21T18:14:07.490666+00:00",
   "count": 102,
   "categories": [
     "SuperQode harnesses",
@@ -1672,6 +1672,61 @@
       "license": "MIT"
     },
     {
+      "id": "acp:fx",
+      "name": "fx (ACP)",
+      "description": "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://fx.sh/setup.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://fx.sh",
+      "repository": "https://github.com/vercel-labs/fx",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://fx.sh",
+      "install_command": "curl -fsSL https://fx.sh/setup.sh | bash",
+      "tui_commands": [
+        ":connect acp fx",
+        ":harness switch acp:fx",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:fx \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "fx agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install fx",
+          "command": "curl -fsSL https://fx.sh/setup.sh | bash",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
+    },
+    {
       "id": "acp:copilot",
       "name": "GitHub Copilot (ACP)",
       "description": "AI coding assistant with ACP support in public preview.",
@@ -2380,61 +2435,6 @@
         {
           "title": "Install Codex",
           "command": "npm install -g @agentclientprotocol/codex-acp",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "acp:fx",
-      "name": "fx (ACP)",
-      "description": "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:featured",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "curl -fsSL https://fx.sh/setup.sh | bash",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://fx.sh",
-      "repository": "https://github.com/vercel-labs/fx",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://fx.sh",
-      "install_command": "curl -fsSL https://fx.sh/setup.sh | bash",
-      "tui_commands": [
-        ":connect acp fx",
-        ":harness switch acp:fx",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:fx \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "fx agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install fx",
-          "command": "curl -fsSL https://fx.sh/setup.sh | bash",
           "description": ""
         }
       ],
@@ -5853,7 +5853,7 @@
       "homepage": "https://www.warp.dev/agent-cli",
       "repository": "https://github.com/warpdotdev/warp",
       "interface": "Terminal harness",
-      "support_note": "Not yet launched from SuperQode. Warp Agent CLI is a standalone `warp` binary (`curl -fsSL https://app.warp.dev/download/agent-cli | bash`). Sign in or export WARP_API_KEY. SuperQode cannot attach it until an ACP or CLI connector ships.",
+      "support_note": "Ecosystem watch: SuperQode does not attach Warp. Warp Agent's loop runs server-side and the open client is AGPL-3.0, so there is nothing to embed and no protocol to speak. Warp has said it plans to support ACP (warpdotdev/warp#9233). SuperQode will revisit an attach when an ACP surface or licence terms make one clean. Run Warp directly meanwhile.",
       "last_verified": "2026-08-14",
       "aliases": [
         "warp",
@@ -5875,7 +5875,8 @@
       "policies": [
         "Warp Agent owns its loop, permissions, and model routing",
         "Warp account or WARP_API_KEY remains with Warp",
-        "No commands are executed by SuperQode until a connector is built and tested"
+        "No commands are executed by SuperQode: no attach is built",
+        "Warp's client is AGPL-3.0 and SuperQode is Apache-2.0, so no code is shared"
       ],
       "capabilities": [
         "Standalone Agent CLI",

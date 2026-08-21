@@ -21,7 +21,7 @@ AuthMode = str  # "subscription" | "acp" | "byok" | "local"
 Openness = str  # "open" | "closed" | "unknown"
 AfterAuth = str  # switch-and-model | acp-attach | vendor-key-acp | vendor-key-cli | vendor-key-rpc | setup-card | inspect
 
-CONNECT_MENU_DEFAULT = "v1"
+CONNECT_MENU_DEFAULT = "v2"
 CONNECT_MENU_VALUES = frozenset({"v1", "v2"})
 CONNECT_MENU_ENV = "SUPERQODE_CONNECT_MENU"
 
@@ -971,8 +971,10 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="ecosystem:warp",
         readiness="setup-required",
         support_note=(
-            "Install with `curl -fsSL https://app.warp.dev/download/agent-cli | bash`, "
-            "then run `warp`. Sign in or export WARP_API_KEY."
+            "Ecosystem watch, not an attach. Warp Agent's loop runs server-side and "
+            "the open client is AGPL-3.0. Waiting on ACP support (warpdotdev/warp#9233) "
+            "or licence terms that make an attach clean. Install with "
+            "`curl -fsSL https://app.warp.dev/download/agent-cli | bash`, then run `warp`."
         ),
         vendor_owned=True,
         list_visible=True,
