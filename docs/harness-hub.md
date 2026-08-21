@@ -184,6 +184,13 @@ Open row (`:connect warp`). Install with
 `curl -fsSL https://app.warp.dev/download/agent-cli | bash`, then sign in or
 export `WARP_API_KEY`. SuperQode does not attach Warp from that row yet.
 
+SuperQode does not drive Warp from any row. Warp Agent's loop runs on Warp's
+servers and the open client is AGPL-3.0, so there is no component to embed and
+no protocol to speak. Warp has said it plans to support ACP
+([warpdotdev/warp#9233](https://github.com/warpdotdev/warp/issues/9233)).
+SuperQode will look at an attach again when an ACP surface or a licence change
+makes one clean. Until then the row is a pointer to running Warp yourself.
+
 ### jcode
 
 [jcode](https://jcode.sh) is indexed under **Ecosystem watch** as an

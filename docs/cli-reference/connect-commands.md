@@ -40,7 +40,7 @@ superqode -C PROFILE [COMMAND]
 | `fx` | Vercel Labs' experimental fx agent on your Vercel login over ACP (`fx acp`). Requires the `fx` binary and `fx login`. Models are billed as AI Gateway credits. |
 | `fx-key` | fx with `AI_GATEWAY_API_KEY` (Open harnesses). Child process only; not the Vercel login. No local model. |
 | `letta` | Letta Code setup card (Open harnesses). Install `letta`, then `/connect` or `/login`. SuperQode does not start the Letta loop from this row yet. |
-| `warp` | Warp Agent CLI setup card (Open harnesses). Install `warp`, then sign in or set `WARP_API_KEY`. SuperQode does not attach Warp from this row yet. |
+| `warp` | Warp Agent CLI setup card (Open harnesses). Install `warp`, then sign in or set `WARP_API_KEY`. SuperQode does not attach Warp: its loop is server-side and its client is AGPL-3.0. Waiting on ACP support or a licence change. |
 | `kiro` | Kiro or Amazon Q Developer subscription through the signed-in Kiro CLI ACP mode. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |

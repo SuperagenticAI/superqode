@@ -171,10 +171,11 @@ def test_every_drawn_row_states_its_openness_to_the_hub_as_well():
     assert unlinked == [], f"these drawn rows tell the Hub nothing: {unlinked}"
 
 
-def test_connect_menu_flag_defaults_to_v1(monkeypatch, tmp_path):
+def test_connect_menu_flag_defaults_to_v2(monkeypatch, tmp_path):
+    """Open and Closed are the shipped IA; v1 stays reachable by opting in."""
     monkeypatch.delenv("SUPERQODE_CONNECT_MENU", raising=False)
-    assert parse_connect_menu_flag(config_path=tmp_path / "missing.json") == "v1"
-    assert CONNECT_MENU_DEFAULT == "v1"
+    assert parse_connect_menu_flag(config_path=tmp_path / "missing.json") == "v2"
+    assert CONNECT_MENU_DEFAULT == "v2"
 
 
 def test_connect_menu_env_overrides_config(monkeypatch, tmp_path):

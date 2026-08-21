@@ -193,7 +193,6 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     # Subscription runtimes that drive the vendor CLI directly (no ACP).
     "copilot-cli": _vendor_cli_factory("copilot"),
     "grok-cli": _vendor_cli_factory("grok"),
-    "warp-cli": _vendor_cli_factory("warp"),
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -210,7 +209,6 @@ _DESCRIPTIONS: dict[str, str] = {
     "devin-cli": "Cognition Devin CLI (devin auth login)",
     "copilot-cli": "GitHub Copilot CLI on your subscription (copilot login)",
     "grok-cli": "Grok CLI on your subscription (grok login)",
-    "warp-cli": "Warp Agent on your Warp plan (oz login)",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
@@ -238,7 +236,6 @@ _DOCUMENTATION_URLS: dict[str, str] = {
     "antigravity-sdk": "https://antigravity.google/docs/cli-install",
     "antigravity-cli": "https://antigravity.google/docs/cli-install",
     "devin-cli": "https://docs.devin.ai/cli",
-    "warp-cli": "https://docs.warp.dev/reference/cli/",
 }
 
 
@@ -340,8 +337,10 @@ def list_runtimes() -> list[RuntimeInfo]:
         elif _vendor_cli_spec(name) is not None:
             # Subscription CLI runtimes need the vendor binary on PATH rather
             # than an optional Python package.
+            import shutil
+
             spec = _vendor_cli_spec(name)
-            installed = spec.resolve_binary() is not None
+            installed = shutil.which(spec.binary) is not None
             ready = installed
             install_hint = None if installed else spec.install_hint
             implemented = True

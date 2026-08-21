@@ -120,7 +120,8 @@ the engine that executes it. The picker is profile-driven and shows live status:
   [2] ACP (Agent Client Protocol)  Any installed external ACP agent
   [3] BYOK (Bring Your Own Key)    Your API key, such as OpenAI, Anthropic, or Gemini
   [4] Subscriptions                Vendor coding agents on a plan you already pay for
-  [5] Other harnesses              Browse optional non-ACP integrations such as Tau
+  [5] Open harnesses               OSI-licensed harnesses such as Tau or OpenCode
+  [6] Closed harnesses             Proprietary harnesses on that vendor's key
 ```
 
 Option 4 opens the vendor screen. Esc returns to the screen above:
@@ -185,7 +186,7 @@ Direct commands and CLI:
 :connect copilot          # official Copilot SDK path
 :copilot models           # live model catalog for the active Copilot account
 :connect acp copilot      # advanced Copilot CLI ACP compatibility path
-:connect other-harnesses  # optional non-ACP integrations such as Tau
+:connect open-harnesses   # OSI-licensed harnesses such as Tau or OpenCode
 :connect antigravity      # signed-in agy CLI (Google OAuth/keyring)
 :antigravity managed      # Google-hosted sandbox (Gemini API key)
 :connect byok anthropic   # Anthropic API-key path

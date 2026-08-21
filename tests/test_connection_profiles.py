@@ -1362,7 +1362,7 @@ def test_connect_profiles_in_commands_and_completion():
         "droid",
         "droid-key",
         "kiro",
-        "other-harnesses",
+        "agent-open-harnesses",
         "byok",
         "local",
         "acp",
