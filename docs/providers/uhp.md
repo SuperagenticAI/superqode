@@ -150,6 +150,10 @@ The cap is saved with the connection and sent on every task.
 `SUPERQODE_UHP_MAX_OUTPUT_TOKENS` sets it per shell. Without one, SuperQode
 sends no budget and the server's own default applies.
 
+The connect screen has the same field beside the address, so a task refused for
+its budget can be fixed without leaving the terminal interface. Clearing the
+field removes the cap.
+
 ### The workspace is the server's
 
 The harness runs in its own workspace inside the server, not in your

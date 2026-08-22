@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.109] - 2026-08-22
+
+### Added
+
+- The UHP connect screen takes a token cap beside the server address, so a
+  task refused for its budget can be fixed without leaving the terminal
+  interface. 0.2.108 added the cap but exposed it only on
+  `superqode connect uhp --max-output-tokens`, which left the TUI able to
+  surface the failure and unable to correct it. The field prefills from the
+  saved connection, and clearing it removes the cap.
+
 ## [0.2.108] - 2026-08-22
 
 ### Added

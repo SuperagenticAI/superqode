@@ -320,3 +320,26 @@ def test_the_connect_screen_paints_every_surface_black():
     for selector in ("#uhp-url", "#uhp-list", "#uhp-actions Button", "Footer"):
         assert selector in css
     assert css.count("#000000") >= 10
+
+
+def test_the_connect_screen_carries_a_token_cap():
+    """The cap was CLI-only, so a TUI user could not fix a 402 without leaving."""
+    from superqode.widgets.uhp_connect import UHPConnectResult, UHPConnectScreen
+
+    screen = UHPConnectScreen(base_url="", default_url="http://x", max_output_tokens=4000)
+    assert screen._cap == "4000"
+
+    blank = UHPConnectScreen(base_url="", default_url="http://x")
+    assert blank._cap == ""
+
+    result = UHPConnectResult("http://x", "chrn_a", "A", 4000)
+    assert result.max_output_tokens == 4000
+    assert UHPConnectResult("http://x", "chrn_a").max_output_tokens is None
+
+
+def test_the_cap_field_is_on_the_screen_and_styled_black():
+    from superqode.widgets.uhp_connect import UHPConnectScreen
+
+    css = UHPConnectScreen.CSS
+    assert "#uhp-cap" in css
+    assert "#uhp-hint" in css

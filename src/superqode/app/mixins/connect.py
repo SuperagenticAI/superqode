@@ -349,6 +349,7 @@ class ConnectMixin:
             UHPConnectScreen(
                 base_url=settings.base_url,
                 default_url=DEFAULT_BASE_URL,
+                max_output_tokens=settings.max_output_tokens,
             ),
             callback=lambda result: self._apply_uhp_selection(result, log),
         )
@@ -366,10 +367,16 @@ class ConnectMixin:
                 base_url=result.base_url,
                 api_key=previous.api_key,
                 harness_id=result.harness_id,
-                max_output_tokens=previous.max_output_tokens,
+                max_output_tokens=result.max_output_tokens,
             )
         )
-        log.add_success(f"UHP harness selected: {result.harness_name or result.harness_id}")
+        selected = result.harness_name or result.harness_id
+        if result.max_output_tokens:
+            log.add_success(
+                f"UHP harness selected: {selected} · {result.max_output_tokens} token cap"
+            )
+        else:
+            log.add_success(f"UHP harness selected: {selected}")
         # The catalog reads the saved connection, so the entry is only
         # available once the selection above has been written.
         self._harness_cmd("switch uhp", log)

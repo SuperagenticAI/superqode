@@ -26,6 +26,7 @@ class UHPConnectResult:
     base_url: str
     harness_id: str
     harness_name: str = ""
+    max_output_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,15 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         border: tall #2a2a2a;
     }
     #uhp-url:focus { border: tall #7c3aed; background: #000000; }
+    #uhp-cap {
+        width: 18;
+        margin-left: 1;
+        background: #000000;
+        color: #e6e6e6;
+        border: tall #2a2a2a;
+    }
+    #uhp-cap:focus { border: tall #7c3aed; background: #000000; }
+    #uhp-hint { padding: 0 2 0 2; height: auto; color: #5a5a5a; background: #000000; }
     #uhp-status { padding: 1 2 0 2; height: auto; color: #8a8a8a; background: #000000; }
     #uhp-list {
         height: 1fr;
@@ -96,10 +106,17 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
     Footer { background: #000000; }
     """
 
-    def __init__(self, *, base_url: str, default_url: str) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        default_url: str,
+        max_output_tokens: int | None = None,
+    ) -> None:
         super().__init__()
         self._url = base_url or default_url
         self._default_url = default_url
+        self._cap = str(max_output_tokens) if max_output_tokens else ""
         self._rows: list[_Row] = []
         self._busy = False
 
@@ -113,7 +130,13 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
             )
         with Horizontal(id="uhp-address"):
             yield Input(value=self._url, placeholder="https://your-server", id="uhp-url")
+            yield Input(value=self._cap, placeholder="max tokens", id="uhp-cap")
             yield Button("Connect", id="uhp-connect", variant="primary")
+        yield Static(
+            "Leave max tokens empty to use the server's budget. Set it when a "
+            "provider bills against the budget a task reserves.",
+            id="uhp-hint",
+        )
         yield Static("", id="uhp-status")
         yield OptionList(id="uhp-list")
         with Horizontal(id="uhp-actions"):
@@ -227,13 +250,21 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         self.query_one("#uhp-url", Input).value = url
         self._discover(url)
 
+    def _token_cap(self) -> int | None:
+        """Read the cap field, treating anything unusable as unset."""
+        try:
+            value = int(self.query_one("#uhp-cap", Input).value.strip())
+        except (ValueError, TypeError):
+            return None
+        return value if value > 0 else None
+
     def _use_highlighted(self) -> None:
         option_list = self.query_one("#uhp-list", OptionList)
         index = option_list.highlighted
         if index is None or not (0 <= index < len(self._rows)):
             return
         row = self._rows[index]
-        self.dismiss(UHPConnectResult(self._url, row.id, row.name))
+        self.dismiss(UHPConnectResult(self._url, row.id, row.name, self._token_cap()))
 
     @on(Button.Pressed, "#uhp-connect")
     def _on_connect(self) -> None:
@@ -249,6 +280,10 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
 
     @on(Input.Submitted, "#uhp-url")
     def _on_submit(self) -> None:
+        self._connect_from_input()
+
+    @on(Input.Submitted, "#uhp-cap")
+    def _on_cap_submit(self) -> None:
         self._connect_from_input()
 
     @on(OptionList.OptionSelected, "#uhp-list")
