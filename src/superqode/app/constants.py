@@ -493,6 +493,7 @@ COMMANDS = [
     ":providers use",
     ":providers show",
     ":connect setup",
+    ":connect uhp",
     ":context",
     ":chat",
     ":chat off",

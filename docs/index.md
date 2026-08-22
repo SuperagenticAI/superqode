@@ -68,6 +68,7 @@ already use:
 :connect acp <agent>                   # any installed ACP coding agent
 :connect local ollama <open-model>     # a local server you run
 :connect byok <provider> <model>       # a hosted provider with an API key
+:connect uhp --base-url <url>          # harnesses on a UHP server
 ```
 
 Ask for repository work as you would in another coding agent:

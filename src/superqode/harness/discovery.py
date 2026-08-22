@@ -126,6 +126,22 @@ def discover_harness_adapters(
         )
         known.add("tau")
 
+        uhp_available, uhp_issue, uhp_adapter = _uhp_adapter_status()
+        entries.append(
+            HarnessAdapterDefinition(
+                id="uhp",
+                name="UHP harness",
+                description=(
+                    "A harness on a Unified Harness Protocol server, through Harness Protocol v1"
+                ),
+                source="optional:uhp",
+                available=uhp_available,
+                adapter=uhp_adapter,
+                issue=uhp_issue,
+            )
+        )
+        known.add("uhp")
+
     for entry_point in _harness_entry_points():
         source = _entry_point_source(entry_point)
         entry_value = str(getattr(entry_point, "value", ""))
@@ -164,6 +180,29 @@ def discover_harness_adapters(
                 )
             )
     return tuple(entries)
+
+
+def _uhp_adapter_status() -> tuple[bool, str, HarnessAdapter | None]:
+    """Build the configured UHP adapter, or explain why there is none."""
+    from ..providers.uhp import resolve_settings, setup_hint
+    from .uhp_adapter import UHPHarnessProtocolAdapter
+
+    settings = resolve_settings()
+    if not settings.configured:
+        return False, setup_hint(), None
+    if not settings.harness_id:
+        return (
+            False,
+            "No UHP harness is selected. Run `superqode connect uhp --harness <id>`.",
+            None,
+        )
+    adapter = UHPHarnessProtocolAdapter(
+        settings.base_url,
+        harness_id=settings.harness_id,
+        api_key=settings.api_key or None,
+        name=f"UHP {settings.harness_id}",
+    )
+    return True, "", adapter
 
 
 def load_harness_adapter(reference: str) -> HarnessAdapter:

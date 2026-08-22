@@ -32,6 +32,15 @@ class BaseHarnessAdapter:
 
     descriptor: HarnessDescriptor
 
+    def session_state(self, session: HarnessSessionRef) -> dict[str, Any]:
+        """Return adapter state the controller should persist with the session.
+
+        Adapters that learn durable ids mid-turn (a remote session id, a
+        response cursor) return them here so a later process can resume.
+        """
+        del session
+        return {}
+
     async def resume(self, session: HarnessSessionRef) -> HarnessSessionRef:
         require_capability(self.descriptor, "resume")
         return session

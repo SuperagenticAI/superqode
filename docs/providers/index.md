@@ -72,6 +72,12 @@ bundled ACP agent in one place.
     [:octicons-arrow-right-24: MCP Configuration](../configuration/mcp-config.md)
     [:octicons-arrow-right-24: A2A Providers](a2a.md)
 
+-   **Unified Harness Protocol**
+
+    Run harnesses hosted on a UHP server through one HTTP contract.
+
+    [:octicons-arrow-right-24: UHP](uhp.md)
+
 </div>
 
 ---
@@ -95,6 +101,7 @@ Each rung opens the specific methods underneath it:
 | **BYOK (Bring Your Own Key)** | Hosted model providers using your API key | `:connect byok` |
 | **Plan endpoints** | A subscription that exposes a model endpoint to our harness | `:connect plan` |
 | **Other harnesses** | Optional non-ACP harness integrations | `:connect other-harnesses` |
+| **UHP** | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` |
 
 Build routes are listed separately because they produce a repository artifact
 rather than a connection:
@@ -369,3 +376,4 @@ superqode providers list --category free
 - [ACP Agents](acp.md) - Coding agent integration
 - [Local Providers](local.md) - Self-hosted models
 - [OpenResponses](openresponses.md) - Gateway configuration
+- [Unified Harness Protocol](uhp.md) - Harnesses on a UHP server

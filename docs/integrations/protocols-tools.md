@@ -12,6 +12,7 @@ description: Configure ACP, MCP, A2A, semantic search, and execution tools.
 | Agent Client Protocol, ACP | **Included** | `:connect acp <agent>` | `superqode agents doctor <agent>` | [ACP Coding Agents](../providers/acp.md) |
 | Model Context Protocol, MCP | **Included** | Configure a server in `superqode.yaml` | `:mcp doctor` | [MCP Configuration](../configuration/mcp-config.md) |
 | Agent2Agent, A2A | `uv tool install "superqode[a2a]"` | `:a2a connect <url>` | `:a2a discover <url>` | [A2A Agents](../providers/a2a.md) |
+| Unified Harness Protocol, UHP | **Included** | `superqode connect uhp --base-url <url>` | `superqode connect uhp --json` | [Unified Harness Protocol](../providers/uhp.md) |
 | Harness Protocol | **Included** | `superqode harness protocol list` | `superqode harness protocol conformance` | [Harness Protocol](../advanced/harness-protocol.md) |
 
 SuperQode can expose a harness as an MCP, ACP, or A2A service. See

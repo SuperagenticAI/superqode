@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -27,6 +28,8 @@ from .spec import HarnessSpec
 from .store import FileHarnessStore, MemoryHarnessStore, SQLiteHarnessStore
 
 HarnessProtocolStore = MemoryHarnessStore | FileHarnessStore | SQLiteHarnessStore
+
+logger = logging.getLogger(__name__)
 
 
 class HarnessProtocolController:
@@ -177,6 +180,7 @@ class HarnessProtocolController:
             return
         finally:
             self._active_runs.pop(ref.session_id, None)
+            self._persist_session_state(ref, adapter)
 
         if run.run_id in self._cancelled_runs:
             self._cancelled_runs.discard(run.run_id)
@@ -330,6 +334,40 @@ class HarnessProtocolController:
     def _session_route(self, session_id: str) -> dict[str, Any]:
         record = self.store.get_session(session_id)
         return dict((record.metadata if record else {}).get("protocol") or {})
+
+    def _persist_session_state(self, session: HarnessSessionRef, adapter: Any) -> None:
+        """Store ids the adapter learned during the turn, if it reports any.
+
+        A frozen session ref cannot carry them, so an adapter whose resume
+        depends on mid-turn ids hands them back through ``session_state``.
+        """
+        state_fn = getattr(adapter, "session_state", None)
+        if state_fn is None:
+            return
+        try:
+            state = dict(state_fn(session) or {})
+        except Exception:  # noqa: BLE001 - persistence must never break a run
+            logger.warning(
+                "Harness %s could not report session state for %s",
+                session.harness_id,
+                session.session_id,
+                exc_info=True,
+            )
+            return
+        if not state:
+            return
+        merged = {**dict(session.metadata), **state}
+        external = state.get("uhp_session_id") or session.external_session_id
+        try:
+            self._touch_session(replace(session, external_session_id=external, metadata=merged))
+        except Exception:  # noqa: BLE001 - a failed write must not fail the run
+            # Silence here would look like a working resume that quietly
+            # restarts the conversation in the next process.
+            logger.warning(
+                "Could not persist session state for %s; resume will not survive a restart",
+                session.session_id,
+                exc_info=True,
+            )
 
     def _touch_session(self, session: HarnessSessionRef) -> None:
         adapter = self._adapter(session.harness_id)

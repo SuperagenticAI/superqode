@@ -1,7 +1,7 @@
 # Connection Methods and Vendors
 
-SuperQode provides six connection and interoperability methods: Local, ACP,
-MCP, A2A, BYOK, and SDK runtimes. The `:connect` screen does not open on those
+SuperQode provides seven connection and interoperability methods: Local, ACP,
+UHP, MCP, A2A, BYOK, and SDK runtimes. The `:connect` screen does not open on those
 methods, because a method is a transport rather than a decision. It opens on
 one question, who should run the coding loop, in three answers: use an agent
 someone else built, run a SuperQode harness on a model you choose, or build a
@@ -60,6 +60,7 @@ Switching can preserve the current conversation or fork an independent branch:
 | SDK | A vendor agent SDK or authenticated client runtime | `:connect subscriptions`, then a product such as `:connect codex`, or use an explicit API-key runtime | The vendor runtime owns model access; SuperQode supplies session and policy controls |
 | MCP | Tool and resource servers exposed through Model Context Protocol | `:mcp` | MCP extends the active harness or ACP agent; it is not a model connection |
 | A2A | Remote agents exposed through Agent2Agent endpoints | `:a2a connect <url>` | The remote agent owns its execution contract |
+| UHP | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` | The server owns the harness, its tools, and its sandbox |
 
 Harness Protocol is also supported for portable harness import and export. It
 defines harness artifacts rather than an intelligence connection.

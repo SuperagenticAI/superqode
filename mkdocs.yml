@@ -196,6 +196,7 @@ nav:
       - ✈️ Airplane Mode: advanced/airplane-mode.md
     - 🔗 Protocol Connections:
       - 🔁 A2A Agents: providers/a2a.md
+      - 🧩 Unified Harness Protocol: providers/uhp.md
       - 🔧 MCP Configuration: configuration/mcp-config.md
       - 🔐 MCP OAuth: advanced/mcp-oauth.md
 

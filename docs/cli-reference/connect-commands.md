@@ -203,7 +203,47 @@ superqode connect COMMAND [OPTIONS] [ARGS]
 | `connect acp` | Connect to an ACP coding agent |
 | `connect byok` | Connect to a cloud provider |
 | `connect local` | Connect to a local provider |
+| `connect uhp` | Connect to a Unified Harness Protocol server |
 | `connect setup` | Show setup guide for a provider |
+
+---
+
+## connect uhp
+
+Connect to a Unified Harness Protocol server, discover the harnesses it
+advertises, and select one.
+
+```bash
+superqode connect uhp [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--base-url URL` | Server root, with or without a trailing `/v1` |
+| `--api-key KEY` | Bearer credential for the server |
+| `--harness ID` | Harness id to select |
+| `--save` / `--no-save` | Remember the connection (default: save) |
+| `--json` | Emit the catalog and selection as JSON |
+
+### Examples
+
+```bash
+superqode connect uhp --base-url https://your-server
+superqode connect uhp --harness chrn_claude
+superqode connect uhp --json
+```
+
+### Notes
+
+A UHP server is a remote catalog, so the address is resolved before the
+harness list is known. Settings come from options first, then
+`SUPERQODE_UHP_BASE_URL` and `SUPERQODE_UHP_API_KEY`, then the saved
+connection at `~/.superqode/uhp.json`.
+
+See [Unified Harness Protocol](../providers/uhp.md) for the adapter, the event
+mapping, and the capability list.
 
 ---
 

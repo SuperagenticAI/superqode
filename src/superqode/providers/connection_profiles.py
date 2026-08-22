@@ -11,6 +11,7 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     byok         the BYOK provider/model picker, optionally pinned to one provider
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
+    uhp-picker   harnesses discovered from a Unified Harness Protocol server
     harness-picker optional non-ACP harness integrations (v1 Other)
     open-harness-picker  Open category (catalog list_entries("open"))
     closed-harness-picker Closed category (catalog list_entries("closed"))
@@ -1079,6 +1080,29 @@ _CLOSED_HARNESSES_ALIAS = ConnectionProfile(
     detect=lambda: True,
 )
 
+
+def _uhp_configured() -> bool:
+    """Whether a UHP server address is already known."""
+    from .uhp import is_configured
+
+    try:
+        return is_configured()
+    except Exception:  # noqa: BLE001 - availability probes must never raise
+        return False
+
+
+_UHP_SERVER = ConnectionProfile(
+    id="uhp",
+    label="UHP server",
+    description="Harnesses on a Unified Harness Protocol server, discovered over HTTP",
+    connector="uhp-picker",
+    transport="UHP",
+    detect=_uhp_configured,
+    unavailable_hint=(
+        "No UHP server is set. Run `superqode connect uhp --base-url https://your-server`."
+    ),
+)
+
 _AGENT_CATEGORY_PROFILES: List[ConnectionProfile] = [
     _AGENT_SUBSCRIPTIONS,
     _AGENT_ACP,
@@ -1291,6 +1315,7 @@ _BY_ID = {
         _AGENT_CLOSED,
         _OPEN_HARNESSES_ALIAS,
         _CLOSED_HARNESSES_ALIAS,
+        _UHP_SERVER,
     )
 }
 

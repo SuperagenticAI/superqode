@@ -10,7 +10,7 @@ import click
 
 @click.group()
 def connect():
-    """Connect to models via ACP agents, BYOK providers, or LOCAL providers."""
+    """Connect to ACP agents, BYOK or LOCAL providers, or a UHP server."""
     pass
 
 
@@ -54,6 +54,24 @@ def connect_zai(model):
     from superqode.commands.providers import connect_provider
 
     exit(connect_provider("zai", model))
+
+
+@connect.command("uhp")
+@click.option("--base-url", metavar="URL", help="UHP server root, e.g. https://your-server")
+@click.option("--api-key", metavar="KEY", help="Bearer credential for the server")
+@click.option("--harness", metavar="ID", help="Harness id to select on that server")
+@click.option("--save/--no-save", default=True, help="Remember this connection")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def connect_uhp(base_url, api_key, harness, save, json_output):
+    """Connect to a Unified Harness Protocol server and list its harnesses.
+
+    A UHP server is a remote catalog, so connecting resolves the address,
+    discovers what the server runs, and selects one harness. Without
+    `--harness` the discovered harnesses are listed for you to pick from.
+    """
+    from superqode.commands.uhp import connect_uhp_server
+
+    exit(connect_uhp_server(base_url, api_key, harness, save=save, json_output=json_output))
 
 
 @connect.command("setup")

@@ -76,6 +76,7 @@ are documented on the linked category page.
 | Telegram | Control the channel daemon through a Telegram bot | [Remote interfaces](remote-interfaces.md) |
 | Text Generation Inference, TGI | Connect a local or remote TGI endpoint | [Models and inference](models-inference.md) |
 | Transformers | Run supported Hugging Face models through a local Python stack | [Models and inference](models-inference.md) |
+| Unified Harness Protocol, UHP | Run harnesses hosted on a UHP server through one HTTP contract | [Protocols and tools](protocols-tools.md) |
 | vLLM | Connect a local or remote vLLM endpoint | [Models and inference](models-inference.md) |
 | Vercel Sandbox | Execute commands through the Vercel Sandbox CLI | [Sandboxes](sandboxes.md) |
 | Web TUI | Host the terminal interface in a browser | [Remote interfaces](remote-interfaces.md) |

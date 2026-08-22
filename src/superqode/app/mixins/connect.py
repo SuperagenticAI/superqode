@@ -317,6 +317,23 @@ class ConnectMixin:
             subtitle="Optional non-ACP harness integrations",
         )
 
+    def _show_uhp_harnesses(self, log: ConversationLog) -> None:
+        """List the harnesses a Unified Harness Protocol server advertises.
+
+        A UHP server is remote, so the catalog is fetched rather than read from
+        a local registry. Discovery runs through the CLI so the TUI stays off
+        the network thread and the same output is produced either way.
+        """
+        from superqode.providers.uhp import resolve_settings, setup_hint
+
+        settings = resolve_settings()
+        if not settings.configured:
+            log.add_error("No UHP server is configured.")
+            log.add_info(setup_hint())
+            return
+        log.add_info(f"Discovering harnesses on {settings.base_url} ...")
+        self._run_cli_passthrough(["connect", "uhp"], log, "UHP harnesses")
+
     def _begin_key_harness(
         self, profile, log: ConversationLog, *, apply_route: tuple | None = None
     ) -> None:
@@ -1323,6 +1340,8 @@ class ConnectMixin:
             self._show_local_provider_picker(log)
         elif conn == "acp-picker":
             self._show_agents(log)
+        elif conn == "uhp-picker":
+            self._show_uhp_harnesses(log)
         elif conn == "harness-picker":
             self._show_other_harnesses(log)
         elif conn == "open-harness-picker":

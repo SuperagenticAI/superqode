@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.104] - 2026-08-22
+
+### Added
+
+- SuperQode speaks the Unified Harness Protocol (UHP) `2026-08-11` as a
+  client. `superqode connect uhp --base-url <url>` reads the server's
+  discovery document, lists the harnesses it advertises, and selects one.
+  A saved connection registers the `uhp` route, so
+  `superqode harness run uhp` runs the task on the server and returns its
+  work through the same session, event, and evidence model as a local
+  harness. `:connect uhp` runs the same discovery from the TUI.
+- `superqode.harness.uhp_client` is a standalone UHP client with no
+  SuperQode types in its signatures: protocol discovery, harness listing and
+  configuration, blocking and streaming task submission, session turns and
+  files, file download, and response and session cancellation. Server errors
+  raise the six typed classes the specification defines.
+- `UHPHarnessProtocolAdapter` normalizes a UHP stream into the canonical
+  event vocabulary, including text deltas, reasoning, tool calls and their
+  results, and produced files as artifacts. It declares `steer` and
+  `checkpoint` unsupported, because UHP has no operation for either.
+- Adapters can report durable state through a new `session_state` hook. The
+  protocol controller persists it after each turn, so a UHP conversation
+  continues across a process restart instead of silently starting over.
+
+### Fixed
+
+- `harness protocol list` and `harness run` reject a UHP route that is not
+  ready. A connection without a selected harness reports what to run rather
+  than appearing available and failing during the task.
+- `superqode connect uhp --harness <id>` exits non-zero and saves nothing
+  when the server does not advertise that id, instead of reporting a
+  connected server.
+
+### Security
+
+- The UHP connection at `~/.superqode/uhp.json` is created with owner-only
+  permissions rather than being widened and then narrowed. A key supplied
+  through `SUPERQODE_UHP_API_KEY` is never copied into that file, and
+  stripping it does not discard a different key saved earlier with
+  `--api-key`.
+- Every UHP task submission carries an `Idempotency-Key`, so a retried
+  request cannot start a second agent in the same workspace. Every request
+  carries `UHP-Version`, so a server cannot silently answer at another
+  version.
+- A dropped stream no longer abandons a running task. SuperQode re-reads the
+  response, which the specification makes the source of truth after a
+  disconnect, and cancels the task explicitly when it is still running.
+
 ## [0.2.103] - 2026-08-21
 
 ### Changed

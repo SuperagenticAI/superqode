@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 267
+EXPECTED_COMMAND_COUNT = 268
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -64,7 +64,12 @@ EXPECTED_COMMAND_COUNT = 267
 # `--connect` choices now draw `agent-open-harnesses` and
 # `agent-closed-harnesses` where v1 drew `other-harnesses`. The legacy id
 # still resolves, so this swaps entries rather than adding a command.
-EXPECTED_HELP_TREE_SHA256 = "429ca0b490d573a23f4d078c3ae47d5affd2d25783527e89494d166727aec8a4"
+# Rebaselined for `superqode connect uhp` (267 -> 268: exactly one command
+# added), which connects a Unified Harness Protocol server and lists the
+# harnesses it advertises. The profile is reachable by id and does not draw a
+# row in the agents menu, so the `--connect` choice list is unchanged. The
+# `connect` group help also now names UHP alongside ACP, BYOK, and local.
+EXPECTED_HELP_TREE_SHA256 = "77afaa36930b90befcceec565bb7b9469733eacb23f808b2735b4d514716302c"
 
 
 def _render_help_tree() -> tuple[int, str]:
