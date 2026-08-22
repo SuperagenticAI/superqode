@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from textual import work
+
+from superqode.widgets.uhp_connect import UHPConnectScreen
 from rich.text import Text
 from rich.panel import Panel
 from rich.box import ROUNDED
@@ -318,15 +320,15 @@ class ConnectMixin:
         )
 
     def _show_uhp_harnesses(self, log: ConversationLog, args: str = "") -> None:
-        """Connect a Unified Harness Protocol server and list its harnesses.
+        """Open the UHP connect screen, or run a fully specified connect.
 
         A UHP server is remote, so the address comes first and the catalog is
-        fetched. Discovery runs through the CLI so the TUI stays off the
-        network thread and both surfaces produce the same output.
+        fetched. With no arguments this opens a picker; with arguments it runs
+        the same command the shell would, so every flag keeps working.
         """
         import shlex
 
-        from superqode.providers.uhp import resolve_settings, setup_hint
+        from superqode.providers.uhp import DEFAULT_BASE_URL, resolve_settings
 
         try:
             tokens = shlex.split(args or "")
@@ -337,18 +339,40 @@ class ConnectMixin:
         # stays available so every CLI option works here too.
         if tokens and not tokens[0].startswith("-"):
             tokens = ["--base-url", *tokens]
-
-        if not tokens:
-            settings = resolve_settings()
-            if not settings.configured:
-                log.add_error("No UHP server is configured.")
-                log.add_info("Connect one with `:connect uhp <url>`.")
-                log.add_info(setup_hint())
-                return
-            log.add_info(f"Discovering harnesses on {settings.base_url} ...")
-        else:
+        if tokens:
             log.add_info("Connecting to the UHP server ...")
-        self._run_cli_passthrough(["connect", "uhp", *tokens], log, "UHP harnesses")
+            self._run_cli_passthrough(["connect", "uhp", *tokens], log, "UHP harnesses")
+            return
+
+        settings = resolve_settings()
+        self.push_screen(
+            UHPConnectScreen(
+                base_url=settings.base_url,
+                default_url=DEFAULT_BASE_URL,
+            ),
+            callback=lambda result: self._apply_uhp_selection(result, log),
+        )
+
+    def _apply_uhp_selection(self, result, log: ConversationLog) -> None:
+        """Save the chosen server and harness, then make it the active one."""
+        if result is None:
+            self._ensure_input_focus()
+            return
+        from superqode.providers.uhp import UHPSettings, resolve_settings, save_connection
+
+        previous = resolve_settings()
+        save_connection(
+            UHPSettings(
+                base_url=result.base_url,
+                api_key=previous.api_key,
+                harness_id=result.harness_id,
+                max_output_tokens=previous.max_output_tokens,
+            )
+        )
+        log.add_success(f"UHP harness selected: {result.harness_name or result.harness_id}")
+        # The catalog reads the saved connection, so the entry is only
+        # available once the selection above has been written.
+        self._harness_cmd("switch uhp", log)
 
     def _begin_key_harness(
         self, profile, log: ConversationLog, *, apply_route: tuple | None = None
@@ -1356,6 +1380,14 @@ class ConnectMixin:
             self._show_local_provider_picker(log)
         elif conn == "acp-picker":
             self._show_agents(log)
+        elif conn == "protocols-menu":
+            from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        elif conn == "a2a-picker":
+            # Discovery only for now: A2A operations need a bearer token that
+            # a published agent card deliberately does not carry.
+            self.run_worker(self._a2a_cmd("", log))
         elif conn == "uhp-picker":
             self._show_uhp_harnesses(log)
         elif conn == "harness-picker":

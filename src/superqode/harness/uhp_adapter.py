@@ -56,10 +56,12 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
         api_key: str | None = None,
         adapter_id: str = "uhp",
         name: str = "UHP harness",
+        max_output_tokens: int | None = None,
         client: UHPClient | None = None,
     ) -> None:
         self.base_url = base_url
         self.harness_id = harness_id
+        self.max_output_tokens = max_output_tokens
         self._client = client or UHPClient(base_url, api_key=api_key)
         self.descriptor = HarnessDescriptor(
             id=adapter_id,
@@ -184,6 +186,7 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
             harness_id=harness_id or None,
             model=override or None,
             previous_response_id=previous_response_id,
+            max_output_tokens=self.max_output_tokens,
         )
         try:
             async for event in stream:

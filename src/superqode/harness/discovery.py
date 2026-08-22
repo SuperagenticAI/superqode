@@ -200,6 +200,7 @@ def _uhp_adapter_status() -> tuple[bool, str, HarnessAdapter | None]:
         settings.base_url,
         harness_id=settings.harness_id,
         api_key=settings.api_key or None,
+        max_output_tokens=settings.max_output_tokens,
         name=f"UHP {settings.harness_id}",
     )
     return True, "", adapter

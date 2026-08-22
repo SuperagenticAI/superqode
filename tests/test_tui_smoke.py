@@ -5832,11 +5832,12 @@ def picker_rows(rendered: str) -> list[tuple[int, str]]:
 
 
 def test_connect_root_picker_asks_who_runs_the_loop():
-    """The first connect screen offers three rungs of the ownership ladder.
+    """The first connect screen names each owner of the coding loop.
 
     The old screen mixed "a whole agent" with "a model for our agent" and put
     a transport name (ACP) beside both, so the five rows were not comparable
-    choices. These three are.
+    choices. These four are: three owners you name, and one for a loop that
+    lives behind a protocol.
     """
     app = make_app()
     log = FakeLog()
@@ -5849,6 +5850,7 @@ def test_connect_root_picker_asks_who_runs_the_loop():
         (1, "Connect an existing harness"),
         (2, "Connect a harness with your model"),
         (3, "Build your own harness"),
+        (4, "Connect to existing agent protocols"),
     ]
     # Vendor products and transports live one screen deeper now.
     assert "Codex subscription" not in rendered
@@ -5899,7 +5901,7 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
     text = console.export_text()
     nonblank = [line for line in text.splitlines() if line.strip()]
 
-    assert len(nonblank) <= 12
+    assert len(nonblank) <= 14
     assert all(len(line) <= width for line in text.splitlines())
     assert "Connect an existing harness" in text
     assert "Connect a harness with your model" in text
@@ -7166,14 +7168,17 @@ def test_connect_uhp_passes_flags_through(monkeypatch):
     ]
 
 
-def test_bare_connect_uhp_without_a_server_says_how_to_connect(monkeypatch):
-    """The old message told the user to leave the TUI and use the CLI."""
+def test_bare_connect_uhp_opens_the_connect_screen(monkeypatch):
+    """A bare :connect uhp asks for a server rather than printing a CLI hint."""
     import superqode.providers.uhp as uhp_settings
+    from superqode.widgets.uhp_connect import UHPConnectScreen
 
     app = make_app()
     log = FakeLog()
     called = []
+    pushed = []
     app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app.push_screen = lambda screen, callback=None: pushed.append(screen)
     app._record_ex_command = lambda *_args: None
     monkeypatch.setattr(
         uhp_settings, "resolve_settings", lambda *a, **k: uhp_settings.UHPSettings()
@@ -7182,5 +7187,7 @@ def test_bare_connect_uhp_without_a_server_says_how_to_connect(monkeypatch):
     app._handle_command(":connect uhp", log)
 
     assert called == []
-    rendered = " ".join(str(item) for item in log.items)
-    assert ":connect uhp <url>" in rendered
+    assert len(pushed) == 1
+    assert isinstance(pushed[0], UHPConnectScreen)
+    # Nothing saved yet, so the screen offers the Docker default.
+    assert pushed[0]._url == uhp_settings.DEFAULT_BASE_URL

@@ -38,7 +38,11 @@ def uhp_backend_status() -> tuple[bool, str]:
     if not settings.configured:
         return False, setup_hint()
     if not settings.harness_id:
-        return False, "No UHP harness is selected. Run `superqode connect uhp --harness <id>`."
+        return False, (
+            "No UHP harness is selected. List them with `:connect uhp <url>`, then "
+            "choose one with `:connect uhp --harness <id>` (or the same "
+            "`superqode connect uhp` commands in a shell)."
+        )
     return True, ""
 
 
@@ -81,6 +85,7 @@ class UHPHarnessBackend:
                 settings.base_url,
                 harness_id=settings.harness_id or None,
                 api_key=settings.api_key or None,
+                max_output_tokens=settings.max_output_tokens,
                 name=f"UHP {settings.harness_id or 'harness'}",
             )
         return self._adapter

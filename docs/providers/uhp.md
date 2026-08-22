@@ -67,13 +67,17 @@ superqode connect uhp --harness chrn_claude
 An unknown harness id is an error, not a silent success: the command exits
 non-zero and saves nothing.
 
-From the TUI, `:connect uhp` runs the same discovery.
+From the TUI, `:connect uhp` opens a screen that takes the server address,
+lists what it advertises, and switches to the harness you pick. It prefills
+HarnessRouter Community Edition's Docker address, so a local container needs
+no typing. The same screen is on `:connect protocols` as `:connect protocol-uhp`.
 
 | Option | Description |
 | --- | --- |
 | `--base-url` | Server root, with or without a trailing `/v1` |
 | `--api-key` | Bearer credential for the server |
 | `--harness` | Harness id to select |
+| `--max-output-tokens` | Cap the token budget for one task |
 | `--save` / `--no-save` | Remember the connection (default: save) |
 | `--json` | Emit the catalog, capabilities, and selection as JSON |
 
@@ -125,6 +129,26 @@ rejects the task rather than falling back, so the id must match what the
 server's integrations provide. `SUPERQODE_MODEL` deliberately does not override
 a remote harness: it is a local default for SuperQode's own harnesses and knows
 nothing about what the server can serve.
+
+### Capping the token budget
+
+Some providers check affordability against the budget a task *reserves*, not
+what it uses. A harness that asks for a large budget is then refused outright,
+even for a one-word prompt, and the error names a number nobody chose:
+
+```text
+You requested up to 65536 tokens, but can only afford 1195.
+```
+
+Cap it, and the server asks for less:
+
+```bash
+superqode connect uhp --max-output-tokens 1000
+```
+
+The cap is saved with the connection and sent on every task.
+`SUPERQODE_UHP_MAX_OUTPUT_TOKENS` sets it per shell. Without one, SuperQode
+sends no budget and the server's own default applies.
 
 ### The workspace is the server's
 

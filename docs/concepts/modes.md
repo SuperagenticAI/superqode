@@ -64,6 +64,27 @@ Switching can preserve the current conversation or fork an independent branch:
 | A2A | Remote agents exposed through Agent2Agent endpoints | `:a2a connect <url>` | The remote agent owns its execution contract |
 | UHP | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` | The server owns the harness, its tools, and its sandbox |
 
+### The Protocols screen
+
+ACP, A2A, and UHP all connect something that owns its own agent loop, so they
+share the fourth row of `:connect`:
+
+```text
+:connect protocols
+```
+
+| Row | Reaches | Command |
+| --- | --- | --- |
+| Agent Client Protocol (ACP) | A coding agent you run as a local process | `:connect protocol-acp` |
+| Agent2Agent (A2A) | A remote agent discovered from its published agent card | `:connect protocol-a2a` |
+| Unified Harness Protocol (UHP) | Harnesses on a UHP server, local or remote | `:connect protocol-uhp` |
+
+A2A is discovery for now: operations against a published card need a bearer
+token the card deliberately does not carry.
+
+MCP is deliberately not on that screen. It extends whatever harness is already
+running rather than owning a loop, so it stays on `:mcp`.
+
 Harness Protocol is also supported for portable harness import and export. It
 defines harness artifacts rather than an intelligence connection.
 

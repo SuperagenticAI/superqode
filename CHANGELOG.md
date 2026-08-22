@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.108] - 2026-08-22
+
+### Added
+
+- `:connect` offers a fourth choice, **Connect to existing agent protocols**,
+  for a coding loop that lives behind a wire rather than in a product you name.
+  It lists Agent Client Protocol (ACP), Agent2Agent (A2A), and Unified Harness
+  Protocol (UHP). MCP is deliberately absent: it extends whatever harness is
+  running rather than owning a loop, so it stays on `:mcp`. A2A is discovery
+  for now, because operations against a published agent card need a bearer
+  token the card does not carry.
+- The UHP row opens a screen that takes a server address, lists what the server
+  advertises, and switches to the harness you pick, with a mouse or the
+  keyboard. The address is prefilled with HarnessRouter Community Edition's
+  Docker location, including the path prefix, so a local container needs no
+  typing. Discovery runs in a worker, so a server that never answers cannot
+  freeze the terminal.
+- `superqode connect uhp --max-output-tokens N` caps the token budget for one
+  task. Some providers check affordability against the budget a task reserves
+  rather than what it uses, and refuse a large reservation outright, so a
+  one-word prompt could fail with a number nobody chose. The cap is saved with
+  the connection; `SUPERQODE_UHP_MAX_OUTPUT_TOKENS` sets it per shell. Without
+  one, no budget is sent and the server's own default applies.
+
+### Fixed
+
+- Switching to a harness the server owns leaves the session able to send.
+  0.2.107 stopped asking for a local model on those harnesses, and that prompt
+  was also what connected the session, so `:harness switch uhp` went active
+  and then refused every message with "Not connected".
+- The UHP connect screen paints every surface. Textual gives `Input`,
+  `OptionList`, `Button`, and `Footer` their own panels regardless of the
+  screen background, so setting only the screen left grey widgets on black.
+
 ## [0.2.107] - 2026-08-22
 
 ### Fixed

@@ -69,7 +69,13 @@ EXPECTED_COMMAND_COUNT = 268
 # harnesses it advertises. The profile is reachable by id and does not draw a
 # row in the agents menu, so the `--connect` choice list is unchanged. The
 # `connect` group help also now names UHP alongside ACP, BYOK, and local.
-EXPECTED_HELP_TREE_SHA256 = "77afaa36930b90befcceec565bb7b9469733eacb23f808b2735b4d514716302c"
+# Rebaselined for the Protocols screen, the fourth root choice. `--connect`
+# derives its choices from the profile registry, so the `protocols`,
+# `protocol-acp`, `protocol-a2a`, and `protocol-uhp` rows widen the choice
+# list. No Click command was added, so the count is unchanged.
+# Rebaselined for `connect uhp --max-output-tokens`, one new option on an
+# existing command, so the count is again unchanged.
+EXPECTED_HELP_TREE_SHA256 = "62862d9771aa4089fbebd67339595830930bf86b636ab2b82bf02936147ff1c9"
 
 
 def _render_help_tree() -> tuple[int, str]:

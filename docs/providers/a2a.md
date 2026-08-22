@@ -4,6 +4,9 @@ SuperQode can **serve** a versioned HarnessSpec as an [A2A 1.0](https://github.c
 
 A2A is the primary cross-service integration surface for SuperQode: other agents, orchestrators, and multiplayer computers discover a SuperQode agent card and submit tasks without sharing SuperQode internals.
 
+A2A also appears on the Protocols screen, reachable directly as
+`:connect protocol-a2a`.
+
 ## Public Agent Card and pilot status
 
 ### Public Agent Card (discovery)

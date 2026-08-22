@@ -27,7 +27,12 @@ def test_root_menu_asks_one_question_in_three_answers():
     Transport belongs one level down: somebody choosing between an agent and
     their own key cannot act on the word "ACP" yet.
     """
-    assert connection_profile_ids(menu=CONNECT_MENU_ROOT) == ["agents", "models", "build"]
+    assert connection_profile_ids(menu=CONNECT_MENU_ROOT) == [
+        "agents",
+        "models",
+        "build",
+        "protocols",
+    ]
     # Root entries are a flat list, so they carry no group headers.
     assert all(p.group == "" for p in list_connection_profiles(CONNECT_MENU_ROOT))
 
@@ -142,6 +147,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "agents",
     "models",
     "build",
+    "protocols",
     "agent-subscriptions",
     "agent-acp",
     "other-harnesses",
@@ -212,6 +218,9 @@ _FLAT_PROFILE_IDS_V1 = [
     "zcode",
     "qoder-key",
     "poolside-key",
+    "protocol-acp",
+    "protocol-a2a",
+    "protocol-uhp",
 ]
 
 

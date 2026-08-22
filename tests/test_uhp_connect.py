@@ -302,3 +302,39 @@ def test_env_key_strip_preserves_a_previously_saved_key(monkeypatch):
     save_connection(UHPSettings(base_url="https://uhp.test", api_key="shell-key"))
 
     assert json.loads(uhp_settings.connection_path().read_text())["api_key"] == "typed-key"
+
+
+def test_a_token_cap_is_saved_and_resolved(monkeypatch, capsys):
+    """Providers that bill up front refuse a budget larger than the balance."""
+    _stub_client(monkeypatch, _handler)
+
+    connect_uhp_server("https://uhp.test", harness_id="chrn_codex", max_output_tokens=1000)
+    out = capsys.readouterr().out
+
+    assert "Token cap:  1000 per task" in out
+    assert resolve_settings().max_output_tokens == 1000
+
+
+def test_no_cap_stays_absent(monkeypatch, capsys):
+    _stub_client(monkeypatch, _handler)
+
+    connect_uhp_server("https://uhp.test", harness_id="chrn_codex")
+    out = capsys.readouterr().out
+
+    assert "Token cap" not in out
+    assert resolve_settings().max_output_tokens is None
+
+
+def test_the_cap_can_come_from_the_environment(monkeypatch):
+    from superqode.providers.uhp import MAX_OUTPUT_TOKENS_ENV
+
+    monkeypatch.setenv(MAX_OUTPUT_TOKENS_ENV, "512")
+    assert resolve_settings().max_output_tokens == 512
+
+
+def test_a_nonsense_cap_is_ignored_rather_than_sent(monkeypatch):
+    from superqode.providers.uhp import MAX_OUTPUT_TOKENS_ENV
+
+    for value in ("0", "-5", "lots", ""):
+        monkeypatch.setenv(MAX_OUTPUT_TOKENS_ENV, value)
+        assert resolve_settings().max_output_tokens is None

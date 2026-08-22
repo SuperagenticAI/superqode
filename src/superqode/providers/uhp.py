@@ -16,6 +16,11 @@ from pathlib import Path
 BASE_URL_ENV = "SUPERQODE_UHP_BASE_URL"
 API_KEY_ENV = "SUPERQODE_UHP_API_KEY"
 HARNESS_ENV = "SUPERQODE_UHP_HARNESS"
+MAX_OUTPUT_TOKENS_ENV = "SUPERQODE_UHP_MAX_OUTPUT_TOKENS"
+
+#: HarnessRouter Community Edition's Docker default. The protocol sits under a
+#: prefix there, which is the detail people most often get wrong.
+DEFAULT_BASE_URL = "http://127.0.0.1:3000/api/harness"
 
 
 def connection_path() -> Path:
@@ -30,17 +35,21 @@ class UHPSettings:
     base_url: str = ""
     api_key: str = ""
     harness_id: str = ""
+    #: Ceiling for one task. Providers that bill up front refuse a request
+    #: whose budget exceeds the balance, however little the task would use.
+    max_output_tokens: int | None = None
 
     @property
     def configured(self) -> bool:
         """Whether a server address is known.  Some servers need no key."""
         return bool(self.base_url)
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "base_url": self.base_url,
             "api_key": self.api_key,
             "harness_id": self.harness_id,
+            "max_output_tokens": self.max_output_tokens,
         }
 
 
@@ -57,6 +66,7 @@ def load_saved_connection() -> UHPSettings:
         base_url=str(payload.get("base_url") or ""),
         api_key=str(payload.get("api_key") or ""),
         harness_id=str(payload.get("harness_id") or ""),
+        max_output_tokens=_optional_int(payload.get("max_output_tokens")),
     )
 
 
@@ -83,10 +93,20 @@ def save_connection(settings: UHPSettings) -> Path:
     return path
 
 
+def _optional_int(value: object) -> int | None:
+    """Return a positive int, or None for anything unusable."""
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 def resolve_settings(
     base_url: str | None = None,
     api_key: str | None = None,
     harness_id: str | None = None,
+    max_output_tokens: int | None = None,
 ) -> UHPSettings:
     """Resolve settings from arguments, then the environment, then the file."""
     saved = load_saved_connection()
@@ -94,6 +114,11 @@ def resolve_settings(
         base_url=(base_url or os.environ.get(BASE_URL_ENV) or saved.base_url or "").strip(),
         api_key=(api_key or os.environ.get(API_KEY_ENV) or saved.api_key or "").strip(),
         harness_id=(harness_id or os.environ.get(HARNESS_ENV) or saved.harness_id or "").strip(),
+        max_output_tokens=(
+            max_output_tokens
+            or _optional_int(os.environ.get(MAX_OUTPUT_TOKENS_ENV))
+            or saved.max_output_tokens
+        ),
     )
 
 
@@ -103,8 +128,13 @@ def is_configured() -> bool:
 
 
 def setup_hint() -> str:
-    """Tell the user how to point SuperQode at a UHP server."""
+    """Tell the user how to point SuperQode at a UHP server.
+
+    Both surfaces show this, so it names the TUI command as well as the shell
+    one rather than sending a TUI user to a terminal.
+    """
     return (
-        "Set a server with `superqode connect uhp --base-url https://your-server` "
-        f"or export {BASE_URL_ENV} (and {API_KEY_ENV} when the server needs a key)."
+        "Connect one with `:connect uhp <url>` in the TUI, or "
+        "`superqode connect uhp --base-url <url>` in a shell. "
+        f"{BASE_URL_ENV} and {API_KEY_ENV} work too."
     )

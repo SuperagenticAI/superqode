@@ -12,6 +12,8 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
     uhp-picker   harnesses discovered from a Unified Harness Protocol server
+    protocols-menu the Protocols screen: ACP, A2A, and UHP in one place
+    a2a-picker   A2A agent discovery, which takes a URL rather than a list
     harness-picker optional non-ACP harness integrations (v1 Other)
     open-harness-picker  Open category (catalog list_entries("open"))
     closed-harness-picker Closed category (catalog list_entries("closed"))
@@ -57,6 +59,7 @@ CONNECT_MENU_ROOT = "root"
 CONNECT_MENU_AGENTS = "agents"
 CONNECT_MENU_VENDORS = "vendors"
 CONNECT_MENU_ACP = "acp-agents"
+CONNECT_MENU_PROTOCOLS = "protocols"
 CONNECT_MENU_OPEN = "open-harnesses"
 CONNECT_MENU_CLOSED = "closed-harnesses"
 CONNECT_MENU_HARNESS = "harness"
@@ -71,6 +74,7 @@ CONNECT_MENUS = (
     CONNECT_MENU_AGENTS,
     CONNECT_MENU_VENDORS,
     CONNECT_MENU_ACP,
+    CONNECT_MENU_PROTOCOLS,
     CONNECT_MENU_OPEN,
     CONNECT_MENU_CLOSED,
     CONNECT_MENU_HARNESS,
@@ -92,6 +96,7 @@ _LEGACY_MENUS = {
 _MENU_PARENTS = {
     CONNECT_MENU_VENDORS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_ACP: CONNECT_MENU_AGENTS,
+    CONNECT_MENU_PROTOCOLS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_OPEN: CONNECT_MENU_AGENTS,
     CONNECT_MENU_CLOSED: CONNECT_MENU_AGENTS,
     CONNECT_MENU_MODELS: CONNECT_MENU_HARNESS,
@@ -425,10 +430,9 @@ def _byok_ready() -> bool:
 
 # --- registry -----------------------------------------------------------------
 
-# The root menu asks exactly one question: who runs the coding loop? Three
-# answers, each a different owner, so no row overlaps another. Everything that
-# used to sit here (local, ACP, BYOK, subscriptions, other harnesses) is one
-# level down, where those options are finally peers of each other.
+# The root menu asks who runs the coding loop. The first three answers are
+# owners you name directly; the fourth is for a loop that lives behind a
+# protocol, where the wire is the thing you pick first.
 _ROOT_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="agents",
@@ -1103,6 +1107,52 @@ _UHP_SERVER = ConnectionProfile(
     ),
 )
 
+_PROTOCOLS = ConnectionProfile(
+    id="protocols",
+    label="Connect to existing agent protocols",
+    description="Reach an agent or harness over ACP, A2A, or UHP",
+    connector="protocols-menu",
+    menu=CONNECT_MENU_ROOT,
+    detect=lambda: True,
+)
+_PROTOCOL_ACP = ConnectionProfile(
+    id="protocol-acp",
+    label="Agent Client Protocol (ACP)",
+    description="A coding agent you run as a local process",
+    connector="acp-picker",
+    menu=CONNECT_MENU_PROTOCOLS,
+    transport="ACP",
+    detect=lambda: True,
+)
+_PROTOCOL_A2A = ConnectionProfile(
+    id="protocol-a2a",
+    label="Agent2Agent (A2A)",
+    description="A remote agent discovered from its published agent card",
+    connector="a2a-picker",
+    menu=CONNECT_MENU_PROTOCOLS,
+    transport="A2A",
+    detect=lambda: True,
+)
+_PROTOCOL_UHP = ConnectionProfile(
+    id="protocol-uhp",
+    label="Unified Harness Protocol (UHP)",
+    description="Harnesses on a UHP server, running locally or remotely",
+    connector="uhp-picker",
+    menu=CONNECT_MENU_PROTOCOLS,
+    transport="UHP",
+    detect=lambda: True,
+)
+
+_PROTOCOL_PROFILES: List[ConnectionProfile] = [
+    _PROTOCOL_ACP,
+    _PROTOCOL_A2A,
+    _PROTOCOL_UHP,
+]
+
+# Appended rather than written inline, because the root list is defined before
+# the protocol rows it points at.
+_ROOT_PROFILES.append(_PROTOCOLS)
+
 _AGENT_CATEGORY_PROFILES: List[ConnectionProfile] = [
     _AGENT_SUBSCRIPTIONS,
     _AGENT_ACP,
@@ -1216,6 +1266,9 @@ def _flat_profiles() -> List[ConnectionProfile]:
             *profiles,
             *_catalog_harness_profiles("open"),
             *_catalog_harness_profiles("closed"),
+            # Protocol rows are drawn, so `--connect protocol-uhp` has to
+            # validate the same way every other drawn row does.
+            *_PROTOCOL_PROFILES,
         ]
     )
 
@@ -1316,12 +1369,15 @@ _BY_ID = {
         _OPEN_HARNESSES_ALIAS,
         _CLOSED_HARNESSES_ALIAS,
         _UHP_SERVER,
+        _PROTOCOLS,
+        *_PROTOCOL_PROFILES,
     )
 }
 
 _BY_MENU = {
     CONNECT_MENU_ROOT: _ROOT_PROFILES,
     CONNECT_MENU_AGENTS: _AGENT_CATEGORY_PROFILES,
+    CONNECT_MENU_PROTOCOLS: _PROTOCOL_PROFILES,
     CONNECT_MENU_VENDORS: _AGENT_PROFILES,
     CONNECT_MENU_ACP: _ACP_MENU_PROFILES,
     CONNECT_MENU_OPEN: (),

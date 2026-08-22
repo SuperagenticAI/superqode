@@ -255,3 +255,68 @@ def test_server_owned_harnesses_are_identifiable_from_the_spec():
 
     assert str(uhp_template().metadata.get("policy_owner")) == "server"
     assert core_template().metadata.get("policy_owner") is None
+
+
+def test_switching_to_a_server_owned_harness_connects_the_session(tmp_path, monkeypatch):
+    """Skipping the model step must not leave the session unable to send.
+
+    The model prompt is also what connected the session, so removing it once
+    left `:harness switch uhp` active but every message refused with
+    "Not connected".
+    """
+    from superqode.app_main import SuperQodeApp
+    from superqode.providers import uhp as uhp_settings
+    from superqode.providers.uhp import UHPSettings, save_connection
+    from superqode.pure_mode import PureMode
+
+    monkeypatch.setattr(uhp_settings.Path, "home", staticmethod(lambda: tmp_path))
+    save_connection(UHPSettings(base_url=BASE_URL, harness_id="chrn_codex"))
+
+    class Log:
+        def __init__(self):
+            self.items = []
+
+        def clear(self):
+            pass
+
+        def write(self, content):
+            self.items.append(str(content))
+
+        def add_info(self, message):
+            self.items.append(str(message))
+
+        def add_error(self, message):
+            self.items.append(str(message))
+
+        def add_success(self, message):
+            self.items.append(str(message))
+
+        def add_meta(self, message, **kwargs):
+            self.items.append(str(message))
+
+        def scroll_end(self, **kwargs):
+            pass
+
+    app = SuperQodeApp()
+    app.set_timer = lambda *a, **k: None
+    app._ensure_input_focus = lambda: None
+    app._record_ex_command = lambda *a: None
+    app._pure_mode = PureMode()
+
+    assert app._pure_mode.session.connected is False
+    app._harness_cmd("switch uhp", Log())
+
+    assert app._pure_mode.session.connected is True
+    assert app._pure_mode.session.provider == "uhp"
+
+
+def test_the_connect_screen_paints_every_surface_black():
+    """Textual gives Input, OptionList and Button their own grey panels."""
+    from superqode.widgets.uhp_connect import UHPConnectScreen
+
+    css = UHPConnectScreen.CSS
+    assert "#050505" not in css
+    assert "#333333" not in css
+    for selector in ("#uhp-url", "#uhp-list", "#uhp-actions Button", "Footer"):
+        assert selector in css
+    assert css.count("#000000") >= 10

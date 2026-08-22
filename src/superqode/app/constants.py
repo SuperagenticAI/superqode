@@ -494,6 +494,7 @@ COMMANDS = [
     ":providers show",
     ":connect setup",
     ":connect uhp",
+    ":connect protocols",
     ":context",
     ":chat",
     ":chat off",

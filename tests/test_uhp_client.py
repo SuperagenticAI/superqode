@@ -1089,3 +1089,47 @@ async def test_the_requested_event_says_when_the_server_chooses():
     await adapter.aclose()
 
     assert events[0].data["model"] == "(server default)"
+
+
+@pytest.mark.asyncio
+async def test_a_configured_token_cap_reaches_the_request():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text=_sse([{"type": "response.completed", "response": _response_payload()}]),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    adapter = UHPHarnessProtocolAdapter(
+        BASE_URL, harness_id="chrn_codex", max_output_tokens=1000, client=_client(handler)
+    )
+    session = await adapter.create(HarnessCreateRequest(harness_id="uhp"))
+    async for _event in adapter.send(session, HarnessMessage("user", "hi")):
+        pass
+    await adapter.aclose()
+
+    assert sent[0]["max_output_tokens"] == 1000
+
+
+@pytest.mark.asyncio
+async def test_without_a_cap_the_field_is_omitted():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text=_sse([{"type": "response.completed", "response": _response_payload()}]),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    adapter = UHPHarnessProtocolAdapter(BASE_URL, harness_id="chrn_codex", client=_client(handler))
+    session = await adapter.create(HarnessCreateRequest(harness_id="uhp"))
+    async for _event in adapter.send(session, HarnessMessage("user", "hi")):
+        pass
+    await adapter.aclose()
+
+    assert "max_output_tokens" not in sent[0]

@@ -27,11 +27,12 @@ def connect_uhp_server(
     api_key: str | None = None,
     harness_id: str | None = None,
     *,
+    max_output_tokens: int | None = None,
     save: bool = True,
     json_output: bool = False,
 ) -> int:
     """Resolve a UHP server, discover its harnesses, and select one."""
-    settings = resolve_settings(base_url, api_key, harness_id)
+    settings = resolve_settings(base_url, api_key, harness_id, max_output_tokens)
     if not settings.configured:
         return _fail("No UHP server is configured.", setup_hint(), json_output=json_output)
 
@@ -61,6 +62,7 @@ def connect_uhp_server(
             base_url=settings.base_url,
             api_key=settings.api_key,
             harness_id=selected["id"],
+            max_output_tokens=settings.max_output_tokens,
         )
         save_connection(settings)
         saved = True
@@ -162,6 +164,8 @@ def _render(
     conformance = result["conformance_class"]
     click.echo(f"Protocol:   UHP {version}{f' ({conformance})' if conformance else ''}")
     click.echo(f"Auth:       {'bearer key' if settings.api_key else 'none supplied'}")
+    if settings.max_output_tokens:
+        click.echo(f"Token cap:  {settings.max_output_tokens} per task")
     if result["discovered"] and not result["speaks_target_version"]:
         from superqode.harness.uhp_client import UHP_PROTOCOL_VERSION
 

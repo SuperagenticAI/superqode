@@ -47,6 +47,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_UHP_BASE_URL` | URL | unset | Unified Harness Protocol server root used by `superqode connect uhp` and the registered `uhp` harness route. |
 | `SUPERQODE_UHP_API_KEY` | bearer token | unset | Credential for that UHP server. A key set here is never copied into the saved connection file. |
 | `SUPERQODE_UHP_HARNESS` | harness id | unset | Harness on the UHP server to select. |
+| `SUPERQODE_UHP_MAX_OUTPUT_TOKENS` | int | unset | Cap the token budget for one UHP task. Useful where a provider checks affordability against the reserved budget rather than usage. |
 | `SUPERQODE_A2A_TOKEN` | bearer token | unset | Protect non-discovery operations served by `superqode serve a2a`; required for non-loopback binding. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |

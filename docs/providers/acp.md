@@ -6,6 +6,9 @@ Agent Client Protocol (ACP) mode connects SuperQode to external coding agents th
 
 ---
 
+ACP also appears on the Protocols screen, reachable directly as
+`:connect protocol-acp`.
+
 ## Overview
 
 An ACP agent is an external runtime such as Codex, Claude Agent, OpenCode, Kimi

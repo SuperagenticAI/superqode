@@ -93,14 +93,16 @@ def dispatch(profile_id):
     return stub
 
 
-# --- the three root choices ---------------------------------------------------
+# --- the root choices ---------------------------------------------------------
 
 
-def test_root_offers_the_three_ways_to_get_a_harness():
+def test_root_offers_the_ways_to_get_a_harness():
+    """Three owners you name, plus the loop that lives behind a protocol."""
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_ROOT)] == [
         ("agents", "Connect an existing harness"),
         ("models", "Connect a harness with your model"),
         ("build", "Build your own harness"),
+        ("protocols", "Connect to existing agent protocols"),
     ]
 
 

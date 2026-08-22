@@ -4119,7 +4119,16 @@ class CommandImplMixin:
             needs_model = True
 
         if server_owned:
+            # No local model to pick, but the session still has to be connected
+            # or the next message is refused. The provider and model here name
+            # the route; the server decides what actually runs.
             needs_model = False
+            pure.connect(
+                "uhp",
+                _harness_display_name(entry.id),
+                working_directory=Path.cwd(),
+                session_id=previous_session_id,
+            )
 
         active_session_id = pure.get_current_session_id() or previous_session_id
         display_name = _harness_display_name(entry.id)
