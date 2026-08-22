@@ -26,6 +26,7 @@ from .templates import (
     pipy_template,
     rlm_template,
     tau_template,
+    uhp_template,
     workbench_template,
 )
 
@@ -152,13 +153,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     pipy = pipy_template()
     rlm = rlm_template()
     tau = tau_template()
+    uhp = uhp_template()
     dsh = deepseek_harness_template()
     deepagents = deepagents_template()
     from .backends.deepagents import deepagents_installation_status
     from .backends.dsh import dsh_installation_status
+    from .backends.uhp import uhp_backend_status
     from .tau_adapter import tau_installation_status
 
     tau_available, tau_issue = tau_installation_status()
+    uhp_available, uhp_issue = uhp_backend_status()
     dsh_available, dsh_issue = dsh_installation_status()
     deepagents_available, deepagents_issue = deepagents_installation_status()
     workflows = (
@@ -217,6 +221,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     reserved = {entry.id for entry in workflows}
     reserved.update(alias for entry in workflows for alias in entry.aliases)
     reserved.add("tau")
+    reserved.add("uhp")
     reserved.add("deepseek-harness")
     reserved.add("deepagents")
     presets: list[HarnessDefinition] = []
@@ -254,6 +259,18 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         available=tau_available,
         issue=tau_issue,
     )
+    uhp_entry = HarnessDefinition(
+        id="uhp",
+        display_name="UHP harness",
+        description=uhp.description,
+        runtime=uhp.runtime.backend,
+        source="optional:uhp",
+        spec=uhp,
+        loop_policy=workbench_loop_policy(),
+        aliases=("unified-harness-protocol", "harness-router"),
+        available=uhp_available,
+        issue=uhp_issue,
+    )
     dsh_entry = HarnessDefinition(
         id="deepseek-harness",
         display_name="DeepSeek Harness",
@@ -280,7 +297,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     )
     # Keep optional first-party harness integrations on the first picker page.
     # They remain visible with a setup hint when their dependency is missing.
-    return workflows + (tau_entry, dsh_entry, deepagents_entry) + tuple(presets)
+    return workflows + (tau_entry, uhp_entry, dsh_entry, deepagents_entry) + tuple(presets)
 
 
 def _candidate_paths(root: Path) -> Iterable[Path]:

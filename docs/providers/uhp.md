@@ -79,16 +79,36 @@ From the TUI, `:connect uhp` runs the same discovery.
 
 ### Run a task
 
-A saved connection with a selected harness registers the `uhp` route:
+A saved connection with a selected harness makes `uhp` a selectable harness
+everywhere SuperQode lists them:
 
 ```bash
-superqode harness protocol list          # uhp appears once configured
-superqode harness protocol describe uhp
 superqode harness run uhp --prompt "review this repository" --stream
+superqode harness protocol list          # uhp appears once configured
+sq hub show uhp
+```
+
+In the TUI it is a normal switcher entry:
+
+```text
+:harness switch uhp
 ```
 
 Without a selected harness the route reports itself as unavailable and says
 what to run, rather than appearing ready and failing later.
+
+`:connect uhp` discovers and saves the server. `:harness switch uhp` puts
+that harness on the current session so the next prompt runs there:
+
+```text
+:connect uhp http://127.0.0.1:3000/api/harness
+:harness switch uhp
+```
+
+Conversation threading works on both routes. The protocol controller persists
+the response id with the session, and the harness backend writes it to
+`.superqode/uhp/sessions/<session>.json`, so a later process continues the
+same conversation instead of starting a new one.
 
 ---
 

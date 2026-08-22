@@ -558,7 +558,7 @@ def test_optional_harnesses_is_still_the_v1_other_source():
     from superqode.harness import optional_harnesses
 
     ids = [entry.id for entry in optional_harnesses(".")]
-    assert ids == ["tau", "deepseek-harness", "deepagents"]
+    assert ids == ["tau", "uhp", "deepseek-harness", "deepagents"]
 
 
 def test_open_rows_surface_optional_harness_setup_hints(monkeypatch):

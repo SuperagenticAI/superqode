@@ -33,6 +33,7 @@ from .runtime import (
 )
 from .pipy import PiPyHarnessBackend
 from .tau import TauHarnessBackend
+from .uhp import UHPHarnessBackend
 
 _RUNTIME_BACKENDS = {"builtin"}
 _OPTIONAL_BACKENDS = {
@@ -51,6 +52,7 @@ _OPTIONAL_BACKENDS = {
     "rlm-code",
     "rlm",
     "tau",
+    "uhp",
 }
 
 
@@ -85,6 +87,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return PiPyHarnessBackend()
     if resolved == "tau":
         return TauHarnessBackend()
+    if resolved == "uhp":
+        return UHPHarnessBackend()
     if resolved in {"google-agent-engine", "anthropic-managed"}:
         return ManagedAgentHarnessBackend(resolved)
     valid = ", ".join(known_harness_backend_names())
@@ -181,6 +185,15 @@ def backend_capabilities(name: str | None):
 def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBackendCapabilities:
     if capabilities.backend in {"google-agent-engine", "anthropic-managed"}:
         return capabilities
+    if capabilities.backend == "uhp":
+        from .uhp import uhp_backend_status
+
+        available, issue = uhp_backend_status()
+        return replace(
+            capabilities,
+            availability="available" if available else "missing",
+            install_hint=None if available else issue,
+        )
     if capabilities.backend == "tau":
         from ..tau_adapter import tau_installation_status
 

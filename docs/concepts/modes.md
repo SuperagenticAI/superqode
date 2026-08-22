@@ -37,7 +37,8 @@ The Harness Switcher is the centralized inventory for runnable harnesses:
 | SuperQode native | Workbench, coding and no-tool templates, model presets | SuperQode owns the tool loop and HarnessSpec policy |
 | Vendor coding agents | Codex, GitHub Copilot, Antigravity, Grok, Kimi Code, Qwen Code | Vendor runtime or first-party agent owns the underlying agent behavior |
 | ACP agents | OpenCode, Claude Code, GLM Agent, Poolside, and the complete ACP catalog | External ACP process owns its agent loop |
-| Optional harness integrations | Hugging Face Tau | External harness runs through SuperQode's Harness Protocol adapter |
+| UHP servers | Any harness a Unified Harness Protocol server advertises | Remote server owns the harness, its tools, and its sandbox |
+| Optional harness integrations | Hugging Face Tau, UHP | External harness runs through SuperQode's Harness Protocol adapter |
 | Project HarnessSpecs | `harness.yaml`, `.superqode/harnesses/*.yaml` | Repository owns the complete run contract |
 | Installed Python harnesses | Package-provided HarnessSpec and protocol adapters | Installed package owns the adapter; repository can still select policy |
 | Registry harnesses | Harnesses installed from the SuperQode registry | Registry artifact becomes a local selectable harness |
@@ -47,6 +48,7 @@ Switching can preserve the current conversation or fork an independent branch:
 ```text
 :harness switch workbench
 :harness switch qwen-code --fork
+:harness switch uhp
 :sessions switch
 ```
 

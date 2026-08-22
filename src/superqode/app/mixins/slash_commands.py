@@ -326,6 +326,10 @@ class SlashCommandMixin:
                 elif subcmd == "local":
                     # Route to LOCAL connection
                     self._connect_local_cmd(subargs, log)
+                elif subcmd == "uhp":
+                    # Needs its own branch: any argument clears bare_profile,
+                    # and the fallthrough would read "uhp" as a BYOK provider.
+                    self._show_uhp_harnesses(log, subargs)
                 elif subcmd == "setup":
                     try:
                         setup_tokens = shlex.split(subargs or "")

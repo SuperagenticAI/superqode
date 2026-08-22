@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.105] - 2026-08-22
+
+### Added
+
+- A harness on a UHP server is now a normal SuperQode harness. Once
+  `superqode connect uhp` has selected one, `uhp` appears in the harness
+  switcher, the Hub, and the catalog, so `:harness switch uhp` and
+  `superqode harness run uhp` work like any other route. The TUI and the
+  harness kernel run backends rather than protocol adapters, so this adds a
+  `uhp` runtime backend beside the existing protocol adapter.
+- The `uhp` backend reports itself unavailable, with the command to run, until
+  a server address and a harness id are both configured. Availability tracks
+  configuration rather than an installed package.
+
+### Fixed
+
+- `:connect uhp` connects instead of only reporting an already-saved
+  connection. `:connect uhp <url>` now reaches the UHP path; any argument
+  previously cleared the profile lookup and the command fell through to the
+  BYOK provider picker, which read `uhp` as a model provider.
+- A UHP conversation continues between turns in the TUI. The harness backend
+  runs outside the protocol controller, so nothing persisted the response id
+  that threads a conversation; it is now stored per session under
+  `.superqode/uhp/sessions/`. A first turn no longer fails on a resume that
+  has nothing to resume.
+
 ## [0.2.104] - 2026-08-22
 
 ### Added

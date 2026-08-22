@@ -59,6 +59,7 @@ _DOCS_BY_ID = {
     "rlm": f"{DOCS_BASE}advanced/rlm/",
     "pipy": f"{DOCS_BASE}advanced/pipy/",
     "tau": f"{DOCS_BASE}advanced/tau/",
+    "uhp": f"{DOCS_BASE}providers/uhp/",
     "deepseek-harness": f"{DOCS_BASE}advanced/deepseek-harness/",
     "deepagents": f"{DOCS_BASE}providers/deepagents/",
     "deepagents-code": f"{DOCS_BASE}providers/deepagents/",
@@ -147,6 +148,7 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "acp:deepagents": _LANGCHAIN_DEEPAGENTS,
     "acp:deepagents-code": _LANGCHAIN_DEEPAGENTS,
     "tau": HubOpenness("open", "MIT", "https://github.com/huggingface/tau"),
+    "uhp": HubOpenness("open", "Apache-2.0", "https://github.com/HarnessRouter/harnessrouter"),
     "deepseek-harness": HubOpenness(
         "open", "MIT", "https://github.com/deepseek-ai/deepseek-harness"
     ),

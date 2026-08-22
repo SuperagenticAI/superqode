@@ -439,6 +439,50 @@ def tau_template(*, name: str = "tau") -> HarnessSpec:
     )
 
 
+def uhp_template(*, name: str = "uhp") -> HarnessSpec:
+    """Preset for a harness hosted on a Unified Harness Protocol server.
+
+    The policy fields describe what SuperQode does locally, which is nothing:
+    the server owns the tools, the sandbox, and the approvals.
+    """
+    return HarnessSpec(
+        name=name,
+        description=(
+            "A harness on a Unified Harness Protocol server; the server runs the "
+            "agent and SuperQode streams its progress, files, and result."
+        ),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="uhp"),
+        model_policy=ModelPolicySpec(
+            profile="uhp",
+            config={"uhp_uses_server_model": True},
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="local",
+            approval_profile="deny",
+            allow_read=False,
+            allow_write=False,
+            allow_shell=False,
+            allow_network=False,
+        ),
+        agents=(
+            AgentSpec(
+                id="uhp",
+                role="remote-harness",
+                tools=(),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "uhp",
+            "builtin_harness": True,
+            "category": "workflow",
+            "continuity": "exact-resume",
+            "policy_owner": "server",
+        },
+    )
+
+
 def deepseek_harness_template(*, name: str = "deepseek-harness") -> HarnessSpec:
     """DeepSeek Harness hosted through its Python SDK over JSON-RPC.
 
@@ -834,6 +878,7 @@ BUILTIN_TEMPLATES = {
     "rlm_monty": rlm_monty_template,
     "prime-agent-python": prime_agent_python_template,
     "tau": tau_template,
+    "uhp": uhp_template,
     "deepseek-harness": deepseek_harness_template,
     # Underscore keys stay out of list-templates, matching the other aliases.
     "deepseek_harness": deepseek_harness_template,

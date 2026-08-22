@@ -170,6 +170,7 @@ def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeyp
                 "built-in",
                 "built-in-template",
                 "optional:tau",
+                "optional:uhp",
                 "optional:deepseek-harness",
                 "optional:deepagents",
                 "file",

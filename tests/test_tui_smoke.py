@@ -6056,6 +6056,7 @@ def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
         assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
         assert [entry.id for entry in kwargs["catalog_entries"]] == [
             "tau",
+            "uhp",
             "deepseek-harness",
             "deepagents",
         ]
@@ -6089,6 +6090,7 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
         assert len(calls) == 1
         assert [entry.id for entry in calls[0][1]["catalog_entries"]] == [
             "tau",
+            "uhp",
             "deepseek-harness",
             "deepagents",
         ]
@@ -7122,3 +7124,63 @@ def test_managed_agent_session_badges_name_hosted_ownership():
     assert "MANAGED" in rendered
     assert "HOSTED" in rendered
     assert "ASK" not in rendered
+
+
+def test_connect_uhp_with_a_url_reaches_the_uhp_path_not_byok(monkeypatch):
+    """Any argument used to clear bare_profile and fall through to BYOK."""
+    app = make_app()
+    log = FakeLog()
+    seen = {}
+    byok = []
+    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._connect_byok_cmd = lambda args, _log: byok.append(args)
+    app._record_ex_command = lambda *_args: None
+
+    app._handle_command(":connect uhp http://127.0.0.1:3000/api/harness", log)
+
+    assert byok == []
+    assert seen["parts"] == [
+        "connect",
+        "uhp",
+        "--base-url",
+        "http://127.0.0.1:3000/api/harness",
+    ]
+
+
+def test_connect_uhp_passes_flags_through(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    seen = {}
+    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._record_ex_command = lambda *_args: None
+
+    app._handle_command(":connect uhp --base-url https://x.test --harness chrn_a", log)
+
+    assert seen["parts"] == [
+        "connect",
+        "uhp",
+        "--base-url",
+        "https://x.test",
+        "--harness",
+        "chrn_a",
+    ]
+
+
+def test_bare_connect_uhp_without_a_server_says_how_to_connect(monkeypatch):
+    """The old message told the user to leave the TUI and use the CLI."""
+    import superqode.providers.uhp as uhp_settings
+
+    app = make_app()
+    log = FakeLog()
+    called = []
+    app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app._record_ex_command = lambda *_args: None
+    monkeypatch.setattr(
+        uhp_settings, "resolve_settings", lambda *a, **k: uhp_settings.UHPSettings()
+    )
+
+    app._handle_command(":connect uhp", log)
+
+    assert called == []
+    rendered = " ".join(str(item) for item in log.items)
+    assert ":connect uhp <url>" in rendered

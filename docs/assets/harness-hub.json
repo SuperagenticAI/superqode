@@ -1,7 +1,7 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-08-21T18:14:07.490666+00:00",
-  "count": 102,
+  "generated_at": "2026-08-22T09:25:45.720630+00:00",
+  "count": 103,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -4263,6 +4263,67 @@
       "setup_steps": [],
       "openness": "open",
       "license": "MIT"
+    },
+    {
+      "id": "uhp",
+      "name": "UHP harness",
+      "description": "A harness on a Unified Harness Protocol server; the server runs the agent and SuperQode streams its progress, files, and result.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "uhp",
+      "source": "optional:uhp",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "exact-resume",
+      "provider": "",
+      "model": "",
+      "setup": "Set a server with `superqode connect uhp --base-url https://your-server` or export SUPERQODE_UHP_BASE_URL (and SUPERQODE_UHP_API_KEY when the server needs a key).",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/HarnessRouter/harnessrouter",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://superagenticai.github.io/superqode/providers/uhp/",
+      "install_command": "Set a server with `superqode connect uhp --base-url https://your-server` or export SUPERQODE_UHP_BASE_URL (and SUPERQODE_UHP_API_KEY when the server needs a key).",
+      "tui_commands": [
+        ":harness switch uhp",
+        ":harness show uhp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run uhp \"Describe your task\"",
+        "superqode harness show uhp"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: deny",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "uhp",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0"
     },
     {
       "id": "deepseek-harness",

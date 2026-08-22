@@ -317,22 +317,38 @@ class ConnectMixin:
             subtitle="Optional non-ACP harness integrations",
         )
 
-    def _show_uhp_harnesses(self, log: ConversationLog) -> None:
-        """List the harnesses a Unified Harness Protocol server advertises.
+    def _show_uhp_harnesses(self, log: ConversationLog, args: str = "") -> None:
+        """Connect a Unified Harness Protocol server and list its harnesses.
 
-        A UHP server is remote, so the catalog is fetched rather than read from
-        a local registry. Discovery runs through the CLI so the TUI stays off
-        the network thread and the same output is produced either way.
+        A UHP server is remote, so the address comes first and the catalog is
+        fetched. Discovery runs through the CLI so the TUI stays off the
+        network thread and both surfaces produce the same output.
         """
+        import shlex
+
         from superqode.providers.uhp import resolve_settings, setup_hint
 
-        settings = resolve_settings()
-        if not settings.configured:
-            log.add_error("No UHP server is configured.")
-            log.add_info(setup_hint())
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :connect uhp arguments: {exc}")
             return
-        log.add_info(f"Discovering harnesses on {settings.base_url} ...")
-        self._run_cli_passthrough(["connect", "uhp"], log, "UHP harnesses")
+        # `:connect uhp <url>` is the form people reach for; the flag form
+        # stays available so every CLI option works here too.
+        if tokens and not tokens[0].startswith("-"):
+            tokens = ["--base-url", *tokens]
+
+        if not tokens:
+            settings = resolve_settings()
+            if not settings.configured:
+                log.add_error("No UHP server is configured.")
+                log.add_info("Connect one with `:connect uhp <url>`.")
+                log.add_info(setup_hint())
+                return
+            log.add_info(f"Discovering harnesses on {settings.base_url} ...")
+        else:
+            log.add_info("Connecting to the UHP server ...")
+        self._run_cli_passthrough(["connect", "uhp", *tokens], log, "UHP harnesses")
 
     def _begin_key_harness(
         self, profile, log: ConversationLog, *, apply_route: tuple | None = None
