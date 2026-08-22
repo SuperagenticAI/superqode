@@ -110,6 +110,39 @@ the response id with the session, and the harness backend writes it to
 `.superqode/uhp/sessions/<session>.json`, so a later process continues the
 same conversation instead of starting a new one.
 
+### The server picks the model
+
+A harness on a UHP server already has a model. SuperQode does not send one, so
+that choice stands. Pass `--model` when you want a different model for a run,
+and only that explicit flag overrides the server:
+
+```bash
+superqode harness run uhp --prompt "..." --model "openai/gpt-5"
+```
+
+The model id has to be one the server can route. A server that cannot serve it
+rejects the task rather than falling back, so the id must match what the
+server's integrations provide. `SUPERQODE_MODEL` deliberately does not override
+a remote harness: it is a local default for SuperQode's own harnesses and knows
+nothing about what the server can serve.
+
+### The workspace is the server's
+
+The harness runs in its own workspace inside the server, not in your
+repository. SuperQode does not upload local files, so a prompt like "review
+this repository" describes whatever the server holds, not your code.
+
+Include the material in the prompt when the harness needs to see your code:
+
+```bash
+superqode harness run uhp --prompt "Review this module:
+
+$(cat src/example.py)"
+```
+
+UHP defines a file input endpoint. SuperQode does not use it yet, so uploading
+a workspace is not available on this route.
+
 ---
 
 ## HarnessRouter Community Edition
@@ -327,9 +360,12 @@ only when the payload nests a full error object.
   not copy them into the workspace automatically; use
   `UHPClient.download_file` for that.
 - **Harness configuration lives on the server.** A HarnessSpec does not drive a
-  remote UHP harness, so tool policy, sandbox, and approvals are whatever the
-  server was configured with. The adapter reports `policy_owner: server` in its
-  descriptor metadata so this is visible rather than assumed.
+  remote UHP harness, so tool policy, sandbox, approvals, the model, and the
+  workspace are whatever the server was configured with. The adapter reports
+  `policy_owner: server` in its descriptor metadata so this is visible rather
+  than assumed.
+- **Local files do not reach the harness.** SuperQode does not implement UHP
+  file upload, so the harness sees the server's workspace only.
 - `superqode connect uhp` verifies the catalog. It does not verify that the
   credential is sufficient to run a task, because listing and running can be
   authorized separately.

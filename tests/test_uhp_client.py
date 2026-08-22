@@ -1020,3 +1020,72 @@ async def test_a_failed_state_write_warns_instead_of_failing_silently(tmp_path, 
     await adapter.aclose()
 
     assert any("resume will not survive a restart" in record.message for record in caplog.records)
+
+
+# --- The server owns the model ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_local_default_model_never_overrides_the_server():
+    """`harness run` defaults --model, and that must not reach the server."""
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text=_sse([{"type": "response.completed", "response": _response_payload()}]),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    adapter = UHPHarnessProtocolAdapter(BASE_URL, harness_id="chrn_codex", client=_client(handler))
+    session = await adapter.create(HarnessCreateRequest(harness_id="uhp", model="gpt-4o-mini"))
+    async for _event in adapter.send(session, HarnessMessage("user", "hi")):
+        pass
+    await adapter.aclose()
+
+    assert "model" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_an_explicitly_chosen_model_is_sent():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text=_sse([{"type": "response.completed", "response": _response_payload()}]),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    adapter = UHPHarnessProtocolAdapter(BASE_URL, harness_id="chrn_codex", client=_client(handler))
+    session = await adapter.create(
+        HarnessCreateRequest(
+            harness_id="uhp",
+            model="z-ai/glm-5.2:free",
+            metadata={"model_explicit": True},
+        )
+    )
+    async for _event in adapter.send(session, HarnessMessage("user", "hi")):
+        pass
+    await adapter.aclose()
+
+    assert sent[0]["model"] == "z-ai/glm-5.2:free"
+
+
+@pytest.mark.asyncio
+async def test_the_requested_event_says_when_the_server_chooses():
+    def handler(request):
+        return httpx.Response(
+            200,
+            text=_sse([{"type": "response.completed", "response": _response_payload()}]),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    adapter = UHPHarnessProtocolAdapter(BASE_URL, harness_id="chrn_codex", client=_client(handler))
+    session = await adapter.create(HarnessCreateRequest(harness_id="uhp", model="gpt-4o-mini"))
+    events = [event async for event in adapter.send(session, HarnessMessage("user", "hi"))]
+    await adapter.aclose()
+
+    assert events[0].data["model"] == "(server default)"

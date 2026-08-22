@@ -230,6 +230,11 @@ def harness_run(
         if session_id and store.get_session(session_id) is not None:
             session = await controller.resume(session_id)
         else:
+            # A remote harness carries its own model. Passing this command's
+            # default would silently override it, so the adapter is told
+            # whether the model was actually asked for.
+            source = click.get_current_context().get_parameter_source("model_name")
+            model_explicit = getattr(source, "name", "") == "COMMANDLINE"
             session = await controller.create(
                 HarnessCreateRequest(
                     harness_id=adapter.descriptor.id,
@@ -237,6 +242,7 @@ def harness_run(
                     model=model_name,
                     working_directory=working_dir,
                     session_id=session_id,
+                    metadata={"model_explicit": model_explicit},
                 )
             )
         events = []

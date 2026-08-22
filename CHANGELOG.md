@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.106] - 2026-08-22
+
+### Fixed
+
+- A UHP task runs on the model the server's harness is configured with.
+  `superqode harness run` defaults `--model`, and that default was being sent
+  to the server, overriding the remote harness's own model with one the
+  server had no integration for. The first task on a freshly connected server
+  failed with a request for a provider serving a model the user never chose.
+  Only an explicit `--model` on the command line now overrides the server;
+  `SUPERQODE_MODEL` is a local default for SuperQode's own harnesses and no
+  longer reaches a remote harness.
+
+### Changed
+
+- The `model.requested` event reports `(server default)` on a UHP run where
+  the server chooses the model, rather than naming a model SuperQode did not
+  send.
+- The UHP guide states that the workspace belongs to the server. The harness
+  runs in its own workspace inside the server and SuperQode does not upload
+  local files, so a prompt about "this repository" describes the server's
+  workspace. UHP's file input endpoint is not used yet.
+
 ## [0.2.105] - 2026-08-22
 
 ### Added

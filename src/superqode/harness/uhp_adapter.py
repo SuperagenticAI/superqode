@@ -158,14 +158,18 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
     ) -> AsyncIterator[HarnessEvent]:
         self._adopt(session)
         harness_id = str(session.metadata.get("uhp_harness_id") or self.harness_id or "")
+        # The server's harness already has a model. Sending one anyway is only
+        # correct when the caller asked for it; a local default would override
+        # a remote choice the caller never saw.
         model = str(session.metadata.get("model") or "")
+        override = model if session.metadata.get("model_explicit") else ""
         previous_response_id = self._previous_response.get(session.session_id)
 
         yield HarnessEvent(
             type="model.requested",
             data={
                 "provider": session.metadata.get("provider") or "",
-                "model": model,
+                "model": override or "(server default)",
                 "transport": "uhp",
                 "harness_id": harness_id,
             },
@@ -178,7 +182,7 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
         stream = self._client.stream_response(
             message.content,
             harness_id=harness_id or None,
-            model=model or None,
+            model=override or None,
             previous_response_id=previous_response_id,
         )
         try:
@@ -227,7 +231,7 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
             "tool_calls_made": len(final.function_calls),
             "response_id": final.id,
             "session_id": final.session_id,
-            "model": final.model or model,
+            "model": final.model or override,
         }
         if final.usage is not None:
             completed["usage"] = final.usage.to_dict()
