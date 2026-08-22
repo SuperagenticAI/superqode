@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.107] - 2026-08-22
+
+### Fixed
+
+- Switching to a harness the server owns no longer asks for a local model.
+  `:harness switch uhp` fell through to the model step because a UHP harness
+  declares no local model policy, so it collected a setting the run never
+  used. A harness whose spec reports `policy_owner: server` now skips that
+  step.
+- The harness summary states where a remote harness gets its tools. Switching
+  to a UHP harness reported "Tools: none, so it can discuss code but not
+  change it", which describes what SuperQode contributes locally rather than
+  what the harness can do. The remote agent has its own tools, so the row now
+  reads "the server's, along with its sandbox and approvals".
+
 ## [0.2.106] - 2026-08-22
 
 ### Fixed

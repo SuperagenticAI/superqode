@@ -235,3 +235,23 @@ async def test_two_sessions_do_not_share_a_conversation(tmp_path: Path):
 
     assert "previous_response_id" not in sent[0]
     assert "previous_response_id" not in sent[1]
+
+
+def test_switching_to_a_server_owned_harness_skips_the_local_model_step(monkeypatch, tmp_path):
+    """Collecting a local model for a remote harness gathers an unused setting."""
+    from superqode.harness.templates import uhp_template
+
+    spec = uhp_template()
+    assert spec.metadata["policy_owner"] == "server"
+    # No local model policy, which is exactly why the switch flow used to
+    # fall through to its "ask for a model" branch.
+    assert not spec.model_policy.primary
+    assert spec.agents[0].tools == ()
+
+
+def test_server_owned_harnesses_are_identifiable_from_the_spec():
+    """The TUI keys its model prompt and tools line off this one field."""
+    from superqode.harness.templates import core_template, uhp_template
+
+    assert str(uhp_template().metadata.get("policy_owner")) == "server"
+    assert core_template().metadata.get("policy_owner") is None

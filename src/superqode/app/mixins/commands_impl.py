@@ -4038,6 +4038,9 @@ class CommandImplMixin:
         self._refresh_harness_panel()
 
         primary = str(entry.spec.model_policy.primary or "")
+        # A remote harness carries its own model, tools, and policy. Asking for
+        # a local model would collect a setting the run never uses.
+        server_owned = str(entry.spec.metadata.get("policy_owner") or "") == "server"
         needs_model = False
         key_session = getattr(self, "_key_harness_session", None)
         if key_session is not None and not self._key_harness_session_matches(entry.id):
@@ -4115,6 +4118,9 @@ class CommandImplMixin:
         else:
             needs_model = True
 
+        if server_owned:
+            needs_model = False
+
         active_session_id = pure.get_current_session_id() or previous_session_id
         display_name = _harness_display_name(entry.id)
         if sub == "switch":
@@ -4186,6 +4192,12 @@ class CommandImplMixin:
                 shown = ", ".join(tools[:6])
                 more = f" +{len(tools) - 6} more" if len(tools) > 6 else ""
                 rows.append(("Tools", f"{len(tools)}: {shown}{more}", THEME["text"]))
+            elif str(spec.metadata.get("policy_owner") or "") == "server":
+                # No local tools is not the same as no tools. The remote
+                # harness has its own, and SuperQode cannot enumerate them.
+                rows.append(
+                    ("Tools", "the server's, along with its sandbox and approvals", THEME["text"])
+                )
             else:
                 rows.append(
                     ("Tools", "none, so it can discuss code but not change it", THEME["warning"])
