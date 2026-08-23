@@ -267,6 +267,13 @@ class SuperQodeA2AExecutor:
         if requested:
             return requested == self.config.shortlist_skill_id
 
+        if not self.config.harness_skill_enabled:
+            # Nothing else is served, so there is nothing to route away to.
+            # Phrase matching here would refuse a caller for describing their
+            # situation in their own words rather than using a magic phrase,
+            # which is the opposite of what a shortlist skill is for.
+            return True
+
         lowered = user_input.casefold()
         asks_for_choice = any(
             phrase in lowered

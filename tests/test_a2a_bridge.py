@@ -225,6 +225,41 @@ def test_a2a_routes_shortlist_questions_away_from_the_harness(tmp_path: Path):
     assert len(session_ids) == 1, "ordinary work still reaches the harness"
 
 
+def test_a_shortlist_only_deployment_answers_any_phrasing(tmp_path: Path):
+    """Phrase matching must not gate the only skill on offer.
+
+    Routing exists to choose between skills. When the harness is not served
+    there is nothing to choose, and refusing a caller for describing their
+    situation in their own words rather than saying "which harness" is the
+    opposite of what a shortlist is for.
+    """
+    server, session_ids = _server(tmp_path)
+    shortlist_only = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=None,
+            harness_skill_enabled=False,
+        ),
+    )
+    client = TestClient(shortlist_only.app)
+
+    for text in (
+        "We are a Rust shop with a large monorepo and need sandboxing.",
+        "hello",
+        "our team runs local models only",
+    ):
+        response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=_request(text))
+        task = response.json()["task"]
+        assert task["status"]["state"] == "TASK_STATE_COMPLETED", text
+        assert "Harness Hub" in task["artifacts"][0]["parts"][0]["text"]
+
+    assert session_ids == [], "the harness must still never run"
+
+
 def test_a2a_shortlist_honours_an_explicit_skill_id(tmp_path: Path):
     """A calling agent that names the skill is not second-guessed."""
     server, session_ids = _server(tmp_path)
@@ -335,14 +370,21 @@ def test_disabled_harness_skill_refuses_work_rather_than_running_it(tmp_path: Pa
     card = client.get("/.well-known/agent-card.json").json()
     assert [skill["id"] for skill in card["skills"]] == ["harness-shortlist"]
 
-    response = client.post(
+    # Free text is answered by the only skill on offer rather than refused.
+    answered = client.post(
         "/message:send",
         headers={"A2A-Version": "1.0"},
         json=_request("Refactor the parser module."),
     )
-    assert response.status_code == 200
-    task = response.json()["task"]
-    assert task["status"]["state"] == "TASK_STATE_FAILED"
+    assert answered.status_code == 200
+    assert answered.json()["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
+
+    # Naming the disabled skill outright is still refused, with a reason.
+    forced = _request("Refactor the parser module.")
+    forced["message"]["metadata"] = {"superqode_skill": "superqode-harness"}
+    refused = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=forced)
+    assert refused.json()["task"]["status"]["state"] == "TASK_STATE_FAILED"
+
     assert session_ids == [], "the harness must not run when the skill is disabled"
 
     still_works = client.post(
@@ -395,7 +437,10 @@ def test_public_serving_cannot_spend_model_credit(tmp_path: Path):
         "superqode harness run",
     ):
         response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=_request(text))
-        assert response.json()["task"]["status"]["state"] == "TASK_STATE_FAILED"
+        # What matters is not which state comes back but that no model was
+        # reached to produce it. An anonymous caller is answered from the Hub
+        # whatever they typed.
+        assert response.status_code == 200, text
 
     # Naming the harness skill explicitly must not bypass the gate either.
     forced = _request("do the work")
