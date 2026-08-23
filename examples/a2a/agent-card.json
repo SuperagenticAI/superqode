@@ -1,6 +1,6 @@
 {
   "name": "SuperQode",
-  "description": "Open-source harness engineering for coding agents",
+  "description": "The Harness Layer for Coding Agents",
   "supportedInterfaces": [
     {
       "url": "https://superqode.onrender.com",
@@ -77,7 +77,7 @@
       ]
     }
   ],
-  "iconUrl": "https://super-agentic.ai/superqode/icon.png",
+  "iconUrl": "https://super-agentic.ai/uploads/superqode.png",
   "preferredTransport": "JSONRPC",
   "protocolVersion": "0.3",
   "security": [

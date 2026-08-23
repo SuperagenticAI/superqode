@@ -48,7 +48,7 @@ class A2AServerConfig(BaseModel):
     """Runtime and discovery settings for the A2A bridge."""
 
     name: str = "SuperQode"
-    description: str = "Open-source harness engineering for coding agents"
+    description: str = "The Harness Layer for Coding Agents"
     version: str = AGENT_CARD_VERSION
     url: str = "http://127.0.0.1:8000"
     documentation_url: str = "https://github.com/SuperagenticAI/superqode"
@@ -85,7 +85,10 @@ class A2AServerConfig(BaseModel):
     #: coding template allows shell and writes with no sandbox isolation.  The
     #: CLI therefore turns this off for remote binds unless asked otherwise.
     harness_skill_enabled: bool = True
-    icon_url: str = "https://super-agentic.ai/superqode/icon.png"
+    #: Must resolve.  Host platforms render this in their agent gallery, and a
+    #: dead URL shows as a broken image rather than as no image.
+    #: ``scripts/check_published_agent_card.py`` verifies it.
+    icon_url: str = "https://super-agentic.ai/uploads/superqode.png"
     jsonrpc_path: str = "/"
     #: Also advertise and serve the A2A 0.3 wire format.  Gemini Enterprise,
     #: Foundry Agent Service, and Agent Registry all still accept 0.3 cards,

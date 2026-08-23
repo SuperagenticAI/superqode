@@ -42,6 +42,27 @@ def fetch(url: str) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+def icon_problem(card: dict[str, Any]) -> str | None:
+    """Return a message when the card's iconUrl does not resolve.
+
+    Host platforms render this in their agent gallery, so a dead URL shows as
+    a broken image rather than as no image at all. The field is optional, and
+    omitting it is better than pointing it at nothing.
+    """
+    url = card.get("iconUrl")
+    if not url:
+        return None
+    try:
+        request = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            content_type = response.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                return f"iconUrl {url} served {content_type or 'no content type'}, not an image"
+    except (urllib.error.URLError, TimeoutError) as error:
+        return f"iconUrl {url} is not reachable: {error}"
+    return None
+
+
 def differences(published: Any, local: Any, path: str = "") -> list[str]:
     """Return a readable list of field-level differences."""
     if isinstance(published, dict) and isinstance(local, dict):
@@ -79,6 +100,14 @@ def main() -> int:
     args = parser.parse_args()
 
     local = json.loads(args.artifact.read_text(encoding="utf-8"))
+
+    icon = icon_problem(local)
+    if icon is not None:
+        print(icon)
+        print("Point iconUrl at an image that exists, or remove the field.")
+        if not args.warn_only:
+            return 1
+
     try:
         published = fetch(args.url)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
