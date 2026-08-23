@@ -1131,6 +1131,10 @@ from superqode.commands.memory import memory
 
 cli_main.add_command(memory, name="memory")
 
+from superqode.commands.a2a_keys import a2a_keys
+
+cli_main.add_command(a2a_keys, name="a2a-keys")
+
 
 from superqode.commands.skillopt import skillopt
 

@@ -312,12 +312,18 @@ def build_shortlist(
     records: Iterable[dict[str, Any]] | None = None,
     limit: int = 5,
     hub_schema_version: str = "",
+    constraints: ShortlistConstraints | None = None,
 ) -> Shortlist:
     """Rank Hub entries against a free-text request.
 
     Third-party harnesses are ranked first and alone. SuperQode's own entries
     are appended only when the request asks for them, or when too few
     third-party candidates satisfy the stated capabilities.
+
+    ``constraints`` accepts constraints derived elsewhere, so a caller that
+    read the request with a model can hand them in. Ranking is unchanged
+    either way: the constraints decide what is wanted, and the catalogue
+    decides what is true.
     """
     version = hub_schema_version
     if records is None:
@@ -330,7 +336,8 @@ def build_shortlist(
     runnable = [
         record for record in records if str(record.get("readiness", "")) != _UNRUNNABLE_READINESS
     ]
-    constraints = parse_constraints(request)
+    if constraints is None:
+        constraints = parse_constraints(request)
     third_party = [r for r in runnable if not _is_own(r)]
     own = [r for r in runnable if _is_own(r)]
 

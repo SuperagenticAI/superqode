@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from superqode.agent.loop import AgentConfig
     from superqode.harness import HarnessProtocolController, HarnessSessionRef, HarnessSpec
 
+from superqode.a2a.keys import ANONYMOUS_TIER, AccessDecision, decide_access
+from superqode.a2a.limits import RateLimiter, RateLimitPolicy, caller_identity
+
 
 #: The version reported in the Agent Card.
 #:
@@ -63,7 +66,29 @@ class A2AServerConfig(BaseModel):
     task_store_path: Path | None = Path(".superqode/a2a/tasks.sqlite3")
     streaming: bool = True
     push_notifications: bool = False
+    #: Operator token. Predates signed keys; kept so an existing deployment
+    #: keeps working, and useful as a break-glass credential.
     bearer_token: str | None = None
+    #: Secret that signs and verifies customer keys. Falls back to
+    #: SUPERQODE_A2A_KEY_SECRET when unset.
+    key_secret: str | None = None
+    #: Serve callers who present no credential at all.
+    #:
+    #: The anonymous tier answers from the local Hub with no model call, so it
+    #: costs nothing to serve.  Keeping it open is also what makes the agent
+    #: registrable on platforms whose registration offers OAuth or nothing,
+    #: with no field for a bearer token.
+    allow_anonymous: bool = True
+    #: Requests per minute for a caller with no credential.
+    anonymous_per_minute: int = 10
+    #: Requests per minute for a caller presenting a valid key.
+    keyed_per_minute: int = 60
+    #: Requests per day across every caller, as a backstop for the case where
+    #: per-caller accounting has a gap. Zero disables it.
+    global_per_day: int = 5_000
+    #: Read a keyed caller's request with a model before ranking.  Anonymous
+    #: callers always use the keyword parser, so the open tier stays free.
+    understand_requests: bool = True
     shortlist_skill_id: str = "harness-shortlist"
     shortlist_skill_name: str = "Harness Shortlist"
     shortlist_skill_description: str = (
@@ -125,7 +150,11 @@ class SuperQodeA2AExecutor:
         user_input = context.get_user_input()
         if self._wants_shortlist(context, user_input):
             await self._answer_shortlist(
-                updater, sdk, user_input, artifact_id=f"shortlist-{task_id}"
+                updater,
+                sdk,
+                user_input,
+                artifact_id=f"shortlist-{task_id}",
+                tier=caller_tier(context),
             )
             return
 
@@ -257,12 +286,36 @@ class SuperQodeA2AExecutor:
         return asks_for_choice
 
     async def _answer_shortlist(
-        self, updater: Any, sdk: dict[str, Any], user_input: str, *, artifact_id: str
+        self,
+        updater: Any,
+        sdk: dict[str, Any],
+        user_input: str,
+        *,
+        artifact_id: str,
+        tier: str = ANONYMOUS_TIER,
     ) -> None:
-        """Answer from the Harness Hub without touching a repository."""
+        """Answer from the Harness Hub without touching a repository.
+
+        A caller presenting a key has their request read by a model, which
+        turns prose into constraints properly instead of matching substrings.
+        An anonymous caller gets the keyword parser, which costs nothing to
+        run and is what keeps the open tier free to serve.
+        """
         from superqode.a2a.shortlist import build_shortlist, render_shortlist
 
-        shortlist = await asyncio.to_thread(build_shortlist, user_input)
+        constraints = None
+        understood = False
+        if tier != ANONYMOUS_TIER and self.config.understand_requests:
+            from superqode.a2a.understand import understand_request
+
+            constraints, understood = await asyncio.to_thread(
+                understand_request,
+                user_input,
+                provider=self.config.provider,
+                model=self.config.model,
+            )
+
+        shortlist = await asyncio.to_thread(build_shortlist, user_input, constraints=constraints)
         text = render_shortlist(shortlist)
         await updater.add_artifact(
             [sdk["Part"](text=text)],
@@ -276,6 +329,7 @@ class SuperQodeA2AExecutor:
                 metadata={
                     "superqode_skill": self.config.shortlist_skill_id,
                     "superqode_shortlist": shortlist.to_dict(),
+                    "superqode_understood": understood,
                 },
             )
         )
@@ -338,6 +392,13 @@ class A2AServer:
             raise ValueError("A2A serving requires at least one Harness Protocol adapter")
         self._task_store_override = task_store
         self._task_engine: Any | None = None
+        self.limiter = RateLimiter(
+            RateLimitPolicy(
+                anonymous_per_minute=self.config.anonymous_per_minute,
+                keyed_per_minute=self.config.keyed_per_minute,
+                global_per_day=self.config.global_per_day,
+            )
+        )
         self.executor = SuperQodeA2AExecutor(controller, self.config)
         self.app = self._build_app()
 
@@ -353,13 +414,19 @@ class A2AServer:
             agent_card=card,
         )
         compat = self.config.legacy_v0_3
+        context_builder = _AccessContextBuilder(sdk)
         sdk["add_a2a_routes_to_fastapi"](
             app,
             agent_card_routes=sdk["create_agent_card_routes"](card),
             jsonrpc_routes=sdk["create_jsonrpc_routes"](
-                handler, rpc_url=self.config.jsonrpc_path, enable_v0_3_compat=compat
+                handler,
+                rpc_url=self.config.jsonrpc_path,
+                enable_v0_3_compat=compat,
+                context_builder=context_builder,
             ),
-            rest_routes=sdk["create_rest_routes"](handler, enable_v0_3_compat=compat),
+            rest_routes=sdk["create_rest_routes"](
+                handler, enable_v0_3_compat=compat, context_builder=context_builder
+            ),
         )
 
         @app.get("/health")
@@ -372,29 +439,54 @@ class A2AServer:
                 "a2a_protocol_versions": ["1.0", "0.3"] if self.config.legacy_v0_3 else ["1.0"],
                 "a2a_protocol_bindings": ["JSONRPC", "HTTP+JSON"],
                 "harnesses": [item.id for item in self.controller.descriptors()],
+                "limits": self.limiter.snapshot(),
             }
 
-        if self.config.bearer_token:
-            token = self.config.bearer_token
+        config = self.config
+        limiter = self.limiter
 
-            @app.middleware("http")
-            async def require_bearer(request: Any, call_next: Any) -> Any:
-                if request.url.path in {
-                    "/.well-known/agent-card.json",
-                    "/health",
-                    "/docs",
-                    "/openapi.json",
-                }:
-                    return await call_next(request)
-                supplied = request.headers.get("authorization", "")
-                expected = f"Bearer {token}"
-                if not hmac.compare_digest(supplied, expected):
-                    return sdk["JSONResponse"](
-                        status_code=401,
-                        content={"detail": "Missing or invalid bearer token"},
-                        headers={"WWW-Authenticate": "Bearer"},
-                    )
+        @app.middleware("http")
+        async def resolve_access(request: Any, call_next: Any) -> Any:
+            # Discovery and health stay open regardless of policy.  Host
+            # platforms fetch the Agent Card anonymously before they hold any
+            # credential, so gating it would make the agent unregistrable.
+            if request.url.path in {
+                "/.well-known/agent-card.json",
+                "/health",
+                "/docs",
+                "/openapi.json",
+            }:
                 return await call_next(request)
+
+            decision = decide_access(
+                request.headers.get("authorization"),
+                static_token=config.bearer_token,
+                secret=config.key_secret,
+                allow_anonymous=config.allow_anonymous,
+            )
+            if not decision.allowed:
+                return sdk["JSONResponse"](
+                    status_code=401,
+                    content={"detail": f"Unauthorized: {decision.reason}"},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            identity = caller_identity(
+                decision.key_id,
+                getattr(getattr(request, "client", None), "host", None),
+                request.headers.get("x-forwarded-for"),
+            )
+            limit = limiter.check(identity, decision.tier)
+            if not limit.allowed:
+                return sdk["JSONResponse"](
+                    status_code=429,
+                    content={"detail": limit.reason},
+                    headers={"Retry-After": str(limit.retry_after_seconds)},
+                )
+
+            # Carried on the scope so the call-context builder, and through it
+            # the executor, can see which tier is asking.
+            request.state.superqode_access = decision
+            return await call_next(request)
 
         if self._task_engine is not None:
             app.router.add_event_handler("shutdown", self._task_engine.dispose)
@@ -454,6 +546,7 @@ async def create_a2a_server(
     model: str | None = None,
     working_directory: str | Path | None = None,
     harness_skill_enabled: bool = True,
+    key_secret: str | None = None,
 ) -> A2AServer:
     """Create an A2A server over a real HarnessSpec or supplied controller.
 
@@ -502,6 +595,7 @@ async def create_a2a_server(
             working_directory=working_directory,
             task_store_path=Path(task_store_path) if task_store_path is not None else None,
             bearer_token=bearer_token,
+            key_secret=key_secret,
             harness_skill_enabled=harness_skill_enabled,
         ),
     )
@@ -608,6 +702,33 @@ def _agent_card(
     )
 
 
+def _AccessContextBuilder(sdk: dict[str, Any]) -> Any:
+    """Build a call-context builder that carries the access decision through.
+
+    The middleware has already decided who is calling; this copies that onto
+    the SDK's own call context so the executor sees it without reaching for
+    the raw request.
+    """
+    base = sdk["DefaultServerCallContextBuilder"]
+
+    class _Builder(base):  # type: ignore[misc, valid-type]
+        def build(self, request: Any) -> Any:
+            context = super().build(request)
+            decision = getattr(request.state, "superqode_access", None)
+            if isinstance(decision, AccessDecision):
+                context.state.update(decision.to_state())
+            return context
+
+    return _Builder()
+
+
+def caller_tier(context: Any) -> str:
+    """Return the tier of the caller behind an executor context."""
+    call_context = getattr(context, "call_context", None)
+    state = getattr(call_context, "state", None) or {}
+    return str(state.get("tier") or ANONYMOUS_TIER)
+
+
 def _requested_skill(context: Any) -> str:
     """Read an explicitly requested skill id from a request.
 
@@ -657,6 +778,7 @@ def _a2a_sdk() -> dict[str, Any]:
             create_jsonrpc_routes,
             create_rest_routes,
         )
+        from a2a.server.routes.common import DefaultServerCallContextBuilder
         from a2a.server.tasks import DatabaseTaskStore, InMemoryTaskStore, TaskUpdater
         from a2a.types import (
             AgentCapabilities,

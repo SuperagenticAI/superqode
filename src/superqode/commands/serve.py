@@ -212,12 +212,13 @@ def serve_a2a(
     import asyncio
 
     from superqode.a2a import create_a2a_server
+    from superqode.a2a.keys import SECRET_ENV as KEY_SECRET_ENV
+    from superqode.a2a.keys import resolve_secret as resolve_key_secret
 
     is_loopback = host in {"127.0.0.1", "localhost", "::1"}
     if not is_loopback and not allow_remote:
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
-    if not is_loopback and not token:
-        raise click.ClickException("Remote A2A serving requires --token or SUPERQODE_A2A_TOKEN.")
+    key_secret = resolve_key_secret()
 
     # A remote endpoint shares one token among every caller, so the harness
     # skill would hand all of them the same working directory with whatever
@@ -234,11 +235,21 @@ def serve_a2a(
                 "sandbox isolation."
             )
         harness_skill_enabled = expose_harness
+        if harness_skill_enabled and not token:
+            # The harness runs work and spends money, so it is never anonymous.
+            raise click.ClickException(
+                "Serving the harness remotely requires --token or SUPERQODE_A2A_TOKEN."
+            )
         if not harness_skill_enabled:
             console.print(
                 "[yellow]Remote bind: serving the harness shortlist skill only. "
                 "Pass --expose-harness with --spec to also run harnesses.[/yellow]"
             )
+            if not token and not key_secret:
+                console.print(
+                    "[yellow]No credential configured: every caller is anonymous. "
+                    f"Set {KEY_SECRET_ENV} to accept customer keys.[/yellow]"
+                )
     elif expose_harness:
         console.print(
             "[yellow]--expose-harness only affects remote binds; loopback already "
@@ -261,6 +272,7 @@ def serve_a2a(
                 store_path=store_path,
                 task_store_path=task_store_path,
                 bearer_token=token,
+                key_secret=key_secret,
                 harness_skill_enabled=harness_skill_enabled,
             )
         )

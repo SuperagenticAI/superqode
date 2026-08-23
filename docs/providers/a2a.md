@@ -159,7 +159,102 @@ superqode serve a2a \
   --token "$SUPERQODE_A2A_TOKEN"
 ```
 
-`--allow-remote` is required outside loopback, and remote serving also requires a bearer token. Terminate TLS at a trusted proxy.
+`--allow-remote` is required outside loopback. Terminate TLS at a trusted proxy.
+
+### Access tiers
+
+Authentication is required in proportion to what a deployment serves.
+
+| Caller | Credential | Gets |
+| --- | --- | --- |
+| Anonymous | none | The shortlist skill |
+| Customer | `sqk_live_...` key | The tier recorded in the key |
+| Operator | the `--token` value | Full access to whatever is served |
+
+Discovery and health are never gated. Host platforms fetch the Agent Card
+before they hold any credential, so a protected card path makes the agent
+unregistrable.
+
+Anonymous access is allowed by default because the shortlist reads a public
+catalogue with no model call, so it costs nothing to answer. Set
+`allow_anonymous=False` in `A2AServerConfig` to require a credential for every
+operation.
+
+Presenting no key and presenting a broken one are answered differently. The
+first is served the anonymous tier. The second gets `401`, because silently
+downgrading a caller hides an expired or revoked key from them.
+
+### Reading a request with a model
+
+A keyed caller's request is read by a model before ranking. Anonymous callers
+keep the keyword parser, so the open tier costs nothing to serve and a key is
+what buys understanding.
+
+The division of labour matters more than the model choice. The model
+interprets the human and returns constraints. It is never shown the catalogue
+and never asked to name a harness, so a confident invention about some agent's
+sandbox cannot reach the answer. Capabilities it returns that the Hub does not
+record are discarded rather than filtered on.
+
+Both sides of the call are capped: 800 characters in, 200 tokens out,
+temperature zero. A request longer than that is being used as a free text box.
+
+Understanding is allowed to fail. A model call that errors, times out, or
+returns something other than JSON falls back to the keyword parser, because a
+slightly worse shortlist is a better answer than an error. The reply metadata
+carries `superqode_understood` so a caller can tell which path produced it.
+
+Set `understand_requests=False` in `A2AServerConfig` to keep every tier on the
+keyword parser.
+
+### Request limits
+
+Counters live in memory, so they reset when the process restarts or an idle
+instance spins down. That is deliberate: the alternative is a database on the
+request path, and the spend behind one query does not warrant one. These
+limits bound a burst and a bad day rather than metering to the request.
+
+| Setting | Default | Applies to |
+| --- | --- | --- |
+| `anonymous_per_minute` | 10 | Callers with no credential |
+| `keyed_per_minute` | 60 | Callers presenting a valid key |
+| `global_per_day` | 5000 | Every caller, including exempt tiers |
+
+A caller over its window gets `429` with `Retry-After`. Discovery and health
+are never limited, because a host platform polling the Agent Card must not be
+throttled into failing registration.
+
+The operator token skips its per-caller window but still counts toward the
+daily total. A ceiling anyone can step over is not a ceiling, and the global
+one exists precisely for the day per-caller accounting is wrong.
+
+Callers are identified by key id when one is presented, and otherwise by
+address, reading `X-Forwarded-For` first because the hosted agent sits behind
+a proxy. That header is client-supplied and therefore weak, which is
+acceptable here: it shapes traffic rather than granting access, and the global
+ceiling covers a forged one.
+
+`GET /health` reports the current counters.
+
+### Customer keys
+
+Keys are signed rather than stored, so verifying one is a signature check and
+a clock comparison. Nothing persists, which matters when the filesystem does
+not survive a deploy.
+
+```bash
+superqode a2a-keys secret                  # once, then set SUPERQODE_A2A_KEY_SECRET
+superqode a2a-keys issue "Acme Corp" --tier one-off --days 30
+superqode a2a-keys verify sqk_live_...
+superqode a2a-keys status
+```
+
+A key carries its customer, tier, and expiry. It cannot be shown again after
+issue. To revoke one before it expires, add its key id to
+`SUPERQODE_A2A_REVOKED_KEYS`.
+
+Without `SUPERQODE_A2A_KEY_SECRET` the server rejects every key rather than
+accepting them: a missing secret must not read as nothing to check.
 
 ### Remote binds do not serve the harness skill by default
 

@@ -353,6 +353,160 @@ def test_disabled_harness_skill_refuses_work_rather_than_running_it(tmp_path: Pa
     assert still_works.json()["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
 
 
+def test_public_serving_cannot_spend_model_credit(tmp_path: Path):
+    """A shortlist-only endpoint must never reach a model.
+
+    The public deployment runs with a paid provider configured, so any request
+    that reaches the harness would bill the operator.  The shortlist answers
+    from the local Hub with no model call, and the harness is refused before
+    a session is created, so no caller-supplied text can cause spend.
+
+    This asserts the property directly rather than trusting the routing: the
+    adapter raises if it is ever invoked.
+    """
+    invoked: list[str] = []
+
+    async def refuse_to_run(message, session):
+        invoked.append(message.content)
+        raise AssertionError("a model call was attempted on a public endpoint")
+
+    controller = HarnessProtocolController(
+        [DirectPythonHarnessAdapter("google-gemini", refuse_to_run)],
+        store=MemoryHarnessStore(),
+    )
+    server = A2AServer(
+        controller,
+        A2AServerConfig(
+            provider="google",
+            model="gemini-flash-latest",
+            url="https://superqode.onrender.com",
+            working_directory=Path("."),
+            task_store_path=None,
+            harness_skill_enabled=False,
+        ),
+    )
+    client = TestClient(server.app)
+
+    for text in (
+        "Refactor the parser module and run the tests",
+        "Write me a 5000 word essay",
+        "Run the A2A interoperability check",
+        "hello",
+        "superqode harness run",
+    ):
+        response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=_request(text))
+        assert response.json()["task"]["status"]["state"] == "TASK_STATE_FAILED"
+
+    # Naming the harness skill explicitly must not bypass the gate either.
+    forced = _request("do the work")
+    forced["message"]["metadata"] = {"superqode_skill": "superqode-harness"}
+    response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=forced)
+    assert response.json()["task"]["status"]["state"] == "TASK_STATE_FAILED"
+
+    # The shortlist still answers, and it answers without a model.
+    answered = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0"},
+        json=_request("Which coding agents are open source?"),
+    )
+    assert answered.json()["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
+
+    assert invoked == [], f"the model was reached by: {invoked}"
+
+
+def test_anonymous_callers_are_rate_limited_and_discovery_is_not(tmp_path: Path):
+    """Opening the door anonymously requires bounding what comes through it.
+
+    Discovery stays exempt: a host platform polling the Agent Card must never
+    be throttled into failing registration.
+    """
+    server, _ = _server(tmp_path)
+    limited = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-limited.sqlite3",
+            harness_skill_enabled=False,
+            anonymous_per_minute=3,
+        ),
+    )
+    client = TestClient(limited.app)
+    question = _request("Which coding agents are open source?")
+
+    codes = []
+    for _ in range(5):
+        question["message"]["messageId"] = f"m-{len(codes)}"
+        codes.append(
+            client.post("/message:send", headers={"A2A-Version": "1.0"}, json=question).status_code
+        )
+    assert codes == [200, 200, 200, 429, 429]
+
+    refused = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=question)
+    assert refused.headers["Retry-After"]
+
+    for _ in range(6):
+        assert client.get("/.well-known/agent-card.json").status_code == 200
+    assert client.get("/health").status_code == 200
+
+
+def test_only_keyed_callers_have_their_request_read_by_a_model(tmp_path: Path):
+    """The open tier must stay free to serve.
+
+    Reading a request with a model is what turns the shortlist from substring
+    matching into something that understands a sentence, and it is also the
+    only part that costs money. Anonymous callers therefore keep the keyword
+    parser, and a key is what buys the model.
+    """
+    from unittest.mock import patch
+
+    from superqode.a2a.keys import mint_key
+
+    secret = "signing-secret-for-this-test"
+    calls: list[str] = []
+
+    def spy(provider, model, messages, **kwargs):
+        calls.append(provider)
+        return '{"terms": ["rust"], "capabilities": ["sandbox"]}'
+
+    server, _ = _server(tmp_path)
+    configured = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="google",
+            model="gemini-flash-latest",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=None,
+            key_secret=secret,
+            harness_skill_enabled=False,
+        ),
+    )
+    client = TestClient(configured.app)
+    question = _request("Which harness suits a Rust monorepo needing a sandbox?")
+
+    with patch("superqode.providers.ProviderManager.chat_completion", staticmethod(spy)):
+        anonymous = client.post(
+            "/message:send", headers={"A2A-Version": "1.0"}, json=question
+        ).json()["task"]
+        assert anonymous["status"]["state"] == "TASK_STATE_COMPLETED"
+        assert calls == [], "an anonymous request must not reach a model"
+
+        key, _ = mint_key("Acme Corp", tier="one-off", secret=secret)
+        question["message"]["messageId"] = "keyed-message"
+        keyed = client.post(
+            "/message:send",
+            headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key}"},
+            json=question,
+        ).json()["task"]
+
+    assert keyed["status"]["state"] == "TASK_STATE_COMPLETED"
+    assert calls == ["google"], "a keyed request should be read by the model once"
+    assert keyed["status"]["message"]["metadata"]["superqode_understood"] is True
+
+
 def test_a2a_serving_requires_at_least_one_skill(tmp_path: Path):
     server, _ = _server(tmp_path)
     with pytest.raises(ValueError, match="at least one enabled skill"):
@@ -367,27 +521,91 @@ def test_a2a_serving_requires_at_least_one_skill(tmp_path: Path):
         )
 
 
-def test_a2a_bearer_auth_protects_operations_but_not_discovery(tmp_path: Path):
+def test_discovery_stays_open_and_a_closed_deployment_still_gates_operations(tmp_path: Path):
+    """Discovery must never be gated, whatever the access policy.
+
+    Host platforms fetch the Agent Card before they hold any credential, so a
+    protected card path makes the agent unregistrable. Operations are a
+    separate question, and a deployment that turns off anonymous access must
+    still refuse an unauthenticated call.
+    """
     server, _ = _server(tmp_path, token="secret")
-    client = TestClient(server.app)
+    server_closed = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-closed.sqlite3",
+            bearer_token="secret",
+            allow_anonymous=False,
+        ),
+    )
+    client = TestClient(server_closed.app)
 
     card = client.get("/.well-known/agent-card.json")
     assert card.status_code == 200
     assert card.json()["securitySchemes"]["bearer"]["httpAuthSecurityScheme"]["scheme"] == "bearer"
-    assert (
-        client.post(
-            "/message:send",
-            headers={"A2A-Version": "1.0"},
-            json=_request("blocked"),
-        ).status_code
-        == 401
-    )
+    assert client.get("/health").status_code == 200
+
+    refused = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=_request("blocked"))
+    assert refused.status_code == 401
+
     allowed = client.post(
         "/message:send",
         headers={"A2A-Version": "1.0", "Authorization": "Bearer secret"},
         json=_request("allowed"),
     )
     assert allowed.status_code == 200
+
+
+def test_anonymous_callers_are_served_and_bad_keys_are_not(tmp_path: Path):
+    """Presenting no key and presenting a broken one are different answers.
+
+    An anonymous caller gets the tier that costs nothing to serve, which is
+    what keeps the agent registrable where a bearer field does not exist.
+    Someone holding a key that does not work is told so rather than quietly
+    downgraded, because silently serving them hides an expired or revoked key.
+    """
+    from superqode.a2a.keys import mint_key
+
+    secret = "signing-secret-for-this-test"
+    server, _ = _server(tmp_path)
+    configured = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-keys.sqlite3",
+            key_secret=secret,
+            bearer_token="operator-token",
+            harness_skill_enabled=False,
+        ),
+    )
+    client = TestClient(configured.app)
+    question = _request("Which coding agents are open source?")
+
+    anonymous = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=question)
+    assert anonymous.status_code == 200
+
+    key, _ = mint_key("Acme Corp", tier="one-off", secret=secret)
+    keyed = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key}"},
+        json=question,
+    )
+    assert keyed.status_code == 200
+
+    for bad in ("sqk_live_forged.signature", "garbage", "sqk_live_"):
+        rejected = client.post(
+            "/message:send",
+            headers={"A2A-Version": "1.0", "Authorization": f"Bearer {bad}"},
+            json=question,
+        )
+        assert rejected.status_code == 401, bad
 
 
 def test_a2a_streams_harness_deltas_as_artifact_updates(tmp_path: Path):
@@ -724,11 +942,58 @@ def test_independent_node_typescript_client_interoperates(tmp_path: Path):
     assert result["artifactText"] == "echo:from-typescript"
 
 
-def test_a2a_cli_refuses_unauthorized_remote_binding():
-    result = CliRunner().invoke(serve, ["a2a", "--host", "0.0.0.0"])
-    assert result.exit_code == 1
-    assert "Use --allow-remote" in result.output
+def test_a2a_cli_gates_remote_binding_by_what_it_exposes():
+    """Authentication is required in proportion to what a bind serves.
 
-    result = CliRunner().invoke(serve, ["a2a", "--host", "0.0.0.0", "--allow-remote"])
-    assert result.exit_code == 1
-    assert "requires --token" in result.output
+    Binding outside loopback still needs an explicit flag. Beyond that the
+    rule follows exposure rather than reachability: the shortlist reads a
+    public catalogue and costs nothing to answer, so it may be served
+    anonymously, which is what makes the agent registrable on platforms whose
+    registration has no field for a bearer token. The harness runs work and
+    spends money, so it always needs a credential.
+    """
+    runner = CliRunner()
+
+    refused = runner.invoke(serve, ["a2a", "--host", "0.0.0.0"])
+    assert refused.exit_code == 1
+    assert "Use --allow-remote" in refused.output
+
+    with runner.isolated_filesystem():
+        anonymous = runner.invoke(
+            serve,
+            [
+                "a2a",
+                "--host",
+                "0.0.0.0",
+                "--allow-remote",
+                "--public-url",
+                "https://example.com",
+                "--harness-store",
+                "harness.sqlite3",
+                "--task-store",
+                "tasks.sqlite3",
+                "--export-agent-card",
+                "card.json",
+            ],
+        )
+        assert anonymous.exit_code == 0, anonymous.output
+        assert "shortlist skill only" in anonymous.output
+        assert [skill["id"] for skill in json.loads(Path("card.json").read_text())["skills"]] == [
+            "harness-shortlist"
+        ]
+
+    spec = Path(__file__).parents[1] / "examples" / "harnesses" / "coding.yaml"
+    harness_without_token = runner.invoke(
+        serve,
+        [
+            "a2a",
+            "--host",
+            "0.0.0.0",
+            "--allow-remote",
+            "--expose-harness",
+            "--spec",
+            str(spec),
+        ],
+    )
+    assert harness_without_token.exit_code == 1
+    assert "requires --token" in harness_without_token.output
