@@ -34,8 +34,14 @@ logger = logging.getLogger(__name__)
 #: anything longer is being used as a free text box and should not be paid for.
 MAX_REQUEST_CHARS = 800
 
-#: Cap on what is read back. The reply is a small JSON object.
-MAX_OUTPUT_TOKENS = 200
+#: Cap on what is read back. The reply is a small JSON object, but the budget
+#: has to cover more than the answer: current Gemini Flash models think before
+#: they answer, and those tokens are drawn from the same allowance. Too small a
+#: cap spends the whole budget thinking and returns empty content, which reads
+#: as "the model produced no JSON" and silently falls back to keywords. The
+#: symptom is length-dependent, because a longer request provokes more
+#: thinking, so short prompts appear to work while real ones do not.
+MAX_OUTPUT_TOKENS = 512
 
 _KNOWN_CAPABILITIES = sorted(_CAPABILITY_LABELS)
 
@@ -134,17 +140,21 @@ def understand_request(
             logger.debug("shortlist understanding unavailable: %s", error)
             return fallback, False
 
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": trimmed},
+    ]
+    base_kwargs: dict[str, Any] = {"max_tokens": MAX_OUTPUT_TOKENS, "temperature": 0}
+
     try:
-        reply = call(
-            provider,
-            model,
-            [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": trimmed},
-            ],
-            max_tokens=MAX_OUTPUT_TOKENS,
-            temperature=0,
-        )
+        # Extraction needs no deliberation, so ask for none. Providers that do
+        # not understand the parameter are retried without it rather than
+        # failing, since the request is otherwise identical.
+        try:
+            reply = call(provider, model, messages, reasoning_effort="none", **base_kwargs)
+        except Exception as unsupported:
+            logger.debug("retrying understanding without reasoning_effort: %s", unsupported)
+            reply = call(provider, model, messages, **base_kwargs)
     except Exception as error:
         # Never fail the request because understanding failed. A keyword
         # shortlist is a worse answer than a model-read one and a far better
@@ -152,9 +162,13 @@ def understand_request(
         logger.info("shortlist understanding failed, using keyword parsing: %s", error)
         return fallback, False
 
-    payload = _extract_json(str(reply or ""))
+    text = str(reply or "")
+    payload = _extract_json(text)
     if payload is None:
-        logger.info("shortlist understanding returned no JSON object, using keyword parsing")
+        logger.info(
+            "shortlist understanding returned no JSON object (%d chars), using keyword parsing",
+            len(text),
+        )
         return fallback, False
 
     return _coerce(payload, fallback), True
