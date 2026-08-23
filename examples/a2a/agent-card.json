@@ -4,6 +4,16 @@
   "supportedInterfaces": [
     {
       "url": "https://super-agentic.ai/superqode/a2a",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0"
+    },
+    {
+      "url": "https://super-agentic.ai/superqode/a2a",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "0.3"
+    },
+    {
+      "url": "https://super-agentic.ai/superqode/a2a",
       "protocolBinding": "HTTP+JSON",
       "protocolVersion": "1.0"
     }
@@ -12,7 +22,7 @@
     "url": "https://super-agentic.ai",
     "organization": "Superagentic AI"
   },
-  "version": "0.2.78",
+  "version": "1.0",
   "documentationUrl": "https://github.com/SuperagenticAI/superqode",
   "capabilities": {
     "streaming": true,
@@ -23,7 +33,10 @@
       "httpAuthSecurityScheme": {
         "description": "Bearer token issued by the SuperQode operator",
         "scheme": "bearer"
-      }
+      },
+      "description": "Bearer token issued by the SuperQode operator",
+      "scheme": "bearer",
+      "type": "http"
     }
   },
   "securityRequirements": [
@@ -61,6 +74,38 @@
       "outputModes": [
         "text/plain"
       ]
+    },
+    {
+      "id": "harness-shortlist",
+      "name": "Harness Shortlist",
+      "description": "Search the curated Harness Hub for third-party coding agents and harnesses matching stated constraints. Returns a ranked catalogue shortlist with licence and setup details. SuperQode's own harnesses are excluded from the ranking and disclosed separately",
+      "tags": [
+        "harness",
+        "recommendation",
+        "evaluation",
+        "discovery"
+      ],
+      "examples": [
+        "Which coding agents in the catalogue are open source?",
+        "Which harness should we shortlist for a Python monorepo?",
+        "We run local models only. What are our options?"
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "text/plain",
+        "application/json"
+      ]
     }
-  ]
+  ],
+  "iconUrl": "https://super-agentic.ai/superqode/icon.png",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3",
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "url": "https://super-agentic.ai/superqode/a2a"
 }

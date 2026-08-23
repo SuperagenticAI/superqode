@@ -24,6 +24,8 @@ jobs:
         run: uv run ruff format --check .
       - name: Public documentation style
         run: uv run python scripts/check_public_docs_style.py
+      - name: Published Agent Card is current
+        run: uv run python scripts/check_published_agent_card.py
 
   test:
     runs-on: ubuntu-latest

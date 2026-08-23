@@ -23,7 +23,22 @@ if TYPE_CHECKING:
     from superqode.harness import HarnessProtocolController, HarnessSessionRef, HarnessSpec
 
 
+#: The version reported in the Agent Card.
+#:
+#: This is deliberately not the SuperQode package version.  A2A defines this
+#: field as the version of the *agent*, and callers use it to notice that the
+#: interface changed.  Tying it to the package version meant every PyPI
+#: release invalidated the published card, which is how the card at the
+#: discovery origin drifted out of date: the release cadence set the
+#: republication cadence, rather than actual interface changes doing so.
+#:
+#: Bump this by hand when the interface URL, capabilities, auth policy, or
+#: skills change.  Nothing else should move it.
+AGENT_CARD_VERSION = "1.0"
+
+
 def _package_version() -> str:
+    """Return the running SuperQode version, for diagnostics only."""
     from superqode import __version__
 
     return __version__
@@ -34,7 +49,7 @@ class A2AServerConfig(BaseModel):
 
     name: str = "SuperQode"
     description: str = "Open-source harness engineering for coding agents"
-    version: str = Field(default_factory=_package_version)
+    version: str = AGENT_CARD_VERSION
     url: str = "http://127.0.0.1:8000"
     documentation_url: str = "https://github.com/SuperagenticAI/superqode"
     skill_id: str = "superqode-harness"
@@ -49,6 +64,23 @@ class A2AServerConfig(BaseModel):
     streaming: bool = True
     push_notifications: bool = False
     bearer_token: str | None = None
+    shortlist_skill_id: str = "harness-shortlist"
+    shortlist_skill_name: str = "Harness Shortlist"
+    shortlist_skill_description: str = (
+        "Search the curated Harness Hub for third-party coding agents and harnesses "
+        "matching stated constraints. Returns a ranked catalogue shortlist with "
+        "licence and setup details. SuperQode's own harnesses are excluded from the "
+        "ranking and disclosed separately"
+    )
+    #: Serve the shortlist skill.  It needs no repository, no model call and no
+    #: sandbox, which is what makes it answerable on a public endpoint.
+    shortlist_enabled: bool = True
+    icon_url: str = "https://super-agentic.ai/superqode/icon.png"
+    jsonrpc_path: str = "/"
+    #: Also advertise and serve the A2A 0.3 wire format.  Gemini Enterprise,
+    #: Foundry Agent Service, and Agent Registry all still accept 0.3 cards,
+    #: and some of their documented flows only show 0.3.
+    legacy_v0_3: bool = True
 
 
 class SuperQodeA2AExecutor:
@@ -77,6 +109,13 @@ class SuperQodeA2AExecutor:
             )
         await updater.start_work()
 
+        user_input = context.get_user_input()
+        if self._wants_shortlist(context, user_input):
+            await self._answer_shortlist(
+                updater, sdk, user_input, artifact_id=f"shortlist-{task_id}"
+            )
+            return
+
         session = await self._session_for(context_id)
         self._task_sessions[task_id] = session
         artifact_id = f"superqode-{task_id}"
@@ -85,7 +124,7 @@ class SuperQodeA2AExecutor:
         pending_chunk: str | None = None
 
         try:
-            async for event in self.controller.send(session, context.get_user_input()):
+            async for event in self.controller.send(session, user_input):
                 if event.type == "message.delta":
                     chunk = str(event.data.get("text") or "")
                     if chunk:
@@ -151,6 +190,63 @@ class SuperQodeA2AExecutor:
         finally:
             self._task_sessions.pop(task_id, None)
 
+    def _wants_shortlist(self, context: Any, user_input: str) -> bool:
+        """Decide whether this turn is a shortlist question.
+
+        An explicit skill id in the message metadata always wins, because a
+        calling agent that names the skill should not be second-guessed.  A
+        chat surface sends plain prose instead, so fall back to a deliberately
+        narrow phrase match and let anything ambiguous run the harness, which
+        is the behaviour callers already depend on.
+        """
+        if not self.config.shortlist_enabled:
+            return False
+        requested = _requested_skill(context)
+        if requested:
+            return requested == self.config.shortlist_skill_id
+
+        lowered = user_input.casefold()
+        asks_for_choice = any(
+            phrase in lowered
+            for phrase in (
+                "which harness",
+                "what harness",
+                "which coding agent",
+                "what coding agent",
+                "recommend a harness",
+                "recommend an harness",
+                "harness recommendation",
+                "shortlist",
+                "which runtime",
+                "what are our options",
+            )
+        )
+        return asks_for_choice
+
+    async def _answer_shortlist(
+        self, updater: Any, sdk: dict[str, Any], user_input: str, *, artifact_id: str
+    ) -> None:
+        """Answer from the Harness Hub without touching a repository."""
+        from superqode.a2a.shortlist import build_shortlist, render_shortlist
+
+        shortlist = await asyncio.to_thread(build_shortlist, user_input)
+        text = render_shortlist(shortlist)
+        await updater.add_artifact(
+            [sdk["Part"](text=text)],
+            artifact_id=artifact_id,
+            name="Harness shortlist",
+            last_chunk=True,
+        )
+        await updater.complete(
+            updater.new_agent_message(
+                [sdk["Part"](text=text)],
+                metadata={
+                    "superqode_skill": self.config.shortlist_skill_id,
+                    "superqode_shortlist": shortlist.to_dict(),
+                },
+            )
+        )
+
     async def cancel(self, context: Any, event_queue: Any) -> None:
         from superqode.harness import HarnessCapabilityError
 
@@ -214,7 +310,7 @@ class A2AServer:
 
     def _build_app(self) -> FastAPI:
         sdk = _a2a_sdk()
-        app = sdk["FastAPI"](title="SuperQode A2A Server", version=self.config.version)
+        app = sdk["FastAPI"](title="SuperQode A2A Server", version=_package_version())
         card = _agent_card(self.controller, self.config, sdk)
         self.agent_card = card
         task_store = self._task_store_override or self._create_task_store(sdk)
@@ -223,17 +319,25 @@ class A2AServer:
             task_store=task_store,
             agent_card=card,
         )
+        compat = self.config.legacy_v0_3
         sdk["add_a2a_routes_to_fastapi"](
             app,
             agent_card_routes=sdk["create_agent_card_routes"](card),
-            rest_routes=sdk["create_rest_routes"](handler),
+            jsonrpc_routes=sdk["create_jsonrpc_routes"](
+                handler, rpc_url=self.config.jsonrpc_path, enable_v0_3_compat=compat
+            ),
+            rest_routes=sdk["create_rest_routes"](handler, enable_v0_3_compat=compat),
         )
 
         @app.get("/health")
         async def health() -> dict[str, Any]:
             return {
                 "status": "ok",
+                "superqode_version": _package_version(),
+                "agent_card_version": self.config.version,
                 "a2a_protocol_version": "1.0",
+                "a2a_protocol_versions": ["1.0", "0.3"] if self.config.legacy_v0_3 else ["1.0"],
+                "a2a_protocol_bindings": ["JSONRPC", "HTTP+JSON"],
                 "harnesses": [item.id for item in self.controller.descriptors()],
             }
 
@@ -279,8 +383,19 @@ class A2AServer:
             ) from exc
 
     def agent_card_json(self) -> str:
-        """Serialize the exact runtime Agent Card for static publication."""
-        payload = sdk_message_to_dict(self.agent_card)
+        """Serialize the exact runtime Agent Card for static publication.
+
+        This must use the SDK's own card serializer rather than a plain
+        protobuf conversion.  With 0.3 compatibility enabled the SDK emits a
+        hybrid card that also carries the 0.3 discovery fields (`url`,
+        `preferredTransport`, `protocolVersion`), and those are the fields
+        host platforms read when they only speak 0.3.  Serializing the
+        protobuf directly silently drops them, so the published card would
+        promise less than the running server actually serves.
+        """
+        from a2a.server.request_handlers.response_helpers import agent_card_to_dict
+
+        payload = agent_card_to_dict(self.agent_card)
         return json.dumps(payload, indent=2, sort_keys=False) + "\n"
 
     def run(self, host: str = "127.0.0.1", port: int = 8000) -> None:
@@ -377,6 +492,24 @@ def _agent_card(
         input_modes=["text/plain"],
         output_modes=["text/plain"],
     )
+    skills = [skill]
+    if config.shortlist_enabled:
+        skills.append(
+            sdk["AgentSkill"](
+                id=config.shortlist_skill_id,
+                name=config.shortlist_skill_name,
+                description=config.shortlist_skill_description,
+                tags=["harness", "recommendation", "evaluation", "discovery"],
+                examples=[
+                    "Which coding agents in the catalogue are open source?",
+                    "Which harness should we shortlist for a Python monorepo?",
+                    "We run local models only. What are our options?",
+                ],
+                input_modes=["text/plain"],
+                output_modes=["text/plain", "application/json"],
+            )
+        )
+
     kwargs: dict[str, Any] = {}
     if config.bearer_token:
         kwargs["security_schemes"] = {
@@ -390,31 +523,79 @@ def _agent_card(
         kwargs["security_requirements"] = [
             sdk["SecurityRequirement"](schemes={"bearer": sdk["StringList"]()})
         ]
+    # Ordered by preference; A2A clients take the first entry they understand.
+    # JSONRPC leads because it is the default binding for A2A clients and the
+    # binding every major host platform documents.  The 0.3 entry is what makes
+    # the card registrable where only 0.3 is accepted.
+    interfaces = [
+        sdk["AgentInterface"](
+            url=config.url,
+            protocol_binding="JSONRPC",
+            protocol_version="1.0",
+        )
+    ]
+    if config.legacy_v0_3:
+        interfaces.append(
+            sdk["AgentInterface"](
+                url=config.url,
+                protocol_binding="JSONRPC",
+                protocol_version="0.3",
+            )
+        )
+    interfaces.append(
+        sdk["AgentInterface"](
+            url=config.url,
+            protocol_binding="HTTP+JSON",
+            protocol_version="1.0",
+        )
+    )
     return sdk["AgentCard"](
         name=config.name,
         description=config.description,
-        supported_interfaces=[
-            sdk["AgentInterface"](
-                url=config.url,
-                protocol_binding="HTTP+JSON",
-                protocol_version="1.0",
-            )
-        ],
+        supported_interfaces=interfaces,
         provider=sdk["AgentProvider"](
             organization="Superagentic AI",
             url="https://super-agentic.ai",
         ),
         version=config.version,
         documentation_url=config.documentation_url,
+        icon_url=config.icon_url,
         capabilities=sdk["AgentCapabilities"](
             streaming=config.streaming,
             push_notifications=config.push_notifications,
         ),
         default_input_modes=["text/plain"],
         default_output_modes=["text/plain"],
-        skills=[skill],
+        skills=skills,
         **kwargs,
     )
+
+
+def _requested_skill(context: Any) -> str:
+    """Read an explicitly requested skill id from a request.
+
+    A2A carries no skill routing field, so callers name the skill in metadata.
+    ``RequestContext.metadata`` exposes the request-level metadata only, and a
+    client may just as reasonably attach it to the message, so both are read.
+    """
+    sources: list[dict[str, Any]] = []
+    request_metadata = getattr(context, "metadata", None)
+    if isinstance(request_metadata, dict):
+        sources.append(request_metadata)
+
+    message = getattr(context, "message", None)
+    message_metadata = getattr(message, "metadata", None)
+    if message_metadata is not None:
+        try:
+            sources.append(sdk_message_to_dict(message_metadata))
+        except Exception:  # pragma: no cover - defensive, metadata is optional
+            pass
+
+    for source in sources:
+        value = source.get("superqode_skill") or source.get("skill")
+        if value:
+            return str(value).strip()
+    return ""
 
 
 def _required_id(value: str | None, label: str) -> str:
@@ -436,6 +617,7 @@ def _a2a_sdk() -> dict[str, Any]:
         from a2a.server.routes import (
             add_a2a_routes_to_fastapi,
             create_agent_card_routes,
+            create_jsonrpc_routes,
             create_rest_routes,
         )
         from a2a.server.tasks import DatabaseTaskStore, InMemoryTaskStore, TaskUpdater

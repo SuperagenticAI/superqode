@@ -83,10 +83,21 @@ def test_a2a_card_task_lifecycle_and_context_session_reuse(tmp_path: Path):
     assert card["supportedInterfaces"] == [
         {
             "url": "http://127.0.0.1:8000",
+            "protocolBinding": "JSONRPC",
+            "protocolVersion": "1.0",
+        },
+        {
+            "url": "http://127.0.0.1:8000",
+            "protocolBinding": "JSONRPC",
+            "protocolVersion": "0.3",
+        },
+        {
+            "url": "http://127.0.0.1:8000",
             "protocolBinding": "HTTP+JSON",
             "protocolVersion": "1.0",
-        }
+        },
     ]
+    assert card["iconUrl"]
     assert client.post("/message:send", json=_request("no-version")).status_code == 400
 
     first = client.post(
@@ -120,6 +131,133 @@ def test_a2a_card_task_lifecycle_and_context_session_reuse(tmp_path: Path):
     assert second.status_code == 200
     assert session_ids[0] == session_ids[1]
     assert session_ids[0] == f"a2a-{first_task['contextId']}"
+
+
+def test_a2a_serves_jsonrpc_for_both_1_0_and_0_3_clients(tmp_path: Path):
+    """Host platforms reach A2A over JSON-RPC, and several still speak 0.3.
+
+    The card advertises JSONRPC first because that is the default binding for
+    A2A clients; the 0.3 entry is what keeps the agent registrable where only
+    0.3 is accepted.  Both must actually execute the harness, not just appear
+    on the card.
+    """
+    server, _ = _server(tmp_path)
+    client = TestClient(server.app)
+
+    modern = client.post(
+        "/",
+        headers={"A2A-Version": "1.0"},
+        json={
+            "jsonrpc": "2.0",
+            "id": "rpc-1",
+            "method": "SendMessage",
+            "params": _request("modern"),
+        },
+    )
+    assert modern.status_code == 200
+    body = modern.json()
+    assert "error" not in body, body
+    task = body["result"]["task"]
+    assert task["status"]["state"] == "TASK_STATE_COMPLETED"
+    assert task["artifacts"][0]["parts"][0]["text"] == "echo:modern"
+
+    legacy = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": "rpc-2",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": "message-legacy",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "legacy"}],
+                }
+            },
+        },
+    )
+    assert legacy.status_code == 200
+    legacy_body = legacy.json()
+    assert "error" not in legacy_body, legacy_body
+    legacy_task = legacy_body["result"]
+    assert legacy_task["kind"] == "task"
+    assert legacy_task["artifacts"][0]["parts"][0]["text"] == "echo:legacy"
+
+
+def test_a2a_routes_shortlist_questions_away_from_the_harness(tmp_path: Path):
+    """The shortlist skill must be answerable without a repository.
+
+    A caller on a chat surface has no checkout on the server, so a question
+    about which harness to pick has to be served from the Hub rather than
+    handed to the coding harness, which would have nothing to act on.
+    """
+    server, session_ids = _server(tmp_path)
+    client = TestClient(server.app)
+
+    card = client.get("/.well-known/agent-card.json").json()
+    assert [skill["id"] for skill in card["skills"]] == [
+        "superqode-harness",
+        "harness-shortlist",
+    ]
+
+    answered = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0"},
+        json=_request("Which harness should we use for a Python monorepo?"),
+    )
+    assert answered.status_code == 200
+    task = answered.json()["task"]
+    text = task["artifacts"][0]["parts"][0]["text"]
+    assert "Third-party harnesses from the Harness Hub" in text
+    assert "HarnessBench" in text
+    assert "Disclosure: the native harnesses are ours" in text, (
+        "our own harnesses must be disclosed"
+    )
+    assert session_ids == [], "the coding harness must not run for a shortlist question"
+
+    coded = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0"},
+        json=_request("Refactor the parser module."),
+    )
+    assert coded.status_code == 200
+    assert coded.json()["task"]["artifacts"][0]["parts"][0]["text"].startswith("echo:")
+    assert len(session_ids) == 1, "ordinary work still reaches the harness"
+
+
+def test_a2a_shortlist_honours_an_explicit_skill_id(tmp_path: Path):
+    """A calling agent that names the skill is not second-guessed."""
+    server, session_ids = _server(tmp_path)
+    client = TestClient(server.app)
+
+    payload = _request("anything at all")
+    payload["message"]["metadata"] = {"superqode_skill": "harness-shortlist"}
+    response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=payload)
+
+    assert response.status_code == 200
+    text = response.json()["task"]["artifacts"][0]["parts"][0]["text"]
+    assert "Third-party harnesses from the Harness Hub" in text
+    assert session_ids == []
+
+
+def test_a2a_can_drop_the_legacy_interface(tmp_path: Path):
+    """Operators serving only modern clients should not advertise 0.3."""
+    server, _ = _server(tmp_path)
+    server.config.legacy_v0_3 = False
+    rebuilt = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-modern.sqlite3",
+            legacy_v0_3=False,
+        ),
+    )
+    card = TestClient(rebuilt.app).get("/.well-known/agent-card.json").json()
+    versions = {item["protocolVersion"] for item in card["supportedInterfaces"]}
+    assert versions == {"1.0"}
 
 
 def test_a2a_bearer_auth_protects_operations_but_not_discovery(tmp_path: Path):
@@ -373,6 +511,27 @@ def test_exported_agent_card_matches_checked_in_publication(tmp_path: Path):
     expected = Path(__file__).parents[1] / "examples" / "a2a" / "agent-card.json"
     assert result.exit_code == 0, result.output
     assert json.loads(exported.read_text()) == json.loads(expected.read_text())
+
+
+def test_agent_card_version_does_not_track_the_package_version(tmp_path: Path):
+    """A PyPI release must not invalidate the published Agent Card.
+
+    The card lives on a separately deployed static host. Tying its version to
+    the package version meant the release cadence set the republication
+    cadence, which is how the published card fell behind.
+    """
+    from superqode import __version__
+    from superqode.a2a.server import AGENT_CARD_VERSION
+
+    server, _ = _server(tmp_path)
+    card = TestClient(server.app).get("/.well-known/agent-card.json").json()
+
+    assert card["version"] == AGENT_CARD_VERSION
+    assert card["version"] != __version__, "the card version must not follow the package version"
+
+    health = TestClient(server.app).get("/health").json()
+    assert health["superqode_version"] == __version__
+    assert health["agent_card_version"] == AGENT_CARD_VERSION
 
 
 def test_independent_node_typescript_client_interoperates(tmp_path: Path):

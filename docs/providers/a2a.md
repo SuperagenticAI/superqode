@@ -15,13 +15,18 @@ SuperQode publishes a static A2A Agent Card at:
 
 **[https://super-agentic.ai/.well-known/agent-card.json](https://super-agentic.ai/.well-known/agent-card.json)**
 
-Use that URL for discovery. The card includes product identity, skills, capabilities, bearer authentication advertisement, and `supportedInterfaces` (A2A 1.0 HTTP+JSON). Clients **must** send operational requests to the interface `url` in the card, which may differ from the discovery origin.
+Use that URL for discovery. The card includes product identity, skills, capabilities, bearer authentication advertisement, and `supportedInterfaces`. Clients **must** send operational requests to the interface `url` in the card, which may differ from the discovery origin.
 
-Inspect the live interface URL:
+The card is deliberately dual-shaped. It carries the A2A 1.0 `supportedInterfaces`
+array **and** the 0.3 discovery fields (`url`, `preferredTransport`,
+`protocolVersion`), because several host platforms still read only the 0.3
+fields. One published document therefore satisfies both.
+
+Inspect the advertised interfaces:
 
 ```bash
 curl -sS https://super-agentic.ai/.well-known/agent-card.json \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['supportedInterfaces'][0]['url'])"
+  | python3 -c "import sys,json; [print(i['protocolBinding'], i['protocolVersion'], i['url']) for i in json.load(sys.stdin)['supportedInterfaces']]"
 ```
 
 A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regenerate it with `--export-agent-card` when version, public interface URL, capabilities, or auth policy change (see below).
@@ -36,6 +41,61 @@ A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regen
 | Local `superqode serve a2a` | Fully usable for development |
 
 Treat the public pilot as experimental: authentication is required for operations, the host may cold-start, and this is not a multi-tenant production SLA. Tokens and provider keys never belong in the Agent Card.
+
+## Skills
+
+The Agent Card advertises two skills, and both are answerable as advertised.
+
+| Skill | What it does | Cost to run |
+| --- | --- | --- |
+| `superqode-harness` | Runs the bound HarnessSpec against the server's working directory | Model tokens, sandbox |
+| `harness-shortlist` | Recommends which harnesses fit stated constraints, from the curated Harness Hub | None |
+
+`harness-shortlist` exists because a caller on a chat surface has no checkout
+on the server. It searches the published Hub and returns a ranked catalogue
+shortlist with licence and setup details. There is no model call, no sandbox
+and no repository involved.
+
+Two rules keep the answer worth reading.
+
+**SuperQode's own harnesses are excluded from the ranking.** Published
+readiness is derived from integration level, so every entry the Hub marks
+`ready` is one SuperQode supplies and every third-party entry reads as
+`setup-required`. Any ranking that rewarded readiness would promote our own
+harnesses on every request. They are held back, and named separately at the
+end of the answer with an explicit disclosure. They enter the ranking only
+when the request asks for them, or when the Hub holds no third-party entry.
+
+**Capability fitness is reported, not scored.** Native harnesses and presets
+declare labelled policies such as `Sandbox: local`. Managed and protocol
+entries carry prose instead, because the vendor owns that loop and SuperQode
+does not know what it does. Asking for a sandbox therefore returns a note
+saying the Hub cannot answer it rather than a guess inferred from a
+description.
+
+The result is a catalogue shortlist, not a measurement. Ranking candidates on
+a specific codebase is HarnessBench's job, and the output says so.
+
+### Routing
+
+A2A has no skill routing field, so the server decides per turn:
+
+1. An explicit skill id in metadata wins. Set `superqode_skill` on either the
+   request metadata or the message metadata.
+2. Otherwise a narrow phrase match picks out shortlist questions ("which
+   harness", "recommend a harness", "what are our options").
+3. Anything else runs the harness, which is the existing behaviour.
+
+```bash
+curl -sS https://your-agent.example.com/message:send \
+  -H 'A2A-Version: 1.0' -H 'Content-Type: application/json' \
+  -d '{"message": {"messageId": "1", "role": "ROLE_USER",
+       "parts": [{"text": "open source harness with a sandbox and approvals"}],
+       "metadata": {"superqode_skill": "harness-shortlist"}}}'
+```
+
+Set `shortlist_enabled=False` in `A2AServerConfig` to serve the harness skill
+alone.
 
 ## Install
 
@@ -62,7 +122,30 @@ The default listener is local at `127.0.0.1:8000`. Discovery is available at:
 GET /.well-known/agent-card.json
 ```
 
-A2A operations require the `A2A-Version: 1.0` header. The advertised interface uses the `HTTP+JSON` binding. Each A2A `contextId` maps to one SuperQode Harness Protocol session, so later tasks in the same context reuse harness history while each A2A task keeps its own lifecycle and artifacts.
+Three interfaces are served from one process, advertised in preference order:
+
+| Binding | Version | Where |
+| --- | --- | --- |
+| `JSONRPC` | 1.0 | `POST /` |
+| `JSONRPC` | 0.3 | `POST /` (same endpoint, version-negotiated) |
+| `HTTP+JSON` | 1.0 | `POST /message:send` and the other REST paths |
+
+JSONRPC leads because it is the default binding for A2A clients and the one
+host platforms document. Serving 0.3 alongside 1.0 is what keeps the agent
+registrable where only 0.3 is accepted; pass `legacy_v0_3=False` in
+`A2AServerConfig` to serve and advertise 1.0 only.
+
+**A2A 1.0 requests must send the `A2A-Version: 1.0` header.** When the header
+is absent the SDK negotiates down to 0.3, so a 1.0 method name without the
+header is rejected. A 0.3 client needs no header.
+
+Each A2A `contextId` maps to one SuperQode Harness Protocol session, so later tasks in the same context reuse harness history while each A2A task keeps its own lifecycle and artifacts.
+
+!!! note "0.3 compatibility covers JSON-RPC, not the legacy REST paths"
+
+    `a2a-sdk` 1.1.2 mounts `/v1/*` REST routes when compatibility is enabled,
+    but they reject 0.3 request bodies. The Agent Card therefore advertises 0.3
+    under the `JSONRPC` binding only, which is the combination that works.
 
 Remote binding is intentionally guarded:
 
@@ -106,7 +189,35 @@ Notes:
 - Publish the generated file at `https://super-agentic.ai/.well-known/agent-card.json` (or your discovery host).
 - Skill text on the card is product-facing (`SuperQode Harness`); the bound `--spec` still decides what the server actually runs.
 - Avoid leading or trailing whitespace in interface URLs; clients may reject a spaced URL as invalid.
-- Regenerate and republish when SuperQode version, public interface URL, capabilities, or auth policy change.
+- Regenerate and republish when the public interface URL, capabilities, auth policy, or skills change.
+
+### The card version is not the package version
+
+`AGENT_CARD_VERSION` in `superqode.a2a.server` is a stable agent version, bumped
+by hand. It is deliberately not `superqode.__version__`.
+
+A2A defines this field as the version of the agent, and callers read it to
+notice that an interface changed. Wiring it to the package version meant every
+PyPI release invalidated the published card, so the release cadence set the
+republication cadence instead of actual interface changes doing so. That is how
+the published card fell behind: the card had to be re-uploaded by hand far more
+often than anything a caller depends on had actually changed.
+
+The running build is still reported, at `GET /health` as `superqode_version`.
+
+### Checking the published card
+
+The discovery origin is a static host deployed separately from the A2A server,
+so nothing stops the two from disagreeing. CI runs:
+
+```bash
+uv run python scripts/check_published_agent_card.py
+```
+
+It fetches the discovery URL, compares it field by field against
+`examples/a2a/agent-card.json`, and prints exactly what differs. An unreachable
+or cold-starting host is reported without failing the build. Pass `--url` to
+check a different origin, or `--warn-only` to report without failing.
 
 ## Python server API
 
