@@ -54,28 +54,6 @@
   ],
   "skills": [
     {
-      "id": "superqode-harness",
-      "name": "SuperQode Harness",
-      "description": "Run versioned coding-agent harnesses with controlled execution, evaluation, and evidence",
-      "tags": [
-        "coding",
-        "harness",
-        "evaluation",
-        "software-engineering"
-      ],
-      "examples": [
-        "Inspect this repository and implement the requested change.",
-        "Run this task through the configured SuperQode harness.",
-        "Evaluate two coding-agent configurations and compare their evidence."
-      ],
-      "inputModes": [
-        "text/plain"
-      ],
-      "outputModes": [
-        "text/plain"
-      ]
-    },
-    {
       "id": "harness-shortlist",
       "name": "Harness Shortlist",
       "description": "Search the curated Harness Hub for third-party coding agents and harnesses matching stated constraints. Returns a ranked catalogue shortlist with licence and setup details. SuperQode's own harnesses are excluded from the ranking and disclosed separately",

@@ -260,6 +260,113 @@ def test_a2a_can_drop_the_legacy_interface(tmp_path: Path):
     assert versions == {"1.0"}
 
 
+def test_remote_serving_does_not_expose_the_harness_by_default():
+    """A remote bind must not hand every token holder a shell.
+
+    One bearer token is shared by every caller, so the harness skill would
+    give all of them the same working directory under whatever the bound spec
+    permits. The default coding template allows shell and writes with sandbox
+    "local", which is no isolation, so remote binds serve the shortlist only.
+    """
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            serve,
+            [
+                "a2a",
+                "--host",
+                "0.0.0.0",
+                "--allow-remote",
+                "--token",
+                "secret",
+                "--public-url",
+                "https://example.com",
+                "--harness-store",
+                "harness.sqlite3",
+                "--task-store",
+                "tasks.sqlite3",
+                "--export-agent-card",
+                "card.json",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        card = json.loads(Path("card.json").read_text())
+
+    assert [skill["id"] for skill in card["skills"]] == ["harness-shortlist"]
+    assert "shortlist skill only" in result.output
+
+
+def test_exposing_the_harness_remotely_requires_an_explicit_spec():
+    """Opting back in must be a deliberate policy choice, not just a flag."""
+    result = CliRunner().invoke(
+        serve,
+        [
+            "a2a",
+            "--host",
+            "0.0.0.0",
+            "--allow-remote",
+            "--token",
+            "secret",
+            "--expose-harness",
+            "--export-agent-card",
+            "card.json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--expose-harness requires --spec" in result.output
+
+
+def test_disabled_harness_skill_refuses_work_rather_than_running_it(tmp_path: Path):
+    """The card stops advertising it, and the executor stops performing it."""
+    server, session_ids = _server(tmp_path)
+    rebuilt = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-locked.sqlite3",
+            harness_skill_enabled=False,
+        ),
+    )
+    client = TestClient(rebuilt.app)
+
+    card = client.get("/.well-known/agent-card.json").json()
+    assert [skill["id"] for skill in card["skills"]] == ["harness-shortlist"]
+
+    response = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0"},
+        json=_request("Refactor the parser module."),
+    )
+    assert response.status_code == 200
+    task = response.json()["task"]
+    assert task["status"]["state"] == "TASK_STATE_FAILED"
+    assert session_ids == [], "the harness must not run when the skill is disabled"
+
+    still_works = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0"},
+        json=_request("Which coding agents are open source?"),
+    )
+    assert still_works.json()["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
+
+
+def test_a2a_serving_requires_at_least_one_skill(tmp_path: Path):
+    server, _ = _server(tmp_path)
+    with pytest.raises(ValueError, match="at least one enabled skill"):
+        A2AServer(
+            server.controller,
+            A2AServerConfig(
+                url="http://127.0.0.1:8000",
+                task_store_path=None,
+                harness_skill_enabled=False,
+                shortlist_enabled=False,
+            ),
+        )
+
+
 def test_a2a_bearer_auth_protects_operations_but_not_discovery(tmp_path: Path):
     server, _ = _server(tmp_path, token="secret")
     client = TestClient(server.app)
@@ -495,6 +602,12 @@ def test_exported_agent_card_matches_checked_in_publication(tmp_path: Path):
         serve,
         [
             "a2a",
+            # Generate the artifact the way the public deployment runs, so the
+            # published card promises exactly what that server answers.  A
+            # remote bind serves the shortlist skill only.
+            "--host",
+            "0.0.0.0",
+            "--allow-remote",
             "--public-url",
             # The operational endpoint, not the discovery origin.  These
             # differ by design in A2A, and pointing the card at the static

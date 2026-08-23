@@ -159,7 +159,37 @@ superqode serve a2a \
   --token "$SUPERQODE_A2A_TOKEN"
 ```
 
-`--allow-remote` is required outside loopback, and remote serving also requires a bearer token. Terminate TLS at a trusted proxy and keep the HarnessSpec execution policy restrictive: A2A authentication controls who may submit work, while the HarnessSpec controls what accepted work may do.
+`--allow-remote` is required outside loopback, and remote serving also requires a bearer token. Terminate TLS at a trusted proxy.
+
+### Remote binds do not serve the harness skill by default
+
+A bearer token is shared by every caller, so it identifies a deployment rather
+than a person. The harness skill would give everyone holding that token the
+same working directory under whatever the bound spec permits, and the default
+coding template allows shell and writes with sandbox `local`, which is no
+isolation at all.
+
+A remote bind therefore serves the **shortlist skill only**. The harness skill
+is left off the Agent Card, and a request that asks for one is refused rather
+than run.
+
+To serve harnesses remotely, opt in and name the spec:
+
+```bash
+superqode serve a2a \
+  --spec read-only.yaml \
+  --host 0.0.0.0 --allow-remote \
+  --public-url https://superqode.example.com \
+  --token "$SUPERQODE_A2A_TOKEN" \
+  --expose-harness
+```
+
+`--expose-harness` requires `--spec`, because the spec is what decides
+what an accepted request may do. Exposing the default coding template
+remotely is exactly the case worth making somebody type out.
+
+Loopback binds are unaffected: there the caller and the repository are the
+same person, and the harness skill is served as before.
 
 ### Durability
 

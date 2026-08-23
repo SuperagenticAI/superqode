@@ -75,6 +75,16 @@ class A2AServerConfig(BaseModel):
     #: Serve the shortlist skill.  It needs no repository, no model call and no
     #: sandbox, which is what makes it answerable on a public endpoint.
     shortlist_enabled: bool = True
+    #: Serve the harness skill, which executes a HarnessSpec against
+    #: ``working_directory``.
+    #:
+    #: The default is permissive because the library is normally embedded or
+    #: bound to loopback, where the caller and the repository are the same
+    #: person.  Exposing it on a remote endpoint is a different proposition:
+    #: the bound spec decides what an accepted request may do, and the default
+    #: coding template allows shell and writes with no sandbox isolation.  The
+    #: CLI therefore turns this off for remote binds unless asked otherwise.
+    harness_skill_enabled: bool = True
     icon_url: str = "https://super-agentic.ai/superqode/icon.png"
     jsonrpc_path: str = "/"
     #: Also advertise and serve the A2A 0.3 wire format.  Gemini Enterprise,
@@ -113,6 +123,26 @@ class SuperQodeA2AExecutor:
         if self._wants_shortlist(context, user_input):
             await self._answer_shortlist(
                 updater, sdk, user_input, artifact_id=f"shortlist-{task_id}"
+            )
+            return
+
+        if not self.config.harness_skill_enabled:
+            # Refuse rather than fall through.  The card does not advertise
+            # the harness skill in this mode, so a request that reaches here
+            # asked for work this deployment does not offer.
+            await updater.failed(
+                updater.new_agent_message(
+                    [
+                        sdk["Part"](
+                            text=(
+                                "This endpoint does not run harnesses. It answers "
+                                f"the '{self.config.shortlist_skill_id}' skill only. "
+                                "Run SuperQode against your own repository to execute "
+                                "a harness."
+                            )
+                        )
+                    ]
+                )
             )
             return
 
@@ -420,6 +450,7 @@ async def create_a2a_server(
     provider: str | None = None,
     model: str | None = None,
     working_directory: str | Path | None = None,
+    harness_skill_enabled: bool = True,
 ) -> A2AServer:
     """Create an A2A server over a real HarnessSpec or supplied controller.
 
@@ -468,6 +499,7 @@ async def create_a2a_server(
             working_directory=working_directory,
             task_store_path=Path(task_store_path) if task_store_path is not None else None,
             bearer_token=bearer_token,
+            harness_skill_enabled=harness_skill_enabled,
         ),
     )
 
@@ -479,6 +511,8 @@ def _agent_card(
     # The bound HarnessSpec still controls execution policy and runtime behavior.
     if not controller.descriptors():
         raise ValueError("A2A serving requires at least one Harness Protocol adapter")
+    if not (config.harness_skill_enabled or config.shortlist_enabled):
+        raise ValueError("A2A serving requires at least one enabled skill")
     skill = sdk["AgentSkill"](
         id=config.skill_id,
         name=config.skill_name,
@@ -492,7 +526,7 @@ def _agent_card(
         input_modes=["text/plain"],
         output_modes=["text/plain"],
     )
-    skills = [skill]
+    skills = [skill] if config.harness_skill_enabled else []
     if config.shortlist_enabled:
         skills.append(
             sdk["AgentSkill"](

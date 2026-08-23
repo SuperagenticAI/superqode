@@ -181,6 +181,14 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
 @click.option("--token", envvar="SUPERQODE_A2A_TOKEN", help="Bearer token for A2A operations")
 @click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
 @click.option(
+    "--expose-harness",
+    is_flag=True,
+    help=(
+        "Serve the harness skill on a remote bind. Requires --spec, because the "
+        "bound spec decides what an accepted request may do."
+    ),
+)
+@click.option(
     "--export-agent-card",
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write the runtime Agent Card to a JSON file and exit",
@@ -197,6 +205,7 @@ def serve_a2a(
     task_store_path: Path,
     token: Optional[str],
     allow_remote: bool,
+    expose_harness: bool,
     export_agent_card: Optional[Path],
 ):
     """Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent."""
@@ -209,6 +218,32 @@ def serve_a2a(
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
     if not is_loopback and not token:
         raise click.ClickException("Remote A2A serving requires --token or SUPERQODE_A2A_TOKEN.")
+
+    # A remote endpoint shares one token among every caller, so the harness
+    # skill would hand all of them the same working directory with whatever
+    # the bound spec permits.  The default template allows shell and writes
+    # with sandbox "local", which is no isolation at all.  Remote binds
+    # therefore serve the shortlist skill only unless asked otherwise, and
+    # asking requires naming the spec so the policy is a deliberate choice.
+    harness_skill_enabled = True
+    if not is_loopback:
+        if expose_harness and spec_path is None:
+            raise click.ClickException(
+                "--expose-harness requires --spec. Serving the default coding "
+                "harness remotely would allow shell access and writes with no "
+                "sandbox isolation."
+            )
+        harness_skill_enabled = expose_harness
+        if not harness_skill_enabled:
+            console.print(
+                "[yellow]Remote bind: serving the harness shortlist skill only. "
+                "Pass --expose-harness with --spec to also run harnesses.[/yellow]"
+            )
+    elif expose_harness:
+        console.print(
+            "[yellow]--expose-harness only affects remote binds; loopback already "
+            "serves the harness skill.[/yellow]"
+        )
     advertised_url = public_url or f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}"
     if not is_loopback and not public_url:
         console.print(
@@ -226,6 +261,7 @@ def serve_a2a(
                 store_path=store_path,
                 task_store_path=task_store_path,
                 bearer_token=token,
+                harness_skill_enabled=harness_skill_enabled,
             )
         )
     except RuntimeError as exc:
