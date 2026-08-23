@@ -496,7 +496,10 @@ def test_exported_agent_card_matches_checked_in_publication(tmp_path: Path):
         [
             "a2a",
             "--public-url",
-            "https://super-agentic.ai/superqode/a2a",
+            # The operational endpoint, not the discovery origin.  These
+            # differ by design in A2A, and pointing the card at the static
+            # discovery host would advertise an interface that 404s.
+            "https://superqode.onrender.com",
             "--token",
             "preview-only-value",
             "--harness-store",

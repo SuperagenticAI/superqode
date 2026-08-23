@@ -37,7 +37,7 @@ A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regen
 | --- | --- |
 | Public Agent Card | **Published** at `https://super-agentic.ai/.well-known/agent-card.json` |
 | A2A operations | Follow the card’s `supportedInterfaces[0].url` (temporary public pilot; bearer required) |
-| Path `https://super-agentic.ai/superqode/a2a/*` | May remain **maintenance** until reverse-proxied to a SuperQode process |
+| Path `https://super-agentic.ai/superqode/a2a/*` | **Not an A2A endpoint.** The discovery origin is a static host; operations belong at the interface `url` in the card |
 | Local `superqode serve a2a` | Fully usable for development |
 
 Treat the public pilot as experimental: authentication is required for operations, the host may cold-start, and this is not a multi-tenant production SLA. Tokens and provider keys never belong in the Agent Card.

@@ -3,17 +3,17 @@
   "description": "Open-source harness engineering for coding agents",
   "supportedInterfaces": [
     {
-      "url": "https://super-agentic.ai/superqode/a2a",
+      "url": "https://superqode.onrender.com",
       "protocolBinding": "JSONRPC",
       "protocolVersion": "1.0"
     },
     {
-      "url": "https://super-agentic.ai/superqode/a2a",
+      "url": "https://superqode.onrender.com",
       "protocolBinding": "JSONRPC",
       "protocolVersion": "0.3"
     },
     {
-      "url": "https://super-agentic.ai/superqode/a2a",
+      "url": "https://superqode.onrender.com",
       "protocolBinding": "HTTP+JSON",
       "protocolVersion": "1.0"
     }
@@ -107,5 +107,5 @@
       "bearer": []
     }
   ],
-  "url": "https://super-agentic.ai/superqode/a2a"
+  "url": "https://superqode.onrender.com"
 }
