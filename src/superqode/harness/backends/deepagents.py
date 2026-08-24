@@ -178,6 +178,26 @@ def _create_agent_for_request(request: HarnessBackendRequest) -> tuple[Any, dict
     return agent, {"model_policy": model_policy.profile, "model": model}
 
 
+#: SuperQode provider ids that LangChain spells differently.
+#:
+#: ``init_chat_model`` infers the client from the prefix, so a name it does not
+#: recognise fails the run before a single token is spent.  Only the ids that
+#: actually differ are listed; everything else passes through unchanged.
+_LANGCHAIN_PROVIDER_NAMES = {
+    "google": "google_genai",
+    "gemini": "google_genai",
+    "vertex": "google_vertexai",
+    "vertexai": "google_vertexai",
+    "mistral": "mistralai",
+    "huggingface": "huggingface",
+}
+
+
+def _langchain_provider(provider: str) -> str:
+    """Return the provider name LangChain expects for a SuperQode provider id."""
+    return _LANGCHAIN_PROVIDER_NAMES.get(provider, provider)
+
+
 def _model_spec(provider: str, model: str) -> str:
     """Build the ``provider:model`` string LangChain's ``init_chat_model`` wants.
 
@@ -194,8 +214,9 @@ def _model_spec(provider: str, model: str) -> str:
     model = normalize_model_for_provider(provider, model)
     if not provider:
         return model
-    if provider == HUGGINGFACE_PROVIDER or not model.startswith(f"{provider}:"):
-        return f"{provider}:{model}"
+    prefix = _langchain_provider(provider)
+    if prefix == HUGGINGFACE_PROVIDER or not model.startswith(f"{prefix}:"):
+        return f"{prefix}:{model}"
     return model
 
 

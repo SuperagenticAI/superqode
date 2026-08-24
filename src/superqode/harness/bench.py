@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import statistics
 import sys
@@ -39,9 +40,32 @@ class HarnessBenchManifest:
     repetitions: int = 1
     live: bool = False
     schema_version: int = HARNESS_BENCH_SCHEMA_VERSION
+    #: Directory the manifest was loaded from. Paths are resolved against it
+    #: for running and expressed relative to it for recording. Not part of the
+    #: recorded contract, so it never reaches the fingerprint.
+    manifest_dir: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {**asdict(self), "specs": list(self.specs)}
+        """Serialize the contract with paths relative to the manifest.
+
+        Absolute paths are what the runtime needs and the wrong thing to
+        record: they pin a scorecard to one machine's directory layout, which
+        makes a published result carry the operator's home directory and an
+        identical benchmark run elsewhere produce a different fingerprint.
+        Relative paths keep the record portable and the fingerprint about the
+        benchmark rather than about where it happened to run.
+        """
+        payload = asdict(self)
+        root = payload.pop("manifest_dir", "") or "."
+        payload["tasks"] = _relativize(self.tasks, root)
+        payload["specs"] = [_relativize(path, root) for path in self.specs]
+        payload["working_dir"] = _relativize(self.working_dir, root)
+        return payload
+
+    def relative_specs(self) -> tuple[str, ...]:
+        """Spec paths as recorded, for keying source digests."""
+        root = self.manifest_dir or "."
+        return tuple(_relativize(path, root) for path in self.specs)
 
 
 def load_harness_bench_manifest(path: str | Path) -> HarnessBenchManifest:
@@ -85,6 +109,7 @@ def load_harness_bench_manifest(path: str | Path) -> HarnessBenchManifest:
         split=split,
         repetitions=repetitions,
         live=bool(payload.get("live", False)),
+        manifest_dir=str(root),
     )
 
 
@@ -104,7 +129,10 @@ async def run_harness_bench(
     effective_live = manifest.live if live is None else live
     source_digests = {
         "tasks": _sha256_file(Path(manifest.tasks)),
-        "specs": {path: _sha256_file(Path(path)) for path in manifest.specs},
+        "specs": {
+            recorded: _sha256_file(Path(actual))
+            for recorded, actual in zip(manifest.relative_specs(), manifest.specs)
+        },
     }
     normalized_manifest = {**manifest.to_dict(), "live": effective_live}
     fingerprint = _sha256_json({"manifest": normalized_manifest, "sources": source_digests})
@@ -122,6 +150,7 @@ async def run_harness_bench(
             live=effective_live,
             eval_split=manifest.split,
         )
+        result = _relativize_record(result, manifest.manifest_dir or ".")
         envelope = {
             "schema_version": HARNESS_BENCH_SCHEMA_VERSION,
             "bench_id": manifest.bench_id,
@@ -378,6 +407,40 @@ def _is_pareto(candidate: dict[str, Any], variants: list[dict[str, Any]]) -> boo
         if no_worse and strictly_better:
             return False
     return True
+
+
+#: Keys in a run record that hold a filesystem path to a benchmark input.
+#: Recorded relative to the manifest so a scorecard describes the benchmark
+#: rather than the machine that ran it.
+_PATH_KEYS = frozenset({"spec", "tasks_file", "tasks", "working_dir"})
+
+
+def _relativize_record(value: Any, root: str) -> Any:
+    """Rewrite recorded input paths relative to the manifest directory."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                _relativize(item, root)
+                if key in _PATH_KEYS and isinstance(item, str) and item.startswith("/")
+                else _relativize_record(item, root)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_relativize_record(item, root) for item in value]
+    return value
+
+
+def _relativize(path: str, root: str) -> str:
+    """Express path relative to root using forward slashes.
+
+    Falls back to the original when no relative path exists, which happens on
+    Windows across drive letters.
+    """
+    try:
+        return Path(os.path.relpath(path, root)).as_posix()
+    except ValueError:
+        return path
 
 
 def _resolve_existing(root: Path, value: Any, label: str) -> str:

@@ -211,3 +211,8 @@ reference/
 
 # Antigravity CLI workspace metadata
 /.antigravitycli/
+# Benchmark output records absolute paths from the machine that ran it,
+# so results stay local. The tasks, specs and manifest beside them are
+# enough to reproduce any run.
+examples/bench/runs/
+examples/bench/results/

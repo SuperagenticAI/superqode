@@ -1,0 +1,108 @@
+metadata:
+  id: dspy-comprehension
+  name: Repository comprehension on dspy
+  description: >-
+    Eight read-only questions about the stanfordnlp/dspy source tree. Each has a
+    single verifiable answer that exists only in the code, so a harness has to
+    navigate a 279-file repository to find it rather than recall it.
+  best_for: comparing how harnesses search and read an unfamiliar codebase
+
+# Every task is read-only by design. HarnessBench runs each spec against one
+# shared working directory with no reset between them, so a task that wrote to
+# the repository would leave the next harness reading the previous harness's
+# edits. Comprehension questions remove that failure mode entirely, and they
+# match how scoring actually works: expect_contains over the response text,
+# not test execution.
+#
+# Answers were verified against commit 4ed377ee9 before this file was written.
+# The expected strings are identifiers and paths rather than formatted numbers,
+# because "10_000", "10000" and "10,000" are all reasonable renderings of the
+# same fact and none of them should decide a score.
+
+tasks:
+  - id: interpreter-runtime
+    prompt: |
+      The sandboxed Python interpreter in this repository shells out to an
+      external runtime rather than executing in-process.
+
+      Name that runtime, name the helper function that locates its executable,
+      and give the path of the file both live in.
+    expect_contains:
+      - "Deno"
+      - "_find_deno_executable"
+      - "python_interpreter.py"
+    tags: [architecture, search]
+
+  - id: exception-hierarchy
+    prompt: |
+      LMRateLimitError is defined in this repository.
+
+      Give its full inheritance chain up to the base Exception, naming every
+      class in between.
+    expect_contains:
+      - "LMProviderError"
+      - "LMError"
+      - "DSPyError"
+    tags: [hierarchy, multi-hop]
+
+  - id: streaming-adapters
+    prompt: |
+      Only some adapters in this repository support streaming.
+
+      Name every adapter class listed in ADAPTER_SUPPORT_STREAMING.
+    expect_contains:
+      - "ChatAdapter"
+      - "XMLAdapter"
+      - "JSONAdapter"
+    tags: [cross-file, enumeration]
+
+  - id: default-adapter
+    prompt: |
+      When dspy.settings.adapter has not been configured, Predict falls back to
+      a default adapter.
+
+      Name that adapter class and the file where the fallback is written.
+    expect_contains:
+      - "ChatAdapter"
+      - "predict.py"
+    tags: [control-flow, default]
+
+  - id: custom-type-marker
+    prompt: |
+      Find the constant CUSTOM_TYPE_START_IDENTIFIER.
+
+      Quote its exact string value.
+    expect_contains:
+      - "<<CUSTOM-TYPE-START-IDENTIFIER>>"
+    tags: [constant, exact-string]
+
+  - id: flex-bridge-markers
+    prompt: |
+      The flex bridge module defines marker names for the tools it exposes.
+
+      Quote the exact string values of CONSTRUCT_TOOL and CALL_TOOL.
+    expect_contains:
+      - "__dspy_construct__"
+      - "__dspy_call__"
+    tags: [constant, exact-string]
+
+  - id: large-var-threshold-reason
+    prompt: |
+      LARGE_VAR_THRESHOLD is set to 100MB rather than a larger value.
+
+      Explain why, naming the component that fails and the mechanism that
+      breaks.
+    expect_contains:
+      - "Pyodide"
+      - "FFI"
+    tags: [rationale, comment-reading]
+
+  - id: global-history-cap
+    prompt: |
+      MAX_HISTORY_SIZE bounds a module-level list in this repository.
+
+      Name that list and give the path of the file both are defined in.
+    expect_contains:
+      - "GLOBAL_HISTORY"
+      - "base_lm.py"
+    tags: [multi-hop, constant]

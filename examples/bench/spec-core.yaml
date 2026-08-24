@@ -1,0 +1,46 @@
+version: 1
+name: bench-core
+description: SuperQode core harness, read-only, for repository comprehension.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: gemini-3.5-flash-lite
+  profile: bench-comprehension
+  temperature: 0
+  config:
+    provider: google
+    max_iterations: 14
+execution_policy:
+  sandbox: local
+  approval_profile: yolo
+  allow_read: true
+  allow_write: false
+  allow_shell: true
+  allow_network: false
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: reader
+    role: analysis
+    system_prompt: |
+      Answer questions about the repository in the working directory by reading
+      its source. Search before you answer, and quote the exact identifiers,
+      values, and file paths you find. Never guess from prior knowledge of the
+      project; if you have not seen it in a file, say so.
+    tools:
+      - read_file
+      - list_directory
+      - grep
+      - glob
+    skills:
+      - repo-navigation
+    max_iterations: 14
+workflow:
+  mode: single
+observability:
+  events: true
+  run_store: file
+metadata:
+  bench: dspy-comprehension

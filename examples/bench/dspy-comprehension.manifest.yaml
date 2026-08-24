@@ -1,0 +1,25 @@
+schema_version: 1
+bench_id: dspy-comprehension-flash-lite-x3
+
+# Three harnesses, one model, one task set, one repository. Holding the model
+# constant is what makes this a comparison of harnesses rather than of models:
+# each spec is launched with the provider and model named below, overriding
+# whatever it would otherwise default to.
+tasks: dspy-comprehension.yaml
+specs:
+  - spec-core.yaml
+  - spec-deepagents.yaml
+  - spec-prime-agent.yaml
+
+provider: google
+model: gemini-3.5-flash-lite
+
+# Point this at a DISPOSABLE copy of the repository under test, relative to
+# this manifest. Never run a benchmark inside a working clone: a harness owns
+# its own tool loop, so it can write despite the read-only policy in the specs.
+#   git clone https://github.com/stanfordnlp/dspy ../../../bench/dspy-copy
+working_dir: ../../../bench/dspy-copy
+sandbox: local
+split: all
+repetitions: 3
+live: true
