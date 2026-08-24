@@ -171,7 +171,7 @@ The credential a caller presents determines what the server will do for them.
 | Caller | Credential | Receives |
 | --- | --- | --- |
 | Anonymous | none | The shortlist skill, answered from the Hub without a model call |
-| Customer | `sqk_live_...` key | The tier recorded in the key |
+| Keyed | `sqk_live_...` key | The tier recorded in the key |
 | Operator | the `--token` value | Everything the deployment serves |
 
 Discovery and health are never gated. Host platforms fetch the Agent Card
@@ -243,7 +243,7 @@ covers the forged case.
 
 `GET /health` reports the current counters.
 
-### Customer keys
+### API keys
 
 Keys are signed rather than stored. Verifying one is a signature check and a
 clock comparison, with no lookup, which matters on a host whose filesystem
@@ -251,24 +251,24 @@ does not survive a deploy.
 
 ```bash
 superqode a2a-keys secret                  # once, then set SUPERQODE_A2A_KEY_SECRET
-superqode a2a-keys issue "Acme Corp" --tier one-off --days 30
+superqode a2a-keys issue "Platform Team" --tier standard --days 30
 superqode a2a-keys verify sqk_live_...
 superqode a2a-keys status
 ```
 
 `SUPERQODE_A2A_KEY_SECRET` is one value held by the server. It signs every key
-the deployment issues, and changing it invalidates all of them. Keys minted
+that server issues, and changing it invalidates all of them. Keys minted
 with a different secret fail signature verification, which is the usual cause
 of a key that looks correct but is rejected.
 
-A key carries its customer, tier and expiry, and cannot be displayed again
+A key carries a label, tier and expiry, and cannot be displayed again
 after issue. To revoke one before it expires, add its key id to
 `SUPERQODE_A2A_REVOKED_KEYS` on the server.
 
 The tier is recorded on the key and surfaced to the executor through
 `caller_tier()`, but the server does not currently branch on its value. Any
 key that verifies receives the keyed rate limit and the model-backed
-shortlist, whether its tier reads `trial`, `one-off` or anything else. Treat
+shortlist, whatever its tier says. Treat
 the field as an attribution label that a deployment can build on, and do not
 rely on it to gate behaviour until something reads it. Only two values change
 what the server does: `anonymous`, applied when no credential is presented,

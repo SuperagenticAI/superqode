@@ -1,13 +1,13 @@
 # A2A Keys Commands
 
-Issue, inspect, and revoke API keys for a hosted SuperQode A2A agent.
+Issue, inspect, and revoke API keys for an A2A agent you host.
 
 ---
 
 ## Overview
 
-The `superqode a2a-keys` command group manages the credentials a hosted A2A
-agent accepts. A key is signed rather than stored, so verifying one is a
+The `superqode a2a-keys` command group manages the credentials your A2A
+server accepts from callers. A key is signed rather than stored, so verifying one is a
 signature check and a clock comparison with no lookup. That matters on a host
 whose filesystem does not survive a deploy.
 
@@ -23,9 +23,9 @@ that looks correct but is rejected.
 | Value | Where it lives | How many |
 | --- | --- | --- |
 | `SUPERQODE_A2A_KEY_SECRET` | On the server, never shared | One, permanent |
-| `sqk_live_...` key | Given to a customer | One per customer |
+| `sqk_live_...` key | Handed to a caller | One per caller |
 
-The secret signs every key the deployment issues. Changing it invalidates all
+The secret signs every key your server issues. Changing it invalidates all
 of them, and a key minted with a different secret fails signature verification.
 
 ---
@@ -45,15 +45,15 @@ there.
 
 ### `superqode a2a-keys issue`
 
-Mint a key for a customer.
+Mint a key for one caller.
 
 ```bash
-superqode a2a-keys issue "Acme Corp" --tier one-off --days 30
+superqode a2a-keys issue "Platform Team" --tier standard --days 30
 ```
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--tier` | `trial` | Tier recorded in the key |
+| `--tier` | `trial` | Free-form label recorded in the key |
 | `--days` | `30` | How long the key stays valid |
 | `--test-key` | off | Mint a `sqk_test_` key instead of `sqk_live_` |
 | `--secret` | `$SUPERQODE_A2A_KEY_SECRET` | Signing secret |
@@ -72,7 +72,7 @@ Check whether a key would be accepted right now.
 superqode a2a-keys verify sqk_live_...
 ```
 
-Reports the customer, tier, key id, and remaining validity, or the reason the
+Reports the label, tier, key id, and remaining validity, or the reason the
 key was rejected.
 
 ### `superqode a2a-keys status`
@@ -94,7 +94,7 @@ Add its key id to `SUPERQODE_A2A_REVOKED_KEYS` on the server, comma separated.
 No code change or redeploy of the application is required.
 
 ```bash
-SUPERQODE_A2A_REVOKED_KEYS=4f649b6aa4a0,7c0c437264e1
+SUPERQODE_A2A_REVOKED_KEYS=<key-id>,<another-key-id>
 ```
 
 ---
