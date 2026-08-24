@@ -287,6 +287,7 @@ nav:
       - 📦 Models: cli-reference/models-commands.md
       - 🤖 Agents: cli-reference/agents-commands.md
       - 🔗 Connect: cli-reference/connect-commands.md
+      - 🔁 A2A Keys: cli-reference/a2a-keys-commands.md
       - 🔐 Auth: cli-reference/auth-commands.md
       - 🛡️ Trust: cli-reference/trust-commands.md
       - ⏱️ Sessions: cli-reference/sessions-commands.md

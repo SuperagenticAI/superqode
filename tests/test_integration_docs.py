@@ -134,6 +134,7 @@ def test_integrations_is_a_top_level_tab_without_expanding_desktop_navigation():
         "🚀 Quick Start",
         "🔌 Connect",
         "⚓ Build Harness",
+        "🔁 A2A",
         "📈 Evaluate & Optimise",
         "🛠️ Operate",
         "🔗 Integrations",
@@ -144,7 +145,7 @@ def test_integrations_is_a_top_level_tab_without_expanding_desktop_navigation():
     assert {
         "📘 Complete Getting Started Guide": "getting-started/complete-guide.md"
     } in quick_start_navigation
-    integration_navigation = navigation[5]["🔗 Integrations"]
+    integration_navigation = navigation[6]["🔗 Integrations"]
     assert integration_navigation == [
         {"🧭 Integration Overview": "integrations/index.md"},
         {"📋 All Integrations": "integrations/all.md"},

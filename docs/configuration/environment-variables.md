@@ -48,7 +48,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_UHP_API_KEY` | bearer token | unset | Credential for that UHP server. A key set here is never copied into the saved connection file. |
 | `SUPERQODE_UHP_HARNESS` | harness id | unset | Harness on the UHP server to select. |
 | `SUPERQODE_UHP_MAX_OUTPUT_TOKENS` | int | unset | Cap the token budget for one UHP task. Useful where a provider checks affordability against the reserved budget rather than usage. |
-| `SUPERQODE_A2A_TOKEN` | bearer token | unset | Protect non-discovery operations served by `superqode serve a2a`; required for non-loopback binding. |
+| `SUPERQODE_A2A_TOKEN` | bearer token | unset | Operator token for `superqode serve a2a`. Enforced only when the command passes `--token`. |
+| `SUPERQODE_A2A_KEY_SECRET` | secret | unset | Signs and verifies customer API keys. Without it the server rejects every key. Generate with `superqode a2a-keys secret`. |
+| `SUPERQODE_A2A_REVOKED_KEYS` | comma-separated ids | unset | Key ids refused before their expiry. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |
 | `SUPERQODE_PIPY_SESSION_DIR` | path | `<pipy dir>/sessions` | Where PiPy stores its session tree, one directory per working directory. |

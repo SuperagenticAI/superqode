@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 268
+EXPECTED_COMMAND_COUNT = 273
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -75,7 +75,12 @@ EXPECTED_COMMAND_COUNT = 268
 # list. No Click command was added, so the count is unchanged.
 # Rebaselined for `connect uhp --max-output-tokens`, one new option on an
 # existing command, so the count is again unchanged.
-EXPECTED_HELP_TREE_SHA256 = "62862d9771aa4089fbebd67339595830930bf86b636ab2b82bf02936147ff1c9"
+# Rebaselined for the `a2a-keys` group and its `secret`, `issue`, `verify`, and
+# `status` subcommands, which issue and revoke API keys for a hosted A2A agent
+# (268 -> 273: five commands added). The same work added
+# `serve a2a --no-task-store`, one new option that keeps A2A task records in
+# memory where the filesystem does not survive a deploy.
+EXPECTED_HELP_TREE_SHA256 = "21282a0df6ad5537d19edc9ea2dc93ce643be006c8da92ae962afcfcdf0486e7"
 
 
 def _render_help_tree() -> tuple[int, str]:

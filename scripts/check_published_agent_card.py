@@ -42,12 +42,17 @@ def fetch(url: str) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def icon_problem(card: dict[str, Any]) -> str | None:
-    """Return a message when the card's iconUrl does not resolve.
+def icon_problem(card: dict[str, Any]) -> tuple[str, bool] | None:
+    """Return a message about the card's iconUrl, and whether it is conclusive.
 
     Host platforms render this in their agent gallery, so a dead URL shows as
-    a broken image rather than as no image at all. The field is optional, and
-    omitting it is better than pointing it at nothing.
+    a broken image rather than as no image at all.
+
+    A 404 or a non-image response is a real defect and fails the build. Being
+    unable to reach the host at all is not: a DNS blip or a timeout says
+    nothing about the card, and failing on it would make the build depend on
+    network weather, which is exactly why the card fetch below tolerates the
+    same condition.
     """
     url = card.get("iconUrl")
     if not url:
@@ -57,9 +62,14 @@ def icon_problem(card: dict[str, Any]) -> str | None:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             content_type = response.headers.get("Content-Type", "")
             if not content_type.startswith("image/"):
-                return f"iconUrl {url} served {content_type or 'no content type'}, not an image"
+                return (
+                    f"iconUrl {url} served {content_type or 'no content type'}, not an image",
+                    True,
+                )
+    except urllib.error.HTTPError as error:
+        return f"iconUrl {url} returned HTTP {error.code}", True
     except (urllib.error.URLError, TimeoutError) as error:
-        return f"iconUrl {url} is not reachable: {error}"
+        return f"Could not reach iconUrl {url}: {error}", False
     return None
 
 
@@ -103,10 +113,12 @@ def main() -> int:
 
     icon = icon_problem(local)
     if icon is not None:
-        print(icon)
-        print("Point iconUrl at an image that exists, or remove the field.")
-        if not args.warn_only:
-            return 1
+        message, conclusive = icon
+        print(message)
+        if conclusive:
+            print("Point iconUrl at an image that exists, or remove the field.")
+            if not args.warn_only:
+                return 1
 
     try:
         published = fetch(args.url)

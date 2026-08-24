@@ -232,7 +232,7 @@ show status, or display its local help where supported.
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a` |
 | Local systems and memory | `:local`, `:memory` |
-| Configuration and services | `:init`, `:config`, `:serve`, `:daemon`, `:export`, `:theme` |
+| Configuration and services | `:init`, `:config`, `:a2a-keys`, `:serve`, `:daemon`, `:export`, `:theme` |
 | Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |
 
 `:sodebar` is retained as a compatibility alias for `:sidebar`. New

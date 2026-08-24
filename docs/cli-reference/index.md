@@ -27,6 +27,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | Group | Reference |
 | --- | --- |
 | `agents` | [Agent Commands](agents-commands.md) |
+| `a2a-keys` | [A2A Keys Commands](a2a-keys-commands.md) |
 | `auth` | [Auth Commands](auth-commands.md) |
 | `benchmark` | [Benchmark Commands](benchmark-commands.md) |
 | `config` | [Config Commands](config-commands.md) |
@@ -599,6 +600,7 @@ For detailed documentation of each command group:
 - [Config Commands](config-commands.md) - Configuration management
 - [Provider Commands](provider-commands.md) - Provider management
 - [Agents Commands](agents-commands.md) - ACP agent management
+- [A2A Keys Commands](a2a-keys-commands.md) - API keys for a hosted A2A agent
 - [Auth Commands](auth-commands.md) - Authentication and security
 - [Init Commands](init-commands.md) - Project initialization
 - [Connect Commands](connect-commands.md) - Connection profiles and direct connect
