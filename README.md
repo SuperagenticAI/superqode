@@ -221,6 +221,35 @@ sq work merge work_... --actor maintainer --cleanup
 
 Read the [Code Factory guide](https://superagenticai.github.io/superqode/advanced/software-factory/).
 
+## Serve a Harness Over A2A
+
+Everything above describes SuperQode as something you run. It also runs as an
+[Agent2Agent](https://a2a-protocol.org/) agent that other systems call, which is
+how a harness reaches an orchestrator, a multiplayer agent computer, or a host
+platform such as Gemini Enterprise or Microsoft Foundry.
+
+```bash
+superqode serve a2a --spec harness.yaml
+```
+
+Discovery is a published Agent Card. One card advertises JSON-RPC and HTTP+JSON
+across A2A 1.0 and 0.3, so a single document satisfies every registration path.
+
+A remote bind is deliberate about what it exposes. It serves the
+`harness-shortlist` skill, which answers questions about which coding agents and
+harnesses to consider from the curated Harness Hub without touching a
+repository. Running harnesses remotely requires opting in with `--expose-harness`
+and naming the spec, because the spec decides what an accepted request may do.
+
+Callers are identified by signed API keys that carry a customer, tier and
+expiry, and are verified without a database:
+
+```bash
+superqode a2a-keys issue "Acme Corp" --tier one-off --days 30
+```
+
+Read the [A2A guide](docs/providers/a2a.md).
+
 ## Harness Execution Model
 
 ```text
@@ -259,6 +288,7 @@ superqode harness graph <run-id> --json
 | [Quick Start](https://superagenticai.github.io/superqode/getting-started/quickstart/) | Install, connect, and run your first task |
 | [Harness Hub](https://superagenticai.github.io/superqode/harness-hub/) | Browsing, filtering, and the published catalog |
 | [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, and A2A routes |
+| [A2A Agents](docs/providers/a2a.md) | Serving a harness over A2A, skills, API keys, and the Agent Card |
 | [Developer Workflows](docs/developer-workflows.md) | The complete TUI and CLI command set |
 | [Harness System](docs/advanced/harness-system.md) | HarnessSpec fields, runtimes, and policy |
 | [Harness Protocol](docs/advanced/harness-protocol.md) | The versioned session and evidence contract |

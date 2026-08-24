@@ -217,6 +217,8 @@ nav:
     - 🔀 SuperQode and Omnigent: advanced/superqode-vs-omnigent.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
+  - 🔁 A2A: providers/a2a.md
+
   - 📈 Evaluate & Optimise:
     - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
     - 📊 Optimization Story: advanced/optimization.md

@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.110] - 2026-08-24
+
+The release where the A2A surface became something you can hand to a customer.
+It gains a skill that answers without a repository, per-customer API keys,
+request limits, and a safety default that changes what a remote bind serves.
+
+### Added
+
+- A2A now serves JSON-RPC alongside HTTP+JSON, and answers A2A 0.3 as well as
+  1.0. The Agent Card advertises all three interfaces with JSON-RPC first,
+  because that is the default binding for A2A clients and the one host
+  platforms document. Gemini Enterprise, Microsoft Foundry and Bedrock
+  AgentCore all accept a 0.3 card, so a single published document now satisfies
+  every registration path.
+- A second skill, `harness-shortlist`, answers questions about which coding
+  agents and harnesses to consider. It reads the curated Harness Hub, so it
+  needs no repository, no sandbox and no model call for anonymous callers.
+  SuperQode entries are held back from the ranking and disclosed separately,
+  because published readiness is derived from integration level and would
+  otherwise promote our own harnesses on every request.
+- Per-customer API keys through `superqode a2a-keys`. A key is signed rather
+  than stored, so verifying one is a signature check and a clock comparison
+  with no lookup. Keys carry a customer, tier and expiry, and are revoked
+  before expiry by adding their key id to `SUPERQODE_A2A_REVOKED_KEYS`. Nothing
+  persists, which matters on a host whose filesystem does not survive a deploy.
+- Request limits, held in memory, covering a per-caller window and a daily
+  ceiling across every caller. A caller over its window receives `429` with
+  `Retry-After`. Discovery and health are exempt, so a host platform polling
+  the Agent Card cannot be throttled into a failed registration.
+- Requests from keyed callers are read by a model before ranking, which turns
+  a sentence such as "we can only use models we host ourselves" into
+  constraints that substring matching cannot recover. The model is never sent
+  the catalogue and never asked to name a harness, so it cannot introduce a
+  claim the Hub does not record. A failed call falls back to the keyword
+  parser, and the reply metadata carries `superqode_understood`.
+- `scripts/check_published_agent_card.py`, run in CI, compares the published
+  Agent Card against the checked-in artifact field by field and confirms that
+  `iconUrl` resolves to an image. The discovery origin is a static host
+  deployed separately from the A2A server, and nothing previously stopped the
+  two from disagreeing.
+
+### Changed
+
+- **A remote bind now serves the shortlist skill only.** The harness skill is
+  omitted from the Agent Card, and a request that names it is refused. A
+  bearer token is shared by everyone holding it, so serving the harness
+  remotely gave every holder the same working directory under whatever the
+  bound spec permitted, and the default coding template permits shell access
+  and writes with `sandbox: local`. To restore the previous behaviour, pass
+  `--expose-harness` with both `--spec` and a token. Anyone running
+  `serve a2a --allow-remote` today will see the harness skill disappear from
+  their card after upgrading.
+- A remote bind no longer requires a token when it serves the shortlist alone.
+  Authentication is now required in proportion to what a deployment exposes,
+  which is also what makes the agent registrable on platforms whose
+  registration offers OAuth or nothing and has no field for a bearer token.
+- The Agent Card version is a stable value in `superqode.a2a.server` and no
+  longer follows the package version. A2A defines that field as the version of
+  the agent, and deriving it from the package tied republication of the card to
+  the release cadence. The running build is reported at `GET /health` as
+  `superqode_version`.
+- The exported Agent Card is serialised the way the server serves it. The
+  previous protobuf conversion silently dropped the 0.3 discovery fields, so a
+  published card promised less than the running server answered.
+- HarnessBench records paths relative to its manifest. Absolute paths pinned a
+  scorecard to one machine's directory layout, so a published result carried
+  the operator's home directory and the same benchmark run from a different
+  checkout produced a different fingerprint.
+
+### Fixed
+
+- The DeepAgents backend failed on every Google model with "Unable to infer
+  model provider". LangChain names that provider `google_genai`, and SuperQode
+  was passing its own provider id through unchanged. Vertex and Mistral had the
+  same mismatch.
+
 ## [0.2.109] - 2026-08-22
 
 ### Added
