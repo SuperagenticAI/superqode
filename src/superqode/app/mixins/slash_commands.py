@@ -118,6 +118,8 @@ class SlashCommandMixin:
             self._run_cli_group("auth", args or "info", log, "Auth command")
         elif c == "serve":
             self._run_cli_group("serve", args or "status", log, "Serve command")
+        elif c == "a2a-keys":
+            self._run_cli_group("a2a-keys", args or "status", log, "A2A keys command")
         elif c == "daemon":
             self._run_cli_group("daemon", args, log, "Daemon command")
         elif c == "profiles":

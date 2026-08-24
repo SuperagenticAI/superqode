@@ -17,11 +17,13 @@ from superqode.main import cli_main
 
 
 def _metaharness_bin() -> str | None:
-    return shutil.which("metaharness") or (
-        "/Users/shashi/miniconda3/bin/metaharness"
-        if Path("/Users/shashi/miniconda3/bin/metaharness").exists()
-        else None
-    )
+    """Locate the metaharness CLI, or None when it is not installed.
+
+    PATH is the only source. A hardcoded fallback to one developer's install
+    made this test resolve differently for them than for CI and every other
+    contributor, which is the opposite of what a skip guard is for.
+    """
+    return shutil.which("metaharness")
 
 
 @pytest.fixture

@@ -6653,7 +6653,7 @@ def test_codex_config_error_hint_explains_unknown_variant():
     log = _Recorder()
     exc = Exception(
         "JSON-RPC error -32600: failed to load configuration: "
-        "/Users/shashi/.codex/config.toml:2:26: unknown variant `ultra`, "
+        "/home/dev/.codex/config.toml:2:26: unknown variant `ultra`, "
         "expected one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`"
     )
     SuperQodeApp._codex_config_error_hint(log, exc)

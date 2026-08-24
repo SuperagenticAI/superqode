@@ -178,6 +178,14 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
     show_default=True,
     help="SQLite store for A2A task lookup, listing, and restart recovery",
 )
+@click.option(
+    "--no-task-store",
+    is_flag=True,
+    help=(
+        "Keep A2A task records in memory. Suitable where responses are "
+        "immediate and the filesystem does not survive a deploy."
+    ),
+)
 @click.option("--token", envvar="SUPERQODE_A2A_TOKEN", help="Bearer token for A2A operations")
 @click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
 @click.option(
@@ -203,6 +211,7 @@ def serve_a2a(
     working_dir: Path,
     store_path: Path,
     task_store_path: Path,
+    no_task_store: bool,
     token: Optional[str],
     allow_remote: bool,
     expose_harness: bool,
@@ -270,7 +279,7 @@ def serve_a2a(
                 model=model_name,
                 working_directory=working_dir.resolve(),
                 store_path=store_path,
-                task_store_path=task_store_path,
+                task_store_path=None if no_task_store else task_store_path,
                 bearer_token=token,
                 key_secret=key_secret,
                 harness_skill_enabled=harness_skill_enabled,

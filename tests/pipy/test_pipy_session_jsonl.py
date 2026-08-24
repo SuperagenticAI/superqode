@@ -55,7 +55,7 @@ async def test_session_file_lives_in_a_cwd_encoded_directory(repo, tmp_path):
 
 
 def test_encode_cwd_matches_pi():
-    assert encode_cwd("/Users/shashi/oss/superqode") == "--Users-shashi-oss-superqode--"
+    assert encode_cwd("/home/dev/work/project") == "--home-dev-work-project--"
 
 
 async def test_entries_are_appended_one_line_each(repo, tmp_path):
