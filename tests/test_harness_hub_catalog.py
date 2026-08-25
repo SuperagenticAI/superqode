@@ -164,6 +164,29 @@ def test_jcode_states_a_buildable_route_unlike_a_desktop_only_harness(monkeypatc
     assert "does not document" in by_id["ecosystem:zcode"]["support_note"]
 
 
+def test_headlong_has_no_task_contract_unlike_jcode(monkeypatch):
+    """jcode publishes a task contract; Headlong publishes an observation."""
+    monkeypatch.setattr(
+        "superqode.harness.hub.harness_picker_items",
+        lambda *_args, **_kwargs: [_item()],
+    )
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+    headlong = by_id["ecosystem:headlong"]
+
+    assert headlong["readiness"] == "not-supported"
+    assert headlong["kind"] == "ecosystem"
+    assert headlong["openness"] == "open"
+    assert headlong["license"] == "Apache-2.0"
+    assert headlong["interface"] == "Named identity CLI"
+    assert "observation" in headlong["support_note"]
+    assert "task" in headlong["support_note"]
+    # The phrases jcode's entry actually uses for a buildable route. Headlong
+    # must not be described the same way a future edit could accidentally
+    # restore that analogy.
+    assert "route is buildable" not in headlong["support_note"]
+    assert "buildable once" not in headlong["support_note"]
+
+
 def test_letta_and_warp_are_open_ecosystem_clis(monkeypatch):
     monkeypatch.setattr(
         "superqode.harness.hub.harness_picker_items",

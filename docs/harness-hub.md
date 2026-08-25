@@ -203,6 +203,43 @@ and a versioned harness API, so a SuperQode route is buildable once someone
 implements and tests one. The Hub distinguishes "no published integration
 surface" from "a surface exists but no connector has been built yet".
 
+### Headlong
+
+[Headlong](https://headlong.ai) is indexed under **Ecosystem watch** as the
+Laude Institute's Apache-2.0 agent microharness, under 10K lines of Bash and
+built around `shellm`, a recursive-language-model (RLM) core that lets an
+agent write bash, run it, read the output, and keep thinking between messages
+instead of going idle after a task.
+
+It is not runnable from SuperQode today, and it is a weaker Hub case than
+jcode's rather than the same one. jcode publishes a headless `jcode run`, a
+TypeScript SDK, and a versioned harness API: a task contract. Headlong
+publishes `<agent> hello`, `ada chat`, `ada dash`, and a set of composable
+`bin/` executables (`shellm`, `traj`, `context`), but no ACP server, MCP
+server, SDK, or task-runner API. `<agent> hello` is a one-shot observation
+sent into a standing mind that may choose not to reply, not a task call with
+a result contract. It has a Unix surface to attach to instead: starting or
+stopping the identity, tailing its trajectory. That surface is why the entry
+reads stronger than ZCode's "nothing to connect to" case, even though there
+is still no run contract to speak of. Install with
+`curl -fsSL https://headlong.ai/install.sh | bash`; the installer interviews
+you for an agent name and personality, and that name becomes the CLI command.
+
+SuperQode already has three RLM routes it can run: Native RLM (first-party),
+RLM Code (an optional package), and Prime Agent (a connected product over
+RPC/ACP), compared in
+[RLM Routes Compared](advanced/rlm-routes.md#an-external-rlm-headlong-related-not-runnable).
+All three build on the same published Recursive Language Models research that
+Headlong cites as prior art. Headlong sits closest to Prime Agent in kind:
+both are live, self-modifying agents from the same research family (Alex
+Zhang is the RLM paper's author and a Prime Agent co-author), though the word
+"persistent" applies differently to each. Prime's daemon persists between
+prompts; Headlong's mind never idles between them. The property none of
+SuperQode's routes share with it is structural: it has no turn. Native RLM's
+resident root worker keeps a session alive after the TUI detaches, but that
+is still one completable turn. Headlong keeps generating thoughts whether or
+not anyone is attached to it.
+
 ## Results and Activity
 
 Important actions no longer depend on the bottom of the transcript. Harness

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.112] - 2026-08-25
+
+### Added
+
+- Headlong is indexed under Ecosystem watch. It is a weaker Hub case than
+  jcode's, not the same one: no ACP server, MCP server, SDK, or task-runner
+  API. `ada hello` is a one-shot observation sent into a standing mind that
+  may not reply, not a task call with a result contract, which is why it
+  reads stronger than ZCode's no-surface-at-all case but has no buildable
+  route the way jcode does.
+
 ## [0.2.111] - 2026-08-25
 
 ### Added

@@ -192,6 +192,9 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "ecosystem:letta": HubOpenness("open", "Apache-2.0", "https://github.com/letta-ai/letta-code"),
     "ecosystem:warp": HubOpenness("open", "AGPL-3.0", "https://github.com/warpdotdev/warp"),
     "ecosystem:qm": HubOpenness("open", "MIT", "https://github.com/yc-software/qm"),
+    "ecosystem:headlong": HubOpenness(
+        "open", "Apache-2.0", "https://github.com/laude-institute/headlong"
+    ),
     "ecosystem:better-harness": HubOpenness(
         "open", "MIT", "https://github.com/QoderAI/better-harness"
     ),
@@ -561,6 +564,54 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
             ),
         ),
     },
+    "ecosystem:headlong": {
+        "interface": "Named identity CLI",
+        "support_note": (
+            "Not runnable from SuperQode, and a different case from jcode's: Headlong has no "
+            "ACP server, MCP server, SDK, or task-runner API. `<agent> hello` is a one-shot "
+            "observation sent into a standing mind that may choose not to reply, not a task "
+            "call with a result contract. It has a Unix surface to attach to (start/stop the "
+            "identity, tail its trajectory) but no run contract to speak of yet. See "
+            "RLM Routes Compared for how its persistent inner-monologue loop differs from "
+            "SuperQode's own RLM routes."
+        ),
+        "docs_url": "https://github.com/laude-institute/headlong#readme",
+        "repository": "https://github.com/laude-institute/headlong",
+        "install_command": "curl -fsSL https://headlong.ai/install.sh | bash",
+        "tools": (
+            "thinkers (idle-loop dispatcher)",
+            "shellm (Bash RLM core)",
+            "traj (jsonl DAG, fork/merge)",
+            "context (tiered-rollup projection)",
+            "mem / skills",
+            "recap (logarithmic memory pyramid)",
+        ),
+        "policies": (
+            "Headlong owns its agent loop, trajectory, and identity store",
+            "Model provider keys (Anthropic, OpenAI, Gemini, OpenRouter) stay in Headlong's own config",
+            "No commands are executed by SuperQode until a connector is built and tested",
+        ),
+        "capabilities": (
+            "Persistent inner-monologue loop, never idle",
+            "Bash-native RLM core, no tool schema",
+            "One shared trajectory across a whole team",
+            "Self-modifies by forking Headlong, testing changes, then merging them",
+            "Docker-sandboxed generated code by default",
+        ),
+        "based_on": "Headlong (Bash, Apache-2.0)",
+        "popularity_rank": 76,
+        "setup_steps": (
+            HubSetupStep(
+                "Install Headlong independently",
+                command="curl -fsSL https://headlong.ai/install.sh | bash",
+                description="Interviews you for an agent name and personality, then installs it as a command.",
+            ),
+            HubSetupStep(
+                "Configure a model provider",
+                description="Headlong's `llm` CLI takes an Anthropic, OpenAI, Gemini, or OpenRouter key.",
+            ),
+        ),
+    },
 }
 
 
@@ -867,6 +918,13 @@ def _supplemental_records() -> list[HubRecord]:
             "Z.AI's official desktop coding harness for GLM-5.3, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
             "https://zcode.z.ai/en",
             ("Z Code", "Z.AI ZCode", "official GLM-5.3 harness"),
+        ),
+        (
+            "ecosystem:headlong",
+            "Headlong",
+            "Laude Institute's Apache-2.0 agent microharness (<10K lines of Bash) built around shellm, a recursive-language-model (RLM) core, for persistent agents that keep thinking between messages.",
+            "https://headlong.ai",
+            ("headlong", "shellm", "laude institute", "recursive language model", "persistent agent"),
         ),
         (
             "ecosystem:qm",

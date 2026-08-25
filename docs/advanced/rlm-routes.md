@@ -215,3 +215,31 @@ offline.
 RLM Code remains the research instrument. Prime Agent and Native RLM are two
 product architectures with similar one-tool programming models and different
 host/runtime trade-offs.
+
+## An external RLM: Headlong (related, not runnable)
+
+[Headlong](https://headlong.ai) is a fourth project on the same research
+line, from the Laude Institute. It is listed in the Hub under
+[Ecosystem watch](../harness-hub.md#headlong), not in the table above: it has
+no ACP server, MCP server, SDK, or task-runner API, so there is no route
+SuperQode can select or run. It belongs here only because the mechanism is
+worth naming precisely against the three routes above, the same way this page
+names the others.
+
+| | Headlong | Native RLM | RLM Code | Prime Agent |
+| --- | --- | --- | --- | --- |
+| Engine | Bash (`shellm`) | Python and PiPy, first-party | Python, separate package | TypeScript host with an IPython kernel |
+| What recurses | The whole standing agent, via nested `shellm` runs | `llm_query()` for semantic calls; `rlm.run()` for full child sessions | `llm_query()`/`delegate` under a depth and branch budget | `await rlm.run()` spawning live sub-agent sessions |
+| A human message | An observation in one thought stream; the agent may not reply | Starts or continues a turn against a resident root | Starts a bounded, scored run | Starts or continues a session |
+| State | Single append-only trajectory (`traj`), shared across a team | Session tree per workspace, resident-worker owned | One experiment's trajectory | Session JSONL per agent |
+| Memory | Whole-life logarithmic pyramid (`recap`) plus `mem`/`skills` files, projected fresh each turn (`context`) | Repository exposed as `context` data, plus PiPy compaction for conversation | Context held out of the window as a REPL variable; profile-controlled | Continual harness CRUD over prompts, memory, skills, subagents |
+| Self-modification | Fork the Headlong repo (and optionally its own trajectory), test, merge | None inside a run; harness `optimize`/`promote` is an outer loop | None inside a run; optimizers and benchmarks are an outer loop | In-session CRUD over its own prompts and skills |
+| Sandbox | Docker for generated code by default | `host`, `docker`, or `monty` profile | `monty`, `docker`, `apple_container`, `command`, or `local` via policy | None by default; optional extension |
+| Loop | Never idle; a `thinkers` dispatcher keeps generating thoughts with backoff when no one is talking | Turn-based; the resident root just survives a detached TUI | One bounded run, then done | Session-based; daemon persists between prompts |
+
+The distinction that matters is not which engine is closer to the original
+RLM definition: Headlong, Native RLM, RLM Code, and Prime Agent all satisfy
+the same recursive-call test. It is that Headlong has no session boundary at
+all. The other three start a turn, a run, or a session when a human or a
+caller asks for one. Headlong's mind is already running, and a message is
+one more thing it observes.
