@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.111] - 2026-08-25
+
+### Added
+
+- `superqode serve a2a --no-task-store` keeps A2A task records in memory. The
+  SQLite task store exists so a client can reconnect and collect the result of
+  a long task, which is worth nothing where responses are immediate and the
+  filesystem does not survive a deploy. Writing it there also made the
+  durability the documentation promised untrue on such a host.
+- `docs/cli-reference/a2a-keys-commands.md` documents the `a2a-keys` group. It
+  leads with the distinction between the single server-side signing secret and
+  the many keys minted from it, because a key signed with a different secret
+  fails verification and looks identical to a correct one.
+- `SUPERQODE_A2A_KEY_SECRET` and `SUPERQODE_A2A_REVOKED_KEYS` are in the
+  environment variable reference.
+
+### Changed
+
+- A2A has its own entry in the documentation navigation. It previously sat
+  three levels down as the last item under Protocol Connections, below the
+  agent and model catalogues, and is still listed there so the protocol
+  inventory stays complete.
+- The `SUPERQODE_A2A_TOKEN` reference no longer claims the token is required
+  for non-loopback binding. That stopped being true when remote binds began
+  serving the shortlist skill anonymously.
+
+### Fixed
+
+- `a2a-keys` is reachable from the terminal interface as `:a2a-keys`. The group
+  shipped in 0.2.110 with a CLI entry point and no TUI counterpart, so typing
+  it returned an unknown command.
+- `scripts/check_published_agent_card.py` no longer fails a build when the
+  icon host cannot be reached. A 404 or a non-image response is still a defect
+  and still fails; a DNS failure or timeout says nothing about the card, and
+  the card fetch beside it already tolerated the same condition.
+- Developer machine paths no longer appear in tests or repository assets. One
+  of them was a hardcoded fallback to a local install, which made a skip guard
+  resolve differently on that machine than in CI.
+
 ## [0.2.110] - 2026-08-24
 
 The release where the A2A surface became something you can hand to a customer.
