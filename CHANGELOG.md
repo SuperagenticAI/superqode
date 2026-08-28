@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.113] - 2026-08-29
+
 ### Added
 
 - `superqode connect a2a` fetches an Agent Card, reports the binding it will
