@@ -7191,3 +7191,90 @@ def test_bare_connect_uhp_opens_the_connect_screen(monkeypatch):
     assert isinstance(pushed[0], UHPConnectScreen)
     # Nothing saved yet, so the screen offers the Docker default.
     assert pushed[0]._url == uhp_settings.DEFAULT_BASE_URL
+
+
+def test_connect_a2a_with_a_url_reaches_the_a2a_path_not_byok(monkeypatch):
+    """Any argument used to clear bare_profile and fall through to BYOK."""
+    app = make_app()
+    log = FakeLog()
+    seen = {}
+    byok = []
+    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._connect_byok_cmd = lambda args, _log: byok.append(args)
+    app._record_ex_command = lambda *_args: None
+
+    app._handle_command(":connect a2a http://127.0.0.1:8000", log)
+
+    assert byok == []
+    assert seen["parts"] == [
+        "connect",
+        "a2a",
+        "--url",
+        "http://127.0.0.1:8000",
+    ]
+
+
+def test_connect_a2a_passes_flags_through(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    seen = {}
+    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._record_ex_command = lambda *_args: None
+
+    app._handle_command(
+        ':connect a2a --url https://x.test --send "hello"',
+        log,
+    )
+
+    assert seen["parts"] == [
+        "connect",
+        "a2a",
+        "--url",
+        "https://x.test",
+        "--send",
+        "hello",
+    ]
+
+
+def test_bare_connect_a2a_opens_the_connect_screen(monkeypatch):
+    """A bare :connect a2a asks for an origin rather than printing a CLI hint."""
+    import superqode.a2a.connection as a2a_settings
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
+    app = make_app()
+    log = FakeLog()
+    called = []
+    pushed = []
+    app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app.push_screen = lambda screen, callback=None: pushed.append(screen)
+    app._record_ex_command = lambda *_args: None
+    monkeypatch.setattr(
+        a2a_settings, "resolve_settings", lambda *a, **k: a2a_settings.A2ASettings()
+    )
+
+    app._handle_command(":connect a2a", log)
+
+    assert called == []
+    assert len(pushed) == 1
+    assert isinstance(pushed[0], A2AConnectScreen)
+    assert pushed[0]._url == a2a_settings.DEFAULT_URL
+
+
+def test_a2a_picker_opens_the_connect_screen(monkeypatch):
+    import superqode.a2a.connection as a2a_settings
+    from superqode.providers.connection_profiles import get_connection_profile
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
+    app = make_app()
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append(screen)
+    app._record_ex_command = lambda *_args: None
+    monkeypatch.setattr(
+        a2a_settings, "resolve_settings", lambda *a, **k: a2a_settings.A2ASettings()
+    )
+
+    app._dispatch_connection_profile(get_connection_profile("protocol-a2a"), log)
+
+    assert len(pushed) == 1
+    assert isinstance(pushed[0], A2AConnectScreen)

@@ -102,6 +102,7 @@ Each rung opens the specific methods underneath it:
 | **Plan endpoints** | A subscription that exposes a model endpoint to our harness | `:connect plan` |
 | **Other harnesses** | Optional non-ACP harness integrations | `:connect other-harnesses` |
 | **UHP** | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` |
+| **A2A** | A remote agent discovered from its published Agent Card | `:connect a2a` |
 
 Build routes are listed separately because they produce a repository artifact
 rather than a connection:

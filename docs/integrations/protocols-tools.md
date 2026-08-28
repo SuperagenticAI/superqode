@@ -11,7 +11,7 @@ description: Configure ACP, MCP, A2A, semantic search, and execution tools.
 | --- | --- | --- | --- | --- |
 | Agent Client Protocol, ACP | **Included** | `:connect acp <agent>` | `superqode agents doctor <agent>` | [ACP Coding Agents](../providers/acp.md) |
 | Model Context Protocol, MCP | **Included** | Configure a server in `superqode.yaml` | `:mcp doctor` | [MCP Configuration](../configuration/mcp-config.md) |
-| Agent2Agent, A2A | `uv tool install "superqode[a2a]"` | `:a2a connect <url>` | `:a2a discover <url>` | [A2A Agents](../providers/a2a.md) |
+| Agent2Agent, A2A | `uv tool install "superqode[a2a]"` | `:connect a2a` or `superqode connect a2a --url <url>` | `superqode connect a2a --conformance --json` | [A2A Agents](../providers/a2a.md) |
 | Unified Harness Protocol, UHP | **Included** | `superqode connect uhp --base-url <url>` | `superqode connect uhp --json` | [Unified Harness Protocol](../providers/uhp.md) |
 | Harness Protocol | **Included** | `superqode harness protocol list` | `superqode harness protocol conformance` | [Harness Protocol](../advanced/harness-protocol.md) |
 
@@ -25,8 +25,10 @@ SuperQode can expose a harness as an MCP, ACP, or A2A service. See
 [A2A](../providers/a2a.md) is SuperQode’s primary **harness-to-harness** and
 agent-to-agent network surface. Other agents discover SuperQode through a public
 [Agent Card](https://super-agentic.ai/.well-known/agent-card.json) and call the
-interface URL advertised in that card. Operational calls on the public pilot
-require bearer authentication (`SUPERQODE_A2A_TOKEN` when serving remotely).
+interface URL advertised in that card. The public pilot answers anonymous
+shortlist calls. A signed key is optional and switches the request to a model
+read. `--token` is required only when a remote bind also serves the harness
+skill (`--expose-harness`).
 
 This is the preferred way to collaborate with **multiplayer agent computers**
 such as [YC’s QM](https://github.com/yc-software/qm): keep SuperQode as the
@@ -45,7 +47,7 @@ TypeScript and Python A2A clients for interop checks are documented under
 | --- | --- |
 | Public Agent Card | `https://super-agentic.ai/.well-known/agent-card.json` |
 | Serve a harness over A2A | `superqode serve a2a --spec harness.yaml` |
-| Call / discover from the TUI | `:a2a discover <url>` · `:a2a connect <url>` |
+| Call / discover from the TUI | `:connect a2a` · `:a2a connect <url>` |
 | Full guide | [A2A Protocol](../providers/a2a.md) |
 
 ## CocoIndex Code semantic search

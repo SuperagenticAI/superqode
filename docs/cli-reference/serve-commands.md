@@ -159,14 +159,20 @@ Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent:
 ```bash
 superqode serve a2a --spec harness.yaml
 superqode serve a2a \
+  --host 0.0.0.0 \
+  --allow-remote \
+  --public-url https://superqode.example.com
+superqode serve a2a \
   --spec harness.yaml \
   --host 0.0.0.0 \
   --allow-remote \
   --public-url https://superqode.example.com \
-  --token "$SUPERQODE_A2A_TOKEN"
+  --token "$SUPERQODE_A2A_TOKEN" \
+  --expose-harness
 superqode serve a2a \
-  --public-url https://super-agentic.ai/superqode/a2a \
-  --token preview-only-value \
+  --host 0.0.0.0 \
+  --allow-remote \
+  --public-url https://superqode.onrender.com \
   --export-agent-card examples/a2a/agent-card.json
 ```
 
@@ -178,8 +184,10 @@ superqode serve a2a \
 | `--public-url` | Interface URL advertised in the Agent Card |
 | `--harness-store` / `--store` | SQLite harness sessions, runs, evidence |
 | `--task-store` | SQLite A2A task records (survives restart) |
-| `--token` | Bearer token (env: `SUPERQODE_A2A_TOKEN`; required for remote bind) |
+| `--no-task-store` | Keep A2A task records in memory |
+| `--token` | Operator token (env: `SUPERQODE_A2A_TOKEN`). Required with `--expose-harness` |
 | `--allow-remote` | Allow binding outside localhost |
+| `--expose-harness` | Serve the harness skill on a remote bind. Requires `--spec` and a token |
 | `--export-agent-card` | Write the runtime Agent Card JSON and exit |
 
 See [A2A Protocol](../providers/a2a.md) for durability, publishing, and the experimental multiplayer-computer packaging notes.

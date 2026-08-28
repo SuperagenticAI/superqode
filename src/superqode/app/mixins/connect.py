@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 from textual import work
 
+from superqode.widgets.a2a_connect import A2AConnectScreen
 from superqode.widgets.uhp_connect import UHPConnectScreen
 from rich.text import Text
 from rich.panel import Panel
@@ -380,6 +381,59 @@ class ConnectMixin:
         # The catalog reads the saved connection, so the entry is only
         # available once the selection above has been written.
         self._harness_cmd("switch uhp", log)
+
+    def _show_a2a_agent(self, log: ConversationLog, args: str = "") -> None:
+        """Open the A2A connect screen, or run a fully specified connect.
+
+        An A2A agent is remote, so the origin comes first and the card is
+        fetched. With no arguments this opens a picker; with arguments it runs
+        the same command the shell would, so every flag keeps working.
+        """
+        import shlex
+
+        from superqode.a2a.connection import DEFAULT_URL, resolve_settings
+
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :connect a2a arguments: {exc}")
+            return
+        # `:connect a2a <url>` is the form people reach for; the flag form
+        # stays available so every CLI option works here too.
+        if tokens and not tokens[0].startswith("-"):
+            tokens = ["--url", *tokens]
+        if tokens:
+            log.add_info("Connecting to the A2A agent ...")
+            self._run_cli_passthrough(["connect", "a2a", *tokens], log, "A2A agent")
+            return
+
+        settings = resolve_settings()
+        self.push_screen(
+            A2AConnectScreen(
+                url=settings.url,
+                default_url=DEFAULT_URL,
+                token=settings.token,
+            ),
+            callback=lambda result: self._apply_a2a_selection(result, log),
+        )
+
+    def _apply_a2a_selection(self, result, log: ConversationLog) -> None:
+        """Save the chosen Agent Card origin and optional Bearer."""
+        if result is None:
+            self._ensure_input_focus()
+            return
+        from superqode.a2a.connection import A2ASettings, save_connection
+
+        save_connection(A2ASettings(url=result.url, token=result.token))
+        selected = result.name or result.url
+        if result.binding:
+            detail = f"{result.binding} {result.protocol_version}".rstrip()
+            log.add_success(f"A2A agent connected: {selected} · {detail}")
+        else:
+            log.add_success(f"A2A agent connected: {selected}")
+        if result.task_text:
+            log.add_info(result.task_text[:2000])
+        self._ensure_input_focus()
 
     def _begin_key_harness(
         self, profile, log: ConversationLog, *, apply_route: tuple | None = None
@@ -1392,9 +1446,7 @@ class ConnectMixin:
 
             self._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
         elif conn == "a2a-picker":
-            # Discovery only for now: A2A operations need a bearer token that
-            # a published agent card deliberately does not carry.
-            self.run_worker(self._a2a_cmd("", log))
+            self._show_a2a_agent(log)
         elif conn == "uhp-picker":
             self._show_uhp_harnesses(log)
         elif conn == "harness-picker":

@@ -61,7 +61,7 @@ Switching can preserve the current conversation or fork an independent branch:
 | BYOK | A hosted model provider using an API key supplied by the user | `:connect byok` | SuperQode runs the harness and calls the provider |
 | SDK | A vendor agent SDK or authenticated client runtime | `:connect subscriptions`, then a product such as `:connect codex`, or use an explicit API-key runtime | The vendor runtime owns model access; SuperQode supplies session and policy controls |
 | MCP | Tool and resource servers exposed through Model Context Protocol | `:mcp` | MCP extends the active harness or ACP agent; it is not a model connection |
-| A2A | Remote agents exposed through Agent2Agent endpoints | `:a2a connect <url>` | The remote agent owns its execution contract |
+| A2A | Remote agents exposed through Agent2Agent endpoints | `:connect a2a` | The remote agent owns its execution contract |
 | UHP | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` | The server owns the harness, its tools, and its sandbox |
 
 ### The Protocols screen
@@ -79,8 +79,8 @@ share the fourth row of `:connect`:
 | Agent2Agent (A2A) | A remote agent discovered from its published agent card | `:connect protocol-a2a` |
 | Unified Harness Protocol (UHP) | Harnesses on a UHP server, local or remote | `:connect protocol-uhp` |
 
-A2A is discovery for now: operations against a published card need a bearer
-token the card deliberately does not carry.
+`:connect a2a` fetches the card and can send one message. Open cards need no
+token. A Bearer is optional and is never written into the card.
 
 MCP is deliberately not on that screen. It extends whatever harness is already
 running rather than owning a loop, so it stays on `:mcp`.

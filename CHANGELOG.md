@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `superqode connect a2a` fetches an Agent Card, reports the binding it will
+  speak, and can send one message. The connection is saved at
+  `~/.superqode/a2a.json`. Open cards need no token.
+- `:connect a2a` opens a TUI screen for the agent origin and an optional
+  Bearer, lists the skills on the card, and can send one test message. The
+  same screen is on `:connect protocols` and on `:a2a connect` with no URL.
+- `superqode connect a2a --inspect` prints the binding SuperQode chose, the
+  interfaces it skipped, and the last HTTP request and response. The TUI
+  screen keeps the same trace in an inspect pane. A card with no speakable
+  interface lists each advertised binding and why it was skipped.
+- `superqode connect a2a --conformance` runs four client checks against a
+  card: fetch, shape, binding, and one task. It does not save the
+  connection. The TUI screen exposes the same pack as Check. The pack says
+  whether SuperQode can talk to the card, not whether the agent is
+  A2A-spec complete.
+
+### Changed
+
+- An open A2A Agent Card advertises the Bearer scheme without
+  `securityRequirements`. Host platforms that treat that field as mandatory
+  can register with no credential. Requirements are set only when
+  `allow_anonymous=False`.
+- The public A2A smoke client runs without `SUPERQODE_A2A_TOKEN`. A token is
+  still accepted when present.
+- The A2A client speaks the first advertised interface it can: JSON-RPC 1.0,
+  JSON-RPC 0.3, or HTTP+JSON 1.0. It no longer requires HTTP+JSON 1.0.
+
 ## [0.2.112] - 2026-08-25
 
 ### Added

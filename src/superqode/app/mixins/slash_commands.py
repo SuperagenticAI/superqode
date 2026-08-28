@@ -332,6 +332,11 @@ class SlashCommandMixin:
                     # Needs its own branch: any argument clears bare_profile,
                     # and the fallthrough would read "uhp" as a BYOK provider.
                     self._show_uhp_harnesses(log, subargs)
+                elif subcmd == "a2a":
+                    # Same reason as uhp: "a2a" is not a connection profile id
+                    # (that is protocol-a2a), and arguments would otherwise
+                    # fall through to BYOK.
+                    self._show_a2a_agent(log, subargs)
                 elif subcmd == "setup":
                     try:
                         setup_tokens = shlex.split(subargs or "")

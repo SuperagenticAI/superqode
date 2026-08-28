@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Smoke-test the SuperQode A2A client against a live discovery URL.
 
-Usage (from repo root, fish or bash):
-
-  set -x SUPERQODE_A2A_TOKEN 'your-token'   # fish
-  export SUPERQODE_A2A_TOKEN=your-token    # bash
+Usage (from repo root):
 
   uv run --extra a2a python examples/a2a/smoke_client.py
   uv run --extra a2a python examples/a2a/smoke_client.py https://superqode.onrender.com
   uv run --extra a2a python examples/a2a/smoke_client.py https://super-agentic.ai "custom message"
+
+  # optional: a signed key or operator token
+  export SUPERQODE_A2A_TOKEN=your-token
 """
 
 from __future__ import annotations
@@ -22,14 +22,6 @@ async def main() -> int:
     discovery = sys.argv[1] if len(sys.argv) > 1 else "https://super-agentic.ai"
     message = sys.argv[2] if len(sys.argv) > 2 else "Reply with exactly: python-client-ok"
     token = os.environ.get("SUPERQODE_A2A_TOKEN") or os.environ.get("TOKEN")
-    if not token:
-        print(
-            "Missing SUPERQODE_A2A_TOKEN (or TOKEN).\n"
-            "fish:  set -x SUPERQODE_A2A_TOKEN 'your-token'\n"
-            "bash:  export SUPERQODE_A2A_TOKEN=your-token",
-            file=sys.stderr,
-        )
-        return 2
 
     from superqode.a2a import A2AClient
 

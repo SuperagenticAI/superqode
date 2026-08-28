@@ -69,6 +69,7 @@ already use:
 :connect local ollama <open-model>     # a local server you run
 :connect byok <provider> <model>       # a hosted provider with an API key
 :connect uhp --base-url <url>          # harnesses on a UHP server
+:connect a2a --url <url>               # an A2A agent from its Agent Card
 ```
 
 Ask for repository work as you would in another coding agent:

@@ -649,7 +649,11 @@ def _agent_card(
         )
 
     kwargs: dict[str, Any] = {}
-    if config.bearer_token:
+    if config.bearer_token or config.key_secret:
+        # Schemes say Bearer is accepted. Requirements say it is mandatory.
+        # An open deployment advertises the scheme so keyed callers know how
+        # to send a credential, and omits requirements so host platforms can
+        # register with no auth field.
         kwargs["security_schemes"] = {
             "bearer": sdk["SecurityScheme"](
                 http_auth_security_scheme=sdk["HTTPAuthSecurityScheme"](
@@ -658,9 +662,10 @@ def _agent_card(
                 )
             )
         }
-        kwargs["security_requirements"] = [
-            sdk["SecurityRequirement"](schemes={"bearer": sdk["StringList"]()})
-        ]
+        if not config.allow_anonymous:
+            kwargs["security_requirements"] = [
+                sdk["SecurityRequirement"](schemes={"bearer": sdk["StringList"]()})
+            ]
     # Ordered by preference; A2A clients take the first entry they understand.
     # JSONRPC leads because it is the default binding for A2A clients and the
     # binding every major host platform documents.  The 0.3 entry is what makes

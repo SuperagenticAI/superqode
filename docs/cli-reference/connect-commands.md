@@ -204,6 +204,7 @@ superqode connect COMMAND [OPTIONS] [ARGS]
 | `connect byok` | Connect to a cloud provider |
 | `connect local` | Connect to a local provider |
 | `connect uhp` | Connect to a Unified Harness Protocol server |
+| `connect a2a` | Connect to an A2A agent from its Agent Card |
 | `connect setup` | Show setup guide for a provider |
 
 ---
@@ -244,6 +245,58 @@ connection at `~/.superqode/uhp.json`.
 
 See [Unified Harness Protocol](../providers/uhp.md) for the adapter, the event
 mapping, and the capability list.
+
+---
+
+## connect a2a
+
+Connect to an A2A agent, fetch its Agent Card, and optionally send one message.
+The client speaks the first advertised interface it can: JSON-RPC 1.0, JSON-RPC
+0.3, or HTTP+JSON 1.0.
+
+```bash
+superqode connect a2a [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--url URL` | Agent origin or Agent Card host |
+| `--token TOKEN` | Bearer credential. Open cards need none |
+| `--send TEXT` | Send one message after discovery |
+| `--save` / `--no-save` | Remember the connection (default: save) |
+| `--inspect` | Show the binding choice, skipped interfaces, and last HTTP request/response |
+| `--conformance` | Run SuperQode's client checks: fetch the card, speak a binding, complete one task |
+| `--json` | Emit the card, binding, and optional task as JSON |
+
+### Examples
+
+```bash
+superqode connect a2a --url https://superqode.onrender.com
+superqode connect a2a --url https://superqode.onrender.com --inspect
+superqode connect a2a --url https://superqode.onrender.com --conformance
+superqode connect a2a --url https://superqode.onrender.com --send "Which coding agents are open source?"
+superqode connect a2a --url https://localhost:8000 --token "$SUPERQODE_A2A_CLIENT_TOKEN"
+```
+
+### Notes
+
+Settings come from options first, then `SUPERQODE_A2A_URL` and
+`SUPERQODE_A2A_CLIENT_TOKEN` (or `SUPERQODE_A2A_TOKEN`), then
+`~/.superqode/a2a.json`. A token that came from the environment is never copied
+to that file.
+
+From the TUI, `:connect a2a` opens a screen for the origin and optional Bearer.
+The screen lists skills and an inspect pane for the binding choice and HTTP.
+`:connect a2a <url>` runs the same command the shell would. `--inspect` is the
+CLI form of that pane. `--conformance` runs four client checks (card-fetch,
+card-shape, binding, send) and does not save the connection. A card SuperQode
+cannot speak prints the advertised interfaces and why each one was skipped.
+These checks answer whether SuperQode can talk to the card. They are not an
+A2A specification suite.
+
+See [A2A Protocol](../providers/a2a.md).
 
 ---
 

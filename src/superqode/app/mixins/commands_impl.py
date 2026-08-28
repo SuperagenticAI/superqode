@@ -6695,6 +6695,10 @@ class CommandImplMixin:
         subcommand = parts[0] if parts else ""
         subargs = parts[1] if len(parts) > 1 else ""
 
+        if subcommand in ("connect", "add") and not subargs:
+            self._show_a2a_agent(log)
+            return
+
         # Lazy load A2A commands
         if not hasattr(self, "_a2a_commands"):
             try:

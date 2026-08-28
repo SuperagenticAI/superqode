@@ -12,6 +12,7 @@ from typing import AsyncIterator, Optional
 
 import httpx
 
+from .inspect import InspectLog
 from .types import (
     AgentCard,
     AgentCapabilities,
@@ -30,19 +31,17 @@ from .types import (
 class A2AClientError(Exception):
     """Base exception for A2A client errors."""
 
-    pass
+    def __init__(self, message: str, inspect: InspectLog | None = None):
+        super().__init__(message)
+        self.inspect = inspect
 
 
 class AgentNotFoundError(A2AClientError):
     """Agent not found or not responding."""
 
-    pass
-
 
 class TaskFailedError(A2AClientError):
     """Task failed on remote agent."""
-
-    pass
 
 
 class A2AClient:
@@ -70,11 +69,13 @@ class A2AClient:
         """
         self.agent_url = agent_url.rstrip("/")
         self._interface_url: str | None = None
+        self._binding: str | None = None
+        self._protocol_version: str | None = None
         self._agent_card: AgentCard | None = None
         self.timeout = timeout
         self._owns_http = http_client is None
         self._http = http_client or httpx.AsyncClient(timeout=timeout)
-        self._http.headers.setdefault("A2A-Version", "1.0")
+        self.inspect = InspectLog()
         if bearer_token:
             self._http.headers.setdefault("Authorization", f"Bearer {bearer_token}")
 
@@ -99,23 +100,64 @@ class A2AClient:
             AgentNotFoundError: If agent is not available
         """
         url = f"{self.agent_url}/.well-known/agent-card.json"
+        self.inspect.request(
+            "GET",
+            url,
+            note="agent-card",
+            headers={str(key): str(value) for key, value in self._http.headers.items()},
+        )
         try:
-            response = await self._http.get(url)
-            response.raise_for_status()
-            data = response.json()
-            card = self._parse_agent_card(data)
-            self._interface_url = card.url.strip().rstrip("/")
-            self._agent_card = card
-            return card
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise AgentNotFoundError(f"Agent not found at {url}") from e
-            raise A2AClientError(f"Failed to get agent card: {e}") from e
+            response = await self._http.get(url, follow_redirects=True)
         except httpx.RequestError as e:
-            raise AgentNotFoundError(f"Cannot connect to agent: {e}") from e
+            summary = f"Cannot connect to agent: {e}"
+            self.inspect.error(summary, url=url)
+            raise AgentNotFoundError(summary, inspect=self.inspect) from e
 
-    def _parse_agent_card(self, data: dict) -> AgentCard:
-        """Parse JSON response into AgentCard."""
+        body = response.text
+        self.inspect.response(response.status_code, "GET", str(response.request.url), body=body)
+        if response.status_code == 404:
+            raise AgentNotFoundError(
+                f"No Agent Card at {url} (404). SuperQode fetches "
+                "/.well-known/agent-card.json from the origin.",
+                inspect=self.inspect,
+            )
+        if response.status_code in {401, 403}:
+            raise A2AClientError(
+                f"Agent Card at {url} returned {response.status_code}. "
+                "Discovery is protected; pass a Bearer if you have one.",
+                inspect=self.inspect,
+            )
+        if response.status_code >= 400:
+            raise A2AClientError(
+                f"Failed to get agent card: {response.status_code} {url}",
+                inspect=self.inspect,
+            )
+        try:
+            data = response.json()
+        except json.JSONDecodeError as e:
+            raise A2AClientError(
+                f"Agent Card at {url} was not JSON: {e}",
+                inspect=self.inspect,
+            ) from e
+        if not isinstance(data, dict):
+            raise A2AClientError(
+                f"Agent Card at {url} was {type(data).__name__}, not an object",
+                inspect=self.inspect,
+            )
+        card, binding, version = self._parse_agent_card(data)
+        self._interface_url = card.url.strip().rstrip("/")
+        self._binding = binding
+        self._protocol_version = version
+        self._agent_card = card
+        return card
+
+    def _parse_agent_card(self, data: dict) -> tuple[AgentCard, str, str]:
+        """Parse a card and pick the first interface this client can speak.
+
+        Cards list ``supportedInterfaces`` in preference order. JSON-RPC is
+        the default A2A binding; HTTP+JSON is optional. Demanding one binding
+        made JSON-RPC-only agents uncallable.
+        """
         capabilities_data = data.get("capabilities", {})
         capabilities = AgentCapabilities(
             streaming=capabilities_data.get("streaming", False),
@@ -134,27 +176,26 @@ class A2AClient:
             for s in data.get("skills", [])
         ]
         interfaces = data.get("supportedInterfaces", [])
-        interface_url = next(
-            (
-                str(item.get("url") or "").strip()
-                for item in interfaces
-                if item.get("protocolBinding", "").upper() == "HTTP+JSON"
-                and item.get("protocolVersion") == "1.0"
-                and str(item.get("url") or "").strip()
-            ),
-            None,
-        )
-        if interfaces and interface_url is None:
-            raise A2AClientError("Agent Card does not advertise A2A 1.0 HTTP+JSON")
-
         fallback = data.get("url", self.agent_url)
         if isinstance(fallback, str):
             fallback = fallback.strip() or self.agent_url
+        else:
+            fallback = self.agent_url
 
-        return AgentCard(
+        selected, skipped = _select_interface(interfaces, fallback)
+        listed = interfaces if isinstance(interfaces, list) else []
+        note = ""
+        if selected is not None and not listed:
+            note = "no supportedInterfaces; using card url as JSONRPC 0.3"
+        self.inspect.choice(selected, skipped, note=note)
+        if selected is None:
+            raise A2AClientError(_reject_message(skipped), inspect=self.inspect)
+        interface_url, binding, version = selected
+
+        card = AgentCard(
             name=data.get("name", "Unknown"),
             description=data.get("description", ""),
-            url=interface_url or fallback,
+            url=interface_url,
             version=data.get("version", "1.0"),
             capabilities=capabilities,
             skills=skills,
@@ -162,12 +203,25 @@ class A2AClient:
             default_input_modes=data.get("defaultInputModes", ["text"]),
             default_output_modes=data.get("defaultOutputModes", ["text"]),
         )
+        return card, binding, version
+
+    async def _ensure_interface(self) -> tuple[str, str, str]:
+        if self._interface_url is None or self._binding is None or self._protocol_version is None:
+            await self.get_agent_card()
+        assert self._interface_url and self._binding and self._protocol_version
+        return self._interface_url, self._binding, self._protocol_version
+
+    def _version_headers(self, version: str) -> dict[str, str]:
+        # A 1.0 method under a missing header is negotiated as 0.3 and rejected.
+        # A 0.3 client sends no version header.
+        if version == "1.0":
+            return {"A2A-Version": "1.0"}
+        return {}
 
     async def _operation_url(self, path: str) -> str:
-        """Resolve an operation against the interface selected from discovery."""
-        if self._interface_url is None:
-            await self.get_agent_card()
-        return f"{self._interface_url}/{path.lstrip('/')}"
+        """Resolve a REST path against the selected HTTP+JSON interface."""
+        interface_url, _, _ = await self._ensure_interface()
+        return f"{interface_url}/{path.lstrip('/')}"
 
     async def send_message(
         self,
@@ -175,46 +229,97 @@ class A2AClient:
         session_id: Optional[str] = None,
         task_id: Optional[str] = None,
     ) -> Task:
-        """POST /message:send - Send a message to the agent.
-
-        Args:
-            message: Text message to send
-            session_id: Optional session/context ID
-            task_id: Optional task ID to continue
-
-        Returns:
-            Task with status and results
-
-        Raises:
-            TaskFailedError: If task fails
-        """
-        url = await self._operation_url("message:send")
-
-        message_obj = {
-            "messageId": str(uuid.uuid4()),
-            "role": "ROLE_USER",
-            "parts": [{"text": message}],
-        }
-        if session_id:
-            message_obj["contextId"] = session_id
-        if task_id:
-            message_obj["taskId"] = task_id
-
-        body = {
-            "message": message_obj,
-            "configuration": {"acceptedOutputModes": ["text/plain"]},
-        }
-
+        """Send a message on the binding advertised first on the card."""
+        interface_url, binding, version = await self._ensure_interface()
+        params = _message_params(message, version, session_id=session_id, task_id=task_id)
         try:
-            response = await self._http.post(url, json=body)
-            response.raise_for_status()
-            data = response.json()
-
-            return self._parse_task(data.get("task", data))
+            if binding == "JSONRPC":
+                method = "SendMessage" if version == "1.0" else "message/send"
+                data = await self._jsonrpc(interface_url, method, params, version)
+            else:
+                data = await self._rest(
+                    "POST",
+                    f"{interface_url}/message:send",
+                    json_body=params,
+                    headers=self._version_headers(version),
+                    note=f"HTTP+JSON {version}",
+                )
+            return self._parse_task(data)
+        except A2AClientError:
+            raise
         except httpx.HTTPStatusError as e:
-            raise TaskFailedError(f"Task failed: {e}") from e
+            raise TaskFailedError(f"Task failed: {e}", inspect=self.inspect) from e
         except httpx.RequestError as e:
-            raise A2AClientError(f"Request failed: {e}") from e
+            raise A2AClientError(f"Request failed: {e}", inspect=self.inspect) from e
+
+    async def _rest(
+        self,
+        method: str,
+        url: str,
+        *,
+        json_body: dict | None = None,
+        headers: dict[str, str] | None = None,
+        note: str = "",
+        follow_redirects: bool = True,
+        unwrap_jsonrpc: bool = False,
+    ) -> dict:
+        """One HTTP call, recorded on the inspect log."""
+        encoded = json.dumps(json_body) if json_body is not None else ""
+        merged_headers = {str(key): str(value) for key, value in self._http.headers.items()}
+        if headers:
+            merged_headers.update(headers)
+        self.inspect.request(method, url, note=note, body=encoded, headers=merged_headers)
+        try:
+            request_kwargs: dict = {
+                "headers": headers,
+                "follow_redirects": follow_redirects,
+            }
+            if json_body is not None:
+                request_kwargs["json"] = json_body
+            response = await self._http.request(method, url, **request_kwargs)
+        except httpx.RequestError as e:
+            self.inspect.error(f"Request failed: {e}", url=url)
+            raise A2AClientError(f"Request failed: {e}", inspect=self.inspect) from e
+        self.inspect.response(
+            response.status_code, method, str(response.request.url), body=response.text
+        )
+        if response.status_code >= 400:
+            raise TaskFailedError(
+                f"Task failed: {response.status_code} {url}",
+                inspect=self.inspect,
+            )
+        try:
+            parsed = response.json()
+        except json.JSONDecodeError as e:
+            raise TaskFailedError(
+                f"Response was not JSON: {e}",
+                inspect=self.inspect,
+            ) from e
+        if unwrap_jsonrpc and isinstance(parsed, dict) and parsed.get("error"):
+            error = parsed["error"]
+            message = error.get("message") if isinstance(error, dict) else str(error)
+            raise TaskFailedError(message or "JSON-RPC error", inspect=self.inspect)
+        return _unwrap_body(parsed)
+
+    async def _jsonrpc(
+        self, url: str, method: str, params: dict, version: str
+    ) -> dict:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": str(uuid.uuid4()),
+            "method": method,
+            "params": params,
+        }
+        body = await self._rest(
+            "POST",
+            url,
+            json_body=payload,
+            headers=self._version_headers(version),
+            note=f"{method} JSONRPC {version}",
+            follow_redirects=True,
+            unwrap_jsonrpc=True,
+        )
+        return body
 
     async def send_message_streaming(
         self,
@@ -233,23 +338,31 @@ class A2AClient:
         Raises:
             TaskFailedError: If task fails
         """
-        url = await self._operation_url("message:stream")
-
-        message_obj = {
-            "role": "ROLE_USER",
-            "parts": [{"text": message}],
-            "messageId": str(uuid.uuid4()),
-        }
-        if session_id:
-            message_obj["contextId"] = session_id
-
-        body = {
-            "message": message_obj,
-            "configuration": {"acceptedOutputModes": ["text/plain"]},
-        }
+        interface_url, binding, version = await self._ensure_interface()
+        params = _message_params(message, version, session_id=session_id)
+        if binding == "JSONRPC":
+            method = "SendStreamingMessage" if version == "1.0" else "message/stream"
+            url = interface_url
+            body: dict = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": method,
+                "params": params,
+            }
+            self.inspect.request("POST", url, note=f"{method} stream JSONRPC {version}")
+        else:
+            url = f"{interface_url}/message:stream"
+            body = params
+            self.inspect.request("POST", url, note=f"stream HTTP+JSON {version}")
 
         try:
-            async with self._http.stream("POST", url, json=body) as response:
+            async with self._http.stream(
+                "POST",
+                url,
+                json=body,
+                headers=self._version_headers(version),
+                follow_redirects=True,
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     data = line.strip()
@@ -275,13 +388,19 @@ class A2AClient:
         Returns:
             Task with current state
         """
-        url = await self._operation_url(f"tasks/{task_id}")
-
-        response = await self._http.get(url)
-        response.raise_for_status()
-        data = response.json()
-
-        return self._parse_task(data.get("task", data))
+        interface_url, binding, version = await self._ensure_interface()
+        if binding == "JSONRPC":
+            method = "GetTask" if version == "1.0" else "tasks/get"
+            data = await self._jsonrpc(interface_url, method, {"id": task_id}, version)
+            return self._parse_task(data)
+        url = f"{interface_url}/tasks/{task_id}"
+        data = await self._rest(
+            "GET",
+            url,
+            headers=self._version_headers(version),
+            note=f"HTTP+JSON {version}",
+        )
+        return self._parse_task(data)
 
     async def cancel_task(self, task_id: str) -> Task:
         """POST /tasks/{id}:cancel - Cancel a running task.
@@ -292,13 +411,20 @@ class A2AClient:
         Returns:
             Task in canceled state
         """
-        url = await self._operation_url(f"tasks/{task_id}:cancel")
-
-        response = await self._http.post(url, json={})
-        response.raise_for_status()
-        data = response.json()
-
-        return self._parse_task(data.get("task", data))
+        interface_url, binding, version = await self._ensure_interface()
+        if binding == "JSONRPC":
+            method = "CancelTask" if version == "1.0" else "tasks/cancel"
+            data = await self._jsonrpc(interface_url, method, {"id": task_id}, version)
+            return self._parse_task(data)
+        url = f"{interface_url}/tasks/{task_id}:cancel"
+        data = await self._rest(
+            "POST",
+            url,
+            json_body={},
+            headers=self._version_headers(version),
+            note=f"HTTP+JSON {version}",
+        )
+        return self._parse_task(data)
 
     async def subscribe_task(self, task_id: str) -> AsyncIterator[StreamResponse]:
         """GET /tasks/{id}:subscribe - Subscribe to task updates.
@@ -309,10 +435,41 @@ class A2AClient:
         Yields:
             StreamResponse with task updates
         """
-        url = await self._operation_url(f"tasks/{task_id}:subscribe")
+        interface_url, binding, version = await self._ensure_interface()
+        if binding == "JSONRPC":
+            url = interface_url
+        else:
+            url = f"{interface_url}/tasks/{task_id}:subscribe"
 
         try:
-            async with self._http.stream("GET", url) as response:
+            stream_headers = self._version_headers(version)
+            if binding == "JSONRPC":
+                method = "TaskResubscription" if version == "1.0" else "tasks/resubscribe"
+                async with self._http.stream(
+                    "POST",
+                    url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": str(uuid.uuid4()),
+                        "method": method,
+                        "params": {"id": task_id},
+                    },
+                    headers=stream_headers,
+                    follow_redirects=True,
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        data = line.strip()
+                        if not data.startswith("data:"):
+                            continue
+                        data = data[5:].lstrip()
+                        try:
+                            parsed = json.loads(data)
+                        except json.JSONDecodeError:
+                            parsed = data
+                        yield StreamResponse(type="task_update", data=parsed)
+                return
+            async with self._http.stream("GET", url, headers=stream_headers) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     data = line.strip()
@@ -329,6 +486,8 @@ class A2AClient:
 
     def _parse_task(self, data: dict) -> Task:
         """Parse JSON response into Task."""
+        if not isinstance(data, dict):
+            data = {}
         status_data = data.get("status", {})
         state_str = status_data.get("state", "submitted")
         normalized_state = {
@@ -395,6 +554,126 @@ class A2AClient:
             metadata=data.get("metadata", {}),
             context_id=data.get("contextId"),
         )
+
+
+_SPEAKABLE = frozenset(
+    {
+        ("JSONRPC", "1.0"),
+        ("JSONRPC", "0.3"),
+        ("HTTP+JSON", "1.0"),
+    }
+)
+
+
+def _normalize_binding(value: str) -> str:
+    binding = value.upper().replace(" ", "")
+    if binding in {"HTTPJSON", "HTTP+JSON"}:
+        return "HTTP+JSON"
+    return binding
+
+
+def _select_interface(
+    interfaces: object, fallback_url: str
+) -> tuple[tuple[str, str, str] | None, list[dict[str, str]]]:
+    """First advertised interface this client can speak, else a 0.3 url fallback."""
+    skipped: list[dict[str, str]] = []
+    listed = interfaces if isinstance(interfaces, list) else []
+    selected: tuple[str, str, str] | None = None
+    for item in listed:
+        if not isinstance(item, dict):
+            skipped.append(
+                {"url": "", "binding": "", "version": "", "reason": "not an object"}
+            )
+            continue
+        url = str(item.get("url") or "").strip()
+        binding = _normalize_binding(str(item.get("protocolBinding") or ""))
+        version = str(item.get("protocolVersion") or "").strip()
+        row = {"url": url, "binding": binding, "version": version}
+        if not url:
+            skipped.append({**row, "reason": "no url"})
+            continue
+        if (binding, version) in _SPEAKABLE:
+            if selected is None:
+                selected = (url, binding, version)
+            else:
+                skipped.append({**row, "reason": "later in preference"})
+            continue
+        skipped.append({**row, "reason": _unspeakable_reason(binding, version)})
+    if selected is not None:
+        return selected, skipped
+    if listed:
+        return None, skipped
+    if fallback_url:
+        return (fallback_url, "JSONRPC", "0.3"), skipped
+    return None, skipped
+
+
+def _unspeakable_reason(binding: str, version: str) -> str:
+    speakable_bindings = {pair[0] for pair in _SPEAKABLE}
+    if not binding:
+        return "no protocolBinding"
+    if not version:
+        return "no protocolVersion"
+    if binding not in speakable_bindings:
+        return f"unsupported binding {binding}"
+    return f"unsupported version {version} for {binding}"
+
+
+def _reject_message(skipped: list[dict[str, str]]) -> str:
+    header = "Agent Card has no interface this client can speak"
+    speakable = "This client speaks JSON-RPC 1.0, JSON-RPC 0.3, and HTTP+JSON 1.0."
+    if not skipped:
+        return f"{header}, and no url to fall back to. {speakable}"
+    lines = [f"{header}:"]
+    for item in skipped:
+        loc = item.get("url") or "(no url)"
+        binding = item.get("binding") or "?"
+        version = item.get("version") or "?"
+        reason = item.get("reason") or "unusable"
+        lines.append(f"  {binding} {version} at {loc}: {reason}")
+    lines.append(speakable)
+    return "\n".join(lines)
+
+
+def _message_params(
+    message: str,
+    version: str,
+    *,
+    session_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+) -> dict:
+    if version == "0.3":
+        message_obj: dict = {
+            "messageId": str(uuid.uuid4()),
+            "role": "user",
+            "parts": [{"kind": "text", "text": message}],
+        }
+    else:
+        message_obj = {
+            "messageId": str(uuid.uuid4()),
+            "role": "ROLE_USER",
+            "parts": [{"text": message}],
+        }
+    if session_id:
+        message_obj["contextId"] = session_id
+    if task_id:
+        message_obj["taskId"] = task_id
+    return {
+        "message": message_obj,
+        "configuration": {"acceptedOutputModes": ["text/plain"]},
+    }
+
+
+def _unwrap_body(data: object) -> dict:
+    if not isinstance(data, dict):
+        return {}
+    if "jsonrpc" in data:
+        result = data.get("result")
+        if isinstance(result, dict) and "task" in result:
+            return result["task"] if isinstance(result["task"], dict) else {}
+        return result if isinstance(result, dict) else {}
+    nested = data.get("task")
+    return nested if isinstance(nested, dict) else data
 
 
 def _message_text(message: object) -> str | None:

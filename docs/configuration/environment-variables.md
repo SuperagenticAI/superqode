@@ -48,7 +48,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_UHP_API_KEY` | bearer token | unset | Credential for that UHP server. A key set here is never copied into the saved connection file. |
 | `SUPERQODE_UHP_HARNESS` | harness id | unset | Harness on the UHP server to select. |
 | `SUPERQODE_UHP_MAX_OUTPUT_TOKENS` | int | unset | Cap the token budget for one UHP task. Useful where a provider checks affordability against the reserved budget rather than usage. |
-| `SUPERQODE_A2A_TOKEN` | bearer token | unset | Operator token for `superqode serve a2a`. Enforced only when the command passes `--token`. |
+| `SUPERQODE_A2A_TOKEN` | bearer token | unset | Operator token for `superqode serve a2a`, and a fallback client token for `superqode connect a2a`. |
+| `SUPERQODE_A2A_URL` | URL | unset | A2A agent origin used by `superqode connect a2a`. |
+| `SUPERQODE_A2A_CLIENT_TOKEN` | bearer token | unset | Bearer for `superqode connect a2a`. A value set here is never copied into the saved connection file. |
 | `SUPERQODE_A2A_KEY_SECRET` | secret | unset | Signs and verifies customer API keys. Without it the server rejects every key. Generate with `superqode a2a-keys secret`. |
 | `SUPERQODE_A2A_REVOKED_KEYS` | comma-separated ids | unset | Key ids refused before their expiry. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |

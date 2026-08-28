@@ -109,7 +109,7 @@ Together, these components form a code factory: the organization-owned system th
 | Local | Ollama, LM Studio, MLX, vLLM, SGLang, DS4, and other local servers | `:connect local ollama qwen3:8b` |
 | SDK | Vendor SDK and authenticated client runtimes | `:connect codex` |
 | MCP | Tool and resource servers | `:mcp connect` |
-| A2A | Remote agent services | `:a2a connect <url>` |
+| A2A | Remote agent services | `:connect a2a` |
 
 See [Connection Methods and Vendors](modes.md) for the complete connection
 method, vendor, provider, and ACP agent inventory.

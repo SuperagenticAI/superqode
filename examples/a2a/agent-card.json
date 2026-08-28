@@ -39,13 +39,6 @@
       "type": "http"
     }
   },
-  "securityRequirements": [
-    {
-      "schemes": {
-        "bearer": {}
-      }
-    }
-  ],
   "defaultInputModes": [
     "text/plain"
   ],
@@ -80,10 +73,5 @@
   "iconUrl": "https://super-agentic.ai/uploads/superqode.png",
   "preferredTransport": "JSONRPC",
   "protocolVersion": "0.3",
-  "security": [
-    {
-      "bearer": []
-    }
-  ],
   "url": "https://superqode.onrender.com"
 }

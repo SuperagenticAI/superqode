@@ -10,7 +10,7 @@ import click
 
 @click.group()
 def connect():
-    """Connect to ACP agents, BYOK or LOCAL providers, or a UHP server."""
+    """Connect to ACP agents, BYOK or LOCAL providers, a UHP server, or an A2A agent."""
     pass
 
 
@@ -85,6 +85,45 @@ def connect_uhp(base_url, api_key, harness, max_output_tokens, save, json_output
             harness,
             max_output_tokens=max_output_tokens,
             save=save,
+            json_output=json_output,
+        )
+    )
+
+
+@connect.command("a2a")
+@click.option("--url", metavar="URL", help="Agent origin or Agent Card URL")
+@click.option("--token", metavar="TOKEN", help="Bearer credential for operations")
+@click.option("--send", "message", metavar="TEXT", help="Send one message after discovery")
+@click.option("--save/--no-save", default=True, help="Remember this connection")
+@click.option(
+    "--inspect",
+    "inspect",
+    is_flag=True,
+    help="Show the binding choice, skipped interfaces, and last HTTP request/response",
+)
+@click.option(
+    "--conformance",
+    is_flag=True,
+    help="Run SuperQode's client checks against this card (fetch, binding, one task)",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def connect_a2a(url, token, message, save, inspect, conformance, json_output):
+    """Connect to an A2A agent from its Agent Card.
+
+    Fetches the card, selects the first binding SuperQode can speak
+    (JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0), and optionally sends
+    one message. Open cards need no token.
+    """
+    from superqode.commands.a2a_connect import connect_a2a_agent
+
+    exit(
+        connect_a2a_agent(
+            url,
+            token,
+            message=message,
+            save=save,
+            inspect=inspect,
+            conformance=conformance,
             json_output=json_output,
         )
     )

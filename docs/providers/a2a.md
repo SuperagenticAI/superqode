@@ -1,11 +1,23 @@
 # A2A Protocol
 
-SuperQode can **serve** a versioned HarnessSpec as an [A2A 1.0](https://github.com/a2aproject/A2A/blob/main/docs/specification.md) agent and **call** other A2A HTTP+JSON agents. The official [`a2a-sdk`](https://github.com/a2aproject/a2a-python) implements discovery, version negotiation, task lifecycle, streaming, subscription, and cancellation. SuperQode maps those tasks onto its Harness Protocol and durable run ledger.
+SuperQode can **serve** a versioned HarnessSpec as an [A2A 1.0](https://github.com/a2aproject/A2A/blob/main/docs/specification.md) agent and **call** other A2A agents over JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0. The official [`a2a-sdk`](https://github.com/a2aproject/a2a-python) implements discovery, version negotiation, task lifecycle, streaming, subscription, and cancellation. SuperQode maps those tasks onto its Harness Protocol and durable run ledger.
 
 A2A is the primary cross-service integration surface for SuperQode: other agents, orchestrators, and multiplayer computers discover a SuperQode agent card and submit tasks without sharing SuperQode internals.
 
 A2A also appears on the Protocols screen, reachable directly as
 `:connect protocol-a2a`.
+
+From the TUI, `:connect a2a` opens a screen that takes the agent origin and
+an optional Bearer, lists the skills on the card, and can send one test
+message. An inspect pane shows the binding SuperQode chose, interfaces it
+skipped, and the last HTTP request and response. Check runs four client
+checks: fetch the card, accept its shape, speak a binding, complete one task.
+Open cards need no token. The same screen is on `:connect protocols` as
+`:connect protocol-a2a`. A saved connection lives at `~/.superqode/a2a.json`.
+From the shell, `superqode connect a2a --inspect` prints the trace and
+`superqode connect a2a --conformance` runs the checks. The checks answer
+whether SuperQode can talk to the card. They are not an A2A specification
+suite.
 
 ## Public Agent Card and pilot status
 
@@ -245,7 +257,7 @@ covers the forged case.
 
 ### API keys
 
-Keys are signed rather than stored. Verifying one is a signature check and a
+Keys are signed, never stored. Verifying one is a signature check and a
 clock comparison, with no lookup, which matters on a host whose filesystem
 does not survive a deploy.
 
@@ -281,7 +293,7 @@ misconfigured server refuses work instead of opening.
 ### Remote binds do not serve the harness skill by default
 
 A bearer token is shared by everyone who holds it, so it identifies a
-deployment rather than a person. Serving the harness skill remotely would give
+deployment, not a person. Serving the harness skill remotely would give
 every holder the same working directory under whatever the bound spec permits.
 The default coding template permits shell access and writes with `sandbox:
 local`, which provides no isolation from the host.
@@ -325,18 +337,19 @@ Generate the static discovery document from the same model used by the server. S
 
 ```bash
 superqode serve a2a \
+  --host 0.0.0.0 --allow-remote \
   --public-url https://your-a2a-interface.example.com \
-  --token preview-only-value \
   --export-agent-card examples/a2a/agent-card.json
 ```
 
 Notes:
 
-- The token value is **not** written into the card; supplying one only declares Bearer authentication.
+- The token value is **not** written into the card. On an open deployment, supplying `--token` advertises the Bearer scheme without making it mandatory. `securityRequirements` is set only when `allow_anonymous=False`.
 - Publish the generated file at `https://super-agentic.ai/.well-known/agent-card.json` (or your discovery host).
-- Skill text on the card is product-facing (`SuperQode Harness`); the bound `--spec` still decides what the server actually runs.
+- Skill text on the card is product-facing; a remote bind serves `harness-shortlist` unless `--expose-harness` is set.
 - Avoid leading or trailing whitespace in interface URLs; clients may reject a spaced URL as invalid.
 - Regenerate and republish when the public interface URL, capabilities, auth policy, or skills change.
+- The public pilot may take about a minute to answer the first call after idle. Open calls use keyword matching. A signed key reads the sentence. Email hello@super-agentic.ai for a key.
 
 ### The card version is not the package version
 
@@ -379,6 +392,65 @@ superqode serve a2a \
   --export-agent-card examples/a2a/agent-card.json
 ```
 
+## Host platforms
+
+### Microsoft Foundry
+
+Foundry's A2A tool lets a Foundry agent call a remote agent as one of its tools.
+It supports A2A protocol versions 1.0 and 0.3, fetches the Agent Card
+anonymously by default, and is text only with no streaming. The public
+SuperQode agent satisfies all of that as shipped, so no configuration change is
+needed on the SuperQode side.
+
+Foundry requires an Azure subscription with an active Foundry project, a model
+deployment in that project, the **Foundry Project Manager** role to create the
+connection, and **Foundry User** to create and test the agent.
+
+Create the connection in the Foundry portal:
+
+1. Sign in to [Microsoft Foundry](https://ai.azure.com) with the **New Foundry** toggle on.
+2. Select **Tools**, then **Connect tool**.
+3. Open the **Custom** tab, select **Agent2Agent (A2A)**, then **Create**.
+4. Enter a name and the A2A agent endpoint.
+5. Under **Authentication**, choose a method.
+
+| Field | Value |
+| --- | --- |
+| Name | `superqode` |
+| A2A Agent Endpoint | `https://superqode.onrender.com` |
+| Agent card path | Leave unset. Foundry resolves `/.well-known/agent-card.json` under the target |
+| Authentication | **None** for the open tier, or key based with credential name `Authorization` and value `Bearer <key>` |
+
+The same connection can be created with the Azure Developer CLI:
+
+```bash
+azd ai connection create superqode-a2a \
+  --kind remote-a2a \
+  --target https://superqode.onrender.com \
+  --auth-type none
+```
+
+Four points decide whether this works on the first attempt.
+
+The connection target is the operational URL carried in the card, not the
+discovery origin. Registering `https://super-agentic.ai` fails, because that
+host serves the card and nothing else. The SuperQode agent serves an identical
+card at both hosts, so Foundry can resolve the default card path under the
+operational URL.
+
+Anonymous callers are limited to ten requests per minute. That is enough to
+evaluate the connection and too little for regular use, so request a key before
+wiring the connection into anything that runs on a schedule.
+
+The operational pilot runs on a suspending free tier. A first request after an
+idle period can take about a minute to return, which is long enough for a
+connection test to look like a failure. Send a request to `/health` and wait for
+it to answer before creating the connection.
+
+Registration is scoped to the project that creates it. Foundry has no public
+catalogue of third-party agents, so registering SuperQode makes it available
+inside that project and does not list it for other Foundry customers.
+
 ## Python server API
 
 ```python
@@ -406,7 +478,7 @@ async with A2AClient("https://agent.example.com", bearer_token="...") as client:
     task = await client.send_message("Review the current change")
 ```
 
-The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. Client discovery uses the well-known Agent Card and routes every operation to the selected A2A 1.0 HTTP+JSON URL in `supportedInterfaces`, including path-prefixed deployments such as `/superqode/a2a`.
+The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. `:a2a connect` with no URL opens the same screen as `:connect a2a`. Client discovery uses the well-known Agent Card and speaks the first advertised interface it can: JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0.
 
 ### Interop clients in this repository
 

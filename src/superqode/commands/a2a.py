@@ -67,7 +67,7 @@ class A2ACommands:
         help_text = """
 [bold cyan]A2A Commands[/bold cyan]
 
-[green]:a2a connect <url>[/green] - Connect to an A2A agent
+[green]:a2a connect [url][/green] - Connect to an A2A agent (opens a screen with no URL)
 [green]:a2a list[/green]          - List connected agents
 [green]:a2a discover <url>[/green] - Discover agent at URL
 [green]:a2a call <name> <msg>[/green] - Call an agent
@@ -93,20 +93,18 @@ Examples:
         log.add_info(f"Connecting to {url}...")
 
         try:
-            from ..a2a import A2AClient, A2ARegistry
+            from superqode.a2a.connection import resolve_settings, save_connection
+            from superqode.commands.a2a_connect import _probe
 
-            if not self._registry:
-                self._registry = A2ARegistry()
-
-            # Try to add and verify
-            success = await self._registry.add(url.split("/")[-1] or "agent", url)
-
-            if success:
-                log.add_info(f"✅ Connected to {url}")
-                self._connected_agents[url] = {"url": url, "connected": True}
-            else:
-                log.add_warning(f"⚠️ Added but not verified: {url}")
-
+            settings = resolve_settings(url, None)
+            result = await _probe(settings, message=None)
+            save_connection(settings)
+            log.add_info(f"Connected: {result['name']} ({result['version']})")
+            log.add_info(f"Interface: {result['interface_url']}")
+            log.add_info(f"Binding:   {result['binding']} {result['protocol_version']}")
+            for skill in result.get("skills") or []:
+                log.add_info(f"  {skill['id']}  {skill['name']}")
+            self._connected_agents[url] = {"url": url, "connected": True, "name": result["name"]}
         except ImportError:
             log.add_error("A2A not installed. Run: uv tool install 'superqode[a2a]'")
         except Exception as e:
@@ -173,28 +171,21 @@ Examples:
         log.add_info(f"Calling {url}...")
 
         try:
-            from ..a2a import A2AClient
+            from superqode.a2a import A2AClient
+            from superqode.a2a.connection import resolve_settings
 
-            client = A2AClient(url)
-            task = await client.send_message(message)
-            await client.close()
+            settings = resolve_settings(url, None)
+            async with A2AClient(
+                settings.url or url, bearer_token=settings.token or None, timeout=180.0
+            ) as client:
+                task = await client.send_message(message)
 
-            status = task.status.state.value
-            log.add_info(f"Status: {status}")
-
-            # Extract result
-            if task.history:
-                for msg in reversed(task.history):
-                    if hasattr(msg, "role") and msg.role.value == "agent":
-                        if hasattr(msg, "parts") and msg.parts:
-                            result = (
-                                msg.parts[0].text[:200]
-                                if hasattr(msg.parts[0], "text")
-                                else "No text"
-                            )
-                            log.add_info(f"Result: {result}...")
-                            break
-
+            log.add_info(f"Status: {task.status.state.value}")
+            text = ""
+            if task.artifacts and task.artifacts[0].parts:
+                text = task.artifacts[0].parts[0].text or ""
+            if text:
+                log.add_info(text[:2000])
         except Exception as e:
             log.add_error(f"Call failed: {e}")
 

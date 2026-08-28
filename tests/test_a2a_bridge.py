@@ -18,7 +18,7 @@ pytest.importorskip("fastapi", reason="A2A tests require FastAPI")
 
 from fastapi.testclient import TestClient
 
-from superqode.a2a.client import A2AClient
+from superqode.a2a.client import A2AClient, A2AClientError
 from superqode.a2a.server import A2AServer, A2AServerConfig
 from superqode.a2a.types import TaskStatusValue
 from superqode.commands.serve import serve
@@ -592,6 +592,7 @@ def test_discovery_stays_open_and_a_closed_deployment_still_gates_operations(tmp
     card = client.get("/.well-known/agent-card.json")
     assert card.status_code == 200
     assert card.json()["securitySchemes"]["bearer"]["httpAuthSecurityScheme"]["scheme"] == "bearer"
+    assert card.json().get("securityRequirements"), "a closed deployment must require Bearer"
     assert client.get("/health").status_code == 200
 
     refused = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=_request("blocked"))
@@ -603,6 +604,17 @@ def test_discovery_stays_open_and_a_closed_deployment_still_gates_operations(tmp
         json=_request("allowed"),
     )
     assert allowed.status_code == 200
+
+
+def test_an_open_card_advertises_bearer_without_requiring_it(tmp_path: Path):
+    """Host platforms that treat securityRequirements as mandatory cannot register
+    an anonymous agent. Schemes stay on the card so a key can still be sent.
+    """
+    server, _ = _server(tmp_path, token="secret")
+    card = TestClient(server.app).get("/.well-known/agent-card.json").json()
+    assert card["securitySchemes"]["bearer"]["httpAuthSecurityScheme"]["scheme"] == "bearer"
+    assert not card.get("securityRequirements")
+    assert not card.get("security")
 
 
 def test_anonymous_callers_are_served_and_bad_keys_are_not(tmp_path: Path):
@@ -757,6 +769,126 @@ async def test_client_strips_whitespace_from_interface_url(tmp_path: Path):
     assert card.url == "http://agent/superqode/a2a"
     assert task.status.state == TaskStatusValue.COMPLETED
     assert task.artifacts[0].parts[0].text == "echo:trim-url"
+
+
+def test_client_accepts_a_jsonrpc_only_card():
+    """JSON-RPC is the default A2A binding. HTTP+JSON must not be required."""
+    client = A2AClient("http://agent")
+    card, binding, version = client._parse_agent_card(
+        {
+            "name": "RpcOnly",
+            "description": "jsonrpc only",
+            "version": "1.0",
+            "skills": [],
+            "supportedInterfaces": [
+                {
+                    "url": "https://rpc.example",
+                    "protocolBinding": "JSONRPC",
+                    "protocolVersion": "1.0",
+                }
+            ],
+        }
+    )
+    assert card.url == "https://rpc.example"
+    assert binding == "JSONRPC"
+    assert version == "1.0"
+
+
+def test_client_prefers_the_first_speakable_interface():
+    client = A2AClient("http://agent")
+    card, binding, version = client._parse_agent_card(
+        {
+            "name": "Ordered",
+            "description": "prefers jsonrpc",
+            "version": "1.0",
+            "skills": [],
+            "supportedInterfaces": [
+                {
+                    "url": "https://rpc.example",
+                    "protocolBinding": "JSONRPC",
+                    "protocolVersion": "1.0",
+                },
+                {
+                    "url": "https://rest.example",
+                    "protocolBinding": "HTTP+JSON",
+                    "protocolVersion": "1.0",
+                },
+            ],
+        }
+    )
+    assert card.url == "https://rpc.example"
+    assert binding == "JSONRPC"
+    assert version == "1.0"
+
+
+def test_client_rejects_a_card_with_only_unknown_bindings():
+    client = A2AClient("http://agent")
+    with pytest.raises(A2AClientError, match="unsupported binding GRPC") as raised:
+        client._parse_agent_card(
+            {
+                "name": "Grpc",
+                "description": "grpc only",
+                "version": "1.0",
+                "skills": [],
+                "supportedInterfaces": [
+                    {
+                        "url": "https://grpc.example",
+                        "protocolBinding": "GRPC",
+                        "protocolVersion": "1.0",
+                    }
+                ],
+            }
+        )
+    assert "JSON-RPC 1.0" in str(raised.value)
+    choice = client.inspect.events[-1]
+    assert choice.kind == "choice"
+    assert choice.detail["skipped"][0]["reason"] == "unsupported binding GRPC"
+
+
+def test_inspect_records_later_interfaces_as_skipped():
+    client = A2AClient("http://agent")
+    client._parse_agent_card(
+        {
+            "name": "Ordered",
+            "version": "1.0",
+            "skills": [],
+            "supportedInterfaces": [
+                {
+                    "url": "https://rpc.example",
+                    "protocolBinding": "JSONRPC",
+                    "protocolVersion": "1.0",
+                },
+                {
+                    "url": "https://rest.example",
+                    "protocolBinding": "HTTP+JSON",
+                    "protocolVersion": "1.0",
+                },
+            ],
+        }
+    )
+    choice = client.inspect.events[-1]
+    assert "Chose JSONRPC 1.0" in choice.summary
+    assert choice.detail["skipped"][0]["reason"] == "later in preference"
+    assert choice.detail["skipped"][0]["binding"] == "HTTP+JSON"
+
+
+def test_inspect_redacts_authorization_and_clips_bodies():
+    from superqode.a2a.inspect import InspectLog, clip, redact_headers
+
+    log = InspectLog()
+    log.request(
+        "POST",
+        "https://agent.example",
+        headers={"Authorization": "Bearer sqk_live_secret", "A2A-Version": "1.0"},
+        body="x" * 2000,
+    )
+    event = log.events[0]
+    assert event.detail["headers"]["Authorization"] == "Bearer ***"
+    assert event.detail["headers"]["A2A-Version"] == "1.0"
+    assert event.detail["body"].endswith("...")
+    assert len(event.detail["body"]) == 800
+    assert clip("short") == "short"
+    assert redact_headers({"Cookie": "session=abc"})["Cookie"] == "***"
 
 
 @pytest.mark.asyncio
