@@ -924,7 +924,13 @@ def _supplemental_records() -> list[HubRecord]:
             "Headlong",
             "Laude Institute's Apache-2.0 agent microharness (<10K lines of Bash) built around shellm, a recursive-language-model (RLM) core, for persistent agents that keep thinking between messages.",
             "https://headlong.ai",
-            ("headlong", "shellm", "laude institute", "recursive language model", "persistent agent"),
+            (
+                "headlong",
+                "shellm",
+                "laude institute",
+                "recursive language model",
+                "persistent agent",
+            ),
         ),
         (
             "ecosystem:qm",

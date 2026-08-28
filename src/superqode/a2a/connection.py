@@ -60,10 +60,7 @@ def resolve_settings(url: str | None = None, token: str | None = None) -> A2ASet
     saved = load_saved_connection()
     resolved_url = normalize_url(url or os.environ.get(URL_ENV) or saved.url)
     resolved_token = (
-        token
-        or os.environ.get(TOKEN_ENV)
-        or os.environ.get(TOKEN_FALLBACK_ENV)
-        or saved.token
+        token or os.environ.get(TOKEN_ENV) or os.environ.get(TOKEN_FALLBACK_ENV) or saved.token
     ).strip()
     return A2ASettings(url=resolved_url, token=resolved_token)
 

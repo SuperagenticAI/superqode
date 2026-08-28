@@ -301,9 +301,7 @@ class A2AClient:
             raise TaskFailedError(message or "JSON-RPC error", inspect=self.inspect)
         return _unwrap_body(parsed)
 
-    async def _jsonrpc(
-        self, url: str, method: str, params: dict, version: str
-    ) -> dict:
+    async def _jsonrpc(self, url: str, method: str, params: dict, version: str) -> dict:
         payload = {
             "jsonrpc": "2.0",
             "id": str(uuid.uuid4()),
@@ -581,9 +579,7 @@ def _select_interface(
     selected: tuple[str, str, str] | None = None
     for item in listed:
         if not isinstance(item, dict):
-            skipped.append(
-                {"url": "", "binding": "", "version": "", "reason": "not an object"}
-            )
+            skipped.append({"url": "", "binding": "", "version": "", "reason": "not an object"})
             continue
         url = str(item.get("url") or "").strip()
         binding = _normalize_binding(str(item.get("protocolBinding") or ""))

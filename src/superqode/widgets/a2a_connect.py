@@ -19,6 +19,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Input, OptionList, Static
 from textual.widgets.option_list import Option
 
+
 @dataclass(frozen=True)
 class A2AConnectResult:
     """The agent the user chose to keep."""
@@ -170,8 +171,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             )
             yield Button("Connect", id="a2a-connect", variant="primary")
         yield Static(
-            "Leave the token empty when the card is open. Bearer is sent as "
-            "Authorization.",
+            "Leave the token empty when the card is open. Bearer is sent as Authorization.",
             id="a2a-hint",
         )
         with Horizontal(id="a2a-message-row"):
@@ -210,9 +210,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         token = self._current_token()
         inspect_log = None
         try:
-            async with A2AClient(
-                url, bearer_token=token or None, timeout=180.0
-            ) as client:
+            async with A2AClient(url, bearer_token=token or None, timeout=180.0) as client:
                 inspect_log = client.inspect
                 card = await client.get_agent_card()
                 binding = client._binding or ""
@@ -242,9 +240,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         token = self._current_token()
         inspect_log = None
         try:
-            async with A2AClient(
-                url, bearer_token=token or None, timeout=180.0
-            ) as client:
+            async with A2AClient(url, bearer_token=token or None, timeout=180.0) as client:
                 inspect_log = client.inspect
                 if not self._connected:
                     card = await client.get_agent_card()
@@ -442,9 +438,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         self._use_connected()
 
     def _connect_from_input(self) -> None:
-        url = _origin(
-            self.query_one("#a2a-url", Input).value.strip() or self._default_url
-        )
+        url = _origin(self.query_one("#a2a-url", Input).value.strip() or self._default_url)
         self.query_one("#a2a-url", Input).value = url
         self._discover(url)
 
