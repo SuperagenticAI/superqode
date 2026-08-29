@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import uuid
 from typing import AsyncIterator, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
-from .inspect import InspectLog
+from .inspect import InspectLog, auth_summary
 from .types import (
     AgentCard,
     AgentCapabilities,
@@ -59,6 +60,9 @@ class A2AClient:
         http_client: Optional[httpx.AsyncClient] = None,
         timeout: float = 60.0,
         bearer_token: Optional[str] = None,
+        extra_headers: Optional[dict[str, str]] = None,
+        client_cert: Optional[str] = None,
+        client_key: Optional[str] = None,
     ):
         """Initialize A2A client.
 
@@ -72,12 +76,28 @@ class A2AClient:
         self._binding: str | None = None
         self._protocol_version: str | None = None
         self._agent_card: AgentCard | None = None
+        self._card_data: dict | None = None
         self.timeout = timeout
         self._owns_http = http_client is None
-        self._http = http_client or httpx.AsyncClient(timeout=timeout)
+        self._tls_cert = (client_cert or "").strip()
+        self._tls_key = (client_key or "").strip()
+        cert = _httpx_cert(self._tls_cert, self._tls_key)
+        self._http = http_client or httpx.AsyncClient(timeout=timeout, cert=cert)
+        self._query_params: dict[str, str] = {}
         self.inspect = InspectLog()
+        if extra_headers:
+            self._http.headers.update(extra_headers)
         if bearer_token:
-            self._http.headers.setdefault("Authorization", f"Bearer {bearer_token}")
+            self._http.headers["Authorization"] = f"Bearer {bearer_token}"
+        if self._tls_cert:
+            self.inspect.auth("Mutual TLS client certificate attached")
+
+    def add_query_params(self, params: dict[str, str]) -> None:
+        """Attach API-key query parameters to every subsequent request."""
+        self._query_params.update({str(key): str(value) for key, value in params.items() if key})
+
+    def _with_query(self, url: str) -> str:
+        return _merge_query(url, self._query_params)
 
     async def close(self):
         """Close the HTTP client."""
@@ -99,26 +119,35 @@ class A2AClient:
         Raises:
             AgentNotFoundError: If agent is not available
         """
-        url = f"{self.agent_url}/.well-known/agent-card.json"
-        self.inspect.request(
-            "GET",
-            url,
-            note="agent-card",
-            headers={str(key): str(value) for key, value in self._http.headers.items()},
-        )
-        try:
-            response = await self._http.get(url, follow_redirects=True)
-        except httpx.RequestError as e:
-            summary = f"Cannot connect to agent: {e}"
-            self.inspect.error(summary, url=url)
-            raise AgentNotFoundError(summary, inspect=self.inspect) from e
-
-        body = response.text
-        self.inspect.response(response.status_code, "GET", str(response.request.url), body=body)
+        paths = ("/.well-known/agent-card.json", "/.well-known/agent.json")
+        response = None
+        url = f"{self.agent_url}{paths[0]}"
+        for index, path in enumerate(paths):
+            url = self._with_query(f"{self.agent_url}{path}")
+            note = "agent-card" if index == 0 else "agent.json fallback"
+            self.inspect.request(
+                "GET",
+                url,
+                note=note,
+                headers={str(key): str(value) for key, value in self._http.headers.items()},
+            )
+            try:
+                response = await self._http.get(url, follow_redirects=True)
+            except httpx.RequestError as e:
+                summary = f"Cannot connect to agent: {e}"
+                self.inspect.error(summary, url=url)
+                raise AgentNotFoundError(summary, inspect=self.inspect) from e
+            self.inspect.response(
+                response.status_code, "GET", str(response.request.url), body=response.text
+            )
+            if response.status_code == 404 and index == 0:
+                continue
+            break
+        assert response is not None
         if response.status_code == 404:
             raise AgentNotFoundError(
-                f"No Agent Card at {url} (404). SuperQode fetches "
-                "/.well-known/agent-card.json from the origin.",
+                f"No Agent Card at {self.agent_url}/.well-known/agent-card.json "
+                "or /.well-known/agent.json (404).",
                 inspect=self.inspect,
             )
         if response.status_code in {401, 403}:
@@ -144,6 +173,7 @@ class A2AClient:
                 f"Agent Card at {url} was {type(data).__name__}, not an object",
                 inspect=self.inspect,
             )
+        self._card_data = data
         card, binding, version = self._parse_agent_card(data)
         self._interface_url = card.url.strip().rstrip("/")
         self._binding = binding
@@ -158,6 +188,7 @@ class A2AClient:
         the default A2A binding; HTTP+JSON is optional. Demanding one binding
         made JSON-RPC-only agents uncallable.
         """
+        self._card_data = data
         capabilities_data = data.get("capabilities", {})
         capabilities = AgentCapabilities(
             streaming=capabilities_data.get("streaming", False),
@@ -182,6 +213,7 @@ class A2AClient:
         else:
             fallback = self.agent_url
 
+        self.inspect.auth(auth_summary(data))
         selected, skipped = _select_interface(interfaces, fallback)
         listed = interfaces if isinstance(interfaces, list) else []
         note = ""
@@ -264,6 +296,7 @@ class A2AClient:
         unwrap_jsonrpc: bool = False,
     ) -> dict:
         """One HTTP call, recorded on the inspect log."""
+        url = self._with_query(url)
         encoded = json.dumps(json_body) if json_body is not None else ""
         merged_headers = {str(key): str(value) for key, value in self._http.headers.items()}
         if headers:
@@ -340,7 +373,7 @@ class A2AClient:
         params = _message_params(message, version, session_id=session_id)
         if binding == "JSONRPC":
             method = "SendStreamingMessage" if version == "1.0" else "message/stream"
-            url = interface_url
+            url = self._with_query(interface_url)
             body: dict = {
                 "jsonrpc": "2.0",
                 "id": str(uuid.uuid4()),
@@ -349,10 +382,9 @@ class A2AClient:
             }
             self.inspect.request("POST", url, note=f"{method} stream JSONRPC {version}")
         else:
-            url = f"{interface_url}/message:stream"
+            url = self._with_query(f"{interface_url}/message:stream")
             body = params
             self.inspect.request("POST", url, note=f"stream HTTP+JSON {version}")
-
         try:
             async with self._http.stream(
                 "POST",
@@ -552,6 +584,24 @@ class A2AClient:
             metadata=data.get("metadata", {}),
             context_id=data.get("contextId"),
         )
+
+
+def _httpx_cert(cert: str, key: str) -> str | tuple[str, str] | None:
+    if cert and key:
+        return (cert, key)
+    if cert:
+        return cert
+    return None
+
+
+def _merge_query(url: str, params: dict[str, str]) -> str:
+    """Append extra query parameters without dropping those already on ``url``."""
+    if not params:
+        return url
+    parts = urlsplit(url)
+    existing = dict(parse_qsl(parts.query, keep_blank_values=True))
+    existing.update(params)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(existing), parts.fragment))
 
 
 _SPEAKABLE = frozenset(

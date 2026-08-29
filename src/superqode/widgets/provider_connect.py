@@ -95,7 +95,7 @@ class ProviderConnectWidget(Container):
 
     ProviderConnectWidget Input {
         width: 100%;
-        background: #050505;
+        background: #000000;
         border: solid #27272a;
         margin-bottom: 1;
     }
@@ -107,7 +107,7 @@ class ProviderConnectWidget(Container):
     ProviderConnectWidget OptionList {
         height: auto;
         max-height: 12;
-        background: #050505;
+        background: #000000;
         border: none;
     }
 

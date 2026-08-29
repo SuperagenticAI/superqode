@@ -7,17 +7,47 @@ A2A is the primary cross-service integration surface for SuperQode: other agents
 A2A also appears on the Protocols screen, reachable directly as
 `:connect protocol-a2a`.
 
-From the TUI, `:connect a2a` opens a screen that takes the agent origin and
-an optional Bearer, lists the skills on the card, and can send one test
-message. An inspect pane shows the binding SuperQode chose, interfaces it
-skipped, and the last HTTP request and response. Check runs four client
-checks: fetch the card, accept its shape, speak a binding, complete one task.
-Open cards need no token. The same screen is on `:connect protocols` as
-`:connect protocol-a2a`. A saved connection lives at `~/.superqode/a2a.json`.
+From the TUI, `:connect` → **Protocols** → **A2A** (or `:connect a2a` /
+`:connect protocol-a2a`) opens a short screen: origin, optional credential,
+and purple chips for **OAuth on**, **Headers**, **mTLS**, and **Inspect**.
+A bare `:connect a2a <url>` or `:a2a connect <url>` opens that screen with
+the origin filled in. Empty credential is an open card. Click Headers or mTLS to open those fields
+on the same screen. After Connect, **Send** is the conversation with that
+remote agent and keeps the same `contextId` thread. Cards that advertise
+streaming stream their replies. Skill examples fill the message box. **Use**
+saves the connection and stays on the screen; **Back** returns. **y** copies
+the last reply, **r** resends, **Esc** stops a wait. The main prompt stays
+your ACP or local agent. Logout clears a stored OAuth token.
+Those checks are client-fit, not an A2A TCK result (TCK is planned for a
+later release). A saved connection lives at `~/.superqode/a2a.json`. Later:
+`:a2a call <name>`.
 From the shell, `superqode connect a2a --inspect` prints the trace and
-`superqode connect a2a --conformance` runs the checks. The checks answer
-whether SuperQode can talk to the card. They are not an A2A specification
-suite.
+`superqode connect a2a --conformance` runs the checks. `--no-send` skips the
+task so a card-only check does not wait on a cold host. Repeatable
+`--header NAME:VALUE` flags are sent on every call. If the card declares an
+API key scheme, inspect names the header or query parameter. A header key is
+sent as that header; a query key is appended to every request URL. When the
+card does not also ask for HTTP Bearer, the token field is that key. HTTP
+Basic takes `--token` as `user:password`. If the card requires OAuth or OIDC
+and no token is present, SuperQode uses a stored access token, refreshes it,
+or tries client credentials when `SUPERQODE_A2A_OAUTH_CLIENT_ID` and
+`SUPERQODE_A2A_OAUTH_CLIENT_SECRET` are set. Otherwise it opens a browser
+using PKCE. The redirect URI is always
+`http://localhost:19876/a2a/oauth/callback` — register that exact value with
+the identity provider; SuperQode will not pick another port. Dynamic client
+registration, when advertised, posts to the authorization server's
+`registration_endpoint`, not the agent origin. Over SSH, or when the
+authorization server advertises `device_authorization_endpoint` and there is
+no local display, SuperQode uses the device-code grant instead of a
+localhost redirect. Tokens sit in the OS keyring when one is available,
+otherwise under `~/.superqode/a2a-oauth/`. `connect a2a --logout` deletes
+that record and revokes the tokens when the authorization server advertised
+`revocation_endpoint`. Mutual TLS uses `--tls-cert` and `--tls-key`.
+Discovery tries `/.well-known/agent-card.json`, then `/.well-known/agent.json`.
+
+The client speaks SendMessage, GetTask, and CancelTask (and the 0.3 method
+names). It does not implement ListTasks, GetExtendedAgentCard, or claim an
+A2A TCK result. The checks answer whether SuperQode can talk to the card.
 
 ## Public Agent Card and pilot status
 
@@ -478,7 +508,7 @@ async with A2AClient("https://agent.example.com", bearer_token="...") as client:
     task = await client.send_message("Review the current change")
 ```
 
-The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. `:a2a connect` with no URL opens the same screen as `:connect a2a`. Client discovery uses the well-known Agent Card and speaks the first advertised interface it can: JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0.
+The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. `:a2a connect` with no URL opens the same screen as `:connect a2a`. Client discovery uses the well-known Agent Card and speaks the first advertised interface it can: JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0. Operations implemented today are send, get, and cancel. ListTasks and GetExtendedAgentCard are not implemented.
 
 ### Interop clients in this repository
 
@@ -490,9 +520,10 @@ For harness-to-harness and cross-language checks against a live or local A2A ser
 Example (from the SuperQode repo root):
 
 ```bash
-export SUPERQODE_A2A_TOKEN='<secret>'
 uv run --extra a2a python examples/a2a/smoke_client.py https://super-agentic.ai
 ```
+
+A token is optional. Set `SUPERQODE_A2A_TOKEN` only when the agent requires Bearer.
 
 ## Protocol boundaries
 

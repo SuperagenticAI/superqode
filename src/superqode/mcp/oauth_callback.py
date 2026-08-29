@@ -72,7 +72,7 @@ SUCCESS_HTML = """<!DOCTYPE html>
     <div class="container">
         <div class="icon">✓</div>
         <h1>Authorization Successful</h1>
-        <p>You have been authenticated with the MCP server.</p>
+        <p>You have been authenticated with the __PRODUCT__.</p>
         <p class="close-msg">You can close this window and return to SuperQode.</p>
     </div>
     <script>
@@ -135,7 +135,7 @@ ERROR_HTML = """<!DOCTYPE html>
     <div class="container">
         <div class="icon">✕</div>
         <h1>Authorization Failed</h1>
-        <p>There was a problem authenticating with the MCP server.</p>
+        <p>There was a problem authenticating with the __PRODUCT__.</p>
         <div class="error-detail">{error}</div>
     </div>
 </body>
@@ -169,7 +169,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
 
         # Only handle the callback path
-        if parsed.path != "/mcp/oauth/callback":
+        if parsed.path not in {"/mcp/oauth/callback", "/a2a/oauth/callback"}:
             self.send_error(404, "Not Found")
             return
 
@@ -202,28 +202,32 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
                     except Exception as e:
                         logger.error(f"Error setting callback result: {e}")
 
-        # Send response
+        product = "A2A agent" if parsed.path.startswith("/a2a/") else "MCP server"
         if error:
-            self._send_error_page(error, error_description)
+            self._send_error_page(error, error_description, product)
         else:
-            self._send_success_page()
+            self._send_success_page(product)
 
-    def _send_success_page(self) -> None:
+    def _send_success_page(self, product: str = "MCP server") -> None:
         """Send success HTML page."""
-        content = SUCCESS_HTML.encode("utf-8")
+        content = SUCCESS_HTML.replace("__PRODUCT__", product).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
 
-    def _send_error_page(self, error: str, description: Optional[str]) -> None:
+    def _send_error_page(
+        self, error: str, description: Optional[str], product: str = "MCP server"
+    ) -> None:
         """Send error HTML page."""
         error_msg = error
         if description:
             error_msg = f"{error}: {description}"
 
-        content = ERROR_HTML.format(error=error_msg).encode("utf-8")
+        content = (
+            ERROR_HTML.replace("__PRODUCT__", product).replace("{error}", error_msg).encode("utf-8")
+        )
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
@@ -254,15 +258,22 @@ class OAuthCallbackServer:
     """
 
     DEFAULT_PORT = 19876
+    DEFAULT_CALLBACK_PATH = "/mcp/oauth/callback"
 
-    def __init__(self, port: int = DEFAULT_PORT):
+    def __init__(self, port: int = DEFAULT_PORT, callback_path: str = DEFAULT_CALLBACK_PATH):
         self.port = port
+        self.callback_path = callback_path
         self._server: Optional[HTTPServer] = None
         self._server_thread: Optional[threading.Thread] = None
         self._running = False
 
-    async def start(self) -> None:
-        """Start the callback server."""
+    async def start(self, *, strict_port: bool = False) -> None:
+        """Start the callback server.
+
+        MCP may walk to the next port when 19876 is taken. A2A never does:
+        identity providers allowlist ``http://localhost:19876/a2a/oauth/callback``
+        and a moved port would fail the redirect.
+        """
         if self._running:
             return
 
@@ -285,12 +296,16 @@ class OAuthCallbackServer:
             logger.info(f"OAuth callback server started on port {self.port}")
 
         except OSError as e:
-            if "Address already in use" in str(e):
+            in_use = "Address already in use" in str(e) or getattr(e, "errno", None) in {
+                48,
+                98,
+            }
+            if in_use and not strict_port:
                 # Port in use, try next port
                 self.port += 1
                 await self.start()
-            else:
-                raise
+                return
+            raise
 
     def _serve_forever(self) -> None:
         """Server loop running in background thread."""
@@ -351,7 +366,7 @@ class OAuthCallbackServer:
 
     def get_redirect_uri(self) -> str:
         """Get the redirect URI for this server."""
-        return f"http://localhost:{self.port}/mcp/oauth/callback"
+        return f"http://localhost:{self.port}{self.callback_path}"
 
     @property
     def is_running(self) -> bool:

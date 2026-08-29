@@ -57,8 +57,8 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
     }
     UHPConnectScreen > * { background: #000000; }
     #uhp-header { height: auto; padding: 1 2 0 2; background: #000000; }
-    #uhp-title { text-style: bold; color: #7c3aed; background: #000000; }
-    #uhp-subtitle { color: #8a8a8a; background: #000000; }
+    #uhp-title { text-style: bold; color: #c4b5fd; background: #000000; }
+    #uhp-subtitle { color: #d4d4d4; background: #000000; }
     #uhp-address { height: auto; padding: 1 2 0 2; background: #000000; }
     #uhp-url {
         width: 1fr;
@@ -75,8 +75,8 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         border: tall #2a2a2a;
     }
     #uhp-cap:focus { border: tall #7c3aed; background: #000000; }
-    #uhp-hint { padding: 0 2 0 2; height: auto; color: #5a5a5a; background: #000000; }
-    #uhp-status { padding: 1 2 0 2; height: auto; color: #8a8a8a; background: #000000; }
+    #uhp-hint { padding: 0 2 0 2; height: auto; color: #c8c8c8; background: #000000; }
+    #uhp-status { padding: 1 2 0 2; height: auto; color: #e6e6e6; background: #000000; }
     #uhp-list {
         height: 1fr;
         margin: 1 2;
@@ -114,7 +114,7 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         max_output_tokens: int | None = None,
     ) -> None:
         super().__init__()
-        self._url = base_url or default_url
+        self._url = base_url
         self._default_url = default_url
         self._cap = str(max_output_tokens) if max_output_tokens else ""
         self._rows: list[_Row] = []
@@ -122,7 +122,17 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="uhp-header"):
-            yield Static("Unified Harness Protocol", id="uhp-title")
+            yield Static(
+                Text.assemble(
+                    ("Unified ", "bold #e9d5ff"),
+                    ("Harness ", "bold #c4b5fd"),
+                    ("Protocol", "bold #a78bfa"),
+                    (" (", "#c8c8c8"),
+                    ("UHP", "bold #7c3aed"),
+                    (")", "#c8c8c8"),
+                ),
+                id="uhp-title",
+            )
             yield Static(
                 "Run a harness that lives on a UHP server. The server owns the "
                 "model, the tools, and the workspace.",
@@ -145,9 +155,7 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._set_status(
-            f"Enter a server address, or press Connect for {self._default_url}",
-        )
+        self._set_status("Paste a server address, then press Connect.")
         self.query_one("#uhp-url", Input).focus()
 
     # -- discovery ---------------------------------------------------------
@@ -212,8 +220,8 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
             detail = row.base_label or "harness"
             if row.model:
                 detail += f" · {row.model}"
-            text.append(f"  {detail}\n", style="#8a8a8a")
-            text.append(f"  {row.id}", style="#5a5a5a")
+            text.append(f"  {detail}\n", style="#d4d4d4")
+            text.append(f"  {row.id}", style="#a8a8a8")
             option_list.add_option(Option(text, id=row.id))
         option_list.focus()
         if self._rows:
@@ -246,7 +254,11 @@ class UHPConnectScreen(Screen[UHPConnectResult | None]):
         self._use_highlighted()
 
     def _connect_from_input(self) -> None:
-        url = self.query_one("#uhp-url", Input).value.strip() or self._default_url
+        url = self.query_one("#uhp-url", Input).value.strip()
+        if not url:
+            self._set_status("Paste a server address, then press Connect.")
+            self.query_one("#uhp-url", Input).focus()
+            return
         self.query_one("#uhp-url", Input).value = url
         self._discover(url)
 

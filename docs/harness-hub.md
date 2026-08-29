@@ -5,9 +5,9 @@ description: Discover, build, inspect, run, evaluate, and optimize coding-agent 
 
 # Harness Hub
 
-**SuperQode is the harness layer for coding agents.** The Harness Hub is where
-those harnesses are discovered, built, inspected, run, evaluated, and
-optimized through one rich, browsable terminal experience.
+The Harness Hub is the catalog. `:connect` is how you start a harness. Browse
+what SuperQode can run, inspect setup, and Use an entry that is ready on this
+machine.
 
 The Hub brings SuperQode native harnesses, established coding agents, ACP
 agents, optional runtimes, model and task presets, and repository-owned custom
@@ -28,14 +28,16 @@ conversation. Use the mouse or keyboard to:
 
 - search names, runtimes, sources, licenses, and descriptions
 - filter to **Ready**, **Needs setup**, **Open source**, **Your harnesses**, or
-  **Coming soon**
-- inspect setup, runtime, provenance, and session-continuity details
+  **Coming soon** (`a` `r` `s` `o` `c` `n`)
+- inspect setup, runtime, provenance, and session-continuity details without
+  leaving the Hub
 - use an available harness or follow its setup route
 - start the custom harness builder
 
-Press `/` to focus search, arrow keys to move, `Enter` to inspect or use the
-selected entry, `I` to inspect, `B` to build, and `Esc` to return to the coding
-session. Buttons and rows are also mouse-enabled.
+Press `/` to focus search, arrow keys to move, `Enter` to use (or learn more
+for coming-soon rows), `I` to inspect in place, `B` to build, and `Esc` to
+return. Click a row to preview; Use is explicit. `:hub` opens on **Ready**
+when anything is ready on this machine.
 
 ## What appears in the Hub
 
@@ -49,10 +51,12 @@ session. Buttons and rows are also mouse-enabled.
 | Ecosystem watch | Relevant external harness projects that are discoverable but not yet supported by SuperQode |
 | Project harnesses | Repository-owned HarnessSpecs discovered from the current project |
 
-An entry marked **Ready** is usable in the current environment. **Needs setup**
-means the catalog knows the route but a dependency, executable, authentication
-step, or service is missing. **Integration pending** marks an ecosystem entry
-SuperQode cannot yet run. These states describe readiness, not a security
+An entry marked **Ready** can be started now (a signed-in coding agent, or a
+SuperQode harness that already has a model). **Needs a model** is a SuperQode
+harness such as Core or RLM: the harness is installed, but Use opens Local / an
+API key / a plan because there is nothing to talk to yet. **Needs setup** means
+a dependency, executable, or login is missing. **Coming soon** is an ecosystem
+entry SuperQode cannot run. These states describe startability, not a security
 certification.
 
 The Hub catalogs harnesses, and only harnesses. Model providers, local

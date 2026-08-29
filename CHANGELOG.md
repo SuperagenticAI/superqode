@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `superqode connect a2a --header NAME:VALUE` sends extra request headers and
+  stores them with the connection. Secrets in header names are redacted in
+  inspect output.
+- Inspect reports advertised `securitySchemes` and whether the card requires
+  them.
+- `superqode connect a2a --conformance --no-send` checks the card without
+  sending a task.
+- Agent Card discovery falls back to `/.well-known/agent.json` after a 404 on
+  `agent-card.json`.
+- Connect reads `APIKeySecurityScheme` from the card and names the header or
+  query parameter to pass. Header keys are sent as headers; query keys are
+  appended to request URLs. When the card does not also ask for HTTP Bearer,
+  the token field is that key. HTTP Basic takes `--token` as `user:password`.
+- When a card requires OAuth or OIDC, `connect a2a` reuses a stored access
+  token, refreshes it, or uses client credentials. Otherwise it opens a
+  browser using PKCE. The redirect URI is fixed at
+  `http://localhost:19876/a2a/oauth/callback` and the callback port does not
+  walk. Dynamic client registration posts to the authorization server, not
+  the agent origin. Device code is used when there is no local display and
+  the server advertises it. Tokens and the registered client sit under
+  `~/.superqode/a2a-oauth/` and in the OS keyring when one is available.
+  `--logout` deletes them and revokes them at the identity provider when the
+  token response advertised `revocation_endpoint`. `--no-oauth` skips the
+  browser but still uses a stored token or client credentials.
+- `connect a2a --tls-cert` and `--tls-key` send a mutual TLS client
+  certificate when the card advertises `mutualTLS`.
+- Inspect redacts credential-shaped values in response bodies and secret
+  query parameters in URLs.
+- The `:connect` → Protocols → A2A screen (and `:connect a2a`) shows origin,
+  credential, and purple chips for OAuth, Headers, mTLS, and Inspect. Send on
+  that screen is the chat with the remote agent and keeps the same
+  `contextId` thread. Cards that advertise streaming stream their replies.
+  Skill examples fill the message box. Use saves the connection in place;
+  Back returns. y copies the last reply, r resends, Esc stops a wait. A
+  host that sits idle for 8s is named as possibly cold-starting. The main
+  SuperQode prompt stays ACP or local. `:a2a call <name>` reaches a saved
+  agent.
+- `:connect a2a <url>` and `:a2a connect <url>` open the A2A screen with the
+  origin filled in. `--inspect` and `--conformance` stay on the CLI.
+  `:a2a list` and `:a2a call` read `~/.superqode/a2a.json` and send the saved
+  credential, headers, and mTLS cert. CLI `--send` uses the same reply text
+  as the TUI chat.
+
+### Changed
+
+- Getting started, the TUI command list, and the connection methods page name
+  `:connect a2a` as the way to fetch an Agent Card. The A2A smoke-client
+  example no longer exports a token as if one were required.
+- The UHP connect screen uses readable text, does not prefill a default host,
+  and opens on a bare `:connect uhp <url>`. The command palette and the
+  theme, hub, and model pickers use the same black/purple surfaces as A2A.
+  Clickable chrome uses an arrow, not an underline.
+- `:connect` asks who should run the loop in friendlier copy. Existing agents
+  lead with Codex, Claude Code, Copilot, Grok, and Devin. Detected sources
+  are chips you can click. Protocols is **Reach a remote agent with
+  protocols**. Gemini CLI is no longer a SuperQode connect route; Google's
+  agent is Antigravity.
+- The Harness Hub title matches the A2A/Connect chrome. Inspect stays on the
+  Hub. Documentation URLs are not OSC-8 links. `ACTIVE` is purple. Filters are
+  chips with `s`/`c`/`n` keys. Narrow terminals stack a short detail pane
+  under the list instead of hiding it. Detected chips stay on `:connect`;
+  they are not on the Hub.
+  Plain `:hub` opens on Ready when this machine has a usable harness. SuperQode
+  harnesses without a connected model show **needs a model** and **Choose
+  model**, not a fake Ready/Use.
+
 ## [0.2.113] - 2026-08-29
 
 ### Added

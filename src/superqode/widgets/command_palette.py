@@ -73,23 +73,23 @@ class PaletteItem(Widget):
         height: 3;
         padding: 0 1;
         layout: horizontal;
-        background: #0a0a0a;
+        background: #000000;
         border-bottom: solid #222222;
     }
 
     PaletteItem:hover {
-        background: #1a3a5a;
+        background: #2a1a40;
     }
 
     PaletteItem.selected {
-        background: #00aaff;
+        background: #3b1d7a;
     }
 
     PaletteItem .icon {
         width: 4;
         height: 3;
         content-align: center middle;
-        color: #ffffff;
+        color: #e9d5ff;
     }
 
     PaletteItem .content {
@@ -99,24 +99,24 @@ class PaletteItem(Widget):
 
     PaletteItem .label {
         text-style: bold;
-        color: #ffffff;
+        color: #f0f0f0;
     }
 
     PaletteItem.selected .label {
-        color: #000000;
+        color: #f3e8ff;
     }
 
     PaletteItem .description {
-        color: #aaaaaa;
+        color: #c8c8c8;
     }
 
     PaletteItem.selected .description {
-        color: #000000;
+        color: #e9d5ff;
     }
 
     PaletteItem .shortcut {
         dock: right;
-        color: #00ff00;
+        color: #c4b5fd;
         text-style: bold;
         width: auto;
         padding-right: 1;
@@ -124,7 +124,7 @@ class PaletteItem(Widget):
     }
 
     PaletteItem.selected .shortcut {
-        color: #004400;
+        color: #e9d5ff;
     }
     """
 
@@ -172,7 +172,7 @@ class CommandPalette(Widget):
         height: auto;
         max-height: 25;
         background: #000000;
-        border: double #00ffff;
+        border: double #7c3aed;
         display: none;
     }
 
@@ -182,65 +182,65 @@ class CommandPalette(Widget):
 
     CommandPalette #palette-title-bar {
         height: 3;
-        background: #001a33;
+        background: #000000;
         padding: 1;
     }
 
     CommandPalette #palette-title {
         text-style: bold;
-        color: #00ffff;
+        color: #c4b5fd;
         text-align: center;
     }
 
     CommandPalette #palette-subtitle {
-        color: #888888;
+        color: #c8c8c8;
         text-align: center;
     }
 
     CommandPalette #palette-search-container {
         height: 3;
         padding: 0 1;
-        background: #0a0a0a;
-        border-bottom: solid #333333;
+        background: #000000;
+        border-bottom: solid #2a2a2a;
     }
 
     CommandPalette #palette-search {
         width: 100%;
-        background: #1a1a1a;
-        border: tall #00ffff;
-        color: #ffffff;
+        background: #000000;
+        border: tall #7c3aed;
+        color: #f0f0f0;
     }
 
     CommandPalette #palette-search:focus {
-        border: tall #00ff00;
-        background: #0a1a0a;
+        border: tall #c4b5fd;
+        background: #000000;
     }
 
     CommandPalette #palette-results {
         height: auto;
         max-height: 16;
-        background: #0a0a0a;
+        background: #000000;
     }
 
     CommandPalette .no-results {
         padding: 2;
-        color: #ffff00;
+        color: #e9d5ff;
         text-style: bold;
         text-align: center;
-        background: #1a1a00;
+        background: #1a1030;
     }
 
     CommandPalette #palette-footer {
         height: 2;
-        background: #1a1a1a;
-        color: #00ff00;
+        background: #000000;
+        color: #c4b5fd;
         padding: 0 1;
-        border-top: solid #333333;
+        border-top: solid #2a2a2a;
     }
 
     CommandPalette #footer-hints {
         text-align: center;
-        color: #00ff00;
+        color: #c4b5fd;
     }
     """
 

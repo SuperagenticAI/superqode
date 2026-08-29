@@ -312,14 +312,19 @@ def test_switching_to_a_server_owned_harness_connects_the_session(tmp_path, monk
 
 def test_the_connect_screen_paints_every_surface_black():
     """Textual gives Input, OptionList and Button their own grey panels."""
+    from inspect import getsource
+
     from superqode.widgets.uhp_connect import UHPConnectScreen
 
     css = UHPConnectScreen.CSS
     assert "#050505" not in css
     assert "#333333" not in css
+    assert "#5a5a5a" not in css
+    assert "#8a8a8a" not in css
     for selector in ("#uhp-url", "#uhp-list", "#uhp-actions Button", "Footer"):
         assert selector in css
     assert css.count("#000000") >= 10
+    assert "press Connect for" not in getsource(UHPConnectScreen)
 
 
 def test_the_connect_screen_carries_a_token_cap():

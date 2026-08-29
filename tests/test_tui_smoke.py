@@ -5847,16 +5847,17 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     rendered = render_plain(log.items[-1])
 
     assert picker_rows(rendered) == [
-        (1, "Connect an existing harness"),
+        (1, "Use an agent you already have"),
         (2, "Connect a harness with your model"),
         (3, "Build your own harness"),
-        (4, "Connect to existing agent protocols"),
+        (4, "Reach a remote agent with protocols"),
     ]
     # Vendor products and transports live one screen deeper now.
     assert "Codex subscription" not in rendered
     assert "US Coding Agents" not in rendered
     # The root screen names what it found rather than making the user guess.
-    assert "Detected here:" in rendered
+    assert "Detected" in rendered
+    assert "[Grok ↗]" in rendered or "Detected" in rendered
 
 
 def test_connect_picker_explains_every_choice():
@@ -5868,29 +5869,34 @@ def test_connect_picker_explains_every_choice():
 
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
-    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
+    assert "Codex, Claude Code, Copilot, Grok, Devin and more" in first
     assert "Core, RLM, PiPy, Workbench or a preset" in first
     assert "Import existing config" in first
-    # Marked twice on purpose: the arrow reads at a glance, the word survives
-    # a screen reader and a copied transcript.
-    assert "Connect an existing harness ↗  ← SELECTED" in first
-    assert first.count("← SELECTED") == 1
+    assert "ACP, A2A, or UHP" in first
+    assert "Use an agent you already have ↗" in first
+    assert "← SELECTED" not in first
+    assert "click a row" in first
 
     # Moving the highlight changes which row is marked, not which explain.
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
-    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
+    assert "Codex, Claude Code, Copilot, Grok, Devin and more" in second
     assert "Core, RLM, PiPy, Workbench or a preset" in second
     assert "Import existing config" in second
-    assert "Connect a harness with your model ↗  ← SELECTED" in second
-    assert second.count("← SELECTED") == 1
+    assert "Connect a harness with your model ↗" in second
+    assert second.count("●") >= 1
+    assert "← SELECTED" not in second
 
 
 @pytest.mark.parametrize("width", [60, 80, 120])
 def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
     import superqode.providers.connection_profiles as profiles
 
-    monkeypatch.setattr(profiles, "detected_sources", lambda: ["Cursor"])
+    monkeypatch.setattr(
+        profiles,
+        "detected_chips",
+        lambda: [profiles.DetectedChip("Grok", "profile", "grok")],
+    )
     app = make_app()
     log = FakeLog()
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
@@ -5903,9 +5909,10 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
 
     assert len(nonblank) <= 14
     assert all(len(line) <= width for line in text.splitlines())
-    assert "Connect an existing harness" in text
+    assert "Use an agent you already have" in text
     assert "Connect a harness with your model" in text
     assert "Build your own harness" in text
+    assert "Reach a remote agent with protocols" in text
 
 
 @pytest.mark.parametrize(
@@ -6024,7 +6031,7 @@ def test_agents_picker_returns_to_the_root_screen():
     assert app.action_connect_menu_back() is True
     assert app._connect_menu == "root"
     assert app._awaiting_connect_type is True
-    assert (1, "Connect an existing harness") in picker_rows(render_plain(log.items[-1]))
+    assert (1, "Use an agent you already have") in picker_rows(render_plain(log.items[-1]))
     # On the root screen Esc falls through to cancelling instead.
     assert app.action_connect_menu_back() is False
 
@@ -7128,25 +7135,31 @@ def test_managed_agent_session_badges_name_hosted_ownership():
     assert "ASK" not in rendered
 
 
-def test_connect_uhp_with_a_url_reaches_the_uhp_path_not_byok(monkeypatch):
-    """Any argument used to clear bare_profile and fall through to BYOK."""
+def test_connect_uhp_with_a_url_opens_the_connect_screen(monkeypatch):
+    """A bare origin is the form people type; it must not skip the picker."""
+    import superqode.providers.uhp as uhp_settings
+    from superqode.widgets.uhp_connect import UHPConnectScreen
+
     app = make_app()
     log = FakeLog()
-    seen = {}
+    called = []
+    pushed = []
     byok = []
-    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app.push_screen = lambda screen, callback=None: pushed.append(screen)
     app._connect_byok_cmd = lambda args, _log: byok.append(args)
     app._record_ex_command = lambda *_args: None
+    monkeypatch.setattr(
+        uhp_settings, "resolve_settings", lambda *a, **k: uhp_settings.UHPSettings()
+    )
 
     app._handle_command(":connect uhp http://127.0.0.1:3000/api/harness", log)
 
     assert byok == []
-    assert seen["parts"] == [
-        "connect",
-        "uhp",
-        "--base-url",
-        "http://127.0.0.1:3000/api/harness",
-    ]
+    assert called == []
+    assert len(pushed) == 1
+    assert isinstance(pushed[0], UHPConnectScreen)
+    assert pushed[0]._url == "http://127.0.0.1:3000/api/harness"
 
 
 def test_connect_uhp_passes_flags_through(monkeypatch):
@@ -7189,29 +7202,34 @@ def test_bare_connect_uhp_opens_the_connect_screen(monkeypatch):
     assert called == []
     assert len(pushed) == 1
     assert isinstance(pushed[0], UHPConnectScreen)
-    # Nothing saved yet, so the screen offers the Docker default.
-    assert pushed[0]._url == uhp_settings.DEFAULT_BASE_URL
+    assert pushed[0]._url == ""
 
 
-def test_connect_a2a_with_a_url_reaches_the_a2a_path_not_byok(monkeypatch):
-    """Any argument used to clear bare_profile and fall through to BYOK."""
+def test_connect_a2a_with_a_url_opens_the_connect_screen(monkeypatch):
+    """A bare origin is the form people type; it must not skip the chat screen."""
+    import superqode.a2a.connection as a2a_settings
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
     app = make_app()
     log = FakeLog()
-    seen = {}
+    called = []
+    pushed = []
     byok = []
-    app._run_cli_passthrough = lambda parts, _log, _label: seen.update(parts=parts)
+    app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app.push_screen = lambda screen, callback=None: pushed.append(screen)
     app._connect_byok_cmd = lambda args, _log: byok.append(args)
     app._record_ex_command = lambda *_args: None
+    monkeypatch.setattr(
+        a2a_settings, "resolve_settings", lambda *a, **k: a2a_settings.A2ASettings()
+    )
 
     app._handle_command(":connect a2a http://127.0.0.1:8000", log)
 
     assert byok == []
-    assert seen["parts"] == [
-        "connect",
-        "a2a",
-        "--url",
-        "http://127.0.0.1:8000",
-    ]
+    assert called == []
+    assert len(pushed) == 1
+    assert isinstance(pushed[0], A2AConnectScreen)
+    assert pushed[0]._url == "http://127.0.0.1:8000"
 
 
 def test_connect_a2a_passes_flags_through(monkeypatch):
@@ -7257,7 +7275,7 @@ def test_bare_connect_a2a_opens_the_connect_screen(monkeypatch):
     assert called == []
     assert len(pushed) == 1
     assert isinstance(pushed[0], A2AConnectScreen)
-    assert pushed[0]._url == a2a_settings.DEFAULT_URL
+    assert pushed[0]._url == ""
 
 
 def test_a2a_picker_opens_the_connect_screen(monkeypatch):

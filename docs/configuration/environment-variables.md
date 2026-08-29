@@ -51,6 +51,10 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_A2A_TOKEN` | bearer token | unset | Operator token for `superqode serve a2a`, and a fallback client token for `superqode connect a2a`. |
 | `SUPERQODE_A2A_URL` | URL | unset | A2A agent origin used by `superqode connect a2a`. |
 | `SUPERQODE_A2A_CLIENT_TOKEN` | bearer token | unset | Bearer for `superqode connect a2a`. A value set here is never copied into the saved connection file. |
+| `SUPERQODE_A2A_OAUTH_CLIENT_ID` | OAuth client id | unset | Public client id for A2A OAuth. Must be registered with redirect URI `http://localhost:19876/a2a/oauth/callback`. Required unless the authorization server advertises `registration_endpoint`. |
+| `SUPERQODE_A2A_OAUTH_CLIENT_SECRET` | OAuth client secret | unset | Confidential-client secret. Enables the client-credentials grant and token-endpoint authentication. |
+| `SUPERQODE_A2A_TLS_CERT` | path | unset | Client certificate PEM for `connect a2a` mutual TLS. A value set here is never copied into the saved connection file. |
+| `SUPERQODE_A2A_TLS_KEY` | path | unset | Private key PEM that pairs with `SUPERQODE_A2A_TLS_CERT`. |
 | `SUPERQODE_A2A_KEY_SECRET` | secret | unset | Signs and verifies customer API keys. Without it the server rejects every key. Generate with `superqode a2a-keys secret`. |
 | `SUPERQODE_A2A_REVOKED_KEYS` | comma-separated ids | unset | Key ids refused before their expiry. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |

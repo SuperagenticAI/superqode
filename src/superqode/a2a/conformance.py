@@ -2,6 +2,8 @@
 
 These answer whether SuperQode can fetch the card, speak an advertised
 binding, and complete one task. They are not an A2A specification suite.
+The client speaks SendMessage, GetTask, and CancelTask (and the 0.3 names).
+It does not claim ListTasks, JSON-RPC task resubscribe, or GetExtendedAgentCard.
 """
 
 from __future__ import annotations
@@ -98,12 +100,30 @@ async def run_a2a_conformance(
         origin,
         http_client=http_client,
         bearer_token=settings.token or None,
+        extra_headers=settings.headers or None,
+        client_cert=settings.cert or None,
+        client_key=settings.key or None,
         timeout=timeout,
     ) as client:
         try:
             card = await client.get_agent_card()
         except A2AClientError as exc:
             return _failed_discovery(origin, client, exc)
+
+        from superqode.a2a.oauth import satisfy_card_auth
+
+        auth_error = ""
+        try:
+            await satisfy_card_auth(
+                client,
+                origin,
+                token=settings.token,
+                headers=dict(settings.headers),
+                interactive=False,
+                skip_oauth=False,
+            )
+        except A2AClientError as exc:
+            auth_error = str(exc)
 
         name = card.name
         binding = client._binding or ""
@@ -136,6 +156,8 @@ async def run_a2a_conformance(
             checks.append(_skip("send", "not requested"))
         elif not checks[-1].passed:
             checks.append(_skip("send", "no speakable interface"))
+        elif auth_error:
+            checks.append(_check("send", False, auth_error))
         else:
             checks.append(await _send_check(client, probe))
         inspect = client.inspect.to_dict()

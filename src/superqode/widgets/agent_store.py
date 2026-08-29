@@ -921,26 +921,6 @@ def create_sample_agents() -> List[AgentInfo]:
             repository="https://github.com/sst/opencode",
         ),
         AgentInfo(
-            id="gemini-cli",
-            name="Gemini CLI",
-            description=(
-                "Google Gemini CLI ACP route for enterprise/API-key users; "
-                "consumer users should migrate to Antigravity CLI."
-            ),
-            author="Google",
-            version="1.0.0",
-            category="code",
-            status=AgentStatus.AVAILABLE,
-            tags=["ai", "google", "gemini", "official-acp"],
-            downloads=20000,
-            rating=4.6,
-            install_command="npm install -g @anthropic-ai/gemini-cli",
-            install_description="Install Gemini CLI",
-            run_command="gemini --acp",
-            requirements=["Node.js 18+", "npm", "Google Cloud account"],
-            documentation_url="https://ai.google.dev/gemini-api/docs",
-        ),
-        AgentInfo(
             id="codex",
             name="Codex",
             description="OpenAI's code generation agent with streaming terminal output.",

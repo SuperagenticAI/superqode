@@ -37,6 +37,23 @@ from superqode.app.session_state import get_session
 from superqode.providers.harness_catalog import HarnessAuthSpec
 
 _CONNECT_LOG = logging.getLogger("superqode.connect")
+
+
+def _origin_for_protocol_screen(tokens: list[str], url_flag: str) -> str | None:
+    """Return an origin for the TUI screen, or None to keep the CLI path.
+
+    A bare URL (or ``--url`` / ``--base-url`` alone) opens the screen. Any
+    other flag stays on the CLI.
+    """
+    if not tokens:
+        return ""
+    if len(tokens) == 1 and not tokens[0].startswith("-"):
+        return tokens[0]
+    if len(tokens) == 2 and tokens[0] == url_flag:
+        return tokens[1]
+    return None
+
+
 _CONNECTION_KEYS = (
     "category",
     "auth_mode",
@@ -323,9 +340,8 @@ class ConnectMixin:
     def _show_uhp_harnesses(self, log: ConversationLog, args: str = "") -> None:
         """Open the UHP connect screen, or run a fully specified connect.
 
-        A UHP server is remote, so the address comes first and the catalog is
-        fetched. With no arguments this opens a picker; with arguments it runs
-        the same command the shell would, so every flag keeps working.
+        A bare origin opens the screen. Flags such as ``--harness`` stay on
+        the CLI so every option keeps working.
         """
         import shlex
 
@@ -336,11 +352,10 @@ class ConnectMixin:
         except ValueError as exc:
             log.add_error(f"Could not parse :connect uhp arguments: {exc}")
             return
-        # `:connect uhp <url>` is the form people reach for; the flag form
-        # stays available so every CLI option works here too.
-        if tokens and not tokens[0].startswith("-"):
-            tokens = ["--base-url", *tokens]
-        if tokens:
+        origin = _origin_for_protocol_screen(tokens, "--base-url")
+        if origin is None:
+            if tokens and not tokens[0].startswith("-"):
+                tokens = ["--base-url", *tokens]
             log.add_info("Connecting to the UHP server ...")
             self._run_cli_passthrough(["connect", "uhp", *tokens], log, "UHP harnesses")
             return
@@ -348,7 +363,7 @@ class ConnectMixin:
         settings = resolve_settings()
         self.push_screen(
             UHPConnectScreen(
-                base_url=settings.base_url,
+                base_url=origin or settings.base_url,
                 default_url=DEFAULT_BASE_URL,
                 max_output_tokens=settings.max_output_tokens,
             ),
@@ -385,55 +400,83 @@ class ConnectMixin:
     def _show_a2a_agent(self, log: ConversationLog, args: str = "") -> None:
         """Open the A2A connect screen, or run a fully specified connect.
 
-        An A2A agent is remote, so the origin comes first and the card is
-        fetched. With no arguments this opens a picker; with arguments it runs
-        the same command the shell would, so every flag keeps working.
+        A bare origin opens the screen. Flags such as ``--inspect`` and
+        ``--conformance`` stay on the CLI so every option keeps working.
         """
         import shlex
 
-        from superqode.a2a.connection import DEFAULT_URL, resolve_settings
+        from superqode.a2a.connection import DEFAULT_URL, normalize_url, resolve_settings
 
         try:
             tokens = shlex.split(args or "")
         except ValueError as exc:
             log.add_error(f"Could not parse :connect a2a arguments: {exc}")
             return
-        # `:connect a2a <url>` is the form people reach for; the flag form
-        # stays available so every CLI option works here too.
-        if tokens and not tokens[0].startswith("-"):
-            tokens = ["--url", *tokens]
-        if tokens:
+        origin = _origin_for_protocol_screen(tokens, "--url")
+        if origin is None:
+            if tokens and not tokens[0].startswith("-"):
+                tokens = ["--url", *tokens]
             log.add_info("Connecting to the A2A agent ...")
             self._run_cli_passthrough(["connect", "a2a", *tokens], log, "A2A agent")
             return
 
         settings = resolve_settings()
+        url = normalize_url(origin) if origin else (settings.url if settings.configured else "")
+        same = bool(url) and normalize_url(url) == normalize_url(settings.url)
         self.push_screen(
             A2AConnectScreen(
-                url=settings.url,
+                url=url,
                 default_url=DEFAULT_URL,
-                token=settings.token,
+                token=settings.token if same else "",
+                headers=settings.headers if same else {},
+                cert=settings.cert if same else "",
+                key=settings.key if same else "",
             ),
             callback=lambda result: self._apply_a2a_selection(result, log),
         )
 
     def _apply_a2a_selection(self, result, log: ConversationLog) -> None:
-        """Save the chosen Agent Card origin and optional Bearer."""
+        """Save the chosen Agent Card origin and credentials."""
         if result is None:
             self._ensure_input_focus()
             return
         from superqode.a2a.connection import A2ASettings, save_connection
 
-        save_connection(A2ASettings(url=result.url, token=result.token))
+        save_connection(
+            A2ASettings(
+                url=result.url,
+                token=result.token,
+                headers=dict(getattr(result, "headers", {}) or {}),
+                cert=str(getattr(result, "cert", "") or ""),
+                key=str(getattr(result, "key", "") or ""),
+                name=str(getattr(result, "name", "") or ""),
+            )
+        )
         selected = result.name or result.url
+        self._remember_a2a_agent(selected, result.url)
         if result.binding:
             detail = f"{result.binding} {result.protocol_version}".rstrip()
-            log.add_success(f"A2A agent connected: {selected} · {detail}")
+            log.add_success(f"A2A agent saved: {selected} · {detail}")
         else:
-            log.add_success(f"A2A agent connected: {selected}")
+            log.add_success(f"A2A agent saved: {selected}")
+        log.add_info(
+            "The main prompt is still SuperQode (ACP or local), not this A2A agent. "
+            f'Chat on :connect a2a with Send, or :a2a call {selected} "your message".'
+        )
         if result.task_text:
             log.add_info(result.task_text[:2000])
         self._ensure_input_focus()
+
+    def _remember_a2a_agent(self, name: str, url: str) -> None:
+        try:
+            from superqode.commands.a2a import create_a2a_commands
+        except Exception:  # noqa: BLE001
+            return
+        if not hasattr(self, "_a2a_commands") or self._a2a_commands is None:
+            self._a2a_commands = create_a2a_commands()
+        remember = getattr(self._a2a_commands, "remember_agent", None)
+        if callable(remember):
+            remember(name, url)
 
     def _begin_key_harness(
         self, profile, log: ConversationLog, *, apply_route: tuple | None = None
@@ -1346,6 +1389,27 @@ class ConnectMixin:
             self._sync_navigation_controls()
         except Exception:  # noqa: BLE001 - navigation chrome must never block a connect
             pass
+
+    def _activate_detected_chip(self, chip) -> bool:
+        """Jump from a Detected chip into that agent, menu, or local engine."""
+        log = self.query_one("#log", ConversationLog)
+        kind = str(getattr(chip, "kind", "") or "")
+        target = str(getattr(chip, "target", "") or "")
+        if kind == "profile" and target:
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            profile = get_connection_profile(target)
+            if profile is None:
+                return False
+            self._dispatch_connection_profile(profile, log)
+            return True
+        if kind == "menu" and target:
+            self._show_connect_type_picker(log, menu=target)
+            return True
+        if kind == "local" and target:
+            self._connect_local_cmd(target, log)
+            return True
+        return False
 
     def _dispatch_connection_profile(self, profile, log: ConversationLog) -> None:
         """Route a chosen connection profile to its connector.
@@ -3197,7 +3261,6 @@ class ConnectMixin:
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_ROOT,
             connect_menu_titles,
-            detected_sources,
             normalize_menu,
         )
 
@@ -3250,15 +3313,37 @@ class ConnectMixin:
         t.append("\n", style="")
 
         # Show what was detected locally before the user chooses anything.
+        # Chips are clickable; info-only notes (repo markers) stay plain.
+        self._connect_chip_hits = []
         if is_root:
             try:
-                found = detected_sources()
+                from superqode.providers.connection_profiles import detected_chips
+
+                found = detected_chips()
             except Exception:  # noqa: BLE001 - never let detection break the picker
                 found = []
-            if found:
-                t.append("  Detected here: ", style=THEME["dim"])
-                t.append(" · ".join(found), style=THEME["cyan"])
+            clickable = [chip for chip in found if chip.kind != "info"]
+            notes = [chip.label for chip in found if chip.kind == "info"]
+            if clickable or notes:
+                from rich.cells import cell_len
+
+                t.append("  Detected  ", style=THEME["dim"])
+                hits: list = []
+                for index, chip in enumerate(clickable):
+                    if index:
+                        t.append(" ", style="")
+                    line = t.plain.rsplit("\n", 1)[-1]
+                    start = cell_len(line)
+                    t.append("[", style=THEME["dim"])
+                    t.append(chip.label, style=THEME["cyan"])
+                    t.append(" ↗]", style=f"bold {THEME['purple']}")
+                    line = t.plain.rsplit("\n", 1)[-1]
+                    hits.append((start, cell_len(line), chip))
+                if notes:
+                    t.append("  ·  ", style=THEME["dim"])
+                    t.append(" · ".join(notes), style=THEME["dim"])
                 t.append("\n\n", style="")
+                self._connect_chip_hits = hits
 
         # Grouping is per-menu; most screens are flat. Drawn from the same
         # helper selection indexes, so a filtered row cannot be numbered here
@@ -3302,7 +3387,7 @@ class ConnectMixin:
                     t.append(f"[{num:>{number_width}}] ", style=link)
                     t.append(profile.label, style=handle)
                     self._append_picker_arrow(t, num)
-                    t.append("  ← SELECTED\n", style=link)
+                    t.append("\n", style=link)
                 else:
                     link = self._picker_link_style(THEME["dim"], num)
                     t.append("  ", style="")
@@ -3339,15 +3424,14 @@ class ConnectMixin:
                     append_wrapped(profile.unavailable_hint, THEME["warning"])
 
         t.append("  💡 ", style=THEME["muted"])
+        t.append("click a row", style=THEME["cyan"])
+        t.append("  ·  ", style=THEME["dim"])
         t.append("↑↓", style=THEME["cyan"])
-        t.append(" navigate  ", style=THEME["dim"])
-        t.append("Enter", style=THEME["cyan"])
-        t.append(" select  ", style=THEME["dim"])
+        t.append("  Enter  ", style=THEME["dim"])
         if not is_root:
             t.append("Esc", style=THEME["purple"])
             t.append(" back  ", style=THEME["dim"])
-        t.append("•  ", style=THEME["dim"])
-        t.append("or type a number\n", style=THEME["dim"])
+        t.append("·  1-4\n" if is_root else "·  or type a number\n", style=THEME["dim"])
 
         if preserve_log:
             # Opened underneath something the user still needs to read, such as

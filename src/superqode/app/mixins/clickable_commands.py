@@ -38,8 +38,12 @@ CONFIRM_WHILE_BUSY: frozenset[str] = frozenset({"disconnect", "exit"})
 
 
 def command_link(command: str) -> str:
-    """Rich style fragment making a span click to run ``command``."""
-    return f"link superqode://cmd/{command}"
+    """Rich style fragment making a span click to run ``command``.
+
+    Terminals underline OSC-8 links on hover. SuperQode marks clickable
+    chrome with an arrow instead, so the link itself must not underline.
+    """
+    return f"not underline link superqode://cmd/{command}"
 
 
 class ClickableCommandMixin:

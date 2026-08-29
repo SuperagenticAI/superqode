@@ -170,7 +170,7 @@ nav:
       - 🟠 Anthropic Claude: providers/anthropic-claude.md
       - 🐙 GitHub Copilot: providers/github-copilot.md
       - 🚀 Google Antigravity: providers/antigravity.md
-      - ♊ Google Gemini CLI: providers/gemini.md
+      - ♊ Google Gemini: providers/gemini.md
       - 🎼 Meta Muse Code: providers/muse-code.md
       - ✕ xAI Grok: providers/grok.md
       - 🌀 Prime Intellect Prime Agent: providers/prime-agent.md

@@ -47,7 +47,7 @@ TypeScript and Python A2A clients for interop checks are documented under
 | --- | --- |
 | Public Agent Card | `https://super-agentic.ai/.well-known/agent-card.json` |
 | Serve a harness over A2A | `superqode serve a2a --spec harness.yaml` |
-| Call / discover from the TUI | `:connect a2a` · `:a2a connect <url>` |
+| Call / discover from the TUI | `:connect a2a` · `superqode connect a2a --inspect` |
 | Full guide | [A2A Protocol](../providers/a2a.md) |
 
 ## CocoIndex Code semantic search

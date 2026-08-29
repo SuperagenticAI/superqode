@@ -99,7 +99,7 @@ class HarnessHubMixin:
             raw = ""
             lowered = ""
 
-        filters = {"all", "ready", "setup", "custom", "coming"}
+        filters = {"all", "ready", "setup", "custom", "coming", "open"}
         initial_filter = lowered if lowered in filters else "all"
         query = "" if lowered in {"", *filters, "on", "start"} else raw
         self._open_harness_hub(log, query=query, initial_filter=initial_filter)
@@ -144,6 +144,10 @@ class HarnessHubMixin:
             (item.id for item in items if self._harness_picker_item_is_current(item)),
             "",
         )
+        if initial_filter == "all" and not query and any(item.available for item in items):
+            initial_filter = "ready"
+        pure = getattr(self, "_pure_mode", None)
+        session = getattr(pure, "session", None)
         self._record_milestone("explored")
         self.push_screen(
             HarnessHubScreen(
@@ -151,6 +155,8 @@ class HarnessHubMixin:
                 current_id=current_id,
                 query=query,
                 initial_filter=initial_filter,
+                session_connected=bool(getattr(session, "connected", False)),
+                session_model=str(getattr(session, "model", "") or ""),
             ),
             callback=lambda result: self._handle_harness_hub_result(result, items, log),
         )

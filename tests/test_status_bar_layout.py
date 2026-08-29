@@ -31,7 +31,7 @@ class TestFullWidthUsage:
         assert "BUILD" in line.plain
         # Identity keeps the corner, controls follow it, state right aligns.
         assert line.plain.startswith("SuperQode")
-        assert "[🔌 Connect]" in line.plain
+        assert "[🔌 Connect ↑]" in line.plain
         assert line.plain.rstrip().endswith("BUILD")
 
     def test_a_narrower_terminal_still_produces_a_valid_line(self):
@@ -65,7 +65,7 @@ class TestNoSessionStateIsAQuietRow:
         line = bar._render_for_width(150)
 
         assert line.plain.startswith("SuperQode")
-        assert "[🔌 Connect]" in line.plain
+        assert "[🔌 Connect ↑]" in line.plain
         assert "BUILD" not in line.plain
 
 

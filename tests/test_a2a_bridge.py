@@ -792,6 +792,157 @@ def test_client_accepts_a_jsonrpc_only_card():
     assert card.url == "https://rpc.example"
     assert binding == "JSONRPC"
     assert version == "1.0"
+    assert any(
+        event.kind == "auth" and "none advertised" in event.summary
+        for event in client.inspect.events
+    )
+
+
+def test_inspect_reports_bearer_advertised_and_not_required():
+    client = A2AClient("http://agent")
+    client._parse_agent_card(
+        {
+            "name": "Open",
+            "version": "1.0",
+            "skills": [],
+            "url": "https://rpc.example",
+            "supportedInterfaces": [
+                {
+                    "url": "https://rpc.example",
+                    "protocolBinding": "JSONRPC",
+                    "protocolVersion": "1.0",
+                }
+            ],
+            "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}},
+        }
+    )
+    assert any(
+        event.kind == "auth" and event.summary == "Auth: bearer advertised, not required"
+        for event in client.inspect.events
+    )
+
+
+@pytest.mark.asyncio
+async def test_client_falls_back_to_agent_json_when_agent_card_is_missing():
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+
+    app = FastAPI()
+
+    @app.get("/.well-known/agent.json")
+    async def legacy_card():
+        return JSONResponse(
+            {
+                "name": "Legacy",
+                "version": "1.0",
+                "skills": [],
+                "supportedInterfaces": [
+                    {
+                        "url": "http://agent",
+                        "protocolBinding": "JSONRPC",
+                        "protocolVersion": "0.3",
+                    }
+                ],
+            }
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as http:
+        client = A2AClient("http://agent", http_client=http)
+        card = await client.get_agent_card()
+    assert card.name == "Legacy"
+    urls = [event.summary for event in client.inspect.events if event.kind == "request"]
+    assert any("agent-card.json" in line for line in urls)
+    assert any("agent.json" in line for line in urls)
+
+
+@pytest.mark.asyncio
+async def test_client_sends_extra_headers_and_redacts_secrets():
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+
+    app = FastAPI()
+    seen: dict[str, str] = {}
+
+    @app.middleware("http")
+    async def capture(request, call_next):
+        seen["tenant"] = request.headers.get("x-tenant", "")
+        seen["key"] = request.headers.get("x-api-key", "")
+        return await call_next(request)
+
+    @app.get("/.well-known/agent-card.json")
+    async def card():
+        return JSONResponse(
+            {
+                "name": "Keyed",
+                "version": "1.0",
+                "skills": [],
+                "url": "http://agent",
+            }
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as http:
+        client = A2AClient(
+            "http://agent",
+            http_client=http,
+            extra_headers={"X-Tenant": "acme", "X-Api-Key": "secret"},
+        )
+        await client.get_agent_card()
+    assert seen == {"tenant": "acme", "key": "secret"}
+    request = next(event for event in client.inspect.events if event.kind == "request")
+    recorded = {key.lower(): value for key, value in request.detail["headers"].items()}
+    assert recorded["x-tenant"] == "acme"
+    assert recorded["x-api-key"] == "***"
+
+
+@pytest.mark.asyncio
+async def test_client_sends_query_api_keys_and_redacts_them():
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+
+    app = FastAPI()
+    seen: dict[str, str] = {}
+
+    @app.middleware("http")
+    async def capture(request, call_next):
+        seen["api_key"] = request.query_params.get("api_key", "")
+        return await call_next(request)
+
+    @app.get("/.well-known/agent-card.json")
+    async def card():
+        return JSONResponse(
+            {
+                "name": "QueryKeyed",
+                "version": "1.0",
+                "skills": [],
+                "url": "http://agent",
+            }
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as http:
+        client = A2AClient("http://agent", http_client=http)
+        client.add_query_params({"api_key": "secret"})
+        await client.get_agent_card()
+    assert seen["api_key"] == "secret"
+    request = next(event for event in client.inspect.events if event.kind == "request")
+    assert "api_key=***" in request.summary
+    assert "secret" not in request.summary
+
+
+def test_inspect_reports_required_schemes():
+    from superqode.a2a.inspect import auth_summary
+
+    assert (
+        auth_summary(
+            {
+                "securitySchemes": {"oauth2": {"type": "oauth2"}},
+                "securityRequirements": [{"oauth2": []}],
+            }
+        )
+        == "Auth: oauth2 required"
+    )
 
 
 def test_client_prefers_the_first_speakable_interface():

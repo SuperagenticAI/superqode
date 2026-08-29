@@ -114,8 +114,8 @@ rather than a connection:
 | **Wizard** | Answer a few questions and generate a spec | `:connect build-wizard` |
 | **Blank** | Write a minimal valid `harness.yaml` | `:connect build-blank` |
 
-Tool and agent interoperability stays on its own commands: `:mcp` for Model
-Context Protocol servers and `:a2a` for remote agent services.
+Tool and agent interoperability: `:mcp` for Model Context Protocol servers,
+`:connect a2a` for a remote Agent Card.
 
 Inside the TUI, `:explore` lists every capability category with its live state
 on this machine, and `:tour` walks the ladder above.

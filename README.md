@@ -112,8 +112,8 @@ Connect an agent that already exists:
 
 | Route | Examples |
 | --- | --- |
-| Vendor plans | Codex, Claude, GitHub Copilot, Cursor, Grok, Devin, Factory Droid, Kiro |
-| ACP agents | OpenCode, Goose, Gemini CLI, Cline, OpenHands, Deep Agents Code, and the full registry |
+| Vendor plans | Codex, Claude, GitHub Copilot, Grok, Devin, Factory Droid, Kiro |
+| ACP agents | OpenCode, Goose, Cline, OpenHands, Deep Agents Code, and the full registry |
 | Optional runtimes | LangChain DeepAgents, Hugging Face Tau, DeepSeek Harness, PydanticAI, Google ADK, OpenAI Agents SDK |
 | Local models | Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, SGLang, TGI |
 

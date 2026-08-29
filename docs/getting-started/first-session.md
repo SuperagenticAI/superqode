@@ -62,6 +62,7 @@ You can also connect directly:
 :connect acp opencode
 :connect byok openai <openai-model>
 :connect local ollama qwen3:8b
+:connect a2a
 ```
 
 Check the current state:
@@ -70,7 +71,7 @@ Check the current state:
 :status
 ```
 
-Use ACP when you want an external coding agent, BYOK when you want a hosted model with your API key, and local when you want Ollama, LM Studio, DS4, MLX, vLLM, or another local server.
+Use ACP when you want an external coding agent, BYOK when you want a hosted model with your API key, and local when you want Ollama, LM Studio, DS4, MLX, vLLM, or another local server. Use `:connect` → Protocols → A2A (or `:connect a2a`) to fetch a remote Agent Card. Open cards need no token; keyed cards take Bearer, API key, HTTP Basic, OAuth, extra headers, or mutual TLS on that screen. See [A2A Protocol](../providers/a2a.md).
 
 For modal keyboard navigation, run `:vim on`. Press `i` to enter a task and `Escape` to return to Normal mode. The setting persists across sessions. The complete reference is in [Vim-Like Terminal Navigation](../advanced/vim-mode.md).
 

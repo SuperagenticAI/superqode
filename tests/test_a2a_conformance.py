@@ -58,7 +58,16 @@ def _patch_client(monkeypatch, app, base_url="http://agent"):
     transport = httpx.ASGITransport(app=app)
     real_init = A2AClient.__init__
 
-    def patched_init(self, agent_url, http_client=None, timeout=60.0, bearer_token=None):
+    def patched_init(
+        self,
+        agent_url,
+        http_client=None,
+        timeout=60.0,
+        bearer_token=None,
+        extra_headers=None,
+        client_cert=None,
+        client_key=None,
+    ):
         if http_client is None:
             http_client = httpx.AsyncClient(transport=transport, base_url=base_url)
         real_init(
@@ -67,6 +76,9 @@ def _patch_client(monkeypatch, app, base_url="http://agent"):
             http_client=http_client,
             timeout=timeout,
             bearer_token=bearer_token,
+            extra_headers=extra_headers,
+            client_cert=client_cert,
+            client_key=client_key,
         )
 
     monkeypatch.setattr(A2AClient, "__init__", patched_init)
@@ -191,6 +203,21 @@ def test_connect_a2a_conformance_cli(tmp_path: Path, monkeypatch):
     assert not (tmp_path / "a2a.json").exists()
 
 
+def test_connect_a2a_conformance_no_send_skips_the_task(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("superqode.a2a.connection.connection_path", lambda: tmp_path / "a2a.json")
+    _patch_client(monkeypatch, _server(tmp_path).app)
+
+    result = CliRunner().invoke(
+        connect,
+        ["a2a", "--url", "http://agent", "--conformance", "--no-send", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["passed"] is True
+    send = next(check for check in payload["checks"] if check["name"] == "send")
+    assert send["skipped"] is True
+
+
 def test_connect_a2a_conformance_cli_fails_unspeakable(tmp_path: Path, monkeypatch):
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
@@ -241,3 +268,14 @@ def test_the_check_button_is_on_the_connect_screen():
 
     source = inspect.getsource(A2AConnectScreen.compose)
     assert 'id="a2a-check"' in source
+    assert 'id="a2a-logout"' in source
+    assert 'id="a2a-oauth"' in source
+    assert 'id="a2a-headers-btn"' in source
+    assert 'id="a2a-tls-btn"' in source
+    assert 'id="a2a-inspect-btn"' in source
+    assert 'id="a2a-headers"' in source
+    assert 'id="a2a-cert"' in source
+    assert 'id="a2a-examples"' in source
+    from superqode.widgets.a2a_connect import _HINT
+
+    assert "anonymous" in _HINT

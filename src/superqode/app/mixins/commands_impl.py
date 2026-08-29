@@ -6695,14 +6695,14 @@ class CommandImplMixin:
         subcommand = parts[0] if parts else ""
         subargs = parts[1] if len(parts) > 1 else ""
 
-        if subcommand in ("connect", "add") and not subargs:
-            self._show_a2a_agent(log)
+        if subcommand in ("connect", "add"):
+            self._show_a2a_agent(log, subargs)
             return
 
         # Lazy load A2A commands
-        if not hasattr(self, "_a2a_commands"):
+        if not hasattr(self, "_a2a_commands") or self._a2a_commands is None:
             try:
-                from .commands.a2a import create_a2a_commands
+                from superqode.commands.a2a import create_a2a_commands
 
                 self._a2a_commands = create_a2a_commands()
             except ImportError:

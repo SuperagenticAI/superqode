@@ -264,20 +264,29 @@ superqode connect a2a [OPTIONS]
 |--------|-------------|
 | `--url URL` | Agent origin or Agent Card host |
 | `--token TOKEN` | Bearer credential. Open cards need none |
+| `--header NAME:VALUE` | Extra request header. Repeatable |
 | `--send TEXT` | Send one message after discovery |
 | `--save` / `--no-save` | Remember the connection (default: save) |
-| `--inspect` | Show the binding choice, skipped interfaces, and last HTTP request/response |
+| `--inspect` | Show the binding choice, skipped interfaces, advertised auth, and last HTTP request/response |
 | `--conformance` | Run SuperQode's client checks: fetch the card, speak a binding, complete one task |
+| `--no-send` | Skip the send check (with `--conformance` only) |
+| `--oauth` / `--no-oauth` | When a card requires OAuth, open a browser (default: open). `--no-oauth` still uses a stored token or client credentials |
+| `--logout` | Delete stored OAuth tokens for this origin and revoke them at the identity provider when it advertised `revocation_endpoint` |
+| `--tls-cert PATH` | Client certificate PEM for mutual TLS |
+| `--tls-key PATH` | Client certificate private key PEM |
 | `--json` | Emit the card, binding, and optional task as JSON |
 
 ### Examples
 
 ```bash
-superqode connect a2a --url https://superqode.onrender.com
-superqode connect a2a --url https://superqode.onrender.com --inspect
-superqode connect a2a --url https://superqode.onrender.com --conformance
-superqode connect a2a --url https://superqode.onrender.com --send "Which coding agents are open source?"
+superqode connect a2a --url https://agent.example
+superqode connect a2a --url https://agent.example --inspect
+superqode connect a2a --url https://agent.example --conformance
+superqode connect a2a --url https://agent.example --conformance --no-send
+superqode connect a2a --url https://agent.example --header "X-Tenant: acme"
+superqode connect a2a --url https://agent.example --send "Which coding agents are open source?"
 superqode connect a2a --url https://localhost:8000 --token "$SUPERQODE_A2A_CLIENT_TOKEN"
+superqode connect a2a --url https://agent.example --logout
 ```
 
 ### Notes
@@ -287,12 +296,31 @@ Settings come from options first, then `SUPERQODE_A2A_URL` and
 `~/.superqode/a2a.json`. A token that came from the environment is never copied
 to that file.
 
-From the TUI, `:connect a2a` opens a screen for the origin and optional Bearer.
-The screen lists skills and an inspect pane for the binding choice and HTTP.
-`:connect a2a <url>` runs the same command the shell would. `--inspect` is the
-CLI form of that pane. `--conformance` runs four client checks (card-fetch,
-card-shape, binding, send) and does not save the connection. A card SuperQode
-cannot speak prints the advertised interfaces and why each one was skipped.
+OAuth browser login always redirects to
+`http://localhost:19876/a2a/oauth/callback`. Register that URI with the
+identity provider and set `SUPERQODE_A2A_OAUTH_CLIENT_ID` (and
+`SUPERQODE_A2A_OAUTH_CLIENT_SECRET` for a confidential client) unless the
+authorization server supports dynamic client registration. Tokens are stored
+in the OS keyring when one is available, otherwise under
+`~/.superqode/a2a-oauth/`. `--logout` deletes them and calls the
+authorization server's `revocation_endpoint` when that was stored at login.
+A query-string API key is sent on the request URL; pass it as `--token` when
+the card names that scheme. Mutual TLS uses `--tls-cert` and `--tls-key` (or
+`SUPERQODE_A2A_TLS_CERT` / `SUPERQODE_A2A_TLS_KEY`).
+
+From the TUI, `:connect` → Protocols → A2A (or `:connect a2a`) opens a
+screen for the origin plus credential, extra headers, mTLS paths, and an
+OAuth on/skip control. A bare `:connect a2a <url>` or `:a2a connect <url>`
+opens that screen with the origin filled in. Open cards leave the credential
+empty. OAuth opens a browser. Logout clears stored tokens. After Connect,
+Send is the chat with that agent and keeps the same `contextId` thread.
+Skill examples fill the message box. Use saves the connection in place; Back
+returns. y copies, r resends, Esc stops a wait. The screen lists skills and
+an inspect pane for the binding choice, advertised auth, and HTTP.
+`--inspect` is the CLI form of that pane. `--conformance` runs four client
+checks (card-fetch, card-shape, binding, send) and does not save the
+connection. A card SuperQode cannot speak prints the advertised interfaces
+and why each one was skipped.
 These checks answer whether SuperQode can talk to the card. They are not an
 A2A specification suite.
 

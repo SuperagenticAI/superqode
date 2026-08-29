@@ -99,10 +99,10 @@ def dispatch(profile_id):
 def test_root_offers_the_ways_to_get_a_harness():
     """Three owners you name, plus the loop that lives behind a protocol."""
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_ROOT)] == [
-        ("agents", "Connect an existing harness"),
+        ("agents", "Use an agent you already have"),
         ("models", "Connect a harness with your model"),
         ("build", "Build your own harness"),
-        ("protocols", "Connect to existing agent protocols"),
+        ("protocols", "Reach a remote agent with protocols"),
     ]
 
 
@@ -424,12 +424,12 @@ def test_the_subscriptions_category_holds_every_plan_codex_first():
 
     assert [p.id for p in list_connection_profiles(CONNECT_MENU_VENDORS)] == [
         "codex",
+        "grok",
         "cursor",
         "amp",
         "antigravity",
         "muse",
         "prime-agent",
-        "grok",
         "copilot",
         "devin",
         "droid",

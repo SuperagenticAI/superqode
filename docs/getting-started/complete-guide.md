@@ -103,6 +103,7 @@ Direct coding-agent examples:
 :connect kimi-code
 :connect qwen-code
 :connect acp opencode
+:connect a2a
 ```
 
 For ACP coding agents, `:connect acp` shows installed and featured runtimes.

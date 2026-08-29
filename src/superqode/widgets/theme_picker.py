@@ -56,7 +56,7 @@ class ThemePicker(ModalScreen[str | None]):
     ThemePicker #theme-list {
         height: auto;
         max-height: 14;
-        background: #050505;
+        background: #000000;
         border: solid #27272a;
     }
 

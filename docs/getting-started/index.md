@@ -159,6 +159,7 @@ Direct examples:
 :connect byok openai <openai-model>
 :connect local ollama qwen3:8b
 :connect acp opencode
+:connect a2a
 ```
 
 Check state:

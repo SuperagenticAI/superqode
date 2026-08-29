@@ -142,6 +142,15 @@ def normalize_menu(menu: str | None) -> str:
 
 
 @dataclass(frozen=True)
+class DetectedChip:
+    """One detected source on the root connect screen."""
+
+    label: str
+    kind: str = "info"  # profile | menu | local | info
+    target: str = ""
+
+
+@dataclass(frozen=True)
 class ConnectionProfile:
     """A product/account-level connection source shown in ``:connect``."""
 
@@ -436,8 +445,8 @@ def _byok_ready() -> bool:
 _ROOT_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="agents",
-        label="Connect an existing harness",
-        description="Codex, Claude Code, Copilot, Cursor, Devin and more",
+        label="Use an agent you already have",
+        description="Codex, Claude Code, Copilot, Grok, Devin and more",
         connector="agent-picker",
         detect=lambda: True,
     ),
@@ -704,6 +713,26 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=missing_extra_hint("codex-sdk", suffix="then run `codex login`"),
     ),
     ConnectionProfile(
+        id="grok",
+        harness_openness="open",
+        model_openness="Grok models",
+        transport="ACP or CLI",
+        label="Grok",
+        description=(
+            "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, "
+            "over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness "
+            "on the same plan: :grok api"
+        ),
+        # Interactive Subscriptions stay on ACP. runtime= is the print/CI path
+        # only — do not prefer grok-cli the way Copilot prefers its SDK.
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="grok",
+        runtime="grok-cli",
+        detect=_grok_cli_ready,
+        unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
+    ),
+    ConnectionProfile(
         id="cursor",
         harness_openness="closed",
         model_openness="multi-model",
@@ -793,26 +822,6 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
             "install with `curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`, "
             "then run `prime-agent` and use its `/login`"
         ),
-    ),
-    ConnectionProfile(
-        id="grok",
-        harness_openness="open",
-        model_openness="Grok models",
-        transport="ACP or CLI",
-        label="Grok",
-        description=(
-            "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, "
-            "over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness "
-            "on the same plan: :grok api"
-        ),
-        # Interactive Subscriptions stay on ACP. runtime= is the print/CI path
-        # only — do not prefer grok-cli the way Copilot prefers its SDK.
-        connector="acp",
-        menu=CONNECT_MENU_VENDORS,
-        acp_agent="grok",
-        runtime="grok-cli",
-        detect=_grok_cli_ready,
-        unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
     ),
     ConnectionProfile(
         id="copilot",
@@ -995,7 +1004,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
 _AGENT_SUBSCRIPTIONS = ConnectionProfile(
     id="agent-subscriptions",
     label="Subscriptions",
-    description="Vendor plans you sign in to: Codex, Claude Code, Copilot, Cursor and more",
+    description="Vendor plans you sign in to: Codex, Claude Code, Copilot, Grok and more",
     connector="vendor-picker",
     menu=CONNECT_MENU_AGENTS,
     detect=lambda: True,
@@ -1109,8 +1118,8 @@ _UHP_SERVER = ConnectionProfile(
 
 _PROTOCOLS = ConnectionProfile(
     id="protocols",
-    label="Connect to existing agent protocols",
-    description="Reach an agent or harness over ACP, A2A, or UHP",
+    label="Reach a remote agent with protocols",
+    description="ACP, A2A, or UHP",
     connector="protocols-menu",
     menu=CONNECT_MENU_ROOT,
     detect=lambda: True,
@@ -1127,7 +1136,7 @@ _PROTOCOL_ACP = ConnectionProfile(
 _PROTOCOL_A2A = ConnectionProfile(
     id="protocol-a2a",
     label="Agent2Agent (A2A)",
-    description="A remote agent discovered from its published agent card",
+    description="A remote agent from its Agent Card: open, Bearer, API key, OAuth, headers, or mTLS",
     connector="a2a-picker",
     menu=CONNECT_MENU_PROTOCOLS,
     transport="A2A",
@@ -1393,7 +1402,7 @@ _BY_MENU = {
 CONNECT_MENU_TITLES = {
     CONNECT_MENU_ROOT: (
         "Connect",
-        "Who should run the coding loop?",
+        "Start from Detected, or choose how the loop runs.",
     ),
     CONNECT_MENU_AGENTS: (
         "Existing harnesses",
@@ -1589,50 +1598,68 @@ def display_ordered_profiles(menu: str) -> List[ConnectionProfile]:
     return [profile for _group, profiles in grouped_menu_profiles(menu) for profile in profiles]
 
 
-def detected_sources(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[str]:
-    """Short labels for what is already usable here, for the connect header.
+def detected_chips(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[DetectedChip]:
+    """Clickable sources already usable here, for the connect header.
 
     Probes are local only (``which``, file and env checks); this renders on
     the first frame of ``:connect``.
     """
-    agents = [
-        profile.label.replace(" subscription", "")
+    ready = [
+        profile
         for profile in _AGENT_PROFILES
         if profile.connector not in _BROWSE_CONNECTORS and profile.available
     ]
 
-    extras: List[str] = []
+    extras: List[DetectedChip] = []
     try:
         from superqode.local.servers import SPECS, ServerManager
 
         manager = ServerManager()
         engines = [engine for engine in SPECS if manager.is_installed(engine)]
         if engines:
-            extras.append(
-                engines[0] if len(engines) == 1 else f"{engines[0]} +{len(engines) - 1} local"
-            )
+            label = engines[0] if len(engines) == 1 else f"{engines[0]} +{len(engines) - 1} local"
+            extras.append(DetectedChip(label, "local", engines[0]))
     except Exception:  # noqa: BLE001 - a detection header must never break connect
         pass
 
     keyed = [env for env in _BYOK_KEY_ENVS if os.environ.get(env)]
     if keyed:
-        extras.append(f"{len(keyed)} API key{'s' if len(keyed) > 1 else ''}")
+        extras.append(
+            DetectedChip(
+                f"{len(keyed)} API key{'s' if len(keyed) > 1 else ''}",
+                "menu",
+                CONNECT_MENU_MODELS,
+            )
+        )
 
     root = repo_root or Path.cwd()
     for marker in (".claude", "AGENTS.md", "CLAUDE.md", ".cursor"):
         try:
             if (root / marker).exists():
-                extras.append(f"{marker} in this repo")
+                extras.append(DetectedChip(f"{marker} in this repo", "info"))
                 break
         except OSError:
             break
 
-    # Local engines, keys and repo config are the interesting finds, so they
-    # keep their slots while a long agent list gets summarised.
     budget = max(1, limit - len(extras))
-    if len(agents) > budget:
-        agents = [*agents[: budget - 1], f"+{len(agents) - budget + 1} more agents"]
-    return [*agents, *extras]
+    if len(ready) > budget:
+        named = ready[: budget - 1]
+        chips = [
+            DetectedChip(profile.label.replace(" subscription", ""), "profile", profile.id)
+            for profile in named
+        ]
+        chips.append(DetectedChip(f"+{len(ready) - len(named)} more", "menu", CONNECT_MENU_AGENTS))
+    else:
+        chips = [
+            DetectedChip(profile.label.replace(" subscription", ""), "profile", profile.id)
+            for profile in ready
+        ]
+    return [*chips, *extras]
+
+
+def detected_sources(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[str]:
+    """Labels only. Prefer ``detected_chips`` when the screen needs a jump target."""
+    return [chip.label for chip in detected_chips(repo_root, limit=limit)]
 
 
 __all__ = [
@@ -1654,6 +1681,8 @@ __all__ = [
     "ConnectionProfile",
     "connect_menu_titles",
     "connect_menu_version",
+    "DetectedChip",
+    "detected_chips",
     "detected_sources",
     "group_profiles_by_readiness",
     "list_connection_profiles",

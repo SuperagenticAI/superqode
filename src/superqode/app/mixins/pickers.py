@@ -29,7 +29,7 @@ class PickerNavigationMixin:
         The ↗ is the only “this is clickable” mark.
         """
         del number, handle
-        return style
+        return f"{style} not underline"
 
     def _append_picker_dot(self, target: Text, number: int, *, highlighted: bool) -> None:
         """Write the click dot that opens a row.
@@ -302,6 +302,23 @@ class PickerNavigationMixin:
                 return False
         except Exception:  # noqa: BLE001 - a stray click must never raise
             return False
+
+        if getattr(self, "_awaiting_connect_type", False):
+            try:
+                header = "".join(segment.text for segment in lines[index])
+            except Exception:  # noqa: BLE001
+                header = ""
+            if "Detected" in header:
+                activate = getattr(self, "_activate_detected_chip", None)
+                hits = getattr(self, "_connect_chip_hits", None) or []
+                if callable(activate) and hits:
+                    column = int(getattr(offset, "x", -1))
+                    for start, end, chip in hits:
+                        if start <= column < end:
+                            return bool(activate(chip))
+                    if len(hits) == 1:
+                        return bool(activate(hits[0][2]))
+                return False
 
         for cursor in range(index, max(-1, index - self._PICKER_ROW_LOOKBACK), -1):
             try:

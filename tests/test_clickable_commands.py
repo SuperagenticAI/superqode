@@ -42,7 +42,7 @@ class App(ClickableCommandMixin):
 
 
 def test_link_targets_carry_the_command():
-    assert command_link("disconnect") == "link superqode://cmd/disconnect"
+    assert command_link("disconnect") == "not underline link superqode://cmd/disconnect"
 
 
 def test_an_idle_click_runs_the_command():
@@ -172,21 +172,26 @@ def _bar(**kwargs):
     return bar
 
 
+def _hit(bar, rendered, marker: str) -> str:
+    prefix = rendered.plain[: rendered.plain.index(marker)]
+    return bar.action_at(cell_len(prefix) + 1)
+
+
 def test_the_button_offers_connect_when_nothing_is_connected():
-    rendered = _bar(interaction_mode="build")._render_for_width(120)
+    bar = _bar(interaction_mode="build")
+    rendered = bar._render_for_width(120)
 
     assert "Connect" in rendered.plain
     assert "Disconnect" not in rendered.plain
-    assert any("cmd/connect" in str(span.style) for span in rendered.spans)
+    assert _hit(bar, rendered, "[🔌 Connect ↑]") == "connect"
 
 
 def test_the_button_offers_disconnect_once_connected():
-    rendered = _bar(
-        byok_provider="openai", byok_model="gpt-4o", interaction_mode="build"
-    )._render_for_width(120)
+    bar = _bar(byok_provider="openai", byok_model="gpt-4o", interaction_mode="build")
+    rendered = bar._render_for_width(120)
 
     assert "Disconnect" in rendered.plain
-    assert any("cmd/disconnect" in str(span.style) for span in rendered.spans)
+    assert _hit(bar, rendered, "[⏏ Disconnect ↑]") == "disconnect"
 
 
 def test_the_controls_sit_beside_the_identity():
@@ -196,15 +201,16 @@ def test_the_controls_sit_beside_the_identity():
 
     # Identity keeps the corner; the controls sit beside it, still on the left.
     assert rendered.plain.startswith("SuperQode")
-    assert "[⏏ Disconnect] [⚓ Hub] [⏻ Exit]" in rendered.plain
+    assert "[⏏ Disconnect ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain
     assert rendered.plain.index("[⏏") < rendered.plain.index("openai")
 
 
 def test_the_hub_is_a_permanent_top_level_control():
-    rendered = _bar(interaction_mode="build")._render_for_width(120)
+    bar = _bar(interaction_mode="build")
+    rendered = bar._render_for_width(120)
 
-    assert "[⚓ Hub]" in rendered.plain
-    assert any("cmd/hub" in str(span.style) for span in rendered.spans)
+    assert "[⚓ Hub ↑]" in rendered.plain
+    assert _hit(bar, rendered, "[⚓ Hub ↑]") == "hub"
     assert rendered.plain.index("Connect") < rendered.plain.index("Hub")
     assert rendered.plain.index("Hub") < rendered.plain.index("Exit")
 
@@ -270,12 +276,11 @@ def test_no_command_ever_asks_when_idle(command):
 
 
 def test_the_exit_button_is_offered_and_clickable():
-    rendered = _bar(
-        byok_provider="openai", byok_model="gpt-4o", interaction_mode="build"
-    )._render_for_width(120)
+    bar = _bar(byok_provider="openai", byok_model="gpt-4o", interaction_mode="build")
+    rendered = bar._render_for_width(120)
 
     assert "Exit" in rendered.plain
-    assert any("cmd/exit" in str(span.style) for span in rendered.spans)
+    assert _hit(bar, rendered, "[⏻ Exit ↑]") == "exit"
 
 
 def test_no_control_is_filled_with_a_reverse_block():
@@ -438,7 +443,7 @@ def test_the_back_button_appears_only_with_somewhere_to_go():
     bar.can_go_back = True
     rendered = bar._render_for_width(120)
     assert "← Back" in rendered.plain
-    assert any("cmd/back" in str(span.style) for span in rendered.spans)
+    assert _hit(bar, rendered, "[← Back ↑]") == "back"
 
 
 def test_clicking_back_walks_the_history():
@@ -543,17 +548,17 @@ def test_the_bar_never_outgrows_the_terminal(width):
 
 # -- the link convention ----------------------------------------------------- #
 #
-# Underline means clickable. Colour keeps meaning state, so a link that also
-# carries state (ready, destructive) keeps its colour and relies on the
-# underline alone; a link with no state takes THEME["link"].
+# An upward arrow means clickable. Colour keeps meaning state. Underline was
+# tried and rejected: it read as a rule across the row on hover.
 
 
 def _underlined(rendered):
-    return {
-        rendered.plain[span.start : span.end].strip()
-        for span in rendered.spans
-        if "underline" in str(span.style)
-    }
+    found = set()
+    for span in rendered.spans:
+        style = str(span.style)
+        if "underline" in style and "not underline" not in style:
+            found.add(rendered.plain[span.start : span.end].strip())
+    return found
 
 
 def _clickable(rendered):
@@ -601,6 +606,38 @@ def _renderings():
     return surfaces
 
 
+def test_status_bar_buttons_carry_an_up_arrow():
+    rendered = _bar(interaction_mode="build")._render_for_width(120)
+    assert "[🔌 Connect ↑]" in rendered.plain
+    assert "[⚓ Hub ↑]" in rendered.plain
+    assert "[⏻ Exit ↑]" in rendered.plain
+
+
+def test_status_bar_buttons_are_not_hyperlinks():
+    """Terminals underline OSC-8 on hover; Rich cannot stop that."""
+    bar = _bar(interaction_mode="build", can_go_back=True)
+    rendered = bar._render_for_width(120)
+    assert "superqode://" not in " ".join(str(span.style) for span in rendered.spans)
+    prefix = rendered.plain[: rendered.plain.index("[🔌 Connect ↑]")]
+    assert bar.action_at(cell_len(prefix) + 1) == "connect"
+    back = rendered.plain[: rendered.plain.index("[← Back ↑]")]
+    assert bar.action_at(cell_len(back) + 1) == "back"
+    hub = rendered.plain[: rendered.plain.index("[⚓ Hub ↑]")]
+    assert bar.action_at(cell_len(hub) + 1) == "hub"
+    exit_at = rendered.plain[: rendered.plain.index("[⏻ Exit ↑]")]
+    assert bar.action_at(cell_len(exit_at) + 1) == "exit"
+    assert bar.action_at(0) == "home"
+
+
+def test_hints_bar_marks_clickable_commands_with_an_arrow():
+    idle = _hints(False).plain
+    assert ":connect ↑" in idle
+    assert ":hub ↑" in idle
+    working = _hints(True).plain
+    assert ":disconnect ↑" in working
+    assert ":help ↑" in working
+
+
 def test_nothing_is_underlined():
     """Underline was tried and rejected: it read as a rule across the row."""
     for name, rendered in _renderings().items():
@@ -609,13 +646,26 @@ def test_nothing_is_underlined():
 
 def test_every_surface_offers_something_clickable():
     for name, rendered in _renderings().items():
-        if name.startswith("picker "):
-            # Picker rows stay clickable by position. They must not emit
-            # OSC-8 pick URLs — those pop a ⌘-click tooltip over the list.
-            assert "↗" in rendered.plain, f"{name}: no row arrow"
+        if name.startswith("picker ") or name == "status bar":
+            # Picker rows and the top status bar stay clickable by position.
+            # OSC-8 hyperlinks make the terminal draw a hover underline that
+            # Rich cannot turn off.
+            assert "↗" in rendered.plain or "↑" in rendered.plain, f"{name}: no row arrow"
             assert _clickable(rendered) == set()
             continue
         assert _clickable(rendered), f"{name}: nothing clickable at all"
+
+
+def test_the_command_palette_uses_black_and_purple():
+    from superqode.widgets.command_palette import CommandPalette, PaletteItem
+
+    for css in (CommandPalette.DEFAULT_CSS, PaletteItem.DEFAULT_CSS):
+        assert "#00ffff" not in css
+        assert "#00aaff" not in css
+        assert "#001a33" not in css
+        assert "#00ff00" not in css
+        assert "#7c3aed" in css or "#3b1d7a" in css or "#c4b5fd" in css
+        assert "#000000" in css
 
 
 def test_the_link_colour_is_distinct_from_the_action_colours():

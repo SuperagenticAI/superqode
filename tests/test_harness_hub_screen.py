@@ -105,7 +105,9 @@ async def test_mouse_selection_previews_until_use_is_clicked() -> None:
         assert isinstance(screen, HarnessHubScreen)
 
         # Clicking a row selects it for inspection without switching harness.
-        assert await pilot.click("#hub-list", offset=(4, 3))
+        # Offset is inside the list content, below the one-cell panel border
+        # and the first two-line row (Core).
+        assert await pilot.click("#hub-list", offset=(6, 5))
         await pilot.pause()
         assert app.selection is None
 
@@ -152,7 +154,12 @@ async def test_zcode_is_browsable_but_enter_opens_inspection() -> None:
         await pilot.press("enter")
         await pilot.pause()
 
-        assert selected == [HarnessHubResult("inspect", "ecosystem:zcode")]
+        assert selected == []
+        assert isinstance(app.screen, HarnessHubScreen)
+        rendered = screen.query_one("#hub-detail").render()
+        detail = getattr(rendered, "plain", str(rendered))
+        assert "ZCode" in detail or "zcode" in detail.casefold()
+        assert screen._inspect_expanded is True
 
 
 @pytest.mark.asyncio
@@ -168,7 +175,8 @@ async def test_hub_catalog_keeps_the_main_content_visible() -> None:
 
         assert header.outer_size.height == 5
         assert body.size.height >= 16
-        assert harness_list.outer_size.height == body.outer_size.height
+        assert harness_list.outer_size.height >= 8
+        assert harness_list.outer_size.height <= body.outer_size.height
 
 
 @pytest.mark.asyncio
@@ -223,3 +231,48 @@ async def test_open_source_filter_selects_open_harnesses_across_every_route() ->
         await pilot.click("#hub-filter-all")
         await pilot.pause()
         assert len(screen.filtered_items) > len(shown)
+
+
+@pytest.mark.asyncio
+async def test_hub_copy_and_inspect_stay_in_place() -> None:
+    app = _HubApp()
+    async with app.run_test(size=(100, 34)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, HarnessHubScreen)
+        subtitle = getattr(screen.query_one("#hub-subtitle").render(), "plain", "") or str(
+            screen.query_one("#hub-subtitle").render()
+        )
+        assert "Browse harnesses" in subtitle
+        assert "trust" not in subtitle.casefold()
+        assert "#38bdf8" not in HarnessHubScreen.CSS
+        assert "hub-detected" not in HarnessHubScreen.CSS
+        detail = screen.query_one("#hub-detail").render()
+        markup = getattr(detail, "markup", str(detail))
+        assert "link " not in markup
+
+        await pilot.press("i")
+        await pilot.pause()
+        assert app.selection is None
+        assert isinstance(app.screen, HarnessHubScreen)
+        assert screen._inspect_expanded is True
+
+
+def test_hub_control_boxes_use_tall_and_panels_use_round() -> None:
+    """Buttons are 3 rows tall; tall borders close. List/detail use round."""
+    css = HarnessHubScreen.CSS
+    assert "border: tall #3a3a3a" in css
+    assert "border: round #27272a" in css
+    assert "border: solid #3a3a3a" not in css
+
+
+def test_native_harness_without_a_model_is_not_called_ready() -> None:
+    screen = HarnessHubScreen([_item("rlm", "RLM"), _item("tau", "Tau", ready=False)])
+    rlm = screen.items[0]
+    assert screen._run_state(rlm) == "choose-model"
+    assert "needs a model" in screen._option_label(rlm).plain
+    screen.session_connected = True
+    screen.session_model = "qwen3:8b"
+    assert screen._run_state(rlm) == "use"
+    assert "ready" in screen._option_label(rlm).plain
+    assert screen._run_state(screen.items[1]) == "setup"

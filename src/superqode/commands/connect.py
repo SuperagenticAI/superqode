@@ -93,6 +93,13 @@ def connect_uhp(base_url, api_key, harness, max_output_tokens, save, json_output
 @connect.command("a2a")
 @click.option("--url", metavar="URL", help="Agent origin or Agent Card URL")
 @click.option("--token", metavar="TOKEN", help="Bearer credential for operations")
+@click.option(
+    "--header",
+    "header_values",
+    multiple=True,
+    metavar="NAME:VALUE",
+    help="Extra request header. Repeatable.",
+)
 @click.option("--send", "message", metavar="TEXT", help="Send one message after discovery")
 @click.option("--save/--no-save", default=True, help="Remember this connection")
 @click.option(
@@ -106,24 +113,77 @@ def connect_uhp(base_url, api_key, harness, max_output_tokens, save, json_output
     is_flag=True,
     help="Run SuperQode's client checks against this card (fetch, binding, one task)",
 )
+@click.option(
+    "--no-send",
+    is_flag=True,
+    help="Skip the send check. Only applies with --conformance",
+)
+@click.option(
+    "--oauth/--no-oauth",
+    default=True,
+    help="When a card requires OAuth, open a browser (default: open)",
+)
+@click.option(
+    "--logout",
+    is_flag=True,
+    help="Delete stored OAuth tokens for this agent origin and revoke them at the identity provider if it advertises revocation_endpoint",
+)
+@click.option(
+    "--tls-cert",
+    "tls_cert",
+    metavar="PATH",
+    help="Client certificate PEM for mutual TLS",
+)
+@click.option(
+    "--tls-key",
+    "tls_key",
+    metavar="PATH",
+    help="Client certificate private key PEM for mutual TLS",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def connect_a2a(url, token, message, save, inspect, conformance, json_output):
+def connect_a2a(
+    url,
+    token,
+    header_values,
+    message,
+    save,
+    inspect,
+    conformance,
+    no_send,
+    oauth,
+    logout,
+    tls_cert,
+    tls_key,
+    json_output,
+):
     """Connect to an A2A agent from its Agent Card.
 
     Fetches the card, selects the first binding SuperQode can speak
     (JSON-RPC 1.0, JSON-RPC 0.3, or HTTP+JSON 1.0), and optionally sends
     one message. Open cards need no token.
     """
+    from superqode.a2a.connection import parse_header_options
     from superqode.commands.a2a_connect import connect_a2a_agent
+
+    try:
+        headers = parse_header_options(header_values)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--header") from exc
 
     exit(
         connect_a2a_agent(
             url,
             token,
+            headers=headers,
             message=message,
             save=save,
             inspect=inspect,
             conformance=conformance,
+            send=not no_send,
+            oauth=oauth,
+            logout=logout,
+            cert=tls_cert,
+            key=tls_key,
             json_output=json_output,
         )
     )

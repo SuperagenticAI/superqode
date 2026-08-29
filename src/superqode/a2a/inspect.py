@@ -7,12 +7,15 @@ summaries plus a clipped detail dict. Authorization headers are stripped.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 BODY_LIMIT = 800
 
 _REDACT_HEADERS = frozenset({"authorization", "x-api-key", "cookie", "set-cookie"})
+_REDACT_PARTS = ("authorization", "api-key", "apikey", "secret", "token", "password")
 
 
 @dataclass
@@ -52,23 +55,28 @@ class InspectLog:
         headers: dict[str, str] | None = None,
     ) -> None:
         suffix = f"  {note}" if note else ""
+        safe_url = redact_url(url)
         self.add(
             "request",
-            f"{method} {url}{suffix}",
-            body=clip(body),
+            f"{method} {safe_url}{suffix}",
+            body=clip(redact_text(body)),
             headers=redact_headers(headers),
         )
 
     def response(self, status: int, method: str, url: str, *, body: str = "") -> None:
+        safe_url = redact_url(url)
         self.add(
             "response",
-            f"{status} {method} {url}",
+            f"{status} {method} {safe_url}",
             status=status,
-            body=clip(body),
+            body=clip(redact_text(body)),
         )
 
     def error(self, summary: str, **detail: Any) -> None:
-        self.add("error", summary, **detail)
+        cleaned = dict(detail)
+        if "url" in cleaned and isinstance(cleaned["url"], str):
+            cleaned["url"] = redact_url(cleaned["url"])
+        self.add("error", redact_text(summary), **cleaned)
 
     def choice(
         self,
@@ -85,6 +93,9 @@ class InspectLog:
         if note:
             summary += f" ({note})"
         self.add("choice", summary, selected=_selected_dict(selected), skipped=skipped)
+
+    def auth(self, summary: str, **detail: Any) -> None:
+        self.add("auth", summary, **detail)
 
     def lines(self) -> list[str]:
         return [event.summary for event in self.events]
@@ -108,11 +119,61 @@ def redact_headers(headers: dict[str, str] | None) -> dict[str, str]:
         return {}
     redacted: dict[str, str] = {}
     for key, value in headers.items():
-        if key.lower() in _REDACT_HEADERS:
+        if _secret_header(key):
             redacted[key] = "Bearer ***" if str(value).lower().startswith("bearer ") else "***"
         else:
             redacted[key] = value
     return redacted
+
+
+def _secret_header(key: str) -> bool:
+    lower = key.lower()
+    if lower in _REDACT_HEADERS:
+        return True
+    return any(part in lower for part in _REDACT_PARTS)
+
+
+def auth_summary(card: dict) -> str:
+    """Describe advertised schemes and whether the card requires them."""
+    from superqode.a2a.security import describe_auth
+
+    return describe_auth(card)
+
+
+_BEARER_VALUE = re.compile(r"(?i)(bearer\s+)\S+")
+_SQK_LIVE = re.compile(r"(?i)(sqk_live_)[A-Za-z0-9_\-]+")
+_SK_PREFIX = re.compile(r"(?i)\bsk-(?:ant-|proj-)?[A-Za-z0-9_\-]{8,}")
+_LABELED_SECRET = re.compile(
+    r"(?i)((?:api[_-]?key|access_token|refresh_token|password|secret|token)\s*[:=]\s*)\S+"
+)
+
+
+def redact_text(text: str | None) -> str:
+    """Strip credential-shaped values from inspect bodies and messages."""
+    if not text:
+        return ""
+    redacted = _BEARER_VALUE.sub(r"\1***", text)
+    redacted = _SQK_LIVE.sub(r"\1***", redacted)
+    redacted = _SK_PREFIX.sub("***", redacted)
+    return _LABELED_SECRET.sub(r"\1***", redacted)
+
+
+def redact_url(url: str) -> str:
+    """Hide secret query parameters such as api_key=."""
+    if not url or "?" not in url:
+        return url
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    pairs = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if _secret_header(key) or key.lower() in {"key", "api_key", "access_token", "token"}:
+            pairs.append((key, "***"))
+        else:
+            pairs.append((key, value))
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(pairs, safe="*"), parts.fragment)
+    )
 
 
 def _selected_dict(selected: tuple[str, str, str] | None) -> dict[str, str]:

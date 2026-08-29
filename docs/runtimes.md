@@ -130,15 +130,13 @@ Option 4 opens the vendor screen. Esc returns to the screen above:
 :connect subscriptions
   US Coding Agents
   [1] Codex                Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
-  [2] Cursor               Use the Cursor plan signed in to Cursor CLI
+  [2] Grok                 Use Grok Build through the signed-in Grok CLI
   [3] Amp                  Use the Amp plan signed in to Amp CLI
   [4] Antigravity CLI      Use Google's agent harness with your Google Sign-In
-  [5] Grok                 Use Grok Build through the signed-in Grok CLI
-  [6] GitHub Copilot       Use your plan through the SDK or official CLI
-  [7] Gemini CLI           Use Google's Gemini CLI through its vendor sign-in
-  [8] Devin                Use Cognition's Devin CLI through devin acp
-  [9] Factory Droid        Use the locally authenticated Droid CLI
-  [10] Kiro                Use a Kiro or Amazon Q Developer plan through Kiro CLI
+  [5] GitHub Copilot       Use your plan through the SDK or official CLI
+  [6] Devin                Use Cognition's Devin CLI through devin acp
+  [7] Factory Droid        Use the locally authenticated Droid CLI
+  [8] Kiro                 Use a Kiro or Amazon Q Developer plan through Kiro CLI
 
   China Coding Agents
   [11] GLM Coding Plan      Use the paid plan through its authenticated ACP agent
@@ -172,13 +170,13 @@ Direct commands and CLI:
 ```bash
 :connect subscriptions    # the vendor screen shown above
 :connect codex            # in the TUI, uses your Codex subscription
-:connect cursor           # Cursor subscription through Cursor Agent ACP
+:connect grok             # Grok Build on your X/SuperGrok login
 :connect amp              # Amp subscription through its ACP adapter
 :connect kimi-code        # Moonshot AI Kimi Code through its official ACP server
 :connect qwen-code        # Qwen Code through its stable ACP server
 :connect fx               # Vercel fx through fx acp after fx login
 :connect fx-key           # same agent with AI_GATEWAY_API_KEY (Open)
-:connect acp gemini       # Google Gemini CLI through gemini --acp
+:connect antigravity      # Google's Antigravity CLI
 :connect devin            # Cognition Devin CLI through devin acp
 :connect droid            # Factory Droid subscription through ACP
 :connect kiro             # Kiro/Amazon Q Developer plan through Kiro ACP
@@ -257,7 +255,7 @@ skills, and converts configured stdio or Streamable HTTP MCP servers.
 
 ### Antigravity CLI
 
-Google's Antigravity CLI (`agy`) is the consumer migration path for Gemini CLI:
+Google's Antigravity CLI (`agy`) is the Google-account coding agent SuperQode connects:
 
 ```text
 :antigravity launch
@@ -281,10 +279,6 @@ setting to the CLI default.
 
 For a complete comparison of harness ownership, authentication, and supported
 routes, see [Google Antigravity](providers/antigravity.md).
-
-Gemini CLI remains listed under the generic ACP picker for enterprise/API-key ACP
-users. For Google AI Pro, Ultra, and free Code Assist individual accounts, prefer
-Antigravity CLI.
 
 ### Subscription CLI runtimes
 

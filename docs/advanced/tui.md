@@ -56,6 +56,8 @@ Find one low-risk cleanup, make the smallest fix, and run the narrowest useful t
 Summarize what changed.
 ```
 
+To talk to a remote A2A agent: `:connect` → **Reach a remote agent with protocols** → **Agent2Agent (A2A)**, or `:connect a2a`. A bare `:connect a2a <url>` or `:a2a connect <url>` opens the same screen with the origin filled in. Leave the credential empty for an open card. The purple chips under the credential are **OAuth on**, **Headers**, **mTLS**, and **Inspect**. Click Headers or mTLS to open those fields on the same screen. Click Inspect for the wire log and Check. After Connect, type in the message field and **Send** — that is the chat with the remote agent. Later Sends keep the same `contextId` thread. Skill examples fill the box. **Use** saves the connection and stays on the screen; **Back** returns. **y** copies the last reply, **r** resends, **Esc** stops a wait. The main prompt stays your ACP or local agent; it does not become the A2A agent. Later: `:a2a call <name> "your message"`.
+
 ## TUI Layout
 
 ```text
@@ -223,14 +225,14 @@ show status, or display its local help where supported.
 | --- | --- |
 | General operation | `:help`, `:keys`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
 | Discovery | `:explore`, `:capabilities`, `:tour` |
-| Connections and authentication | `:connect`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
+| Connections and authentication | `:connect`, `:connect a2a`, `:connect uhp`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
 | Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
-| Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a` |
+| Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a`, `:connect protocols` |
 | Local systems and memory | `:local`, `:memory` |
 | Configuration and services | `:init`, `:config`, `:a2a-keys`, `:serve`, `:daemon`, `:export`, `:theme` |
 | Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |

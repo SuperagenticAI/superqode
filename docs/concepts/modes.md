@@ -76,11 +76,13 @@ share the fourth row of `:connect`:
 | Row | Reaches | Command |
 | --- | --- | --- |
 | Agent Client Protocol (ACP) | A coding agent you run as a local process | `:connect protocol-acp` |
-| Agent2Agent (A2A) | A remote agent discovered from its published agent card | `:connect protocol-a2a` |
+| Agent2Agent (A2A) | A remote agent from its Agent Card: open, Bearer, API key, or OAuth | `:connect protocol-a2a` |
 | Unified Harness Protocol (UHP) | Harnesses on a UHP server, local or remote | `:connect protocol-uhp` |
 
 `:connect a2a` fetches the card and can send one message. Open cards need no
-token. A Bearer is optional and is never written into the card.
+token. The TUI screen takes Bearer, API key, HTTP Basic, OAuth, extra
+headers, and mutual TLS the same way the CLI does. A Bearer is never written
+into the card.
 
 MCP is deliberately not on that screen. It extends whatever harness is already
 running rather than owning a loop, so it stays on `:mcp`.
@@ -401,19 +403,19 @@ definitions.
 | Devin | `devin` | Dirac | `dirac` |
 | Factory Droid | `droid` | fast-agent | `fast-agent` |
 | fount | `fount` | fx | `fx` |
-| Gemini CLI | `gemini` | GLM Agent | `glm` |
-| Goose | `goose` | Grok Build | `grok` |
-| Harn | `harn` | Hermes Agent | `hermes` |
-| JetBrains Junie | `junie` | Kilo | `kilo` |
-| Kimi Code | `kimi` | Kiro CLI | `kiro` |
-| LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
-| Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
-| OpenCode | `opencode` | OpenHands | `openhands` |
-| Pi | `pi` | Poolside | `poolside` |
-| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
-| Qwen Code | `qwen` | siGit Code | `sigit` |
-| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
-| VT Code | `vtcode` | | |
+| GLM Agent | `glm` | Goose | `goose` |
+| Grok Build | `grok` | Harn | `harn` |
+| Hermes Agent | `hermes` | JetBrains Junie | `junie` |
+| Kilo | `kilo` | Kimi Code | `kimi` |
+| Kiro CLI | `kiro` | LLMling-Agent | `llmlingagent` |
+| Minion Code | `minion` | Mistral Vibe | `mistral-vibe` |
+| OpenClaw | `openclaw` | OpenCode | `opencode` |
+| OpenHands | `openhands` | Pi | `pi` |
+| Poolside | `poolside` | Prime Agent | `prime-agent` |
+| Qoder CLI | `qoder` | Qwen Code | `qwen` |
+| siGit Code | `sigit` | Stakpak | `stakpak` |
+| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
+
 
 Inspect installation and authentication requirements:
 
@@ -574,18 +576,25 @@ harness server interface.
 
 ## A2A Agent Connections
 
-A2A connects remote agents through Agent2Agent cards and task endpoints. It is
-used for remote delegation and agent-provider integration rather than direct
-model selection.
+A2A connects SuperQode to a remote agent from its published Agent Card. The
+remote agent owns its execution contract.
 
 ```text
-:a2a connect http://localhost:8000
-:a2a discover http://agent:8080
-:a2a call myagent "Review the authentication module"
+:connect a2a
+:connect a2a https://superqode.onrender.com
+superqode connect a2a --url https://superqode.onrender.com --inspect
+superqode connect a2a --url https://superqode.onrender.com --conformance
 ```
 
-See [A2A Protocol](../providers/a2a.md) for provider configuration,
-authentication, task lifecycle, and streaming.
+`:connect a2a` (and `:connect` → Protocols → A2A) opens a screen for the
+origin and the credential the card asks for: empty for anonymous, Bearer,
+API key, `user:password` for HTTP Basic, OAuth (browser or stored token),
+extra headers, and mTLS cert/key. OAuth opens a browser at
+`http://localhost:19876/a2a/oauth/callback`. Logout clears the stored
+token. Check runs four client checks: fetch, shape, binding, one task. Open
+cards need no token.
+
+See [A2A Protocol](../providers/a2a.md).
 
 ## Connection Method Versus Harness
 

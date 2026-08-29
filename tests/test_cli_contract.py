@@ -87,7 +87,15 @@ EXPECTED_COMMAND_COUNT = 274
 # the count is unchanged.
 # Rebaselined for `connect a2a --conformance`, one new option on that command,
 # so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "2c1a5688ef3672d6a8a3eb750a77d622d49650f7f2545ebb77a7071e7778e897"
+# Rebaselined for `connect a2a --header` and `--no-send`, two new options on
+# that command, so the count is unchanged.
+# Rebaselined for `connect a2a --oauth/--no-oauth`, flags on that command, so
+# the count is unchanged.
+# Rebaselined for `connect a2a --logout`, one new option on that command, so
+# the count is unchanged.
+# Rebaselined for `connect a2a --tls-cert` and `--tls-key`, two new options
+# on that command, so the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "cd303bbc274c231cc76d4439f10c6b697ff894d418917add03579727298d70a5"
 
 
 def _render_help_tree() -> tuple[int, str]:

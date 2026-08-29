@@ -292,16 +292,11 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         "Vendor coding agents on a plan you already pay for",
         category="workflow",
     ),
-    SlashCommand(":connect gemini-cli", "Google Gemini CLI over ACP", category="workflow"),
+    SlashCommand(":connect grok", "Grok Build on your X/SuperGrok login", category="workflow"),
     SlashCommand(":connect devin", "Cognition Devin CLI over ACP", category="workflow"),
     SlashCommand(":connect glm-cli", "Community GLM ACP agent", category="workflow"),
     SlashCommand(
         ":connect antigravity", "Connect via signed-in Antigravity CLI", category="workflow"
-    ),
-    SlashCommand(
-        ":connect grok",
-        "Grok Build, xAI's own agent on your subscription (ACP)",
-        category="workflow",
     ),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),

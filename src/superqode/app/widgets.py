@@ -203,32 +203,32 @@ class ColorfulStatusBar(Static):
             right.append(" │ ", style="#3f3f46")
 
         # Compact branded identity, kept in the corner. Version is retained at
-        # every width.
+        # every width. No OSC-8: terminals underline hyperlinks on hover.
         identity = Text()
-        # The wordmark goes home, the way a site logo does. Version included:
-        # it reads as one mark, so half of it being inert would be a surprise.
-        home = command_link("home")
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
         for i, char in enumerate("Super"):
             color = super_colors[i % len(super_colors)]
-            identity.append(char, style=f"bold {color} {home}")
+            identity.append(char, style=f"bold {color}")
         qode_colors = ["#ec4899", "#f472b6", "#f97316", "#fb923c"]
         for i, char in enumerate("Qode"):
             color = qode_colors[i % len(qode_colors)]
-            identity.append(char, style=f"bold {color} {home}")
-        identity.append(f" v{__version__}", style=f"#a1a1aa {home}")
+            identity.append(char, style=f"bold {color}")
+        identity.append(f" v{__version__}", style="#a1a1aa")
 
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
         model_limit = 42 if wide else 24 if medium else 15 if width >= 64 else 10
         provider_limit = 24 if medium else 12 if width >= 64 else 8
-        disconnect = command_link("disconnect")
+        conn_start = cell_len(result.plain)
+        conn_action = ""
         if self.byok_provider:
             separator()
-            result.append("● ", style=f"#22c55e {disconnect}")
+            conn_start = cell_len(result.plain)
+            conn_action = "disconnect"
+            result.append("● ", style="#22c55e")
             result.append(
                 self._truncate_status_value(self.byok_provider, provider_limit),
-                style=f"bold #10b981 {disconnect}",
+                style="bold #10b981",
             )
             if self.byok_model:
                 result.append(
@@ -237,21 +237,28 @@ class ColorfulStatusBar(Static):
                 )
         elif self.active_model:
             separator()
-            result.append("● ", style=f"#22c55e {disconnect}")
+            conn_start = cell_len(result.plain)
+            conn_action = "disconnect"
+            result.append("● ", style="#22c55e")
             result.append(
                 self._truncate_status_value(self.active_model, model_limit),
-                style=f"bold #10b981 {disconnect}",
+                style="bold #10b981",
             )
         elif self.active_runtime:
             separator()
-            result.append("● ", style=f"#22c55e {disconnect}")
+            conn_start = cell_len(result.plain)
+            conn_action = "disconnect"
+            result.append("● ", style="#22c55e")
             result.append(
                 self._truncate_status_value(self.active_runtime, model_limit),
-                style=f"bold #10b981 {disconnect}",
+                style="bold #10b981",
             )
         else:
             separator()
-            result.append("Model: not connected", style=f"#a1a1aa {command_link('connect')}")
+            conn_start = cell_len(result.plain)
+            conn_action = "connect"
+            result.append("Model: not connected", style="#a1a1aa")
+        conn_end = cell_len(result.plain)
 
         # A specialized runtime is useful when a model is also named. The
         # default built-in runtime is intentionally omitted as visual noise.
@@ -382,19 +389,34 @@ class ColorfulStatusBar(Static):
         # Controls lead the row, where a browser puts its toolbar, and the
         # state they act on follows.
         controls = Text()
+        control_hits: list[tuple[int, int, str]] = []
+        chrome = 5  # "[label ↑]"
         if self.can_go_back:
             for label in ("← Back", "←"):
-                if room >= cell_len(label) + 3:
-                    self._append_button(controls, label, "#06b6d4", "back", separator=False)
-                    room -= cell_len(label) + 3
+                if room >= cell_len(label) + chrome:
+                    self._append_button(
+                        controls,
+                        label,
+                        "#06b6d4",
+                        "back",
+                        separator=False,
+                        hits=control_hits,
+                    )
+                    room -= cell_len(label) + chrome
                     break
 
         placed = False
         for label in (f"{icon} {word}", f"{icon} {word[:4]}", icon):
-            cost = cell_len(label) + 3
+            cost = cell_len(label) + chrome
             if room >= cost:
                 self._append_button(
-                    controls, label, colour, action, separator=False, gap=bool(controls.plain)
+                    controls,
+                    label,
+                    colour,
+                    action,
+                    separator=False,
+                    gap=bool(controls.plain),
+                    hits=control_hits,
                 )
                 room -= cost
                 placed = True
@@ -403,12 +425,18 @@ class ColorfulStatusBar(Static):
         if placed:
             # Keep enough room for the compact Exit control. On a busy row the
             # Hub label compacts to its icon before Exit disappears.
-            compact_exit_cost = cell_len("⏻") + 3
+            compact_exit_cost = cell_len("⏻") + chrome
             for label in ("⚓ Hub", "⚓"):
-                cost = cell_len(label) + 3
+                cost = cell_len(label) + chrome
                 if room >= cost + compact_exit_cost:
                     self._append_button(
-                        controls, label, "#a855f7", "hub", separator=False, gap=True
+                        controls,
+                        label,
+                        "#a855f7",
+                        "hub",
+                        separator=False,
+                        gap=True,
+                        hits=control_hits,
                     )
                     room -= cost
                     break
@@ -417,9 +445,15 @@ class ColorfulStatusBar(Static):
         # no business still offering the one that closes the app.
         if placed:
             for label in ("⏻ Exit", "⏻"):
-                if room >= cell_len(label) + 3:
+                if room >= cell_len(label) + chrome:
                     self._append_button(
-                        controls, label, "#ef4444", "exit", separator=False, gap=True
+                        controls,
+                        label,
+                        "#ef4444",
+                        "exit",
+                        separator=False,
+                        gap=True,
+                        hits=control_hits,
                     )
                     break
 
@@ -430,10 +464,15 @@ class ColorfulStatusBar(Static):
             result.append("  ", style="")
             result.append(right)
 
+        hits: list[tuple[int, int, str]] = [(0, cell_len(identity.plain), "home")]
         if not controls.plain:
             if result.plain:
                 identity.append(" │ ", style="#3f3f46")
+            result_origin = cell_len(identity.plain)
             identity.append(result)
+            if conn_action:
+                hits.append((result_origin + conn_start, result_origin + conn_end, conn_action))
+            self._hits = hits
             return identity
 
         # Identity keeps the corner. The controls follow it, still on the left
@@ -441,14 +480,21 @@ class ColorfulStatusBar(Static):
         line = Text()
         line.append(identity)
         line.append("  ", style="")
+        origin = cell_len(line.plain)
         line.append(controls)
+        for start, end, hit in control_hits:
+            hits.append((origin + start, origin + end, hit))
         # Measured in cells, not characters: an emoji glyph occupies two
         # columns while len() counts it once, which wrapped the row.
         gap = width - cell_len(line.plain) - cell_len(result.plain)
         # Padding only when there is room for it. A crowded row is already
         # over the edge; widening it further is the one thing that helps least.
         line.append(" " * gap if gap > 0 else " ", style="")
+        result_origin = cell_len(line.plain)
         line.append(result)
+        if conn_action:
+            hits.append((result_origin + conn_start, result_origin + conn_end, conn_action))
+        self._hits = hits
         return line
 
     @staticmethod
@@ -460,20 +506,53 @@ class ColorfulStatusBar(Static):
         *,
         separator: bool,
         gap: bool = False,
+        hits: list[tuple[int, int, str]] | None = None,
     ) -> None:
         """Append a bracketed control.
 
         Bracketed rather than reverse video: a filled block reads as an alert,
-        and this row already uses colour to carry state.
+        and this row already uses colour to carry state. An upward arrow marks
+        a clickable control. There is no OSC-8 hyperlink: terminals draw their
+        own underline on hover for those, which we cannot turn off.
         """
-        link = command_link(action)
+        style = f"bold {colour}"
+        chrome = "#52525b"
         if separator:
             target.append(" │ ", style="#3f3f46")
         elif gap:
             target.append(" ", style="")
-        target.append("[", style=f"#52525b {link}")
-        target.append(label, style=f"bold {colour} {link}")
-        target.append("]", style=f"#52525b {link}")
+        start = cell_len(target.plain)
+        target.append("[", style=chrome)
+        target.append(label, style=style)
+        target.append(" ↑", style=style)
+        target.append("]", style=chrome)
+        if hits is not None:
+            hits.append((start, cell_len(target.plain), action))
+
+    def action_at(self, column: int) -> str:
+        """Return the command under a cell column, if any."""
+        for start, end, action in getattr(self, "_hits", ()):
+            if start <= column < end:
+                return action
+        return ""
+
+    def on_click(self, event) -> None:
+        """Run the control under the pointer without an OSC-8 hyperlink."""
+        column = int(getattr(event, "x", -1))
+        try:
+            column -= int(self.content_offset.x)
+        except Exception:  # noqa: BLE001 - unmounted tests have no layout
+            pass
+        action = self.action_at(column)
+        if not action:
+            return
+        event.stop()
+        prevent = getattr(event, "prevent_default", None)
+        if callable(prevent):
+            prevent()
+        run = getattr(self.app, "_run_clicked_command", None)
+        if callable(run):
+            run(action)
 
     def render(self) -> Text:
         return self._render_for_width(self.size.width or 120)
@@ -994,7 +1073,7 @@ class HintsBar(Static):
         width = self.size.width or 0
         if width:
             while len(hints) > 2:
-                needed = sum(cell_len(f"{icon} {hint}") for icon, hint, _ in hints)
+                needed = sum(cell_len(f"{icon} {hint} ↑") for icon, hint, _ in hints)
                 needed += 5 * (len(hints) - 1)
                 if needed <= width:
                     break
@@ -1008,6 +1087,8 @@ class HintsBar(Static):
                 style = f"{color} {command_link(hint.lstrip(':'))}"
             t.append(f"{icon} ", style=style)
             t.append(hint, style=style)
+            if hint.lstrip(":") in CLICKABLE_COMMANDS:
+                t.append(" ↑", style=style)
 
         return t
 

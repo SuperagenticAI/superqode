@@ -52,84 +52,144 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         Binding("b", "build", "Build"),
         Binding("a", "filter_all", "All", show=False),
         Binding("r", "filter_ready", "Ready", show=False),
+        Binding("s", "filter_setup", "Setup", show=False),
         Binding("o", "filter_open", "Open source", show=False),
+        Binding("c", "filter_custom", "Yours", show=False),
+        Binding("n", "filter_coming", "Coming", show=False),
     ]
 
     CSS = """
     HarnessHubScreen {
-        background: #050505;
+        background: #000000;
+    }
+    HarnessHubScreen Footer {
+        background: #000000;
+        dock: bottom;
+        height: 1;
     }
     HarnessHubScreen #hub-header {
         height: 5;
         min-height: 5;
         max-height: 5;
-        padding: 1 2;
-        border-bottom: solid #27272a;
-        background: #090909;
+        padding: 1 2 0 2;
+        background: #000000;
     }
     HarnessHubScreen #hub-heading {
+        width: 1fr;
         height: 3;
     }
     HarnessHubScreen #hub-title {
         width: 1fr;
         height: 1;
-        color: #a855f7;
+        color: #c4b5fd;
         text-style: bold;
     }
     HarnessHubScreen #hub-subtitle {
         width: 1fr;
         height: 1;
-        color: #a1a1aa;
+        color: #d4d4d4;
     }
     HarnessHubScreen #hub-search {
-        width: 48;
+        width: 1fr;
+        max-width: 36;
         height: 3;
-        max-width: 46%;
+        background: #000000;
+        color: #f0f0f0;
+        border: tall #2a2a2a;
+    }
+    HarnessHubScreen #hub-search:focus {
+        border: tall #7c3aed;
     }
     HarnessHubScreen #hub-filters {
-        height: 3;
-        padding: 0 2;
-        background: #090909;
-        border-bottom: solid #1f1f23;
+        height: auto;
+        padding: 0 1;
+        background: #000000;
     }
     HarnessHubScreen #hub-filters Button {
         min-width: 10;
+        height: 3;
         margin-right: 1;
+        background: #1a1a1a;
+        color: #d8d8d8;
+        border: tall #3a3a3a;
+    }
+    HarnessHubScreen #hub-filters Button:hover {
+        background: #2a1a40;
+    }
+    HarnessHubScreen #hub-filters Button.on {
+        background: #3b1d7a;
+        color: #f3e8ff;
+        border: tall #c4b5fd;
+        text-style: bold;
     }
     HarnessHubScreen #hub-body {
         height: 1fr;
         min-height: 8;
+        padding: 1 1 1 1;
+    }
+    HarnessHubScreen OptionList {
+        border: round #27272a;
     }
     HarnessHubScreen #hub-list {
         width: 54%;
         height: 100%;
-        background: #050505;
-        border-right: solid #27272a;
+        background: #000000;
+        border: round #27272a;
+        scrollbar-background: #000000;
+        scrollbar-color: #2a2a2a;
+        overflow-x: hidden;
+        margin-right: 1;
+    }
+    HarnessHubScreen #hub-list > .option-list--option {
+        padding: 0 1;
+    }
+    HarnessHubScreen #hub-list > .option-list--option-highlighted {
+        background: #1a1030;
+    }
+    HarnessHubScreen #hub-list:focus > .option-list--option-highlighted {
+        background: #241542;
     }
     HarnessHubScreen #hub-detail {
         width: 1fr;
         height: 100%;
-        padding: 2 3;
-        background: #080808;
+        padding: 1 2;
+        background: #000000;
         overflow-y: auto;
+        overflow-x: hidden;
+        border: round #27272a;
     }
     HarnessHubScreen #hub-actions {
-        height: 4;
-        padding: 0 2;
-        align-horizontal: right;
-        background: #090909;
-        border-top: solid #27272a;
+        height: auto;
+        padding: 0 1;
+        background: #000000;
+        align: right middle;
     }
     HarnessHubScreen #hub-actions Button {
         min-width: 13;
+        height: 3;
         margin-left: 1;
+        background: #000000;
+        color: #e6e6e6;
+        border: tall #2a2a2a;
+    }
+    HarnessHubScreen #hub-actions Button.-primary {
+        background: #3b1d7a;
+        color: #f3e8ff;
+        border: tall #c4b5fd;
     }
 
+    HarnessHubScreen.narrow #hub-body {
+        layout: vertical;
+    }
     HarnessHubScreen.narrow #hub-list {
         width: 100%;
+        height: 1fr;
     }
     HarnessHubScreen.narrow #hub-detail {
-        display: none;
+        display: block;
+        width: 100%;
+        height: 8;
+        padding: 1 2;
     }
     HarnessHubScreen.narrow #hub-search {
         width: 28;
@@ -146,20 +206,31 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         current_id: str = "",
         query: str = "",
         initial_filter: str = "all",
+        session_connected: bool = False,
+        session_model: str = "",
     ) -> None:
         super().__init__()
         self.items = list(items)
         self.current_id = current_id
         self.search_query = query.strip()
         self.filter_name = initial_filter if initial_filter in self.FILTERS else "all"
+        self.session_connected = session_connected
+        self.session_model = session_model.strip()
         self.filtered_items: list[HarnessPickerItem] = []
+        self._inspect_expanded = False
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="hub-header"):
             with Vertical(id="hub-heading"):
-                yield Static("Harness Hub", id="hub-title")
                 yield Static(
-                    "Discover, trust, run, compare and build coding harnesses",
+                    Text.assemble(
+                        ("Harness", "bold #e9d5ff"),
+                        (" Hub", "bold #a78bfa"),
+                    ),
+                    id="hub-title",
+                )
+                yield Static(
+                    "Browse harnesses. :connect is how you start one.",
                     id="hub-subtitle",
                 )
             yield Input(value=self.search_query, placeholder="Search harnesses...", id="hub-search")
@@ -263,27 +334,48 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self._update_detail(self.filtered_items[index])
         self._update_primary_action(self.filtered_items[index])
 
+    def _session_has_model(self) -> bool:
+        return bool(self.session_connected and self.session_model)
+
+    def _run_state(self, item: HarnessPickerItem) -> str:
+        """How far this row is from actually running.
+
+        Built-in SuperQode harnesses (Core, RLM, PiPy, Workbench) are always
+        *installed*, but they still need a model. Coding agents that are
+        logged in can Use immediately.
+        """
+        if item.kind in REFERENCE_ONLY_KINDS:
+            return "coming"
+        if not item.available:
+            return "setup"
+        if item.kind == "harness" and not (item.provider and item.model):
+            if not self._session_has_model():
+                return "choose-model"
+        return "use"
+
     def _option_label(self, item: HarnessPickerItem) -> Text:
         text = Text()
         active = item.id == self.current_id
-        text.append(
-            "● " if item.available else "○ ", style="#22c55e" if item.available else "#f59e0b"
-        )
+        state = self._run_state(item)
+        mark = "● " if state == "use" else "○ "
+        mark_color = {
+            "use": "#22c55e",
+            "choose-model": "#c4b5fd",
+            "setup": "#f59e0b",
+            "coming": "#f97316",
+        }.get(state, "#f59e0b")
+        text.append(mark, style=mark_color)
         text.append(item.display_name, style="bold #f4f4f5")
         if active:
-            text.append("  ACTIVE", style="bold #38bdf8")
+            text.append("  ACTIVE", style="bold #c4b5fd")
         text.append(f"\n    {item.group} · ", style="#71717a")
-        status = (
-            "coming soon"
-            if item.kind == "ecosystem"
-            else "ready"
-            if item.available
-            else "needs setup"
-        )
-        status_color = (
-            "#f97316" if item.kind == "ecosystem" else "#22c55e" if item.available else "#f59e0b"
-        )
-        text.append(status, style=status_color)
+        status = {
+            "use": "ready",
+            "choose-model": "needs a model",
+            "setup": "needs setup",
+            "coming": "coming soon",
+        }.get(state, "needs setup")
+        text.append(status, style=mark_color)
         if item.runtime:
             text.append(f" · {item.runtime}", style="#a1a1aa")
         return text
@@ -307,9 +399,30 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         text = Text()
         text.append(f"{item.display_name}\n", style="bold #f4f4f5")
         text.append(f"{item.description}\n", style="#d4d4d8")
+        state = self._run_state(item)
+        if state == "coming":
+            text.append(
+                "\nComing soon in SuperQode. Inspect stays on this screen.\n", style="#c8c8c8"
+            )
+        elif state == "choose-model":
+            text.append(
+                "\nThis harness is installed. It still needs a model. "
+                "Choose model opens Local, an API key, or a plan.\n",
+                style="#c4b5fd",
+            )
+        elif state == "use":
+            text.append("\nEnter or Use starts this harness.\n", style="#c4b5fd")
+        else:
+            text.append("\nNeeds setup before Use.\n", style="#fbbf24")
         text.append("\n")
+        status_value = {
+            "use": "Ready",
+            "choose-model": "Needs a model",
+            "setup": "Needs setup",
+            "coming": "Coming soon",
+        }.get(state, readiness_label(record.readiness))
         rows = (
-            ("Status", readiness_label(record.readiness)),
+            ("Status", status_value),
             ("Type", item.group),
             ("Runtime", item.runtime or "Defined by the harness"),
             ("Continuity", item.continuity.replace("-", " ")),
@@ -334,8 +447,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             text.append("\nImportant\n", style="bold #f59e0b")
             text.append(f"{item.warning}\n", style="#fbbf24")
         if record.based_on:
-            text.append("\nBased on\n", style="bold #38bdf8")
-            text.append(f"{record.based_on}\n", style="#bae6fd")
+            text.append("\nBased on\n", style="bold #a78bfa")
+            text.append(f"{record.based_on}\n", style="#e9d5ff")
         if record.support_note:
             text.append("\nSuperQode support\n", style="bold #f97316")
             text.append(f"{record.support_note}\n", style="#fdba74")
@@ -352,9 +465,9 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             for command in record.tui_commands:
                 text.append(f"{command}\n", style="#86efac")
         if record.eval_commands:
-            text.append("\nEvaluate\n", style="bold #38bdf8")
+            text.append("\nEvaluate\n", style="bold #a78bfa")
             for command in record.eval_commands:
-                text.append(f"{command}\n", style="#7dd3fc")
+                text.append(f"{command}\n", style="#e9d5ff")
         if record.optimize_commands:
             text.append("\nOptimize\n", style="bold #a855f7")
             for command in record.optimize_commands:
@@ -376,23 +489,23 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             text.append("\nInstallation and authentication\n", style="bold #f59e0b")
             text.append(f"{record.install_command}\n", style="#e4e4e7")
         if record.docs_url:
-            text.append("\nDocumentation\n", style="bold #38bdf8")
-            text.append(record.docs_url, style=f"#7dd3fc link {record.docs_url}")
+            text.append("\nDocumentation\n", style="bold #a78bfa")
+            text.append(record.docs_url, style="#c4b5fd")
             text.append("\n")
-        if item.kind in REFERENCE_ONLY_KINDS:
-            text.append("\nMouse: select, then choose Learn more\n", style="#71717a")
-            text.append(
-                "Keyboard: / search · Enter learn more · I inspect · B build", style="#71717a"
-            )
-        else:
-            text.append("\nMouse: select and use the buttons\n", style="#71717a")
-            text.append("Keyboard: / search · Enter use · I inspect · B build", style="#71717a")
+        if self._inspect_expanded and record.cli_commands:
+            text.append("\nCLI\n", style="bold #a78bfa")
+            for command in record.cli_commands:
+                text.append(f"{command}\n", style="#e9d5ff")
+        if record.homepage and record.homepage != record.docs_url:
+            text.append("\nOfficial site\n", style="bold #a78bfa")
+            text.append(f"{record.homepage}\n", style="#c4b5fd")
         self.query_one("#hub-detail", Static).update(text)
 
     def _update_filter_buttons(self) -> None:
         for filter_name in self.FILTERS:
             button = self.query_one(f"#hub-filter-{filter_name}", Button)
-            button.variant = "primary" if filter_name == self.filter_name else "default"
+            button.set_class(filter_name == self.filter_name, "on")
+            button.variant = "default"
 
     @on(Input.Changed, "#hub-search")
     def on_search_changed(self, event: Input.Changed) -> None:
@@ -462,19 +575,34 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
     def _use_selected(self) -> None:
         item = self._selected_item()
-        if item is not None:
-            action = "inspect" if item.kind in REFERENCE_ONLY_KINDS else "use"
-            self.dismiss(HarnessHubResult(action, item.id))
+        if item is None:
+            return
+        if item.kind in REFERENCE_ONLY_KINDS:
+            self.action_inspect()
+            return
+        self.dismiss(HarnessHubResult("use", item.id))
 
     def _update_primary_action(self, item: HarnessPickerItem) -> None:
         button = self.query_one("#hub-use", Button)
         button.disabled = False
-        button.label = "Learn more" if item.kind in REFERENCE_ONLY_KINDS else "Use"
+        state = self._run_state(item)
+        button.label = {
+            "coming": "Learn more",
+            "choose-model": "Choose model",
+            "setup": "Set up",
+            "use": "Use",
+        }.get(state, "Use")
 
     def action_inspect(self) -> None:
         item = self._selected_item()
-        if item is not None:
-            self.dismiss(HarnessHubResult("inspect", item.id))
+        if item is None:
+            return
+        self._inspect_expanded = True
+        self._update_detail(item)
+        try:
+            self.query_one("#hub-detail", Static).focus()
+        except Exception:  # noqa: BLE001
+            pass
 
     def action_build(self) -> None:
         self.dismiss(HarnessHubResult("build"))
@@ -487,8 +615,20 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self.filter_name = "ready"
         self._refresh_items()
 
+    def action_filter_setup(self) -> None:
+        self.filter_name = "setup"
+        self._refresh_items()
+
     def action_filter_open(self) -> None:
         self.filter_name = "open"
+        self._refresh_items()
+
+    def action_filter_custom(self) -> None:
+        self.filter_name = "custom"
+        self._refresh_items()
+
+    def action_filter_coming(self) -> None:
+        self.filter_name = "coming"
         self._refresh_items()
 
     def action_close(self) -> None:

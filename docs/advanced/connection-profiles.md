@@ -88,12 +88,6 @@ One visible subscription entry. It prefers the official GitHub Copilot SDK
 (`copilot-sdk`) for SuperQode-native harness controls and falls back to the
 installed official CLI (`copilot --acp --stdio`) when the SDK is absent.
 
-### Gemini CLI (connector: acp, agent: gemini)
-
-Runs Google's Gemini CLI through `gemini --acp`. Requires the `gemini` command
-and either its sign-in or `GEMINI_API_KEY`. Consumer Google AI accounts should
-use Antigravity instead.
-
 ### Devin (connector: acp, agent: devin)
 
 Runs Cognition's Devin CLI through `devin acp`. Requires the `devin` command
@@ -162,9 +156,9 @@ Direct shortcuts:
 
 - `:connect subscriptions` - open the vendor screen
 - `:connect codex` - connect Codex SDK directly
-- `:connect cursor` - Cursor subscription through ACP
+- `:connect grok` - Grok Build on your X/SuperGrok login (ACP)
 - `:connect amp` - Amp subscription through ACP
-- `:connect acp gemini` - Google Gemini CLI over ACP (API-key route, not a subscription)
+- `:connect antigravity` - Google's Antigravity CLI
 - `:connect devin` - Cognition Devin CLI over ACP
 - `:connect droid` - Factory Droid subscription through ACP
 - `:connect droid-key` - Factory Droid with `FACTORY_API_KEY` (Closed harnesses)
