@@ -191,6 +191,29 @@ class ModelCatalogMixin:
             {"id": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "context": 200000},
         ]
 
+    #: How many catalogue refreshes are in flight, so two workers finishing
+    #: out of order cannot clear each other's indicator.
+    _catalog_refresh_depth = 0
+
+    def _begin_catalog_refresh(self, label: str) -> None:
+        """Show that a catalogue is being refreshed behind the current screen."""
+        self._catalog_refresh_depth = getattr(self, "_catalog_refresh_depth", 0) + 1
+        self._set_catalog_chip(label)
+
+    def _end_catalog_refresh(self) -> None:
+        """Clear the indicator once the last refresh finishes."""
+        self._catalog_refresh_depth = max(0, getattr(self, "_catalog_refresh_depth", 0) - 1)
+        if not self._catalog_refresh_depth:
+            self._set_catalog_chip("")
+
+    def _set_catalog_chip(self, label: str) -> None:
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            self.query_one("#status-bar", ColorfulStatusBar).catalog_state = label
+        except Exception:  # noqa: BLE001 - a status chip is never load-bearing
+            pass
+
     def _start_models_dev_refresh(self) -> None:
         """Refresh the models.dev catalog without blocking the TUI."""
         self.run_worker(
@@ -310,6 +333,7 @@ class ModelCatalogMixin:
 
     async def _load_acp_registry_data(self):
         """Pull the current ACP registry, leaving the cache alone on failure."""
+        self._begin_catalog_refresh("agents")
         try:
             from superqode.providers.acp_registry import get_acp_registry_agents
 
@@ -318,6 +342,8 @@ class ModelCatalogMixin:
         except Exception:
             # Offline or transient: the cached registry stands.
             self._catalog_status.setdefault("agents", None)
+        finally:
+            self._end_catalog_refresh()
 
     def _apply_live_models(self, client) -> bool:
         """Push the client's current provider/model data into the live registry."""
@@ -341,6 +367,7 @@ class ModelCatalogMixin:
         and swaps it in — so newly launched models appear without any manual
         list update.
         """
+        self._begin_catalog_refresh("models")
         try:
             from superqode.providers.models_dev import get_models_dev
 
@@ -357,6 +384,8 @@ class ModelCatalogMixin:
         except Exception:
             # Silent failure - live data is optional
             pass
+        finally:
+            self._end_catalog_refresh()
 
     def _unload_ollama_model(self, model: str) -> bool:
         """Ask Ollama to unload a resident model without killing the Ollama app."""

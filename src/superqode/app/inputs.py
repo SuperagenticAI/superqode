@@ -483,6 +483,12 @@ class SelectionAwareInput(TextArea):
         if getattr(app, "_awaiting_runtime_selection", False) and typed:
             return False
 
+        # Same for a typed model number. Without this, typing "7" and pressing
+        # Enter in an ACP model picker selected whichever row was highlighted,
+        # which is why picking a model felt like it ignored the input.
+        if getattr(app, "_awaiting_model_selection", False) and typed.isdigit():
+            return False
+
         if getattr(app, "_awaiting_harness_selection", False) and typed:
             handler = getattr(app, "_handle_harness_picker_input", None)
             if callable(handler):

@@ -160,6 +160,9 @@ class ColorfulStatusBar(Static):
     interaction_mode: reactive[str] = reactive("build")
     plan_state: reactive[str] = reactive("")
     vim_state: reactive[str] = reactive("")
+    #: Non-empty while a catalogue refresh is in flight, so the first
+    #: seconds after launch read as work in progress rather than a stall.
+    catalog_state: reactive[str] = reactive("")
 
     @staticmethod
     def _format_token_count(tokens: int) -> str:
@@ -339,6 +342,15 @@ class ColorfulStatusBar(Static):
                 right_separator()
             right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
             right.append(" tok", style="#71717a")
+
+        # Launch fires the models.dev and ACP registry refreshes behind the
+        # first frame. Saying so costs one chip and turns a quiet couple of
+        # seconds into visible progress.
+        if self.catalog_state and medium:
+            if right.plain:
+                right_separator()
+            right.append("⟳ ", style="#06b6d4")
+            right.append(self.catalog_state.strip(), style="#a1a1aa")
 
         if self.plan_state:
             state = self.plan_state.strip()

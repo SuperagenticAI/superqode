@@ -29,7 +29,10 @@ def runtime_cmd() -> None:
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def list_runtimes_cmd(json_output: bool) -> None:
     """Show installed and available runtimes."""
-    runtimes = list_runtimes()
+    # A command-line report is where the deep probe belongs: it runs the vendor
+    # CLIs and imports the optional SDKs, which is the point here and is far
+    # too slow to do behind a TUI frame.
+    runtimes = list_runtimes(probe=True)
     active = resolve_runtime_name()
 
     if json_output:
@@ -120,7 +123,7 @@ def doctor(name: Optional[str]) -> None:
         return
 
     target_names: list[str] = []
-    info_by_name = {r.name: r for r in list_runtimes()}
+    info_by_name = {r.name: r for r in list_runtimes(probe=True)}
 
     if name is None:
         target_names = list(info_by_name.keys())

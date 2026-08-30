@@ -361,7 +361,7 @@ class ConnectMixin:
             return
 
         settings = resolve_settings()
-        self.push_screen(
+        self._push_protocol_screen(
             UHPConnectScreen(
                 base_url=origin or settings.base_url,
                 default_url=DEFAULT_BASE_URL,
@@ -373,7 +373,7 @@ class ConnectMixin:
     def _apply_uhp_selection(self, result, log: ConversationLog) -> None:
         """Save the chosen server and harness, then make it the active one."""
         if result is None:
-            self._ensure_input_focus()
+            self._restore_connect_listing()
             return
         from superqode.providers.uhp import UHPSettings, resolve_settings, save_connection
 
@@ -423,7 +423,7 @@ class ConnectMixin:
         settings = resolve_settings()
         url = normalize_url(origin) if origin else (settings.url if settings.configured else "")
         same = bool(url) and normalize_url(url) == normalize_url(settings.url)
-        self.push_screen(
+        self._push_protocol_screen(
             A2AConnectScreen(
                 url=url,
                 default_url=DEFAULT_URL,
@@ -438,7 +438,7 @@ class ConnectMixin:
     def _apply_a2a_selection(self, result, log: ConversationLog) -> None:
         """Save the chosen Agent Card origin and credentials."""
         if result is None:
-            self._ensure_input_focus()
+            self._restore_connect_listing()
             return
         from superqode.a2a.connection import A2ASettings, save_connection
 
@@ -1365,6 +1365,34 @@ class ConnectMixin:
         ):
             if hasattr(self, attr):
                 delattr(self, attr)
+
+    def _push_protocol_screen(self, screen, callback) -> None:
+        """Open a protocol screen without consuming the listing behind it.
+
+        These are Textual screens rather than log renders, so they record no
+        history step of their own. Left unmarked, the listing they were opened
+        from stayed the top of the stack and back popped it: closing the A2A
+        screen landed on the connect root instead of the Protocols list.
+        """
+        try:
+            self._history.detach()
+            self._sync_navigation_controls()
+        except Exception:  # noqa: BLE001 - navigation chrome must never block a connect
+            pass
+        self.push_screen(screen, callback=callback)
+
+    def _restore_connect_listing(self) -> None:
+        """Redraw the listing a protocol screen was closed out of.
+
+        Dispatching the row cleared the log before the screen went up, so
+        dismissing it without a selection would otherwise leave the user on an
+        empty transcript with no way back to the list they were reading.
+        """
+        try:
+            self._navigate_back()
+        except Exception:  # noqa: BLE001 - navigation chrome must never block a connect
+            pass
+        self._ensure_input_focus()
 
     def _open_connect_screen(self, log: ConversationLog) -> None:
         """Start a connect step on a clean screen.

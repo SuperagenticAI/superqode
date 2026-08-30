@@ -23,6 +23,15 @@ _SEVERITY_COLORS = {
     OutcomeSeverity.ERROR: "#ef4444",
 }
 
+#: Read before the words are. Kept to the set already used in the transcript so
+#: the modal and the receipt below it agree.
+_SEVERITY_ICONS = {
+    OutcomeSeverity.SUCCESS: "✅",
+    OutcomeSeverity.INFORMATION: "ℹ️",
+    OutcomeSeverity.WARNING: "⚠️",
+    OutcomeSeverity.ERROR: "❌",
+}
+
 
 @dataclass(frozen=True)
 class OutcomeSelection:
@@ -36,7 +45,8 @@ def outcome_text(outcome: Outcome) -> Text:
     """Render an outcome without relying on Rich markup in external data."""
     color = _SEVERITY_COLORS[outcome.severity]
     text = Text()
-    text.append(f"{outcome.title}\n", style=f"bold {color}")
+    text.append(f"{_SEVERITY_ICONS[outcome.severity]}  ", style=color)
+    text.append(f"{outcome.title}\n\n", style=f"bold {color}")
     text.append(f"{outcome.summary}\n", style="bold #f4f4f5")
     if outcome.source:
         text.append(f"\nFrom {outcome.source}\n", style="#71717a")
@@ -53,6 +63,7 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
 
     BINDINGS = [
         Binding("escape", "close", "Back"),
+        Binding("enter", "close", "Continue"),
     ]
 
     CSS = """
@@ -118,6 +129,25 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def replace_outcome(self, outcome: Outcome) -> bool:
+        """Show a newer result in the open modal instead of stacking another.
+
+        Connecting an agent announces more than once: the connection, then the
+        model. Pushing a screen per announcement would make the user dismiss a
+        queue of them, so a modal that is already up takes the newer content.
+
+        Returns False when the screen is not mounted, so the caller can push a
+        fresh one instead.
+        """
+        self.outcome = outcome
+        try:
+            self.query_one("#outcome-content", ScrollableContainer).query_one(Static).update(
+                outcome_text(outcome)
+            )
+        except Exception:  # noqa: BLE001 - fall back to a fresh screen
+            return False
+        return True
 
 
 class ActivityScreen(Screen[OutcomeSelection | None]):

@@ -95,7 +95,11 @@ EXPECTED_COMMAND_COUNT = 274
 # the count is unchanged.
 # Rebaselined for `connect a2a --tls-cert` and `--tls-key`, two new options
 # on that command, so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "cd303bbc274c231cc76d4439f10c6b697ff894d418917add03579727298d70a5"
+# Rebaselined for Grok Build moving up the registry-derived `--connect` choice
+# list, where it now follows `codex` directly instead of sitting after
+# `prime-agent`. Order comes from the profile registry, so this reorders the
+# rendered choice list without adding a Click command; the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "aa7c1bbd8cc55e3bdc4b60ed6d6b79e0ce0e2a760c699527c7c7fea0ab2352a9"
 
 
 def _render_help_tree() -> tuple[int, str]:

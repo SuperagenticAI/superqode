@@ -106,3 +106,78 @@ def test_builtin_runtime_conforms_to_protocol():
     assert hasattr(BuiltinRuntime, "cancel")
     assert hasattr(BuiltinRuntime, "reset_cancellation")
     assert BuiltinRuntime.name == "builtin"
+
+
+def test_listing_runtimes_never_shells_out_to_a_vendor_cli(monkeypatch):
+    """The default listing runs on a UI frame, so it must not fork a process.
+
+    Selecting one runtime used to run `agy --version`, `devin version` and
+    `devin auth status`, which froze the terminal for seconds before the
+    picker redrew.
+    """
+    import subprocess
+
+    from superqode.runtime import list_runtimes
+    from superqode.runtime import antigravity_status, devin_status
+
+    antigravity_status.clear_antigravity_cli_cache()
+    devin_status.clear_devin_cli_cache()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError(f"list_runtimes() shelled out: {args!r}")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    runtimes = list_runtimes()
+    assert {"devin-cli", "antigravity-cli"} <= {item.name for item in runtimes}
+
+
+def test_listing_runtimes_never_imports_an_optional_sdk(monkeypatch):
+    """Deciding whether to draw a row must not execute the package.
+
+    SuperQode's own small modules are still imported; what must not happen is
+    pulling in google.adk or openai_codex to decide whether a row is drawn.
+    """
+    import importlib
+
+    from superqode.runtime import list_runtimes
+    from superqode.runtime.registry import _OPTIONAL_PACKAGES
+
+    guarded = {pkg for pkg, _extra in _OPTIONAL_PACKAGES.values()}
+    real_import = importlib.import_module
+
+    def guard(name, *args, **kwargs):
+        if name in guarded:
+            raise AssertionError(f"list_runtimes() imported the {name!r} SDK")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib, "import_module", guard)
+
+    names = {item.name for item in list_runtimes()}
+    assert "codex-sdk" in names
+
+
+def test_the_deep_probe_is_still_available_for_reports(monkeypatch):
+    """`superqode runtime list` and drift still pay for the real status."""
+    import subprocess
+
+    from superqode.runtime import list_runtimes
+    from superqode.runtime import antigravity_status, devin_status
+
+    antigravity_status.clear_antigravity_cli_cache()
+    devin_status.clear_devin_cli_cache()
+
+    calls: list[tuple] = []
+    real_run = subprocess.run
+
+    def counted(args, **kwargs):
+        calls.append(tuple(args))
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", counted)
+    monkeypatch.setattr(
+        "shutil.which", lambda binary: f"/usr/local/bin/{binary}" if binary == "devin" else None
+    )
+
+    list_runtimes(probe=True)
+    assert any("devin" in call[0] for call in calls), "the deep probe stopped probing"

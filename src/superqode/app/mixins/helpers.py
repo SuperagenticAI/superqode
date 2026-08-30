@@ -271,12 +271,19 @@ class HelpersMixin(
 
     @staticmethod
     def _scroll_to_rendered_selected_block(log: ConversationLog) -> bool:
-        """Bring the selected row and its supporting content into view."""
+        """Bring the selected row and its supporting content into view.
+
+        The filled click dot counts as a marker alongside the ``SELECTED``
+        label. Pickers that render one-line rows mark the highlight with the
+        dot alone, and without it those fell through to the geometry fallback,
+        which assumes three lines per row and scrolled straight past the
+        selection on a short terminal.
+        """
         try:
             selected_y = next(
                 index
                 for index, line in enumerate(log.lines)
-                if "SELECTED" in line.text or "▶" in line.text
+                if "SELECTED" in line.text or "▶" in line.text or "●" in line.text
             )
         except (AttributeError, StopIteration):
             return False

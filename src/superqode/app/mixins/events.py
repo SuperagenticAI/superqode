@@ -617,9 +617,12 @@ class EventHandlerMixin:
             if self._handle_acp_agent_selection(text, log):
                 return
 
-        # Check if awaiting model selection and user typed a number 1-5
-        if self._awaiting_model_selection and text in ("1", "2", "3", "4", "5"):
-            self._select_model_by_number(int(text))
+        # Numbered model selection. A model list is routinely longer than five
+        # entries, and the old fixed 1-5 range meant a typed "7" fell through
+        # this branch and was sent to the agent as a prompt. Any number is
+        # accepted here; the picker reports one it cannot honour.
+        if self._awaiting_model_selection and text.strip().isdigit():
+            self._select_model_by_number(int(text.strip()))
             return
 
         # Check if awaiting BYOK provider selection

@@ -164,6 +164,61 @@ class FeedbackMixin:
             dedupe_key=f"local-ready:{provider}:{model}",
         )
 
+    def _show_transition_modal(
+        self,
+        *,
+        title: str,
+        primary: str,
+        detail: str,
+        guidance: str,
+        severity: str,
+    ) -> bool:
+        """Acknowledge a finished state change in a modal.
+
+        A toast for "agent connected" was easy to miss and, styled against this
+        app's dark panel, hard to read at all. A modal puts the result in the
+        middle of the screen and waits for Enter or Esc.
+
+        Returns False when no screen can be pushed, so the caller falls back to
+        a notification. That path is what keeps headless and lightweight tests
+        working.
+        """
+        from superqode.app.outcomes import Outcome, OutcomeSeverity
+        from superqode.widgets.outcome_screen import OutcomeScreen
+
+        outcome = Outcome(
+            title=title,
+            summary=primary,
+            details=tuple(part for part in (detail, guidance) if part),
+            severity=OutcomeSeverity(severity),
+            # No source line: "From state change" under "Agent connected" is
+            # noise in a modal. Activity still records the source separately.
+            source="",
+            actions=(
+                (OutcomeAction("recover", "Run recovery", guidance),)
+                if guidance.startswith(":")
+                else ()
+            ),
+        )
+
+        # A flow that announces twice, such as connecting an agent and then
+        # settling its model, must not queue two dismissals.
+        try:
+            current = self.screen
+        except Exception:  # noqa: BLE001 - no screen stack yet
+            current = None
+        if isinstance(current, OutcomeScreen) and current.replace_outcome(outcome):
+            return True
+
+        try:
+            self.push_screen(
+                OutcomeScreen(outcome),
+                callback=lambda selection: self._handle_outcome_selection(selection, None),
+            )
+        except Exception:  # noqa: BLE001 - fall back to a notification
+            return False
+        return True
+
     def _announce_transition(
         self,
         *,
@@ -210,9 +265,22 @@ class FeedbackMixin:
 
         # A completed state change must be visible without scrolling.  Routine
         # information may stay quiet, but success, warning and error all get a
-        # short popup in addition to the persistent status/transcript state.
+        # popup in addition to the persistent status/transcript state.
         show_popup = severity != "information" if popup is None else popup
-        if show_popup:
+        # A completed result is acknowledged in a modal; a progress note is not,
+        # because nothing has finished yet and demanding a keypress mid-flow is
+        # worse than the toast it replaces. `persist` is already the difference
+        # between the two: only persisted announcements become an Outcome.
+        modal_shown = False
+        if show_popup and persist:
+            modal_shown = self._show_transition_modal(
+                title=title,
+                primary=primary,
+                detail=detail,
+                guidance=guidance,
+                severity=severity,
+            )
+        if show_popup and not modal_shown:
             body_parts = [primary]
             if detail:
                 body_parts.append(detail)

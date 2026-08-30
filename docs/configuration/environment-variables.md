@@ -174,6 +174,7 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 | `SUPERQODE_VERBOSE` | `0`/`1` | off | Same as passing `--verbose`. |
 | `SUPERQODE_VIM_MODE` | `0`/`1` | saved preference or off | Override the optional Vim-like modal navigation layer for the TUI. |
 | `SUPERQODE_NO_BROWSER` | `0`/`1` | off | Do not open the system browser automatically during subscription login. Print the login URL instead. |
+| `SUPERQODE_NO_SPLASH` | `0`/`1` | off | Skip the wordmark printed while the TUI starts. The splash covers the wait before the first frame and is already suppressed when output is not a terminal. |
 
 ## Notes
 

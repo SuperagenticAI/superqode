@@ -33,7 +33,7 @@ and no token is present, SuperQode uses a stored access token, refreshes it,
 or tries client credentials when `SUPERQODE_A2A_OAUTH_CLIENT_ID` and
 `SUPERQODE_A2A_OAUTH_CLIENT_SECRET` are set. Otherwise it opens a browser
 using PKCE. The redirect URI is always
-`http://localhost:19876/a2a/oauth/callback` — register that exact value with
+`http://localhost:19876/a2a/oauth/callback`. Register that exact value with
 the identity provider; SuperQode will not pick another port. Dynamic client
 registration, when advertised, posts to the authorization server's
 `registration_endpoint`, not the agent origin. Over SSH, or when the

@@ -665,6 +665,21 @@ class SuperQodeApp(
             log.scroll_end(animate=False)
             log.auto_scroll = True
 
+    def _typed_picker_digits(self) -> str:
+        """Return the digits waiting in the prompt, if that is all it holds.
+
+        A picker's Enter normally confirms the highlighted row. When the user
+        has typed a row number instead, that number is the choice, and the
+        submit path is what knows how to resolve it.
+        """
+        try:
+            from superqode.app.inputs import SelectionAwareInput
+
+            typed = (self.query_one("#prompt-input", SelectionAwareInput).value or "").strip()
+        except Exception:  # noqa: BLE001 - key handling must never raise
+            return ""
+        return typed if typed.isdigit() else ""
+
     def on_key(self, event: events.Key) -> None:
         """Handle key events globally - intercept arrow keys during selection modes."""
         # Inline permission prompt: while a permission decision is pending,
@@ -836,14 +851,22 @@ class SuperQodeApp(
                     self.action_select_highlighted_local_model()
 
             elif getattr(self, "_awaiting_model_selection", False):
-                event.stop()
-                handled = True
-                if event.key == "up":
-                    self.action_navigate_acp_model_up()
-                elif event.key == "down":
-                    self.action_navigate_acp_model_down()
-                elif event.key == "enter":
-                    self.action_select_highlighted_acp_model()
+                # A typed model number must win over the highlighted row. This
+                # branch mirrors the prompt-input dispatch, so it needs the same
+                # escape: without it this handler ran first, consumed Enter, and
+                # selected whatever was highlighted while the user watched their
+                # typed number be ignored.
+                if event.key == "enter" and self._typed_picker_digits():
+                    pass  # fall through to the normal submit path
+                else:
+                    event.stop()
+                    handled = True
+                    if event.key == "up":
+                        self.action_navigate_acp_model_up()
+                    elif event.key == "down":
+                        self.action_navigate_acp_model_down()
+                    elif event.key == "enter":
+                        self.action_select_highlighted_acp_model()
 
             if handled:
                 # Ensure input stays focused after navigation

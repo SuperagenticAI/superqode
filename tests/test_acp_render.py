@@ -18,6 +18,8 @@ from superqode.acp.render import (
     extract_text_blocks,
     extract_tool_arguments,
     normalize_acp_tool_status,
+    normalize_plan_status,
+    plan_entries_to_todos,
     render_acp_tool_output,
     render_unified_diff,
     should_suppress_output,
@@ -328,3 +330,52 @@ def test_normal_diff_body_respects_max_lines_constant():
     out = summarize_diff_blocks([("big.py", old, new)], mode="normal")
     body_lines = out.splitlines()[1:]  # skip the summary header
     assert len(body_lines) <= NORMAL_DIFF_MAX_LINES + 1
+
+
+def test_normalize_plan_status_settles_separator_spellings():
+    assert normalize_plan_status("in-progress") == "in_progress"
+    assert normalize_plan_status("in progress") == "in_progress"
+    assert normalize_plan_status("DONE") == "completed"
+    assert normalize_plan_status("skipped") == "cancelled"
+
+
+def test_normalize_plan_status_treats_unknown_as_outstanding_work():
+    # An entry that has not obviously finished must keep counting against the
+    # plan, otherwise the panel hides itself while work remains.
+    assert normalize_plan_status("") == "pending"
+    assert normalize_plan_status(None) == "pending"
+    assert normalize_plan_status("whatever") == "pending"
+
+
+def test_plan_entries_convert_to_the_todo_panel_shape():
+    todos = plan_entries_to_todos(
+        [
+            {"content": "Read the failing test", "status": "completed", "priority": "high"},
+            {"content": "  Fix   the   bug ", "status": "in-progress"},
+        ]
+    )
+    assert todos == [
+        {
+            "id": "1",
+            "content": "Read the failing test",
+            "status": "completed",
+            "priority": "high",
+        },
+        {"id": "2", "content": "Fix the bug", "status": "in_progress"},
+    ]
+
+
+def test_plan_entries_drop_rows_that_would_render_blank():
+    entries = [{"content": "   ", "status": "pending"}, "not a dict", {"status": "pending"}]
+    assert plan_entries_to_todos(entries) == []
+    assert plan_entries_to_todos(None) == []
+
+
+def test_plan_entries_accept_alternate_text_keys():
+    todos = plan_entries_to_todos([{"title": "From title"}, {"text": "From text"}])
+    assert [todo["content"] for todo in todos] == ["From title", "From text"]
+
+
+def test_plan_entries_keep_the_agent_supplied_id():
+    todos = plan_entries_to_todos([{"id": "task-7", "content": "Ship it", "status": "pending"}])
+    assert todos[0]["id"] == "task-7"

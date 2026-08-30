@@ -106,7 +106,8 @@ def _runtime_check(spec: HarnessSpec) -> DriftCheck:
     try:
         from superqode.runtime import list_runtimes
 
-        runtimes = {item.name: item for item in list_runtimes()}
+        # Drift reports what actually resolves, so it pays for the deep probe.
+        runtimes = {item.name: item for item in list_runtimes(probe=True)}
     except Exception as exc:  # noqa: BLE001 - reporting beats crashing
         return _check(
             "runtime",

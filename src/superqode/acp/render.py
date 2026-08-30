@@ -352,3 +352,50 @@ def render_acp_tool_output(
     if raw_output is None:
         return None
     return extract_raw_output_text(raw_output, mode=mode)
+
+
+def normalize_plan_status(status: Any) -> str:
+    """Normalize ACP plan-entry status spellings for the pinned plan panel.
+
+    The protocol defines ``pending``, ``in_progress`` and ``completed``, but
+    agents differ on the separator and a few report terminal states the spec
+    does not name. Unknown values fall back to ``pending`` so an entry that
+    has not obviously finished still counts as outstanding work.
+    """
+    value = str(status or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if value in {"completed", "complete", "done", "finished"}:
+        return "completed"
+    if value in {"in_progress", "inprogress", "running", "active", "started"}:
+        return "in_progress"
+    if value in {"cancelled", "canceled", "skipped", "failed"}:
+        return "cancelled"
+    return "pending"
+
+
+def plan_entries_to_todos(entries: Any) -> List[dict]:
+    """Convert ACP ``plan`` entries into the todo shape the TUI panel renders.
+
+    A plan entry already carries ``content``, ``priority`` and ``status``,
+    which is what the pinned plan panel wants; only the spellings need
+    settling. Entries without any text are dropped rather than rendered as
+    blank rows.
+    """
+    todos: List[dict] = []
+    for index, entry in enumerate(entries or [], 1):
+        if not isinstance(entry, dict):
+            continue
+        content = " ".join(
+            str(entry.get("content") or entry.get("title") or entry.get("text") or "").split()
+        )
+        if not content:
+            continue
+        todo: dict = {
+            "id": str(entry.get("id") or index),
+            "content": content,
+            "status": normalize_plan_status(entry.get("status")),
+        }
+        priority = str(entry.get("priority") or "").strip().lower()
+        if priority:
+            todo["priority"] = priority
+        todos.append(todo)
+    return todos

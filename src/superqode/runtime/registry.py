@@ -12,6 +12,7 @@ Optional backends (adk, openai-agents, pydanticai) are imported lazily so import
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -296,8 +297,62 @@ def create_runtime(name: str | None, **kwargs: Any) -> AgentRuntime:
     return _FACTORIES[resolved](**kwargs)
 
 
-def list_runtimes() -> list[RuntimeInfo]:
-    """Describe every known runtime and whether its dependencies are installed."""
+def _cli_presence(
+    binary: str, label: str, install_hint: str
+) -> tuple[bool, bool, str | None, str | None]:
+    """Decide a vendor CLI runtime's listing status from PATH alone.
+
+    This is the same answer, and the same wording, the subscription CLI
+    runtimes already give: the binary is there, and the version and sign-in are
+    confirmed when it is actually used. Running the CLI to find out belongs
+    behind ``probe=True``.
+    """
+    import shutil
+
+    installed = shutil.which(binary) is not None
+    detail = (
+        f"{label} CLI on PATH; version and sign-in are verified on first use"
+        if installed
+        else install_hint
+    )
+    return installed, installed, None if installed else install_hint, detail
+
+
+def _package_installed(pkg: str, *, probe: bool) -> bool:
+    """Whether an optional runtime package is importable.
+
+    ``find_spec`` answers the listing question without executing the package.
+    Importing google.adk or openai_codex to decide whether to draw a row cost
+    far more than the row was worth. A deep probe still imports, because that
+    is the only way to catch a package that installs but cannot load.
+    """
+    if probe:
+        try:
+            importlib.import_module(pkg)
+            return True
+        except ImportError:
+            return False
+    try:
+        return importlib.util.find_spec(pkg) is not None
+    except (ImportError, AttributeError, ValueError):
+        # A missing parent package raises rather than returning None, and a
+        # half-installed distribution can leave a module without __spec__.
+        return False
+
+
+def list_runtimes(*, probe: bool = False) -> list[RuntimeInfo]:
+    """Describe every known runtime and whether its dependencies are installed.
+
+    The default listing is cheap enough to run on a UI frame: presence is
+    decided by PATH and a module lookup, never by importing an SDK or shelling
+    out to a vendor CLI. Selecting any one runtime used to run `agy --version`,
+    `devin version` and `devin auth status`, and import every optional SDK,
+    which blocked the terminal for seconds before the picker redrew.
+
+    Pass ``probe=True`` where the deep status is the point rather than a side
+    effect, such as `superqode runtime list` and harness drift. Those callers
+    are already command-line reports, so a few seconds of probing is expected.
+    """
     out: list[RuntimeInfo] = []
     for name in _FACTORIES:
         if name == "builtin":
@@ -307,26 +362,40 @@ def list_runtimes() -> list[RuntimeInfo]:
             ready = True
             status_detail = None
         elif name == "antigravity-cli":
-            from .antigravity_status import probe_antigravity_cli
+            if probe:
+                from .antigravity_status import probe_antigravity_cli
 
-            status = probe_antigravity_cli()
-            installed = status.installed
-            ready = status.compatible
-            status_detail = status.issue or (
-                f"compatible CLI {status.version_text}; Google Sign-In is verified on first use"
-                if status.version_text
-                else None
-            )
-            install_hint = None if installed else status.issue
+                status = probe_antigravity_cli()
+                installed = status.installed
+                ready = status.compatible
+                status_detail = status.issue or (
+                    f"compatible CLI {status.version_text}; Google Sign-In is verified on first use"
+                    if status.version_text
+                    else None
+                )
+                install_hint = None if installed else status.issue
+            else:
+                installed, ready, install_hint, status_detail = _cli_presence(
+                    "agy",
+                    "Google Antigravity",
+                    "install the Antigravity CLI from https://antigravity.google/docs/cli-install",
+                )
             implemented = True
         elif name == "devin-cli":
-            from .devin_status import probe_devin_cli
+            if probe:
+                from .devin_status import probe_devin_cli
 
-            status = probe_devin_cli()
-            installed = status.installed
-            ready = status.compatible
-            status_detail = status.detail
-            install_hint = None if installed else status.issue
+                status = probe_devin_cli()
+                installed = status.installed
+                ready = status.compatible
+                status_detail = status.detail
+                install_hint = None if installed else status.issue
+            else:
+                from .devin_status import INSTALL_HINT as _DEVIN_INSTALL_HINT
+
+                installed, ready, install_hint, status_detail = _cli_presence(
+                    "devin", "Devin", _DEVIN_INSTALL_HINT
+                )
             implemented = True
         elif name == "antigravity-managed":
             installed = True
@@ -351,11 +420,7 @@ def list_runtimes() -> list[RuntimeInfo]:
             )
         else:
             pkg, extra = _OPTIONAL_PACKAGES[name]
-            try:
-                importlib.import_module(pkg)
-                installed = True
-            except ImportError:
-                installed = False
+            installed = _package_installed(pkg, probe=probe)
             install_hint = None if installed else _extra_install(name)
             implemented = True
             ready = installed

@@ -13,6 +13,8 @@ import os
 
 import pytest
 
+from textual.widgets import Static
+
 from superqode.app_main import SuperQodeApp, SelectionAwareInput
 from superqode.app.widgets import ColorfulStatusBar, ConversationLog
 
@@ -23,6 +25,17 @@ def _isolate_mounted_app_startup(monkeypatch):
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
     monkeypatch.setattr(SuperQodeApp, "_prewarm_litellm", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_models_dev_refresh", lambda self: None)
+
+
+async def _settle(pilot, frames: int = 6) -> None:
+    """Let a registry prompt finish mounting before driving it.
+
+    ``pilot.pause()`` advances one frame. Opening a prompt takes several, so a
+    key pressed after a single pause can land before the prompt is listening,
+    which made these tests sensitive to unrelated timing changes elsewhere.
+    """
+    for _ in range(frames):
+        await pilot.pause()
 
 
 async def test_status_setters_update_mounted_status_bar():
@@ -95,7 +108,7 @@ async def test_mouse_drag_selection_copies_to_clipboard():
         # Let any persisted startup connection finish before creating the
         # controlled transcript used by this interaction test.
         for _ in range(5):
-            await pilot.pause()
+            await _settle(pilot)
         await pilot.pause(0.5)
         app._welcome_active = False
         app._prompts.clear()
@@ -105,8 +118,8 @@ async def test_mouse_drag_selection_copies_to_clipboard():
         log.clear()
         log.reset_response_stream("qwen")
         log.write_final_response("Mouse selectable answer body here.", agent="qwen")
-        await pilot.pause()
-        await pilot.pause()
+        await _settle(pilot)
+        await _settle(pilot)
 
         ty = next(
             y
@@ -473,14 +486,14 @@ async def test_mounted_vim_mode_switches_between_normal_insert_and_command(monke
         prompt = app.query_one(SelectionAwareInput)
         bar = app.query_one("#status-bar", ColorfulStatusBar)
         input_box = app.query_one("#input-box")
-        await pilot.pause()
+        await _settle(pilot)
 
         assert prompt.read_only is True
         assert bar.vim_state == "normal"
         assert input_box.border_title == "Task · NORMAL"
 
         await pilot.press("i")
-        await pilot.pause()
+        await _settle(pilot)
         assert prompt.read_only is False
         assert bar.vim_state == "insert"
 
@@ -488,21 +501,21 @@ async def test_mounted_vim_mode_switches_between_normal_insert_and_command(monke
         assert prompt.text == "h"
 
         await pilot.press("escape")
-        await pilot.pause()
+        await _settle(pilot)
         assert prompt.read_only is True
         assert prompt.text == "h"
         assert bar.vim_state == "normal"
 
         prompt.load_text("")
         await pilot.press(":")
-        await pilot.pause()
+        await _settle(pilot)
         assert prompt.text == ":"
         assert prompt.read_only is False
         assert bar.vim_state == "command"
 
         prompt.insert("vim status")
         await pilot.press("enter")
-        await pilot.pause()
+        await _settle(pilot)
         assert prompt.text == ""
         assert prompt.read_only is True
         assert bar.vim_state == "normal"
@@ -519,7 +532,7 @@ async def test_mounted_vim_jk_moves_prompt_completion(monkeypatch):
         monkeypatch.setattr(app, "_move_prompt_completion", lambda delta: moves.append(delta))
 
         await pilot.press("j", "k")
-        await pilot.pause()
+        await _settle(pilot)
 
         assert moves == [1, -1]
         assert prompt.text == ""
@@ -919,10 +932,10 @@ async def test_missing_runtime_offers_a_navigable_install_prompt(monkeypatch):
         app._awaiting_runtime_selection = True
         app._runtime_selection_list = [missing]
         app._runtime_highlighted_index = 0
-        await pilot.pause()
+        await _settle(pilot)
 
         app.action_select_highlighted_runtime()
-        await pilot.pause()
+        await _settle(pilot)
 
         pending = app._awaiting_dependency_install
         assert isinstance(pending, dict)
@@ -941,10 +954,10 @@ async def test_missing_runtime_offers_a_navigable_install_prompt(monkeypatch):
         # Arrow keys move the highlight, which now lives on the prompt stack.
         assert app._prompts.index == 0
         app.action_navigate_dependency_install_down()
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 1
         app.action_navigate_dependency_install_up()
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 0
 
 
@@ -959,7 +972,7 @@ async def test_missing_copilot_routes_to_the_safe_dependency_picker(monkeypatch)
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._dispatch_connection_profile(cp.get_connection_profile("copilot"), log)
-        await pilot.pause()
+        await _settle(pilot)
 
         rendered = "\n".join(line.text for line in log.lines)
         assert app._prompts.is_active("dependency_install")
@@ -1223,29 +1236,29 @@ async def test_registry_driven_prompt_handles_every_key_path():
 
         # Arrows.
         app._show_dependency_install_picker("codex-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.is_active("dependency_install")
         app._prompts.navigate(1)
         assert app._prompts.index == 1
 
         # Esc closes it and falls back to the runtime picker underneath.
         assert app._prompts.cancel() is True
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.active is None
         assert app._awaiting_dependency_install is None
 
         # Numbers select. Option 2 is "manual", which only prints the command.
         app._show_dependency_install_picker("codex-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
         app._prompts.select_index(1)
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.active is None
 
         # Typed answers route through the same spec.
         app._show_dependency_install_picker("codex-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.handle_text("n") is True
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.active is None
 
 
@@ -1260,26 +1273,26 @@ async def test_dependency_prompt_arrow_keys_work_as_real_keypresses():
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._show_dependency_install_picker("claude-agent-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.is_active("dependency_install")
         assert app._prompts.index == 0
 
         await pilot.press("down")
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 1, "down arrow did not move the highlight"
 
         await pilot.press("down")
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 2
 
         # Clamped at the end rather than wrapping or overflowing.
         await pilot.press("down")
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 2
 
         await pilot.press("up")
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 1
 
 
@@ -1289,15 +1302,15 @@ async def test_dependency_prompt_enter_selects_the_highlighted_row():
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._show_dependency_install_picker("claude-agent-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
 
         # Move to "I will install it myself", which only prints the command.
         await pilot.press("down")
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.index == 1
 
         await pilot.press("enter")
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.active is None
         rendered = "\n".join(line.text for line in log.lines)
@@ -1312,11 +1325,11 @@ async def test_dependency_prompt_escape_returns_to_the_connect_screen():
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._show_dependency_install_picker("claude-agent-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.is_active("dependency_install")
 
         await pilot.press("escape")
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.active is None
         rendered = "\n".join(line.text for line in log.lines)
@@ -1352,7 +1365,7 @@ async def test_every_route_to_the_install_prompt_accepts_enter(entry, monkeypatc
             await pilot.press("enter")
         else:
             app._show_runtime_picker(log)
-            await pilot.pause()
+            await _settle(pilot)
             if entry == "typed_name":
                 prompt.value = "claude-agent-sdk"
                 await pilot.press("enter")
@@ -1360,14 +1373,14 @@ async def test_every_route_to_the_install_prompt_accepts_enter(entry, monkeypatc
                 names = [r.name for r in app._runtime_selection_list]
                 await pilot.press(str(names.index("claude-agent-sdk") + 1))
         for _ in range(4):
-            await pilot.pause()
+            await _settle(pilot)
 
         assert app._prompts.is_active("dependency_install"), f"{entry} did not open the prompt"
 
         monkeypatch.setattr(_subprocess, "run", fake_run)
         await pilot.press("enter")
         for _ in range(6):
-            await pilot.pause()
+            await _settle(pilot)
 
         assert any("pip" in argv for argv in ran), f"{entry}: Enter did not start the install"
 
@@ -1378,12 +1391,12 @@ async def test_cancelling_the_install_prompt_lands_on_the_connect_screen():
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._show_dependency_install_picker("claude-agent-sdk", log)
-        await pilot.pause()
+        await _settle(pilot)
 
         # Option 3 is Cancel.
         app._prompts.select_index(2)
         for _ in range(3):
-            await pilot.pause()
+            await _settle(pilot)
 
         assert app._prompts.active is None
         rendered = "\n".join(line.text for line in log.lines)
@@ -1412,7 +1425,7 @@ async def test_agy_models_opens_a_picker_instead_of_printing_a_list(monkeypatch)
         monkeypatch.setattr(app, "_antigravity_model_cmd", lambda m, log: chosen.append(m))
 
         await app._show_agy_models(log)
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.is_active("vendor_model")
         rendered = "\n".join(line.text for line in log.lines)
@@ -1421,9 +1434,9 @@ async def test_agy_models_opens_a_picker_instead_of_printing_a_list(monkeypatch)
 
         # Arrow to the second entry and confirm it, through real keypresses.
         await pilot.press("down")
-        await pilot.pause()
+        await _settle(pilot)
         await pilot.press("enter")
-        await pilot.pause()
+        await _settle(pilot)
 
         assert chosen == ["gemini-3.1-pro-low"]
         assert app._prompts.active is None
@@ -1445,7 +1458,7 @@ async def test_agy_models_falls_back_to_raw_output_when_nothing_parses(monkeypat
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         await app._show_agy_models(log)
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.active is None
         rendered = "\n".join(line.text for line in log.lines)
@@ -1472,12 +1485,12 @@ async def test_number_keys_select_in_any_registry_prompt(monkeypatch):
         monkeypatch.setattr(app, "_antigravity_model_cmd", lambda m, log: chosen.append(m))
 
         await app._show_agy_models(log)
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.is_active("vendor_model")
 
         await pilot.press("3")
         for _ in range(3):
-            await pilot.pause()
+            await _settle(pilot)
 
         assert chosen == ["claude-sonnet-4-6"]
 
@@ -1524,6 +1537,462 @@ async def test_arrow_keys_keep_the_chosen_acp_view():
         assert len(app._acp_agent_list) == featured_count
 
 
+async def test_arrow_keys_reuse_the_acp_catalog_snapshot():
+    """A highlight move inside the TTL must not re-read every agent file.
+
+    Freshness comes from the background revalidation, not from making every
+    keystroke wait on a PATH scan.
+    """
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 60)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._connect_acp_cmd("featured", log)
+        for _ in range(12):
+            await pilot.pause()
+
+        rows = len(app._acp_agent_list)
+        assert rows > 1
+
+        import superqode.agents.registry as registry
+
+        calls = []
+        original = registry.get_all_acp_agents
+
+        async def counted():
+            calls.append(1)
+            return await original()
+
+        registry.get_all_acp_agents = counted
+        try:
+            app.action_navigate_acp_agent_down()
+            for _ in range(12):
+                await pilot.pause()
+        finally:
+            registry.get_all_acp_agents = original
+
+        assert calls == [], "navigation rebuilt the catalogue instead of reusing it"
+        assert len(app._acp_agent_list) == rows
+        assert app._acp_highlighted_agent_index == 1
+
+
+async def test_reopening_the_acp_picker_rebuilds_the_catalog_snapshot():
+    """Only navigation reuses the snapshot, so an install is picked up on reopen."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 60)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._connect_acp_cmd("featured", log)
+        for _ in range(12):
+            await pilot.pause()
+
+        import superqode.agents.registry as registry
+
+        calls = []
+        original = registry.get_all_acp_agents
+
+        async def counted():
+            calls.append(1)
+            return await original()
+
+        registry.get_all_acp_agents = counted
+        try:
+            app._connect_acp_cmd("featured", log)
+            for _ in range(12):
+                await pilot.pause()
+        finally:
+            registry.get_all_acp_agents = original
+
+        assert calls, "reopening the picker served a stale catalogue"
+
+
+def _patch_registry_with_newcomer(monkey_target):
+    """Return a ``get_all_acp_agents`` that adds one agent the catalogue lacked."""
+    original = monkey_target.get_all_acp_agents
+
+    async def with_newcomer():
+        agents = dict(await original())
+        agents["newcomer.example"] = {
+            "identity": "newcomer.example",
+            "name": "Newcomer Agent",
+            "short_name": "newcomer",
+            "protocol": "acp",
+            "catalog_tier": "featured",
+        }
+        return agents
+
+    return original, with_newcomer
+
+
+async def test_a_newly_landed_acp_agent_appears_without_reopening_the_picker():
+    """An agent installed elsewhere must not stay hidden behind a stale snapshot."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 60)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._connect_acp_cmd("all", log)
+        for _ in range(12):
+            await pilot.pause()
+
+        before = len(app._acp_agent_list)
+        assert before > 1
+
+        import superqode.agents.registry as registry
+
+        original, with_newcomer = _patch_registry_with_newcomer(registry)
+        registry.get_all_acp_agents = with_newcomer
+        # Age the snapshot so the next redraw revalidates instead of serving it.
+        app._acp_picker_snapshot_at = 0.0
+        try:
+            app.action_navigate_acp_agent_down()
+            for _ in range(30):
+                await pilot.pause()
+        finally:
+            registry.get_all_acp_agents = original
+
+        assert len(app._acp_agent_list) == before + 1
+        assert any(agent_id == "newcomer.example" for agent_id, _ in app._acp_agent_list)
+
+
+async def test_a_background_catalog_rebuild_keeps_the_same_agent_highlighted():
+    """Rows shift when an agent lands; the selection must follow its agent."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 60)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._connect_acp_cmd("all", log)
+        for _ in range(12):
+            await pilot.pause()
+
+        app.action_navigate_acp_agent_down()
+        app.action_navigate_acp_agent_down()
+        for _ in range(12):
+            await pilot.pause()
+
+        anchor = app._acp_agent_list[app._acp_highlighted_agent_index][0]
+
+        import superqode.agents.registry as registry
+
+        original, with_newcomer = _patch_registry_with_newcomer(registry)
+        registry.get_all_acp_agents = with_newcomer
+        app._acp_picker_snapshot_at = 0.0
+        try:
+            app._reshow_acp_agents(log)
+            for _ in range(30):
+                await pilot.pause()
+        finally:
+            registry.get_all_acp_agents = original
+
+        assert any(agent_id == "newcomer.example" for agent_id, _ in app._acp_agent_list)
+        assert app._acp_agent_list[app._acp_highlighted_agent_index][0] == anchor
+
+
+async def test_an_unchanged_catalog_does_not_repaint_the_picker():
+    """Revalidation is silent unless something actually landed."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 60)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._connect_acp_cmd("all", log)
+        for _ in range(12):
+            await pilot.pause()
+
+        repaints = []
+        original_reshow = app._reshow_acp_agents
+        app._reshow_acp_agents = lambda target: repaints.append(target)
+        app._acp_picker_snapshot_at = 0.0
+        try:
+            app._revalidate_acp_catalog(log)
+            for _ in range(30):
+                await pilot.pause()
+        finally:
+            app._reshow_acp_agents = original_reshow
+
+        assert repaints == []
+        # The rebuild still ran; it just found nothing worth repainting for.
+        assert app._acp_picker_snapshot_at > 0.0
+
+
+async def test_clicking_an_acp_model_row_selects_that_model():
+    """A boxed model row must be clickable, not just drag-selectable text.
+
+    The ACP model pickers draw their rows inside a box and raise
+    ``_awaiting_model_selection``. Neither the click gate nor the row pattern
+    accounted for that, so a click fell through to the terminal's own text
+    selection and the list looked inert.
+    """
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app.current_agent = "opencode"
+        app._opencode_models = [
+            {"id": "openai/gpt-5.2", "name": "gpt-5.2", "desc": "fast"},
+            {"id": "anthropic/claude-opus-5", "name": "claude-opus-5", "desc": "deep"},
+        ]
+        app._show_opencode_models_selection({"name": "OpenCode"}, log)
+        await _settle(pilot)
+        assert app._awaiting_model_selection is True
+
+        row = next(index for index, line in enumerate(log.lines) if "[2]" in line.text)
+        offset = log.region.offset + (6, row - int(log.scroll_offset.y))
+        await pilot.click(offset=offset)
+        await _settle(pilot)
+
+        assert app.current_model == "anthropic/claude-opus-5"
+        assert app._awaiting_model_selection is False
+
+
+async def test_a_typed_model_number_past_five_is_not_sent_to_the_agent():
+    """The old 1-5 gate let a typed "7" fall through and become a prompt."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app.current_agent = "opencode"
+        app._opencode_models = [
+            {"id": f"vendor/model-{n}", "name": f"model-{n}"} for n in range(1, 9)
+        ]
+        app._show_opencode_models_selection({"name": "OpenCode"}, log)
+        await _settle(pilot)
+
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "7"
+        await pilot.press("enter")
+        await _settle(pilot)
+
+        assert app.current_model == "vendor/model-7"
+        assert app._awaiting_model_selection is False
+
+
+async def test_model_picker_digits_buffer_so_two_digit_rows_are_reachable():
+    """Typing 1 then 2 must reach model 12, not select model 1 immediately."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app.current_agent = "opencode"
+        app._opencode_models = [
+            {"id": f"vendor/model-{n}", "name": f"model-{n}"} for n in range(1, 15)
+        ]
+        app._show_opencode_models_selection({"name": "OpenCode"}, log)
+        await _settle(pilot)
+
+        app._select_by_number_universal(1)
+        await _settle(pilot)
+        assert app._awaiting_model_selection is True, "the first digit selected a model"
+
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        assert prompt.value == "1"
+
+
+async def test_closing_the_a2a_screen_returns_to_the_protocols_listing():
+    """Back from a protocol screen belongs on the list it was opened from.
+
+    The screen is a Textual screen, so it records no history step. Without
+    marking the listing as still current, back popped Protocols and landed on
+    the connect root instead.
+    """
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_PROTOCOLS,
+        get_connection_profile,
+    )
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log)
+        await pilot.pause()
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+
+        app._dispatch_connection_profile(get_connection_profile("protocol-a2a"), log)
+        await pilot.pause()
+
+        # Close it the way the screen's Back control does.
+        app.screen.action_close()
+        for _ in range(6):
+            await pilot.pause()
+
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS, "back left the protocols listing"
+        assert app._awaiting_connect_type is True, "the listing came back inert"
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "Agent2Agent" in rendered or "A2A" in rendered
+
+
+async def test_back_from_the_protocols_listing_still_reaches_the_connect_root():
+    """Restoring the listing must not strand the user on it."""
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_PROTOCOLS,
+        CONNECT_MENU_ROOT,
+        get_connection_profile,
+    )
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log)
+        await pilot.pause()
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+
+        app._dispatch_connection_profile(get_connection_profile("protocol-a2a"), log)
+        await pilot.pause()
+        app.screen.action_close()
+        for _ in range(6):
+            await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+
+        # One more back leaves the protocols listing for the screen above it.
+        app._navigate_back()
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_ROOT
+
+
+def _modal_body(app) -> str:
+    """Read the text out of the open outcome modal."""
+    from textual.widgets import Static
+
+    from superqode.widgets.outcome_screen import OutcomeScreen
+
+    assert isinstance(app.screen, OutcomeScreen), f"no modal, got {type(app.screen).__name__}"
+    return app.screen.query_one("#outcome-content").query_one(Static).render().plain
+
+
+async def test_a_finished_state_change_opens_an_acknowledgeable_modal():
+    """A toast for "agent connected" was easy to miss and hard to read."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected",
+            primary="OpenCode",
+            detail="opencode/big-pickle via ACP",
+            severity="success",
+        )
+        await _settle(pilot)
+
+        body = _modal_body(app)
+        assert "Agent connected" in body
+        assert "OpenCode" in body
+        assert "opencode/big-pickle via ACP" in body
+        assert "✅" in body, "severity is not readable at a glance"
+        assert "From state change" not in body, "internal plumbing leaked into the modal"
+
+
+async def test_a_second_announcement_reuses_the_open_modal():
+    """Connecting announces more than once; that is still one dismissal."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+        )
+        await _settle(pilot)
+        depth = len(app.screen_stack)
+
+        app._announce_transition(
+            title="Model ready", primary="big-pickle", detail="OpenCode via ACP", severity="success"
+        )
+        await _settle(pilot)
+
+        assert len(app.screen_stack) == depth, "a second announcement stacked another modal"
+        body = _modal_body(app)
+        assert "Model ready" in body and "big-pickle" in body
+        assert "Agent connected" not in body, "the modal kept stale content"
+
+
+async def test_enter_dismisses_the_state_change_modal():
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+        )
+        await _settle(pilot)
+        assert len(app.screen_stack) == 2
+
+        await pilot.press("enter")
+        await _settle(pilot)
+        assert len(app.screen_stack) == 1, "Enter did not dismiss the modal"
+
+
+async def test_a_progress_note_never_demands_a_dismissal():
+    """Nothing has finished yet, so stopping the user mid-flow would be worse."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Connecting",
+            primary="OpenCode",
+            detail="Starting ACP session",
+            severity="information",
+            persist=False,
+            popup=True,
+        )
+        await _settle(pilot)
+        assert len(app.screen_stack) == 1, "a progress note opened a modal"
+
+
+async def test_a_failure_modal_offers_its_recovery_command():
+    """An error that names a command should let the user run it from here."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Connection failed",
+            primary="opencode",
+            detail="Model x-preview-f-free is not supported",
+            severity="error",
+            guidance=":log verbose",
+        )
+        await _settle(pilot)
+
+        body = _modal_body(app)
+        assert "❌" in body
+        assert "Connection failed" in body
+        assert ":log verbose" in body
+        actions = [action.command for action in app.screen.outcome.actions]
+        assert ":log verbose" in actions
+
+
+async def test_acp_plan_updates_fill_the_live_plan_panel():
+    """An ACP plan belongs in the pinned panel, not in a one-line count."""
+    from superqode.acp.render import plan_entries_to_todos
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        panel = app.query_one("#todo-panel", Static)
+        assert "visible" not in panel.classes
+
+        app._set_todos(
+            plan_entries_to_todos(
+                [
+                    {"content": "Read the failing test", "status": "completed"},
+                    {"content": "Fix the bug", "status": "in_progress"},
+                    {"content": "Run the suite", "status": "pending"},
+                ]
+            )
+        )
+        await pilot.pause()
+
+        assert "visible" in panel.classes
+        rendered = "\n".join(strip.text for strip in panel.render_lines(panel.size.region))
+        assert "1/3 done" in rendered
+        assert "Fix the bug" in rendered
+
+
+async def test_a_finished_acp_plan_hides_the_panel_again():
+    """Nothing outstanding means nothing pinned to the top of the screen."""
+    from superqode.acp.render import plan_entries_to_todos
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        panel = app.query_one("#todo-panel", Static)
+        entries = [{"content": "Fix the bug", "status": "in_progress"}]
+        app._set_todos(plan_entries_to_todos(entries))
+        await pilot.pause()
+        assert "visible" in panel.classes
+
+        entries[0]["status"] = "completed"
+        app._set_todos(plan_entries_to_todos(entries))
+        await pilot.pause()
+        assert "visible" not in panel.classes
+
+
 async def test_vendor_model_picker_is_shared_across_runtimes():
     """One picker serves every vendor's model list, keyed by (id, label)."""
     app = SuperQodeApp()
@@ -1538,7 +2007,7 @@ async def test_vendor_model_picker_is_shared_across_runtimes():
             on_choose=chosen.append,
             current="m-2",
         )
-        await pilot.pause()
+        await _settle(pilot)
 
         assert opened is True
         assert app._prompts.is_active("vendor_model")
@@ -1547,10 +2016,14 @@ async def test_vendor_model_picker_is_shared_across_runtimes():
         assert "Model One" in rendered
         assert "◀ active" in rendered  # the current model is marked
 
+        for _ in range(6):
+            await _settle(pilot)
         await pilot.press("down")
-        await pilot.pause()
+        for _ in range(6):
+            await _settle(pilot)
         await pilot.press("enter")
-        await pilot.pause()
+        for _ in range(6):
+            await _settle(pilot)
 
         # The id is chosen, not the label shown.
         assert chosen == ["m-2"]
@@ -1567,7 +2040,7 @@ async def test_vendor_model_picker_reports_an_empty_list():
             )
             is False
         )
-        await pilot.pause()
+        await _settle(pilot)
         assert app._prompts.active is None
 
 
@@ -1577,7 +2050,7 @@ async def test_claude_model_list_is_selectable(monkeypatch):
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
         app._claude_model_cmd("", log)
-        await pilot.pause()
+        await _settle(pilot)
 
         assert app._prompts.is_active("vendor_model")
         rendered = "\n".join(line.text for line in log.lines)
@@ -1645,7 +2118,7 @@ async def test_npm_agent_is_manual_only(monkeypatch):
             lambda data: {"command": "npm install -g @kilocode/cli"},
         )
         assert app._show_agent_install_picker(agent, log) is True
-        await pilot.pause()
+        await _settle(pilot)
 
         rendered = "\n".join(line.text for line in log.lines)
         assert "Install it for me" not in rendered
@@ -1656,7 +2129,7 @@ async def test_npm_agent_is_manual_only(monkeypatch):
 
         # Enter chooses the manual path; it must only display guidance.
         await pilot.press("enter")
-        await pilot.pause()
+        await _settle(pilot)
         rendered = "\n".join(line.text for line in log.lines)
         assert "Install Kilo CLI yourself with" in rendered
 
@@ -1675,7 +2148,7 @@ async def test_pipe_to_shell_agent_is_never_offered_for_install(monkeypatch):
             },
         )
         assert app._show_agent_install_picker(agent, log) is True
-        await pilot.pause()
+        await _settle(pilot)
 
         rendered = "\n".join(line.text for line in log.lines)
         assert "Install it for me" not in rendered
@@ -1918,10 +2391,12 @@ async def test_a_click_off_a_picker_row_selects_nothing(monkeypatch):
 
 
 async def test_the_status_bar_controls_actually_fire_when_clicked(monkeypatch):
-    """A link style in the rendered text is not proof that a click works.
+    """A control drawn on the bar is not proof that a click reaches it.
 
-    The bar occupies three screen rows with its content on the middle one, so
-    a test that clicks the widget's own origin misses every control.
+    The bar carries no OSC-8 links, because terminals underline those on hover
+    and we cannot turn that off. It maps screen columns to commands itself, so
+    the mapping is only right if the columns it records line up with where the
+    row is actually painted. Drive real clicks rather than read the text.
     """
     from superqode.app.widgets import ColorfulStatusBar
 
@@ -1936,29 +2411,21 @@ async def test_the_status_bar_controls_actually_fire_when_clicked(monkeypatch):
         await pilot.pause()
         bar = app.query_one("#status-bar", ColorfulStatusBar)
 
-        from rich.cells import cell_len
+        hits = list(bar._hits)
+        assert {"home", "connect", "exit"} <= {action for _, _, action in hits}
 
-        line = bar._render_for_width(bar.size.width or 120)
-        columns: dict[str, int] = {}
-        for span in line.spans:
-            style = str(span.style)
-            if "superqode://cmd/" in style:
-                # Span offsets count characters; the screen counts cells, and
-                # the plug glyph occupies two of them.
-                columns.setdefault(style.rsplit("/", 1)[-1], cell_len(line.plain[: span.start]))
-        assert {"home", "connect", "exit"} <= set(columns)
-
-        row = next(
-            y
-            for y in range(bar.region.y, bar.region.y + bar.region.height)
-            if getattr(app.screen.get_style_at(bar.region.x + 2, y), "link", None)
-        )
-        for command, column in columns.items():
+        # The bar occupies three screen rows with its content on the middle
+        # one, so clicking the widget's own origin lands on the border and
+        # misses every control.
+        content = bar.content_region
+        for start, _end, action in hits:
+            column = content.x + start + 1
+            assert column < content.right, f"{action} was placed off the row"
             before = len(ran)
-            await pilot.click(offset=(bar.region.x + column + 1, row))
+            await pilot.click(offset=(column, content.y))
             await pilot.pause()
-            assert len(ran) > before, f"clicking {command} did nothing"
-            assert ran[-1] == command
+            assert len(ran) > before, f"clicking {action} did nothing"
+            assert ran[-1] == action, f"clicking {action} ran {ran[-1]}"
 
 
 async def test_clicking_the_wordmark_goes_home(monkeypatch):
@@ -1975,12 +2442,9 @@ async def test_clicking_the_wordmark_goes_home(monkeypatch):
     async with app.run_test(size=(120, 30)) as pilot:
         await pilot.pause()
         bar = app.query_one("#status-bar", ColorfulStatusBar)
-        row = next(
-            y
-            for y in range(bar.region.y, bar.region.y + bar.region.height)
-            if getattr(app.screen.get_style_at(bar.region.x + 2, y), "link", None)
-        )
-        await pilot.click(offset=(bar.region.x + 4, row))
+        assert bar.action_at(2) == "home"
+        content = bar.content_region
+        await pilot.click(offset=(content.x + 2, content.y))
         await pilot.pause()
 
     assert ran == ["home"]

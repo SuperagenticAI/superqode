@@ -2310,10 +2310,27 @@ class AgentRunMixin:
                 )
 
         async def on_plan(entries: list[dict]) -> None:
-            """Handle plan updates - ALWAYS visible."""
-            if entries:
-                # Plans are important - always show
-                self._call_ui(log.add_thinking, f"📋 Plan: {len(entries)} tasks", "planning")
+            """Mirror the agent's plan into the pinned plan panel.
+
+            Native sessions fill that panel from ``todo_write``. An ACP plan
+            update carries the same information in the protocol's own shape,
+            so it belongs in the same place rather than in a one-line count
+            that scrolls away.
+            """
+            from superqode.acp.render import plan_entries_to_todos
+
+            todos = plan_entries_to_todos(entries)
+            if not todos:
+                return
+
+            self._call_ui(self._set_todos, todos)
+
+            # The panel now carries live status, so the transcript only needs a
+            # line when the task list itself changes, not on every status tick.
+            signature = tuple(todo["content"] for todo in todos)
+            if signature != getattr(self, "_acp_plan_signature", None):
+                self._acp_plan_signature = signature
+                self._call_ui(log.add_thinking, f"📋 Plan: {len(todos)} tasks", "planning")
 
         async def on_available_commands(commands: list[dict]) -> None:
             """Remember agent-advertised commands without spamming the transcript."""

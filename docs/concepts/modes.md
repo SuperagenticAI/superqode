@@ -403,18 +403,19 @@ definitions.
 | Devin | `devin` | Dirac | `dirac` |
 | Factory Droid | `droid` | fast-agent | `fast-agent` |
 | fount | `fount` | fx | `fx` |
-| GLM Agent | `glm` | Goose | `goose` |
-| Grok Build | `grok` | Harn | `harn` |
-| Hermes Agent | `hermes` | JetBrains Junie | `junie` |
-| Kilo | `kilo` | Kimi Code | `kimi` |
-| Kiro CLI | `kiro` | LLMling-Agent | `llmlingagent` |
-| Minion Code | `minion` | Mistral Vibe | `mistral-vibe` |
-| OpenClaw | `openclaw` | OpenCode | `opencode` |
-| OpenHands | `openhands` | Pi | `pi` |
-| Poolside | `poolside` | Prime Agent | `prime-agent` |
-| Qoder CLI | `qoder` | Qwen Code | `qwen` |
-| siGit Code | `sigit` | Stakpak | `stakpak` |
-| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
+| Gemini CLI | `gemini` | GLM Agent | `glm` |
+| Goose | `goose` | Grok Build | `grok` |
+| Harn | `harn` | Hermes Agent | `hermes` |
+| JetBrains Junie | `junie` | Kilo | `kilo` |
+| Kimi Code | `kimi` | Kiro CLI | `kiro` |
+| LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
+| Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
+| OpenCode | `opencode` | OpenHands | `openhands` |
+| Pi | `pi` | Poolside | `poolside` |
+| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
+| Qwen Code | `qwen` | siGit Code | `sigit` |
+| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
+| VT Code | `vtcode` |  |  |
 
 
 Inspect installation and authentication requirements:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import os
 import subprocess
@@ -34,6 +35,13 @@ from superqode.design_system import (
 from superqode.app.inputs import SelectionAwareInput
 from superqode.app.welcome import render_welcome
 from superqode.app.recipes import LocalRecipe
+
+
+#: How long the ACP picker serves a catalogue snapshot before a redraw
+#: revalidates it in the background. Short enough that an agent installed from
+#: another terminal shows up on the next keypress, long enough that holding an
+#: arrow key does not re-read every agent file and re-scan PATH once per row.
+ACP_CATALOG_TTL_SECONDS = 5.0
 
 
 class DialogsMixin:
@@ -2462,6 +2470,7 @@ class DialogsMixin:
         *,
         include_all: bool = True,
         catalog_tier: str = "all",
+        reuse_snapshot: bool = False,
     ):
         """Show the curated ACP picker or a requested catalog tier."""
         # Recorded so back from a connected agent returns to this listing
@@ -2484,7 +2493,77 @@ class DialogsMixin:
             clear_log=clear_log,
             include_all=include_all,
             catalog_tier=catalog_tier,
+            reuse_snapshot=reuse_snapshot,
         )
+
+    async def _acp_picker_catalog(self, reuse_snapshot: bool) -> tuple[dict, set[str]]:
+        """Return the picker's agents and the ids that are installed.
+
+        Building this costs a re-read of every agent TOML plus a PATH lookup
+        per agent, which is far too much to repeat for a highlight move. Moving
+        the cursor paints from the last snapshot and revalidates it in the
+        background, so an agent installed from another terminal still lands
+        without making navigation wait for the check.
+        """
+        if reuse_snapshot:
+            snapshot = getattr(self, "_acp_picker_snapshot", None)
+            if snapshot is not None:
+                return snapshot
+        return await self._build_acp_picker_catalog()
+
+    async def _build_acp_picker_catalog(self) -> tuple[dict, set[str]]:
+        """Read the agent catalogue and work out what is installed right now."""
+        from superqode.agents.registry import get_all_acp_agents
+        from superqode.commands.acp import check_agent_installed
+
+        agents = await get_all_acp_agents()
+        # `shutil.which` walks PATH per agent, so keep the whole sweep off the
+        # event loop rather than stalling the terminal on a slow filesystem.
+        installed_ids = await asyncio.to_thread(
+            lambda: {
+                agent_id
+                for agent_id, agent_data in agents.items()
+                if check_agent_installed(agent_data)
+            }
+        )
+        snapshot = (agents, installed_ids)
+        self._acp_picker_snapshot = snapshot
+        self._acp_picker_snapshot_at = time.monotonic()
+        return snapshot
+
+    @work(exclusive=True, group="acp-catalog-revalidate")
+    async def _revalidate_acp_catalog(self, log: ConversationLog) -> None:
+        """Rebuild the catalogue behind a painted picker, and repaint if it moved.
+
+        A new agent can land at any moment: installed from another terminal, or
+        published to the official registry. Navigation must not wait on that
+        check, but it must not hide the result either, so the redraw paints from
+        the snapshot and this runs afterwards.
+        """
+        if (
+            time.monotonic() - getattr(self, "_acp_picker_snapshot_at", 0.0)
+            < ACP_CATALOG_TTL_SECONDS
+        ):
+            return
+        if not getattr(self, "_awaiting_acp_agent_selection", False):
+            return
+
+        previous = getattr(self, "_acp_picker_snapshot", None)
+        try:
+            agents, installed_ids = await self._build_acp_picker_catalog()
+        except Exception:  # noqa: BLE001 - a background check must never break the picker
+            return
+
+        # The user may have chosen an agent while the rebuild was in flight.
+        if not getattr(self, "_awaiting_acp_agent_selection", False):
+            return
+        if (
+            previous is not None
+            and set(previous[0]) == set(agents)
+            and previous[1] == installed_ids
+        ):
+            return
+        self._reshow_acp_agents(log)
 
     @work(exclusive=True)
     async def _show_agents_async(
@@ -2494,15 +2573,14 @@ class DialogsMixin:
         *,
         include_all: bool = True,
         catalog_tier: str = "all",
+        reuse_snapshot: bool = False,
     ):
         """Show ACP agents with installed agents first and catalog grouping."""
         import traceback
-        from superqode.agents.registry import get_all_acp_agents
         from superqode.agents.registry import get_agent_installation_info
-        from superqode.commands.acp import check_agent_installed
 
         try:
-            agents = await get_all_acp_agents()
+            agents, installed_ids = await self._acp_picker_catalog(reuse_snapshot)
         except Exception as e:
             log.add_error(f"Error loading agents: {e}")
             log.add_error(f"Details: {traceback.format_exc()}")
@@ -2530,8 +2608,7 @@ class DialogsMixin:
         missing_by_tier = {"featured": [], "enterprise": [], "all": []}
 
         for agent_id, agent_data in agents.items():
-            is_installed = check_agent_installed(agent_data)
-            if is_installed:
+            if agent_id in installed_ids:
                 installed.append((agent_id, agent_data))
             else:
                 tier = str(agent_data.get("catalog_tier") or "all")
@@ -2589,12 +2666,30 @@ class DialogsMixin:
         visible_groups = [(label, items) for label, items in visible_groups if items]
         all_agents = installed_sorted + [item for _, items in visible_groups for item in items]
 
+        # Follow the highlighted agent by identity, not by position. A newly
+        # installed agent joins the Ready now group and shifts every row below
+        # it, and moving the highlight onto a neighbour under the user would
+        # mean Enter connects something they never chose.
+        previous_agents = getattr(self, "_acp_agent_list", []) or []
+        current_highlight = getattr(self, "_acp_highlighted_agent_index", 0)
+        anchor_id = ""
+        if 0 <= current_highlight < len(previous_agents):
+            anchor_id = str(previous_agents[current_highlight][0])
+
         # Store the list for selection
         self._acp_agent_list = all_agents
         self._awaiting_acp_agent_selection = True
-        # Preserve current highlight if already set, otherwise start with first
-        current_highlight = getattr(self, "_acp_highlighted_agent_index", 0)
-        self._acp_highlighted_agent_index = min(current_highlight, max(len(all_agents) - 1, 0))
+        anchored = next(
+            (index for index, (agent_id, _) in enumerate(all_agents) if str(agent_id) == anchor_id),
+            None,
+        )
+        # Falling back to the old position keeps a view switch, which renumbers
+        # everything, landing somewhere sensible rather than back at the top.
+        self._acp_highlighted_agent_index = (
+            anchored
+            if anchored is not None
+            else min(current_highlight, max(len(all_agents) - 1, 0))
+        )
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
@@ -2721,6 +2816,10 @@ class DialogsMixin:
         t.append("  drive it from Zed or any ACP client\n", style=THEME["muted"])
 
         self._show_command_output(log, t, clear_log=clear_log)
+
+        if reuse_snapshot:
+            # The rows are on screen; now go and check whether they are stale.
+            self._revalidate_acp_catalog(log)
 
     def _show_context(self, log: ConversationLog):
         t = Text()

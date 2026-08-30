@@ -82,20 +82,34 @@ class PickerNavigationMixin:
         - OpenCode model selection
         """
         log = self.query_one("#log", ConversationLog)
+        # A registry-driven prompt owns its own digits: its lists are short and
+        # numbered, and a digit selects immediately. Those prompts can open
+        # while a picker flag is still set, so they are checked first rather
+        # than having their keystrokes buffered out from under them.
+        prompts = getattr(self, "_prompts", None)
+        registry_prompt_active = prompts is not None and prompts.active is not None
         # While awaiting typed selection, inject digits into prompt instead of
         # auto-selecting. A mouse click is exempt: it names the row outright.
-        if not getattr(self, "_direct_pick", False) and (
-            getattr(self, "_awaiting_acp_agent_selection", False)
-            or getattr(self, "_awaiting_byok_model", False)
-            or getattr(self, "_awaiting_local_model", False)
-            or getattr(self, "_awaiting_byok_provider", False)
-            or getattr(self, "_awaiting_local_provider", False)
-            or getattr(self, "_awaiting_recommendation_selection", False)
-            or getattr(self, "_awaiting_codex_model", False)
-            or getattr(self, "_awaiting_codex_effort", False)
-            or getattr(self, "_awaiting_session_resume", False)
-            or getattr(self, "_awaiting_mode_selection", False)
-            or getattr(self, "_awaiting_harness_wizard", False)
+        if (
+            not getattr(self, "_direct_pick", False)
+            and not registry_prompt_active
+            and (
+                getattr(self, "_awaiting_acp_agent_selection", False)
+                or getattr(self, "_awaiting_byok_model", False)
+                or getattr(self, "_awaiting_local_model", False)
+                or getattr(self, "_awaiting_byok_provider", False)
+                or getattr(self, "_awaiting_local_provider", False)
+                or getattr(self, "_awaiting_recommendation_selection", False)
+                or getattr(self, "_awaiting_codex_model", False)
+                or getattr(self, "_awaiting_codex_effort", False)
+                or getattr(self, "_awaiting_session_resume", False)
+                or getattr(self, "_awaiting_mode_selection", False)
+                or getattr(self, "_awaiting_harness_wizard", False)
+                # An ACP model list runs past nine entries, so its digits buffer
+                # like every other picker's: "1" then "2" reaches model 12 instead
+                # of selecting model 1 on the first keystroke.
+                or getattr(self, "_awaiting_model_selection", False)
+            )
         ):
             try:
                 prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
@@ -273,10 +287,17 @@ class PickerNavigationMixin:
         "_awaiting_runtime_selection",
         "_awaiting_recommendation_selection",
         "_awaiting_harness_wizard",
+        # The ACP model pickers (OpenCode, Gemini, Claude, Codex, OpenHands)
+        # all raise this one. Without it a click on a model row was not
+        # recognised as a pick at all, so the terminal drag-selected the text
+        # instead and the list appeared to do nothing.
+        "_awaiting_model_selection",
     )
 
-    #: A row opens with an optional marker, then its bracketed number.
-    _PICKER_ROW = re.compile(r"^\s*[▶●○]?\s*\[\s*(\d+)\s*\]")
+    #: A row opens with an optional box border and marker, then its bracketed
+    #: number. The ACP model pickers draw their rows inside a box, so the
+    #: border has to be allowed for or those rows never resolve to a pick.
+    _PICKER_ROW = re.compile(r"^\s*(?:│\s*)?[▶●○]?\s*\[\s*(\d+)\s*\]")
 
     #: How far above a clicked line to look for the row it belongs to. A
     #: description wraps to a handful of lines at most; scanning further would
@@ -1132,6 +1153,9 @@ class PickerNavigationMixin:
             clear_log=False,
             include_all=view == "all",
             catalog_tier=view,
+            # Moving the highlight is not a reason to re-read every agent file
+            # and re-scan PATH; the catalogue cannot have changed under us.
+            reuse_snapshot=True,
         )
 
     def action_navigate_acp_agent_down(self):

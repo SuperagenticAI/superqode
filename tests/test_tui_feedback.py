@@ -99,9 +99,21 @@ async def test_model_transition_is_visible_without_scrolling(monkeypatch) -> Non
             severity="success",
             log=log,
         )
-        await pilot.pause(0.1)
+        for _ in range(6):
+            await pilot.pause()
 
-        assert len(app._notifications) == 1
+        # A finished state change is acknowledged in a modal rather than a
+        # toast: the toast was easy to miss and, against this app's dark panel,
+        # its themed title was barely readable.
+        from textual.widgets import Static
+
+        from superqode.widgets.outcome_screen import OutcomeScreen
+
+        assert isinstance(app.screen, OutcomeScreen)
+        body = app.screen.query_one("#outcome-content").query_one(Static).render().plain
+        assert "Model ready" in body
+        assert "Laguna S 2.1 Free" in body
+        # The transcript still keeps the receipt, so it survives dismissal.
         assert "Model ready" in "\n".join(line.text for line in log.lines)
 
 
