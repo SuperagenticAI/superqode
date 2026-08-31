@@ -99,7 +99,14 @@ EXPECTED_COMMAND_COUNT = 274
 # list, where it now follows `codex` directly instead of sitting after
 # `prime-agent`. Order comes from the profile registry, so this reorders the
 # rendered choice list without adding a Click command; the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "aa7c1bbd8cc55e3bdc4b60ed6d6b79e0ce0e2a760c699527c7c7fea0ab2352a9"
+# Rebaselined for `serve a2a --anonymous-per-minute`, `--keyed-per-minute`,
+# `--global-per-day` and `--conformance-mode`. The first three expose rate
+# ceilings that were previously only reachable by editing the dataclass, which
+# made the A2A TCK impossible to run: its several hundred requests were
+# throttled by the 10/minute anonymous default. The fourth answers the kit's
+# fixture message ids. Four new options on an existing command, so the count is
+# unchanged.
+EXPECTED_HELP_TREE_SHA256 = "8c29334f4ffa271cb4954ddcbfc0750c7c4445bca74041ce4a0c23744b58a880"
 
 
 def _render_help_tree() -> tuple[int, str]:

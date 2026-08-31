@@ -110,6 +110,16 @@ class A2AServerConfig(BaseModel):
     #: coding template allows shell and writes with no sandbox isolation.  The
     #: CLI therefore turns this off for remote binds unless asked otherwise.
     harness_skill_enabled: bool = True
+    #: Answer the A2A TCK's fixture message ids instead of running a harness.
+    #:
+    #: The conformance kit drives a System Under Test through behaviours the
+    #: specification does not describe: a task that stays active long enough to
+    #: resubscribe to, artifacts with known text and filenames, a turn that ends
+    #: in `input-required`.  A real agent fails those checks by doing real work,
+    #: so certification needs a mode that answers them literally.  Never enable
+    #: this on an endpoint serving real callers: it replaces harness execution
+    #: with canned replies.
+    conformance_mode: bool = False
     #: Must resolve.  Host platforms render this in their agent gallery, and a
     #: dead URL shows as a broken image rather than as no image.
     #: ``scripts/check_published_agent_card.py`` verifies it.
@@ -119,6 +129,42 @@ class A2AServerConfig(BaseModel):
     #: Foundry Agent Service, and Agent Registry all still accept 0.3 cards,
     #: and some of their documented flows only show 0.3.
     legacy_v0_3: bool = True
+
+
+#: JSON-RPC error code for ContentTypeNotSupportedError, from the A2A
+#: specification's error table.
+CONTENT_TYPE_NOT_SUPPORTED = -32005
+
+
+def _unsupported_content_type(request: Any, config: "A2AServerConfig", sdk: dict[str, Any]) -> Any:
+    """Reject a JSON-RPC POST whose media type is not JSON.
+
+    Returned as a JSON-RPC envelope rather than an HTTP 415 because the error
+    belongs to the JSON-RPC layer: the caller reached the right endpoint and
+    framed the request wrongly, and a JSON-RPC client reads ``error.code``.
+    """
+    if request.method != "POST" or request.url.path != config.jsonrpc_path:
+        return None
+    media_type = (request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+    # An absent header is tolerated: some clients omit it and the body still
+    # parses. Only a media type that is present and wrong is refused.
+    if not media_type or media_type == "application/json" or media_type.endswith("+json"):
+        return None
+    return sdk["JSONResponse"](
+        status_code=200,
+        content={
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": CONTENT_TYPE_NOT_SUPPORTED,
+                "message": "ContentTypeNotSupportedError",
+                "data": {
+                    "received": media_type,
+                    "supported": ["application/json"],
+                },
+            },
+        },
+    )
 
 
 class SuperQodeA2AExecutor:
@@ -145,6 +191,15 @@ class SuperQodeA2AExecutor:
                     status=sdk["TaskStatus"](state=sdk["TaskState"].TASK_STATE_SUBMITTED),
                 )
             )
+        # Certification fixtures are answered before any harness work: the kit
+        # asserts on literal artifact text a real run would never produce.
+        if self.config.conformance_mode:
+            from superqode.a2a.tck import answer_conformance, conformance_message_id
+
+            message_id = conformance_message_id(context)
+            if await answer_conformance(updater, event_queue, sdk, message_id):
+                return
+
         await updater.start_work()
 
         user_input = context.get_user_input()
@@ -246,7 +301,10 @@ class SuperQodeA2AExecutor:
             await updater.complete(
                 updater.new_agent_message(
                     [sdk["Part"](text=final_text or "SuperQode completed the harness run.")],
-                    metadata={"superqode_session_id": session.session_id},
+                    # camelCase: the A2A spec requires it for JSON field names
+                    # (specification 5.5), and the TCK's DM-SERIAL-001 check
+                    # rejects any snake_case key anywhere in a response.
+                    metadata={"superqodeSessionId": session.session_id},
                 )
             )
         finally:
@@ -465,6 +523,15 @@ class A2AServer:
             }:
                 return await call_next(request)
 
+            # A JSON-RPC caller that sends the wrong media type gets the
+            # spec's ContentTypeNotSupportedError. Without this the body was
+            # parsed anyway and the failure surfaced as ParseError (-32700),
+            # which tells the caller their JSON is malformed rather than that
+            # this endpoint only speaks application/json.
+            unsupported = _unsupported_content_type(request, config, sdk)
+            if unsupported is not None:
+                return unsupported
+
             decision = decide_access(
                 request.headers.get("authorization"),
                 static_token=config.bearer_token,
@@ -554,6 +621,10 @@ async def create_a2a_server(
     working_directory: str | Path | None = None,
     harness_skill_enabled: bool = True,
     key_secret: str | None = None,
+    anonymous_per_minute: int | None = None,
+    keyed_per_minute: int | None = None,
+    global_per_day: int | None = None,
+    conformance_mode: bool = False,
 ) -> A2AServer:
     """Create an A2A server over a real HarnessSpec or supplied controller.
 
@@ -604,6 +675,16 @@ async def create_a2a_server(
             bearer_token=bearer_token,
             key_secret=key_secret,
             harness_skill_enabled=harness_skill_enabled,
+            conformance_mode=conformance_mode,
+            **{
+                name: value
+                for name, value in (
+                    ("anonymous_per_minute", anonymous_per_minute),
+                    ("keyed_per_minute", keyed_per_minute),
+                    ("global_per_day", global_per_day),
+                )
+                if value is not None
+            },
         ),
     )
 
