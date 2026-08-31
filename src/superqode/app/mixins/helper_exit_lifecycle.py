@@ -102,22 +102,34 @@ class HelperExitLifecycleMixin:
 
         self._go_home(log)
 
+        # _refresh_harness_panel would repopulate active_harness to "core"
+        # even when disconnected, so refresh first then set final chrome once.
         refresh_harness_panel = getattr(self, "_refresh_harness_panel", None)
         if refresh_harness_panel is not None:
             try:
                 refresh_harness_panel()
             except Exception:
                 pass
+        try:
+            from superqode.app.widgets import ColorfulStatusBar, HintsBar
 
-        # A transcript line would be written below the freshly rendered welcome
-        # and scrolled out of view, so announce the transition as a popup.
+            is_connected = bool(self._has_live_connection())
+            status = self.query_one("#status-bar", ColorfulStatusBar)
+            # Freshly launched has no harness badge.
+            if not is_connected:
+                status.active_harness = ""
+            self.query_one("#hints", HintsBar).connected = is_connected
+        except Exception:
+            pass
+
+        # Announced as a modal so it is never missed below the fold.
         self._announce_transition(
             title="Disconnected",
             primary="Model and harness detached",
             detail="SuperQode is back to a freshly launched state",
             severity="information",
             log=log,
-            persist=False,
+            persist=True,
             popup=True,
             timeout=3.0,
             dedupe_key="disconnect-everything",

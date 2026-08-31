@@ -118,6 +118,21 @@ class AgentRunMixin:
         }
         log.add_info(blurbs[nxt])
 
+    def _bind_acp_client(self, client, client_key) -> None:
+        """Store ACP client for cancellation and sync approval chrome.
+
+        Guards ``_sync_approval_mode`` so a missing mixin or a ``call_from_thread``
+        failure doesn't leave the client half-bound.
+        """
+        self._acp_client = client
+        self._acp_client_key = client_key
+        try:
+            sync = getattr(self, "_sync_approval_mode", None)
+            if callable(sync):
+                self._call_ui(sync)  # type: ignore[arg-type]
+        except Exception:
+            pass
+
     def _start_stream_animation(self, log: ConversationLog):
         """Start animation during agent streaming."""
         self._stream_animation_frame = 0
@@ -2470,8 +2485,7 @@ class AgentRunMixin:
                     # the session onto metered billing.
                     subscription_vendor=getattr(self, "_acp_subscription_vendor", None),
                 )
-                self._acp_client = client
-                self._acp_client_key = client_key
+                self._bind_acp_client(client, client_key)
 
             client.on_message = on_message
             client.on_thinking = on_thinking
@@ -2513,9 +2527,8 @@ class AgentRunMixin:
                             )
                         return None, {}
 
-                # Store for cancellation cleanup
-                self._acp_client = client
-                self._acp_client_key = client_key
+                # Store for cancellation cleanup (deduped)
+                self._bind_acp_client(client, client_key)
                 if getattr(client, "_process", None) is not None:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 

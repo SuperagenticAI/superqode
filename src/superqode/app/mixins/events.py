@@ -130,20 +130,24 @@ class EventHandlerMixin:
         if not selection:
             return
 
-        try:
-            if self._copy_text_to_clipboard(selection):
-                self.notify(
-                    f"Copied {len(selection)} chars to clipboard",
-                    title="Copied",
-                    severity="information",
-                    timeout=1,
+        def _announce_or_notify(
+            title: str, primary: str, severity: str, *, persist: bool, timeout: int
+        ) -> None:
+            if hasattr(self, "_announce_transition"):
+                self._announce_transition(  # type: ignore[attr-defined]
+                    title=title, primary=primary, severity=severity, persist=persist
                 )
             else:
-                self.notify(
-                    "Couldn't reach the clipboard — try :copy or Shift+drag",
-                    title="Copy failed",
-                    severity="warning",
-                    timeout=3,
+                self.notify(primary, title=title, severity=severity, timeout=timeout)
+
+        copy_ok_msg = f"Copied {len(selection)} chars to clipboard"
+        copy_fail_msg = "Couldn't reach the clipboard — try :copy or Shift+drag"
+        try:
+            if self._copy_text_to_clipboard(selection):
+                _announce_or_notify("Copied", copy_ok_msg, "information", persist=False, timeout=1)
+            else:
+                _announce_or_notify(
+                    "Copy failed", copy_fail_msg, "warning", persist=False, timeout=3
                 )
         except Exception:
             # Best-effort: never let a copy/notify failure crash the UI.

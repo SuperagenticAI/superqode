@@ -90,6 +90,13 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
         align-horizontal: right;
         margin-top: 1;
     }
+    OutcomeScreen #outcome-hint {
+        height: auto;
+        color: #71717a;
+        text-style: italic;
+        padding: 0 1;
+        margin-top: 1;
+    }
     OutcomeScreen Button {
         margin-left: 1;
         min-width: 12;
@@ -100,18 +107,33 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
         super().__init__()
         self.outcome = outcome
 
+    def _action_ids(self) -> tuple[str, ...]:
+        """Identity of the button row, used to decide if it can be reused."""
+        return tuple(action.id for action in self.outcome.actions)
+
+    def _action_buttons(self) -> list[Button]:
+        """The row of buttons this outcome needs, recovery actions first.
+
+        Close is always present. A modal that blocks input has to be
+        dismissable with the mouse, not only with Esc.
+        """
+        buttons = [
+            Button(
+                action.label,
+                id=f"outcome-action-{action.id}",
+                variant="primary" if action.primary else "default",
+            )
+            for action in self.outcome.actions
+        ]
+        buttons.append(Button("Close", id="outcome-close"))
+        return buttons
+
     def compose(self) -> ComposeResult:
         with Vertical():
             with ScrollableContainer(id="outcome-content"):
                 yield Static(outcome_text(self.outcome))
             with Horizontal(id="outcome-actions"):
-                for action in self.outcome.actions:
-                    yield Button(
-                        action.label,
-                        id=f"outcome-action-{action.id}",
-                        variant="primary" if action.primary else "default",
-                    )
-                yield Button("Back", id="outcome-close")
+                yield from self._action_buttons()
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -130,6 +152,16 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
     def action_close(self) -> None:
         self.dismiss(None)
 
+    def can_replace(self, outcome: Outcome) -> bool:
+        """Whether a newer outcome can reuse this screen's button row.
+
+        ``compose`` runs once, so the buttons belong to the outcome the screen
+        was built with. Swapping in an outcome that needs a different row has to
+        rebuild the screen instead, or the new recovery command would have no
+        button and the old one would still be on display.
+        """
+        return tuple(action.id for action in outcome.actions) == self._action_ids()
+
     def replace_outcome(self, outcome: Outcome) -> bool:
         """Show a newer result in the open modal instead of stacking another.
 
@@ -137,16 +169,17 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
         model. Pushing a screen per announcement would make the user dismiss a
         queue of them, so a modal that is already up takes the newer content.
 
-        Returns False when the screen is not mounted, so the caller can push a
-        fresh one instead.
+        Returns False when the content cannot be swapped in place, so the caller
+        can replace the screen instead.
         """
-        self.outcome = outcome
+        if not self.can_replace(outcome):
+            return False
         try:
-            self.query_one("#outcome-content", ScrollableContainer).query_one(Static).update(
-                outcome_text(outcome)
-            )
+            content = self.query_one("#outcome-content", ScrollableContainer)
+            content.query_one(Static).update(outcome_text(outcome))
         except Exception:  # noqa: BLE001 - fall back to a fresh screen
             return False
+        self.outcome = outcome
         return True
 
 

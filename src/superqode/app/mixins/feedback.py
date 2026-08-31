@@ -207,8 +207,15 @@ class FeedbackMixin:
             current = self.screen
         except Exception:  # noqa: BLE001 - no screen stack yet
             current = None
-        if isinstance(current, OutcomeScreen) and current.replace_outcome(outcome):
-            return True
+        if isinstance(current, OutcomeScreen):
+            if current.replace_outcome(outcome):
+                return True
+            # The newer result needs a different button row, so the screen is
+            # swapped rather than stacked: the user still owes one dismissal.
+            try:
+                self.pop_screen()
+            except Exception:  # noqa: BLE001 - fall through to a plain push
+                pass
 
         try:
             self.push_screen(
@@ -269,7 +276,7 @@ class FeedbackMixin:
         show_popup = severity != "information" if popup is None else popup
         # A completed result is acknowledged in a modal; a progress note is not,
         # because nothing has finished yet and demanding a keypress mid-flow is
-        # worse than the toast it replaces. `persist` is already the difference
+        # worse than the toast it replaces. ``persist`` is already the difference
         # between the two: only persisted announcements become an Outcome.
         modal_shown = False
         if show_popup and persist:

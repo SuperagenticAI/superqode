@@ -9,6 +9,7 @@ gap.
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import pytest
@@ -838,9 +839,8 @@ async def test_disconnect_tears_down_runtime_and_harness(monkeypatch):
         assert os.environ.get("SUPERQODE_HARNESS") is None
         assert bar.active_runtime == ""
         assert bar.active_model == ""
-        # "core" is the built-in harness a freshly launched app reports, so the
-        # named harness is detached rather than the row being blanked.
-        assert bar.active_harness == "core"
+        # Freshly launched has no harness badge; _refresh is re-cleared after disconnect.
+        assert bar.active_harness == ""
         assert app.current_model == ""
         assert app.current_provider == ""
 
@@ -1908,6 +1908,72 @@ async def test_enter_dismisses_the_state_change_modal():
         await pilot.press("enter")
         await _settle(pilot)
         assert len(app.screen_stack) == 1, "Enter did not dismiss the modal"
+
+
+async def test_the_modal_can_always_be_dismissed_with_the_mouse():
+    """A modal that blocks input needs a button, not only Esc."""
+    from textual.widgets import Button
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+        )
+        await _settle(pilot)
+
+        assert [str(b.id) for b in app.screen.query(Button)] == ["outcome-close"]
+
+
+async def test_replacing_with_a_recoverable_failure_keeps_both_buttons():
+    """The buttons belong to the outcome, so a swapped-in result rebuilds them.
+
+    Reusing the screen for an outcome that needs a different row left the new
+    recovery command with no button and no close button at all.
+    """
+    from textual.widgets import Button
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+        )
+        await _settle(pilot)
+        depth = len(app.screen_stack)
+
+        app._announce_transition(
+            title="Connection failed",
+            primary="opencode",
+            detail="Model not supported",
+            severity="error",
+            guidance=":log verbose",
+        )
+        await _settle(pilot)
+
+        assert len(app.screen_stack) == depth, "swapping the screen stacked another modal"
+        ids = [str(b.id) for b in app.screen.query(Button)]
+        assert "outcome-action-recover" in ids, "the recovery command lost its button"
+        assert "outcome-close" in ids
+
+
+async def test_a_failure_modal_never_closes_itself():
+    """An error without a recovery command is still an error worth reading."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Connection failed",
+            primary="opencode",
+            detail="Model x-preview-f-free is not supported",
+            severity="error",
+        )
+        await _settle(pilot)
+        assert app.screen.outcome.actions == ()
+
+        await asyncio.sleep(2.6)
+        await _settle(pilot)
+        assert len(app.screen_stack) == 2, "the failure disappeared on its own"
 
 
 async def test_a_progress_note_never_demands_a_dismissal():

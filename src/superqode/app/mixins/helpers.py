@@ -187,6 +187,13 @@ class HelpersMixin(
                 harness_panel.refresh_summary()
         except Exception:
             pass
+        # Any non-core harness / provider / runtime should show :disconnect.
+        try:
+            from superqode.app.widgets import HintsBar
+
+            self.query_one("#hints", HintsBar).connected = bool(self._has_live_connection())
+        except Exception:
+            pass
 
     def _call_ui(self, func, *args):
         """Run a UI callback from either worker threads or the app thread."""

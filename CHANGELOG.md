@@ -5,7 +5,7 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.114] - 2026-08-30
 
 ### Added
 
@@ -52,6 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   credential, headers, and mTLS cert. CLI `--send` uses the same reply text
   as the TUI chat.
 
+- ACP plan updates fill the pinned live plan panel. An agent's plan arrives in
+  the protocol's own shape, so it now renders with per-task status icons and a
+  done count instead of a one-line task count that scrolled away.
+- The `:connect` splash prints the wordmark while the interface starts, so the
+  terminal is never blank during launch. `SUPERQODE_NO_SPLASH=1` turns it off,
+  and it stays silent when output is redirected.
+- The status bar shows a refresh indicator while the models.dev and ACP
+  registry catalogues update behind the first frame.
+
 ### Changed
 
 - Getting started, the TUI command list, and the connection methods page name
@@ -73,7 +82,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they are not on the Hub.
   Plain `:hub` opens on Ready when this machine has a usable harness. SuperQode
   harnesses without a connected model show **needs a model** and **Choose
-  model**, not a fake Ready/Use.
+  model**, not a fake Ready/Use.- Finished state changes are acknowledged in a modal rather than a toast. An
+  agent connecting, a model becoming ready, and a failure now open a centred
+  dialog that waits for Enter, Esc, or Close. A flow that announces more than
+  once reuses the open dialog, so connecting an agent still costs one
+  dismissal. Progress notes stay out of the way and do not ask to be
+  acknowledged.
+- Disconnect is offered whenever a harness, provider, or runtime is live, not
+  only when a model is connected.
+- `list_runtimes()` no longer runs vendor CLIs or imports optional SDKs to
+  build its listing. Selecting a runtime used to run `agy --version`,
+  `devin version`, and `devin auth status` first, which blocked the terminal
+  for seconds. Pass `probe=True` for the deep status, which
+  `superqode runtime list` and `harness drift` still do.
+- The ACP agent picker paints from a short-lived catalogue snapshot and
+  revalidates it in the background, so moving the highlight no longer re-reads
+  every agent file and re-scans PATH. The highlight follows its agent by
+  identity, so a newly installed agent cannot shift the selection onto a
+  neighbour.
+- The sidebar file search prunes ignored directories during the walk instead of
+  filtering them afterwards.
+- The five ACP model pickers share one commit path, and the picker box clears
+  when a model is chosen.
+
+### Fixed
+
+- Clicking a row in an ACP model picker selects that model. The click was never
+  recognised as a pick, so the terminal drag-selected the text instead.
+- Typing a model number above five reaches that model instead of being sent to
+  the agent as a prompt, and a typed number now wins over the highlighted row.
+- Back from a protocol screen returns to the Protocols listing rather than the
+  connect root, and the listing is interactive again. UHP had the same bug.
+- Picker navigation keeps the highlighted row on screen for pickers whose rows
+  are a single line.
 
 ## [0.2.113] - 2026-08-29
 

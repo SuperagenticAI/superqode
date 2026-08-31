@@ -155,6 +155,9 @@ class ColorfulStatusBar(Static):
     # in full (no shortening) so the user can see exactly what's selected.
     active_runtime: reactive[str] = reactive("")
     active_model: reactive[str] = reactive("")
+    # Empty on a fresh launch and after a disconnect. `_refresh_harness_panel`
+    # can set "core", which `_disconnect_everything` clears again, so "core" and
+    # "" both mean "nothing connected" wherever this is read.
     active_harness: reactive[str] = reactive("")
     can_go_back: reactive[bool] = reactive(False)
     interaction_mode: reactive[str] = reactive("build")
@@ -374,7 +377,12 @@ class ColorfulStatusBar(Static):
         # The way out of a session sits at the far right, where a window
         # control would be: one fixed place, present at every width, and
         # labelled with whichever action is actually available.
-        connected = bool(self.byok_provider or self.active_model or self.active_runtime)
+        # Any live harness (non-core) / provider / runtime counts — not just ACP.
+        harness = (self.active_harness or "").strip().lower()
+        has_harness = harness not in ("", "core")
+        connected = bool(
+            self.byok_provider or self.active_model or self.active_runtime or has_harness
+        )
         icon, word, colour, action = (
             ("⏏", "Disconnect", "#fb7185", "disconnect")
             if connected

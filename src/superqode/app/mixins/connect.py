@@ -38,6 +38,12 @@ from superqode.providers.harness_catalog import HarnessAuthSpec
 
 _CONNECT_LOG = logging.getLogger("superqode.connect")
 
+# Agents that show a model picker before the session is usable. Centralized
+# so adding a new picker (e.g. a new ACP vendor) requires one edit, not two.
+_ACP_PICKER_AGENTS: frozenset[str] = frozenset(
+    {"opencode", "gemini", "claude", "codex", "openhands"}
+)
+
 
 def _origin_for_protocol_screen(tokens: list[str], url_flag: str) -> str | None:
     """Return an origin for the TUI screen, or None to keep the CLI path.
@@ -2994,6 +3000,13 @@ class ConnectMixin:
             self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
         else:
             log.add_meta(f"Ready · {provider}/{model}")
+        # Hints bar shows :disconnect for any live harness/provider/runtime, not just ACP.
+        try:
+            from superqode.app.widgets import HintsBar
+
+            self.query_one("#hints", HintsBar).connected = True
+        except Exception:
+            pass
 
     def _show_connection_summary(
         self,
@@ -4239,8 +4252,11 @@ class ConnectMixin:
                 self._is_first_message = True
                 self._opencode_session_id = ""
 
-                # Clear screen for fresh workspace
-                self._clear_for_workspace(log, self.current_agent.upper())
+                # Picker agents manage their own log clearing (picker box or
+                # auto-select both clear). Doing a workspace clear here would flash
+                # "Ready as OPENCODE" for a frame before the picker replaces it.
+                if self.current_agent not in _ACP_PICKER_AGENTS:
+                    self._clear_for_workspace(log, self.current_agent.upper())
 
                 # For OpenCode, handle model selection
                 if self.current_agent == "opencode":
@@ -4339,8 +4355,7 @@ class ConnectMixin:
                 # connection, including the model-selection state.
                 self._set_acp_status(self.current_model)
 
-                model_picker_agents = {"opencode", "gemini", "claude", "codex", "openhands"}
-                if self.current_agent in model_picker_agents and self._awaiting_model_selection:
+                if self.current_agent in _ACP_PICKER_AGENTS and self._awaiting_model_selection:
                     self._announce_transition(
                         title="Agent connected",
                         primary=agent.get("name", self.current_agent),
@@ -4350,7 +4365,7 @@ class ConnectMixin:
                         persist=False,
                         dedupe_key=f"agent-picker:{self.current_agent}",
                     )
-                elif self.current_agent not in model_picker_agents and self.current_agent != "grok":
+                elif self.current_agent not in _ACP_PICKER_AGENTS and self.current_agent != "grok":
                     self._announce_transition(
                         title="Agent connected",
                         primary=agent.get("name", self.current_agent),
@@ -4372,6 +4387,12 @@ class ConnectMixin:
                 if not getattr(self, "_pending_vendor_key", None):
                     self._persist_acp_connection(str(self.current_agent or agent_id))
                 self._mark_onboarding_complete()
+                try:
+                    from superqode.app.widgets import HintsBar
+
+                    self.query_one("#hints", HintsBar).connected = True
+                except Exception:
+                    pass
             else:
                 self._pending_harness_acp_transition = None
                 self._abandon_vendor_key_attach(agent_id)

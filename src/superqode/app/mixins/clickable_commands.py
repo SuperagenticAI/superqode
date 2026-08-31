@@ -78,17 +78,60 @@ class ClickableCommandMixin:
         except Exception:  # noqa: BLE001 - chrome must never break a render
             pass
 
+    def _has_harness(self) -> bool:
+        """True if a non-core harness is visibly active.
+
+        The spec-based check via ``_active_harness_spec()`` misses built-ins
+        like ``workbench`` (``load_harness_spec('workbench')`` fails), but the
+        status bar already reflects the resolved harness. Check the bar first,
+        then fall back to the pure session field.
+        """
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            bar = self.query_one("#status-bar", ColorfulStatusBar)
+            harness = (getattr(bar, "active_harness", "") or "").strip().lower()
+            if harness not in ("", "core"):
+                return True
+        except Exception:
+            pass
+        try:
+            pure = getattr(self, "_pure_mode", None)
+            if pure is not None:
+                hname = (
+                    str(getattr(getattr(pure, "session", None), "harness_name", "") or "")
+                    .strip()
+                    .lower()
+                )
+                if hname not in ("", "core"):
+                    return True
+        except Exception:
+            pass
+        # Fallback to spec (covers file-based harnesses)
+        try:
+            spec, _ = self._active_harness_spec()  # type: ignore[attr-defined]
+            if spec is None:
+                return False
+            name = str(getattr(spec, "name", "") or getattr(spec, "id", "") or "").strip().lower()
+            return name not in ("", "core")
+        except Exception:
+            return False
+
     def _has_live_connection(self) -> bool:
         """Whether there is anything to disconnect from."""
         pure = getattr(self, "_pure_mode", None)
         if pure is None:
-            return False
+            if getattr(self, "_acp_client", None):
+                return True
+            return self._has_harness()
         session = getattr(pure, "session", None)
-        return bool(
+        if bool(
             getattr(session, "provider", "")
             or getattr(session, "model", "")
             or getattr(self, "_acp_client", None)
-        )
+        ):
+            return True
+        return self._has_harness()
 
     def _clicked_command_log(self):
         from superqode.app.widgets import ConversationLog

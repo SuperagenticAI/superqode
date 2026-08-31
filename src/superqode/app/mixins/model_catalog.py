@@ -419,6 +419,49 @@ class ModelCatalogMixin:
         except Exception:
             return False
 
+    def _clear_picker(self, log: ConversationLog) -> None:
+        """Clear the transcript picker box before showing the result.
+
+        Centralizes the ``try: log.clear() except: pass`` that was copied across
+        seven model-selection paths. ``log`` is explicit so callers cannot
+        accidentally capture a stale enclosing ``log`` variable.
+        """
+        try:
+            log.clear()
+        except Exception:
+            pass
+
+    def _commit_acp_model(
+        self,
+        log: ConversationLog,
+        *,
+        model_id: str,
+        model_name: str,
+        provider: str,
+        source: str,
+        free: bool = False,
+    ) -> None:
+        """Commit a picker selection and announce it.
+
+        Replaces the duplicated ``current_model / current_provider / badge /
+        _announce_model_ready`` sequence that existed for every ACP agent.
+        """
+        self._clear_picker(log)
+        self.current_model = model_id
+        self.current_provider = provider
+        self._awaiting_model_selection = False
+        badge = self.query_one("#mode-badge", ModeBadge)
+        badge.model = model_id
+        badge.provider = provider
+        badge.execution_mode = "acp"
+        self._announce_model_ready(
+            model_name=model_name,
+            model_id=model_id,
+            source=source,
+            log=log,
+            free=free,
+        )
+
     def _select_model_by_number(self, num: int):
         """Select a model by number when awaiting model selection."""
         # Only work if we're awaiting selection
@@ -431,24 +474,12 @@ class ModelCatalogMixin:
         if self.current_agent == "opencode":
             if 1 <= num <= len(self.opencode_models):
                 model = self.opencode_models[num - 1]
-                model_id = model.get("id", "")
-                model_name = model.get("name", "")
-
-                self.current_model = model_id
-                self.current_provider = "opencode"
-                self._awaiting_model_selection = False
-
-                # Update badge with execution mode - ACP for :acp connect
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.model = model_id
-                badge.provider = self.current_provider
-                badge.execution_mode = "acp"  # ACP mode for agent connections
-
-                self._announce_model_ready(
-                    model_name=model_name,
-                    model_id=model_id,
+                self._commit_acp_model(
+                    log,
+                    model_id=model.get("id", ""),
+                    model_name=model.get("name", ""),
+                    provider="opencode",
                     source="OpenCode",
-                    log=log,
                     free=bool(model.get("free")),
                 )
             else:
@@ -457,24 +488,12 @@ class ModelCatalogMixin:
         elif self.current_agent == "gemini":
             if 1 <= num <= len(self._gemini_models):
                 model = self._gemini_models[num - 1]
-                model_id = model.get("id", "")
-                model_name = model.get("name", "")
-
-                self.current_model = model_id
-                self.current_provider = "gemini"
-                self._awaiting_model_selection = False
-
-                # Update badge
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.model = model_id
-                badge.provider = self.current_provider
-                badge.execution_mode = "acp"
-
-                self._announce_model_ready(
-                    model_name=model_name,
-                    model_id=model_id,
+                self._commit_acp_model(
+                    log,
+                    model_id=model.get("id", ""),
+                    model_name=model.get("name", ""),
+                    provider="gemini",
                     source="Gemini CLI",
-                    log=log,
                 )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._gemini_models)}")
@@ -482,24 +501,12 @@ class ModelCatalogMixin:
         elif self.current_agent == "claude":
             if 1 <= num <= len(self._claude_models):
                 model = self._claude_models[num - 1]
-                model_id = model.get("id", "")
-                model_name = model.get("name", "")
-
-                self.current_model = model_id
-                self.current_provider = "claude"
-                self._awaiting_model_selection = False
-
-                # Update badge
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.model = model_id
-                badge.provider = self.current_provider
-                badge.execution_mode = "acp"
-
-                self._announce_model_ready(
-                    model_name=model_name,
-                    model_id=model_id,
+                self._commit_acp_model(
+                    log,
+                    model_id=model.get("id", ""),
+                    model_name=model.get("name", ""),
+                    provider="claude",
                     source="Claude Code",
-                    log=log,
                 )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._claude_models)}")
@@ -507,24 +514,12 @@ class ModelCatalogMixin:
         elif self.current_agent == "codex":
             if 1 <= num <= len(self._codex_models):
                 model = self._codex_models[num - 1]
-                model_id = model.get("id", "")
-                model_name = model.get("name", "")
-
-                self.current_model = model_id
-                self.current_provider = "codex"
-                self._awaiting_model_selection = False
-
-                # Update badge
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.model = model_id
-                badge.provider = self.current_provider
-                badge.execution_mode = "acp"
-
-                self._announce_model_ready(
-                    model_name=model_name,
-                    model_id=model_id,
+                self._commit_acp_model(
+                    log,
+                    model_id=model.get("id", ""),
+                    model_name=model.get("name", ""),
+                    provider="codex",
                     source="Codex CLI",
-                    log=log,
                 )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._codex_models)}")
@@ -532,24 +527,12 @@ class ModelCatalogMixin:
         elif self.current_agent == "openhands":
             if 1 <= num <= len(self._openhands_models):
                 model = self._openhands_models[num - 1]
-                model_id = model.get("id", "")
-                model_name = model.get("name", "")
-
-                self.current_model = model_id
-                self.current_provider = "openhands"
-                self._awaiting_model_selection = False
-
-                # Update badge
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.model = model_id
-                badge.provider = self.current_provider
-                badge.execution_mode = "acp"
-
-                self._announce_model_ready(
-                    model_name=model_name,
-                    model_id=model_id,
+                self._commit_acp_model(
+                    log,
+                    model_id=model.get("id", ""),
+                    model_name=model.get("name", ""),
+                    provider="openhands",
                     source="OpenHands",
-                    log=log,
                 )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._openhands_models)}")
@@ -2669,6 +2652,8 @@ class ModelCatalogMixin:
         self.current_model = stored_model_name
         self._awaiting_model_selection = False  # Clear the flag
 
+        self._clear_picker(log)
+
         # Update badge
         badge = self.query_one("#mode-badge", ModeBadge)
         badge.model = badge_model_name
@@ -2721,6 +2706,8 @@ class ModelCatalogMixin:
             self.current_model = stored_model_id
             self.current_provider = "opencode"
             self._awaiting_model_selection = False
+
+            self._clear_picker(log)
 
             # Update badge - ACP mode for agent connections
             badge = self.query_one("#mode-badge", ModeBadge)
