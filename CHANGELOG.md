@@ -82,7 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they are not on the Hub.
   Plain `:hub` opens on Ready when this machine has a usable harness. SuperQode
   harnesses without a connected model show **needs a model** and **Choose
-  model**, not a fake Ready/Use.- Finished state changes are acknowledged in a modal rather than a toast. An
+  model**, not a fake Ready/Use.
+- Finished state changes are acknowledged in a modal rather than a toast. An
   agent connecting, a model becoming ready, and a failure now open a centred
   dialog that waits for Enter, Esc, or Close. A flow that announces more than
   once reuses the open dialog, so connecting an agent still costs one
