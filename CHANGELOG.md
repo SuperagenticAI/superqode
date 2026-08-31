@@ -13,13 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--global-per-day` expose the request ceilings that were previously fixed in
   code. Zero removes a ceiling. The A2A TCK sends several hundred requests and
   could not complete against the ten-per-minute anonymous default.
-- `superqode serve a2a --conformance-mode` answers the message ids in the A2A
-  TCK's `docs/SUT_REQUIREMENTS.md` with the replies its reference System Under
-  Test returns. Those requirements sit outside the specification and a working
-  agent fails them by doing real work. The mode replaces harness execution, so
-  a certification run calls no model and touches no repository. Because that
-  makes it unsafe on an endpoint serving real callers, the command prints a
-  warning while it is on.
+- `scripts/a2a_tck_sut.py` answers the message ids in the A2A TCK's
+  `docs/SUT_REQUIREMENTS.md` with the replies its reference System Under Test
+  returns. Those requirements sit outside the specification and a working agent
+  fails them by doing real work. The script sits outside the installed package
+  because replying to a fixture means changing behaviour according to a
+  client-supplied message id, which a published agent must never do. A
+  certification run calls no model and touches no repository.
 - The Agent Card endpoint sends `Cache-Control`, `ETag` and `Last-Modified`,
   and answers a conditional request with `304 Not Modified` (specification
   section 8.6.1). `card_cache_max_age` sets the window and defaults to 300

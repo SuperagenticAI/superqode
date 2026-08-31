@@ -118,16 +118,6 @@ class A2AServerConfig(BaseModel):
     #: (section 8.6.1). The card only changes when the process restarts, so
     #: this can be generous.
     card_cache_max_age: int = 300
-    #: Answer the A2A TCK's fixture message ids instead of running a harness.
-    #:
-    #: The conformance kit drives a System Under Test through behaviours the
-    #: specification does not describe: a task that stays active long enough to
-    #: resubscribe to, artifacts with known text and filenames, a turn that ends
-    #: in `input-required`.  A real agent fails those checks by doing real work,
-    #: so certification needs a mode that answers them literally.  Never enable
-    #: this on an endpoint serving real callers: it replaces harness execution
-    #: with canned replies.
-    conformance_mode: bool = False
     #: Must resolve.  Host platforms render this in their agent gallery, and a
     #: dead URL shows as a broken image rather than as no image.
     #: ``scripts/check_published_agent_card.py`` verifies it.
@@ -223,15 +213,6 @@ class SuperQodeA2AExecutor:
                     status=sdk["TaskStatus"](state=sdk["TaskState"].TASK_STATE_SUBMITTED),
                 )
             )
-        # Certification fixtures are answered before any harness work: the kit
-        # asserts on literal artifact text a real run would never produce.
-        if self.config.conformance_mode:
-            from superqode.a2a.tck import answer_conformance, conformance_message_id
-
-            message_id = conformance_message_id(context)
-            if await answer_conformance(updater, event_queue, sdk, message_id):
-                return
-
         await updater.start_work()
 
         user_input = context.get_user_input()
@@ -673,7 +654,6 @@ async def create_a2a_server(
     anonymous_per_minute: int | None = None,
     keyed_per_minute: int | None = None,
     global_per_day: int | None = None,
-    conformance_mode: bool = False,
 ) -> A2AServer:
     """Create an A2A server over a real HarnessSpec or supplied controller.
 
@@ -724,7 +704,6 @@ async def create_a2a_server(
             bearer_token=bearer_token,
             key_secret=key_secret,
             harness_skill_enabled=harness_skill_enabled,
-            conformance_mode=conformance_mode,
             **{
                 name: value
                 for name, value in (

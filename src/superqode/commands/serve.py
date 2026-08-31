@@ -223,15 +223,6 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
     default=None,
     help="Requests per day across every caller (default 5000). Zero removes the ceiling.",
 )
-@click.option(
-    "--conformance-mode",
-    is_flag=True,
-    help=(
-        "Answer the A2A TCK's fixture message ids instead of running a harness. "
-        "For certification runs only: it replaces harness execution with canned "
-        "replies and must never be used on an endpoint serving real callers."
-    ),
-)
 def serve_a2a(
     spec_path: Optional[Path],
     provider: str,
@@ -250,7 +241,6 @@ def serve_a2a(
     anonymous_per_minute: Optional[int],
     keyed_per_minute: Optional[int],
     global_per_day: Optional[int],
-    conformance_mode: bool,
 ):
     """Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent."""
     import asyncio
@@ -305,13 +295,6 @@ def serve_a2a(
             "[yellow]No --public-url supplied; the Agent Card advertises a loopback URL.[/yellow]"
         )
 
-    if conformance_mode:
-        console.print(
-            "[yellow]Conformance mode: TCK fixture message ids are answered with "
-            "canned replies instead of running a harness. Do not serve real "
-            "callers from this process.[/yellow]"
-        )
-
     try:
         server = asyncio.run(
             create_a2a_server(
@@ -328,7 +311,6 @@ def serve_a2a(
                 anonymous_per_minute=anonymous_per_minute,
                 keyed_per_minute=keyed_per_minute,
                 global_per_day=global_per_day,
-                conformance_mode=conformance_mode,
             )
         )
     except RuntimeError as exc:

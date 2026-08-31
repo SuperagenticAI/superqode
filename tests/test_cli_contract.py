@@ -99,14 +99,17 @@ EXPECTED_COMMAND_COUNT = 274
 # list, where it now follows `codex` directly instead of sitting after
 # `prime-agent`. Order comes from the profile registry, so this reorders the
 # rendered choice list without adding a Click command; the count is unchanged.
-# Rebaselined for `serve a2a --anonymous-per-minute`, `--keyed-per-minute`,
-# `--global-per-day` and `--conformance-mode`. The first three expose rate
-# ceilings that were previously only reachable by editing the dataclass, which
-# made the A2A TCK impossible to run: its several hundred requests were
-# throttled by the 10/minute anonymous default. The fourth answers the kit's
-# fixture message ids. Four new options on an existing command, so the count is
-# unchanged.
-EXPECTED_HELP_TREE_SHA256 = "8c29334f4ffa271cb4954ddcbfc0750c7c4445bca74041ce4a0c23744b58a880"
+# Rebaselined for `serve a2a --anonymous-per-minute`, `--keyed-per-minute` and
+# `--global-per-day`, which expose rate ceilings that were previously only
+# reachable by editing the dataclass. That made the A2A TCK impossible to run:
+# its several hundred requests were throttled by the 10/minute anonymous
+# default. Three new options on an existing command, so the count is unchanged.
+# Rebaselined again to remove `--conformance-mode`. Answering the TCK means
+# changing behaviour according to a client-supplied message id, which a
+# published agent must never do, and a flag is one misconfiguration away from
+# doing it in production. The fixtures moved to scripts/a2a_tck_sut.py, outside
+# the installed package. One option removed, count still unchanged.
+EXPECTED_HELP_TREE_SHA256 = "3e051b991cad79a5987650651edff3a4096f6c7db1057eae3e16e20aad58bf12"
 
 
 def _render_help_tree() -> tuple[int, str]:

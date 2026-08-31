@@ -399,26 +399,28 @@ behaviours the specification does not describe. Two options exist for that
 reason.
 
 ```bash
-superqode serve a2a --port 9999 \
-  --anonymous-per-minute 0 \
-  --global-per-day 0 \
-  --conformance-mode
+python scripts/a2a_tck_sut.py --port 9999
 ```
 
-`--anonymous-per-minute 0` and `--global-per-day 0` remove the request
-ceilings documented under [Request limits](#request-limits). Left at their
-defaults, the kit is throttled after ten requests and the run measures the
-limiter instead of the protocol.
+The kit expects behaviour the specification does not describe. Its
+`docs/SUT_REQUIREMENTS.md` requires that a task whose message id begins
+`test-resubscribe-message-id` stays active long enough to resubscribe to, and
+several checks assert on literal artifact text and filenames its reference
+System Under Test returns. A working agent fails those by doing real work.
 
-`--conformance-mode` answers the message ids listed in the kit's
-`docs/SUT_REQUIREMENTS.md` with the replies its reference System Under Test
-returns. Those requirements sit outside the specification: a task whose
-message id begins `test-resubscribe-message-id` has to stay active long
-enough to resubscribe to, and several checks assert on literal artifact text
-and filenames. A working agent fails them by doing real work. The mode
-replaces harness execution entirely, so no model is called and no repository
-is touched, and it must never be enabled on an endpoint serving real callers.
-The command prints a warning while it is on.
+`scripts/a2a_tck_sut.py` answers them. It sits outside the installed package
+on purpose. Replying to a fixture means changing behaviour according to a
+client-supplied message id, which a published agent must never do, and a flag
+on the shipped server would be one misconfiguration away from doing it in
+production. A script that is not installed cannot be switched on by accident.
+It also removes the request ceilings, because the kit sends several hundred
+requests and the shipped anonymous default of ten per minute would otherwise
+measure the limiter rather than the protocol.
+
+Two numbers therefore exist and both are worth having. The figures above are
+the protocol layer measured through the System Under Test. Running the kit
+against `superqode serve a2a` measures the agent people actually call, and the
+gap between them is where real defects hide.
 
 Then run the kit:
 

@@ -1,28 +1,39 @@
-"""Fixture replies for the official A2A Technology Compatibility Kit.
+#!/usr/bin/env python3
+"""System Under Test for the official A2A Technology Compatibility Kit.
 
-The TCK at https://github.com/a2aproject/a2a-tck drives a System Under Test
-through behaviours the A2A specification does not describe. Its
+The kit at https://github.com/a2aproject/a2a-tck drives an agent through
+behaviours the A2A specification does not describe. Its
 ``docs/SUT_REQUIREMENTS.md`` calls these "testing-specific requirements beyond
-the core A2A specification": a task whose message id starts with
+the core A2A specification": a task whose message id begins
 ``test-resubscribe-message-id`` has to stay active long enough to resubscribe
 to, and several checks assert on artifact text and filenames the reference SUT
-returns verbatim.
+returns verbatim. A working agent fails them by doing real work.
 
-A real agent fails those checks by doing real work. Running SuperQode against
-the kit returned an artifact describing an actual repository search where the
-kit expected the literal string ``Generated text content``. So certification
-needs a mode that answers the kit on its own terms, which is what this module
-is. It is selected by message id prefix and only when
-``A2AServerConfig.conformance_mode`` is on.
+This lives outside the package on purpose. Answering the kit means changing
+behaviour according to a client-supplied message id, and a published agent must
+never do that. A flag on the shipped server would be one misconfiguration away
+from doing it in production; a separate script cannot be switched on by
+accident because it is not installed.
 
-Nothing here should ever run for a real caller. The routing lives in its own
-module so that is easy to see and easy to keep out of the harness path.
+The consequence is that two numbers exist and both are worth having. This
+script measures conformance of the protocol layer. Running the kit against
+``superqode serve a2a`` measures the agent people actually call, and the gap
+between them is where real defects hide.
+
+Usage:
+
+    python scripts/a2a_tck_sut.py --port 9999
+    ./run_tck.py --sut-host http://127.0.0.1:9999
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 from typing import Any
+
+import superqode.a2a.server as server_module
+
 
 #: How long a resubscribe fixture task stays active.
 #:
@@ -193,10 +204,62 @@ async def answer_conformance(
     return True
 
 
-__all__ = [
-    "CONFORMANCE_PREFIXES",
-    "RESUBSCRIBE_HOLD_SECONDS",
-    "answer_conformance",
-    "conformance_message_id",
-    "wants_conformance",
-]
+def _patch_executor() -> None:
+    """Route every request to a fixture instead of the harness.
+
+    Patched on the class before any server is built, so there is no path
+    through this process that reaches real execution. That is the point: a
+    certification run must not call a model or touch a repository.
+    """
+
+    async def execute(self: Any, context: Any, event_queue: Any) -> None:
+        sdk = server_module._a2a_sdk()
+        task_id = server_module._required_id(context.task_id, "task")
+        context_id = server_module._required_id(context.context_id, "context")
+        updater = sdk["TaskUpdater"](event_queue, task_id, context_id)
+
+        if context.current_task is None:
+            await event_queue.enqueue_event(
+                sdk["Task"](
+                    id=task_id,
+                    context_id=context_id,
+                    status=sdk["TaskStatus"](state=sdk["TaskState"].TASK_STATE_SUBMITTED),
+                )
+            )
+        await answer_conformance(updater, event_queue, sdk, conformance_message_id(context))
+
+    server_module.SuperQodeA2AExecutor.execute = execute
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=9999)
+    parser.add_argument("--provider", default="ollama")
+    parser.add_argument("--model", default="none")
+    args = parser.parse_args()
+
+    _patch_executor()
+
+    # The kit sends several hundred requests. The shipped ceilings would
+    # throttle it after ten, so a run would measure the limiter instead.
+    from superqode.a2a import create_a2a_server
+
+    server = asyncio.run(
+        create_a2a_server(
+            server_url=f"http://{args.host}:{args.port}",
+            provider=args.provider,
+            model=args.model,
+            store_path="/tmp/superqode-tck-store.sqlite3",
+            task_store_path="/tmp/superqode-tck-tasks.sqlite3",
+            anonymous_per_minute=0,
+            keyed_per_minute=0,
+            global_per_day=0,
+        )
+    )
+    print(f"A2A TCK SUT on http://{args.host}:{args.port} (fixtures only, no harness)")
+    server.run(host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()
