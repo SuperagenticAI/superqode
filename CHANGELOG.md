@@ -5,6 +5,50 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.115] - 2026-08-31
+
+### Added
+
+- `superqode serve a2a --anonymous-per-minute`, `--keyed-per-minute` and
+  `--global-per-day` expose the request ceilings that were previously fixed in
+  code. Zero removes a ceiling. The A2A TCK sends several hundred requests and
+  could not complete against the ten-per-minute anonymous default.
+- `superqode serve a2a --conformance-mode` answers the message ids in the A2A
+  TCK's `docs/SUT_REQUIREMENTS.md` with the replies its reference System Under
+  Test returns. Those requirements sit outside the specification and a working
+  agent fails them by doing real work. The mode replaces harness execution, so
+  a certification run calls no model and touches no repository. Because that
+  makes it unsafe on an endpoint serving real callers, the command prints a
+  warning while it is on.
+- The Agent Card endpoint sends `Cache-Control`, `ETag` and `Last-Modified`,
+  and answers a conditional request with `304 Not Modified` (specification
+  section 8.6.1). `card_cache_max_age` sets the window and defaults to 300
+  seconds.
+
+### Fixed
+
+- Response metadata used `superqode_session_id`. The specification requires
+  camelCase JSON field names (section 5.5), and a strict client rejects any
+  snake_case key. It is now `superqodeSessionId`.
+- A JSON-RPC request carrying a media type other than JSON returned
+  `ParseError (-32700)`, which reports malformed JSON rather than a media type
+  the endpoint does not accept. It now returns `ContentTypeNotSupportedError
+  (-32005)`. A request with no `Content-Type` header is still accepted.
+- The 0.3 discovery path `/.well-known/agent.json` was subject to the
+  authentication and rate-limit path, unlike the 1.0 filename beside it. Both
+  are now treated as card routes.
+- Tests read the builtin model catalogue unless they ask for live data. A test
+  that loaded models.dev data left it in a module global, so a later assertion
+  about builtin metadata was answered from whatever catalogue the machine had
+  fetched. The Z.AI GLM-5.2 pricing assertion failed in continuous integration
+  for that reason while passing in isolation.
+
+### Changed
+
+- `superqode serve a2a` scores 100% MUST and 100% MAY against the official A2A
+  TCK on JSONRPC and HTTP+JSON. See the provider documentation for scope and
+  for how to reproduce the run.
+
 ## [0.2.114] - 2026-08-30
 
 ### Added

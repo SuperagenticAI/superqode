@@ -49,10 +49,35 @@ def _clear_cli_probe_caches():
 
     clear_devin_cli_cache()
     clear_antigravity_cli_cache()
+    from superqode.providers import models as model_db
     from superqode.providers.models import clear_effective_models_cache
 
+    # Live models.dev data leaks the same way. ``set_live_models`` flips a
+    # module global, so one test that loads live data changes what every later
+    # test sees from ``get_model_info``. That is how a builtin-catalogue
+    # assertion started failing only in a full run, and only where models.dev
+    # was reachable. Each test starts on the builtin catalogue and puts the
+    # previous state back afterwards.
+    # Suppressing the autoload matters as much as clearing the flag: without
+    # it a test reads whatever models.dev cache happens to sit in the running
+    # user's home directory, so an assertion about builtin metadata passes or
+    # fails according to the machine. A test that wants the autoload sets the
+    # flag back itself, as tests/test_live_models.py does.
+    live_state = (
+        model_db._use_live_data,
+        model_db._live_models,
+        model_db._live_autoload_attempted,
+    )
+    model_db._use_live_data = False
+    model_db._live_models = None
+    model_db._live_autoload_attempted = True
     clear_effective_models_cache()
     yield
     clear_devin_cli_cache()
     clear_antigravity_cli_cache()
+    (
+        model_db._use_live_data,
+        model_db._live_models,
+        model_db._live_autoload_attempted,
+    ) = live_state
     clear_effective_models_cache()

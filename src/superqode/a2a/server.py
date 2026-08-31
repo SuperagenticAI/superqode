@@ -110,6 +110,14 @@ class A2AServerConfig(BaseModel):
     #: coding template allows shell and writes with no sandbox isolation.  The
     #: CLI therefore turns this off for remote binds unless asked otherwise.
     harness_skill_enabled: bool = True
+    #: How long a fetched Agent Card may be reused, in seconds.
+    #:
+    #: Registries and gateways poll the card. Without a freshness window they
+    #: either refetch on every call or cache it forever at their own
+    #: discretion, and the specification asks the server to say which it wants
+    #: (section 8.6.1). The card only changes when the process restarts, so
+    #: this can be generous.
+    card_cache_max_age: int = 300
     #: Answer the A2A TCK's fixture message ids instead of running a harness.
     #:
     #: The conformance kit drives a System Under Test through behaviours the
@@ -165,6 +173,30 @@ def _unsupported_content_type(request: Any, config: "A2AServerConfig", sdk: dict
             },
         },
     )
+
+
+#: Paths the SDK serves the Agent Card on. The 0.3 name is still fetched by
+#: hosts that have not moved to the 1.0 filename.
+AGENT_CARD_PATHS = frozenset({"/.well-known/agent-card.json", "/.well-known/agent.json"})
+
+
+def _card_validators(server: "A2AServer") -> tuple[str, str]:
+    """Return a stable ``(etag, last_modified)`` pair for the Agent Card.
+
+    The card is fixed for the life of the process, so both are computed once
+    and reused. The ETag is a hash of the exact bytes served, which is what
+    makes a conditional request answerable without re-serializing.
+    """
+    cached = getattr(server, "_card_validators_cache", None)
+    if cached is not None:
+        return cached
+    import hashlib
+    from email.utils import formatdate
+
+    digest = hashlib.sha256(server.agent_card_json().encode("utf-8")).hexdigest()[:32]
+    validators = (f'"{digest}"', formatdate(usegmt=True))
+    server._card_validators_cache = validators
+    return validators
 
 
 class SuperQodeA2AExecutor:
@@ -515,12 +547,29 @@ class A2AServer:
             # Discovery and health stay open regardless of policy.  Host
             # platforms fetch the Agent Card anonymously before they hold any
             # credential, so gating it would make the agent unregistrable.
-            if request.url.path in {
-                "/.well-known/agent-card.json",
-                "/health",
-                "/docs",
-                "/openapi.json",
-            }:
+            if request.url.path in AGENT_CARD_PATHS:
+                etag, last_modified = _card_validators(self)
+                cache_control = f"public, max-age={self.config.card_cache_max_age}"
+                # A poller that already holds this card is told so rather than
+                # being sent the same bytes again.
+                if request.headers.get("if-none-match") == etag:
+                    return sdk["JSONResponse"](
+                        status_code=304,
+                        content=None,
+                        headers={
+                            "ETag": etag,
+                            "Last-Modified": last_modified,
+                            "Cache-Control": cache_control,
+                        },
+                    )
+                response = await call_next(request)
+                if response.status_code == 200:
+                    response.headers["ETag"] = etag
+                    response.headers["Last-Modified"] = last_modified
+                    response.headers["Cache-Control"] = cache_control
+                return response
+
+            if request.url.path in {"/health", "/docs", "/openapi.json"}:
                 return await call_next(request)
 
             # A JSON-RPC caller that sends the wrong media type gets the

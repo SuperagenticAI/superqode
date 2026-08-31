@@ -18,9 +18,10 @@ streaming stream their replies. Skill examples fill the message box. **Use**
 saves the connection and stays on the screen; **Back** returns. **y** copies
 the last reply, **r** resends, **Esc** stops a wait. The main prompt stays
 your ACP or local agent. Logout clears a stored OAuth token.
-Those checks are client-fit, not an A2A TCK result (TCK is planned for a
-later release). A saved connection lives at `~/.superqode/a2a.json`. Later:
-`:a2a call <name>`.
+Those checks are client-fit. They ask whether SuperQode can talk to a card,
+and they are separate from the A2A TCK result recorded under
+[Conformance](#conformance), which measures the server. A saved connection
+lives at `~/.superqode/a2a.json`. Later: `:a2a call <name>`.
 From the shell, `superqode connect a2a --inspect` prints the trace and
 `superqode connect a2a --conformance` runs the checks. `--no-send` skips the
 task so a card-only check does not wait on a cold host. Repeatable
@@ -45,9 +46,10 @@ that record and revokes the tokens when the authorization server advertised
 `revocation_endpoint`. Mutual TLS uses `--tls-cert` and `--tls-key`.
 Discovery tries `/.well-known/agent-card.json`, then `/.well-known/agent.json`.
 
-The client speaks SendMessage, GetTask, and CancelTask (and the 0.3 method
-names). It does not implement ListTasks, GetExtendedAgentCard, or claim an
-A2A TCK result. The checks answer whether SuperQode can talk to the card.
+The client speaks SendMessage, GetTask, and CancelTask, and the 0.3 method
+names. It does not implement ListTasks or GetExtendedAgentCard. These checks
+answer whether SuperQode can reach a card, not whether SuperQode's own server
+conforms. For that, see [Conformance](#conformance).
 
 ## Public Agent Card and pilot status
 
@@ -263,11 +265,15 @@ instance spins down. The alternative is a database on the request path, which
 the spend behind a single query does not warrant. These limits bound a burst
 and a bad day. They do not meter usage.
 
-| Setting | Default | Applies to |
-| --- | --- | --- |
-| `anonymous_per_minute` | 10 | Callers with no credential |
-| `keyed_per_minute` | 60 | Callers presenting a valid key |
-| `global_per_day` | 5000 | Every caller, including exempt tiers |
+| Setting | Flag | Default | Applies to |
+| --- | --- | --- | --- |
+| `anonymous_per_minute` | `--anonymous-per-minute` | 10 | Callers with no credential |
+| `keyed_per_minute` | `--keyed-per-minute` | 60 | Callers presenting a valid key |
+| `global_per_day` | `--global-per-day` | 5000 | Every caller, including exempt tiers |
+
+Zero removes a ceiling. A test suite or a benchmark run needs that, and
+[Conformance](#conformance) explains why the A2A TCK cannot complete without
+it.
 
 A caller over its window receives `429` with `Retry-After`. Discovery and
 health are exempt, so a host platform polling the Agent Card cannot be
@@ -360,6 +366,80 @@ The bridge uses two durable stores with separate schemas:
 | A2A task store | `--task-store` | Official SDK SQLite task lookup, listing, and terminal state |
 
 Completed A2A task records survive process restart. An actively executing request is **not** auto-resumed after a crash; operators should reconcile tasks left in `TASK_STATE_WORKING` against the SuperQode run ledger.
+
+## Conformance
+
+`superqode serve a2a` is measured against the [A2A Technology Compatibility
+Kit](https://github.com/a2aproject/a2a-tck), the suite the A2A project
+maintains under the Linux Foundation. Results below are from the JSONRPC and
+HTTP+JSON transports, which are the two the runtime Agent Card declares.
+
+| Level | Result |
+| --- | --- |
+| MUST | 100% (73 of 73 exercised) |
+| SHOULD | 57.1% |
+| MAY | 100% |
+| Overall | 96.4% |
+
+Read the MUST figure with its scope attached. Twenty requirements are skipped
+and twenty-five are not exercised at all, almost entirely because the card
+declares no gRPC interface. Declaring one would raise the denominator rather
+than the percentage.
+
+Three SHOULD requirements remain open: `CORE-HIST-005` and `CORE-HIST-006`
+cover chronological ordering and content fidelity of task history, and
+`DM-SERIAL-005` asks that unrecognised fields be ignored for forward
+compatibility. The kit grades SHOULD as an expected failure, so none of these
+block a compatibility result.
+
+### Reproducing the result
+
+The kit sends several hundred requests and drives the agent through
+behaviours the specification does not describe. Two options exist for that
+reason.
+
+```bash
+superqode serve a2a --port 9999 \
+  --anonymous-per-minute 0 \
+  --global-per-day 0 \
+  --conformance-mode
+```
+
+`--anonymous-per-minute 0` and `--global-per-day 0` remove the request
+ceilings documented under [Request limits](#request-limits). Left at their
+defaults, the kit is throttled after ten requests and the run measures the
+limiter instead of the protocol.
+
+`--conformance-mode` answers the message ids listed in the kit's
+`docs/SUT_REQUIREMENTS.md` with the replies its reference System Under Test
+returns. Those requirements sit outside the specification: a task whose
+message id begins `test-resubscribe-message-id` has to stay active long
+enough to resubscribe to, and several checks assert on literal artifact text
+and filenames. A working agent fails them by doing real work. The mode
+replaces harness execution entirely, so no model is called and no repository
+is touched, and it must never be enabled on an endpoint serving real callers.
+The command prints a warning while it is on.
+
+Then run the kit:
+
+```bash
+git clone https://github.com/a2aproject/a2a-tck.git
+cd a2a-tck && uv venv && uv pip install -e ".[dev]"
+./run_tck.py --sut-host http://127.0.0.1:9999
+```
+
+Reports land in `reports/`, including `compatibility.json` for machine
+reading and `junitreport.xml` for continuous integration.
+
+### Agent Card caching
+
+The card endpoint sends `Cache-Control`, `ETag`, and `Last-Modified`, and
+answers a conditional request with `304 Not Modified`. Specification section
+8.6.1 asks for these, and registries that poll the card benefit from them.
+The card is fixed for the life of the process, so the validators are computed
+once from the exact bytes served. `card_cache_max_age` sets the freshness
+window and defaults to 300 seconds. Both `/.well-known/agent-card.json` and
+the 0.3 path `/.well-known/agent.json` are served this way.
 
 ## Publish the runtime Agent Card
 
