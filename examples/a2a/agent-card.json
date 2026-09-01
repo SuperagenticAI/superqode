@@ -3,17 +3,17 @@
   "description": "The Harness Layer for Coding Agents",
   "supportedInterfaces": [
     {
-      "url": "https://superqode.onrender.com",
+      "url": "https://a2a.superqode.dev",
       "protocolBinding": "JSONRPC",
       "protocolVersion": "1.0"
     },
     {
-      "url": "https://superqode.onrender.com",
+      "url": "https://a2a.superqode.dev",
       "protocolBinding": "JSONRPC",
       "protocolVersion": "0.3"
     },
     {
-      "url": "https://superqode.onrender.com",
+      "url": "https://a2a.superqode.dev",
       "protocolBinding": "HTTP+JSON",
       "protocolVersion": "1.0"
     }
@@ -27,17 +27,6 @@
   "capabilities": {
     "streaming": true,
     "pushNotifications": false
-  },
-  "securitySchemes": {
-    "bearer": {
-      "httpAuthSecurityScheme": {
-        "description": "Bearer token issued by the SuperQode operator",
-        "scheme": "bearer"
-      },
-      "description": "Bearer token issued by the SuperQode operator",
-      "scheme": "bearer",
-      "type": "http"
-    }
   },
   "defaultInputModes": [
     "text/plain"
@@ -73,5 +62,5 @@
   "iconUrl": "https://super-agentic.ai/uploads/superqode.png",
   "preferredTransport": "JSONRPC",
   "protocolVersion": "0.3",
-  "url": "https://superqode.onrender.com"
+  "url": "https://a2a.superqode.dev"
 }

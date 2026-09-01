@@ -31,7 +31,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-DEFAULT_URL = "https://super-agentic.ai/.well-known/agent-card.json"
+DEFAULT_URL = "https://superqode.dev/.well-known/agent-card.json"
 DEFAULT_ARTIFACT = Path(__file__).resolve().parents[1] / "examples" / "a2a" / "agent-card.json"
 TIMEOUT_SECONDS = 60
 

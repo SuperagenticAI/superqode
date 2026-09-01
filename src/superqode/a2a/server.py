@@ -492,6 +492,22 @@ class A2AServer:
             agent_card=card,
         )
         compat = self.config.legacy_v0_3
+
+        # The 0.3 discovery filename. The SDK routes only the 1.0 name, but the
+        # card still advertises a 0.3 interface and hosts from that era look
+        # here first. SuperQode's own client falls back to this path too, so
+        # serving it costs one route and removes a discovery failure.
+        #
+        # Registered before the SDK routes because those include a catch-all
+        # ``Mount`` at ``/{tenant}``, which matches any single leading segment.
+        # A route added afterwards is shadowed by that mount and never runs.
+        @app.get("/.well-known/agent.json")
+        async def legacy_agent_card() -> Any:
+            return sdk["JSONResponse"](
+                content=json.loads(self.agent_card_json()),
+                media_type="application/json",
+            )
+
         context_builder = _AccessContextBuilder(sdk)
         sdk["add_a2a_routes_to_fastapi"](
             app,
