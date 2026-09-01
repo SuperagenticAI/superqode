@@ -48,7 +48,7 @@ build your own harness. All of them run through the same inspectable contract.
 ## Quick Start
 
 ```bash
-curl -fsSL https://super-agentic.ai/superqode.sh | sh
+curl -fsSL https://superqode.dev/install.sh | sh
 ```
 
 The installer pulls the latest release from PyPI into an isolated environment,

@@ -39,7 +39,7 @@ hide:
 ## Installation and first run
 
 ```bash
-curl -fsSL https://super-agentic.ai/superqode.sh | sh
+curl -fsSL https://superqode.dev/install.sh | sh
 cd your-project
 superqode
 ```

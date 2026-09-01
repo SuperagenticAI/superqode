@@ -14,7 +14,7 @@ SuperQode is your portable coding agent harness. A harness defines the run contr
 ## 1. Install
 
 ```bash
-curl -fsSL https://super-agentic.ai/superqode.sh | sh
+curl -fsSL https://superqode.dev/install.sh | sh
 ```
 
 This installs `uv` when it is missing, then installs SuperQode in an isolated

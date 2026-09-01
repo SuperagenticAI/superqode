@@ -13,7 +13,7 @@ session. A custom harness is optional for the first session.
 Run the installer:
 
 ```bash
-curl -fsSL https://super-agentic.ai/superqode.sh | sh
+curl -fsSL https://superqode.dev/install.sh | sh
 ```
 
 The installer creates an isolated `uv` tool environment and does not require
