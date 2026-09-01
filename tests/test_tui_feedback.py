@@ -89,6 +89,18 @@ def test_transition_feedback_has_toast_receipt_guidance_and_deduplication() -> N
 @pytest.mark.asyncio
 async def test_model_transition_is_visible_without_scrolling(monkeypatch) -> None:
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    # A saved-connection resume and the catalogue freshness line both write to
+    # the transcript on mount. On a slower machine they arrive after the
+    # announcement and replace the receipt this test reads back.
+    for name in (
+        "_start_models_dev_refresh",
+        "_start_acp_registry_refresh",
+        "_report_catalog_freshness",
+        "_run_startup_connect",
+        "_prewarm_litellm",
+    ):
+        if hasattr(SuperQodeApp, name):
+            monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None, raising=False)
     app = SuperQodeApp()
     async with app.run_test(size=(58, 24), notifications=True) as pilot:
         log = app.query_one("#log", ConversationLog)

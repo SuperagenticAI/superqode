@@ -15,6 +15,29 @@ import sys
 import pytest
 
 
+def _quiet_startup(monkeypatch) -> None:
+    """Stop the launch timers from writing over a test's own state.
+
+    On mount the app schedules a models.dev refresh, an ACP registry refresh, a
+    catalogue freshness line and a saved-connection resume. Each of them writes
+    to the transcript or moves the catalogue chip, and on a slower machine they
+    land in the middle of a test that is asserting on exactly those surfaces.
+    Tests that are about announcement behaviour rather than about launch turn
+    them off.
+    """
+    from superqode.app_main import SuperQodeApp
+
+    for name in (
+        "_start_models_dev_refresh",
+        "_start_acp_registry_refresh",
+        "_report_catalog_freshness",
+        "_run_startup_connect",
+        "_prewarm_litellm",
+    ):
+        if hasattr(SuperQodeApp, name):
+            monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None, raising=False)
+
+
 class _FakeTTY(io.StringIO):
     def isatty(self) -> bool:
         return True
@@ -143,11 +166,14 @@ def test_the_launch_splash_never_breaks_a_launch(monkeypatch):
     _print_launch_splash()  # must not raise
 
 
-async def test_the_catalog_chip_clears_only_after_the_last_refresh():
+async def test_the_catalog_chip_clears_only_after_the_last_refresh(monkeypatch):
     """Two refreshes run at launch; whichever finishes first must not clear it."""
     from superqode.app_main import SuperQodeApp
     from superqode.app.widgets import ColorfulStatusBar
 
+    # The launch refreshes drive this same counter, so they are silenced to
+    # leave the two below as the only ones in flight.
+    _quiet_startup(monkeypatch)
     app = SuperQodeApp()
     async with app.run_test(size=(120, 30)) as pilot:
         await pilot.pause()
@@ -167,8 +193,9 @@ async def test_the_catalog_chip_clears_only_after_the_last_refresh():
         assert bar.catalog_state == ""
 
 
-async def test_the_catalog_chip_reaches_the_status_row():
+async def test_the_catalog_chip_reaches_the_status_row(monkeypatch):
     """A chip nobody can see is not an indicator."""
+    _quiet_startup(monkeypatch)
     from superqode.app_main import SuperQodeApp
     from superqode.app.widgets import ColorfulStatusBar
 
