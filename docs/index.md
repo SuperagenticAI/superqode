@@ -13,7 +13,7 @@ hide:
 
 <p class="sq-kicker"><span class="sq-gradient-text">The Harness Layer</span> for Coding Agents</p>
 
-<p class="sq-tagline">The Harness Hub where coding harnesses are discovered, built, inspected, run, evaluated, and optimized through one rich, browsable terminal experience.</p>
+<p class="sq-tagline">Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal. Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.</p>
 
 <p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 

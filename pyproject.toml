@@ -240,7 +240,7 @@ observability = [
 ]
 
 [project.urls]
-Homepage = "https://super-agentic.ai/superqode/"
+Homepage = "https://superqode.dev"
 Repository = "https://github.com/SuperagenticAI/superqode"
 Documentation = "https://superagenticai.github.io/superqode/"
 Issues = "https://github.com/SuperagenticAI/superqode/issues"

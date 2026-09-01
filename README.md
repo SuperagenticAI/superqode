@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong>The harness layer for coding agents.</strong><br>
-  Discover, build, run, evaluate, and optimize coding-agent harnesses from one terminal.
+  Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal.<br>
+  Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.
 </p>
 
 <p align="center">
@@ -22,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="https://superagenticai.github.io/superqode/harness-hub/">Harness Hub</a>
   &nbsp;·&nbsp;
-  <a href="https://super-agentic.ai/superqode/">Website</a>
+  <a href="https://superqode.dev">superqode.dev</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
 </p>
@@ -234,6 +235,18 @@ superqode serve a2a --spec harness.yaml
 
 Discovery is a published Agent Card. One card advertises JSON-RPC and HTTP+JSON
 across A2A 1.0 and 0.3, so a single document satisfies every registration path.
+The public SuperQode agent runs at
+[`a2a.superqode.dev`](https://superqode.dev/.well-known/agent-card.json) and you
+can call it today:
+
+```bash
+superqode connect a2a --url https://superqode.dev
+```
+
+It scores 100% of MUST and 100% of MAY against the
+[Technology Compatibility Kit](https://github.com/a2aproject/a2a-tck) the A2A
+project maintains under the Linux Foundation, on both transports the card
+declares. Reproducing that run is documented in the A2A guide.
 
 A remote bind is deliberate about what it exposes. It serves the
 `harness-shortlist` skill, which answers questions about which coding agents and

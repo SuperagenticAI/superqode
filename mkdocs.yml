@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "The Harness Hub where coding harnesses are discovered, built, inspected, run, evaluated, and optimized through one rich, browsable terminal experience."
+site_description: "Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal. Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -128,7 +128,7 @@ extra:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/superqode/
     - icon: fontawesome/solid/globe
-      link: https://super-agentic.ai/superqode/
+      link: https://superqode.dev
       name: SuperQode website
     - icon: fontawesome/solid/building
       link: https://super-agentic.ai
