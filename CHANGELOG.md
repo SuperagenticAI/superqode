@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section 8.6.1). `card_cache_max_age` sets the window and defaults to 300
   seconds.
 
+- A `Dockerfile` at the repository root builds the public A2A endpoint for
+  Cloud Run. It installs only the `a2a` extra, binds the port Cloud Run
+  injects, and serves the Hub shortlist skill alone, because a remote bind
+  without `--expose-harness` does not run harnesses. Task records are kept in
+  memory, since the container filesystem is per-instance and does not survive a
+  restart.
+
 ### Fixed
 
 - Response metadata used `superqode_session_id`. The specification requires
@@ -48,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `superqode serve a2a` scores 100% MUST and 100% MAY against the official A2A
   TCK on JSONRPC and HTTP+JSON. See the provider documentation for scope and
   for how to reproduce the run.
+- The hosted installer moved to `https://superqode.dev/install.sh`. The script
+  itself is unchanged and still lives at `install/install.sh`. The README, the
+  documentation and both copies of the script now quote the new address. The
+  previous address remains served so existing links keep working.
 
 ## [0.2.114] - 2026-08-30
 
