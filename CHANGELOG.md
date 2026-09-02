@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.119] - 2026-09-02
+
+### Changed
+
+- Restored the OpenCode model picker from before 0.2.118. The loading
+  frame that replaced the ACP catalog while models were fetched is
+  removed.
+
 ## [0.2.118] - 2026-09-02
 
 ### Fixed

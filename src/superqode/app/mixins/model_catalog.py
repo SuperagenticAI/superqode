@@ -42,53 +42,32 @@ class ModelCatalogMixin:
             self._opencode_models = self._get_opencode_models()
         return self._opencode_models
 
-    def _format_opencode_models(self, models: List[Dict]) -> List[Dict]:
-        """Convert OpenCode CLI rows into the TUI picker shape."""
-        from superqode.providers.models import sort_models_newest_first
-
-        return sort_models_newest_first(
-            [
-                {
-                    "id": m["id"],
-                    "name": m.get("name", m["id"].split("/")[-1]),
-                    "context": m.get("context", 128000),
-                    "free": bool(m.get("is_free", False)),
-                    "recommended": bool(m.get("recommended", False)),
-                    "desc": m.get("description") or m.get("source", "OpenCode"),
-                    "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
-                }
-                for m in models
-            ]
-        )
-
     def _get_opencode_models(self) -> List[Dict]:
         """Get OpenCode models from the live CLI catalog, newest releases first."""
         try:
+            from superqode.providers.models import sort_models_newest_first
             from superqode.providers.opencode_models import get_opencode_models_sync
 
-            return self._format_opencode_models(get_opencode_models_sync())
+            models = get_opencode_models_sync()
+
+            # Convert to our format. Show all discovered OpenCode models, not
+            # only free ones, because the catalog and free-tier markers change.
+            return sort_models_newest_first(
+                [
+                    {
+                        "id": m["id"],
+                        "name": m.get("name", m["id"].split("/")[-1]),
+                        "context": m.get("context", 128000),
+                        "free": bool(m.get("is_free", False)),
+                        "recommended": bool(m.get("recommended", False)),
+                        "desc": m.get("description") or m.get("source", "OpenCode"),
+                        "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
+                    }
+                    for m in models
+                ]
+            )
         except Exception:
             return []
-
-    def _paint_acp_model_loading(self, agent_id: str, log: ConversationLog) -> None:
-        """Replace the ACP agent list before the CLI catalog is fetched."""
-        color = AGENT_COLORS.get(agent_id, THEME["success"])
-        icon = AGENT_ICONS.get(agent_id, "◆")
-        label = agent_id.replace("-", " ").upper()
-        t = Text()
-        t.append(f"\n  ╭{'─' * 58}╮\n", style=color)
-        t.append("  │  ", style=color)
-        t.append(f"{icon} ", style=color)
-        t.append("Connected to ", style=THEME["text"])
-        t.append(label, style=f"bold {color}")
-        t.append("\n", style=color)
-        t.append(f"  ├{'─' * 58}┤\n", style=color)
-        t.append("  │  ", style=color)
-        t.append("Loading models…", style=THEME["muted"])
-        t.append("\n", style=color)
-        t.append(f"  ╰{'─' * 58}╯\n", style=color)
-        log.clear()
-        log.write(t)
 
     @property
     def gemini_models(self) -> List[Dict]:
