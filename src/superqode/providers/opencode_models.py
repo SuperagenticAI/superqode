@@ -20,42 +20,182 @@ _cached_models: Optional[List[Dict]] = None
 _cache_time: Optional[datetime] = None
 CACHE_TTL_SECONDS = 300
 
-_FALLBACK_FREE_MODELS = [
-    {
-        "id": "opencode/big-pickle",
-        "name": "Big Pickle",
-        "context": 200000,
-        "description": "OpenCode free model fallback",
-    },
-    {
-        "id": "opencode/deepseek-v4-flash-free",
-        "name": "DeepSeek V4 Flash Free",
-        "context": 1000000,
-        "description": "OpenCode free model fallback",
-    },
-    {
-        "id": "opencode/minimax-m2.5-free",
-        "name": "MiniMax M2.5 Free",
-        "context": 204800,
-        "description": "OpenCode free model fallback",
-    },
-    {
-        "id": "opencode/nemotron-3-super-free",
-        "name": "Nemotron 3 Super Free",
-        "context": 1000000,
-        "description": "OpenCode free model fallback",
-    },
-    {
-        "id": "opencode/qwen3.6-plus-free",
-        "name": "Qwen 3.6 Plus Free",
-        "context": 262144,
-        "description": "OpenCode free model fallback",
-    },
-]
+
+def _run_opencode(args: List[str], timeout: int = 15) -> subprocess.CompletedProcess:
+    """Run an OpenCode CLI command. PATH is the only locator."""
+    binary = shutil.which("opencode")
+    if not binary:
+        raise FileNotFoundError("opencode")
+    return subprocess.run(
+        [binary, *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _cli_model_list() -> List[Dict]:
+    """Models OpenCode currently prints (`opencode models`)."""
+    verbose = _run_opencode(["models", "--verbose"])
+    if verbose.returncode == 0:
+        parsed = _parse_opencode_models(verbose.stdout or "")
+        if parsed:
+            return parsed
+    plain = _run_opencode(["models"])
+    if plain.returncode != 0:
+        return []
+    models: List[Dict] = []
+    for line in (plain.stdout or "").splitlines():
+        model_id = line.strip()
+        if not _MODEL_ID_LINE.match(model_id) or model_id.startswith(("{", "}", '"', "[")):
+            continue
+        models.append(
+            {
+                "id": model_id,
+                "name": model_id.split("/", 1)[-1],
+                "provider": model_id.split("/", 1)[0],
+                "is_free": _model_has_free_pricing({}, model_id=model_id),
+                "context": 128000,
+                "source": "opencode",
+            }
+        )
+    return models
+
+
+def _cache_catalog_path(debug_paths: str) -> Optional[str]:
+    """Resolve OpenCode's models.dev cache from `opencode debug paths`."""
+    from pathlib import Path
+
+    for line in debug_paths.splitlines():
+        key, _, rest = line.strip().partition(" ")
+        if key != "cache" or not rest.strip():
+            continue
+        path = Path(rest.strip()) / "models.json"
+        if path.is_file():
+            return str(path)
+    return None
+
+
+def _configured_provider_ids(debug_v2: str) -> set[str]:
+    """Provider ids OpenCode itself reports as built-in/configured."""
+    text = debug_v2.strip()
+    if not text:
+        return set()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return set()
+    providers = data.get("providers") if isinstance(data, dict) else None
+    if not isinstance(providers, list):
+        return set()
+    ids: set[str] = set()
+    for item in providers:
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(str(item["id"]))
+    return ids
+
+
+def _models_from_cache_file(path: str) -> List[Dict]:
+    """Read every provider/model pair from OpenCode's live models.dev cache."""
+    from pathlib import Path
+
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    models: List[Dict] = []
+    for provider_id, provider in data.items():
+        if not isinstance(provider, dict):
+            continue
+        raw = provider.get("models") or {}
+        if isinstance(raw, dict):
+            entries = raw.values()
+        elif isinstance(raw, list):
+            entries = raw
+        else:
+            continue
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            raw_id = str(item.get("id") or "")
+            if not raw_id:
+                continue
+            model_id = raw_id if "/" in raw_id else f"{provider_id}/{raw_id}"
+            limit = item.get("limit") if isinstance(item.get("limit"), dict) else {}
+            models.append(
+                {
+                    "id": model_id,
+                    "name": item.get("name") or raw_id.split("/")[-1],
+                    "provider": model_id.split("/", 1)[0],
+                    "is_free": _model_has_free_pricing(
+                        item, model_id=model_id, model_name=str(item.get("name") or "")
+                    ),
+                    "context": item.get("context")
+                    or item.get("context_window")
+                    or limit.get("context")
+                    or 128000,
+                    "source": "opencode",
+                }
+            )
+    return models
+
+
+def _expand_cli_with_cache(
+    cli_models: List[Dict], cache_models: List[Dict], extra_providers: set[str]
+) -> List[Dict]:
+    """Keep every CLI row, plus the rest of each connected provider from the cache.
+
+    `opencode models` only prints currently wired models (often the free Zen
+    subset). OpenCode's models.dev cache still has the full provider catalog.
+    """
+    prefixes = {model["id"].split("/", 1)[0] for model in cli_models if "/" in model["id"]}
+    prefixes.update(extra_providers)
+    if not prefixes:
+        return list(cli_models)
+    merged: dict[str, Dict] = {}
+    for model in cache_models:
+        if model["id"].split("/", 1)[0] in prefixes:
+            merged[model["id"]] = model
+    for model in cli_models:
+        merged.setdefault(model["id"], model)
+    return list(merged.values())
+
+
+def _discover_opencode_models() -> List[Dict]:
+    """CLI list + OpenCode's own cache. No hardcoded model names."""
+    if not shutil.which("opencode"):
+        logger.warning("OpenCode not found in PATH")
+        return []
+    try:
+        cli_models = _cli_model_list()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("opencode models failed: %s", exc)
+        cli_models = []
+    extra_providers: set[str] = set()
+    cache_models: List[Dict] = []
+    try:
+        paths = _run_opencode(["debug", "paths"])
+        cache_path = _cache_catalog_path(paths.stdout or "") if paths.returncode == 0 else None
+        if cache_path:
+            cache_models = _models_from_cache_file(cache_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("OpenCode models cache unavailable: %s", exc)
+    try:
+        v2 = _run_opencode(["debug", "v2"])
+        if v2.returncode == 0:
+            extra_providers = _configured_provider_ids(v2.stdout or "")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("OpenCode provider list unavailable: %s", exc)
+    models = _expand_cli_with_cache(cli_models, cache_models, extra_providers)
+    logger.info("Found %s models from OpenCode", len(models))
+    return models
 
 
 async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
-    """Dynamically fetch available models from OpenCode CLI."""
+    """Dynamically fetch available models from OpenCode."""
     global _cached_models, _cache_time
 
     if not force_refresh and _cached_models and _cache_time:
@@ -63,39 +203,10 @@ async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
             logger.debug("Using cached OpenCode models")
             return _cached_models
 
-    opencode_path = shutil.which("opencode")
-    if not opencode_path:
-        logger.warning("OpenCode not found in PATH")
-        return []
-
-    try:
-        cmd = ["opencode", "models", "--verbose"]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            error = stderr.decode(errors="replace").strip()
-            logger.warning(f"opencode models failed: {error}")
-            return _opencode_fallback_models(error)
-
-        output = stdout.decode()
-        models = _parse_opencode_models(output)
-        if not models:
-            models = _opencode_fallback_models("OpenCode model catalog returned no models")
-
-        _cached_models = models
-        _cache_time = datetime.now()
-
-        logger.info(f"Found {len(models)} models from OpenCode")
-        return models
-
-    except Exception as e:
-        logger.error(f"Error fetching OpenCode models: {e}")
-        return _opencode_fallback_models(str(e))
+    models = await asyncio.to_thread(_discover_opencode_models)
+    _cached_models = models
+    _cache_time = datetime.now()
+    return models
 
 
 def get_opencode_models_sync(force_refresh: bool = False) -> List[Dict]:
@@ -107,66 +218,10 @@ def get_opencode_models_sync(force_refresh: bool = False) -> List[Dict]:
             logger.debug("Using cached OpenCode models")
             return _cached_models
 
-    if not shutil.which("opencode"):
-        logger.warning("OpenCode not found in PATH")
-        return []
-
-    try:
-        proc = subprocess.run(
-            ["opencode", "models", "--verbose"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
-        if proc.returncode != 0:
-            error = (proc.stderr or proc.stdout or "").strip()
-            logger.warning(f"opencode models failed: {error}")
-            models = _opencode_fallback_models(error)
-        else:
-            models = _parse_opencode_models(proc.stdout)
-            if not models:
-                models = _opencode_fallback_models("OpenCode model catalog returned no models")
-
-        _cached_models = models
-        _cache_time = datetime.now()
-        return models
-    except Exception as e:
-        logger.error(f"Error fetching OpenCode models: {e}")
-        models = _opencode_fallback_models(str(e))
-        _cached_models = models
-        _cache_time = datetime.now()
-        return models
-
-
-def _opencode_fallback_models(reason: str = "") -> List[Dict]:
-    """Return usable OpenCode options when catalog discovery fails."""
-    fallback_models = [
-        {
-            **model,
-            "provider": "opencode",
-            "is_free": True,
-            "source": "opencode fallback",
-            "catalog_unavailable": True,
-            "description": model["description"]
-            + (f" (catalog unavailable: {reason})" if reason else ""),
-        }
-        for model in _FALLBACK_FREE_MODELS
-    ]
-    fallback_models.append(
-        {
-            "id": "opencode/auto",
-            "name": "OpenCode Default",
-            "provider": "opencode",
-            "is_free": False,
-            "context": 128000,
-            "source": "opencode default",
-            "description": "Use OpenCode's configured default model"
-            + (f" (catalog unavailable: {reason})" if reason else ""),
-            "catalog_unavailable": True,
-        }
-    )
-    return fallback_models
+    models = _discover_opencode_models()
+    _cached_models = models
+    _cache_time = datetime.now()
+    return models
 
 
 def _parse_opencode_models(output: str) -> List[Dict]:
@@ -182,7 +237,7 @@ def _parse_opencode_models(output: str) -> List[Dict]:
             continue
 
         try:
-            data = json.loads(json_text[:2000])
+            data = json.loads(json_text)
 
             is_free = False
             is_free = _model_has_free_pricing(data, model_id=model_id)

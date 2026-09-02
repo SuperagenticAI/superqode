@@ -42,17 +42,19 @@ class ModelCatalogMixin:
             self._opencode_models = self._get_opencode_models()
         return self._opencode_models
 
+    def _sort_opencode_picker_models(self, models: List[Dict]) -> List[Dict]:
+        """Newest free models first. Paid OpenCode rows are not shown."""
+        from superqode.providers.models import sort_models_newest_first
+
+        return sort_models_newest_first([item for item in models if item.get("free")])
+
     def _get_opencode_models(self) -> List[Dict]:
-        """Get OpenCode models from the live CLI catalog, newest releases first."""
+        """Free OpenCode models only, shared by subscription ACP and :connect acp."""
         try:
-            from superqode.providers.models import sort_models_newest_first
             from superqode.providers.opencode_models import get_opencode_models_sync
 
             models = get_opencode_models_sync()
-
-            # Convert to our format. Show all discovered OpenCode models, not
-            # only free ones, because the catalog and free-tier markers change.
-            return sort_models_newest_first(
+            return self._sort_opencode_picker_models(
                 [
                     {
                         "id": m["id"],
@@ -722,6 +724,7 @@ class ModelCatalogMixin:
 
             log = self.query_one("#log", ConversationLog)
             self._awaiting_model_selection = False
+            log.auto_scroll = True
             self.current_model = model_id
             self.current_provider = "opencode"
 
@@ -2651,6 +2654,7 @@ class ModelCatalogMixin:
         # Store the model
         self.current_model = stored_model_name
         self._awaiting_model_selection = False  # Clear the flag
+        log.auto_scroll = True
 
         self._clear_picker(log)
 
@@ -2706,6 +2710,7 @@ class ModelCatalogMixin:
             self.current_model = stored_model_id
             self.current_provider = "opencode"
             self._awaiting_model_selection = False
+            log.auto_scroll = True
 
             self._clear_picker(log)
 
@@ -2757,10 +2762,12 @@ class ModelCatalogMixin:
         t.append(f"{'':>32}│\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
-        # Show available models
-        t.append(f"  │  🆓 ", style=color)
+        t.append("  │  ", style=color)
         t.append("SELECT OPENCODE MODEL", style=f"bold {THEME['success']}")
-        t.append(f"{'':>34}│\n", style=color)
+        t.append("\n", style=color)
+        t.append("  │  ", style=color)
+        t.append("Free models from the OpenCode catalog", style=THEME["muted"])
+        t.append("\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
         models = self.opencode_models
@@ -2844,24 +2851,14 @@ class ModelCatalogMixin:
 
         t.append(f"  ╰{'─' * 58}╯\n", style=color)
 
-        if clear_log:
-            log.clear()
-            log.auto_scroll = False
-            log.write(t)
-            log.scroll_home(animate=False)
-            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
-        else:
-            # Update during navigation - clear and write but don't scroll to home
-            log.auto_scroll = False
-            log.clear()
-            log.write(t)
-            # Don't scroll to home on navigation updates to reduce flickering
-            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
-
-        # Set flag to await model selection
+        # Await before paint so after-refresh pins do not no-op.
         self._awaiting_model_selection = True
-        # Store agent data for navigation
         self._opencode_agent_data = agent
+        log.auto_scroll = False
+        log.clear()
+        log.write(t, scroll_end=False)
+        if clear_log:
+            self._keep_opencode_picker_at_top(log)
 
         # DO NOT auto-select model - user must choose
         self.current_model = ""  # No model selected yet
@@ -2873,6 +2870,38 @@ class ModelCatalogMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = ""
+
+    def _keep_opencode_picker_at_top(self, log: ConversationLog) -> None:
+        """Keep the OpenCode model list pinned to the heading after layout."""
+
+        def pin_top() -> None:
+            if getattr(self, "current_agent", "") != "opencode":
+                return
+            if not getattr(self, "_awaiting_model_selection", False):
+                return
+            log.auto_scroll = False
+            try:
+                log.scroll_to(x=0, y=0, animate=False, force=True)
+            except TypeError:
+                log.scroll_to(y=0, animate=False)
+            except Exception:  # noqa: BLE001
+                log.scroll_home(animate=False)
+            try:
+                log.scroll_y = 0
+            except Exception:  # noqa: BLE001
+                pass
+
+        pin_top()
+        try:
+            self.call_after_refresh(pin_top)
+        except Exception:  # noqa: BLE001
+            pass
+        if getattr(log, "is_attached", False):
+            try:
+                self.call_later(pin_top)
+                self.set_timer(0.05, pin_top)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _show_gemini_models_selection(self, agent: Dict[str, Any], log: ConversationLog):
         """Show Gemini available models for selection."""

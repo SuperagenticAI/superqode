@@ -1,3 +1,6 @@
+import json
+import subprocess
+
 import pytest
 
 from superqode.app_main import SuperQodeApp
@@ -136,16 +139,42 @@ def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
             "desc": "from cli",
             "catalog_unavailable": False,
         },
-        {
-            "id": "opencode/live-paid",
-            "name": "Live Paid",
-            "context": 123456,
-            "free": False,
-            "recommended": False,
-            "desc": "OpenCode",
-            "catalog_unavailable": False,
-        },
     ]
+
+
+def test_tui_opencode_picker_shows_only_free_models(monkeypatch):
+    clear_cache()
+
+    def fake_get_opencode_models_sync(force_refresh=False):
+        return [
+            {
+                "id": "anthropic/claude-opus",
+                "name": "Claude Opus",
+                "is_free": False,
+                "context": 200000,
+            },
+            {
+                "id": "opencode/big-pickle",
+                "name": "Big Pickle",
+                "is_free": True,
+                "context": 200000,
+            },
+            {
+                "id": "openai/gpt-5",
+                "name": "GPT-5",
+                "is_free": False,
+                "context": 400000,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "superqode.providers.opencode_models.get_opencode_models_sync",
+        fake_get_opencode_models_sync,
+    )
+
+    app = SuperQodeApp()
+    ids = [model["id"] for model in app.opencode_models]
+    assert ids == ["opencode/big-pickle"]
 
 
 @pytest.mark.asyncio
@@ -158,32 +187,77 @@ async def test_opencode_models_do_not_fall_back_to_static_catalog(monkeypatch):
     assert models == []
 
 
-@pytest.mark.asyncio
-async def test_opencode_models_fall_back_when_cli_catalog_fails(monkeypatch):
+def test_opencode_cache_expands_connected_providers_without_hardcoded_names(tmp_path, monkeypatch):
+    """CLI may list only wired free models; OpenCode's cache still has the rest."""
+    from superqode.providers import opencode_models as mod
+
     clear_cache()
-    monkeypatch.setattr("superqode.providers.opencode_models.shutil.which", lambda name: "opencode")
-
-    class FakeProcess:
-        returncode = 1
-
-        async def communicate(self):
-            return b"", b"catalog db unavailable"
-
-    async def fake_subprocess_exec(*args, **kwargs):
-        return FakeProcess()
-
-    monkeypatch.setattr(
-        "superqode.providers.opencode_models.asyncio.create_subprocess_exec",
-        fake_subprocess_exec,
+    catalog = tmp_path / "models.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "opencode": {
+                    "id": "opencode",
+                    "models": {
+                        "big-pickle": {
+                            "id": "big-pickle",
+                            "name": "Big Pickle",
+                            "cost": {"input": 0, "output": 0},
+                            "limit": {"context": 200000},
+                        },
+                        "claude-opus-4-8": {
+                            "id": "claude-opus-4-8",
+                            "name": "Claude Opus 4.8",
+                            "cost": {"input": 5, "output": 25},
+                            "limit": {"context": 200000},
+                        },
+                    },
+                },
+                "anthropic": {
+                    "id": "anthropic",
+                    "models": {
+                        "claude-sonnet-4": {
+                            "id": "claude-sonnet-4",
+                            "name": "Claude Sonnet 4",
+                            "cost": {"input": 3, "output": 15},
+                        }
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
     )
 
-    models = await get_opencode_models_with_fallback(force_refresh=True)
+    def fake_run(args, timeout=15):
+        command = args[0] if args else ""
+        if command == "models":
+            stdout = "opencode/big-pickle\n"
+            if "--verbose" in args:
+                stdout = (
+                    "opencode/big-pickle\n"
+                    '{"name":"Big Pickle","cost":{"input":0,"output":0},'
+                    '"limit":{"context":200000}}\n'
+                )
+            return subprocess.CompletedProcess(args, 0, stdout, "")
+        if command == "debug" and args[1:] == ["paths"]:
+            return subprocess.CompletedProcess(args, 0, f"cache {catalog.parent}\n", "")
+        if command == "debug" and args[1:] == ["v2"]:
+            return subprocess.CompletedProcess(
+                args, 0, json.dumps({"providers": [{"id": "opencode"}]}), ""
+            )
+        return subprocess.CompletedProcess(args, 1, "", "unexpected")
 
-    assert models[0]["id"] == "opencode/big-pickle"
-    assert models[0]["catalog_unavailable"] is True
-    assert models[0]["is_free"] is True
-    assert models[-1]["id"] == "opencode/auto"
-    assert "configured default" in models[-1]["description"]
+    monkeypatch.setattr(mod.shutil, "which", lambda name: "opencode")
+    monkeypatch.setattr(mod, "_run_opencode", fake_run)
+
+    models = get_opencode_models_sync(force_refresh=True)
+    ids = {model["id"] for model in models}
+    assert "opencode/big-pickle" in ids
+    assert "opencode/claude-opus-4-8" in ids
+    assert "anthropic/claude-sonnet-4" not in ids
+    paid = next(model for model in models if model["id"] == "opencode/claude-opus-4-8")
+    assert paid["is_free"] is False
+    assert paid["name"] == "Claude Opus 4.8"
 
 
 def test_sync_opencode_models_works_inside_running_event_loop(monkeypatch):

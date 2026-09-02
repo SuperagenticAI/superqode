@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.120] - 2026-09-02
+
+### Changed
+
+- The OpenCode ACP picker lists free models from OpenCode's live catalog
+  (CLI plus OpenCode's own models.dev cache). Paid models are omitted.
+  The list opens at the top so free models are visible without scrolling
+  up. Subscription ACP and `:connect acp` share this picker.
+
 ## [0.2.119] - 2026-09-02
 
 ### Changed

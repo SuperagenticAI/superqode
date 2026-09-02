@@ -4355,7 +4355,11 @@ class ConnectMixin:
                 # connection, including the model-selection state.
                 self._set_acp_status(self.current_model)
 
-                if self.current_agent in _ACP_PICKER_AGENTS and self._awaiting_model_selection:
+                if (
+                    self.current_agent in _ACP_PICKER_AGENTS
+                    and self._awaiting_model_selection
+                    and self.current_agent != "opencode"
+                ):
                     self._announce_transition(
                         title="Agent connected",
                         primary=agent.get("name", self.current_agent),
@@ -4365,6 +4369,8 @@ class ConnectMixin:
                         persist=False,
                         dedupe_key=f"agent-picker:{self.current_agent}",
                     )
+                if self.current_agent == "opencode" and self._awaiting_model_selection:
+                    self._keep_opencode_picker_at_top(log)
                 elif self.current_agent not in _ACP_PICKER_AGENTS and self.current_agent != "grok":
                     self._announce_transition(
                         title="Agent connected",

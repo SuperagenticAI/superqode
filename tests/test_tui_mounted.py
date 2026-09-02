@@ -1708,6 +1708,32 @@ async def test_an_unchanged_catalog_does_not_repaint_the_picker():
         assert app._acp_picker_snapshot_at > 0.0
 
 
+async def test_opencode_model_picker_opens_scrolled_to_the_top():
+    """A long OpenCode catalog must start at the heading, not the last model."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 18)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app.current_agent = "opencode"
+        app._opencode_models = [
+            {
+                "id": f"opencode/m{index}",
+                "name": f"model-{index}",
+                "free": index < 3,
+                "desc": "row",
+            }
+            for index in range(40)
+        ]
+        app._show_opencode_models_selection({"name": "OpenCode"}, log)
+        await _settle(pilot)
+        assert log.scroll_y == 0
+        start = int(log.scroll_y)
+        visible = "\n".join(
+            log.lines[index].text for index in range(start, min(start + 10, len(log.lines)))
+        )
+        assert "OPENCODE" in visible or "SELECT OPENCODE" in visible
+        assert "model-39" not in visible
+
+
 async def test_clicking_an_acp_model_row_selects_that_model():
     """A boxed model row must be clickable, not just drag-selectable text.
 
