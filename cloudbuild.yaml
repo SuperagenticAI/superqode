@@ -1,0 +1,51 @@
+# Cloud Run continuous deploy from GitHub.
+#
+# Google now requires a user-managed service account on the trigger. That
+# account cannot write to the Google-owned logs bucket, which is why a
+# Dockerfile-only deploy fails with:
+#
+#   if 'build.service_account' is specified, the build must either
+#   (a) specify 'build.logs_bucket', (b) REGIONAL_USER_OWNED_BUCKET, or
+#   (c) CLOUD_LOGGING_ONLY / NONE
+#
+# Point the Cloud Build trigger at this file. Substitutions below are the
+# ones Cloud Run's GitHub integration already injects; ALLOW_LOOSE keeps
+# a local `gcloud builds submit` from failing if they are unset.
+
+substitutions:
+  _SERVICE_NAME: superqode-a2a
+  _DEPLOY_REGION: europe-west1
+  _AR_HOSTNAME: ${_DEPLOY_REGION}-docker.pkg.dev
+  _AR_REPOSITORY: cloud-run-source-deploy
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+      - -f
+      - Dockerfile
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - ${_SERVICE_NAME}
+      - --platform=managed
+      - --image=${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+      - --region=${_DEPLOY_REGION}
+      - --quiet
+
+images:
+  - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
