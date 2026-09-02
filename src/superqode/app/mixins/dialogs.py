@@ -2547,6 +2547,10 @@ class DialogsMixin:
             return
         if not getattr(self, "_awaiting_acp_agent_selection", False):
             return
+        if getattr(self, "_acp_agent_connect_in_progress", False):
+            return
+        if getattr(self, "_awaiting_model_selection", False):
+            return
 
         previous = getattr(self, "_acp_picker_snapshot", None)
         try:
@@ -2556,6 +2560,10 @@ class DialogsMixin:
 
         # The user may have chosen an agent while the rebuild was in flight.
         if not getattr(self, "_awaiting_acp_agent_selection", False):
+            return
+        if getattr(self, "_acp_agent_connect_in_progress", False):
+            return
+        if getattr(self, "_awaiting_model_selection", False):
             return
         if (
             previous is not None

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.118] - 2026-09-02
+
+### Fixed
+
+- Choosing OpenCode from `:connect acp` no longer leaves the ACP agent
+  catalog on screen while `opencode models` runs. The list is replaced
+  with a loading frame, models are fetched without blocking the UI, and
+  a background catalog refresh cannot paint the registry back over the
+  picker.
+
 ## [0.2.117] - 2026-09-02
 
 ### Fixed

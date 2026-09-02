@@ -4234,6 +4234,13 @@ class ConnectMixin:
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
         log = self.query_one("#log", ConversationLog)
         self._retain_acp_extra_env_for(agent_id)
+        picker_id = agent_id.strip().lower()
+        connecting_picker = picker_id in _ACP_PICKER_AGENTS and not (model_hint or "").strip()
+        if connecting_picker:
+            self._awaiting_acp_agent_selection = False
+            self._acp_agent_connect_in_progress = True
+            self._paint_acp_model_loading(picker_id, log)
+            await asyncio.sleep(0)
 
         try:
             from superqode.agents.discovery import get_agent_by_short_name_async
@@ -4264,6 +4271,12 @@ class ConnectMixin:
                     if model_hint:
                         self._auto_select_opencode_model(model_hint, agent, log)
                     else:
+                        if self._opencode_models is None:
+                            from superqode.providers.opencode_models import get_opencode_models
+
+                            self._opencode_models = self._format_opencode_models(
+                                await get_opencode_models()
+                            )
                         self._show_opencode_models_selection(agent, log)
                 elif self.current_agent == "gemini":
                     # For Gemini, handle model selection
@@ -4415,3 +4428,6 @@ class ConnectMixin:
                 log=log,
                 guidance="Run :log verbose for startup details.",
             )
+        finally:
+            if connecting_picker:
+                self._acp_agent_connect_in_progress = False

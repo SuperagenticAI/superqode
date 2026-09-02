@@ -1708,6 +1708,20 @@ async def test_an_unchanged_catalog_does_not_repaint_the_picker():
         assert app._acp_picker_snapshot_at > 0.0
 
 
+async def test_acp_model_loading_replaces_the_agent_catalog():
+    """OpenCode connect must not leave the ACP registry on screen while models load."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.write("Coding agents over ACP")
+        app._paint_acp_model_loading("opencode", log)
+        await _settle(pilot)
+        text = "\n".join(line.text for line in log.lines)
+        assert "Coding agents over ACP" not in text
+        assert "Loading models" in text
+        assert "OPENCODE" in text
+
+
 async def test_clicking_an_acp_model_row_selects_that_model():
     """A boxed model row must be clickable, not just drag-selectable text.
 
