@@ -29,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not a model, and that a real model chat needs a `SUPERQODE_API_KEY`
   from https://superqode.dev. That env var is accepted as the A2A client
   Bearer when the A2A-specific token vars are unset.
-- Tagged releases publish to PyPI from `.github/workflows/publish.yml`
-  using `PYPI_API_TOKEN`.
+- PyPI upload is a manual GitHub Action (`.github/workflows/publish.yml`)
+  that publishes a chosen tag with `PYPI_API_TOKEN`. It does not run on
+  tag push.
 
 ### Changed
 

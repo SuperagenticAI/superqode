@@ -1,10 +1,12 @@
 name: Publish
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to publish (for example v0.2.117)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,8 +15,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,12 +26,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
       - name: Validate release metadata
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            python scripts/check_release_metadata.py --tag "${GITHUB_REF_NAME}"
-          else
-            python scripts/check_release_metadata.py
-          fi
+        run: python scripts/check_release_metadata.py --tag "${{ inputs.tag }}"
       - name: Build package
         run: uv build
       - name: Publish to PyPI
