@@ -25,11 +25,21 @@
   &nbsp;·&nbsp;
   <a href="https://superqode.dev">superqode.dev</a>
   &nbsp;·&nbsp;
+  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">Demo</a>
+  &nbsp;·&nbsp;
   <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
 </p>
 
 <p align="center">
-  <img src="assets/superqode-hero.png" alt="The SuperQode terminal interface" width="880">
+  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
+    <img src="assets/superqode-hero.png" alt="Watch the SuperQode demo" width="880">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0"><strong>Watch the demo</strong></a>
+  &nbsp;·&nbsp;
+  <code>curl -fsSL https://superqode.dev/install.sh | sh</code>
 </p>
 
 ## What is SuperQode?
