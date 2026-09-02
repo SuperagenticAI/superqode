@@ -25,7 +25,7 @@
   &nbsp;·&nbsp;
   <a href="https://superqode.dev">superqode.dev</a>
   &nbsp;·&nbsp;
-  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">Demo</a>
+  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">Demo</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
 </p>
@@ -54,7 +54,7 @@ One session: connect an agent, browse the Harness Hub, and call the A2A agent
 from the same terminal.
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
+  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">
     <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
   </a>
 </p>
