@@ -242,7 +242,7 @@ observability = [
 [project.urls]
 Homepage = "https://superqode.dev"
 Repository = "https://github.com/SuperagenticAI/superqode"
-Documentation = "https://superagenticai.github.io/superqode/"
+Documentation = "https://docs.superqode.dev/"
 Issues = "https://github.com/SuperagenticAI/superqode/issues"
 Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
 

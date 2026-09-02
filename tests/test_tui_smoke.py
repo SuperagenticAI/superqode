@@ -363,7 +363,7 @@ def test_welcome_uses_unified_harness_positioning():
     assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" in text
     assert "Terminal-first · Any agent or model" in text
-    assert "Interoperability: Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Interoperability: Local · ACP · MCP · A2A · UHP · BYOK" in text
     assert "Current workspace" in text
     assert "/work/repository" in text
     # Harness, model and policy report only absence before a connection, which
@@ -457,7 +457,7 @@ def test_welcome_compacts_for_narrow_terminals():
 
     assert "SuperQode" in text
     assert "THE HARNESS LAYER FOR CODING AGENTS" in text
-    assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Local · ACP · MCP · A2A · UHP · BYOK" in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
     # Identity only. Commands live in the prompt area at every width.

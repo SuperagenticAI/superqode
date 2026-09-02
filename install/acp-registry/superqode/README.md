@@ -32,6 +32,6 @@ same spec with your usual provider API keys.
 
 ## Links
 
-- [Documentation](https://superagenticai.github.io/superqode/)
-- [Harness engineering guide](https://superagenticai.github.io/superqode/harness-engineering/)
+- [Documentation](https://docs.superqode.dev/)
+- [Harness engineering guide](https://docs.superqode.dev/harness-engineering/)
 - [Source](https://github.com/SuperagenticAI/superqode)

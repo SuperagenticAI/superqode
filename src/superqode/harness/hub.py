@@ -11,7 +11,7 @@ from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
 
 
 HUB_SCHEMA_VERSION = "1.5"
-DOCS_BASE = "https://superagenticai.github.io/superqode/"
+DOCS_BASE = "https://docs.superqode.dev/"
 PROJECT_REPOSITORY = "https://github.com/SuperagenticAI/superqode"
 
 # One vocabulary for every surface. The terminal, the CLI and the website all

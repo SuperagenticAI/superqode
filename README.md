@@ -17,11 +17,11 @@
 </p>
 
 <p align="center">
-  <a href="https://superagenticai.github.io/superqode/"><strong>Documentation</strong></a>
+  <a href="https://docs.superqode.dev/"><strong>Documentation</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://superagenticai.github.io/superqode/getting-started/quickstart/">Quick Start</a>
+  <a href="https://docs.superqode.dev/getting-started/quickstart/">Quick Start</a>
   &nbsp;·&nbsp;
-  <a href="https://superagenticai.github.io/superqode/harness-hub/">Harness Hub</a>
+  <a href="https://docs.superqode.dev/harness-hub/">Harness Hub</a>
   &nbsp;·&nbsp;
   <a href="https://superqode.dev">superqode.dev</a>
   &nbsp;·&nbsp;
@@ -152,7 +152,7 @@ results = rlm.wait_all(children)
 
 It runs on the host, in a container with `sandbox: docker`, or inside a
 no-filesystem interpreter with `sandbox: monty`.
-See [Native RLM](https://superagenticai.github.io/superqode/advanced/rlm/).
+See [Native RLM](https://docs.superqode.dev/advanced/rlm/).
 
 ## Evaluate and Optimize
 
@@ -220,7 +220,7 @@ sq work approve work_... --actor maintainer
 sq work merge work_... --actor maintainer --cleanup
 ```
 
-Read the [Code Factory guide](https://superagenticai.github.io/superqode/advanced/software-factory/).
+Read the [Code Factory guide](https://docs.superqode.dev/advanced/software-factory/).
 
 ## Serve a Harness Over A2A
 
@@ -245,8 +245,9 @@ superqode connect a2a --url https://a2a.superqode.dev
 
 It scores 100% of MUST and 100% of MAY against the
 [Technology Compatibility Kit](https://github.com/a2aproject/a2a-tck) the A2A
-project maintains under the Linux Foundation, on both transports the card
-declares. Reproducing that run is documented in the A2A guide.
+project maintains under the Linux Foundation, on the JSON-RPC and HTTP+JSON
+transports the card declares. Reproducing that run is documented in the A2A
+guide.
 
 A remote bind is deliberate about what it exposes. It serves the
 `harness-shortlist` skill, which answers questions about which coding agents and
@@ -298,8 +299,8 @@ superqode harness graph <run-id> --json
 
 | Guide | What it covers |
 | --- | --- |
-| [Quick Start](https://superagenticai.github.io/superqode/getting-started/quickstart/) | Install, connect, and run your first task |
-| [Harness Hub](https://superagenticai.github.io/superqode/harness-hub/) | Browsing, filtering, and the published catalog |
+| [Quick Start](https://docs.superqode.dev/getting-started/quickstart/) | Install, connect, and run your first task |
+| [Harness Hub](https://docs.superqode.dev/harness-hub/) | Browsing, filtering, and the published catalog |
 | [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, and A2A routes |
 | [A2A Agents](docs/providers/a2a.md) | Serving a harness over A2A, skills, API keys, and the Agent Card |
 | [Developer Workflows](docs/developer-workflows.md) | The complete TUI and CLI command set |

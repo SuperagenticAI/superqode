@@ -5,6 +5,15 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Public documentation URLs now point at `https://docs.superqode.dev` rather
+  than the GitHub Pages host. The Hub snapshot, README, PyPI metadata and the
+  welcome interoperability line (`Local · ACP · MCP · A2A · UHP · BYOK`)
+  follow that host.
+
 ## [0.2.116] - 2026-09-02
 
 ### Fixed

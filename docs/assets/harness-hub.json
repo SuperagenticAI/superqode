@@ -1,6 +1,6 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-09-02T06:30:06.123342+00:00",
+  "generated_at": "2026-09-02T06:47:37.545008+00:00",
   "count": 104,
   "categories": [
     "SuperQode harnesses",
@@ -100,7 +100,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/advanced/rlm/",
+      "docs_url": "https://docs.superqode.dev/advanced/rlm/",
       "install_command": "",
       "tui_commands": [
         ":harness switch rlm",
@@ -164,7 +164,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/advanced/pipy/",
+      "docs_url": "https://docs.superqode.dev/advanced/pipy/",
       "install_command": "",
       "tui_commands": [
         ":harness switch pipy",
@@ -370,7 +370,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/codex/",
+      "docs_url": "https://docs.superqode.dev/providers/codex/",
       "install_command": "uv tool install \"superqode[codex-sdk]\", then run `codex login`",
       "tui_commands": [
         ":connect codex",
@@ -435,7 +435,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/anthropic-claude/",
+      "docs_url": "https://docs.superqode.dev/providers/anthropic-claude/",
       "install_command": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
       "tui_commands": [
         ":connect claude",
@@ -491,7 +491,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/kimi/",
+      "docs_url": "https://docs.superqode.dev/providers/kimi/",
       "install_command": "run `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, then run `kimi` and complete `/login`",
       "tui_commands": [
         ":connect kimi-code",
@@ -555,7 +555,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/qwen-code/",
+      "docs_url": "https://docs.superqode.dev/providers/qwen-code/",
       "install_command": "run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`",
       "tui_commands": [
         ":connect qwen-code",
@@ -619,7 +619,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/antigravity/",
+      "docs_url": "https://docs.superqode.dev/providers/antigravity/",
       "install_command": "install or update agy from https://antigravity.google/docs/cli-install (SuperQode requires 1.1.1+)",
       "tui_commands": [
         ":connect antigravity",
@@ -685,7 +685,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/grok/",
+      "docs_url": "https://docs.superqode.dev/providers/grok/",
       "install_command": "install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
       "tui_commands": [
         ":connect grok",
@@ -750,7 +750,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/github-copilot/",
+      "docs_url": "https://docs.superqode.dev/providers/github-copilot/",
       "install_command": "uv tool install \"superqode[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
       "tui_commands": [
         ":connect copilot",
@@ -820,7 +820,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
       "install_command": "install with `curl https://cursor.com/install -fsS | bash`, then run `cursor-agent login`",
       "tui_commands": [
         ":connect cursor",
@@ -884,7 +884,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
       "install_command": "install Amp and run `amp login`, then install its adapter with `uv tool install acp-amp`",
       "tui_commands": [
         ":connect amp",
@@ -948,7 +948,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/muse-code/",
+      "docs_url": "https://docs.superqode.dev/providers/muse-code/",
       "install_command": "on macOS or Linux, install with `curl -fsSL https://dev.meta.ai/install.sh | bash`, then run `muse login`",
       "tui_commands": [
         ":connect muse",
@@ -1012,7 +1012,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/prime-agent/",
+      "docs_url": "https://docs.superqode.dev/providers/prime-agent/",
       "install_command": "install with `curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`, then run `prime-agent` and use its `/login`",
       "tui_commands": [
         ":prime connect",
@@ -1078,7 +1078,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/devin/",
+      "docs_url": "https://docs.superqode.dev/providers/devin/",
       "install_command": "run `curl -fsSL https://cli.devin.ai/install.sh | bash`, then run `devin auth login`",
       "tui_commands": [
         ":connect devin",
@@ -1142,7 +1142,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
       "install_command": "install Factory Droid, then complete the vendor CLI sign-in",
       "tui_commands": [
         ":connect droid",
@@ -1206,7 +1206,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
       "install_command": "install Kiro CLI from https://kiro.dev/docs/cli/, then sign in with your Kiro or Amazon Q Developer account",
       "tui_commands": [
         ":connect kiro",
@@ -1270,7 +1270,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/zai/",
+      "docs_url": "https://docs.superqode.dev/providers/zai/",
       "install_command": "run `npm install -g glm-acp-agent`, then set your Z.AI key for the agent",
       "tui_commands": [
         ":connect glm-cli",
@@ -1334,7 +1334,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/deepagents/",
+      "docs_url": "https://docs.superqode.dev/providers/deepagents/",
       "install_command": "run `curl -LsSf https://langch.in/dcode | bash`, then run `dcode` and complete `/auth`",
       "tui_commands": [
         ":connect deepagents-code",
@@ -1398,7 +1398,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/concepts/modes/",
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
       "install_command": "run `npm install -g @jetbrains/junie`, then sign in with Junie CLI",
       "tui_commands": [
         ":connect junie",
@@ -1462,7 +1462,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/fx/",
+      "docs_url": "https://docs.superqode.dev/providers/fx/",
       "install_command": "install with `curl -fsSL https://fx.sh/setup.sh | bash`, then run `fx login`",
       "tui_commands": [
         ":connect fx",
@@ -4223,7 +4223,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/advanced/tau/",
+      "docs_url": "https://docs.superqode.dev/advanced/tau/",
       "install_command": "uv tool install \"superqode[tau]\"",
       "tui_commands": [
         ":harness switch tau",
@@ -4286,7 +4286,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/uhp/",
+      "docs_url": "https://docs.superqode.dev/providers/uhp/",
       "install_command": "",
       "tui_commands": [
         ":harness switch uhp",
@@ -4347,7 +4347,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/advanced/deepseek-harness/",
+      "docs_url": "https://docs.superqode.dev/advanced/deepseek-harness/",
       "install_command": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
       "tui_commands": [
         ":harness switch deepseek-harness",
@@ -4413,7 +4413,7 @@
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://superagenticai.github.io/superqode/providers/deepagents/",
+      "docs_url": "https://docs.superqode.dev/providers/deepagents/",
       "install_command": "uv tool install \"superqode[deepagents]\"",
       "tui_commands": [
         ":harness switch deepagents",

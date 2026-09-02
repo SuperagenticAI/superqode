@@ -230,7 +230,7 @@ def render_welcome(
     desc_text.append("Terminal-first · Any agent or model\n", style=f"bold {THEME['purple']}")
     if not narrow:
         desc_text.append("\n", style="")
-    interoperability = "Local · ACP · MCP · A2A · BYOK · SDKs"
+    interoperability = "Local · ACP · MCP · A2A · UHP · BYOK"
     if narrow:
         desc_text.append(interoperability, style=THEME["muted"])
     else:
