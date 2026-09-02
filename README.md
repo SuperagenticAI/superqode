@@ -92,9 +92,6 @@ superqode                                      # coding agent TUI
 superqode connect a2a --url https://a2a.superqode.dev
 ```
 
-V2 is that surface: TUI and CLI, ACP, native harnesses, local models, and a
-public A2A agent. Details: [superqode.dev/v2](https://superqode.dev/v2).
-
 ## The Harness Hub
 
 `:hub` opens a browsable catalog of **104 harnesses**: SuperQode's native
@@ -312,7 +309,7 @@ superqode harness graph <run-id> --json
 
 | Guide | What it covers |
 | --- | --- |
-| [Website](https://superqode.dev) | Product, Hub, A2A agent, V2 |
+| [Website](https://superqode.dev) | Product, Hub, A2A agent |
 | [Quick Start](https://docs.superqode.dev/getting-started/quickstart/) | Install, connect, and run your first task |
 | [Harness Hub](https://docs.superqode.dev/harness-hub/) | Browsing, filtering, and the published catalog |
 | [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, and A2A routes |
