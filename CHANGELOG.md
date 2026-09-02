@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.117] - 2026-09-02
+
+### Fixed
+
+- The A2A connect screen reads JSON-RPC 1.0 stream wrappers
+  (`artifactUpdate`, `statusUpdate`, `task`). SendStreamingMessage to
+  `a2a.superqode.dev` completed with no visible text because the parser
+  only knew A2A 0.3 `kind: artifact-update` shapes.
+- The completed-status event that restates the shortlist is no longer
+  concatenated onto the artifact, so the same catalogue does not appear
+  twice in one reply.
+
+### Added
+
+- Clear / new conversation on the A2A screen (`n`, Clear button) wipes
+  the window and starts a new `contextId`.
+- Copy button and `ctrl+y` push the last reply to the OS clipboard. The
+  `y` binding was swallowed by the message field.
+- Catalogue-only cards state that anonymous calls are a Hub shortlist,
+  not a model, and that a real model chat needs a `SUPERQODE_API_KEY`
+  from https://superqode.dev. That env var is accepted as the A2A client
+  Bearer when the A2A-specific token vars are unset.
+
 ### Changed
 
 - Public documentation URLs now point at `https://docs.superqode.dev` rather

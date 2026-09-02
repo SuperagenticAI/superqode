@@ -151,6 +151,9 @@ def test_output_always_points_at_measurement():
     text = render_shortlist(build_shortlist("anything", records=[_third_party()], limit=1))
     assert "not measurements" in text
     assert "HarnessBench" in text
+    assert "not a chat model" in text
+    assert "SUPERQODE_API_KEY" in text
+    assert "superqode.dev" in text
 
 
 def test_rendered_text_carries_no_catalogue_counts():

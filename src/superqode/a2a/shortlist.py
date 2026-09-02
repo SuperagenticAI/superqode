@@ -416,4 +416,9 @@ def render_shortlist(shortlist: Shortlist) -> str:
             "and control outright. Disclosure: the native harnesses are ours, and they "
             "are excluded from the ranking above."
         )
+    lines.append("")
+    lines.append(
+        "This A2A skill is a catalogue shortlist, not a chat model. "
+        "For a real model chat, get a SUPERQODE_API_KEY at https://superqode.dev."
+    )
     return "\n".join(lines).rstrip() + "\n"

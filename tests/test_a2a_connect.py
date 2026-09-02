@@ -34,6 +34,11 @@ def test_resolve_settings_prefers_options_then_env_then_file(tmp_path: Path, mon
     from_env = resolve_settings(None, None)
     assert from_env.url == "https://env.example"
     assert from_env.token == "env-token"
+    monkeypatch.delenv("SUPERQODE_A2A_CLIENT_TOKEN", raising=False)
+    monkeypatch.delenv("SUPERQODE_A2A_TOKEN", raising=False)
+    monkeypatch.setenv("SUPERQODE_API_KEY", "sq-api-key")
+    from_api_key = resolve_settings(None, None)
+    assert from_api_key.token == "sq-api-key"
 
 
 def test_connect_a2a_tells_the_user_which_api_key_header_to_pass(tmp_path, monkeypatch):
@@ -317,6 +322,7 @@ def test_the_a2a_connect_screen_paints_every_surface_black():
         "#a2a-headers-panel",
         "#a2a-tls-panel",
         "#a2a-chat",
+        "#a2a-body",
         "#a2a-thinking",
         "#a2a-examples",
         "#a2a-inspect",
@@ -324,6 +330,8 @@ def test_the_a2a_connect_screen_paints_every_surface_black():
         "Footer",
     ):
         assert selector in css
+    assert "min-height: 12" in css
+    assert "A2AConnectScreen.connected" in css
     assert css.count("#000000") >= 10
 
 
@@ -372,6 +380,95 @@ def test_stream_delta_reads_text_fields():
         _stream_context_id(SimpleNamespace(data={"result": {"contextId": "ctx-9", "artifact": {}}}))
         == "ctx-9"
     )
+
+
+def test_stream_delta_reads_a2a_1_0_wrappers():
+    """Live SuperQode 1.0 SSE wraps text in artifactUpdate / statusUpdate / task."""
+    from types import SimpleNamespace
+
+    from superqode.widgets.a2a_connect import _stream_context_id, _stream_delta
+
+    submitted = SimpleNamespace(
+        data={
+            "jsonrpc": "2.0",
+            "id": "t1",
+            "result": {
+                "task": {
+                    "id": "t1",
+                    "contextId": "ctx-1",
+                    "status": {"state": "TASK_STATE_SUBMITTED"},
+                }
+            },
+        }
+    )
+    assert _stream_delta(submitted) == ""
+    assert _stream_context_id(submitted) == "ctx-1"
+
+    working = SimpleNamespace(
+        data={
+            "result": {
+                "statusUpdate": {
+                    "taskId": "t1",
+                    "contextId": "ctx-1",
+                    "status": {"state": "TASK_STATE_WORKING"},
+                }
+            }
+        }
+    )
+    assert _stream_delta(working) == ""
+
+    artifact = SimpleNamespace(
+        data={
+            "result": {
+                "artifactUpdate": {
+                    "taskId": "t1",
+                    "contextId": "ctx-1",
+                    "artifact": {
+                        "artifactId": "shortlist-t1",
+                        "name": "Harness shortlist",
+                        "parts": [{"text": "1. Codex"}],
+                    },
+                    "lastChunk": True,
+                }
+            }
+        }
+    )
+    assert _stream_delta(artifact) == "1. Codex"
+    assert _stream_context_id(artifact) == "ctx-1"
+
+    completed = SimpleNamespace(
+        data={
+            "result": {
+                "statusUpdate": {
+                    "taskId": "t1",
+                    "contextId": "ctx-1",
+                    "status": {
+                        "state": "TASK_STATE_COMPLETED",
+                        "message": {
+                            "role": "ROLE_AGENT",
+                            "parts": [{"text": "1. Codex"}],
+                        },
+                    },
+                }
+            }
+        }
+    )
+    assert _stream_delta(completed) == "1. Codex"
+
+
+def test_coalesce_stream_text_drops_status_echo():
+    from superqode.widgets.a2a_connect import _coalesce_stream_text
+
+    chunks: list[str] = []
+    _coalesce_stream_text(chunks, "")
+    _coalesce_stream_text(chunks, "1. Codex\n")
+    _coalesce_stream_text(chunks, "1. Codex")
+    _coalesce_stream_text(chunks, "1. Codex\n")
+    assert "".join(chunks).strip() == "1. Codex"
+    extra: list[str] = []
+    _coalesce_stream_text(extra, "hi ")
+    _coalesce_stream_text(extra, "there")
+    assert "".join(extra) == "hi there"
 
 
 @pytest.mark.asyncio
@@ -426,6 +523,82 @@ async def test_deliver_streams_and_keeps_context_id():
 
 
 @pytest.mark.asyncio
+async def test_deliver_reads_a2a_1_0_stream_and_skips_duplicate_status():
+    from types import SimpleNamespace
+
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
+    class LiveClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str | None]] = []
+
+        async def send_message_streaming(self, message, session_id=None):
+            self.calls.append(("stream", message, session_id))
+            yield SimpleNamespace(
+                type="message",
+                data={
+                    "result": {
+                        "task": {
+                            "id": "t1",
+                            "contextId": "ctx-1",
+                            "status": {"state": "TASK_STATE_SUBMITTED"},
+                        }
+                    }
+                },
+            )
+            yield SimpleNamespace(
+                type="message",
+                data={
+                    "result": {
+                        "statusUpdate": {
+                            "taskId": "t1",
+                            "contextId": "ctx-1",
+                            "status": {"state": "TASK_STATE_WORKING"},
+                        }
+                    }
+                },
+            )
+            yield SimpleNamespace(
+                type="message",
+                data={
+                    "result": {
+                        "artifactUpdate": {
+                            "taskId": "t1",
+                            "contextId": "ctx-1",
+                            "artifact": {"parts": [{"text": "1. Codex\n"}]},
+                        }
+                    }
+                },
+            )
+            yield SimpleNamespace(
+                type="message",
+                data={
+                    "result": {
+                        "statusUpdate": {
+                            "taskId": "t1",
+                            "contextId": "ctx-1",
+                            "status": {
+                                "state": "TASK_STATE_COMPLETED",
+                                "message": {"parts": [{"text": "1. Codex"}]},
+                            },
+                        }
+                    }
+                },
+            )
+
+        async def send_message(self, message, session_id=None):
+            self.calls.append(("one", message, session_id))
+            raise AssertionError("must not fall back after a live 1.0 stream")
+
+    screen = A2AConnectScreen(url="", default_url="")
+    screen._streaming = True
+    screen._context_id = ""
+    text, task = await screen._deliver(LiveClient(), "hello")
+    assert text.strip() == "1. Codex"
+    assert task.context_id == "ctx-1"
+
+
+@pytest.mark.asyncio
 async def test_deliver_falls_back_when_the_stream_errors():
     from types import SimpleNamespace
 
@@ -455,6 +628,41 @@ async def test_deliver_falls_back_when_the_stream_errors():
     assert task.context_id == "ctx-2"
 
 
+@pytest.mark.asyncio
+async def test_deliver_falls_back_when_stream_events_have_no_text():
+    from types import SimpleNamespace
+
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
+    class EmptyStreamClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def send_message_streaming(self, message, session_id=None):
+            self.calls.append("stream")
+            yield SimpleNamespace(
+                type="message",
+                data={"result": {"task": {"id": "t1", "status": {"state": "TASK_STATE_SUBMITTED"}}}},
+            )
+
+        async def send_message(self, message, session_id=None):
+            self.calls.append("one")
+            return SimpleNamespace(
+                artifacts=[SimpleNamespace(parts=[SimpleNamespace(text="one-shot")])],
+                status=SimpleNamespace(message=""),
+                history=[],
+                context_id="ctx-3",
+            )
+
+    screen = A2AConnectScreen(url="", default_url="")
+    screen._streaming = True
+    client = EmptyStreamClient()
+    text, task = await screen._deliver(client, "hello")
+    assert text == "one-shot"
+    assert task.context_id == "ctx-3"
+    assert client.calls == ["stream", "one"]
+
+
 def test_use_saves_in_place_and_chat_keys_are_wired():
     from inspect import getsource
 
@@ -468,12 +676,56 @@ def test_use_saves_in_place_and_chat_keys_are_wired():
     source = getsource(A2AConnectScreen)
     assert "action_copy_reply" in source
     assert "action_resend" in source
+    assert "action_clear_chat" in source
     assert "action_cancel_or_close" in source
+    assert 'id="a2a-clear"' in source
+    assert 'id="a2a-copy"' in source
+    assert "not a model" in source
+    assert "SUPERQODE_API_KEY" in source
+    assert "superqode.dev" in source
     assert "_note_cold_start" in source
     assert "Host may be cold-starting" in source
     assert "send_message_streaming" in source
     assert "_on_example" in source
     assert 'id="a2a-examples"' in source
+
+
+def test_catalogue_card_is_detected_from_shortlist_skills():
+    from superqode.widgets.a2a_connect import _Row, _is_catalogue_card
+
+    assert _is_catalogue_card([]) is False
+    assert _is_catalogue_card([_Row("superqode-harness", "Harness", "run")]) is False
+    assert _is_catalogue_card([_Row("harness-shortlist", "Harness Shortlist", "rank")]) is True
+
+
+def test_copy_reply_uses_the_os_clipboard(monkeypatch):
+    from superqode.widgets import a2a_connect as mod
+    from superqode.widgets.a2a_connect import A2AConnectScreen
+
+    copied: list[str] = []
+    monkeypatch.setattr(mod, "_copy_text", lambda text: copied.append(text) or True)
+    screen = A2AConnectScreen(url="", default_url="")
+    screen._task_text = "1. Codex"
+    screen.action_copy_reply()
+    assert copied == ["1. Codex"]
+
+
+def test_clear_chat_resets_window_and_conversation_context():
+    from superqode.widgets.a2a_connect import A2AConnectScreen, _ChatTurn
+
+    screen = A2AConnectScreen(url="", default_url="")
+    screen._connected = True
+    screen._busy = False
+    screen._context_id = "ctx-1"
+    screen._task_text = "old shortlist"
+    screen._last_sent = "hello"
+    screen._chat = [_ChatTurn(role="you", text="hello"), _ChatTurn(role="agent", text="old")]
+    screen.action_clear_chat()
+    assert screen._chat == []
+    assert screen._context_id == ""
+    assert screen._task_text == ""
+    assert screen._last_sent == ""
+    assert screen._connected is True
 
 
 def test_a2a_commands_list_saved_connection_once(tmp_path, monkeypatch):

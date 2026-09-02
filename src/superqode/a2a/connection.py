@@ -15,6 +15,8 @@ URL_ENV = "SUPERQODE_A2A_URL"
 TOKEN_ENV = "SUPERQODE_A2A_CLIENT_TOKEN"
 #: Also accepted so a token minted for the public agent can be reused as a client.
 TOKEN_FALLBACK_ENV = "SUPERQODE_A2A_TOKEN"
+#: Public product name for a SuperQode API key used as the A2A Bearer.
+API_KEY_ENV = "SUPERQODE_API_KEY"
 CERT_ENV = "SUPERQODE_A2A_TLS_CERT"
 KEY_ENV = "SUPERQODE_A2A_TLS_KEY"
 
@@ -115,7 +117,11 @@ def resolve_settings(
     saved = load_saved_connection()
     resolved_url = normalize_url(url or os.environ.get(URL_ENV) or saved.url)
     resolved_token = (
-        token or os.environ.get(TOKEN_ENV) or os.environ.get(TOKEN_FALLBACK_ENV) or saved.token
+        token
+        or os.environ.get(TOKEN_ENV)
+        or os.environ.get(TOKEN_FALLBACK_ENV)
+        or os.environ.get(API_KEY_ENV)
+        or saved.token
     ).strip()
     resolved_headers = dict(saved.headers)
     if headers:

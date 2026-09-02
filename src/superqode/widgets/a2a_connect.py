@@ -64,19 +64,36 @@ def _origin(url: str) -> str:
     return normalize_url(url)
 
 
+# A2A 1.0 JSON-RPC streams a protobuf oneof (`task` / `artifactUpdate` /
+# `statusUpdate`). A2A 0.3 puts `kind: artifact-update` on the result itself.
+_STREAM_WRAPPERS = (
+    "artifactUpdate",
+    "statusUpdate",
+    "task",
+    "artifact_update",
+    "status_update",
+    "artifact-update",
+    "status-update",
+)
+
+
 def _stream_payload(event) -> dict:
     """Unwrap a JSON-RPC stream event down to the result object."""
     data = getattr(event, "data", None)
     if not isinstance(data, dict):
         return {}
     result = data.get("result")
-    if isinstance(result, dict):
-        return result
-    return data
+    if not isinstance(result, dict):
+        return data
+    for key in _STREAM_WRAPPERS:
+        nested = result.get(key)
+        if isinstance(nested, dict):
+            return nested
+    return result
 
 
 def _text_parts(node) -> list[str]:
-    """Collect text from A2A message, artifact, and status-update shapes."""
+    """Collect text from A2A 0.3 and 1.0 message, artifact, and status shapes."""
     if isinstance(node, str) and node.strip():
         return [node]
     if not isinstance(node, dict):
@@ -100,7 +117,35 @@ def _text_parts(node) -> list[str]:
     status = node.get("status")
     if isinstance(status, dict):
         texts.extend(_text_parts(status))
-    return texts
+    for key in _STREAM_WRAPPERS:
+        nested = node.get(key)
+        if isinstance(nested, dict):
+            texts.extend(_text_parts(nested))
+    collapsed: list[str] = []
+    for item in texts:
+        if not collapsed or collapsed[-1] != item:
+            collapsed.append(item)
+    return collapsed
+
+
+def _coalesce_stream_text(chunks: list[str], piece: str) -> None:
+    """Keep new deltas; drop completed-status echoes of the same artifact."""
+    if not piece or not piece.strip():
+        return
+    stripped = piece.strip()
+    if not chunks:
+        chunks.append(piece)
+        return
+    joined = "".join(chunks)
+    if stripped == joined.strip() or stripped == chunks[-1].strip():
+        return
+    if stripped in joined:
+        return
+    if joined.strip() and joined.strip() in stripped:
+        chunks.clear()
+        chunks.append(piece)
+        return
+    chunks.append(piece)
 
 
 def _stream_delta(event) -> str:
@@ -118,10 +163,47 @@ def _stream_context_id(event) -> str:
     return str(value) if value else ""
 
 
+def _is_catalogue_card(rows: list[_Row]) -> bool:
+    """True when the card only advertises a shortlist, not a runnable harness."""
+    if not rows:
+        return False
+    return all(
+        "shortlist" in row.id.casefold() or "shortlist" in row.name.casefold() for row in rows
+    )
+
+
+def _copy_text(text: str) -> bool:
+    """Push text to the OS clipboard. OSC 52 is attempted by the caller too."""
+    import subprocess
+    import sys
+
+    if not text:
+        return False
+    data = text.encode("utf-8")
+    if sys.platform == "darwin":
+        commands = [["pbcopy"]]
+    elif sys.platform.startswith("linux"):
+        commands = [["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
+    elif sys.platform.startswith("win"):
+        commands = [["clip"]]
+    else:
+        commands = []
+    for cmd in commands:
+        try:
+            proc = subprocess.run(cmd, input=data, check=False)
+            if proc.returncode == 0:
+                return True
+        except FileNotFoundError:
+            continue
+        except Exception:  # noqa: BLE001 - clipboard backends are best-effort
+            continue
+    return False
+
+
 _HINT = (
-    "Empty credential is an open (anonymous) card. Paste a Bearer or API key "
-    "only when the card asks. After Connect, type below and Send — replies "
-    "appear in the chat."
+    "Empty credential is the public catalogue (anonymous, no model). "
+    "For a real model chat, get a SUPERQODE_API_KEY at https://superqode.dev "
+    "and paste it here, or export SUPERQODE_API_KEY."
 )
 
 _THINK_FRAMES = ("◇ ◇ ◇", "◆ ◇ ◇", "◇ ◆ ◇", "◇ ◇ ◆", "◇ ◆ ◇", "◆ ◇ ◇")
@@ -195,7 +277,9 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         Binding("t", "toggle_tls", "mTLS"),
         Binding("i", "toggle_inspect", "Inspect"),
         Binding("y", "copy_reply", "Copy"),
+        Binding("ctrl+y", "copy_reply", "Copy", show=False, priority=True),
         Binding("r", "resend", "Resend"),
+        Binding("n", "clear_chat", "New chat"),
         Binding("l", "logout", "Logout"),
     ]
 
@@ -259,8 +343,18 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         border: tall #7c3aed;
         background: #000000;
     }
+    A2AConnectScreen.connected #a2a-subtitle,
+    A2AConnectScreen.connected #a2a-hint {
+        display: none;
+    }
+    A2AConnectScreen.connected #a2a-header,
+    A2AConnectScreen.connected #a2a-address,
+    A2AConnectScreen.connected #a2a-credential-row,
+    A2AConnectScreen.connected #a2a-options {
+        padding-bottom: 0;
+    }
     #a2a-hint { padding: 0 2 1 2; height: auto; color: #c8c8c8; background: #000000; }
-    #a2a-status { padding: 0 2 1 2; height: auto; color: #e6e6e6; background: #000000; }
+    #a2a-status { padding: 0 2 0 2; height: auto; color: #e6e6e6; background: #000000; }
     #a2a-thinking {
         height: 1;
         margin: 0 2;
@@ -269,9 +363,13 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         color: #e9d5ff;
         display: none;
     }
+    #a2a-body {
+        height: 1fr;
+        background: #000000;
+    }
     #a2a-examples {
         height: auto;
-        max-height: 5;
+        max-height: 4;
         margin: 0 2 0 2;
         background: #000000;
         color: #d4d4d4;
@@ -281,6 +379,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
     #a2a-examples.visible { display: block; }
     #a2a-chat {
         height: 1fr;
+        min-height: 12;
         margin: 1 2 0 2;
         background: #000000;
         color: #e6e6e6;
@@ -288,9 +387,11 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         scrollbar-background: #000000;
         scrollbar-color: #2a2a2a;
         overflow-x: hidden;
+        overflow-y: auto;
     }
     #a2a-inspect {
-        height: 7;
+        height: auto;
+        max-height: 6;
         margin: 1 2 0 2;
         background: #000000;
         color: #d4d4d4;
@@ -342,6 +443,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         self._example_prompts: list[str] = []
         self._context_id = ""
         self._streaming = False
+        self._catalogue_only = False
         self._generation = 0
         self._last_sent = ""
         self._cold_timer: Timer | None = None
@@ -375,7 +477,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         with Horizontal(id="a2a-credential-row"):
             yield Input(
                 value=self._token,
-                placeholder="credential (empty = open card)",
+                placeholder="SUPERQODE_API_KEY (empty = catalogue)",
                 password=True,
                 id="a2a-token",
             )
@@ -415,15 +517,16 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             yield Button("Check", id="a2a-check")
         yield Static(_HINT, id="a2a-hint")
         yield Static("", id="a2a-status")
-        yield OptionList(id="a2a-examples")
-        yield _A2AThinkingBar()
-        yield RichLog(
-            highlight=False,
-            markup=False,
-            wrap=True,
-            auto_scroll=True,
-            id="a2a-chat",
-        )
+        with Vertical(id="a2a-body"):
+            yield OptionList(id="a2a-examples")
+            yield _A2AThinkingBar()
+            yield RichLog(
+                highlight=False,
+                markup=False,
+                wrap=True,
+                auto_scroll=True,
+                id="a2a-chat",
+            )
         with Horizontal(id="a2a-message-row"):
             yield Input(
                 placeholder="message to this agent, then Send",
@@ -432,6 +535,8 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         with Horizontal(id="a2a-actions"):
             yield Button("Use", id="a2a-use", variant="primary")
             yield Button("Send", id="a2a-send")
+            yield Button("Copy", id="a2a-copy")
+            yield Button("Clear", id="a2a-clear")
             yield Button("Logout", id="a2a-logout")
             yield Button("Back", id="a2a-close")
         yield Footer()
@@ -692,10 +797,21 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         self._task_text = text
         self._chat.append(_ChatTurn(role="you", text=message))
         self._chat.append(_ChatTurn(role="agent", text=text or f"(empty reply · {state})"))
+        self._set_examples_visible(False)
         who = self._name or "Agent"
         if text.strip():
             self._write_agent(who, text)
-            self._set_status(f"{who} replied ({state}). Send another, or Use to save.")
+            if self._catalogue_only:
+                self._write_note(
+                    "Catalogue shortlist — no model. For a real model chat, get a "
+                    "SUPERQODE_API_KEY at https://superqode.dev and paste it in the "
+                    "credential field (or export SUPERQODE_API_KEY)."
+                )
+                self._set_status(
+                    f"{who} replied ({state}). Catalogue. Get SUPERQODE_API_KEY for a real model chat."
+                )
+            else:
+                self._set_status(f"{who} replied ({state}). n starts a new conversation.")
         else:
             self._write_note(f"{who} returned no text ({state}). Open Inspect for the HTTP trace.")
             self._set_status(f"{who} returned no text ({state}). Open Inspect for the HTTP trace.")
@@ -721,13 +837,12 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
                     cid = _stream_context_id(event)
                     if cid:
                         context_id = cid
-                    piece = _stream_delta(event)
-                    if piece:
-                        chunks.append(piece)
+                    _coalesce_stream_text(chunks, _stream_delta(event))
             except Exception:  # noqa: BLE001 - fall back to a single reply
                 saw_event = False
                 chunks = []
-            if saw_event:
+            text = "".join(chunks)
+            if saw_event and text.strip():
                 task = type(
                     "Task",
                     (),
@@ -736,7 +851,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
                         "status": type("S", (), {"state": "completed"})(),
                     },
                 )()
-                return "".join(chunks), task
+                return text, task
         task = await client.send_message(message, session_id=session)
         return _task_reply(task), task
 
@@ -813,9 +928,12 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         self._binding = binding
         self._protocol_version = version
         self._connected = True
+        self.add_class("connected")
         self._auth_line = auth_line
         self._chat = []
         self._context_id = ""
+        self._task_text = ""
+        self._last_sent = ""
         self._streaming = bool(getattr(getattr(card, "capabilities", None), "streaming", False))
         self._rows = [
             _Row(
@@ -826,6 +944,7 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             )
             for skill in card.skills
         ]
+        self._catalogue_only = _is_catalogue_card(self._rows)
         if auth_line:
             try:
                 self.query_one("#a2a-hint", Static).update(auth_line + "  " + _HINT)
@@ -848,11 +967,17 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         if "tls" in lowered or "mutual" in lowered:
             self._show_tls = True
         self._sync_option_panels()
-        self._set_status(
-            label + ". Type below and Send — this is the chat with that agent. "
-            "Use saves it here; Back returns. The main SuperQode prompt stays your ACP or local agent. "
-            + stored
-        )
+        if self._catalogue_only:
+            self._set_status(
+                label + ". Catalogue without a key. "
+                "Get a SUPERQODE_API_KEY at https://superqode.dev for a real model chat. "
+                + stored
+            )
+        else:
+            self._set_status(
+                label + ". Type below and Send. n or Clear starts a new conversation. "
+                + stored
+            )
         try:
             self.query_one("#a2a-message", Input).placeholder = "message to this agent, then Send"
         except Exception:  # noqa: BLE001
@@ -890,9 +1015,21 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             skills.append("Skills  ", style="#a78bfa")
             skills.append(", ".join(row.name for row in self._rows), style="#d4d4d4")
             log.write(skills)
+        if self._catalogue_only:
+            note = Text()
+            note.append("Catalogue  ", style="bold #c4b5fd")
+            note.append(
+                "Anonymous catalogue — not a model. The same kind of list is "
+                "expected for most questions. For a real model chat, get a "
+                "SUPERQODE_API_KEY at https://superqode.dev and paste it above "
+                "(or export SUPERQODE_API_KEY).",
+                style="#d4d4d4",
+            )
+            log.write(note)
         hint = Text()
         hint.append(
-            "Type a question below and Send. Click an example to fill it. y copies, r resends.",
+            "Type below and Send. Copy or ctrl+y copies the last reply. "
+            "Clear or n starts a new conversation.",
             style="#a8a8a8",
         )
         log.write(hint)
@@ -950,6 +1087,15 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             listing.add_option(Option(label, id=f"ex-{index}"))
         listing.display = True
         listing.add_class("visible")
+
+    def _set_examples_visible(self, visible: bool) -> None:
+        try:
+            listing = self.query_one("#a2a-examples", OptionList)
+        except Exception:  # noqa: BLE001
+            return
+        show = bool(visible and self._example_prompts)
+        listing.display = show
+        listing.set_class(show, "visible")
 
     def _arm_cold_start(self) -> None:
         self._disarm_cold_start()
@@ -1011,9 +1157,13 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
 
     def _fail(self, message: str) -> None:
         self._connected = False
+        self.remove_class("connected")
         self._rows = []
         self._chat = []
         self._context_id = ""
+        self._task_text = ""
+        self._last_sent = ""
+        self._catalogue_only = False
         self._streaming = False
         try:
             self._thinking_bar().stop()
@@ -1109,13 +1259,44 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
     def action_copy_reply(self) -> None:
         text = self._task_text.strip()
         if not text:
-            self._set_status("Nothing to copy yet.")
+            try:
+                self._set_status("Nothing to copy yet. Send a message first.")
+            except Exception:  # noqa: BLE001
+                pass
             return
+        copied = _copy_text(text)
         try:
             self.app.copy_to_clipboard(text)
-            self._set_status("Last reply copied.")
+            copied = True
         except Exception:  # noqa: BLE001
-            self._set_status("Could not copy.")
+            pass
+        try:
+            self._set_status("Last reply copied." if copied else "Could not copy.")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def action_clear_chat(self) -> None:
+        """Wipe the window and start a new A2A conversation (new contextId)."""
+        if self._busy:
+            try:
+                self._set_status("Wait for the current reply, then Clear.")
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        self._chat = []
+        self._context_id = ""
+        self._task_text = ""
+        self._last_sent = ""
+        try:
+            if self._connected:
+                self._write_connected_banner()
+                self._render_examples()
+            else:
+                self._chat_log().clear()
+            self._set_status("New conversation. Window and context cleared.")
+            self.query_one("#a2a-message", Input).focus()
+        except Exception:  # noqa: BLE001 - tests construct the screen unmounted
+            pass
 
     def action_resend(self) -> None:
         if self._busy:
@@ -1246,6 +1427,14 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
     @on(Button.Pressed, "#a2a-send")
     def _on_send(self) -> None:
         self._send_from_input()
+
+    @on(Button.Pressed, "#a2a-copy")
+    def _on_copy(self) -> None:
+        self.action_copy_reply()
+
+    @on(Button.Pressed, "#a2a-clear")
+    def _on_clear(self) -> None:
+        self.action_clear_chat()
 
     @on(OptionList.OptionSelected, "#a2a-examples")
     def _on_example(self, event: OptionList.OptionSelected) -> None:
