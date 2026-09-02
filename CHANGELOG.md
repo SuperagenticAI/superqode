@@ -7,6 +7,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-02
+
+SuperQode v2, the harness interoperability layer for coding agents. This
+release marks the milestone rather than a code change: 2.0.0 ships the same
+code as 0.2.120, and names what the 0.2.x line grew into. Everything below is
+available on install.
+
+### 🛰️ Agent2Agent
+
+- A published Agent Card advertises JSON-RPC and HTTP+JSON across A2A 1.0 and
+  0.3 from a single document, so one card registers on Gemini Enterprise,
+  Microsoft Foundry and Bedrock AgentCore.
+- A hosted agent runs at `a2a.superqode.dev`. Ask it which coding agent or
+  harness fits a set of constraints and it answers from the Harness Hub with
+  licence and setup detail. SuperQode's own harnesses are excluded from the
+  ranking and the reply discloses the exclusion.
+- Zero failures against the official A2A Technology Compatibility Kit
+  maintained under the Linux Foundation: 100% of MUST and 100% of MAY
+  requirements, 73 of 73 MUST exercised, 96.4% overall.
+- Signed API keys carry a customer, a tier and an expiry, and verify with a
+  signature check and a clock comparison rather than a database lookup.
+- A remote bind serves the shortlist alone. Running a harness over the wire
+  needs `--expose-harness`, a named `--spec` and a `--token`, so no repository
+  leaves your machine by default.
+- As a client, SuperQode reads OAuth, device code, client credentials, mutual
+  TLS and API key schemes from a card, and ships an inspector and a conformance
+  pack for debugging an integration you do not control.
+
+### 🔌 Protocols
+
+- **ACP** reaches 49 agents in the Hub. Codex, Claude, Copilot, Cursor, Grok,
+  Antigravity, Prime Agent, Muse Code and Kiro connect on plans you already
+  hold; OpenCode, Cline, OpenHands, Kimi Code, Qwen Code, Goose, Amp, Devin,
+  Factory, Pi and fast-agent connect with a key or a local model.
+- **UHP** is supported as a client, so a harness hosted elsewhere joins the
+  switcher and the Hub and returns work through the same session, event and
+  evidence model. Every submission carries an idempotency key.
+- **MCP** tool servers attach to a harness under the same permissions and
+  approvals as everything else.
+
+### 🧭 Harness Hub
+
+- 104 harnesses, 64 of them open source, each with runtime, provenance, licence
+  and setup, in the terminal with `:hub` and on the web.
+- The whole catalogue is available as a single JSON fetch for agents and
+  scripts.
+
+### 🧱 HarnessSpec
+
+- One portable YAML file covers runtime, model policy, tools, memory, search,
+  sandbox, approvals, workflow and evidence, versioned in your repository.
+- Start from a wizard, a template, or what the repository already contains:
+  `AGENTS.md`, `CLAUDE.md`, Cursor rules and Copilot instructions convert into
+  an inspectable spec you own.
+- A drift check confirms the harness that resolved is the one the spec
+  declared, comparing runtime, sandbox, tools, shell and write stances and the
+  evidence store, and exits non-zero so it can gate a pipeline.
+
+### 📊 Evaluate and optimize
+
+- **GEPA Omni** generates candidates, mines failures and selects on a Pareto
+  frontier behind a sealed held-out gate.
+- **HarnessBench** packs a manifest, a scorecard and drift checks so a result
+  is reproducible from a different checkout.
+- **SkillOpt** improves reusable skills and recipes under the same gates.
+- Evaluation records behaviour and leaves the live spec alone. Candidates stay
+  reviewable artifacts and reach production only when you promote them.
+
+### 🧠 Memory
+
+- Memory is a provider interface selected in configuration: a local store ships
+  by default, with SpecMem, Mem0, Cognee and Supermemory as options. The
+  harness declares which one it uses, so memory is part of the versioned
+  artifact.
+
+### 💻 Terminal and CLI
+
+- A coding agent in its own right, in the terminal and from the command line,
+  with a headless mode for CI.
+- Durable sessions with compaction, forking, resume and a session tree.
+- Approvals and permissions are policy. Execution runs on the local OS or in
+  Docker, Podman, E2B, Daytona, Modal or Vercel sandboxes.
+- **WorkOrders** give dependency-aware tasks isolated worktrees, bounded
+  workers, crash recovery, acceptance checks and an explicit human decision
+  before delivery.
+
+### 🖥️ Models
+
+- Local inference on Ollama, MLX, LM Studio, vLLM, SGLang, TGI, llama.cpp and
+  DwarfStar, with an offline Airplane Mode.
+- 45 providers in the built-in registry, hosted on your own key or local on
+  your own machine.
+
+### 📦 Install
+
+- `curl -fsSL https://superqode.dev/install.sh | sh`, or
+  `uv tool install superqode`. Python 3.12+, on macOS, Linux and Windows
+  through WSL2. Apache-2.0 throughout.
+
 ## [0.2.120] - 2026-09-02
 
 ### Changed

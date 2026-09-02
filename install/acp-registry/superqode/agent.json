@@ -1,7 +1,7 @@
 {
   "id": "superqode",
   "name": "SuperQode",
-  "version": "0.2.120",
+  "version": "2.0.0",
   "description": "The open-source, terminal-first harness layer for coding agents. Build native harnesses or connect open-source and proprietary agents, models, and runtimes.",
   "repository": "https://github.com/SuperagenticAI/superqode",
   "website": "https://super-agentic.ai/superqode",
@@ -11,7 +11,7 @@
   "license": "Apache-2.0",
   "distribution": {
     "uvx": {
-      "package": "superqode==0.2.120",
+      "package": "superqode==2.0.0",
       "args": [
         "serve",
         "acp"
