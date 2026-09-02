@@ -37,6 +37,18 @@ hide:
 
 ---
 
+## Watch the demo
+
+The terminal, the Harness Hub and the A2A agent, end to end.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
+    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
+  </a>
+</p>
+
+---
+
 ## Installation and first run
 
 ```bash

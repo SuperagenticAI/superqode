@@ -32,7 +32,7 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
-    <img src="assets/superqode-hero.png" alt="Watch the SuperQode demo" width="880">
+    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
   </a>
 </p>
 
@@ -40,6 +40,10 @@
   <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0"><strong>Watch the demo</strong></a>
   &nbsp;·&nbsp;
   <code>curl -fsSL https://superqode.dev/install.sh | sh</code>
+</p>
+
+<p align="center">
+  <img src="assets/superqode-hero.png" alt="The SuperQode terminal interface" width="880">
 </p>
 
 ## What is SuperQode?
