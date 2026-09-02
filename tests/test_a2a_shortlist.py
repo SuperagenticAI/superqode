@@ -167,7 +167,7 @@ def test_rendered_text_carries_no_catalogue_counts():
     closing = [line for line in text.splitlines() if "Disclosure" in line]
     assert closing and not any(character.isdigit() for character in closing[0])
     assert "evaluate and optimise" in text
-    assert result.to_dict()["third_party_considered"] == 2
+    assert result.to_dict()["thirdPartyConsidered"] == 2
 
 
 def test_shortlist_reads_the_real_hub_by_default():

@@ -20,7 +20,7 @@ KEY_ENV = "SUPERQODE_A2A_TLS_KEY"
 
 #: Public SuperQode A2A origin. The client fetches
 #: ``/.well-known/agent-card.json`` from here.
-DEFAULT_URL = "https://superqode.onrender.com"
+DEFAULT_URL = "https://a2a.superqode.dev"
 
 _CARD_SUFFIXES = (
     "/.well-known/agent-card.json",

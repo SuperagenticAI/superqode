@@ -405,9 +405,9 @@ class SuperQodeA2AExecutor:
             updater.new_agent_message(
                 [sdk["Part"](text=text)],
                 metadata={
-                    "superqode_skill": self.config.shortlist_skill_id,
-                    "superqode_shortlist": shortlist.to_dict(),
-                    "superqode_understood": understood,
+                    "superqodeSkill": self.config.shortlist_skill_id,
+                    "superqodeShortlist": shortlist.to_dict(),
+                    "superqodeUnderstood": understood,
                 },
             )
         )
@@ -481,6 +481,9 @@ class A2AServer:
         self.app = self._build_app()
 
     def _build_app(self) -> FastAPI:
+        from fastapi.middleware.cors import CORSMiddleware
+        from starlette.responses import Response as StarletteResponse
+
         sdk = _a2a_sdk()
         app = sdk["FastAPI"](title="SuperQode A2A Server", version=_package_version())
         card = _agent_card(self.controller, self.config, sdk)
@@ -523,7 +526,7 @@ class A2AServer:
             ),
         )
 
-        @app.get("/health")
+        @app.api_route("/health", methods=["GET", "HEAD"])
         async def health() -> dict[str, Any]:
             return {
                 "status": "ok",
@@ -539,31 +542,38 @@ class A2AServer:
         config = self.config
         limiter = self.limiter
 
+        def _card_cache_headers() -> dict[str, str]:
+            etag, last_modified = _card_validators(self)
+            return {
+                "ETag": etag,
+                "Last-Modified": last_modified,
+                "Cache-Control": f"public, max-age={self.config.card_cache_max_age}",
+            }
+
         @app.middleware("http")
         async def resolve_access(request: Any, call_next: Any) -> Any:
             # Discovery and health stay open regardless of policy.  Host
             # platforms fetch the Agent Card anonymously before they hold any
             # credential, so gating it would make the agent unregistrable.
             if request.url.path in AGENT_CARD_PATHS:
-                etag, last_modified = _card_validators(self)
-                cache_control = f"public, max-age={self.config.card_cache_max_age}"
-                # A poller that already holds this card is told so rather than
-                # being sent the same bytes again.
-                if request.headers.get("if-none-match") == etag:
-                    return sdk["JSONResponse"](
-                        status_code=304,
-                        content=None,
-                        headers={
-                            "ETag": etag,
-                            "Last-Modified": last_modified,
-                            "Cache-Control": cache_control,
-                        },
+                headers = _card_cache_headers()
+                # Registries probe with HEAD. The SDK card routes are GET-only,
+                # so HEAD would 404 through call_next. Serve GET and HEAD from
+                # the same bytes the ETag is hashed from.
+                if request.method in {"GET", "HEAD"}:
+                    if request.headers.get("if-none-match") == headers["ETag"]:
+                        return StarletteResponse(status_code=304, headers=headers)
+                    body = self.agent_card_json().encode("utf-8")
+                    return StarletteResponse(
+                        content=b"" if request.method == "HEAD" else body,
+                        status_code=200,
+                        media_type="application/json",
+                        headers={**headers, "Content-Length": str(len(body))},
                     )
                 response = await call_next(request)
                 if response.status_code == 200:
-                    response.headers["ETag"] = etag
-                    response.headers["Last-Modified"] = last_modified
-                    response.headers["Cache-Control"] = cache_control
+                    for name, value in headers.items():
+                        response.headers[name] = value
                 return response
 
             if request.url.path in {"/health", "/docs", "/openapi.json"}:
@@ -610,6 +620,23 @@ class A2AServer:
 
         if self._task_engine is not None:
             app.router.add_event_handler("shutdown", self._task_engine.dispose)
+
+        # Outermost so OPTIONS preflight never hits auth or the SDK catch-all.
+        # Browser clients, and the marketing site fetching the operational
+        # card, need this; the static discovery host already sends it.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=[
+                "ETag",
+                "Last-Modified",
+                "Cache-Control",
+                "Retry-After",
+                "WWW-Authenticate",
+            ],
+        )
 
         return app
 
@@ -887,7 +914,11 @@ def _requested_skill(context: Any) -> str:
             pass
 
     for source in sources:
-        value = source.get("superqode_skill") or source.get("skill")
+        value = (
+            source.get("superqodeSkill")
+            or source.get("superqode_skill")
+            or source.get("skill")
+        )
         if value:
             return str(value).strip()
     return ""

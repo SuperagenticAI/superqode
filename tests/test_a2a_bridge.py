@@ -421,7 +421,7 @@ def test_public_serving_cannot_spend_model_credit(tmp_path: Path):
         A2AServerConfig(
             provider="google",
             model="gemini-flash-latest",
-            url="https://superqode.onrender.com",
+            url="https://a2a.superqode.dev",
             working_directory=Path("."),
             task_store_path=None,
             harness_skill_enabled=False,
@@ -549,7 +549,7 @@ def test_only_keyed_callers_have_their_request_read_by_a_model(tmp_path: Path):
 
     assert keyed["status"]["state"] == "TASK_STATE_COMPLETED"
     assert calls == ["google"], "a keyed request should be read by the model once"
-    assert keyed["status"]["message"]["metadata"]["superqode_understood"] is True
+    assert keyed["status"]["message"]["metadata"]["superqodeUnderstood"] is True
 
 
 def test_a2a_serving_requires_at_least_one_skill(tmp_path: Path):
@@ -1158,9 +1158,7 @@ def test_exported_agent_card_matches_checked_in_publication(tmp_path: Path):
             # The operational endpoint, not the discovery origin.  These
             # differ by design in A2A, and pointing the card at the static
             # discovery host would advertise an interface that 404s.
-            "https://superqode.onrender.com",
-            "--token",
-            "preview-only-value",
+            "https://a2a.superqode.dev",
             "--harness-store",
             str(tmp_path / "harness.sqlite3"),
             "--task-store",
@@ -1194,6 +1192,83 @@ def test_agent_card_version_does_not_track_the_package_version(tmp_path: Path):
     health = TestClient(server.app).get("/health").json()
     assert health["superqode_version"] == __version__
     assert health["agent_card_version"] == AGENT_CARD_VERSION
+
+
+def _snake_field_names(value: object, path: str = "") -> list[str]:
+    """JSON object keys that look like snake_case protocol fields."""
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            here = f"{path}.{key}" if path else str(key)
+            if isinstance(key, str) and "_" in key and key.islower():
+                found.append(here)
+            found.extend(_snake_field_names(child, here))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_snake_field_names(child, f"{path}[{index}]"))
+    return found
+
+
+def test_discovery_answers_head_and_cors_preflight(tmp_path: Path):
+    """Registries probe the card with HEAD; browsers preflight with OPTIONS."""
+    server, _ = _server(tmp_path)
+    client = TestClient(server.app)
+
+    for path in ("/.well-known/agent-card.json", "/.well-known/agent.json"):
+        get = client.get(path)
+        head = client.head(path)
+        assert get.status_code == 200, path
+        assert head.status_code == 200, path
+        assert head.content == b""
+        assert head.headers["ETag"] == get.headers["ETag"]
+        assert head.headers["Content-Length"] == str(len(get.content))
+
+        preflight = client.options(
+            path,
+            headers={
+                "Origin": "https://superqode.dev",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert preflight.status_code in {200, 204}, path
+        assert preflight.headers.get("access-control-allow-origin") == "*"
+
+        from_browser = client.get(path, headers={"Origin": "https://superqode.dev"})
+        assert from_browser.headers.get("access-control-allow-origin") == "*"
+
+    health_head = client.head("/health")
+    assert health_head.status_code == 200
+
+
+def test_shortlist_reply_metadata_is_camel_case(tmp_path: Path):
+    """The public skill is the one callers actually receive.
+
+    DM-SERIAL-001 rejects snake_case keys anywhere in a response. The harness
+    path already emits superqodeSessionId; the shortlist has to match.
+    """
+    server, _ = _server(tmp_path)
+    client = TestClient(
+        A2AServer(
+            server.controller,
+            A2AServerConfig(
+                provider="test",
+                model="test",
+                url="http://127.0.0.1:8000",
+                working_directory=Path("."),
+                task_store_path=None,
+                harness_skill_enabled=False,
+            ),
+        ).app
+    )
+    payload = _request("Which coding agents are open source?")
+    response = client.post("/message:send", headers={"A2A-Version": "1.0"}, json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert _snake_field_names(body) == []
+    metadata = body["task"]["status"]["message"]["metadata"]
+    assert metadata["superqodeSkill"] == "harness-shortlist"
+    assert metadata["superqodeUnderstood"] is False
+    assert metadata["superqodeShortlist"]["kind"] == "superqode.harness-shortlist"
 
 
 def test_independent_node_typescript_client_interoperates(tmp_path: Path):

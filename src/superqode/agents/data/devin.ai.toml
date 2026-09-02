@@ -38,7 +38,7 @@ curl -fsSL https://cli.devin.ai/install.sh | bash
 brew install --cask devin-cli
 ```
 
-On Windows use the installer or PowerShell — the install script does not work
+On Windows use the installer or PowerShell. The install script does not work
 under Git Bash or CMD. Devin Desktop already bundles the CLI for Enterprise
 users.
 
@@ -53,7 +53,7 @@ devin auth login
 devin auth status
 ```
 
-The official CLI owns its credential store — SuperQode never reads, copies, or
+The official CLI owns its credential store. SuperQode never reads, copies, or
 refreshes Devin tokens. If `:connect acp devin` fails to hand shake, check
 `devin auth status` first.
 
@@ -91,8 +91,8 @@ SuperQode's own approval prompts still apply on top of whatever Devin allows.
 Devin reads configuration in this order, most specific last:
 
 1. `~/.config/devin/config.json` (`%APPDATA%\devin\config.json` on Windows)
-2. `.devin/config.json` — project settings, committed
-3. `.devin/config.local.json` — local overrides, gitignored
+2. `.devin/config.json`, project settings, committed
+3. `.devin/config.local.json`, local overrides, gitignored
 
 Devin's `mcpServers` block uses the same schema shape as Claude Code, so MCP
 servers configured for one generally transfer to the other.

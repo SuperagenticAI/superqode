@@ -22,7 +22,7 @@ hide:
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square" alt="Python versions"></a>
   <a href="https://github.com/SuperagenticAI/superqode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License"></a>
   <a href="https://github.com/SuperagenticAI/superqode"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=64748b" alt="GitHub stars"></a>
-  <a href="https://super-agentic.ai/superqode/"><img src="https://img.shields.io/badge/website-super--agentic.ai-7c3aed?style=flat-square" alt="Website"></a>
+  <a href="https://superqode.dev"><img src="https://img.shields.io/badge/website-superqode.dev-7c3aed?style=flat-square" alt="Website"></a>
 </p>
 
 [Start Coding](getting-started/first-session.md){ .md-button .md-button--primary }
@@ -30,7 +30,7 @@ hide:
 [Choose an Agent, Model, or Harness](concepts/modes.md){ .md-button }
 [Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button }
 [Optimize Local Models](local-agentic-coding.md){ .md-button }
-[SuperQode Website](https://super-agentic.ai/superqode/){ .md-button }
+[SuperQode Website](https://superqode.dev){ .md-button }
 
 </div>
 

@@ -137,6 +137,8 @@ class ShortlistEntry:
     superqode_supplied: bool = False
 
     def to_dict(self) -> dict[str, Any]:
+        # camelCase: A2A JSON field names (specification 5.5). A snake_case
+        # key anywhere in a response fails DM-SERIAL-001.
         return {
             "id": self.id,
             "name": self.name,
@@ -146,13 +148,13 @@ class ShortlistEntry:
             "readiness": self.readiness,
             "openness": self.openness,
             "license": self.license,
-            "docs_url": self.docs_url,
-            "install_command": self.install_command,
+            "docsUrl": self.docs_url,
+            "installCommand": self.install_command,
             "score": round(self.score, 3),
             "meets": list(self.meets),
             "lacks": list(self.lacks),
-            "policy_known": self.policy_known,
-            "superqode_supplied": self.superqode_supplied,
+            "policyKnown": self.policy_known,
+            "superqodeSupplied": self.superqode_supplied,
         }
 
 
@@ -174,12 +176,12 @@ class Shortlist:
     def to_dict(self) -> dict[str, Any]:
         return {
             "kind": "superqode.harness-shortlist",
-            "hub_schema_version": self.hub_schema_version,
-            "third_party_considered": self.third_party_considered,
-            "own_considered": self.own_considered,
+            "hubSchemaVersion": self.hub_schema_version,
+            "thirdPartyConsidered": self.third_party_considered,
+            "ownConsidered": self.own_considered,
             "constraints": {
                 "capabilities": list(self.constraints.capabilities),
-                "open_source_preferred": self.constraints.open_source_preferred,
+                "openSourcePreferred": self.constraints.open_source_preferred,
                 "terms": list(self.constraints.terms),
             },
             "entries": [entry.to_dict() for entry in self.entries],

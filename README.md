@@ -236,11 +236,11 @@ superqode serve a2a --spec harness.yaml
 Discovery is a published Agent Card. One card advertises JSON-RPC and HTTP+JSON
 across A2A 1.0 and 0.3, so a single document satisfies every registration path.
 The public SuperQode agent runs at
-[`a2a.superqode.dev`](https://superqode.dev/.well-known/agent-card.json) and you
+[`a2a.superqode.dev`](https://a2a.superqode.dev/.well-known/agent-card.json) and you
 can call it today:
 
 ```bash
-superqode connect a2a --url https://superqode.dev
+superqode connect a2a --url https://a2a.superqode.dev
 ```
 
 It scores 100% of MUST and 100% of MAY against the

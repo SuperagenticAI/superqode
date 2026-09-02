@@ -24,7 +24,7 @@ SuperQode can expose a harness as an MCP, ACP, or A2A service. See
 
 [A2A](../providers/a2a.md) is SuperQode’s primary **harness-to-harness** and
 agent-to-agent network surface. Other agents discover SuperQode through a public
-[Agent Card](https://super-agentic.ai/.well-known/agent-card.json) and call the
+[Agent Card](https://superqode.dev/.well-known/agent-card.json) and call the
 interface URL advertised in that card. The public pilot answers anonymous
 shortlist calls. A signed key is optional and switches the request to a model
 read. `--token` is required only when a remote bind also serves the harness
@@ -45,7 +45,7 @@ TypeScript and Python A2A clients for interop checks are documented under
 
 | First step | Command or URL |
 | --- | --- |
-| Public Agent Card | `https://super-agentic.ai/.well-known/agent-card.json` |
+| Public Agent Card | `https://superqode.dev/.well-known/agent-card.json` |
 | Serve a harness over A2A | `superqode serve a2a --spec harness.yaml` |
 | Call / discover from the TUI | `:connect a2a` · `superqode connect a2a --inspect` |
 | Full guide | [A2A Protocol](../providers/a2a.md) |

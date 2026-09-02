@@ -532,19 +532,22 @@ def test_the_a2a_connect_screen_carries_url_and_token():
 
     screen = A2AConnectScreen(
         url="https://saved.example",
-        default_url="https://superqode.onrender.com",
+        default_url="https://a2a.superqode.dev",
         token="sqk_live_test",
     )
     assert screen._url == "https://saved.example"
     assert screen._token == "sqk_live_test"
 
-    blank = A2AConnectScreen(url="", default_url="https://superqode.onrender.com")
+    blank = A2AConnectScreen(url="", default_url="https://a2a.superqode.dev")
     assert blank._url == ""
     assert blank._token == ""
     from inspect import getsource
 
     screen_source = getsource(A2AConnectScreen)
     assert "onrender" not in screen_source
+    from superqode.a2a.connection import DEFAULT_URL
+
+    assert DEFAULT_URL == "https://a2a.superqode.dev"
     assert "press Connect for" not in screen_source
 
     result = A2AConnectResult("https://agent.example", "tok", name="Pilot")

@@ -582,9 +582,9 @@ remote agent owns its execution contract.
 
 ```text
 :connect a2a
-:connect a2a https://superqode.onrender.com
-superqode connect a2a --url https://superqode.onrender.com --inspect
-superqode connect a2a --url https://superqode.onrender.com --conformance
+:connect a2a https://a2a.superqode.dev
+superqode connect a2a --url https://a2a.superqode.dev --inspect
+superqode connect a2a --url https://a2a.superqode.dev --conformance
 ```
 
 `:connect a2a` (and `:connect` → Protocols → A2A) opens a screen for the

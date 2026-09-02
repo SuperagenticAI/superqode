@@ -4,8 +4,8 @@
 Usage (from repo root):
 
   uv run --extra a2a python examples/a2a/smoke_client.py
-  uv run --extra a2a python examples/a2a/smoke_client.py https://superqode.onrender.com
-  uv run --extra a2a python examples/a2a/smoke_client.py https://super-agentic.ai "custom message"
+  uv run --extra a2a python examples/a2a/smoke_client.py https://a2a.superqode.dev
+  uv run --extra a2a python examples/a2a/smoke_client.py https://superqode.dev "custom message"
 
   # optional: a signed key or operator token
   export SUPERQODE_A2A_TOKEN=your-token
@@ -19,7 +19,7 @@ import sys
 
 
 async def main() -> int:
-    discovery = sys.argv[1] if len(sys.argv) > 1 else "https://super-agentic.ai"
+    discovery = sys.argv[1] if len(sys.argv) > 1 else "https://a2a.superqode.dev"
     message = sys.argv[2] if len(sys.argv) > 2 else "Reply with exactly: python-client-ok"
     token = os.environ.get("SUPERQODE_A2A_TOKEN") or os.environ.get("TOKEN")
 

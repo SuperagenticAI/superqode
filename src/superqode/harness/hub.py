@@ -984,7 +984,7 @@ def _supplemental_records() -> list[HubRecord]:
         (
             "ecosystem:warp",
             "Warp Agent",
-            "Warp's AGPL-3.0 Agent CLI — the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+            "Warp's AGPL-3.0 Agent CLI, the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
             "https://www.warp.dev/agent-cli",
             ("warp", "warp agent cli", "warp terminal agent"),
         ),

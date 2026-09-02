@@ -5,6 +5,23 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.116] - 2026-09-02
+
+### Fixed
+
+- The public A2A client default is `https://a2a.superqode.dev`. It had been
+  left on the Render pilot after the Cloud Run cutover, so `:connect a2a`
+  with no URL talked to a second live agent.
+- Agent Card discovery on the server answers `HEAD` and CORS preflight
+  (`OPTIONS`). Registries probe with HEAD, and the SDK routes were GET-only,
+  which made `HEAD /.well-known/agent-card.json` 404 on Cloud Run. `/health`
+  now accepts HEAD as well.
+- Shortlist reply metadata is camelCase (`superqodeSkill`,
+  `superqodeShortlist`, `superqodeUnderstood`, and the nested shortlist
+  fields). The harness path already used `superqodeSessionId`; the public
+  skill did not, and a strict 1.0 client can reject snake_case keys
+  anywhere in a response.
+
 ## [0.2.115] - 2026-08-31
 
 ### Added

@@ -15,10 +15,9 @@ Expose SuperQode to other tools: an ACP agent for editors and benchmarks, MCP an
 | Web TUI | `superqode serve web` | A browser, for the full TUI without a terminal emulator. |
 | A2A | `superqode serve a2a --spec harness.yaml` | Other agents and orchestrators over A2A 1.0 HTTP+JSON. See [A2A Providers](../providers/a2a.md). |
 
-A2A is the primary cross-service surface. The public [Agent Card](https://super-agentic.ai/.well-known/agent-card.json)
-is published for discovery; operational requests use the interface URL inside
-the card (temporary public pilot, bearer required). Local `serve a2a` works
-today. See [A2A Protocol](../providers/a2a.md#public-agent-card-and-pilot-status).
+A2A is the primary cross-service surface. The public [Agent Card](https://superqode.dev/.well-known/agent-card.json)
+is published for discovery; operational requests go to `https://a2a.superqode.dev`.
+Local `serve a2a` works today. See [A2A Protocol](../providers/a2a.md#public-agent-card-and-pilot-status).
 
 ---
 
@@ -172,7 +171,7 @@ superqode serve a2a \
 superqode serve a2a \
   --host 0.0.0.0 \
   --allow-remote \
-  --public-url https://superqode.onrender.com \
+  --public-url https://a2a.superqode.dev \
   --export-agent-card examples/a2a/agent-card.json
 ```
 

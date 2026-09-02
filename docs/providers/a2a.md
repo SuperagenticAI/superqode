@@ -57,9 +57,11 @@ conforms. For that, see [Conformance](#conformance).
 
 SuperQode publishes a static A2A Agent Card at:
 
-**[https://super-agentic.ai/.well-known/agent-card.json](https://super-agentic.ai/.well-known/agent-card.json)**
+**[https://superqode.dev/.well-known/agent-card.json](https://superqode.dev/.well-known/agent-card.json)**
 
-Use that URL for discovery. The card carries product identity, skills, capabilities, the advertised security schemes, and `supportedInterfaces`. Send operational requests to the interface `url` in the card, which may differ from the discovery origin.
+The operational host serves the same document at
+[https://a2a.superqode.dev/.well-known/agent-card.json](https://a2a.superqode.dev/.well-known/agent-card.json).
+Use either URL for discovery. The card carries product identity, skills, capabilities, the advertised security schemes, and `supportedInterfaces`. Send operational requests to the interface `url` in the card (`https://a2a.superqode.dev`).
 
 The card is deliberately dual-shaped. It carries the A2A 1.0 `supportedInterfaces`
 array **and** the 0.3 discovery fields (`url`, `preferredTransport`,
@@ -69,7 +71,7 @@ fields. One published document therefore satisfies both.
 Inspect the advertised interfaces:
 
 ```bash
-curl -sS https://super-agentic.ai/.well-known/agent-card.json \
+curl -sS https://superqode.dev/.well-known/agent-card.json \
   | python3 -c "import sys,json; [print(i['protocolBinding'], i['protocolVersion'], i['url']) for i in json.load(sys.stdin)['supportedInterfaces']]"
 ```
 
@@ -79,9 +81,9 @@ A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regen
 
 | Surface | Status |
 | --- | --- |
-| Public Agent Card | **Published** at `https://super-agentic.ai/.well-known/agent-card.json` |
-| A2A operations | Follow the first entry in `supportedInterfaces` (public pilot, shortlist skill only, anonymous access permitted) |
-| Path `https://super-agentic.ai/superqode/a2a/*` | **Not an A2A endpoint.** The discovery origin is a static host; operations belong at the interface `url` in the card |
+| Public Agent Card | **Published** at `https://superqode.dev/.well-known/agent-card.json` (also served from the operational host) |
+| A2A operations | `https://a2a.superqode.dev` (public pilot, shortlist skill only, anonymous access permitted) |
+| Path `https://superqode.dev/a2a` | Marketing page, not an A2A endpoint |
 | Local `superqode serve a2a` | Fully usable for development |
 
 Treat the public pilot as experimental. The host may cold-start, and this is not a multi-tenant production deployment. Tokens and provider keys never belong in the Agent Card.
@@ -125,8 +127,8 @@ codebase requires measurement, which is what HarnessBench does.
 
 A2A carries no field for selecting a skill, so the server decides per turn:
 
-1. An explicit skill id in metadata takes precedence. Set `superqode_skill` on
-   either the request metadata or the message metadata.
+1. An explicit skill id in metadata takes precedence. Set `superqodeSkill` on
+   either the request metadata or the message metadata (`superqode_skill` is still accepted).
 2. When the harness skill is not served, every request goes to the shortlist.
    Nothing else is available, and phrase matching would reject callers who
    describe their situation in their own words.
@@ -138,7 +140,7 @@ curl -sS https://your-agent.example.com/message:send \
   -H 'A2A-Version: 1.0' -H 'Content-Type: application/json' \
   -d '{"message": {"messageId": "1", "role": "ROLE_USER",
        "parts": [{"text": "open source harness with a sandbox and approvals"}],
-       "metadata": {"superqode_skill": "harness-shortlist"}}}'
+       "metadata": {"superqodeSkill": "harness-shortlist"}}}'
 ```
 
 Set `shortlist_enabled=False` in `A2AServerConfig` to serve the harness skill
@@ -251,7 +253,7 @@ empty content.
 
 A model call that errors, times out, or returns something other than JSON
 falls back to the keyword parser. The reply metadata carries
-`superqode_understood`, so a caller can tell which path produced the answer.
+`superqodeUnderstood`, so a caller can tell which path produced the answer.
 Watch that field in production: a missing provider key produces a silent
 downgrade, not an error.
 
@@ -457,7 +459,7 @@ superqode serve a2a \
 Notes:
 
 - The token value is **not** written into the card. On an open deployment, supplying `--token` advertises the Bearer scheme without making it mandatory. `securityRequirements` is set only when `allow_anonymous=False`.
-- Publish the generated file at `https://super-agentic.ai/.well-known/agent-card.json` (or your discovery host).
+- Publish the generated file at `https://superqode.dev/.well-known/agent-card.json` (or your discovery host).
 - Skill text on the card is product-facing; a remote bind serves `harness-shortlist` unless `--expose-harness` is set.
 - Avoid leading or trailing whitespace in interface URLs; clients may reject a spaced URL as invalid.
 - Regenerate and republish when the public interface URL, capabilities, auth policy, or skills change.
@@ -529,7 +531,7 @@ Create the connection in the Foundry portal:
 | Field | Value |
 | --- | --- |
 | Name | `superqode` |
-| A2A Agent Endpoint | `https://superqode.onrender.com` |
+| A2A Agent Endpoint | `https://a2a.superqode.dev` |
 | Agent card path | Leave unset. Foundry resolves `/.well-known/agent-card.json` under the target |
 | Authentication | **None** for the open tier, or key based with credential name `Authorization` and value `Bearer <key>` |
 
@@ -538,14 +540,14 @@ The same connection can be created with the Azure Developer CLI:
 ```bash
 azd ai connection create superqode-a2a \
   --kind remote-a2a \
-  --target https://superqode.onrender.com \
+  --target https://a2a.superqode.dev \
   --auth-type none
 ```
 
 Four points decide whether this works on the first attempt.
 
 The connection target is the operational URL carried in the card, not the
-discovery origin. Registering `https://super-agentic.ai` fails, because that
+discovery origin. Registering `https://superqode.dev` fails, because that
 host serves the card and nothing else. The SuperQode agent serves an identical
 card at both hosts, so Foundry can resolve the default card path under the
 operational URL.
@@ -602,7 +604,7 @@ For harness-to-harness and cross-language checks against a live or local A2A ser
 Example (from the SuperQode repo root):
 
 ```bash
-uv run --extra a2a python examples/a2a/smoke_client.py https://super-agentic.ai
+uv run --extra a2a python examples/a2a/smoke_client.py https://a2a.superqode.dev
 ```
 
 A token is optional. Set `SUPERQODE_A2A_TOKEN` only when the agent requires Bearer.
