@@ -914,11 +914,7 @@ def _requested_skill(context: Any) -> str:
             pass
 
     for source in sources:
-        value = (
-            source.get("superqodeSkill")
-            or source.get("superqode_skill")
-            or source.get("skill")
-        )
+        value = source.get("superqodeSkill") or source.get("superqode_skill") or source.get("skill")
         if value:
             return str(value).strip()
     return ""
