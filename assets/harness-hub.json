@@ -1,13 +1,14 @@
 {
   "schema_version": "1.5",
-  "generated_at": "2026-08-25T18:19:39.144686+00:00",
-  "count": 104,
+  "generated_at": "2026-09-01T15:36:06.305933+00:00",
+  "count": 105,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
     "ACP agents",
     "Optional integrations",
     "Model and task presets",
+    "Project harnesses",
     "Ecosystem watch"
   ],
   "items": [
@@ -605,7 +606,7 @@
       "kind": "connection",
       "runtime": "antigravity-cli",
       "source": "connection:runtime",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -671,7 +672,7 @@
       "kind": "connection",
       "runtime": "grok-cli",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -736,7 +737,7 @@
       "kind": "connection",
       "runtime": "copilot-sdk",
       "source": "connection:copilot",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -806,7 +807,7 @@
       "kind": "connection",
       "runtime": "cursor",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -870,7 +871,7 @@
       "kind": "connection",
       "runtime": "amp",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -998,7 +999,7 @@
       "kind": "connection",
       "runtime": "prime-rpc",
       "source": "connection:prime-rpc",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -1064,7 +1065,7 @@
       "kind": "connection",
       "runtime": "devin",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -1128,7 +1129,7 @@
       "kind": "connection",
       "runtime": "droid",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -1320,7 +1321,7 @@
       "kind": "connection",
       "runtime": "deepagents-code",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -1448,7 +1449,7 @@
       "kind": "connection",
       "runtime": "fx",
       "source": "connection:acp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
@@ -1507,6 +1508,61 @@
       "license": "Apache-2.0"
     },
     {
+      "id": "acp:amp",
+      "name": "Amp (ACP)",
+      "description": "AI coding agent by Ampcode. Works in any codebase with full ACP support via acp-amp adapter.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install acp-amp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://ampcode.com",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://ampcode.com",
+      "install_command": "uv tool install acp-amp",
+      "tui_commands": [
+        ":connect acp amp",
+        ":harness switch acp:amp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:amp \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Amp agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Amp",
+          "command": "uv tool install acp-amp",
+          "description": ""
+        }
+      ],
+      "openness": "",
+      "license": ""
+    },
+    {
       "id": "acp:cursor",
       "name": "Cursor (ACP)",
       "description": "AI-powered code editor with ACP support via its agent CLI.",
@@ -1514,7 +1570,7 @@
       "kind": "acp",
       "runtime": "ACP",
       "source": "acp:installed+featured",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
@@ -1562,6 +1618,171 @@
       "license": ""
     },
     {
+      "id": "acp:deepagents-code",
+      "name": "Deep Agents Code (ACP)",
+      "description": "LangChain's MIT-licensed terminal coding agent, built on the Deep Agents SDK, with persistent memory, skills, subagents, and approval controls.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -LsSf https://langch.in/dcode | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.langchain.com/deepagents-code",
+      "repository": "https://github.com/langchain-ai/deepagents",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.langchain.com/deepagents-code",
+      "install_command": "curl -LsSf https://langch.in/dcode | bash",
+      "tui_commands": [
+        ":connect acp deepagents-code",
+        ":harness switch acp:deepagents-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:deepagents-code \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Deep Agents Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Deep Agents Code",
+          "command": "curl -LsSf https://langch.in/dcode | bash",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "MIT"
+    },
+    {
+      "id": "acp:fx",
+      "name": "fx (ACP)",
+      "description": "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://fx.sh/setup.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://fx.sh",
+      "repository": "https://github.com/vercel-labs/fx",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://fx.sh",
+      "install_command": "curl -fsSL https://fx.sh/setup.sh | bash",
+      "tui_commands": [
+        ":connect acp fx",
+        ":harness switch acp:fx",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:fx \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "fx agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install fx",
+          "command": "curl -fsSL https://fx.sh/setup.sh | bash",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "acp:copilot",
+      "name": "GitHub Copilot (ACP)",
+      "description": "AI coding assistant with ACP support in public preview.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed+featured",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @github/copilot",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/features/copilot",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/features/copilot",
+      "install_command": "npm install -g @github/copilot",
+      "tui_commands": [
+        ":connect acp copilot",
+        ":harness switch acp:copilot",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:copilot \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "GitHub Copilot agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install GitHub Copilot",
+          "command": "npm install -g @github/copilot",
+          "description": ""
+        }
+      ],
+      "openness": "",
+      "license": ""
+    },
+    {
       "id": "acp:grok",
       "name": "Grok Build (ACP)",
       "description": "xAI's official Grok Build coding agent, connected through its native ACP server.",
@@ -1569,7 +1790,7 @@
       "kind": "acp",
       "runtime": "ACP",
       "source": "acp:installed+featured",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
@@ -1624,7 +1845,7 @@
       "kind": "acp",
       "runtime": "ACP",
       "source": "acp:installed+featured",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
@@ -1672,6 +1893,61 @@
       "license": "MIT"
     },
     {
+      "id": "acp:devin",
+      "name": "Devin (ACP)",
+      "description": "Cognition's Devin CLI coding agent, connected through its native ACP server.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.devin.ai/cli",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.devin.ai/cli",
+      "install_command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+      "tui_commands": [
+        ":connect acp devin",
+        ":harness switch acp:devin",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:devin \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Devin agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Devin",
+          "command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
+          "description": ""
+        }
+      ],
+      "openness": "",
+      "license": ""
+    },
+    {
       "id": "acp:droid",
       "name": "Factory Droid (ACP)",
       "description": "AI coding agent by Factory with ACP support.",
@@ -1679,7 +1955,7 @@
       "kind": "acp",
       "runtime": "ACP",
       "source": "acp:installed",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
@@ -1727,6 +2003,61 @@
       "license": ""
     },
     {
+      "id": "acp:fast-agent",
+      "name": "fast-agent (ACP)",
+      "description": "Create and interact with sophisticated Agents and Workflows in minutes. MCP native.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "uv tool install -U fast-agent-mcp",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/evalstate/fast-agent",
+      "repository": "https://github.com/evalstate/fast-agent",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/evalstate/fast-agent",
+      "install_command": "uv tool install -U fast-agent-mcp",
+      "tui_commands": [
+        ":connect acp fast-agent",
+        ":harness switch acp:fast-agent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:fast-agent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "fast-agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install fast-agent",
+          "command": "uv tool install -U fast-agent-mcp",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0"
+    },
+    {
       "id": "acp:gemini",
       "name": "Gemini CLI (ACP)",
       "description": "Google's Gemini CLI ACP implementation. Consumer Google AI Pro/Ultra/free Code Assist users should migrate to Antigravity CLI; enterprise/API-key ACP users can keep this route.",
@@ -1734,7 +2065,7 @@
       "kind": "acp",
       "runtime": "ACP",
       "source": "acp:installed",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
@@ -1782,36 +2113,36 @@
       "license": "Apache-2.0"
     },
     {
-      "id": "acp:amp",
-      "name": "Amp (ACP)",
-      "description": "AI coding agent by Ampcode. Works in any codebase with full ACP support via acp-amp adapter.",
+      "id": "acp:hermes",
+      "name": "Hermes Agent (ACP)",
+      "description": "Open-source coding agent by Nous Research with ACP support.",
       "category": "ACP agents",
       "kind": "acp",
       "runtime": "ACP",
-      "source": "acp:featured",
-      "readiness": "setup-required",
+      "source": "acp:installed",
+      "readiness": "ready",
       "integration_level": "protocol",
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "uv tool install acp-amp",
+      "setup": "uv tool install 'hermes-agent[acp]'",
       "warning": "",
       "project_path": "",
-      "homepage": "https://ampcode.com",
-      "repository": "",
+      "homepage": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+      "repository": "https://github.com/nousresearch/hermes-agent",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://ampcode.com",
-      "install_command": "uv tool install acp-amp",
+      "docs_url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+      "install_command": "uv tool install 'hermes-agent[acp]'",
       "tui_commands": [
-        ":connect acp amp",
-        ":harness switch acp:amp",
+        ":connect acp hermes",
+        ":harness switch acp:hermes",
         ":harness status"
       ],
       "cli_commands": [
-        "superqode harness run acp:amp \"Describe your task\""
+        "superqode harness run acp:hermes \"Describe your task\""
       ],
       "eval_commands": [],
       "optimize_commands": [],
@@ -1824,17 +2155,127 @@
         "Agent Client Protocol",
         "Context replay"
       ],
-      "based_on": "Amp agent",
+      "based_on": "Hermes Agent agent",
       "popularity_rank": 500,
       "setup_steps": [
         {
-          "title": "Install Amp",
-          "command": "uv tool install acp-amp",
+          "title": "Install Hermes Agent",
+          "command": "uv tool install 'hermes-agent[acp]'",
           "description": ""
         }
       ],
-      "openness": "",
-      "license": ""
+      "openness": "open",
+      "license": "MIT"
+    },
+    {
+      "id": "acp:openhands",
+      "name": "OpenHands (ACP)",
+      "description": "AI coding agent platform by All-Hands-AI with ACP support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "pip install openhands",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
+      "repository": "https://github.com/OpenHands/OpenHands",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
+      "install_command": "pip install openhands",
+      "tui_commands": [
+        ":connect acp openhands",
+        ":harness switch acp:openhands",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:openhands \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "OpenHands agent",
+      "popularity_rank": 150,
+      "setup_steps": [
+        {
+          "title": "Install OpenHands",
+          "command": "pip install openhands",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "MIT"
+    },
+    {
+      "id": "acp:prime-agent",
+      "name": "Prime Agent (ACP)",
+      "description": "Self-improving RLM agent for coding and long-running autonomous tasks. A persistent IPython kernel is the single model-facing tool.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:installed",
+      "readiness": "ready",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "repository": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "install_command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+      "tui_commands": [
+        ":connect acp prime-agent",
+        ":harness switch acp:prime-agent",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:prime-agent \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Prime Agent agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Prime Agent",
+          "command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "MIT"
     },
     {
       "id": "acp:claude",
@@ -2000,171 +2441,6 @@
       ],
       "openness": "open",
       "license": "Apache-2.0"
-    },
-    {
-      "id": "acp:deepagents-code",
-      "name": "Deep Agents Code (ACP)",
-      "description": "LangChain's MIT-licensed terminal coding agent, built on the Deep Agents SDK, with persistent memory, skills, subagents, and approval controls.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:featured",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "curl -LsSf https://langch.in/dcode | bash",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://docs.langchain.com/deepagents-code",
-      "repository": "https://github.com/langchain-ai/deepagents",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://docs.langchain.com/deepagents-code",
-      "install_command": "curl -LsSf https://langch.in/dcode | bash",
-      "tui_commands": [
-        ":connect acp deepagents-code",
-        ":harness switch acp:deepagents-code",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:deepagents-code \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "Deep Agents Code agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install Deep Agents Code",
-          "command": "curl -LsSf https://langch.in/dcode | bash",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "MIT"
-    },
-    {
-      "id": "acp:fx",
-      "name": "fx (ACP)",
-      "description": "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:featured",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "curl -fsSL https://fx.sh/setup.sh | bash",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://fx.sh",
-      "repository": "https://github.com/vercel-labs/fx",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://fx.sh",
-      "install_command": "curl -fsSL https://fx.sh/setup.sh | bash",
-      "tui_commands": [
-        ":connect acp fx",
-        ":harness switch acp:fx",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:fx \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "fx agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install fx",
-          "command": "curl -fsSL https://fx.sh/setup.sh | bash",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "acp:copilot",
-      "name": "GitHub Copilot (ACP)",
-      "description": "AI coding assistant with ACP support in public preview.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:featured",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "npm install -g @github/copilot",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://github.com/features/copilot",
-      "repository": "",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://github.com/features/copilot",
-      "install_command": "npm install -g @github/copilot",
-      "tui_commands": [
-        ":connect acp copilot",
-        ":harness switch acp:copilot",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:copilot \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "GitHub Copilot agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install GitHub Copilot",
-          "command": "npm install -g @github/copilot",
-          "description": ""
-        }
-      ],
-      "openness": "",
-      "license": ""
     },
     {
       "id": "acp:goose",
@@ -3102,61 +3378,6 @@
       "license": "MIT"
     },
     {
-      "id": "acp:devin",
-      "name": "Devin (ACP)",
-      "description": "Cognition's Devin CLI coding agent, connected through its native ACP server.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:enterprise",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "curl -fsSL https://cli.devin.ai/install.sh | bash",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://docs.devin.ai/cli",
-      "repository": "",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://docs.devin.ai/cli",
-      "install_command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
-      "tui_commands": [
-        ":connect acp devin",
-        ":harness switch acp:devin",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:devin \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "Devin agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install Devin",
-          "command": "curl -fsSL https://cli.devin.ai/install.sh | bash",
-          "description": ""
-        }
-      ],
-      "openness": "",
-      "license": ""
-    },
-    {
       "id": "acp:dirac",
       "name": "Dirac (ACP)",
       "description": "Open-source coding agent focused on efficient parallel edits and lower model cost.",
@@ -3210,61 +3431,6 @@
       ],
       "openness": "open",
       "license": ""
-    },
-    {
-      "id": "acp:fast-agent",
-      "name": "fast-agent (ACP)",
-      "description": "Create and interact with sophisticated Agents and Workflows in minutes. MCP native.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:all",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "uv tool install -U fast-agent-mcp",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://github.com/evalstate/fast-agent",
-      "repository": "https://github.com/evalstate/fast-agent",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://github.com/evalstate/fast-agent",
-      "install_command": "uv tool install -U fast-agent-mcp",
-      "tui_commands": [
-        ":connect acp fast-agent",
-        ":harness switch acp:fast-agent",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:fast-agent \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "fast-agent agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install fast-agent",
-          "command": "uv tool install -U fast-agent-mcp",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "Apache-2.0"
     },
     {
       "id": "acp:fount",
@@ -3375,61 +3541,6 @@
       ],
       "openness": "",
       "license": ""
-    },
-    {
-      "id": "acp:hermes",
-      "name": "Hermes Agent (ACP)",
-      "description": "Open-source coding agent by Nous Research with ACP support.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:all",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "uv tool install 'hermes-agent[acp]'",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
-      "repository": "https://github.com/nousresearch/hermes-agent",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
-      "install_command": "uv tool install 'hermes-agent[acp]'",
-      "tui_commands": [
-        ":connect acp hermes",
-        ":harness switch acp:hermes",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:hermes \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "Hermes Agent agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install Hermes Agent",
-          "command": "uv tool install 'hermes-agent[acp]'",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "MIT"
     },
     {
       "id": "acp:junie",
@@ -3762,61 +3873,6 @@
       "license": ""
     },
     {
-      "id": "acp:openhands",
-      "name": "OpenHands (ACP)",
-      "description": "AI coding agent platform by All-Hands-AI with ACP support.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:all",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "pip install openhands",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
-      "repository": "https://github.com/OpenHands/OpenHands",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://docs.openhands.dev/openhands/usage/run-openhands/acp",
-      "install_command": "pip install openhands",
-      "tui_commands": [
-        ":connect acp openhands",
-        ":harness switch acp:openhands",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:openhands \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "OpenHands agent",
-      "popularity_rank": 150,
-      "setup_steps": [
-        {
-          "title": "Install OpenHands",
-          "command": "pip install openhands",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "MIT"
-    },
-    {
       "id": "acp:poolside",
       "name": "Poolside (ACP)",
       "description": "AI coding agent by Poolside with ACP support.",
@@ -3870,61 +3926,6 @@
       ],
       "openness": "closed",
       "license": ""
-    },
-    {
-      "id": "acp:prime-agent",
-      "name": "Prime Agent (ACP)",
-      "description": "Self-improving RLM agent for coding and long-running autonomous tasks. A persistent IPython kernel is the single model-facing tool.",
-      "category": "ACP agents",
-      "kind": "acp",
-      "runtime": "ACP",
-      "source": "acp:all",
-      "readiness": "setup-required",
-      "integration_level": "protocol",
-      "continuity": "context-replay",
-      "provider": "",
-      "model": "",
-      "setup": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
-      "warning": "",
-      "project_path": "",
-      "homepage": "https://github.com/PrimeIntellect-ai/prime-agent",
-      "repository": "https://github.com/PrimeIntellect-ai/prime-agent",
-      "interface": "",
-      "support_note": "",
-      "last_verified": "",
-      "aliases": [],
-      "docs_url": "https://github.com/PrimeIntellect-ai/prime-agent",
-      "install_command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
-      "tui_commands": [
-        ":connect acp prime-agent",
-        ":harness switch acp:prime-agent",
-        ":harness status"
-      ],
-      "cli_commands": [
-        "superqode harness run acp:prime-agent \"Describe your task\""
-      ],
-      "eval_commands": [],
-      "optimize_commands": [],
-      "tools": [],
-      "policies": [
-        "External agent owns its tool loop and tool inventory",
-        "SuperQode provides ACP connection, session handoff, and context replay"
-      ],
-      "capabilities": [
-        "Agent Client Protocol",
-        "Context replay"
-      ],
-      "based_on": "Prime Agent agent",
-      "popularity_rank": 500,
-      "setup_steps": [
-        {
-          "title": "Install Prime Agent",
-          "command": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh",
-          "description": ""
-        }
-      ],
-      "openness": "open",
-      "license": "MIT"
     },
     {
       "id": "acp:qoder",
@@ -4272,12 +4273,12 @@
       "kind": "harness",
       "runtime": "uhp",
       "source": "optional:uhp",
-      "readiness": "setup-required",
+      "readiness": "ready",
       "integration_level": "optional",
       "continuity": "exact-resume",
       "provider": "",
       "model": "",
-      "setup": "Connect one with `:connect uhp <url>` in the TUI, or `superqode connect uhp --base-url <url>` in a shell. SUPERQODE_UHP_BASE_URL and SUPERQODE_UHP_API_KEY work too.",
+      "setup": "",
       "warning": "",
       "project_path": "",
       "homepage": "",
@@ -4287,7 +4288,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://superagenticai.github.io/superqode/providers/uhp/",
-      "install_command": "Connect one with `:connect uhp <url>` in the TUI, or `superqode connect uhp --base-url <url>` in a shell. SUPERQODE_UHP_BASE_URL and SUPERQODE_UHP_API_KEY work too.",
+      "install_command": "",
       "tui_commands": [
         ":harness switch uhp",
         ":harness show uhp",
@@ -5486,6 +5487,82 @@
       "license": "Apache-2.0"
     },
     {
+      "id": "base",
+      "name": "base",
+      "description": "Tool-rich coding harness for repository work.",
+      "category": "Project harnesses",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "registry",
+      "readiness": "ready",
+      "integration_level": "custom",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch /Users/shashi/.superqode/harness-registry/myteam/harness.yaml",
+        ":harness show /Users/shashi/.superqode/harness-registry/myteam/harness.yaml",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run /Users/shashi/.superqode/harness-registry/myteam/harness.yaml \"Describe your task\"",
+        "superqode harness show /Users/shashi/.superqode/harness-registry/myteam/harness.yaml"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec /Users/shashi/.superqode/harness-registry/myteam/harness.yaml",
+        "superqode harness eval --spec /Users/shashi/.superqode/harness-registry/myteam/harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec /Users/shashi/.superqode/harness-registry/myteam/harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec /Users/shashi/.superqode/harness-registry/myteam/harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "edit_file",
+        "insert_text",
+        "patch",
+        "multi_edit",
+        "grep",
+        "glob",
+        "repo_search",
+        "code_search",
+        "bash",
+        "todo_write",
+        "todo_read"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "coding",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "",
+      "license": ""
+    },
+    {
       "id": "ecosystem:zcode",
       "name": "ZCode",
       "description": "Z.AI's official desktop coding harness for GLM-5.3, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
@@ -5969,7 +6046,7 @@
     {
       "id": "ecosystem:warp",
       "name": "Warp Agent",
-      "description": "Warp's AGPL-3.0 Agent CLI \u2014 the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+      "description": "Warp's AGPL-3.0 Agent CLI, the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
       "category": "Ecosystem watch",
       "kind": "ecosystem",
       "runtime": "external",
