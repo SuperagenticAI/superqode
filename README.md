@@ -31,18 +31,6 @@
 </p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
-    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0"><strong>Watch the demo</strong></a>
-  &nbsp;·&nbsp;
-  <code>curl -fsSL https://superqode.dev/install.sh | sh</code>
-</p>
-
-<p align="center">
   <img src="assets/superqode-hero.png" alt="The SuperQode terminal interface" width="880">
 </p>
 
@@ -59,6 +47,17 @@ policy, tools, memory, search, sandbox, approvals, workflow, and evidence.
 
 Connect the coding agents you already pay for, run local or hosted models, or
 build your own harness. All of them run through the same inspectable contract.
+
+## Demo
+
+One session: connect an agent, browse the Harness Hub, and call the A2A agent
+from the same terminal.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FjAMwzbfIu0">
+    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
+  </a>
+</p>
 
 ## Quick Start
 
