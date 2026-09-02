@@ -129,6 +129,34 @@ async def test_model_transition_is_visible_without_scrolling(monkeypatch) -> Non
         assert "Model ready" in "\n".join(line.text for line in log.lines)
 
 
+@pytest.mark.asyncio
+async def test_model_ready_reports_without_asking_for_a_keypress():
+    """Model selection repeats on every connect and every switch.
+
+    A modal there stops being an acknowledgement and becomes a step to clear,
+    so this one result reports through the self-clearing toast instead. The
+    transcript receipt is what keeps it recoverable after the toast fades.
+    """
+    app = SuperQodeApp()
+    async with app.run_test(size=(58, 24), notifications=True) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._announce_model_ready(
+            model_name="Big Pickle",
+            model_id="opencode/big-pickle",
+            source="OpenCode",
+            log=log,
+            free=True,
+        )
+        for _ in range(6):
+            await pilot.pause()
+
+        from superqode.widgets.outcome_screen import OutcomeScreen
+
+        assert not isinstance(app.screen, OutcomeScreen)
+        assert "Model ready" in "\n".join(line.text for line in log.lines)
+        assert "Big Pickle" in "\n".join(line.text for line in log.lines)
+
+
 def test_information_transition_can_request_a_short_popup() -> None:
     log = _Log()
     app = _FeedbackApp(log)

@@ -4264,6 +4264,11 @@ class ConnectMixin:
                     if model_hint:
                         self._auto_select_opencode_model(model_hint, agent, log)
                     else:
+                        # Fetching the catalogue blocks for a second or two, so
+                        # it happens off the loop behind a placeholder rather
+                        # than under the still-painted agent registry.
+                        self._opencode_highlighted_model_index = 0
+                        await self._prepare_opencode_models(log)
                         self._show_opencode_models_selection(agent, log)
                 elif self.current_agent == "gemini":
                     # For Gemini, handle model selection

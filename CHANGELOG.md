@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-02
+
+A maintenance release covering the install experience and the OpenCode ACP
+model picker.
+
+### 📦 Easy Installation
+
+- The one-line installer no longer prints the package manager's dependency
+  wall. Several hundred resolved packages scrolling past read like a failure,
+  so the installer now shows the SuperQode mark and a progress bar that reports
+  the stage it has actually reached.
+- Package manager output is captured to a log and printed in full when a step
+  fails, so a real error is never hidden by the quieter presentation.
+- `SUPERQODE_INSTALL_VERBOSE=1` streams everything as it happens.
+- Colour and animation appear only when the output is a terminal. Piping the
+  installer into a file or a CI log gives plain text, `NO_COLOR` is honoured,
+  non-UTF8 locales get an ASCII progress bar, and narrow terminals get shorter
+  captions and a compact wordmark.
+- The installer closes with the SuperQode wordmark in the colours sampled from
+  the product mark, then the commands to run.
+- `SUPERQODE_EXTRAS` and `SUPERQODE_VERSION` behave exactly as before, and the
+  progress line now names the version and extras being installed.
+
+### 🔌 OpenCode ACP Model Loading Enhancements
+
+- Fixed the model picker offering models OpenCode cannot run. Discovery padded
+  the list from OpenCode's own models.dev cache, which carries the whole
+  catalogue rather than what the installation will route, so selecting one of
+  the added entries returned a provider error, an empty response or a rate
+  limit on the first prompt. The OpenCode CLI is now the authority on which
+  models exist, and the cache only fills in names, context windows and pricing.
+- The picker lists every model OpenCode offers with the free ones first,
+  instead of filtering to a free subset that could hide usable models or come
+  back empty when pricing metadata was missing.
+- The catalogue is fetched off the UI thread behind a placeholder frame. The
+  ACP agent list no longer stays frozen on screen for a second or two before
+  the picker replaces it.
+- The background agent registry refresh no longer repaints over the model
+  picker while a model is being chosen.
+- Choosing a model now reports through a notification that clears itself rather
+  than a dialog that waits for a keypress. The transcript still records it.
+- When OpenCode reports no models at all, the picker offers OpenCode's
+  configured default so the session can still start.
+
 ## [2.0.0] - 2026-09-02
 
 SuperQode v2, the harness interoperability layer for coding agents. This

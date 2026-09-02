@@ -129,6 +129,7 @@ def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
     app = SuperQodeApp()
     models = app.opencode_models
 
+    # Everything OpenCode offers is listed, free first, in the picker's shape.
     assert models == [
         {
             "id": "opencode/live-free",
@@ -139,10 +140,24 @@ def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
             "desc": "from cli",
             "catalog_unavailable": False,
         },
+        {
+            "id": "opencode/live-paid",
+            "name": "Live Paid",
+            "context": 123456,
+            "free": False,
+            "recommended": False,
+            "desc": "OpenCode",
+            "catalog_unavailable": False,
+        },
     ]
 
 
-def test_tui_opencode_picker_shows_only_free_models(monkeypatch):
+def test_tui_opencode_picker_lists_every_model_with_free_ones_first(monkeypatch):
+    """Discovery already limits this to what OpenCode will route.
+
+    Filtering again in the picker only hid usable models, so the whole
+    catalogue is listed and the free rows lead.
+    """
     clear_cache()
 
     def fake_get_opencode_models_sync(force_refresh=False):
@@ -174,7 +189,8 @@ def test_tui_opencode_picker_shows_only_free_models(monkeypatch):
 
     app = SuperQodeApp()
     ids = [model["id"] for model in app.opencode_models]
-    assert ids == ["opencode/big-pickle"]
+    assert ids[0] == "opencode/big-pickle"
+    assert set(ids) == {"opencode/big-pickle", "anthropic/claude-opus", "openai/gpt-5"}
 
 
 @pytest.mark.asyncio
@@ -187,7 +203,129 @@ async def test_opencode_models_do_not_fall_back_to_static_catalog(monkeypatch):
     assert models == []
 
 
-def test_opencode_cache_expands_connected_providers_without_hardcoded_names(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_connect_clears_the_agent_list_before_the_catalogue_loads(monkeypatch):
+    """Discovery shells out to the OpenCode CLI and takes a second or two.
+
+    Running it inline left the ACP agent registry painted and frozen on screen
+    for that whole wait, so the list appeared to flash up and vanish. The
+    placeholder has to be on screen before the fetch begins.
+    """
+    from superqode.app.widgets import ConversationLog
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.write("ACP AGENT REGISTRY LISTING")
+        await pilot.pause()
+
+        seen_during_fetch = []
+
+        async def fake_fetch(force_refresh=False):
+            seen_during_fetch.append("\n".join(line.text for line in log.lines))
+            return [
+                {
+                    "id": "opencode/big-pickle",
+                    "name": "Big Pickle",
+                    "is_free": True,
+                    "context": 200000,
+                }
+            ]
+
+        monkeypatch.setattr("superqode.providers.opencode_models.get_opencode_models", fake_fetch)
+        app._opencode_models = None
+        await app._prepare_opencode_models(log)
+        await pilot.pause()
+
+        assert seen_during_fetch, "the catalogue fetch never ran"
+        onscreen = seen_during_fetch[0]
+        assert "ACP AGENT REGISTRY LISTING" not in onscreen
+        assert "Loading models" in onscreen
+        assert [model["id"] for model in app._opencode_models] == ["opencode/big-pickle"]
+
+
+def test_connect_awaits_the_prefetch_before_painting_the_picker():
+    """Guard the wiring, not just the helper.
+
+    The previous attempt at this fix was reverted wholesale along with an
+    unrelated change in the same commit, and nothing failed to catch it. The
+    picker must not be painted until the catalogue has been awaited off-loop.
+    """
+    import inspect
+
+    from superqode.app.mixins.connect import ConnectMixin
+
+    source = inspect.getsource(ConnectMixin._connect_agent)
+    prefetch = source.index("await self._prepare_opencode_models(log)")
+    picker = source.index("self._show_opencode_models_selection(agent, log)")
+    assert prefetch < picker
+
+
+@pytest.mark.asyncio
+async def test_agent_catalogue_does_not_repaint_over_the_model_picker():
+    """The registry revalidates in the background and can land mid-selection.
+
+    Repainting the agent list then flashes every agent across the screen while
+    the user is reading the model picker, so the refresh has to stand down
+    until the picker is gone.
+    """
+    from superqode.app.widgets import ConversationLog
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        repainted = []
+        app._reshow_acp_agents = lambda _log: repainted.append(True)
+        app._acp_picker_snapshot_at = 0.0
+        app._awaiting_acp_agent_selection = True
+        app._awaiting_model_selection = True
+
+        await app._revalidate_acp_catalog(log).wait()
+        for _ in range(4):
+            await pilot.pause()
+
+        assert repainted == []
+
+
+def test_opencode_offers_its_default_when_the_cli_lists_nothing(monkeypatch):
+    """A signed-out OpenCode must still give the picker something selectable."""
+    clear_cache()
+    from superqode.providers import opencode_models as mod
+
+    monkeypatch.setattr(mod.shutil, "which", lambda name: "opencode")
+    monkeypatch.setattr(mod, "_cli_model_list", lambda: [])
+    monkeypatch.setattr(
+        mod,
+        "_run_opencode",
+        lambda args, timeout=15: subprocess.CompletedProcess(args, 1, "", "not logged in"),
+    )
+
+    models = get_opencode_models_sync(force_refresh=True)
+
+    assert [model["id"] for model in models] == ["opencode/auto"]
+    assert models[0]["catalog_unavailable"] is True
+
+
+def test_opencode_picker_keeps_paid_rows_when_nothing_reads_as_free(monkeypatch):
+    """Free detection relies on pricing metadata that some rows never carry."""
+
+    def fake_get_opencode_models_sync(force_refresh=False):
+        return [
+            {"id": "opencode/big-pickle", "name": "Big Pickle", "context": 200000},
+            {"id": "opencode/mimo-v2.5", "name": "MiMo v2.5", "context": 128000},
+        ]
+
+    monkeypatch.setattr(
+        "superqode.providers.opencode_models.get_opencode_models_sync",
+        fake_get_opencode_models_sync,
+    )
+
+    app = SuperQodeApp()
+    ids = sorted(model["id"] for model in app.opencode_models)
+    assert ids == ["opencode/big-pickle", "opencode/mimo-v2.5"]
+
+
+def test_opencode_cache_only_enriches_models_the_cli_offers(tmp_path, monkeypatch):
     """CLI may list only wired free models; OpenCode's cache still has the rest."""
     from superqode.providers import opencode_models as mod
 
@@ -252,12 +390,19 @@ def test_opencode_cache_expands_connected_providers_without_hardcoded_names(tmp_
 
     models = get_opencode_models_sync(force_refresh=True)
     ids = {model["id"] for model in models}
-    assert "opencode/big-pickle" in ids
-    assert "opencode/claude-opus-4-8" in ids
+
+    # The CLI is the only source of truth for what OpenCode can route. The
+    # cache carries the whole models.dev catalogue, including ids this install
+    # would refuse, so offering them puts unusable rows in the picker.
+    assert ids == {"opencode/big-pickle"}
+    assert "opencode/claude-opus-4-8" not in ids
     assert "anthropic/claude-sonnet-4" not in ids
-    paid = next(model for model in models if model["id"] == "opencode/claude-opus-4-8")
-    assert paid["is_free"] is False
-    assert paid["name"] == "Claude Opus 4.8"
+
+    # The cache is still used, for metadata on the model the CLI did offer.
+    offered = next(model for model in models if model["id"] == "opencode/big-pickle")
+    assert offered["name"] == "Big Pickle"
+    assert offered["context"] == 200000
+    assert offered["is_free"] is True
 
 
 def test_sync_opencode_models_works_inside_running_event_loop(monkeypatch):

@@ -134,6 +134,9 @@ class FeedbackMixin:
             detail_parts.append("Free model")
         if model_id and model_id != model_name:
             detail_parts.append(model_id)
+        # Picking a model happens on every connect and on every switch, so a
+        # modal that waits for Enter turns a routine step into a prompt. The
+        # toast still reports it, and the transcript receipt still records it.
         return self._announce_transition(
             title="Model changed" if changed else "Model ready",
             primary=model_name or model_id,
@@ -141,6 +144,7 @@ class FeedbackMixin:
             severity="success",
             log=log,
             popup=True,
+            modal=False,
             dedupe_key=f"model:{source}:{model_id}",
         )
 
@@ -240,12 +244,17 @@ class FeedbackMixin:
         dedupe_key: str = "",
         restore_focus: bool = True,
         popup: bool | None = None,
+        modal: bool = True,
     ) -> bool:
         """Announce a user-visible state transition.
 
         Warnings and errors use a short popup because they require attention.
         Routine success and information transitions stay in the transcript and
         status bar unless a caller explicitly requests a popup.
+
+        ``modal=False`` keeps the popup but makes it a toast that clears itself,
+        for results that repeat often enough that demanding a keypress each time
+        becomes an obstacle rather than an acknowledgement.
         """
         title = " ".join(str(title).split())
         primary = " ".join(str(primary).split())
@@ -279,7 +288,7 @@ class FeedbackMixin:
         # worse than the toast it replaces. ``persist`` is already the difference
         # between the two: only persisted announcements become an Outcome.
         modal_shown = False
-        if show_popup and persist:
+        if show_popup and persist and modal:
             modal_shown = self._show_transition_modal(
                 title=title,
                 primary=primary,

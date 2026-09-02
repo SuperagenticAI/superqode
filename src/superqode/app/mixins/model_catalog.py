@@ -43,33 +43,90 @@ class ModelCatalogMixin:
         return self._opencode_models
 
     def _sort_opencode_picker_models(self, models: List[Dict]) -> List[Dict]:
-        """Newest free models first. Paid OpenCode rows are not shown."""
+        """Every model OpenCode offers, free ones first.
+
+        Discovery already narrows this to what the OpenCode CLI will actually
+        route, so a second filter here only hides usable models: free detection
+        leans on pricing metadata that some rows never carry. Free models lead
+        because they are what most sessions want, and the rows carry their own
+        FREE badge, so nothing is lost by listing the rest underneath.
+        """
         from superqode.providers.models import sort_models_newest_first
 
-        return sort_models_newest_first([item for item in models if item.get("free")])
+        free = sort_models_newest_first([item for item in models if item.get("free")])
+        paid = sort_models_newest_first([item for item in models if not item.get("free")])
+        return free + paid
+
+    def _shape_opencode_models(self, models: List[Dict]) -> List[Dict]:
+        """Put raw discovery rows into the shape the picker renders.
+
+        The sync and async fetch paths both come through here, so the picker
+        cannot end up showing a different list depending on how it was opened.
+        """
+        return [
+            {
+                "id": m["id"],
+                "name": m.get("name", m["id"].split("/")[-1]),
+                "context": m.get("context", 128000),
+                "free": bool(m.get("is_free", False)),
+                "recommended": bool(m.get("recommended", False)),
+                "desc": m.get("description") or m.get("source", "OpenCode"),
+                "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
+            }
+            for m in models
+        ]
 
     def _get_opencode_models(self) -> List[Dict]:
-        """Free OpenCode models only, shared by subscription ACP and :connect acp."""
+        """OpenCode's catalogue, shared by subscription ACP and :connect acp."""
         try:
             from superqode.providers.opencode_models import get_opencode_models_sync
 
-            models = get_opencode_models_sync()
             return self._sort_opencode_picker_models(
-                [
-                    {
-                        "id": m["id"],
-                        "name": m.get("name", m["id"].split("/")[-1]),
-                        "context": m.get("context", 128000),
-                        "free": bool(m.get("is_free", False)),
-                        "recommended": bool(m.get("recommended", False)),
-                        "desc": m.get("description") or m.get("source", "OpenCode"),
-                        "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
-                    }
-                    for m in models
-                ]
+                self._shape_opencode_models(get_opencode_models_sync())
             )
         except Exception:
             return []
+
+    async def _prepare_opencode_models(self, log: ConversationLog) -> None:
+        """Load the catalogue off the event loop, behind a placeholder frame.
+
+        Discovery shells out to the OpenCode CLI and takes a second or two.
+        Doing that inline leaves the ACP agent registry painted and frozen
+        until the picker replaces it, which reads as the agent list flashing
+        up and vanishing. Painting a frame first means the registry is gone
+        before the wait starts.
+        """
+        if self._opencode_models is not None:
+            return
+        self._paint_opencode_loading(log)
+        try:
+            from superqode.providers.opencode_models import get_opencode_models
+
+            raw = await get_opencode_models()
+        except Exception:  # noqa: BLE001 - the picker reports an empty catalogue itself
+            raw = []
+        self._opencode_models = self._sort_opencode_picker_models(self._shape_opencode_models(raw))
+
+    def _paint_opencode_loading(self, log: ConversationLog) -> None:
+        """Stand in for the picker while the catalogue is being fetched."""
+        color = AGENT_COLORS.get("opencode", THEME["success"])
+        icon = AGENT_ICONS.get("opencode", "🌿")
+
+        t = Text()
+        t.append(f"\n  ╭{'─' * 58}╮\n", style=color)
+        t.append(f"  │  {icon} ", style=color)
+        t.append("Connected to ", style=THEME["text"])
+        t.append("OPENCODE", style=f"bold {color}")
+        t.append(f"{'':>32}│\n", style=color)
+        t.append(f"  ├{'─' * 58}┤\n", style=color)
+        t.append("  │  ", style=color)
+        t.append("Loading models from the OpenCode catalog...", style=THEME["muted"])
+        t.append(f"{'':>13}│\n", style=color)
+        t.append(f"  ╰{'─' * 58}╯\n", style=color)
+
+        log.auto_scroll = False
+        log.clear()
+        log.write(t, scroll_end=False)
 
     @property
     def gemini_models(self) -> List[Dict]:
@@ -2766,11 +2823,16 @@ class ModelCatalogMixin:
         t.append("SELECT OPENCODE MODEL", style=f"bold {THEME['success']}")
         t.append("\n", style=color)
         t.append("  │  ", style=color)
-        t.append("Free models from the OpenCode catalog", style=THEME["muted"])
+        t.append("Models available from the OpenCode catalog", style=THEME["muted"])
         t.append("\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
         models = self.opencode_models
+        # A highlight left over from a previous, longer catalogue would point
+        # past the end of this one and open the list part-way down.
+        if highlighted_idx >= len(models):
+            highlighted_idx = 0
+            self._opencode_highlighted_model_index = 0
         if not models:
             t.append(f"  │  ", style=color)
             t.append("No models discovered from OpenCode CLI", style=THEME["warning"])

@@ -143,25 +143,50 @@ def _models_from_cache_file(path: str) -> List[Dict]:
     return models
 
 
-def _expand_cli_with_cache(
-    cli_models: List[Dict], cache_models: List[Dict], extra_providers: set[str]
-) -> List[Dict]:
-    """Keep every CLI row, plus the rest of each connected provider from the cache.
+def _enrich_cli_with_cache(cli_models: List[Dict], cache_models: List[Dict]) -> List[Dict]:
+    """Fill in metadata for the models OpenCode actually offers.
 
-    `opencode models` only prints currently wired models (often the free Zen
-    subset). OpenCode's models.dev cache still has the full provider catalog.
+    `opencode models` is authoritative about which models this install can
+    route: the free Zen tier rotates, so the models.dev cache still lists
+    plenty of ids that OpenCode will refuse. Only names, context windows and
+    pricing come from the cache, so a model the CLI did not offer can never
+    reach the picker.
     """
-    prefixes = {model["id"].split("/", 1)[0] for model in cli_models if "/" in model["id"]}
-    prefixes.update(extra_providers)
-    if not prefixes:
-        return list(cli_models)
-    merged: dict[str, Dict] = {}
-    for model in cache_models:
-        if model["id"].split("/", 1)[0] in prefixes:
-            merged[model["id"]] = model
+    by_id = {model["id"]: model for model in cache_models}
+    enriched: List[Dict] = []
     for model in cli_models:
-        merged.setdefault(model["id"], model)
-    return list(merged.values())
+        extra = by_id.get(model["id"])
+        if not extra:
+            enriched.append(model)
+            continue
+        enriched.append(
+            {
+                **model,
+                "name": extra.get("name") or model.get("name"),
+                "context": extra.get("context") or model.get("context"),
+                "is_free": bool(model.get("is_free") or extra.get("is_free")),
+            }
+        )
+    return enriched
+
+
+def _opencode_default_model(reason: str = "") -> Dict:
+    """A row that defers to whatever model OpenCode is configured to use.
+
+    Discovery can come up empty when OpenCode is installed but not signed in.
+    Without this the picker has nothing to select and the session is stuck.
+    """
+    return {
+        "id": "opencode/auto",
+        "name": "OpenCode Default",
+        "provider": "opencode",
+        "is_free": True,
+        "context": 128000,
+        "source": "opencode default",
+        "description": "Use OpenCode's configured default model"
+        + (f" (catalog unavailable: {reason})" if reason else ""),
+        "catalog_unavailable": True,
+    }
 
 
 def _discover_opencode_models() -> List[Dict]:
@@ -189,7 +214,12 @@ def _discover_opencode_models() -> List[Dict]:
             extra_providers = _configured_provider_ids(v2.stdout or "")
     except Exception as exc:  # noqa: BLE001
         logger.debug("OpenCode provider list unavailable: %s", exc)
-    models = _expand_cli_with_cache(cli_models, cache_models, extra_providers)
+    if extra_providers:
+        logger.debug("OpenCode providers configured: %s", sorted(extra_providers))
+    models = _enrich_cli_with_cache(cli_models, cache_models)
+    if not models:
+        logger.warning("OpenCode listed no models; offering its configured default")
+        return [_opencode_default_model("opencode models returned nothing")]
     logger.info("Found %s models from OpenCode", len(models))
     return models
 

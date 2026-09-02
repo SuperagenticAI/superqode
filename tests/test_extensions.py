@@ -391,9 +391,19 @@ def test_context_sources_are_bounded_and_fail_independently(tmp_path):
     assert runtime.errors[0].capability == "context"
 
 
+def _satisfiable_requirement() -> str:
+    """A requires_superqode range the installed version satisfies."""
+    from superqode.extensions import _superqode_version
+
+    major = int(_superqode_version().split(".", 1)[0])
+    return f">={major}.0,<{major + 1}.0"
+
+
 @pytest.mark.parametrize(
     ("requirement", "compatible"),
-    [(">=0.2.0,<1.0", True), (">99.0", False)],
+    # Derived from the installed version rather than hardcoded, so a major
+    # version bump cannot turn a satisfiable range into an unsatisfiable one.
+    [(_satisfiable_requirement(), True), (">99.0", False)],
 )
 def test_requires_superqode_compatibility(requirement, compatible, monkeypatch, tmp_path):
     extension = Extension(

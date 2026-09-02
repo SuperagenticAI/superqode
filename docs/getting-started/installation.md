@@ -177,6 +177,24 @@ curl -fsSL https://superqode.dev/install.sh |
 Release automation can install an exact published version with
 `SUPERQODE_VERSION=0.2.68`.
 
+### Seeing the full installer output
+
+The installer keeps the package manager output in a log and shows a progress
+bar instead, because several hundred resolved dependencies scrolling
+past looks like something has gone wrong. If a step fails, the captured output
+is printed in full so you can read the real error.
+
+To stream everything as it happens, set `SUPERQODE_INSTALL_VERBOSE=1`:
+
+```bash
+curl -fsSL https://superqode.dev/install.sh |
+  SUPERQODE_INSTALL_VERBOSE=1 sh
+```
+
+Colour and animation are used only when the output is a terminal, so piping
+the installer into a file or a CI log gives you plain text. `NO_COLOR` is
+honoured as well.
+
 ## Installation for Developers
 
 For contributors or those wanting the latest features:
