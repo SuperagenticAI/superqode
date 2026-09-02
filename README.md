@@ -83,11 +83,24 @@ superqode --print "fix the failing test and summarize the change"
 `sq` is a shorter alias for every `superqode` command. Remove it any time with
 `uv tool uninstall superqode`.
 
+Four ways in, from the same install:
+
+```text
+superqode                                      # coding agent TUI
+:connect acp opencode                          # drive any ACP agent
+:connect ollama                                # local models / airplane mode
+superqode connect a2a --url https://a2a.superqode.dev
+```
+
+V2 is that surface: TUI and CLI, ACP, native harnesses, local models, and a
+public A2A agent. Details: [superqode.dev/v2](https://superqode.dev/v2).
+
 ## The Harness Hub
 
-`:hub` opens a browsable catalog of **97 harnesses**: SuperQode's native
+`:hub` opens a browsable catalog of **104 harnesses**: SuperQode's native
 harnesses, vendor coding agents, the full ACP registry, optional runtimes,
-model presets, and the HarnessSpecs your own repository defines.
+model presets, and the HarnessSpecs your own repository defines. The same
+catalog is on the web at [superqode.dev/hub](https://superqode.dev/hub).
 
 ```text
 :hub                    # browse, search, and filter every route
@@ -95,7 +108,7 @@ model presets, and the HarnessSpecs your own repository defines.
 :harness switch rlm --fork   # or branch into an independent attempt
 ```
 
-**55 of those harnesses are open source**, across every route. Press `o` in the
+**64 of those harnesses are open source**, across every route. Press `o` in the
 Hub, or ask from the command line:
 
 ```bash
@@ -299,6 +312,7 @@ superqode harness graph <run-id> --json
 
 | Guide | What it covers |
 | --- | --- |
+| [Website](https://superqode.dev) | Product, Hub, A2A agent, V2 |
 | [Quick Start](https://docs.superqode.dev/getting-started/quickstart/) | Install, connect, and run your first task |
 | [Harness Hub](https://docs.superqode.dev/harness-hub/) | Browsing, filtering, and the published catalog |
 | [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, and A2A routes |

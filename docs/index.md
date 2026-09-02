@@ -27,6 +27,8 @@ hide:
 
 [Start Coding](getting-started/first-session.md){ .md-button .md-button--primary }
 [Explore the Harness Hub](harness-hub.md){ .md-button }
+[A2A Agent](https://a2a.superqode.dev){ .md-button }
+[What's new](https://superqode.dev/v2){ .md-button }
 [Choose an Agent, Model, or Harness](concepts/modes.md){ .md-button }
 [Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button }
 [Optimize Local Models](local-agentic-coding.md){ .md-button }

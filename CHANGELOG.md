@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the GitHub Pages host. The Hub snapshot, README, PyPI metadata and the
   welcome interoperability line (`Local · ACP · MCP · A2A · UHP · BYOK`)
   follow that host.
+- README Hub counts match the published catalog (104 harnesses, 64 open
+  source). Quick start lists the four V2 entry points. Docs home links the
+  live A2A agent and [superqode.dev/v2](https://superqode.dev/v2).
 
 ## [0.2.116] - 2026-09-02
 
