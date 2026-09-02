@@ -970,13 +970,11 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
         if self._catalogue_only:
             self._set_status(
                 label + ". Catalogue without a key. "
-                "Get a SUPERQODE_API_KEY at https://superqode.dev for a real model chat. "
-                + stored
+                "Get a SUPERQODE_API_KEY at https://superqode.dev for a real model chat. " + stored
             )
         else:
             self._set_status(
-                label + ". Type below and Send. n or Clear starts a new conversation. "
-                + stored
+                label + ". Type below and Send. n or Clear starts a new conversation. " + stored
             )
         try:
             self.query_one("#a2a-message", Input).placeholder = "message to this agent, then Send"

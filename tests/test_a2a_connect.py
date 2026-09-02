@@ -642,7 +642,9 @@ async def test_deliver_falls_back_when_stream_events_have_no_text():
             self.calls.append("stream")
             yield SimpleNamespace(
                 type="message",
-                data={"result": {"task": {"id": "t1", "status": {"state": "TASK_STATE_SUBMITTED"}}}},
+                data={
+                    "result": {"task": {"id": "t1", "status": {"state": "TASK_STATE_SUBMITTED"}}}
+                },
             )
 
         async def send_message(self, message, session_id=None):
