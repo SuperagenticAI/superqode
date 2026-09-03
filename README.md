@@ -17,6 +17,10 @@
 </p>
 
 <p align="center">
+  <a href="https://www.producthunt.com/products/superqode?utm_source=badge-follow&utm_medium=badge&utm_source=badge-superqode" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=1155543&theme=light" alt="SuperQode - The&#0032;harness&#0032;interoperability&#0032;layer&#0032;for&#0032;coding&#0032;agent | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+</p>
+
+<p align="center">
   <a href="https://docs.superqode.dev/"><strong>Documentation</strong></a>
   &nbsp;·&nbsp;
   <a href="https://docs.superqode.dev/getting-started/quickstart/">Quick Start</a>
