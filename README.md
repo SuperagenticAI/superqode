@@ -2,8 +2,8 @@
   <img src="assets/superqode-banner.png" alt="SuperQode" width="760">
 </p>
 
+<h2 align="center">The harness layer for coding agents.</h2>
 <p align="center">
-  <strong>The harness layer for coding agents.</strong><br>
   Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal.<br>
   Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.
 </p>
