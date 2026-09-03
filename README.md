@@ -61,18 +61,13 @@ from the same terminal.
 
 ## Quick Start
 
-Install from PyPI with [uv](https://docs.astral.sh/uv/) (recommended):
-
-```bash
-uv tool install superqode
-```
-
-Or use the one-line installer, which installs uv when needed and never uses
-`sudo`:
-
 ```bash
 curl -fsSL https://superqode.dev/install.sh | sh
 ```
+
+The installer pulls the latest release from PyPI into an isolated environment,
+installs [uv](https://docs.astral.sh/uv/) when needed, and never uses `sudo`.
+Already have uv? Run `uv tool install superqode` instead.
 
 Open any repository and start:
 
