@@ -36,6 +36,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `doctor` | [Doctor Command](doctor-command.md) |
 | `factory` | [Factory Commands](factory-commands.md) |
 | `harness` | [Harness Commands](harness-commands.md) |
+| `gauge` | [Gauge Commands](gauge-commands.md) |
 | `hub` | [Hub Commands](hub-commands.md) |
 | `init` | [Init Commands](init-commands.md) |
 | `local` | [Local Commands](local-commands.md) |
@@ -610,6 +611,7 @@ For detailed documentation of each command group:
 - [Session Commands](sessions-commands.md) - Session listing and inspection
 - [Factory Commands](factory-commands.md) - Model, harness, and route lineage
 - [WorkOrder Commands](work-commands.md) - Durable task scheduling, evidence, and decisions
+- [Gauge Commands](gauge-commands.md) - Emit and check Agent Quality Records
 - [Share Commands](share-commands.md) - Portable session artifact management
 - [Trust Commands](trust-commands.md) - Project trust management
 - [Update Command](update-command.md) - Upgrade SuperQode to the latest release

@@ -6,6 +6,7 @@ Tests the command-line interface functionality.
 
 import json
 import shutil
+import subprocess
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
@@ -17,13 +18,24 @@ from superqode.main import cli_main
 
 
 def _metaharness_bin() -> str | None:
-    """Locate the metaharness CLI, or None when it is not installed.
+    """Locate a working metaharness CLI, or None when it is not usable.
 
     PATH is the only source. A hardcoded fallback to one developer's install
     made this test resolve differently for them than for CI and every other
     contributor, which is the opposite of what a skip guard is for.
+
+    Presence on PATH is not enough. An entry point left behind by another
+    environment resolves here and then fails on import, so the guard runs the
+    binary and skips unless it answers.
     """
-    return shutil.which("metaharness")
+    binary = shutil.which("metaharness")
+    if binary is None:
+        return None
+    try:
+        probe = subprocess.run([binary, "--help"], capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return binary if probe.returncode == 0 else None
 
 
 @pytest.fixture

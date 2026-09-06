@@ -2,11 +2,10 @@
 # commit that passes locally passes in CI.
 #
 #   pre-commit install --install-hooks
-#   pre-commit install --hook-type pre-push
 #
-# Lint and formatting run on commit. The test suite runs on push, because it is
-# too slow to sit in front of every commit and a hook people disable protects
-# nothing.
+# Lint, formatting and release metadata run on commit. Tests are not hooked:
+# they belong in CI on a pull request, where a failure can be read and fixed
+# without standing between you and a push.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -46,10 +45,3 @@ repos:
         language: system
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock|CHANGELOG\.md|src/superqode/__init__\.py|install/acp-registry/superqode/agent\.json)$
-
-      - id: pytest
-        name: pytest
-        entry: uv run --no-sync pytest -q
-        language: system
-        pass_filenames: false
-        stages: [pre-push]

@@ -9,7 +9,9 @@ import httpx
 import pytest
 from click.testing import CliRunner
 
-pytest.importorskip("a2a", reason="A2A tests require the optional a2a extra")
+# `a2a` imports from an older a2a-sdk that lacks a2a.server.routes, so guarding
+# on the bare package let these run against a build without the API they need.
+pytest.importorskip("a2a.server.routes", reason="A2A tests require the optional a2a extra")
 pytest.importorskip("fastapi", reason="A2A tests require FastAPI")
 
 from superqode.a2a.connection import (

@@ -157,6 +157,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)
 - `:harness` - Open all coding agents, HarnessSpecs, presets, and project harnesses
+- `:gauge` - Emit and check Agent Quality Records for a release decision
 - `:harness switch` - Open the same Harness Switcher
 - `:harness switch codex` - Connect a vendor coding agent from the same command family
 - `:harness switch kimi-code` - Connect Kimi Code from the unified picker
@@ -229,7 +230,7 @@ show status, or display its local help where supported.
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
-| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
+| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a`, `:connect protocols` |

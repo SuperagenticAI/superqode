@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 274
+EXPECTED_COMMAND_COUNT = 279
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -109,7 +109,10 @@ EXPECTED_COMMAND_COUNT = 274
 # published agent must never do, and a flag is one misconfiguration away from
 # doing it in production. The fixtures moved to scripts/a2a_tck_sut.py, outside
 # the installed package. One option removed, count still unchanged.
-EXPECTED_HELP_TREE_SHA256 = "3e051b991cad79a5987650651edff3a4096f6c7db1057eae3e16e20aad58bf12"
+# Rebaselined for `sq gauge`, which emits and checks Agent Quality Records.
+# One new group and four subcommands (run, gate, show, verify), so the count
+# moves 274 -> 279 and no existing command changed.
+EXPECTED_HELP_TREE_SHA256 = "e115b0d6458aef4d5d0d5892f6cbb12fb17d5fd1acd861a64c48de7c7e9edcae"
 
 
 def _render_help_tree() -> tuple[int, str]:
