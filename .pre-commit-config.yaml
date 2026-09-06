@@ -1,4 +1,12 @@
-# Basic file checks
+# Mirrors the gating checks in .github/workflows/ci.yml and publish.yml, so a
+# commit that passes locally passes in CI.
+#
+#   pre-commit install --install-hooks
+#   pre-commit install --hook-type pre-push
+#
+# Lint and formatting run on commit. The test suite runs on push, because it is
+# too slow to sit in front of every commit and a hook people disable protects
+# nothing.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -16,3 +24,32 @@ repos:
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
+
+  # CI runs `ruff check .` and `ruff format --check .`. Keep this rev in step
+  # with the ruff pin in pyproject.toml, or the hook and CI can disagree.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # publish.yml runs this against the tag. Running it whenever a
+      # version-carrying file changes catches a stale uv.lock or ACP registry
+      # at commit time instead of halfway through a release, where the version
+      # number has already been spent.
+      - id: release-metadata
+        name: release metadata is consistent
+        entry: python scripts/check_release_metadata.py
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock|CHANGELOG\.md|src/superqode/__init__\.py|install/acp-registry/superqode/agent\.json)$
+
+      - id: pytest
+        name: pytest
+        entry: uv run --no-sync pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

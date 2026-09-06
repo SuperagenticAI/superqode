@@ -9,7 +9,10 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  # Nothing reaches PyPI without lint and tests passing on the tagged commit.
+  # ci.yml runs the same checks, but it is a separate workflow: the two run in
+  # parallel on a tag push, so it cannot gate this one. These jobs can.
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tag
@@ -20,14 +23,60 @@ jobs:
           python-version: "3.12"
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --extra dev
+      # Cheapest first: a wrong version fails here in seconds, before the
+      # number is spent on PyPI where it cannot be withdrawn.
       - name: Validate release metadata
-        run: python scripts/check_release_metadata.py --tag "${GITHUB_REF_NAME}"
+        run: uv run python scripts/check_release_metadata.py --tag "${GITHUB_REF_NAME}"
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Public documentation style
+        run: uv run python scripts/check_public_docs_style.py
+      - name: Published Agent Card is current
+        run: uv run python scripts/check_published_agent_card.py
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Pytest
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run pytest -p pytest_asyncio.plugin
+
+  publish:
+    needs: [verify, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
       - name: Build package
         run: uv build
+      # --skip-existing keeps a rerun idempotent. Without it, re-running a tag
+      # whose version already published fails here and the GitHub release is
+      # never created.
       - name: Publish to PyPI
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: uv publish
+        run: uv publish --skip-existing
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,4 +85,9 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           version="${tag#v}"
           python scripts/changelog_notes.py "$tag" > "${RUNNER_TEMP}/notes.md"
-          gh release create "$tag" dist/* --title "$version" --notes-file "${RUNNER_TEMP}/notes.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --notes-file "${RUNNER_TEMP}/notes.md"
+          else
+            gh release create "$tag" dist/* --title "$version" --notes-file "${RUNNER_TEMP}/notes.md"
+          fi
