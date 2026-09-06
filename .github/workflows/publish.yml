@@ -4,11 +4,27 @@ on:
   push:
     tags:
       - "v*"
+  # For a rerun that should not move a tag. A tag push only fires when the tag
+  # actually changes, so re-pushing an unchanged tag transfers nothing and
+  # produces no event.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release, for example v2.1.0
+        required: true
 
 permissions:
   contents: write
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+    steps:
+      - id: pick
+        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
   # ci.yml runs the same checks, but it is a separate workflow: the two run in
   # parallel on a tag push, so it cannot gate this one. This job can, and it
   # covers everything that makes a release wrong in a way PyPI cannot undo.
@@ -18,10 +34,13 @@ jobs:
   # block every publish until that backlog is cleared. ci.yml runs it on every
   # push and pull request, which is where those failures should be fixed.
   verify:
+    needs: [resolve]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,7 +52,7 @@ jobs:
       # Cheapest first: a wrong version fails here in seconds, before the
       # number is spent on PyPI where it cannot be withdrawn.
       - name: Validate release metadata
-        run: uv run python scripts/check_release_metadata.py --tag "${GITHUB_REF_NAME}"
+        run: uv run python scripts/check_release_metadata.py --tag "${{ needs.resolve.outputs.tag }}"
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
@@ -44,11 +63,13 @@ jobs:
         run: uv run python scripts/check_published_agent_card.py
 
   publish:
-    needs: [verify]
+    needs: [resolve, verify]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -68,7 +89,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ needs.resolve.outputs.tag }}"
           version="${tag#v}"
           python scripts/changelog_notes.py "$tag" > "${RUNNER_TEMP}/notes.md"
           if gh release view "$tag" >/dev/null 2>&1; then
