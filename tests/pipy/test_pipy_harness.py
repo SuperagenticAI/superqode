@@ -302,9 +302,11 @@ async def test_queue_update_events():
     harness = await build([text_response("ok")])
     updates: list[int] = []
     harness.subscribe(
-        lambda event: updates.append(len(event.steer))
-        if getattr(event, "type", "") == "queue_update"
-        else None
+        lambda event: (
+            updates.append(len(event.steer))
+            if getattr(event, "type", "") == "queue_update"
+            else None
+        )
     )
 
     await harness.steer("a")
@@ -424,9 +426,11 @@ async def test_save_point_reports_pending_mutations():
     harness = await build([text_response("ok")])
     save_points: list[bool] = []
     harness.subscribe(
-        lambda event: save_points.append(event.had_pending_mutations)
-        if getattr(event, "type", "") == "save_point"
-        else None
+        lambda event: (
+            save_points.append(event.had_pending_mutations)
+            if getattr(event, "type", "") == "save_point"
+            else None
+        )
     )
 
     await harness.prompt("hi")
@@ -456,9 +460,11 @@ async def test_next_turn_queued_while_idle_is_consumed_by_the_prompt():
     harness = await build([text_response("ok")])
     settled: list[int] = []
     harness.subscribe(
-        lambda event: settled.append(event.next_turn_count)
-        if getattr(event, "type", "") == "settled"
-        else None
+        lambda event: (
+            settled.append(event.next_turn_count)
+            if getattr(event, "type", "") == "settled"
+            else None
+        )
     )
     await harness.next_turn("queued")
 

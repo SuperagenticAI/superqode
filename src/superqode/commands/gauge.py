@@ -49,21 +49,40 @@ def gauge() -> None:
 @click.option("--tasks", "tasks_path", required=True, type=click.Path(exists=True, path_type=Path))
 @click.option("--provider", default="ollama", show_default=True)
 @click.option("--model", default="", help="Model id; falls back to the spec's model policy.")
-@click.option("--repeat", "repeat", default=1, show_default=True,
-              help="Independent attempts per task. Values above 1 produce pass^k and pass@k.")
+@click.option(
+    "--repeat",
+    "repeat",
+    default=1,
+    show_default=True,
+    help="Independent attempts per task. Values above 1 produce pass^k and pass@k.",
+)
 @click.option("--profile", "profile_id", default="sg/coding-agent", show_default=True)
 @click.option("--tier", type=click.Choice(["T0", "T1", "T2"]), default="T1", show_default=True)
-@click.option("--sealed/--unsealed", default=False,
-              help="Assert the held-out split was closed to anything that tunes.")
+@click.option(
+    "--sealed/--unsealed",
+    default=False,
+    help="Assert the held-out split was closed to anything that tunes.",
+)
 @click.option("--canary", "canary_ids", multiple=True, help="Contamination probe task ids.")
-@click.option("--evaluator-independent", is_flag=True,
-              help="Assert the grader saw only the artifact and resulting state.")
-@click.option("--ledger", "ledger_dir", type=click.Path(path_type=Path), default=None,
-              help="Event ledger to reference. Defaults to .superqode/harness-protocol.")
-@click.option("--candidate", "candidate_id", default="",
-              help="Promotion candidate id; the record takes its actor and rollback target from it.")
-@click.option("--no-sources", is_flag=True,
-              help="Skip the promotion, policy and ledger readers.")
+@click.option(
+    "--evaluator-independent",
+    is_flag=True,
+    help="Assert the grader saw only the artifact and resulting state.",
+)
+@click.option(
+    "--ledger",
+    "ledger_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Event ledger to reference. Defaults to .superqode/harness-protocol.",
+)
+@click.option(
+    "--candidate",
+    "candidate_id",
+    default="",
+    help="Promotion candidate id; the record takes its actor and rollback target from it.",
+)
+@click.option("--no-sources", is_flag=True, help="Skip the promotion, policy and ledger readers.")
 @click.option("--out", "out_path", type=click.Path(path_type=Path), default=None)
 @click.option("--json", "as_json", is_flag=True)
 @click.option("--live/--dry-run", default=False, show_default=True)
@@ -124,15 +143,11 @@ def gauge_run(
     decisions: list[dict] = []
     ledger: dict = {}
     if not no_sources:
-        promotion = gauge_sources.promotion_evidence(
-            base_spec=spec_path, candidate_id=candidate_id
-        )
+        promotion = gauge_sources.promotion_evidence(base_spec=spec_path, candidate_id=candidate_id)
         decisions = gauge_sources.policy_decisions_from_ledger(
             ledger_dir or gauge_sources.DEFAULT_LEDGER_DIR
         ) or gauge_sources.policy_decisions(repository=".")
-        ledger = gauge_sources.ledger_evidence(
-            ledger_dir or gauge_sources.DEFAULT_LEDGER_DIR
-        )
+        ledger = gauge_sources.ledger_evidence(ledger_dir or gauge_sources.DEFAULT_LEDGER_DIR)
 
     record = record_from_eval(
         eval_result=runs[0],
@@ -220,7 +235,9 @@ def gauge_show(record_path: Path) -> None:
     task_set = record.get("task_set") or {}
 
     click.echo(f"\n  {subject.get('agent', 'unknown')}")
-    click.echo(f"  profile {profile.get('id')}@{profile.get('version')}  tier {profile.get('tier')}")
+    click.echo(
+        f"  profile {profile.get('id')}@{profile.get('version')}  tier {profile.get('tier')}"
+    )
     click.echo(f"  harness {str(subject.get('harness_digest', ''))[:23]}...")
 
     authority = subject.get("authority") or {}
@@ -247,7 +264,9 @@ def gauge_show(record_path: Path) -> None:
             floor = f" floor={gate['floor']}" if gate.get("floor") is not None else ""
             click.echo(f"    [{mark}] {gate['id']}{floor}")
 
-    click.echo(f"\n  verdict {decision.get('verdict', 'none')}  by {decision.get('actor', 'unknown')}")
+    click.echo(
+        f"\n  verdict {decision.get('verdict', 'none')}  by {decision.get('actor', 'unknown')}"
+    )
     click.echo(f"  level   {highest_level(record) or 'none'}\n")
 
 
@@ -266,7 +285,9 @@ def gauge_verify(record_path: Path, spec_path: Path | None) -> None:
         actual = sha256_file(spec_path)
         recorded = str(subject.get("harness_digest") or "")
         if actual != recorded:
-            problems.append(f"harness digest differs\n    recorded {recorded}\n    actual   {actual}")
+            problems.append(
+                f"harness digest differs\n    recorded {recorded}\n    actual   {actual}"
+            )
         else:
             click.echo("harness digest matches")
 

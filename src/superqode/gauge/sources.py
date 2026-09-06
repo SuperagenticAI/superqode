@@ -46,9 +46,7 @@ def promotion_evidence(
         return {}
 
     try:
-        state = harness_promotion_state(
-            candidate_id, base_spec=base_spec, registry_path=registry
-        )
+        state = harness_promotion_state(candidate_id, base_spec=base_spec, registry_path=registry)
     except (ValueError, OSError):
         return {}
 
@@ -113,7 +111,9 @@ def policy_decisions(
     return decisions
 
 
-def policy_decisions_from_ledger(ledger_dir: str | Path = DEFAULT_LEDGER_DIR) -> list[dict[str, Any]]:
+def policy_decisions_from_ledger(
+    ledger_dir: str | Path = DEFAULT_LEDGER_DIR,
+) -> list[dict[str, Any]]:
     """Read the decisions a run actually produced, where the ledger kept them."""
     root = Path(ledger_dir)
     if not root.exists():

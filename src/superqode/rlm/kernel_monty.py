@@ -386,9 +386,9 @@ class MontyKernelBackend:
             "_rlm_ctx_search": lambda paths, pattern, limit: self._view(paths).search(
                 pattern, limit=int(limit)
             ),
-            "_rlm_ctx_select": lambda paths, patterns: self._view(paths)
-            .select(*[str(item) for item in patterns])
-            .files(),
+            "_rlm_ctx_select": lambda paths, patterns: (
+                self._view(paths).select(*[str(item) for item in patterns]).files()
+            ),
             "_rlm_ctx_chunk": lambda paths, size, overlap: [
                 {
                     "text": chunk.text,

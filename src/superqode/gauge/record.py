@@ -124,7 +124,11 @@ def _authority_from_spec(spec: Any) -> dict[str, Any]:
             authority["egress"] = "unrestricted"
 
     capabilities = sorted(
-        {tool for agent in getattr(spec, "agents", []) or [] for tool in getattr(agent, "tools", []) or []}
+        {
+            tool
+            for agent in getattr(spec, "agents", []) or []
+            for tool in getattr(agent, "tools", []) or []
+        }
     )
     if capabilities:
         authority["capabilities"] = capabilities
