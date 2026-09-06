@@ -229,6 +229,7 @@ nav:
     - 📐 Benchmark Runner: advanced/benchmark-runner.md
     - 🧠 Skill Optimization: advanced/skill-optimization.md
     - 🚦 Harness Promotion: advanced/harness-promotion.md
+    - 🧭 Agent Quality Records: advanced/agent-quality-record.md
 
   - 🛠️ Operate:
     - 🧭 Terminal User Interface: advanced/tui.md
@@ -293,6 +294,7 @@ nav:
       - 🛡️ Trust: cli-reference/trust-commands.md
       - ⏱️ Sessions: cli-reference/sessions-commands.md
       - 📦 WorkOrders: cli-reference/work-commands.md
+      - 🧭 Gauge: cli-reference/gauge-commands.md
       - 🔐 Policy: cli-reference/policy-commands.md
       - 🏭 Factory: cli-reference/factory-commands.md
       - 📤 Share: cli-reference/share-commands.md

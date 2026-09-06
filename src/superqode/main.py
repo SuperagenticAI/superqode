@@ -1151,6 +1151,11 @@ from superqode.commands.harness import harness
 cli_main.add_command(harness, name="harness")
 
 
+from superqode.commands.gauge import gauge
+
+cli_main.add_command(gauge, name="gauge")
+
+
 from superqode.commands.hub import hub
 
 cli_main.add_command(hub, name="hub")

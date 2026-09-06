@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-06
+
+Adds `sq gauge`, which writes an Agent Quality Record for a release decision.
+`harness eval` reports how a harness scored; the record states what was checked
+before a change shipped, which conditions had to hold, who accepted the result,
+and what to revert to.
+
+### 🧭 Agent Quality Records
+
+- New `sq gauge` command group with `run`, `gate`, `show` and `verify`.
+- `sq gauge run` evaluates a harness and emits a record in the format published
+  at [SuperGauge](https://github.com/SuperagenticAI/supergauge), an open
+  specification any tool may implement.
+- `sq gauge gate record.yaml --level L2` exits non-zero below the level a
+  profile requires. This is the command intended for a pipeline step.
+- `sq gauge show` prints the record as a scorecard: subject, authority, task
+  set, measures, gates, verdict and level.
+- `sq gauge verify` recomputes the harness digest against the spec on disk and
+  confirms the referenced ledger is present. A digest mismatch means the spec
+  moved after the record was written.
+
+### 📐 What the record reports
+
+- The record introduces no new measurement. It projects state SuperQode already
+  holds: `task.completion` and the split counts from `harness eval`, the three
+  `efficiency.*_per_success` values from the usage aggregate that command
+  already reports, and a sha256 of the spec file as `subject.harness_digest`.
+- `subject.authority` records what the agent was permitted to do, read from
+  `execution_policy.sandbox`, the network policy and the agent tool lists. The
+  specification requires this because a record naming the agent without naming
+  its permissions can be structurally valid and substantively wrong.
+- `--repeat k` runs independent attempts per task and adds
+  `reliability.pass_hat_k` and `reliability.pass_at_k`. Working state is reset
+  between attempts, without which the measure would be unsound.
+- Measures appear only where the run produced them. An evaluation without
+  `--repeat` carries no reliability measure and stops at L2.
+
+### 🔗 Evidence read from existing stores
+
+- The promotion registry supplies `decision.actor` and the rollback target. The
+  target is the base digest, the version in force before the candidate, since
+  that is what a reader needs when the candidate turns out to be wrong.
+  `--candidate <id>` selects a specific promotion.
+- Governance decisions become the `policy.hard_rules` gate. Recorded `policy.*`
+  events are read from the ledger when present; otherwise the policy in force is
+  evaluated per phase.
+- The harness protocol ledger is referenced with its event count, which
+  conformance level L4 requires so a third party knows the size of what they are
+  being invited to replay. `--ledger PATH` overrides the default.
+- Each reader degrades to nothing when its store is absent, which lowers the
+  level the record reaches and never fails the run. `--no-sources` turns all
+  three off.
+
+### 🚦 Gates and judges
+
+- A gate is deterministic. `add_gate` raises on `answer.grounded` and
+  `robustness.multi_turn` instead of accepting a model-graded measure quietly,
+  because a judge varies between runs and can be influenced by the system it
+  grades.
+- Level checks live in `superqode.gauge.levels` and mirror the published
+  conformance suite, so a record SuperQode emits is judged by the rules a third
+  party would apply.
+
+### 📚 Documentation
+
+- New guide: [Agent Quality Records](docs/advanced/agent-quality-record.md).
+- New CLI reference: [`sq gauge`](docs/cli-reference/gauge-commands.md).
+
 ## [2.0.1] - 2026-09-02
 
 A maintenance release covering the install experience and the OpenCode ACP

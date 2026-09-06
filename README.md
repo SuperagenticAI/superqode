@@ -208,6 +208,24 @@ sealed held-out gate without replacing the live specification.
 See the [evaluation and optimization guide](docs/advanced/harness-optimization.md)
 and [Harness Promotion](docs/advanced/harness-promotion.md).
 
+
+### Release records
+
+Evaluation says how a harness scored. A record says what was checked before a
+change shipped, which conditions had to hold, who accepted it, and what to
+revert to.
+
+```bash
+sq gauge run --spec harness.yaml --tasks eval-tasks.yaml --out record.yaml
+sq gauge gate record.yaml --level L2      # the CI verb
+```
+
+The format is [SuperGauge](https://github.com/SuperagenticAI/supergauge), an open
+specification any tool may implement. SuperQode computes nothing new for it: the
+record projects the eval result, the execution policy, the governance decisions,
+the promotion registry and the event ledger it already holds. See
+[Agent Quality Records](docs/advanced/agent-quality-record.md).
+
 ## Local and Open Models
 
 SuperQode is tuned for the cases where context, tool calling, and search decide
