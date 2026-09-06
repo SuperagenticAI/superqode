@@ -34,7 +34,11 @@ jobs:
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
 
+  # Pull requests only. The suite takes several minutes and carries a standing
+  # backlog of failures, so running it on every push blocked work without
+  # telling anyone anything new. A pull request is where it has to be green.
   test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

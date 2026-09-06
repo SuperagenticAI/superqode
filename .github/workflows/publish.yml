@@ -57,13 +57,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Build package
         run: uv build
-      # --skip-existing keeps a rerun idempotent. Without it, re-running a tag
-      # whose version already published fails here and the GitHub release is
-      # never created.
+      # --check-url lets uv query the index and skip a distribution that is
+      # already published, which keeps a rerun of the same tag idempotent.
       - name: Publish to PyPI
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: uv publish --skip-existing
+        run: uv publish --check-url https://pypi.org/simple/
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
