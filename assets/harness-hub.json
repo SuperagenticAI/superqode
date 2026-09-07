@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.5",
-  "generated_at": "2026-09-02T06:47:37.545008+00:00",
+  "schema_version": "1.6",
+  "generated_at": "2026-09-07T06:34:55.224591+00:00",
   "count": 104,
   "categories": [
     "SuperQode harnesses",
@@ -76,7 +76,10 @@
       "popularity_rank": 220,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "rlm",
@@ -140,7 +143,10 @@
       "popularity_rank": 250,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "pipy",
@@ -207,7 +213,10 @@
       "popularity_rank": 240,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "workbench",
@@ -285,7 +294,10 @@
       "popularity_rank": 230,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "no-tool",
@@ -346,7 +358,10 @@
       "popularity_rank": 260,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "codex",
@@ -411,7 +426,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "openai/codex is Rust (96%); the npm package is a thin wrapper."
     },
     {
       "id": "claude",
@@ -467,7 +485,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. @anthropic-ai/claude-code ships a Bun-compiled single binary per platform."
     },
     {
       "id": "kimi-code",
@@ -531,7 +552,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "MoonshotAI/kimi-code carries package.json and tsconfig.json (TypeScript 97%)."
     },
     {
       "id": "qwen-code",
@@ -595,7 +619,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "QwenLM/qwen-code carries tsconfig.json (TypeScript 82%)."
     },
     {
       "id": "antigravity",
@@ -661,7 +688,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Go",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Ships as one self-contained agy binary with no separate runtime; Google\u2019s CLI docs and launch coverage describe it as a Go build sharing the Antigravity IDE agent harness."
     },
     {
       "id": "grok",
@@ -726,7 +756,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "xai-org/grok-build carries Cargo.toml (Rust 98%)."
     },
     {
       "id": "copilot",
@@ -796,7 +829,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. @github/copilot ships node_modules and a bundled webview alongside its binary."
     },
     {
       "id": "cursor",
@@ -860,7 +896,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. agent-cli-package.tar.gz contains webpack .index.js chunks and a Node SEA (cursor-agent-sea)."
     },
     {
       "id": "amp",
@@ -924,7 +963,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. @ampcode/cli is an npm wrapper over per-platform JS-runtime binaries."
     },
     {
       "id": "muse",
@@ -988,7 +1030,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. The installer fetches an opaque muse-bin binary from api.meta.ai."
     },
     {
       "id": "prime-agent",
@@ -1054,7 +1099,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "PrimeIntellect-ai/prime-agent carries tsconfig.json (TypeScript 94%)."
     },
     {
       "id": "devin",
@@ -1118,7 +1166,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "Cognition's own installer names the artifact a \"Cargo [[bin]] target\"."
     },
     {
       "id": "droid",
@@ -1182,7 +1233,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. droid delegates to @factory/cli-* JS-runtime binaries."
     },
     {
       "id": "kiro",
@@ -1246,7 +1300,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Ships gnu/musl target triples and derives from Amazon Q Developer CLI (Rust)."
     },
     {
       "id": "glm-cli",
@@ -1310,7 +1367,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "stefandevo/glm-acp-agent is TypeScript (99%)."
     },
     {
       "id": "deepagents-code",
@@ -1374,7 +1434,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "langchain-ai/deepagents carries pyproject.toml (Python 98%)."
     },
     {
       "id": "junie",
@@ -1438,7 +1501,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Kotlin",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. JetBrains ships a JVM archive; the npm client only unzips it (yauzl)."
     },
     {
       "id": "fx",
@@ -1504,7 +1570,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Zig",
+      "language_confidence": "confirmed",
+      "language_evidence": "vercel-labs/fx carries build.zig (Zig 81%)."
     },
     {
       "id": "acp:amp",
@@ -1559,7 +1628,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Amp itself is closed and JS-runtime based; SuperQode reaches it via the Python acp-amp adapter."
     },
     {
       "id": "acp:cursor",
@@ -1614,7 +1686,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Node SEA bundle, as with the Cursor entry."
     },
     {
       "id": "acp:deepagents-code",
@@ -1669,7 +1744,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "langchain-ai/deepagents carries pyproject.toml."
     },
     {
       "id": "acp:fx",
@@ -1724,7 +1802,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Zig",
+      "language_confidence": "confirmed",
+      "language_evidence": "vercel-labs/fx carries build.zig."
     },
     {
       "id": "acp:copilot",
@@ -1779,7 +1860,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. The npm package ships node_modules."
     },
     {
       "id": "acp:grok",
@@ -1834,7 +1918,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "xai-org/grok-build carries Cargo.toml."
     },
     {
       "id": "acp:opencode",
@@ -1853,7 +1940,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://opencode.ai/",
-      "repository": "https://github.com/opencode-ai/opencode",
+      "repository": "https://github.com/anomalyco/opencode",
       "interface": "",
       "support_note": "",
       "last_verified": "",
@@ -1889,7 +1976,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "OpenCode carries tsconfig.json and bun.lock. (The Go repo in this entry is the archived 2024 project.)"
     },
     {
       "id": "acp:devin",
@@ -1944,7 +2034,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "Cognition's installer names a Cargo binary target."
     },
     {
       "id": "acp:droid",
@@ -1999,7 +2092,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Delegates to @factory/cli-* JS-runtime binaries."
     },
     {
       "id": "acp:fast-agent",
@@ -2054,7 +2150,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "evalstate/fast-agent carries pyproject.toml (Python 99%)."
     },
     {
       "id": "acp:gemini",
@@ -2109,7 +2208,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "google-gemini/gemini-cli carries tsconfig.json (TypeScript 96%)."
     },
     {
       "id": "acp:hermes",
@@ -2164,7 +2266,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "nousresearch/hermes-agent carries pyproject.toml; the TypeScript in the repo is its web UI."
     },
     {
       "id": "acp:openhands",
@@ -2219,7 +2324,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Shipped as the openhands PyPI package; the repo's TypeScript majority is the web frontend."
     },
     {
       "id": "acp:prime-agent",
@@ -2274,7 +2382,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "PrimeIntellect-ai/prime-agent carries tsconfig.json."
     },
     {
       "id": "acp:claude",
@@ -2329,7 +2440,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "The claude-agent-acp adapter is TypeScript; Claude Code itself is a closed TypeScript bundle."
     },
     {
       "id": "acp:cline",
@@ -2384,7 +2498,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "cline/cline carries package.json and bun.lock (TypeScript 97%)."
     },
     {
       "id": "acp:codex",
@@ -2439,7 +2556,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "Codex is Rust; the codex-acp adapter in front of it is TypeScript."
     },
     {
       "id": "acp:goose",
@@ -2454,7 +2574,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "pipx install goose-ai",
+      "setup": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/block/goose",
@@ -2464,7 +2584,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/block/goose",
-      "install_command": "pipx install goose-ai",
+      "install_command": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
       "tui_commands": [
         ":connect acp goose",
         ":harness switch acp:goose",
@@ -2489,12 +2609,15 @@
       "setup_steps": [
         {
           "title": "Install Goose",
-          "command": "pipx install goose-ai",
+          "command": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
           "description": ""
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "block/goose carries Cargo.toml (Rust 72%)."
     },
     {
       "id": "acp:harn",
@@ -2549,7 +2672,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "burin-labs/harn carries Cargo.toml."
     },
     {
       "id": "acp:kilo",
@@ -2604,7 +2730,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "Kilo-Org/kilocode carries tsconfig.json and bun.lock."
     },
     {
       "id": "acp:kimi",
@@ -2659,7 +2788,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "MoonshotAI/kimi-code is TypeScript. (Moonshot's separate Kimi CLI is Python.)"
     },
     {
       "id": "acp:pi",
@@ -2714,7 +2846,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "The Pi coding agent and its pi-acp adapter both carry tsconfig.json."
     },
     {
       "id": "acp:qwen",
@@ -2769,7 +2904,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "QwenLM/qwen-code carries tsconfig.json."
     },
     {
       "id": "acp:agentpool",
@@ -2824,7 +2962,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "phil65/agentpool carries pyproject.toml."
     },
     {
       "id": "acp:auggie",
@@ -2879,7 +3020,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Plain Node package (13 MB, node-pty), no native binary."
     },
     {
       "id": "acp:autodev",
@@ -2934,7 +3078,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "The @xiuper/cli ACP agent is a Node package; the Kotlin in phodal/auto-dev is the IntelliJ plugin."
     },
     {
       "id": "acp:blackbox",
@@ -2989,7 +3136,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "Blackbox's own installer states the CLI is \"Node.js-based\"."
     },
     {
       "id": "acp:bub",
@@ -3044,7 +3194,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "bubbuild/bub carries pyproject.toml."
     },
     {
       "id": "acp:cagent",
@@ -3059,17 +3212,17 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "pip install cagent",
+      "setup": "brew install docker-agent",
       "warning": "",
       "project_path": "",
-      "homepage": "https://github.com/cagent/cagent",
+      "homepage": "https://github.com/docker/docker-agent",
       "repository": "",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://github.com/cagent/cagent",
-      "install_command": "pip install cagent",
+      "docs_url": "https://github.com/docker/docker-agent",
+      "install_command": "brew install docker-agent",
       "tui_commands": [
         ":connect acp cagent",
         ":harness switch acp:cagent",
@@ -3094,12 +3247,15 @@
       "setup_steps": [
         {
           "title": "Install cagent",
-          "command": "pip install cagent",
+          "command": "brew install docker-agent",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Go",
+      "language_confidence": "confirmed",
+      "language_evidence": "docker/docker-agent carries go.mod."
     },
     {
       "id": "acp:codeassistant",
@@ -3114,17 +3270,17 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "cargo install code-assistant",
+      "setup": "cargo install --git https://github.com/stippi/code-assistant",
       "warning": "",
       "project_path": "",
-      "homepage": "https://github.com/codeassistant/codeassistant",
+      "homepage": "https://github.com/stippi/code-assistant",
       "repository": "",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://github.com/codeassistant/codeassistant",
-      "install_command": "cargo install code-assistant",
+      "docs_url": "https://github.com/stippi/code-assistant",
+      "install_command": "cargo install --git https://github.com/stippi/code-assistant",
       "tui_commands": [
         ":connect acp codeassistant",
         ":harness switch acp:codeassistant",
@@ -3149,12 +3305,15 @@
       "setup_steps": [
         {
           "title": "Install Code Assistant",
-          "command": "cargo install code-assistant",
+          "command": "cargo install --git https://github.com/stippi/code-assistant",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "stippi/code-assistant carries Cargo.toml."
     },
     {
       "id": "acp:codebuddy",
@@ -3209,7 +3368,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. 169 MB npm bundle with node-pty, no native platform packages."
     },
     {
       "id": "acp:cortex",
@@ -3264,7 +3426,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. Snowflake publishes no build manifest for the CoCo/Cortex Code CLI."
     },
     {
       "id": "acp:crow",
@@ -3279,7 +3444,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g crow-cli",
+      "setup": "uv tool install crow-cli",
       "warning": "",
       "project_path": "",
       "homepage": "https://crow-ai.dev",
@@ -3289,7 +3454,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://crow-ai.dev",
-      "install_command": "npm install -g crow-cli",
+      "install_command": "uv tool install crow-cli",
       "tui_commands": [
         ":connect acp crow",
         ":harness switch acp:crow",
@@ -3314,12 +3479,15 @@
       "setup_steps": [
         {
           "title": "Install crow-cli",
-          "command": "npm install -g crow-cli",
+          "command": "uv tool install crow-cli",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "crow-cli/crow-cli carries pyproject.toml."
     },
     {
       "id": "acp:deepagents",
@@ -3374,7 +3542,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "The ACP build ships from langchain-ai/deepagentsjs (tsconfig.json)."
     },
     {
       "id": "acp:dirac",
@@ -3429,7 +3600,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "dirac-run/dirac carries tsconfig.json."
     },
     {
       "id": "acp:fount",
@@ -3444,7 +3618,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "cargo install fount",
+      "setup": "curl -fsSL https://steve02081504.github.io/fount/install.sh | bash",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/steve02081504/fount",
@@ -3454,7 +3628,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/steve02081504/fount",
-      "install_command": "cargo install fount",
+      "install_command": "curl -fsSL https://steve02081504.github.io/fount/install.sh | bash",
       "tui_commands": [
         ":connect acp fount",
         ":harness switch acp:fount",
@@ -3479,12 +3653,15 @@
       "setup_steps": [
         {
           "title": "Install fount",
-          "command": "cargo install fount",
+          "command": "curl -fsSL https://steve02081504.github.io/fount/install.sh | bash",
           "description": ""
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "JavaScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "steve02081504/fount is JavaScript (88%)."
     },
     {
       "id": "acp:glm",
@@ -3539,7 +3716,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "stefandevo/glm-acp-agent is TypeScript (99%)."
     },
     {
       "id": "acp:junie",
@@ -3594,7 +3774,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Kotlin",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. JetBrains ships a JVM archive behind an npm unzip client."
     },
     {
       "id": "acp:kiro",
@@ -3649,7 +3832,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. gnu/musl target triples; derives from Amazon Q Developer CLI (Rust)."
     },
     {
       "id": "acp:llmlingagent",
@@ -3664,17 +3850,17 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "pip install llmling-agent",
+      "setup": "uv tool install agentpool",
       "warning": "",
       "project_path": "",
-      "homepage": "https://github.com/llmling/llmling-agent",
+      "homepage": "https://github.com/phil65/agentpool",
       "repository": "",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://github.com/llmling/llmling-agent",
-      "install_command": "pip install llmling-agent",
+      "docs_url": "https://github.com/phil65/agentpool",
+      "install_command": "uv tool install agentpool",
       "tui_commands": [
         ":connect acp llmlingagent",
         ":harness switch acp:llmlingagent",
@@ -3699,12 +3885,15 @@
       "setup_steps": [
         {
           "title": "Install LLMling-Agent",
-          "command": "pip install llmling-agent",
+          "command": "uv tool install agentpool",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "phil65/llmling-agent carries pyproject.toml."
     },
     {
       "id": "acp:minion",
@@ -3759,7 +3948,10 @@
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "femto/minion-code carries pyproject.toml (Python 99%)."
     },
     {
       "id": "acp:mistral-vibe",
@@ -3814,7 +4006,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "mistralai/mistral-vibe carries pyproject.toml (Python 99%)."
     },
     {
       "id": "acp:openclaw",
@@ -3869,7 +4064,10 @@
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "The openclaw npm package is a real Node application (ws, zod, acorn, yaml)."
     },
     {
       "id": "acp:poolside",
@@ -3884,7 +4082,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g @poolsideai/pool",
+      "setup": "curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/poolsideai/pool",
@@ -3894,7 +4092,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/poolsideai/pool",
-      "install_command": "npm install -g @poolsideai/pool",
+      "install_command": "curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh",
       "tui_commands": [
         ":connect acp poolside",
         ":harness switch acp:poolside",
@@ -3919,12 +4117,15 @@
       "setup_steps": [
         {
           "title": "Install Poolside",
-          "command": "npm install -g @poolsideai/pool",
+          "command": "curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh",
           "description": ""
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. poolsideai/pool publishes no code and no npm package."
     },
     {
       "id": "acp:qoder",
@@ -3939,7 +4140,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g qoder-cli",
+      "setup": "npm install -g @qoder-ai/qodercli",
       "warning": "",
       "project_path": "",
       "homepage": "https://docs.qoder.com/cli/acp",
@@ -3949,7 +4150,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.qoder.com/cli/acp",
-      "install_command": "npm install -g qoder-cli",
+      "install_command": "npm install -g @qoder-ai/qodercli",
       "tui_commands": [
         ":connect acp qoder",
         ":harness switch acp:qoder",
@@ -3974,12 +4175,15 @@
       "setup_steps": [
         {
           "title": "Install Qoder CLI",
-          "command": "npm install -g qoder-cli",
+          "command": "npm install -g @qoder-ai/qodercli",
           "description": ""
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source. No public repository or published npm package."
     },
     {
       "id": "acp:sigit",
@@ -3994,7 +4198,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g sigit",
+      "setup": "cargo install sigit",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/getsigit/sigit",
@@ -4004,7 +4208,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/getsigit/sigit",
-      "install_command": "npm install -g sigit",
+      "install_command": "cargo install sigit",
       "tui_commands": [
         ":connect acp sigit",
         ":harness switch acp:sigit",
@@ -4029,12 +4233,15 @@
       "setup_steps": [
         {
           "title": "Install siGit Code",
-          "command": "npm install -g sigit",
+          "command": "cargo install sigit",
           "description": ""
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "getsigit/sigit carries Cargo.toml (Rust 98%)."
     },
     {
       "id": "acp:stakpak",
@@ -4049,17 +4256,17 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "pip install stakpak",
+      "setup": "curl -sSL https://stakpak.dev/install.sh | sh",
       "warning": "",
       "project_path": "",
-      "homepage": "https://github.com/stakpak/stakpak",
+      "homepage": "https://github.com/stakpak/agent",
       "repository": "",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://github.com/stakpak/stakpak",
-      "install_command": "pip install stakpak",
+      "docs_url": "https://github.com/stakpak/agent",
+      "install_command": "curl -sSL https://stakpak.dev/install.sh | sh",
       "tui_commands": [
         ":connect acp stakpak",
         ":harness switch acp:stakpak",
@@ -4084,12 +4291,15 @@
       "setup_steps": [
         {
           "title": "Install Stakpak",
-          "command": "pip install stakpak",
+          "command": "curl -sSL https://stakpak.dev/install.sh | sh",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "stakpak/agent carries Cargo.toml."
     },
     {
       "id": "acp:stdio-bus",
@@ -4104,7 +4314,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "cargo install stdio-bus",
+      "setup": "curl -L -o stdio_bus https://github.com/stdiobus/stdiobus/releases/latest/download/linux-amd64/stdio_bus && chmod +x stdio_bus",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/stdiobus/stdiobus",
@@ -4114,7 +4324,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/stdiobus/stdiobus",
-      "install_command": "cargo install stdio-bus",
+      "install_command": "curl -L -o stdio_bus https://github.com/stdiobus/stdiobus/releases/latest/download/linux-amd64/stdio_bus && chmod +x stdio_bus",
       "tui_commands": [
         ":connect acp stdio-bus",
         ":harness switch acp:stdio-bus",
@@ -4139,12 +4349,15 @@
       "setup_steps": [
         {
           "title": "Install stdio Bus",
-          "command": "cargo install stdio-bus",
+          "command": "curl -L -o stdio_bus https://github.com/stdiobus/stdiobus/releases/latest/download/linux-amd64/stdio_bus && chmod +x stdio_bus",
           "description": ""
         }
       ],
       "openness": "open",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "stdiobus/stdiobus holds only shell and Makefile sources; no published crate."
     },
     {
       "id": "acp:vtcode",
@@ -4159,17 +4372,17 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g vtcode-acp",
+      "setup": "cargo install vtcode",
       "warning": "",
       "project_path": "",
-      "homepage": "https://github.com/vtcode/vtcode",
+      "homepage": "https://github.com/vinhnx/vtcode",
       "repository": "",
       "interface": "",
       "support_note": "",
       "last_verified": "",
       "aliases": [],
-      "docs_url": "https://github.com/vtcode/vtcode",
-      "install_command": "npm install -g vtcode-acp",
+      "docs_url": "https://github.com/vinhnx/vtcode",
+      "install_command": "cargo install vtcode",
       "tui_commands": [
         ":connect acp vtcode",
         ":harness switch acp:vtcode",
@@ -4194,12 +4407,15 @@
       "setup_steps": [
         {
           "title": "Install VT Code",
-          "command": "npm install -g vtcode-acp",
+          "command": "cargo install vtcode",
           "description": ""
         }
       ],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "vinhnx/vtcode carries Cargo.toml."
     },
     {
       "id": "tau",
@@ -4262,7 +4478,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "huggingface/tau carries pyproject.toml (Python 96%)."
     },
     {
       "id": "uhp",
@@ -4323,7 +4542,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "HarnessRouter/harnessrouter is Python (61%); the TypeScript is its dashboard."
     },
     {
       "id": "deepseek-harness",
@@ -4389,7 +4611,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "deepseek-ai/deepseek-harness carries tsconfig.json (TypeScript 96%)."
     },
     {
       "id": "deepagents",
@@ -4455,7 +4680,10 @@
       "popularity_rank": 255,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "langchain-ai/deepagents carries pyproject.toml (Python 98%)."
     },
     {
       "id": "benchmark-coding",
@@ -4532,7 +4760,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "rlm-docker",
@@ -4596,7 +4827,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "rlm-monty",
@@ -4660,7 +4894,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "prime-agent-python",
@@ -4726,7 +4963,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "gemma4-coding",
@@ -4803,7 +5043,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "gemma4-no-tool",
@@ -4864,7 +5107,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "ds4-coding",
@@ -4941,7 +5187,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "ds4-fast-local",
@@ -5018,7 +5267,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "qwen-coding",
@@ -5095,7 +5347,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "glm-coding",
@@ -5172,7 +5427,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "glm52-coding",
@@ -5250,7 +5508,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "minimax-coding",
@@ -5327,7 +5588,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "kimi-coding",
@@ -5405,7 +5669,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "kimi-k3-coding",
@@ -5483,7 +5750,10 @@
       "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "ecosystem:zcode",
@@ -5551,7 +5821,10 @@
         }
       ],
       "openness": "closed",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "Closed source desktop application."
     },
     {
       "id": "ecosystem:headlong",
@@ -5622,7 +5895,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Shell",
+      "language_confidence": "confirmed",
+      "language_evidence": "laude-institute/headlong is Bash (58%), orchestrating Python and Node tooling."
     },
     {
       "id": "ecosystem:qm",
@@ -5664,7 +5940,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "yc-software/qm carries tsconfig.json (TypeScript 92%)."
     },
     {
       "id": "ecosystem:harness-new",
@@ -5706,7 +5985,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution."
     },
     {
       "id": "ecosystem:replicas",
@@ -5747,7 +6029,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution."
     },
     {
       "id": "ecosystem:synth",
@@ -5788,7 +6073,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution."
     },
     {
       "id": "ecosystem:better-harness",
@@ -5829,7 +6117,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "JavaScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "QoderAI/better-harness is JavaScript (65%)."
     },
     {
       "id": "ecosystem:jcode",
@@ -5896,7 +6187,10 @@
         }
       ],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "1jehuang/jcode carries Cargo.toml (Rust 91%)."
     },
     {
       "id": "ecosystem:letta",
@@ -5964,7 +6258,10 @@
         }
       ],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "letta-ai/letta-code carries tsconfig.json and bun.lock (TypeScript 97%)."
     },
     {
       "id": "ecosystem:warp",
@@ -6031,7 +6328,10 @@
         }
       ],
       "openness": "open",
-      "license": "AGPL-3.0"
+      "license": "AGPL-3.0",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "warpdotdev/warp carries Cargo.toml (Rust 98%)."
     },
     {
       "id": "ecosystem:aider",
@@ -6074,7 +6374,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Aider-AI/aider carries pyproject.toml (Python 80%)."
     },
     {
       "id": "ecosystem:crush",
@@ -6116,7 +6419,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "",
-      "license": ""
+      "license": "",
+      "language": "Go",
+      "language_confidence": "confirmed",
+      "language_evidence": "charmbracelet/crush carries go.mod (Go 98%)."
     },
     {
       "id": "ecosystem:plandex",
@@ -6158,7 +6464,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "open",
-      "license": "MIT"
+      "license": "MIT",
+      "language": "Go",
+      "language_confidence": "confirmed",
+      "language_evidence": "plandex-ai/plandex is Go (93%)."
     },
     {
       "id": "ecosystem:roo-code",
@@ -6201,7 +6510,10 @@
       "popularity_rank": 700,
       "setup_steps": [],
       "openness": "open",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "RooCodeInc/Roo-Code carries tsconfig.json (TypeScript 90%)."
     }
   ]
 }
