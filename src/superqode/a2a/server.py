@@ -121,7 +121,7 @@ class A2AServerConfig(BaseModel):
     #: Must resolve.  Host platforms render this in their agent gallery, and a
     #: dead URL shows as a broken image rather than as no image.
     #: ``scripts/check_published_agent_card.py`` verifies it.
-    icon_url: str = "https://super-agentic.ai/uploads/superqode.png"
+    icon_url: str = "https://superqode.dev/assets/superqode.png"
     jsonrpc_path: str = "/"
     #: Also advertise and serve the A2A 0.3 wire format.  Gemini Enterprise,
     #: Foundry Agent Service, and Agent Registry all still accept 0.3 cards,
