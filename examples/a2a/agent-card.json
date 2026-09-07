@@ -59,7 +59,7 @@
       ]
     }
   ],
-  "iconUrl": "https://super-agentic.ai/uploads/superqode.png",
+  "iconUrl": "https://docs.superqode.dev/assets/superqode-logo.png",
   "preferredTransport": "JSONRPC",
   "protocolVersion": "0.3",
   "url": "https://a2a.superqode.dev"
