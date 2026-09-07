@@ -60,7 +60,7 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         ),
         "run_command": "gemini --acp",
         "status": "available",
-        "installation_command": "npm install -g @anthropic-ai/gemini-cli",
+        "installation_command": "npm install -g @google/gemini-cli",
         "installation_instructions": (
             "Install Gemini CLI via npm and set GEMINI_API_KEY or GOOGLE_API_KEY. "
             "For consumer Google AI accounts, use Antigravity CLI instead: :connect antigravity."

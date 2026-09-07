@@ -88,7 +88,7 @@ AGENTS: Dict[str, AgentDef] = {
             "to Antigravity CLI"
         ),
         auth_info="Enterprise/API-key route: GEMINI_API_KEY or GOOGLE_API_KEY",
-        setup_command="npm install -g @anthropic-ai/gemini-cli",
+        setup_command="npm install -g @google/gemini-cli",
         docs_url="https://github.com/google-gemini/gemini-cli",
         capabilities=["Large codebases", "Multimodal input", "2M context"],
         connection_type="stdio",

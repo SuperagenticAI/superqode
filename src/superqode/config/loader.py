@@ -785,7 +785,7 @@ Critique and improve code quality from development.""",
             "gemini": {
                 "enabled": True,
                 "description": "Gemini CLI - Google's reference ACP implementation",
-                "install_command": "npm install -g @anthropic-ai/gemini-cli",
+                "install_command": "npm install -g @google/gemini-cli",
                 "api_key_env": "GEMINI_API_KEY",
             },
             "claude-code": {
