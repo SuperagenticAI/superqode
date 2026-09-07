@@ -59,7 +59,7 @@
       ]
     }
   ],
-  "iconUrl": "https://docs.superqode.dev/assets/superqode-logo.png",
+  "iconUrl": "https://superqode.dev/assets/superqode.png",
   "preferredTransport": "JSONRPC",
   "protocolVersion": "0.3",
   "url": "https://a2a.superqode.dev"
