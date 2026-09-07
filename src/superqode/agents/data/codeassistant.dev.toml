@@ -1,13 +1,13 @@
 # Schema defined in agent_schema.py
-# https://github.com/codeassistant/codeassistant
+# https://github.com/stippi/code-assistant
 
 identity = "codeassistant.dev"
 name = "Code Assistant"
 short_name = "codeassistant"
-url = "https://github.com/codeassistant/codeassistant"
+url = "https://github.com/stippi/code-assistant"
 protocol = "acp"
 author_name = "Code Assistant"
-author_url = "https://github.com/codeassistant"
+author_url = "https://github.com/stippi"
 publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
@@ -31,10 +31,10 @@ Code Assistant is an AI coding assistant built in Rust for autonomous code analy
 
 ## Installation
 
-Install Code Assistant via Cargo:
+Download the latest release, or build from source:
 
 ```bash
-cargo install code-assistant
+cargo install --git https://github.com/stippi/code-assistant
 ```
 
 **Requirements:**
@@ -43,9 +43,9 @@ cargo install code-assistant
 
 ---
 
-**GitHub**: https://github.com/codeassistant/codeassistant
+**GitHub**: https://github.com/stippi/code-assistant
 '''
 
 [actions."*".install]
-command = "cargo install code-assistant"
-description = "Install Code Assistant via Cargo"
+command = "cargo install --git https://github.com/stippi/code-assistant"
+description = "Build Code Assistant from source"

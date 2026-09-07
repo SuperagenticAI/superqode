@@ -112,7 +112,11 @@ EXPECTED_COMMAND_COUNT = 279
 # Rebaselined for `sq gauge`, which emits and checks Agent Quality Records.
 # One new group and four subcommands (run, gate, show, verify), so the count
 # moves 274 -> 279 and no existing command changed.
-EXPECTED_HELP_TREE_SHA256 = "e115b0d6458aef4d5d0d5892f6cbb12fb17d5fd1acd861a64c48de7c7e9edcae"
+# Rebaselined for `hub --language`, which filters the catalogue by the language
+# a harness is implemented in. One new option on `hub` and `hub list`, and the
+# rendered `hub` help now lists the language choices, so the digest moves. No
+# Click command was added or removed and the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "33ec669e953c549c7a87bfcccc3deea4cb3925f4ea6e80414126cf14edc21b04"
 
 
 def _render_help_tree() -> tuple[int, str]:

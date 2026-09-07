@@ -20,7 +20,7 @@ AI coding agent CLI.
 ## Installation
 
 ```bash
-npm install -g crow-cli
+uv tool install crow-cli
 ```
 
 For ACP mode:
@@ -33,5 +33,5 @@ See https://crow-ai.dev for details.
 '''
 
 [actions."*".install]
-command = "npm install -g crow-cli"
+command = "uv tool install crow-cli"
 description = "Install crow-cli"

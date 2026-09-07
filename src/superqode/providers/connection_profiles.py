@@ -61,6 +61,11 @@ CONNECT_MENU_VENDORS = "vendors"
 CONNECT_MENU_ACP = "acp-agents"
 CONNECT_MENU_PROTOCOLS = "protocols"
 CONNECT_MENU_OPEN = "open-harnesses"
+#: Language index, and ``by-language:<Language>`` for one language's harnesses.
+CONNECT_MENU_LANGUAGE = "by-language"
+CONNECT_MENU_LANGUAGE_PREFIX = "by-language:"
+#: Mirrors hub.UNKNOWN_LANGUAGE without importing it at module load.
+UNKNOWN_LANGUAGE_LABEL = "Unknown"
 CONNECT_MENU_CLOSED = "closed-harnesses"
 CONNECT_MENU_HARNESS = "harness"
 CONNECT_MENU_MODELS = "models"
@@ -77,6 +82,7 @@ CONNECT_MENUS = (
     CONNECT_MENU_PROTOCOLS,
     CONNECT_MENU_OPEN,
     CONNECT_MENU_CLOSED,
+    CONNECT_MENU_LANGUAGE,
     CONNECT_MENU_HARNESS,
     CONNECT_MENU_MODELS,
     CONNECT_MENU_KEY_MODELS,
@@ -99,6 +105,7 @@ _MENU_PARENTS = {
     CONNECT_MENU_PROTOCOLS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_OPEN: CONNECT_MENU_AGENTS,
     CONNECT_MENU_CLOSED: CONNECT_MENU_AGENTS,
+    CONNECT_MENU_LANGUAGE: CONNECT_MENU_AGENTS,
     CONNECT_MENU_MODELS: CONNECT_MENU_HARNESS,
     CONNECT_MENU_PLAN: CONNECT_MENU_MODELS,
 }
@@ -118,6 +125,8 @@ def parent_menu(menu: str, *, return_menu: str | None = None) -> str:
     Open or Closed list the user came from (``KeyHarnessSession.return_menu``).
     """
     name = normalize_menu(menu)
+    if name.startswith(CONNECT_MENU_LANGUAGE_PREFIX):
+        return CONNECT_MENU_LANGUAGE
     if name == CONNECT_MENU_KEY_MODELS:
         dest = str(return_menu or "").strip()
         if dest in {CONNECT_MENU_OPEN, CONNECT_MENU_CLOSED}:
@@ -133,7 +142,12 @@ def normalize_menu(menu: str | None) -> str:
     to the root menu rather than rendering an empty screen. ``other-harnesses``
     is a profile in v1, not a menu; under v2 it aliases the Open list.
     """
-    name = str(menu or "").strip().lower()
+    name = str(menu or "").strip()
+    # ``by-language:Rust`` is a real screen; the language keeps its own casing
+    # so the title reads "Rust" rather than "rust".
+    if name.lower().startswith(CONNECT_MENU_LANGUAGE_PREFIX) and name.split(":", 1)[1].strip():
+        return f"{CONNECT_MENU_LANGUAGE_PREFIX}{name.split(':', 1)[1].strip()}"
+    name = name.lower()
     if name in CONNECT_MENUS:
         return name
     if name == "other-harnesses" and connect_menu_version() == "v2":
@@ -1048,6 +1062,17 @@ _AGENT_CLOSED = ConnectionProfile(
     menu=CONNECT_MENU_AGENTS,
     detect=lambda: True,
 )
+_AGENT_BY_LANGUAGE = ConnectionProfile(
+    id="agent-by-language",
+    label="By language",
+    description=(
+        "Browse harnesses by what they are written in — Rust, Python, "
+        "TypeScript and the rest — when the runtime you already have matters."
+    ),
+    connector="language-picker",
+    menu=CONNECT_MENU_AGENTS,
+    detect=lambda: True,
+)
 _AGENT_SUBSCRIPTIONS_V2 = ConnectionProfile(
     id="agent-subscriptions",
     label="Subscriptions",
@@ -1232,6 +1257,7 @@ def _agent_category_profiles() -> List[ConnectionProfile]:
 
     if list_entries("closed"):
         rows.append(_AGENT_CLOSED)
+    rows.append(_AGENT_BY_LANGUAGE)
     return rows
 
 
@@ -1416,6 +1442,10 @@ CONNECT_MENU_TITLES = {
         "ACP agents",
         "Agents that speak Agent Client Protocol.",
     ),
+    CONNECT_MENU_LANGUAGE: (
+        "By language",
+        "What each harness is written in, from its own build manifest.",
+    ),
     CONNECT_MENU_OPEN: (
         "Open harnesses",
         "Open-source harnesses. Connect with your API key or a local model.",
@@ -1466,7 +1496,147 @@ def connect_menu_titles() -> dict:
         titles[CONNECT_MENU_AGENTS] = (
             _V2_AGENTS_TITLE_WITH_CLOSED if list_entries("closed") else _V2_AGENTS_TITLE
         )
+    # ``by-language:<Language>`` is one screen per language, so its titles are
+    # generated from the same index the rows come from.
+    for row in _language_index_profiles():
+        # "Unknown" is a statement about what we could establish, not a language,
+        # so it does not read as one in a sentence.
+        subtitle = (
+            "Harnesses with no published source or build manifest to read."
+            if row.label == UNKNOWN_LANGUAGE_LABEL
+            else f"Harnesses implemented in {row.label}."
+        )
+        titles[f"{CONNECT_MENU_LANGUAGE_PREFIX}{row.label}"] = (
+            f"{row.label} harnesses",
+            subtitle,
+        )
     return titles
+
+
+def _language_routes() -> List[tuple[ConnectionProfile, str]]:
+    """Every connect route, paired with the language its harness is written in.
+
+    All three routes count, not just the key-harness screens: a subscription is
+    as real a way to reach Qwen Code as its API key is, and a language screen
+    that quietly omitted the Subscriptions list would under-report every vendor
+    agent. A harness reachable two ways appears twice, which is what the rest of
+    ``:connect`` already does -- the labels say "(API key)" where they differ.
+    """
+    from superqode.harness.hub import language_for_reference
+    from superqode.providers.harness_catalog import get_entry
+
+    routes: List[tuple[ConnectionProfile, str]] = []
+    covered: set[str] = set()
+
+    def add(profile: ConnectionProfile, *hints: str) -> None:
+        found = language_for_reference(*hints, profile.id)
+        routes.append((profile, found.language if found else UNKNOWN_LANGUAGE_LABEL))
+        for hint in (*hints, profile.id):
+            token = (hint or "").strip().casefold()
+            if token:
+                covered.add(token)
+                covered.add(token.removesuffix("-key"))
+
+    # SuperQode's own harnesses. `harness-presets` and `harness-repo` open
+    # further menus rather than naming a harness, so they are not routes.
+    # "Core" and "RLM" mean nothing next to a list of named products, so they
+    # are labelled with whose harnesses they are; `_profiles_for_language`
+    # then sorts them below the third-party ones.
+    for profile in _HARNESS_PROFILES:
+        if profile.runtime:
+            plain = profile.label.replace(" (recommended)", "").strip()
+            add(replace(profile, label=f"SuperQode {plain}"), profile.runtime)
+    for profile in _AGENT_PROFILES:
+        add(profile, profile.runtime or "", profile.acp_agent or "")
+    for screen in ("open", "closed"):
+        for profile in _catalog_harness_profiles(screen):
+            entry = get_entry(profile.id)
+            add(profile, (entry.harness_id or "") if entry else "")
+
+    # The ACP registry's long tail: everything `:connect acp` can reach that no
+    # curated route above already covers. Without these the index under-reports
+    # every language whose agents are ACP-only -- most of the Python ones.
+    for agent_id, data in _acp_registry_agents().items():
+        short = str(data.get("short_name") or "").strip()
+        if not short or short.casefold() in covered:
+            continue
+        label = str(data.get("name") or short)
+        add(
+            ConnectionProfile(
+                id=f"acp-{short}",
+                label=label,
+                description=str(data.get("description") or "")[:120],
+                connector="acp",
+                acp_agent=short,
+                transport="ACP",
+                detect=_always_ready,
+            ),
+            short,
+        )
+    return routes
+
+
+def _acp_registry_agents() -> dict:
+    """The ACP agent registry, or nothing if it cannot be read.
+
+    Reading it touches every agent TOML, so a failure must degrade to the
+    curated routes rather than taking the whole screen down with it.
+    """
+    import asyncio
+
+    from superqode.agents.registry import get_all_acp_agents
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:  # pragma: no cover - the connect screens build these synchronously
+        return {}
+    try:
+        return asyncio.run(get_all_acp_agents()) or {}
+    except Exception:  # noqa: BLE001 - a browse screen must not fail closed
+        return {}
+
+
+def _language_index_profiles() -> List[ConnectionProfile]:
+    """One row per language present across every connect route, commonest first."""
+    counts: dict[str, int] = {}
+    for _profile, name in _language_routes():
+        counts[name] = counts.get(name, 0) + 1
+    order = sorted(counts, key=lambda name: (-counts[name], name))
+    return [
+        ConnectionProfile(
+            id=f"language-{name.lower()}",
+            label=name,
+            description=(
+                f"{counts[name]} harness{'es' if counts[name] != 1 else ''} "
+                + (
+                    "whose language is not published"
+                    if name == UNKNOWN_LANGUAGE_LABEL
+                    else f"written in {name}"
+                )
+            ),
+            connector="language-harness-picker",
+            menu=CONNECT_MENU_LANGUAGE,
+            detect=_always_ready,
+        )
+        for name in order
+    ]
+
+
+def _profiles_for_language(language: str) -> List[ConnectionProfile]:
+    """Every connect route to a harness written in one language."""
+    wanted = language.strip().casefold()
+    rows = [
+        replace(profile, menu=f"{CONNECT_MENU_LANGUAGE_PREFIX}{language}")
+        for profile, name in _language_routes()
+        if name.casefold() == wanted
+    ]
+    # SuperQode's own harnesses go last. Someone browsing by language is
+    # looking for an agent they already have, not for the harnesses that ship
+    # in the box, and those sit one screen away under Harness anyway.
+    rows.sort(key=lambda profile: profile.id.startswith("harness-"))
+    return _dedupe_by_id(rows)
 
 
 def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfile]:
@@ -1485,6 +1655,10 @@ def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfi
         return _catalog_harness_profiles("open")
     if menu == CONNECT_MENU_CLOSED:
         return _catalog_harness_profiles("closed")
+    if menu == CONNECT_MENU_LANGUAGE:
+        return _language_index_profiles()
+    if str(menu).startswith(CONNECT_MENU_LANGUAGE_PREFIX):
+        return _profiles_for_language(str(menu)[len(CONNECT_MENU_LANGUAGE_PREFIX) :])
     if menu == CONNECT_MENU_KEY_MODELS:
         # A derived list. Never mutate _MODEL_PROFILES; Plan stays on the
         # native SuperQode-harness path.
@@ -1668,6 +1842,8 @@ __all__ = [
     "CONNECT_MENU_AGENTS",
     "CONNECT_MENU_BUILD",
     "CONNECT_MENU_ACP",
+    "CONNECT_MENU_LANGUAGE",
+    "CONNECT_MENU_LANGUAGE_PREFIX",
     "CONNECT_MENU_CLOSED",
     "CONNECT_MENU_HARNESS",
     "CONNECT_MENU_KEY_MODELS",

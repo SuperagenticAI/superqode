@@ -1,13 +1,13 @@
 # Schema defined in agent_schema.py
-# https://github.com/vtcode/vtcode
+# https://github.com/vinhnx/vtcode
 
 identity = "vtcode.dev"
 name = "VT Code"
 short_name = "vtcode"
-url = "https://github.com/vtcode/vtcode"
+url = "https://github.com/vinhnx/vtcode"
 protocol = "acp"
 author_name = "VT Code"
-author_url = "https://github.com/vtcode"
+author_url = "https://github.com/vinhnx"
 publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
@@ -31,21 +31,20 @@ VT Code is a versatile coding agent implementing ACP for seamless integration wi
 
 ## Installation
 
-Install VT Code ACP adapter via npm:
+Install VT Code via Cargo:
 
 ```bash
-npm install -g vtcode-acp
+cargo install vtcode
 ```
 
 **Requirements:**
-- Node.js (v16 or higher)
-- npm
+- Rust toolchain (rustc and cargo)
 
 ---
 
-**GitHub**: https://github.com/vtcode/vtcode
+**GitHub**: https://github.com/vinhnx/vtcode
 '''
 
 [actions."*".install]
-command = "npm install -g vtcode-acp"
-description = "Install VT Code ACP adapter"
+command = "cargo install vtcode"
+description = "Install VT Code"

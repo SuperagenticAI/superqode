@@ -1539,6 +1539,18 @@ class ConnectMixin:
             self._show_local_provider_picker(log)
         elif conn == "acp-picker":
             self._show_agents(log)
+        elif conn == "language-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_LANGUAGE
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_LANGUAGE)
+        elif conn == "language-harness-picker":
+            # The row's label is the language, and the screen id carries it, so
+            # the second level needs no session state of its own.
+            from superqode.providers.connection_profiles import CONNECT_MENU_LANGUAGE_PREFIX
+
+            self._show_connect_type_picker(
+                log, menu=f"{CONNECT_MENU_LANGUAGE_PREFIX}{profile.label}"
+            )
         elif conn == "protocols-menu":
             from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS
 

@@ -50,5 +50,5 @@ What can I help you build today?
 '''
 
 [actions."*".install]
-command = "pipx install goose-ai"
-description = "Install Goose via pipx (see https://zed.dev/acp for latest)"
+command = "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash"
+description = "Install Goose with Block's own installer"

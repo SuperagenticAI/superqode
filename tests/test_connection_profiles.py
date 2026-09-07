@@ -48,6 +48,7 @@ def test_root_menu_asks_one_question_in_three_answers():
                 "agent-acp",
                 "agent-open-harnesses",
                 "agent-closed-harnesses",
+                "agent-by-language",
             ],
         ),
     ],

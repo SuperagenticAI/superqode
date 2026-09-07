@@ -27,6 +27,7 @@ CONNECT_COMPLETION_COMMANDS = (
     ":connect byok",
     ":connect subscriptions",
     ":connect other-harnesses",
+    ":connect by-language",
     ":connect codex",
     ":connect grok",
     ":connect copilot",

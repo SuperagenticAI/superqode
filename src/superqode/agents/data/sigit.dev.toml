@@ -20,12 +20,12 @@ AI coding agent by siGit with ACP support.
 ## Installation
 
 ```bash
-npm install -g sigit
+cargo install sigit
 ```
 
 See https://github.com/getsigit/sigit for details.
 '''
 
 [actions."*".install]
-command = "npm install -g sigit"
+command = "cargo install sigit"
 description = "Install siGit Code"

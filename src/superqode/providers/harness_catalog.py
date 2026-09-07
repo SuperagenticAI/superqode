@@ -437,7 +437,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         description="Open-source harness over ACP. The agent keeps its own login.",
         openness="open",
         license="MIT",
-        repository="https://github.com/opencode-ai/opencode",
+        repository="https://github.com/anomalyco/opencode",
         auth=(
             HarnessAuthSpec(
                 mode="acp",
@@ -457,7 +457,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         description="Attach OpenCode over ACP after you provide a key or a local model.",
         openness="open",
         license="MIT",
-        repository="https://github.com/opencode-ai/opencode",
+        repository="https://github.com/anomalyco/opencode",
         auth=_key_auth(
             "opencode-key",
             "acp-attach",
@@ -1017,7 +1017,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             env_vars=("QODER_PERSONAL_ACCESS_TOKEN",),
             inject_env=True,
             detect=_acp_probe("qoder"),
-            unavailable_hint="run `npm install -g qoder-cli`, then sign in with Qoder CLI",
+            unavailable_hint="run `npm install -g @qoder-ai/qodercli`, then sign in with Qoder CLI",
         ),
         acp_agent="qoder",
         hub_id="acp:qoder",
@@ -1046,7 +1046,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             local_providers=_POOLSIDE_LOCAL_PROVIDERS,
             inject_env=True,
             detect=_acp_probe("poolside"),
-            unavailable_hint="run `npm install -g @poolsideai/pool`, then sign in with Pool CLI",
+            unavailable_hint="run `curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh`, then sign in with Pool CLI",
         ),
         acp_agent="poolside",
         hub_id="acp:poolside",

@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-07
+
+Every Harness Hub record now states the language its harness is implemented in,
+taken from the project's own build manifest rather than its marketing, and that
+fact is filterable from the terminal, the CLI and the website. The same pass
+found install commands that fetched the wrong software and corrected them.
+
+### 🔤 Implementation language
+
+- Hub records carry `language`, `language_confidence` and `language_evidence`.
+  The schema moves to 1.6.
+- "Confirmed" comes from a build manifest, GitHub's language breakdown, or a
+  statement by the vendor. "Inferred" is read off what a closed-source product
+  ships, such as an npm wrapper over platform binaries or Cargo target triples
+  in an installer, and every surface marks it as such.
+- `superqode hub` prints a language column and takes `--language`, whose
+  choices come from the catalogue and so cannot drift from it.
+- `superqode hub show` reports the language, how firmly it is known, and the
+  evidence behind it.
+- `:hub` filters by language from named buttons that wrap across rows, so no
+  language sits off the right edge of an 80-column terminal.
+- New `:connect by-language` screen. It browses every route by what the harness
+  is written in: SuperQode's own harnesses, vendor subscriptions, key harnesses
+  and the ACP registry.
+
+### 🔭 Hub
+
+- Inspecting a harness shows its language, the one command that launches it,
+  and a Links block carrying the official repository. Several entries repeat a
+  single URL across repository, homepage and docs; those now collapse to one
+  row instead of printing the same address three times.
+- The preview pane keeps what you need to choose and start. Setup steps, tools,
+  policies and commands moved behind Inspect. Warnings stay in the preview,
+  since hiding a sandbox caveat behind a keypress is not a summary.
+- ACP agents left `:hub`. `:connect acp` already reaches every one of them and
+  marks what is installed, so listing them twice made the Hub twice as long
+  without saying anything new.
+- Presets left `:hub` too. They are tunings of the four built-in harnesses
+  rather than harnesses in their own right; `:harness switch <preset>` and the
+  preset menu still reach them.
+- The Hub opens on All. It previously switched itself to Ready whenever
+  anything was installed, which read as a short catalogue rather than a
+  filtered one.
+- Entries are ordered alphabetically with nothing promoted, and the list
+  returns to the top when the view changes.
+
+### 🔧 Install commands and repository URLs
+
+- Three commands installed unrelated software: `cargo install fount` fetched a
+  Fountain screenplay editor, `npm install -g crow-cli` a Crystal transpiler,
+  and `pipx install goose-ai` a placeholder package. `cagent` and `kimi-cli`
+  had the same collision on npm.
+- Eight more named packages that do not exist: `qoder-cli`, `sigit`,
+  `vtcode-acp`, `@poolsideai/pool`, `cagent`, `stakpak`, `code-assistant` and
+  `stdio-bus`.
+- Gemini CLI, Auggie and Kimi were published under the `@anthropic-ai/` scope,
+  which belongs to another vendor and carries no such packages. One of the
+  three was a live `npx` invocation rather than documentation.
+- Seven repository URLs answered 404 or named the wrong project. OpenCode
+  pointed at the archived 2024 Go project, which also reported the wrong
+  language for it.
+
 ## [2.1.0] - 2026-09-06
 
 Adds `sq gauge`, which writes an Agent Quality Record for a release decision.

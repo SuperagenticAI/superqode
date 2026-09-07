@@ -309,7 +309,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "icon": "🌿",
         "color": "#22c55e",
         "description": "Open-source coding agent with ACP implementation for flexible integration",
-        "website": "https://github.com/opencode-ai/opencode",
+        "website": "https://github.com/anomalyco/opencode",
         "requires_api_key": False,  # Uses cloud with free tier
         "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
         "check_command": ["opencode", "--version"],
@@ -360,7 +360,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "command": ["auggie", "--acp"],
         "alt_commands": [
             ["augment", "--acp"],
-            ["npx", "-y", "@anthropic-ai/auggie", "--acp"],
+            ["npx", "-y", "@augmentcode/auggie", "--acp"],
         ],
         "icon": "🔮",
         "color": "#ec4899",

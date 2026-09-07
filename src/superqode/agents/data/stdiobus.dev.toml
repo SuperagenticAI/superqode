@@ -19,21 +19,25 @@ ACP-compatible tool bus for connecting AI agents to development tools.
 
 ## Installation
 
+Download the binary for your platform from the releases page and make it
+executable:
+
 ```bash
-cargo install stdio-bus
+curl -L -o stdio_bus https://github.com/stdiobus/stdiobus/releases/latest/download/linux-amd64/stdio_bus
+chmod +x stdio_bus
 ```
 
-Or build from source:
+Or build from source (requires Make or CMake 3.10+):
 
 ```bash
 git clone https://github.com/stdiobus/stdiobus
 cd stdiobus
-cargo build --release
+make
 ```
 
 See https://github.com/stdiobus/stdiobus for details.
 '''
 
 [actions."*".install]
-command = "cargo install stdio-bus"
+command = "curl -L -o stdio_bus https://github.com/stdiobus/stdiobus/releases/latest/download/linux-amd64/stdio_bus && chmod +x stdio_bus"
 description = "Install stdio Bus"

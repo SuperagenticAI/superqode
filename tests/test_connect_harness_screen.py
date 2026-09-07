@@ -272,6 +272,7 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
                 ("agent-acp", "ACP"),
                 ("agent-open-harnesses", "Open harnesses"),
                 ("agent-closed-harnesses", "Closed harnesses"),
+                ("agent-by-language", "By language"),
             ],
         ),
     ],

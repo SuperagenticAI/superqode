@@ -21,7 +21,7 @@ AI coding agent by Poolside.
 
 ```bash
 # Install Pool CLI
-npm install -g @poolsideai/pool
+curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh
 ```
 
 For ACP mode:
@@ -34,5 +34,5 @@ See https://github.com/poolsideai/pool for details.
 '''
 
 [actions."*".install]
-command = "npm install -g @poolsideai/pool"
+command = "curl -fsSL https://downloads.poolside.ai/pool/install.sh | sh"
 description = "Install Poolside CLI"

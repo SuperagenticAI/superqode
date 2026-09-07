@@ -20,7 +20,7 @@ AI coding CLI with ACP support.
 ## Installation
 
 ```bash
-npm install -g qoder-cli
+npm install -g @qoder-ai/qodercli
 ```
 
 For ACP mode:
@@ -33,5 +33,5 @@ See https://docs.qoder.com/cli/acp for details.
 '''
 
 [actions."*".install]
-command = "npm install -g qoder-cli"
+command = "npm install -g @qoder-ai/qodercli"
 description = "Install Qoder CLI"

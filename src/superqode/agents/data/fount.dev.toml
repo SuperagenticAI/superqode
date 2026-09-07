@@ -20,7 +20,7 @@ AI coding agent with ACP support.
 ## Installation
 
 ```bash
-cargo install fount
+curl -fsSL https://steve02081504.github.io/fount/install.sh | bash
 ```
 
 Or build from source:
@@ -35,5 +35,5 @@ See https://github.com/steve02081504/fount for details.
 '''
 
 [actions."*".install]
-command = "cargo install fount"
+command = "curl -fsSL https://steve02081504.github.io/fount/install.sh | bash"
 description = "Install fount"

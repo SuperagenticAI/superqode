@@ -24,6 +24,8 @@ from superqode.harness.hub import (
     REFERENCE_ONLY_KINDS,
     hub_record,
     is_open_source,
+    language_of,
+    language_label,
     openness_label,
     readiness_label,
 )
@@ -56,6 +58,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         Binding("o", "filter_open", "Open source", show=False),
         Binding("c", "filter_custom", "Yours", show=False),
         Binding("n", "filter_coming", "Coming", show=False),
+        Binding("l", "cycle_language", "Language", show=False),
     ]
 
     CSS = """
@@ -117,6 +120,32 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         background: #2a1a40;
     }
     HarnessHubScreen #hub-filters Button.on {
+        background: #3b1d7a;
+        color: #f3e8ff;
+        border: tall #c4b5fd;
+        text-style: bold;
+    }
+    HarnessHubScreen #hub-languages {
+        height: auto;
+        padding: 0 1;
+        background: #000000;
+    }
+    HarnessHubScreen .hub-language-row {
+        height: auto;
+        background: #000000;
+    }
+    HarnessHubScreen #hub-languages Button {
+        min-width: 6;
+        height: 3;
+        margin-right: 1;
+        background: #141414;
+        color: #b8b8b8;
+        border: tall #2f2f2f;
+    }
+    HarnessHubScreen #hub-languages Button:hover {
+        background: #2a1a40;
+    }
+    HarnessHubScreen #hub-languages Button.on {
         background: #3b1d7a;
         color: #f3e8ff;
         border: tall #c4b5fd;
@@ -198,6 +227,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     """
 
     FILTERS = ("all", "ready", "setup", "open", "custom", "coming")
+    #: Language buttons per row. Six fits an 80-column terminal.
+    LANGUAGES_PER_ROW = 6
 
     def __init__(
         self,
@@ -214,6 +245,10 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self.current_id = current_id
         self.search_query = query.strip()
         self.filter_name = initial_filter if initial_filter in self.FILTERS else "all"
+        # Language is a second, independent axis rather than another mutually
+        # exclusive filter: "ready" and "Rust" are useful together, and nine
+        # languages would not fit the button row as exclusive options.
+        self.language_filter = ""
         self.session_connected = session_connected
         self.session_model = session_model.strip()
         self.filtered_items: list[HarnessPickerItem] = []
@@ -230,7 +265,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                     id="hub-title",
                 )
                 yield Static(
-                    "Browse harnesses. :connect is how you start one.",
+                    "Browse harnesses. :connect starts one; :connect acp lists ACP agents.",
                     id="hub-subtitle",
                 )
             yield Input(value=self.search_query, placeholder="Search harnesses...", id="hub-search")
@@ -242,6 +277,26 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             yield Button("Open source", id="hub-filter-open")
             yield Button("Your harnesses", id="hub-filter-custom")
             yield Button("Coming soon", id="hub-filter-coming")
+
+        # Named languages rather than one cycling control: a button reading
+        # "Language: All" tells you the current value but not that it can be
+        # changed, nor what the options are. They wrap across rows because a
+        # Horizontal cannot scroll, so anything past the right edge of a narrow
+        # terminal would simply be unreachable.
+        with Vertical(id="hub-languages"):
+            buttons = [("Any language", "all")]
+            buttons += [
+                (
+                    f"{name} {sum(1 for i in self.items if language_of(i).language == name)}",
+                    self._language_slug(name),
+                )
+                for name in self._languages_present()
+            ]
+            for start in range(0, len(buttons), self.LANGUAGES_PER_ROW):
+                row = buttons[start : start + self.LANGUAGES_PER_ROW]
+                with Horizontal(classes="hub-language-row"):
+                    for label, slug in row:
+                        yield Button(label, id=f"hub-language-{slug}")
 
         with Horizontal(id="hub-body"):
             yield OptionList(id="hub-list")
@@ -279,6 +334,34 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             return item.kind == "ecosystem"
         return True
 
+    @staticmethod
+    def _language_slug(name: str) -> str:
+        """A Textual-safe id fragment for a language name."""
+        return "".join(char if char.isalnum() else "-" for char in name).lower()
+
+    def _matches_language(self, item: HarnessPickerItem) -> bool:
+        if not self.language_filter:
+            return True
+        return language_of(item).language == self.language_filter
+
+    def _languages_present(self) -> list[str]:
+        """Languages in the current list, commonest first, for the cycle order."""
+        counts: dict[str, int] = {}
+        for item in self.items:
+            name = language_of(item).language
+            counts[name] = counts.get(name, 0) + 1
+        return sorted(counts, key=lambda name: (-counts[name], name))
+
+    def action_cycle_language(self) -> None:
+        """Step to the next language, wrapping back to All after the last."""
+        order = ["", *self._languages_present()]
+        try:
+            nxt = order[(order.index(self.language_filter) + 1) % len(order)]
+        except ValueError:
+            nxt = ""
+        self.language_filter = nxt
+        self._refresh_items()
+
     def _matches_query(self, item: HarnessPickerItem) -> bool:
         if not self.search_query:
             return True
@@ -292,16 +375,28 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                 item.source,
                 item.provider,
                 item.model,
+                language_of(item).language,
             )
         ).casefold()
         return all(part in haystack for part in self.search_query.casefold().split())
 
-    def _refresh_items(self) -> None:
+    def _refresh_items(self, *, keep_position: bool = False) -> None:
+        """Rebuild the list. Changing what is shown starts at the top again.
+
+        Only searching keeps the highlight: narrowing a list you are reading
+        should not throw away your place. Switching filter or language is a new
+        view, and restoring the old highlight there lands the user in the middle
+        of it -- or, since the active harness is now sorted last, at the bottom.
+        """
         self.filtered_items = [
-            item for item in self.items if self._matches_filter(item) and self._matches_query(item)
+            item
+            for item in self.items
+            if self._matches_filter(item)
+            and self._matches_language(item)
+            and self._matches_query(item)
         ]
         option_list = self.query_one("#hub-list", OptionList)
-        previous_id = self._selected_id()
+        previous_id = self._selected_id() if keep_position else ""
         option_list.clear_options()
         self._update_filter_buttons()
         for item in self.filtered_items:
@@ -325,12 +420,11 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                 (i for i, item in enumerate(self.filtered_items) if item.id == previous_id),
                 0,
             )
-        elif self.current_id:
-            index = next(
-                (i for i, item in enumerate(self.filtered_items) if item.id == self.current_id),
-                0,
-            )
         option_list.highlighted = index
+        if index == 0:
+            # Rebuilding keeps the old scroll offset, so a fresh view can open
+            # part-way down a list whose first row is highlighted.
+            option_list.scroll_to(y=0, animate=False)
         self._update_detail(self.filtered_items[index])
         self._update_primary_action(self.filtered_items[index])
 
@@ -378,7 +472,39 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         text.append(status, style=mark_color)
         if item.runtime:
             text.append(f" · {item.runtime}", style="#a1a1aa")
+        text.append(f" · {language_of(item).language}", style="#a1a1aa")
         return text
+
+    @staticmethod
+    def _has_more_detail(record) -> bool:
+        """Whether Inspect would actually add anything, so the hint never lies."""
+        return any(
+            (
+                record.based_on,
+                record.support_note,
+                record.tools,
+                record.policies,
+                record.tui_commands,
+                record.eval_commands,
+                record.optimize_commands,
+                record.setup_steps,
+                record.cli_commands,
+            )
+        )
+
+    @staticmethod
+    def _launch_command(record, state: str) -> str:
+        """The single command that starts this harness, or "" if there is none.
+
+        Inside SuperQode that is the TUI command; for an entry SuperQode cannot
+        run it is the vendor's own CLI, which is the only thing that would
+        actually launch it.
+        """
+        if state != "coming" and record.tui_commands:
+            return record.tui_commands[0]
+        if record.cli_commands:
+            return record.cli_commands[0]
+        return ""
 
     def _selected_id(self) -> str:
         try:
@@ -433,6 +559,10 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                 "Licensing",
                 record.license if record.license else openness_label(record.openness),
             ),
+            # What the harness is actually written in. An inferred reading is
+            # marked as such rather than presented with the same confidence as
+            # one taken from the project's own build manifest.
+            ("Language", language_label(record.language, record.language_confidence)),
         )
         for label, value in rows:
             text.append(f"{label:<13}", style="#71717a")
@@ -440,65 +570,97 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         if item.provider or item.model:
             text.append(f"{'Model route':<13}", style="#71717a")
             text.append(f"{item.provider}/{item.model}\n", style="#e4e4e7")
+        # The launcher. "Use" is only meaningful for something SuperQode can
+        # drive, so an entry it cannot run shows the vendor's own command
+        # instead of a button that would do nothing.
+        launcher = self._launch_command(record, state)
+        if launcher:
+            text.append("\nLaunch\n", style="bold #22c55e")
+            text.append(f"{launcher}\n", style="#86efac")
         if item.issue and not item.available:
             text.append("\nSetup\n", style="bold #f59e0b")
             text.append(f"{item.issue}\n", style="#fbbf24")
         if item.warning:
             text.append("\nImportant\n", style="bold #f59e0b")
             text.append(f"{item.warning}\n", style="#fbbf24")
-        if record.based_on:
-            text.append("\nBased on\n", style="bold #a78bfa")
-            text.append(f"{record.based_on}\n", style="#e9d5ff")
-        if record.support_note:
-            text.append("\nSuperQode support\n", style="bold #f97316")
-            text.append(f"{record.support_note}\n", style="#fdba74")
-        if record.tools:
-            text.append("\nTools\n", style="bold #a855f7")
-            text.append(" · ".join(record.tools), style="#d8b4fe")
-            text.append("\n")
-        if record.policies:
-            text.append("\nPolicies\n", style="bold #a855f7")
-            for policy in record.policies:
-                text.append(f"• {policy}\n", style="#d4d4d8")
-        if record.tui_commands:
-            text.append("\nUse in the TUI\n", style="bold #22c55e")
-            for command in record.tui_commands:
-                text.append(f"{command}\n", style="#86efac")
-        if record.eval_commands:
-            text.append("\nEvaluate\n", style="bold #a78bfa")
-            for command in record.eval_commands:
-                text.append(f"{command}\n", style="#e9d5ff")
-        if record.optimize_commands:
-            text.append("\nOptimize\n", style="bold #a855f7")
-            for command in record.optimize_commands:
-                text.append(f"{command}\n", style="#d8b4fe")
-        if record.setup_steps:
-            heading = (
-                "Official installation (external)"
-                if record.readiness == "not-supported"
-                else "Installation and authentication"
-            )
-            text.append(f"\n{heading}\n", style="bold #f59e0b")
-            for index, step in enumerate(record.setup_steps, 1):
-                text.append(f"{index}. {step.title}\n", style="#e4e4e7")
-                if step.command:
-                    text.append(f"   {step.command}\n", style="#fbbf24")
-                if step.description:
-                    text.append(f"   {step.description}\n", style="#a1a1aa")
-        elif record.install_command:
-            text.append("\nInstallation and authentication\n", style="bold #f59e0b")
+        # Everything above stays in the preview: it is what the highlight is
+        # for -- what this is, what it is written in, and how to start it.
+        # Depth moves behind Inspect so the pane stays readable while arrowing
+        # through a long list, and so Links below is reachable without a scroll.
+        if self._inspect_expanded:
+            if record.based_on:
+                text.append("\nBased on\n", style="bold #a78bfa")
+                text.append(f"{record.based_on}\n", style="#e9d5ff")
+            if record.support_note:
+                text.append("\nSuperQode support\n", style="bold #f97316")
+                text.append(f"{record.support_note}\n", style="#fdba74")
+            if record.tools:
+                text.append("\nTools\n", style="bold #a855f7")
+                text.append(" · ".join(record.tools), style="#d8b4fe")
+                text.append("\n")
+            if record.policies:
+                text.append("\nPolicies\n", style="bold #a855f7")
+                for policy in record.policies:
+                    text.append(f"• {policy}\n", style="#d4d4d8")
+            if record.tui_commands:
+                text.append("\nUse in the TUI\n", style="bold #22c55e")
+                for command in record.tui_commands:
+                    text.append(f"{command}\n", style="#86efac")
+            if record.eval_commands:
+                text.append("\nEvaluate\n", style="bold #a78bfa")
+                for command in record.eval_commands:
+                    text.append(f"{command}\n", style="#e9d5ff")
+            if record.optimize_commands:
+                text.append("\nOptimize\n", style="bold #a855f7")
+                for command in record.optimize_commands:
+                    text.append(f"{command}\n", style="#d8b4fe")
+            if record.setup_steps:
+                heading = (
+                    "Official installation (external)"
+                    if record.readiness == "not-supported"
+                    else "Installation and authentication"
+                )
+                text.append(f"\n{heading}\n", style="bold #f59e0b")
+                for index, step in enumerate(record.setup_steps, 1):
+                    text.append(f"{index}. {step.title}\n", style="#e4e4e7")
+                    if step.command:
+                        text.append(f"   {step.command}\n", style="#fbbf24")
+                    if step.description:
+                        text.append(f"   {step.description}\n", style="#a1a1aa")
+            elif record.install_command:
+                text.append("\nInstallation and authentication\n", style="bold #f59e0b")
+                text.append(f"{record.install_command}\n", style="#e4e4e7")
+            if record.cli_commands:
+                text.append("\nCLI\n", style="bold #a78bfa")
+                for command in record.cli_commands:
+                    text.append(f"{command}\n", style="#e9d5ff")
+        elif not record.setup_steps and record.install_command:
+            # Nothing SuperQode can launch: the vendor's own command is the
+            # only actionable thing on the screen, so it is not hidden.
+            text.append("\nInstall\n", style="bold #f59e0b")
             text.append(f"{record.install_command}\n", style="#e4e4e7")
-        if record.docs_url:
-            text.append("\nDocumentation\n", style="bold #a78bfa")
-            text.append(record.docs_url, style="#c4b5fd")
-            text.append("\n")
-        if self._inspect_expanded and record.cli_commands:
-            text.append("\nCLI\n", style="bold #a78bfa")
-            for command in record.cli_commands:
-                text.append(f"{command}\n", style="#e9d5ff")
-        if record.homepage and record.homepage != record.docs_url:
-            text.append("\nOfficial site\n", style="bold #a78bfa")
-            text.append(f"{record.homepage}\n", style="#c4b5fd")
+        # One Links block rather than scattered sections. Several catalogue
+        # entries repeat a single URL across repository, homepage and docs, so
+        # the first label to claim a URL keeps it and the rest are dropped --
+        # otherwise the panel prints the same address three times.
+        links: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for label, url in (
+            ("Official repo", record.repository),
+            ("Homepage", record.homepage),
+            ("Documentation", record.docs_url),
+        ):
+            if url and url not in seen:
+                seen.add(url)
+                links.append((label, url))
+        if links:
+            text.append("\nLinks\n", style="bold #a78bfa")
+            for label, url in links:
+                text.append(f"{label:<15}", style="#71717a")
+                text.append(f"{url}\n", style="#c4b5fd")
+        if not self._inspect_expanded and self._has_more_detail(record):
+            text.append("\ni  ", style="bold #a78bfa")
+            text.append("setup steps, tools, policies and commands\n", style="#71717a")
         self.query_one("#hub-detail", Static).update(text)
 
     def _update_filter_buttons(self) -> None:
@@ -506,11 +668,20 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             button = self.query_one(f"#hub-filter-{filter_name}", Button)
             button.set_class(filter_name == self.filter_name, "on")
             button.variant = "default"
+        for button in self.query("#hub-languages Button"):
+            wanted = str(button.id or "").removeprefix("hub-language-")
+            active = (
+                not self.language_filter
+                if wanted == "all"
+                else self._language_slug(self.language_filter) == wanted
+            )
+            button.set_class(active, "on")
+            button.variant = "default"
 
     @on(Input.Changed, "#hub-search")
     def on_search_changed(self, event: Input.Changed) -> None:
         self.search_query = event.value.strip()
-        self._refresh_items()
+        self._refresh_items(keep_position=True)
 
     @on(Input.Submitted, "#hub-search")
     def on_search_submitted(self, event: Input.Submitted) -> None:
@@ -546,6 +717,21 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         button_id = str(event.button.id or "")
         if button_id.startswith("hub-filter-"):
             self.filter_name = button_id.removeprefix("hub-filter-")
+            self._refresh_items()
+            return
+        if button_id.startswith("hub-language-"):
+            wanted = button_id.removeprefix("hub-language-")
+            if wanted == "all":
+                self.language_filter = ""
+            else:
+                self.language_filter = next(
+                    (
+                        name
+                        for name in self._languages_present()
+                        if self._language_slug(name) == wanted
+                    ),
+                    "",
+                )
             self._refresh_items()
             return
         if button_id == "hub-use":

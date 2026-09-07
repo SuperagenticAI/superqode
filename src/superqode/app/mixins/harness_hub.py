@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
@@ -106,15 +107,48 @@ class HarnessHubMixin:
 
     @staticmethod
     def _harness_hub_items() -> list[HarnessPickerItem]:
-        """Return runnable entries plus read-only ecosystem discovery records."""
-        return [
-            *harness_picker_items(
-                Path.cwd(),
-                include_all=True,
-                expand_protocol_catalog=True,
+        """Return runnable entries plus read-only ecosystem discovery records.
+
+        ACP agents are deliberately absent. Every one of them is reachable from
+        ``:connect acp``, which lists the full registry and marks what is
+        already installed, so carrying them here too made the Hub roughly twice
+        as long while saying the same thing twice. Leaving the protocol catalogue
+        unexpanded also avoids building several dozen entries only to drop them.
+        """
+        items = [
+            *(
+                item
+                for item in harness_picker_items(
+                    Path.cwd(),
+                    include_all=True,
+                    expand_protocol_catalog=False,
+                )
+                # Presets are tunings of the four SuperQode harnesses rather
+                # than harnesses in their own right, so they pad the Hub without
+                # offering anything new to run; `:harness switch <preset>` and
+                # the preset menu still reach them.
+                if item.group not in {"ACP agents", "Model and task presets"}
+                and item.id != "no-tool"
             ),
             *hub_ecosystem_picker_items(),
         ]
+        # "Core" and "RLM" say nothing beside a list of named products, so the
+        # SuperQode-built entries carry whose they are. The rename is local to
+        # the Hub; the harness picker keeps its own labels.
+        #
+        # Ordering is alphabetical with nothing promoted or demoted, matching
+        # the website. A Hub that ranks entries is making a claim about them,
+        # and one predictable order is what makes a specific harness findable
+        # by scanning.
+        return sorted(
+            (
+                replace(item, display_name=f"SuperQode {item.display_name}")
+                if item.group == "SuperQode harnesses"
+                else item
+                for item in items
+            ),
+            key=lambda item: item.display_name.casefold(),
+        )
 
     def _open_harness_hub(
         self,
@@ -144,8 +178,8 @@ class HarnessHubMixin:
             (item.id for item in items if self._harness_picker_item_is_current(item)),
             "",
         )
-        if initial_filter == "all" and not query and any(item.available for item in items):
-            initial_filter = "ready"
+        # Opening on "Ready" hid most of the catalogue behind a filter the user
+        # never chose, which reads as a short Hub rather than a filtered one.
         pure = getattr(self, "_pure_mode", None)
         session = getattr(pure, "session", None)
         self._record_milestone("explored")

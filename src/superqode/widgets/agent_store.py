@@ -948,7 +948,7 @@ def create_sample_agents() -> List[AgentInfo]:
             tags=["ai", "automation", "coding", "open-source"],
             downloads=15000,
             rating=4.3,
-            install_command="pipx install goose-ai",
+            install_command="curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
             install_description="Install Goose",
             run_command="goose",
             requirements=["Python 3.10+", "pipx"],

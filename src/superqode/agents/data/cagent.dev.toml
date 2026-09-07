@@ -1,13 +1,13 @@
 # Schema defined in agent_schema.py
-# https://github.com/cagent/cagent
+# https://github.com/docker/docker-agent
 
 identity = "cagent.dev"
 name = "cagent"
 short_name = "cagent"
-url = "https://github.com/cagent/cagent"
+url = "https://github.com/docker/docker-agent"
 protocol = "acp"
 author_name = "cagent"
-author_url = "https://github.com/cagent"
+author_url = "https://github.com/docker"
 publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
@@ -31,21 +31,20 @@ cagent is a powerful, easy-to-use, customizable multi-agent runtime that orchest
 
 ## Installation
 
-Install cagent via pip:
+Install cagent (Docker Agent) via Homebrew:
 
 ```bash
-pip install cagent
+brew install docker-agent
 ```
 
 **Requirements:**
-- Python 3.8 or higher
-- pip
+- Homebrew, or Docker Desktop 4.63+ which ships it as a CLI plugin
 
 ---
 
-**GitHub**: https://github.com/cagent/cagent
+**GitHub**: https://github.com/docker/docker-agent
 '''
 
 [actions."*".install]
-command = "pip install cagent"
+command = "brew install docker-agent"
 description = "Install cagent"

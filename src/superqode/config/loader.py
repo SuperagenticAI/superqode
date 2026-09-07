@@ -785,7 +785,7 @@ Critique and improve code quality from development.""",
             "gemini": {
                 "enabled": True,
                 "description": "Gemini CLI - Google's reference ACP implementation",
-                "install_command": "npm install -g @anthropic-ai/gemini-cli",
+                "install_command": "npm install -g @google/gemini-cli",
                 "api_key_env": "GEMINI_API_KEY",
             },
             "claude-code": {
@@ -808,54 +808,54 @@ Critique and improve code quality from development.""",
             "goose": {
                 "enabled": True,
                 "description": "Goose - Square's open-source agent",
-                "install_command": "curl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash",
+                "install_command": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
             },
             "kimi": {
                 "enabled": True,
                 "description": "Kimi CLI - CLI AI agent with ACP support",
-                "install_command": "npm install -g @anthropic-ai/kimi-cli",
+                "install_command": "uv tool install kimi-cli",
                 "api_key_env": "MOONSHOT_API_KEY",
             },
             "opencode": {
                 "enabled": True,
                 "description": "OpenCode - Open-source coding agent",
-                "install_command": "go install github.com/opencode-ai/opencode@latest",
+                "install_command": "npm install -g opencode-ai",
             },
             "stakpak": {
                 "enabled": True,
                 "description": "Stakpak - ACP-compatible code assistance",
-                "install_command": "npm install -g stakpak",
+                "install_command": "curl -sSL https://stakpak.dev/install.sh | sh",
             },
             "vtcode": {
                 "enabled": True,
                 "description": "VT Code - Versatile coding agent",
-                "install_command": "npm install -g vtcode",
+                "install_command": "cargo install vtcode",
             },
             "auggie": {
                 "enabled": True,
                 "description": "Augment Code - Agentic code capabilities",
-                "install_command": "npm install -g @anthropic-ai/auggie",
+                "install_command": "npm install -g @augmentcode/auggie",
                 "api_key_env": "AUGMENT_API_KEY",
             },
             "code-assistant": {
                 "enabled": True,
                 "description": "Code Assistant - AI coding assistant in Rust",
-                "install_command": "cargo install code-assistant",
+                "install_command": "cargo install --git https://github.com/stippi/code-assistant",
             },
             "cagent": {
                 "enabled": True,
                 "description": "cagent - Multi-agent runtime orchestration",
-                "install_command": "npm install -g cagent",
+                "install_command": "brew install docker-agent",
             },
             "fast-agent": {
                 "enabled": True,
                 "description": "fast-agent - Sophisticated agent workflows",
-                "install_command": "pip install fast-agent",
+                "install_command": "uv tool install fast-agent-mcp",
             },
             "llmling-agent": {
                 "enabled": True,
                 "description": "LLMling-Agent - LLM-powered agent framework",
-                "install_command": "pip install llmling-agent",
+                "install_command": "uv tool install agentpool",
             },
         }
     }

@@ -3790,13 +3790,14 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     ]
     # The completion order mirrors the connect screen: methods first, then the
     # subscription products behind them.
-    assert connect_values[:9] == [
+    assert connect_values[:10] == [
         ":connect",
         ":connect local",
         ":connect acp",
         ":connect byok",
         ":connect subscriptions",
         ":connect other-harnesses",
+        ":connect by-language",
         ":connect codex",
         ":connect grok",
         ":connect copilot",
@@ -5930,6 +5931,7 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
                 (2, "ACP"),
                 (3, "Open harnesses"),
                 (4, "Closed harnesses"),
+                (5, "By language"),
             ],
             "Pick how you authenticate. Open vs Closed is about the harness source, not the model.",
         ),

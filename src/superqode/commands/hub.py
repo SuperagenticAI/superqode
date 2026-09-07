@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from superqode.harness.hub import OPENNESS_VALUES, READINESS_VALUES
+from superqode.harness.hub import OPENNESS_VALUES, READINESS_VALUES, known_languages
 
 
 def _catalog(
@@ -16,6 +16,7 @@ def _catalog(
     readiness: str | None,
     category: str,
     openness: str | None = "",
+    language: str | None = "",
     public: bool = False,
 ) -> dict:
     from superqode.harness.hub import build_hub_index, filter_hub_records
@@ -27,6 +28,7 @@ def _catalog(
         readiness=readiness,
         category=category,
         openness=openness,
+        language=language,
     )
     payload["count"] = len(payload["items"])
     payload["categories"] = list(dict.fromkeys(item["category"] for item in payload["items"]))
@@ -42,13 +44,19 @@ def _render(payload: dict, *, json_output: bool) -> None:
     if not payload["items"]:
         click.echo("No harnesses match those filters.")
         return
+    # "~" marks a language read off what a closed product ships rather than
+    # taken from its build manifest, so the two are never confused.
+    click.echo("  ~ = language inferred from distribution, not confirmed from source")
     current_category = None
     for item in payload["items"]:
         if item["category"] != current_category:
             current_category = item["category"]
             click.echo(f"\n{current_category}")
         state = readiness_label(item["readiness"])
-        click.echo(f"  {item['id']:<24} {state:<20} {item['name']}")
+        language = item.get("language") or ""
+        if item.get("language_confidence") == "inferred":
+            language += "~"
+        click.echo(f"  {item['id']:<24} {state:<16} {language:<14} {item['name']}")
 
 
 def _filters(function):
@@ -63,6 +71,12 @@ def _filters(function):
         type=click.Choice(list(OPENNESS_VALUES)),
         default=None,
         help="Filter to harnesses whose implementation is open source or proprietary",
+    )(function)
+    function = click.option(
+        "--language",
+        type=click.Choice(list(known_languages()), case_sensitive=False),
+        default=None,
+        help="Filter by the language the harness is implemented in",
     )(function)
     function = click.option("--category", default="", help="Filter by exact Hub category")(function)
     function = click.option(
@@ -89,6 +103,7 @@ def hub(
     query: str,
     readiness: str | None,
     category: str,
+    language: str | None,
     openness: str | None,
     public_catalog: bool,
 ):
@@ -100,6 +115,7 @@ def hub(
                 readiness=readiness,
                 category=category,
                 openness=openness,
+                language=language,
                 public=public_catalog,
             ),
             json_output=json_output,
@@ -113,6 +129,7 @@ def hub_list(
     query: str,
     readiness: str | None,
     category: str,
+    language: str | None,
     openness: str | None,
     public_catalog: bool,
 ):
@@ -123,6 +140,7 @@ def hub_list(
             readiness=readiness,
             category=category,
             openness=openness,
+            language=language,
             public=public_catalog,
         ),
         json_output=json_output,
@@ -151,6 +169,9 @@ def hub_show(harness_id: str, json_output: bool):
         ("Continuity", "continuity"),
         ("Openness", "openness"),
         ("License", "license"),
+        ("Language", "language"),
+        ("Language source", "language_confidence"),
+        ("Language evidence", "language_evidence"),
         ("Repository", "repository"),
         ("Description", "description"),
         ("Setup", "setup"),

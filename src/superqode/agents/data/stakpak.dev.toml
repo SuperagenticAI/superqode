@@ -1,10 +1,10 @@
 # Schema defined in agent_schema.py
-# https://github.com/stakpak/stakpak
+# https://github.com/stakpak/agent
 
 identity = "stakpak.dev"
 name = "Stakpak"
 short_name = "stakpak"
-url = "https://github.com/stakpak/stakpak"
+url = "https://github.com/stakpak/agent"
 protocol = "acp"
 author_name = "Stakpak"
 author_url = "https://github.com/stakpak"
@@ -31,21 +31,20 @@ Stakpak is an ACP-compatible agent focused on providing comprehensive code assis
 
 ## Installation
 
-Install Stakpak via pip:
+Install Stakpak with its own installer, or Homebrew:
 
 ```bash
-pip install stakpak
+curl -sSL https://stakpak.dev/install.sh | sh
 ```
 
 **Requirements:**
-- Python 3.8 or higher
-- pip
+- curl, or Homebrew (`brew install stakpak`)
 
 ---
 
-**GitHub**: https://github.com/stakpak/stakpak
+**GitHub**: https://github.com/stakpak/agent
 '''
 
 [actions."*".install]
-command = "pip install stakpak"
+command = "curl -sSL https://stakpak.dev/install.sh | sh"
 description = "Install Stakpak"

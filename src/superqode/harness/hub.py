@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
 
 
-HUB_SCHEMA_VERSION = "1.5"
+HUB_SCHEMA_VERSION = "1.6"
 DOCS_BASE = "https://docs.superqode.dev/"
 PROJECT_REPOSITORY = "https://github.com/SuperagenticAI/superqode"
 
@@ -33,10 +33,61 @@ OPENNESS_LABELS = {
 }
 OPENNESS_VALUES = tuple(OPENNESS_LABELS)
 
+# How firmly the implementation language is known. "confirmed" comes from the
+# project's own build manifest, GitHub's language breakdown, or an explicit
+# statement by the vendor. "inferred" is read off what a closed-source product
+# ships -- an npm wrapper over platform binaries, Cargo target triples in an
+# installer -- which is honest but could move with a packaging change.
+LANGUAGE_CONFIDENCE_LABELS = {
+    "confirmed": "Confirmed",
+    "inferred": "Inferred",
+}
+LANGUAGE_CONFIDENCE_VALUES = tuple(LANGUAGE_CONFIDENCE_LABELS)
+UNKNOWN_LANGUAGE = "Unknown"
+
 
 def openness_label(openness: str) -> str:
     """Return the public label for an openness value, or an honest unknown."""
     return OPENNESS_LABELS.get(openness, "Not published")
+
+
+def language_for_reference(*ids: str) -> HubLanguage | None:
+    """Find the language for an entry known by a different id than the Hub's.
+
+    The ``:connect`` catalogue names entries for the connection rather than the
+    harness -- ``grok-key``, ``opencode-key`` -- and reaches ACP and ecosystem
+    records without their prefixes. Rather than duplicate the language table
+    against a second set of ids, each candidate is tried in the shapes the Hub
+    actually uses.
+    """
+    for candidate in ids:
+        base = (candidate or "").strip()
+        if not base:
+            continue
+        for form in (base, base.removesuffix("-key")):
+            for key in (form, f"acp:{form}", f"ecosystem:{form}"):
+                found = _LANGUAGE_BY_ID.get(key)
+                if found is not None:
+                    return found
+    return None
+
+
+def known_languages() -> tuple[str, ...]:
+    """Every language the catalogue currently reports, commonest first.
+
+    Ordered by how many entries carry each value so the most useful choice sits
+    at the top of a filter list rather than wherever the alphabet puts it.
+    """
+    counts: dict[str, int] = {}
+    for entry in _LANGUAGE_BY_ID.values():
+        counts[entry.language] = counts.get(entry.language, 0) + 1
+    return tuple(sorted(counts, key=lambda name: (-counts[name], name)))
+
+
+def language_label(language: str, confidence: str = "") -> str:
+    """Language for display, marking an inferred reading rather than hiding it."""
+    name = language or UNKNOWN_LANGUAGE
+    return f"{name} (inferred)" if confidence == "inferred" else name
 
 
 def readiness_label(readiness: str) -> str:
@@ -161,7 +212,7 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "acp:gemini": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
     "acp:goose": HubOpenness("open", "Apache-2.0", "https://github.com/aaif-goose/goose"),
     "acp:cline": HubOpenness("open", "Apache-2.0", "https://github.com/cline/cline"),
-    "acp:opencode": HubOpenness("open", "MIT", "https://github.com/opencode-ai/opencode"),
+    "acp:opencode": HubOpenness("open", "MIT", "https://github.com/anomalyco/opencode"),
     "acp:openhands": HubOpenness("open", "MIT", "https://github.com/OpenHands/OpenHands"),
     # Drawn on the Open and Closed connect lists, so the Hub has to agree with
     # what those rows already state about the same harness.
@@ -200,6 +251,483 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     ),
     # A download-only desktop application with no published source.
     "ecosystem:zcode": HubOpenness("closed"),
+}
+
+
+@dataclass(frozen=True)
+class HubLanguage:
+    """What a harness implementation is actually written in.
+
+    This is the language of the agent's own runtime -- the thing doing the
+    work -- not of any adapter SuperQode reaches it through. Where the two
+    differ, ``evidence`` says so.
+    """
+
+    language: str
+    confidence: str = "inferred"
+    evidence: str = ""
+
+
+_PROJECT_LANGUAGE = HubLanguage(
+    "Python",
+    "confirmed",
+    "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+)
+
+# Established from primary evidence rather than a vendor's marketing: a build
+# manifest (Cargo.toml, go.mod, pyproject.toml, tsconfig.json, build.zig),
+# GitHub's language breakdown, or what a closed product's installer actually
+# fetches. Anything absent here falls through ``_resolve_language`` and, failing
+# that, stays Unknown. A language is never reported on a guess.
+_LANGUAGE_BY_ID: dict[str, HubLanguage] = {
+    "acp:agentpool": HubLanguage(
+        "Python",
+        "confirmed",
+        "phil65/agentpool carries pyproject.toml.",
+    ),
+    "acp:amp": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Amp itself is closed and JS-runtime based; SuperQode reaches it via the Python acp-amp adapter.",
+    ),
+    "acp:auggie": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. Plain Node package (13 MB, node-pty), no native binary.",
+    ),
+    "acp:autodev": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "The @xiuper/cli ACP agent is a Node package; the Kotlin in phodal/auto-dev is the IntelliJ plugin.",
+    ),
+    "acp:blackbox": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        'Blackbox\'s own installer states the CLI is "Node.js-based".',
+    ),
+    "acp:bub": HubLanguage("Python", "confirmed", "bubbuild/bub carries pyproject.toml."),
+    "acp:cagent": HubLanguage("Go", "confirmed", "docker/docker-agent carries go.mod."),
+    "acp:claude": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "The claude-agent-acp adapter is TypeScript; Claude Code itself is a closed TypeScript bundle.",
+    ),
+    "acp:cline": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "cline/cline carries package.json and bun.lock (TypeScript 97%).",
+    ),
+    "acp:codeassistant": HubLanguage(
+        "Rust",
+        "confirmed",
+        "stippi/code-assistant carries Cargo.toml.",
+    ),
+    "acp:codebuddy": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. 169 MB npm bundle with node-pty, no native platform packages.",
+    ),
+    "acp:codex": HubLanguage(
+        "Rust",
+        "confirmed",
+        "Codex is Rust; the codex-acp adapter in front of it is TypeScript.",
+    ),
+    "acp:copilot": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. The npm package ships node_modules.",
+    ),
+    "acp:cortex": HubLanguage(
+        "Unknown",
+        "inferred",
+        "Closed source. Snowflake publishes no build manifest for the CoCo/Cortex Code CLI.",
+    ),
+    "acp:crow": HubLanguage("Python", "confirmed", "crow-cli/crow-cli carries pyproject.toml."),
+    "acp:cursor": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. Node SEA bundle, as with the Cursor entry.",
+    ),
+    "acp:deepagents": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "The ACP build ships from langchain-ai/deepagentsjs (tsconfig.json).",
+    ),
+    "acp:deepagents-code": HubLanguage(
+        "Python",
+        "confirmed",
+        "langchain-ai/deepagents carries pyproject.toml.",
+    ),
+    "acp:devin": HubLanguage(
+        "Rust",
+        "confirmed",
+        "Cognition's installer names a Cargo binary target.",
+    ),
+    "acp:dirac": HubLanguage("TypeScript", "confirmed", "dirac-run/dirac carries tsconfig.json."),
+    "acp:droid": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. Delegates to @factory/cli-* JS-runtime binaries.",
+    ),
+    "acp:fast-agent": HubLanguage(
+        "Python",
+        "confirmed",
+        "evalstate/fast-agent carries pyproject.toml (Python 99%).",
+    ),
+    "acp:fount": HubLanguage(
+        "JavaScript",
+        "confirmed",
+        "steve02081504/fount is JavaScript (88%).",
+    ),
+    "acp:fx": HubLanguage("Zig", "confirmed", "vercel-labs/fx carries build.zig."),
+    "acp:gemini": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "google-gemini/gemini-cli carries tsconfig.json (TypeScript 96%).",
+    ),
+    "acp:glm": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "stefandevo/glm-acp-agent is TypeScript (99%).",
+    ),
+    "acp:goose": HubLanguage("Rust", "confirmed", "block/goose carries Cargo.toml (Rust 72%)."),
+    "acp:grok": HubLanguage("Rust", "confirmed", "xai-org/grok-build carries Cargo.toml."),
+    "acp:harn": HubLanguage("Rust", "confirmed", "burin-labs/harn carries Cargo.toml."),
+    "acp:hermes": HubLanguage(
+        "Python",
+        "confirmed",
+        "nousresearch/hermes-agent carries pyproject.toml; the TypeScript in the repo is its web UI.",
+    ),
+    "acp:junie": HubLanguage(
+        "Kotlin",
+        "inferred",
+        "Closed source. JetBrains ships a JVM archive behind an npm unzip client.",
+    ),
+    "acp:kilo": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "Kilo-Org/kilocode carries tsconfig.json and bun.lock.",
+    ),
+    "acp:kimi": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "MoonshotAI/kimi-code is TypeScript. (Moonshot's separate Kimi CLI is Python.)",
+    ),
+    "acp:kiro": HubLanguage(
+        "Rust",
+        "inferred",
+        "Closed source. gnu/musl target triples; derives from Amazon Q Developer CLI (Rust).",
+    ),
+    "acp:llmlingagent": HubLanguage(
+        "Python",
+        "confirmed",
+        "phil65/llmling-agent carries pyproject.toml.",
+    ),
+    "acp:minion": HubLanguage(
+        "Python",
+        "confirmed",
+        "femto/minion-code carries pyproject.toml (Python 99%).",
+    ),
+    "acp:mistral-vibe": HubLanguage(
+        "Python",
+        "confirmed",
+        "mistralai/mistral-vibe carries pyproject.toml (Python 99%).",
+    ),
+    "acp:openclaw": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "The openclaw npm package is a real Node application (ws, zod, acorn, yaml).",
+    ),
+    "acp:opencode": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "OpenCode carries tsconfig.json and bun.lock. (The Go repo in this entry is the archived 2024 project.)",
+    ),
+    "acp:openhands": HubLanguage(
+        "Python",
+        "confirmed",
+        "Shipped as the openhands PyPI package; the repo's TypeScript majority is the web frontend.",
+    ),
+    "acp:pi": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "The Pi coding agent and its pi-acp adapter both carry tsconfig.json.",
+    ),
+    "acp:poolside": HubLanguage(
+        "Unknown",
+        "inferred",
+        "Closed source. poolsideai/pool publishes no code and no npm package.",
+    ),
+    "acp:prime-agent": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "PrimeIntellect-ai/prime-agent carries tsconfig.json.",
+    ),
+    "acp:qoder": HubLanguage(
+        "Unknown",
+        "inferred",
+        "Closed source. No public repository or published npm package.",
+    ),
+    "acp:qwen": HubLanguage("TypeScript", "confirmed", "QwenLM/qwen-code carries tsconfig.json."),
+    "acp:sigit": HubLanguage("Rust", "confirmed", "getsigit/sigit carries Cargo.toml (Rust 98%)."),
+    "acp:stakpak": HubLanguage("Rust", "confirmed", "stakpak/agent carries Cargo.toml."),
+    "acp:stdio-bus": HubLanguage(
+        "Unknown",
+        "inferred",
+        "stdiobus/stdiobus holds only shell and Makefile sources; no published crate.",
+    ),
+    "acp:vtcode": HubLanguage("Rust", "confirmed", "vinhnx/vtcode carries Cargo.toml."),
+    "amp": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. @ampcode/cli is an npm wrapper over per-platform JS-runtime binaries.",
+    ),
+    "antigravity": HubLanguage(
+        "Go",
+        "inferred",
+        "Closed source. Ships as one self-contained agy binary with no separate runtime; Google’s CLI docs and launch coverage describe it as a Go build sharing the Antigravity IDE agent harness.",
+    ),
+    "benchmark-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "claude": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. @anthropic-ai/claude-code ships a Bun-compiled single binary per platform.",
+    ),
+    "codex": HubLanguage(
+        "Rust",
+        "confirmed",
+        "openai/codex is Rust (96%); the npm package is a thin wrapper.",
+    ),
+    "copilot": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. @github/copilot ships node_modules and a bundled webview alongside its binary.",
+    ),
+    "core": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "cursor": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. agent-cli-package.tar.gz contains webpack .index.js chunks and a Node SEA (cursor-agent-sea).",
+    ),
+    "deepagents": HubLanguage(
+        "Python",
+        "confirmed",
+        "langchain-ai/deepagents carries pyproject.toml (Python 98%).",
+    ),
+    "deepagents-code": HubLanguage(
+        "Python",
+        "confirmed",
+        "langchain-ai/deepagents carries pyproject.toml (Python 98%).",
+    ),
+    "deepseek-harness": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "deepseek-ai/deepseek-harness carries tsconfig.json (TypeScript 96%).",
+    ),
+    "devin": HubLanguage(
+        "Rust",
+        "confirmed",
+        'Cognition\'s own installer names the artifact a "Cargo [[bin]] target".',
+    ),
+    "droid": HubLanguage(
+        "TypeScript",
+        "inferred",
+        "Closed source. droid delegates to @factory/cli-* JS-runtime binaries.",
+    ),
+    "ds4-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "ds4-fast-local": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "ecosystem:aider": HubLanguage(
+        "Python",
+        "confirmed",
+        "Aider-AI/aider carries pyproject.toml (Python 80%).",
+    ),
+    "ecosystem:better-harness": HubLanguage(
+        "JavaScript",
+        "confirmed",
+        "QoderAI/better-harness is JavaScript (65%).",
+    ),
+    "ecosystem:crush": HubLanguage(
+        "Go",
+        "confirmed",
+        "charmbracelet/crush carries go.mod (Go 98%).",
+    ),
+    "ecosystem:harness-new": HubLanguage(
+        "Unknown",
+        "inferred",
+        "No public source or distribution.",
+    ),
+    "ecosystem:headlong": HubLanguage(
+        "Shell",
+        "confirmed",
+        "laude-institute/headlong is Bash (58%), orchestrating Python and Node tooling.",
+    ),
+    "ecosystem:jcode": HubLanguage(
+        "Rust",
+        "confirmed",
+        "1jehuang/jcode carries Cargo.toml (Rust 91%).",
+    ),
+    "ecosystem:letta": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "letta-ai/letta-code carries tsconfig.json and bun.lock (TypeScript 97%).",
+    ),
+    "ecosystem:plandex": HubLanguage("Go", "confirmed", "plandex-ai/plandex is Go (93%)."),
+    "ecosystem:qm": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "yc-software/qm carries tsconfig.json (TypeScript 92%).",
+    ),
+    "ecosystem:replicas": HubLanguage("Unknown", "inferred", "No public source or distribution."),
+    "ecosystem:roo-code": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "RooCodeInc/Roo-Code carries tsconfig.json (TypeScript 90%).",
+    ),
+    "ecosystem:synth": HubLanguage("Unknown", "inferred", "No public source or distribution."),
+    "ecosystem:warp": HubLanguage(
+        "Rust",
+        "confirmed",
+        "warpdotdev/warp carries Cargo.toml (Rust 98%).",
+    ),
+    "ecosystem:zcode": HubLanguage("Unknown", "inferred", "Closed source desktop application."),
+    "fx": HubLanguage("Zig", "confirmed", "vercel-labs/fx carries build.zig (Zig 81%)."),
+    "gemma4-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "gemma4-no-tool": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "glm-cli": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "stefandevo/glm-acp-agent is TypeScript (99%).",
+    ),
+    "glm-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "glm52-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "grok": HubLanguage("Rust", "confirmed", "xai-org/grok-build carries Cargo.toml (Rust 98%)."),
+    "junie": HubLanguage(
+        "Kotlin",
+        "inferred",
+        "Closed source. JetBrains ships a JVM archive; the npm client only unzips it (yauzl).",
+    ),
+    "kimi-code": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "MoonshotAI/kimi-code carries package.json and tsconfig.json (TypeScript 97%).",
+    ),
+    "kimi-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "kimi-k3-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "kiro": HubLanguage(
+        "Rust",
+        "inferred",
+        "Closed source. Ships gnu/musl target triples and derives from Amazon Q Developer CLI (Rust).",
+    ),
+    "minimax-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "muse": HubLanguage(
+        "Unknown",
+        "inferred",
+        "Closed source. The installer fetches an opaque muse-bin binary from api.meta.ai.",
+    ),
+    "no-tool": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "pipy": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "prime-agent": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "PrimeIntellect-ai/prime-agent carries tsconfig.json (TypeScript 94%).",
+    ),
+    "prime-agent-python": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "qwen-code": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "QwenLM/qwen-code carries tsconfig.json (TypeScript 82%).",
+    ),
+    "qwen-coding": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "rlm": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "rlm-docker": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "rlm-monty": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "tau": HubLanguage(
+        "Python",
+        "confirmed",
+        "huggingface/tau carries pyproject.toml (Python 96%).",
+    ),
+    "uhp": HubLanguage(
+        "Python",
+        "confirmed",
+        "HarnessRouter/harnessrouter is Python (61%); the TypeScript is its dashboard.",
+    ),
+    "workbench": HubLanguage(
+        "Python",
+        "confirmed",
+        "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
 }
 
 
@@ -654,6 +1182,9 @@ class HubRecord:
     setup_steps: tuple[HubSetupStep, ...] = ()
     openness: str = ""
     license: str = ""
+    language: str = ""
+    language_confidence: str = ""
+    language_evidence: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -703,6 +1234,59 @@ def _resolve_openness(item: HarnessPickerItem, integration_level: str) -> HubOpe
     if integration_level in {"native", "preset"}:
         return _PROJECT_OPENNESS
     return HubOpenness("")
+
+
+def _language_from_install(command: str) -> HubLanguage | None:
+    """Last-resort read of an install command for an entry we have not checked.
+
+    A package manager only proves an ecosystem, never TypeScript versus
+    JavaScript, so the label stays deliberately broad and is always inferred.
+    """
+    text = command.casefold()
+
+    def guess(name: str, via: str) -> HubLanguage:
+        return HubLanguage(
+            name, "inferred", f"Not yet researched; read from the {via} install command."
+        )
+
+    if "cargo install" in text:
+        return guess("Rust", "cargo")
+    if "go install" in text:
+        return guess("Go", "go")
+    if any(token in text for token in ("pip install", "pipx install", "uv tool install")):
+        return guess("Python", "Python")
+    if any(token in text for token in ("npm install", "npm i -g", "pnpm add", "bun add")):
+        return guess("JavaScript/TypeScript", "npm")
+    if "gem install" in text:
+        return guess("Ruby", "gem")
+    return None
+
+
+def _resolve_language(item: HarnessPickerItem, integration_level: str) -> HubLanguage:
+    """Resolve the implementation language from the source that actually knows.
+
+    Order mirrors ``_resolve_openness``: a verified entry, then a language the
+    harness declares about itself, then SuperQode's own code for native entries,
+    then a reading of the install command. A repository HarnessSpec is left
+    unknown on purpose -- SuperQode cannot know what a user wrote theirs in.
+    """
+    verified = _LANGUAGE_BY_ID.get(item.id)
+    if verified is not None:
+        return verified
+    declared = str(getattr(item.target, "harness_language", "") or "")
+    if declared:
+        return HubLanguage(declared, "confirmed", "Declared by the harness itself.")
+    if integration_level in {"native", "preset"}:
+        return _PROJECT_LANGUAGE
+    guessed = _language_from_install(str(getattr(item, "issue", "") or ""))
+    if guessed is not None:
+        return guessed
+    return HubLanguage(UNKNOWN_LANGUAGE, "inferred", "No public source or distribution signal yet.")
+
+
+def language_of(item: HarnessPickerItem) -> HubLanguage:
+    """Language for one picker item, for the terminal's filter and detail panel."""
+    return _resolve_language(item, _integration_level(item))
 
 
 def is_open_source(item: HarnessPickerItem) -> bool:
@@ -868,6 +1452,7 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
     )
     integration_level = _integration_level(item)
     openness = _resolve_openness(item, integration_level)
+    language = _resolve_language(item, integration_level)
     return HubRecord(
         id=item.id,
         name=item.display_name,
@@ -900,6 +1485,9 @@ def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) ->
         setup_steps=tuple(details.get("setup_steps") or ()),
         openness=openness.openness,
         license=openness.license,
+        language=language.language,
+        language_confidence=language.confidence,
+        language_evidence=language.evidence,
     )
 
 
@@ -1045,6 +1633,11 @@ def _supplemental_records() -> list[HubRecord]:
             ),
             openness=_OPENNESS_BY_ID.get(item_id, HubOpenness("")).openness,
             license=_OPENNESS_BY_ID.get(item_id, HubOpenness("")).license,
+            language=_LANGUAGE_BY_ID.get(item_id, HubLanguage(UNKNOWN_LANGUAGE)).language,
+            language_confidence=_LANGUAGE_BY_ID.get(
+                item_id, HubLanguage(UNKNOWN_LANGUAGE)
+            ).confidence,
+            language_evidence=_LANGUAGE_BY_ID.get(item_id, HubLanguage(UNKNOWN_LANGUAGE)).evidence,
             install_command=_ECOSYSTEM_DETAILS.get(item_id, {}).get("install_command", ""),
             tools=_ECOSYSTEM_DETAILS.get(item_id, {}).get("tools", ()),
             policies=_ECOSYSTEM_DETAILS.get(item_id, {}).get("policies", ()),
@@ -1152,12 +1745,14 @@ def filter_hub_records(
     readiness: str | None = "",
     category: str = "",
     openness: str | None = "",
+    language: str | None = "",
 ) -> list[dict[str, Any]]:
     """Filter serialized records with the same broad discovery vocabulary as the TUI."""
     needle = query.strip().casefold()
     wanted_readiness = (readiness or "").strip().casefold()
     wanted_category = category.strip().casefold()
     wanted_openness = (openness or "").strip().casefold()
+    wanted_language = (language or "").strip().casefold()
     matched: list[dict[str, Any]] = []
     for record in records:
         if wanted_readiness and str(record.get("readiness", "")).casefold() != wanted_readiness:
@@ -1165,6 +1760,8 @@ def filter_hub_records(
         if wanted_category and str(record.get("category", "")).casefold() != wanted_category:
             continue
         if wanted_openness and str(record.get("openness", "")).casefold() != wanted_openness:
+            continue
+        if wanted_language and str(record.get("language", "")).casefold() != wanted_language:
             continue
         if needle:
             haystack = " ".join(
@@ -1192,6 +1789,7 @@ def filter_hub_records(
                     "openness",
                     "license",
                     "repository",
+                    "language",
                 )
             ).casefold()
             if needle not in haystack:
