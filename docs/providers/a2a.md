@@ -88,6 +88,25 @@ A checked-in publication artifact lives at `examples/a2a/agent-card.json`. Regen
 
 Treat the public pilot as experimental. The host may cold-start, and this is not a multi-tenant production deployment. Tokens and provider keys never belong in the Agent Card.
 
+## Official A2A CLI
+
+The A2A project publishes an official command-line client, [`a2a`](https://github.com/a2aproject/a2a-cli) (`a2aproject/a2a-cli`). Use it when you want a standardized third-party or CI client against any A2A agent, including the public SuperQode pilot. SuperQode's own `superqode connect a2a`, TUI `:connect a2a`, and `superqode serve a2a` remain the product surfaces for harness work, OAuth, and local serving. The Go CLI is not vendored into SuperQode.
+
+Install from the [a2a-cli releases](https://github.com/a2aproject/a2a-cli/releases) (Homebrew, WinGet, or a prebuilt binary). Then:
+
+```bash
+# Discover the public Agent Card
+a2a card get -a https://a2a.superqode.dev
+
+# Call the harness-shortlist skill
+a2a send -a https://a2a.superqode.dev \
+  "Which harness should we shortlist for a Python monorepo?"
+```
+
+Add `-o json` for protocol-native JSON suitable for scripts. The remote pilot exposes `harness-shortlist` only unless you opt in to the harness skill on your own bind.
+
+Machine-readable card fetch and a shortlist send against `https://a2a.superqode.dev` were verified with `a2a` v0.2.0. The CLI specification is still in Review; treat command details as evolving with upstream releases.
+
 ## Skills
 
 The Agent Card advertises the skills a deployment actually serves. A loopback
@@ -596,7 +615,7 @@ The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow
 
 ### Interop clients in this repository
 
-For harness-to-harness and cross-language checks against a live or local A2A server:
+Prefer the [official A2A CLI](#official-a2a-cli) for a standardized external client. For harness-to-harness and cross-language checks against a live or local A2A server that stay in this repository:
 
 - **Python smoke client:** `examples/a2a/smoke_client.py`. Discover from a base URL (for example the public Agent Card host), follow the interface URL, send a message, print task state.
 - **TypeScript client:** `examples/qm-deployment-layer/interop/a2a-client.mts`. Dependency-free Node client used for independent wire tests (Node 22+).

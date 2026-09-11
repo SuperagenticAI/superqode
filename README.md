@@ -288,6 +288,14 @@ can call it today:
 superqode connect a2a --url https://a2a.superqode.dev
 ```
 
+Or use the A2A project's official CLI ([`a2a`](https://github.com/a2aproject/a2a-cli)):
+
+```bash
+a2a card get -a https://a2a.superqode.dev
+a2a send -a https://a2a.superqode.dev \
+  "Which harness should we shortlist for a Python monorepo?"
+```
+
 It scores 100% of MUST and 100% of MAY against the
 [Technology Compatibility Kit](https://github.com/a2aproject/a2a-tck) the A2A
 project maintains under the Linux Foundation, on the JSON-RPC and HTTP+JSON
