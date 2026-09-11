@@ -38,9 +38,10 @@ dependencies = [
     "prompt_toolkit>=3.0.52",
     "rich>=15.0.0",
     "textual>=0.47.0",
-    # Keep the stable MCP v1 line while FastMCP 4 / MCP SDK v2 are prerelease.
+    # Stay on the MCP v1 + FastMCP 3 line. MCP SDK v2 and FastMCP 4 are stable
+    # but are a larger migration; do not jump until that work is scheduled.
     # The standalone framework replaces the FastMCP 1.0 copy bundled in mcp v1.
-    "fastmcp==3.4.4",
+    "fastmcp==3.4.7",
     "mcp>=1.27.1,<2",
     "anyio>=4.0.0",
     "httpx>=0.28.1",
