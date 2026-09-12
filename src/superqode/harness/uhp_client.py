@@ -37,9 +37,12 @@ IDEMPOTENCY_HEADER = "Idempotency-Key"
 PROVIDER_KEY_HEADER = "X-Provider-Api-Key"
 
 
-def _caller_provider_env() -> str:
-    provider = (os.environ.get("SUPERQODE_PROVIDER") or "deepseek").strip() or "deepseek"
-    return f"{provider.upper()}_API_KEY"
+def _caller_provider_api_key() -> str:
+    """Return the caller's model key for a BYOK UHP server, if present."""
+    provider = (os.environ.get("SUPERQODE_PROVIDER") or "google").strip() or "google"
+    if provider in {"google", "gemini"}:
+        return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+    return (os.environ.get(f"{provider.upper()}_API_KEY") or "").strip()
 
 
 _TERMINAL_STREAM_EVENTS = frozenset(
@@ -515,7 +518,7 @@ class UHPClient:
         }
         if api_key:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        provider_key = (os.environ.get(_caller_provider_env()) or "").strip()
+        provider_key = _caller_provider_api_key()
         if provider_key and PROVIDER_KEY_HEADER not in self._headers:
             self._headers[PROVIDER_KEY_HEADER] = provider_key
         self._client = client

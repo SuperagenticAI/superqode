@@ -527,12 +527,14 @@ curl -sS https://uhp.superqode.dev/v1/uhp
 superqode connect uhp --base-url https://uhp.superqode.dev --no-save
 ```
 
-A harness turn (caller's DeepSeek key, not SuperQode's):
+A harness turn (caller's Gemini key, not SuperQode's):
 
 ```bash
 export SUPERQODE_UHP_API_KEY=...
-export DEEPSEEK_API_KEY=...
-superqode connect uhp --base-url https://uhp.superqode.dev --api-key "$SUPERQODE_UHP_API_KEY"
+export SUPERQODE_PROVIDER=google
+export GEMINI_API_KEY=...
+superqode connect uhp --base-url https://uhp.superqode.dev \
+  --harness chrn_superqode_core --api-key "$SUPERQODE_UHP_API_KEY"
 ```
 
 Reserve `uhp.superqode.dev` on the `superqode.dev` zone (GoDaddy). Point it at
@@ -542,9 +544,9 @@ not at `a2a.superqode.dev` and not through a global HTTPS load balancer.
 Create a **new** Cloud Run service. Do not open or retarget `superqode-a2a`.
 Connect this GitHub repository, Dockerfile path `Dockerfile.uhp`, Cloud Build
 file `cloudbuild.uhp.yaml`, service name `superqode-uhp`, region `us-central1`.
-Set secret `SUPERQODE_UHP_API_KEY`. Do not set `DEEPSEEK_API_KEY` on the
-service. Callers send that key as `X-Provider-Api-Key`. See
-`deploy/uhp/README.md`.
+Set secret `SUPERQODE_UHP_API_KEY`. The bind is Google `gemini-flash-latest`.
+Do not set `GEMINI_API_KEY` on the service. Callers send that key as
+`X-Provider-Api-Key`. See `deploy/uhp/README.md`.
 
 Until that mapping answers, smoke-test on loopback:
 

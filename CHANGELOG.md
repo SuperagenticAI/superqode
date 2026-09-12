@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-12
+
+The installed CLI can complete a harness turn against a BYOK UHP host such as
+`uhp.superqode.dev`. The client sends the caller's provider key
+(`GEMINI_API_KEY` / `GOOGLE_API_KEY` when the provider is Google). The public
+Core bind stays catalog-open and does not attach a model key. A separate Cloud
+Run image (`Dockerfile.uhp`) deploys that bind without touching A2A.
+
+### 🧩 Unified Harness Protocol
+
+- `UHPClient` and `harness run uhp` send `X-Provider-Api-Key` from the
+  caller's environment so a remote Core host can run a turn without a
+  server-side `GEMINI_API_KEY`.
+- Remote `serve uhp --allow-remote` requires `--api-key`. Catalog GETs stay
+  public; `POST /v1/responses` without the caller provider key returns
+  `missing_provider_key` and does not start LiteLLM.
+- Public bind defaults: provider `google`, model `gemini-flash-latest`, harness
+  `chrn_superqode_core`. Image and Cloud Build files are `Dockerfile.uhp` and
+  `cloudbuild.uhp.yaml` (service `superqode-uhp`).
+
 ## [2.2.1] - 2026-09-12
 
 Local UHP for the package cut: SuperQode speaks it as a client (connect, run,

@@ -6,8 +6,8 @@
 #
 # Cloud Run sets PORT. Bind 0.0.0.0 and pass --allow-remote.
 # SUPERQODE_UHP_API_KEY must come from Secret Manager. Do not set a
-# provider key (DEEPSEEK_API_KEY, OPENAI_API_KEY, ...) on this service:
-# harness turns use the caller's X-Provider-Api-Key header.
+# provider key (GEMINI_API_KEY, GOOGLE_API_KEY, DEEPSEEK_API_KEY, ...)
+# on this service: harness turns use the caller's X-Provider-Api-Key header.
 
 FROM python:3.12-slim
 
@@ -16,8 +16,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     SUPERQODE_TELEMETRY=false \
     SUPERQODE_NO_SPLASH=1 \
-    SUPERQODE_PROVIDER=deepseek \
-    SUPERQODE_MODEL=deepseek-v3
+    SUPERQODE_PROVIDER=google \
+    SUPERQODE_MODEL=gemini-flash-latest
 
 WORKDIR /app
 
