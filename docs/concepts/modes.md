@@ -64,6 +64,9 @@ Switching can preserve the current conversation or fork an independent branch:
 | A2A | Remote agents exposed through Agent2Agent endpoints | `:connect a2a` | The remote agent owns its execution contract |
 | UHP | Harnesses hosted on a Unified Harness Protocol server | `:connect uhp` | The server owns the harness, its tools, and its sandbox |
 
+SuperQode also serves UHP with `superqode serve uhp` (one HarnessSpec, Core
+class). See [Unified Harness Protocol](../providers/uhp.md).
+
 ### The Protocols screen
 
 ACP, A2A, and UHP all connect something that owns its own agent loop, so they

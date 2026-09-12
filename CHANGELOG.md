@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+UHP is ready for a public package announcement: SuperQode speaks it as a client
+(connect, run, file upload and artifact download) and as a native Core server
+that binds one HarnessSpec. Harness stop reasons map to UHP failed or incomplete
+instead of an empty completed response. The same cut includes A2ABreak card-review
+and contextId hardening.
+
+### 🧩 Unified Harness Protocol
+
+- Client path: `superqode connect uhp` discovers a server and selects a harness;
+  `harness run uhp` runs tasks through the same session, event and evidence model
+  as a local harness.
+- File upload and artifact download: `--file` / `input_files=` send local files
+  through `POST /v1/files`; `--download-dir` and `download_citations` write
+  `container_file_citation` artifacts back to disk.
+- Native server: `superqode serve uhp --spec harness.yaml` exposes one configured
+  HarnessSpec over UHP Core. Complementary to HarnessRouter (a multi-backend
+  runner), not a substitute for it.
+- Harness `stopped_reason` values such as `error`, `blocked` and `loop_detected`
+  map to UHP `failed`; `needs_approval` and `max_iterations` map to `incomplete`.
+  An empty provider failure is no longer reported as `completed`.
+- The server advertises `conformance_class: core`. That names the surface it
+  implements; it is not a UHP conformance-suite certificate.
+
+### 🔐 A2ABreak hardening
+
+- Card review on connect/inspect surfaces SuperOptiX-aligned findings, and
+  `contextId` plus task ACL bind to the caller principal (protocol gaps, not
+  product CVEs).
+
 ## [2.2.0] - 2026-09-07
 
 Every Harness Hub record now states the language its harness is implemented in,
