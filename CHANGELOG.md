@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-UHP is ready for a public package announcement: SuperQode speaks it as a client
-(connect, run, file upload and artifact download) and as a native Core server
-that binds one HarnessSpec. Harness stop reasons map to UHP failed or incomplete
-instead of an empty completed response. The same cut includes A2ABreak card-review
-and contextId hardening.
+## [2.2.1] - 2026-09-12
+
+Local UHP for the package cut: SuperQode speaks it as a client (connect, run,
+file upload and artifact download) and as a native Core server that binds one
+HarnessSpec. Harness stop reasons map to UHP failed or incomplete instead of an
+empty completed response. The same cut includes A2ABreak card-review and
+contextId hardening. A public UHP host (GoDaddy) and Google Cloud infra stay for
+2.3.0.
 
 ### 🧩 Unified Harness Protocol
 
