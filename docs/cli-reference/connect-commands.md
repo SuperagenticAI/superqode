@@ -267,13 +267,15 @@ superqode connect a2a [OPTIONS]
 | `--header NAME:VALUE` | Extra request header. Repeatable |
 | `--send TEXT` | Send one message after discovery |
 | `--save` / `--no-save` | Remember the connection (default: save) |
-| `--inspect` | Show the binding choice, skipped interfaces, advertised auth, and last HTTP request/response |
+| `--inspect` | Show the binding choice, skipped interfaces, advertised auth, card-review findings, and last HTTP request/response |
 | `--conformance` | Run SuperQode's client checks: fetch the card, speak a binding, complete one task |
 | `--no-send` | Skip the send check (with `--conformance` only) |
 | `--oauth` / `--no-oauth` | When a card requires OAuth, open a browser (default: open). `--no-oauth` still uses a stored token or client credentials |
 | `--logout` | Delete stored OAuth tokens for this origin and revoke them at the identity provider when it advertised `revocation_endpoint` |
 | `--tls-cert PATH` | Client certificate PEM for mutual TLS |
 | `--tls-key PATH` | Client certificate private key PEM |
+| `--allow-origin HOST` | Permit this Agent Card origin. Repeatable. Combined with `SUPERQODE_A2A_ALLOWED_ORIGINS` |
+| `--jws-trust-root PATH` | PEM or JWKS used to root Agent Card JWS. A signature without a trust root is not identity |
 | `--json` | Emit the card, binding, and optional task as JSON |
 
 ### Examples
@@ -317,7 +319,10 @@ Send is the chat with that agent and keeps the same `contextId` thread.
 Skill examples fill the message box. Use saves the connection in place; Back
 returns. y copies, r resends, Esc stops a wait. The screen lists skills and
 an inspect pane for the binding choice, advertised auth, and HTTP.
-`--inspect` is the CLI form of that pane. `--conformance` runs four client
+`--inspect` is the CLI form of that pane. It also prints Agent Card review
+findings that match SuperOptiX `agent-card-review`: unattested skill claims,
+an unsigned card, and (when JWS is present) that a signature authenticates
+the publisher, not skill capability. `--conformance` runs four client
 checks (card-fetch, card-shape, binding, send) and does not save the
 connection. A card SuperQode cannot speak prints the advertised interfaces
 and why each one was skipped.

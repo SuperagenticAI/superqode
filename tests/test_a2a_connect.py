@@ -257,6 +257,27 @@ def test_connect_a2a_inspect_prints_the_wire_log(tmp_path: Path, monkeypatch):
     assert "Chose JSONRPC 1.0" in result.output
     assert "skip JSONRPC 0.3" in result.output
     assert "later in preference" in result.output
+    assert "skills.attestation" in result.output
+    assert "Unattested Skill Claims" in result.output
+    assert "Card is unsigned" in result.output
+
+
+def test_connect_a2a_refuses_an_origin_off_the_allowlist(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("superqode.a2a.connection.connection_path", lambda: tmp_path / "a2a.json")
+    result = CliRunner().invoke(
+        connect,
+        [
+            "a2a",
+            "--url",
+            "http://agent",
+            "--allow-origin",
+            "safe.example",
+            "--json",
+            "--no-save",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    assert "allowlist" in result.output
 
 
 def test_connect_a2a_inspect_explains_an_unspeakable_card(tmp_path: Path, monkeypatch):

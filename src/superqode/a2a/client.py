@@ -214,6 +214,7 @@ class A2AClient:
             fallback = self.agent_url
 
         self.inspect.auth(auth_summary(data))
+        self._record_card_review(data)
         selected, skipped = _select_interface(interfaces, fallback)
         listed = interfaces if isinstance(interfaces, list) else []
         note = ""
@@ -236,6 +237,36 @@ class A2AClient:
             default_output_modes=data.get("defaultOutputModes", ["text"]),
         )
         return card, binding, version
+
+    def _record_card_review(self, data: dict) -> None:
+        """Record A2ABreak card-review findings. Never treat JWS as auth."""
+        from superqode.a2a.trust import (
+            origin_is_allowed,
+            parse_origin_allowlist,
+            record_card_review,
+            resolve_jws_trust_root,
+            review_agent_card,
+        )
+
+        allowed = getattr(self, "allowed_origins", None)
+        if allowed is None:
+            allowed = parse_origin_allowlist()
+        trust_root = getattr(self, "jws_trust_root", None)
+        if trust_root is None:
+            trust_root = resolve_jws_trust_root()
+        review = review_agent_card(
+            data,
+            origin=self.agent_url,
+            allowed_origins=tuple(allowed or ()),
+            jws_trust_root=str(trust_root or ""),
+        )
+        self._card_review = review
+        record_card_review(self.inspect, review)
+        if tuple(allowed or ()) and not origin_is_allowed(self.agent_url, tuple(allowed)):
+            raise A2AClientError(
+                f"Origin is not on the A2A allowlist: {self.agent_url}",
+                inspect=self.inspect,
+            )
 
     async def _ensure_interface(self) -> tuple[str, str, str]:
         if self._interface_url is None or self._binding is None or self._protocol_version is None:

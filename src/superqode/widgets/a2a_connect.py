@@ -1013,6 +1013,15 @@ class A2AConnectScreen(Screen[A2AConnectResult | None]):
             skills.append("Skills  ", style="#a78bfa")
             skills.append(", ".join(row.name for row in self._rows), style="#d4d4d4")
             log.write(skills)
+            note = Text()
+            note.append("Trust  ", style="#a78bfa")
+            note.append(
+                "Skill claims are self-asserted. A2A 1.0 provides no "
+                "attestation or capability challenge (A2ABreak protocol risk: "
+                "Unattested Skill Claims).",
+                style="#c8c8c8",
+            )
+            log.write(note)
         if self._catalogue_only:
             note = Text()
             note.append("Catalogue  ", style="bold #c4b5fd")

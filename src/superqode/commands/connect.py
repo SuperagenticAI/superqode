@@ -106,7 +106,7 @@ def connect_uhp(base_url, api_key, harness, max_output_tokens, save, json_output
     "--inspect",
     "inspect",
     is_flag=True,
-    help="Show the binding choice, skipped interfaces, and last HTTP request/response",
+    help="Show the binding choice, skipped interfaces, card-review findings, and last HTTP request/response",
 )
 @click.option(
     "--conformance",
@@ -140,6 +140,19 @@ def connect_uhp(base_url, api_key, harness, max_output_tokens, save, json_output
     metavar="PATH",
     help="Client certificate private key PEM for mutual TLS",
 )
+@click.option(
+    "--allow-origin",
+    "allow_origins",
+    multiple=True,
+    metavar="HOST",
+    help="Permit this Agent Card origin. Repeatable. If any are set (or SUPERQODE_A2A_ALLOWED_ORIGINS), other origins are refused.",
+)
+@click.option(
+    "--jws-trust-root",
+    "jws_trust_root",
+    metavar="PATH",
+    help="PEM or JWKS file used to root Agent Card JWS. A signature without a trust root is not identity.",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def connect_a2a(
     url,
@@ -154,6 +167,8 @@ def connect_a2a(
     logout,
     tls_cert,
     tls_key,
+    allow_origins,
+    jws_trust_root,
     json_output,
 ):
     """Connect to an A2A agent from its Agent Card.
@@ -184,6 +199,8 @@ def connect_a2a(
             logout=logout,
             cert=tls_cert,
             key=tls_key,
+            allow_origins=allow_origins,
+            jws_trust_root=jws_trust_root,
             json_output=json_output,
         )
     )

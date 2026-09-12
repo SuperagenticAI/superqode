@@ -32,13 +32,29 @@ def connect_a2a_agent(
     logout: bool = False,
     cert: str | None = None,
     key: str | None = None,
+    allow_origins: tuple[str, ...] | list[str] = (),
+    jws_trust_root: str | None = None,
 ) -> int:
     """Fetch the Agent Card, print what it advertises, optionally send one message."""
+    from superqode.a2a.trust import (
+        origin_is_allowed,
+        parse_origin_allowlist,
+        resolve_jws_trust_root,
+    )
+
     settings = resolve_settings(url, token, headers, cert=cert, key=key)
+    allowed = parse_origin_allowlist(tuple(allow_origins or ()))
+    trust_root = resolve_jws_trust_root(jws_trust_root)
     if not settings.configured:
         return _fail(
             "No A2A agent URL is configured.",
             f"Pass --url or set {URL_ENV}.",
+            json_output=json_output,
+        )
+
+    if allowed and not origin_is_allowed(settings.url, allowed):
+        return _fail(
+            f"Origin is not on the A2A allowlist: {settings.url}",
             json_output=json_output,
         )
 
@@ -52,6 +68,8 @@ def connect_a2a_agent(
             inspect=inspect,
             send=send,
             json_output=json_output,
+            allowed_origins=allowed,
+            jws_trust_root=trust_root,
         )
 
     try:
@@ -61,6 +79,8 @@ def connect_a2a_agent(
                 message=message,
                 interactive=not json_output,
                 oauth=oauth,
+                allowed_origins=allowed,
+                jws_trust_root=trust_root,
             )
         )
     except Exception as exc:  # noqa: BLE001 - report any transport or protocol failure
@@ -136,12 +156,22 @@ def _run_conformance(
     inspect: bool,
     send: bool,
     json_output: bool,
+    allowed_origins: tuple[str, ...] = (),
+    jws_trust_root: str = "",
 ) -> int:
     """Run the client checks. A check does not save the connection."""
     from superqode.a2a.conformance import render_a2a_conformance, run_a2a_conformance
 
     try:
-        report = asyncio.run(run_a2a_conformance(settings, message=message, send=send))
+        report = asyncio.run(
+            run_a2a_conformance(
+                settings,
+                message=message,
+                send=send,
+                allowed_origins=allowed_origins,
+                jws_trust_root=jws_trust_root,
+            )
+        )
     except Exception as exc:  # noqa: BLE001 - report any transport or protocol failure
         return _fail(
             f"Could not check the A2A agent at {settings.url}: {exc}",
@@ -177,6 +207,8 @@ async def _probe(
     message: str | None,
     interactive: bool = True,
     oauth: bool = True,
+    allowed_origins: tuple[str, ...] = (),
+    jws_trust_root: str = "",
 ) -> dict[str, Any]:
     from superqode.a2a.client import A2AClient, A2AClientError
 
@@ -188,6 +220,8 @@ async def _probe(
         client_key=settings.key or None,
         timeout=180.0,
     ) as client:
+        client.allowed_origins = allowed_origins
+        client.jws_trust_root = jws_trust_root
         try:
             return await _probe_with(
                 client,
@@ -247,6 +281,9 @@ async def _probe_with(
         "interfaces": list(card.supported_interfaces),
         "inspect": client.inspect.to_dict(),
     }
+    review = getattr(client, "_card_review", None)
+    if review is not None:
+        payload["card_review"] = review.to_dict()
     if message:
         from superqode.a2a.reply import task_reply
 
@@ -284,6 +321,20 @@ def _render(
         click.echo(f"\nSkills ({len(skills)}):")
         for skill in skills:
             click.echo(f"  {skill['id']:<24} {skill['name']}")
+        click.echo(
+            "Skill claims are self-asserted. A2A 1.0 provides no "
+            "attestation or capability challenge (A2ABreak protocol risk: "
+            "Unattested Skill Claims)."
+        )
+    findings = (result.get("card_review") or {}).get("findings") or []
+    if findings:
+        click.echo("\nCard review:")
+        for item in findings:
+            if not isinstance(item, dict):
+                continue
+            click.echo(
+                f"  {item.get('severity', '')} {item.get('field', '')}: {item.get('issue', '')}"
+            )
     task = result.get("task")
     if task:
         click.echo(f"\nTask:       {task['id']}  {task['state']}")
@@ -314,6 +365,10 @@ def _render_inspect(inspect: dict[str, Any] | None) -> None:
             loc = skipped.get("url") or "(no url)"
             reason = skipped.get("reason") or "unusable"
             click.echo(f"    skip {binding} {version} at {loc}: {reason}")
+        if event.get("kind") == "trust":
+            issue = detail.get("issue")
+            if issue and issue not in str(event.get("summary") or ""):
+                click.echo(f"    {issue}")
         body = detail.get("body")
         if body:
             for line in str(body).splitlines()[:12]:

@@ -1405,3 +1405,91 @@ def test_a2a_cli_gates_remote_binding_by_what_it_exposes():
     )
     assert harness_without_token.exit_code == 1
     assert "requires --token" in harness_without_token.output
+
+
+def test_context_id_reuse_is_bound_to_the_caller(tmp_path: Path):
+    """Same API key may resume a context. A different key may not (A2ABreak)."""
+    from superqode.a2a.keys import mint_key
+
+    secret = "context-ownership-secret"
+    key_a, _ = mint_key("Alice", secret=secret)
+    key_b, _ = mint_key("Bob", secret=secret)
+    server, session_ids = _server(tmp_path)
+    configured = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-owners.sqlite3",
+            key_secret=secret,
+        ),
+    )
+    client = TestClient(configured.app)
+    first = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_a}"},
+        json=_request("first", context_id="shared-context"),
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
+
+    reuse = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_a}"},
+        json=_request("second", context_id="shared-context"),
+    )
+    assert reuse.status_code == 200, reuse.text
+    assert session_ids[0] == session_ids[1]
+
+    stolen = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_b}"},
+        json=_request("steal", context_id="shared-context"),
+    )
+    assert stolen.status_code == 200, stolen.text
+    body = stolen.json()
+    state = body["task"]["status"]["state"]
+    assert state == "TASK_STATE_FAILED"
+    blob = json.dumps(body)
+    assert "bound to another caller" in blob
+    assert len(session_ids) == 2
+
+
+def test_get_task_is_scoped_to_the_caller_principal(tmp_path: Path):
+    """Official SDK List/Get/Cancel/Subscribe key tasks by call-context user."""
+    from superqode.a2a.keys import mint_key
+
+    secret = "task-scope-secret"
+    key_a, _ = mint_key("Alice", secret=secret)
+    key_b, _ = mint_key("Bob", secret=secret)
+    server, _ = _server(tmp_path)
+    configured = A2AServer(
+        server.controller,
+        A2AServerConfig(
+            provider="test",
+            model="test",
+            url="http://127.0.0.1:8000",
+            working_directory=Path("."),
+            task_store_path=tmp_path / "tasks-scope.sqlite3",
+            key_secret=secret,
+        ),
+    )
+    client = TestClient(configured.app)
+    created = client.post(
+        "/message:send",
+        headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_a}"},
+        json=_request("owned"),
+    )
+    assert created.status_code == 200, created.text
+    task_id = created.json()["task"]["id"]
+    own = client.get(
+        f"/tasks/{task_id}", headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_a}"}
+    )
+    assert own.status_code == 200
+    other = client.get(
+        f"/tasks/{task_id}", headers={"A2A-Version": "1.0", "Authorization": f"Bearer {key_b}"}
+    )
+    assert other.status_code == 404
+    assert "Task not found" in other.text
