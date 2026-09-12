@@ -16,7 +16,7 @@ As a client, a harness on a remote UHP server is registered as the `uhp` route
 and runs through the same session, event, and evidence model as a local harness.
 
 As a server (`superqode serve uhp`), SuperQode exposes **one configured
-HarnessSpec** over the UHP wire format — a native harness bind, not a
+HarnessSpec** over the UHP wire format: a native harness bind, not a
 multi-backend runner. That is complementary to [HarnessRouter](https://github.com/HarnessRouter/harnessrouter):
 HarnessRouter wraps Codex, Claude Code, and similar tools as a catalog;
 `serve uhp` makes SuperQode's own harness speak UHP so any UHP client can drive
@@ -492,9 +492,9 @@ and Full (harness management, sharing) are deferred.
 
 ### Partnership with HarnessRouter
 
-- **HarnessRouter** — multi-backend UHP *runner*: advertise and run Codex,
+- **HarnessRouter**: multi-backend UHP *runner*: advertise and run Codex,
   Claude Code, Hermes, etc. behind one catalog.
-- **`superqode serve uhp`** — native UHP *harness*: one SuperQode HarnessSpec
+- **`superqode serve uhp`**: native UHP *harness*: one SuperQode HarnessSpec
   speaking the protocol so any UHP client (including SuperQode's own client,
   or HarnessRouter as a client elsewhere) can call it.
 
