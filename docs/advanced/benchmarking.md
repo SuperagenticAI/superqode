@@ -5,7 +5,7 @@ description: How to run HarnessBench and Terminal-Bench 4.0.
 
 # Benchmarking SuperQode
 
-[HarnessBench](harnessbench.md) compares SuperQode harnesses on a fixed task set and model. Terminal-Bench 4.0 scores SuperQode as an agent on Harbor's 66-task suite. Keep the two reports separate; they measure different things.
+[HarnessBench](harnessbench.md) compares SuperQode harnesses on a fixed task set and model. It runs on the host and does not use ACP. Terminal-Bench 4.0 scores SuperQode as an agent on Harbor's 66-task suite. Harbor talks to SuperQode over ACP. Keep the two reports separate; they measure different things.
 
 | Harness | Role | Headless |
 | --- | --- | --- |
@@ -20,15 +20,15 @@ MCP is opt-in on a builtin spec (`runtime.config.mcp_servers`). These four templ
 
 ```bash
 curl -fsSL https://superqode.dev/install.sh | sh
-export SUPERQODE_PROVIDER=openai
-export SUPERQODE_MODEL=gpt-4o-mini
-export OPENAI_API_KEY=...
+export SUPERQODE_PROVIDER=deepseek
+export SUPERQODE_MODEL=deepseek-v3
+export DEEPSEEK_API_KEY=...
 
 superqode -p --harness core --provider "$SUPERQODE_PROVIDER" --model "$SUPERQODE_MODEL" \
   "summarize this repository in 5 bullets"
 ```
 
-Exit `0` means the run finished. `--mode json` emits `content`, `stopped_reason`, `success`, and `changes`. Swap provider, model, and key for the account you are measuring (for example `deepseek` and `DEEPSEEK_API_KEY`).
+Exit `0` means the run finished. `--mode json` emits `content`, `stopped_reason`, `success`, and `changes`. Swap provider, model, and key if you are measuring a different account.
 
 ```bash
 SUPERQODE_PURE_PERMISSIONS_HEADLESS=1 \
@@ -79,8 +79,8 @@ tasks: tasks.yaml
 specs:
   - core.yaml
   - benchmark-coding.yaml
-provider: openai
-model: gpt-4o-mini
+provider: deepseek
+model: deepseek-v3
 runtime: builtin
 working_dir: /tmp/superqode-bench-clone
 sandbox: local
@@ -129,14 +129,20 @@ sq harness bench-verify results/dspy-comprehension
 
 Dataset: `terminal-bench/terminal-bench@4.0.0` ([release notes](https://www.tbench.ai/news/terminal-bench-4-0)). Sixty-six tasks, an eight-hour agent timeout, five trials on the public board. Earlier Terminal-Bench versions use a different task set.
 
+Harbor has no built-in SuperQode agent (`-a superqode` is not a Harbor name). The path SuperQode ships is ACP: Harbor installs SuperQode from `install/acp-registry/superqode/agent.json` and runs `superqode serve acp` in the task container. Other Harbor `-a` values (`claude-code`, `codex`, `terminus-2`, `pi`) are those products.
+
+[HarnessBench](harnessbench.md) does not use ACP. `sq harness bench` drives SuperQode harnesses on the host. Use that runner for Core, PiPy, and RLM comparisons that stay off ACP.
+
+A Harbor job that skips ACP would need a custom Harbor installed agent wrapping `superqode -p`. SuperQode does not ship that adapter.
+
 Harbor starts SuperQode inside each task container. Docker must be running on the host. Use `template:benchmark-coding` for the first job.
 
 ```bash
 uv tool install harbor
 
-export OPENAI_API_KEY=...
-export SUPERQODE_PROVIDER=openai
-export SUPERQODE_MODEL=gpt-4o-mini
+export DEEPSEEK_API_KEY=...
+export SUPERQODE_PROVIDER=deepseek
+export SUPERQODE_MODEL=deepseek-v3
 ```
 
 One trial (`-k 1`) from a SuperQode checkout:
@@ -146,11 +152,11 @@ harbor run -d terminal-bench/terminal-bench@4.0.0 \
   -a acp \
   --ak registry_entry_path=install/acp-registry/superqode/agent.json \
   --ak auth_policy=disabled \
-  -m openai/gpt-4o-mini \
+  -m deepseek/deepseek-v3 \
   --ae SUPERQODE_ACP_SPEC=template:benchmark-coding \
-  --ae SUPERQODE_PROVIDER=openai \
-  --ae SUPERQODE_MODEL=gpt-4o-mini \
-  --ae OPENAI_API_KEY \
+  --ae SUPERQODE_PROVIDER=deepseek \
+  --ae SUPERQODE_MODEL=deepseek-v3 \
+  --ae DEEPSEEK_API_KEY \
   -k 1 \
   -n 1 \
   -o jobs/tb4-k1
@@ -176,11 +182,11 @@ harbor run -d terminal-bench/terminal-bench@4.0.0 \
   -a acp \
   --ak registry_entry_path=install/acp-registry/superqode/agent.json \
   --ak auth_policy=disabled \
-  -m openai/gpt-4o-mini \
+  -m deepseek/deepseek-v3 \
   --ae SUPERQODE_ACP_SPEC=template:benchmark-coding \
-  --ae SUPERQODE_PROVIDER=openai \
-  --ae SUPERQODE_MODEL=gpt-4o-mini \
-  --ae OPENAI_API_KEY \
+  --ae SUPERQODE_PROVIDER=deepseek \
+  --ae SUPERQODE_MODEL=deepseek-v3 \
+  --ae DEEPSEEK_API_KEY \
   -k 5 \
   -n 4 \
   -o jobs/tb4-k5
@@ -194,10 +200,10 @@ for t in core benchmark-coding pipy rlm; do
     -a acp \
     --ak registry_entry_path=install/acp-registry/superqode/agent.json \
     --ak auth_policy=disabled \
-    -m openai/gpt-4o-mini \
+    -m deepseek/deepseek-v3 \
     --ae SUPERQODE_ACP_SPEC=template:$t \
     --ae SUPERQODE_PURE_PERMISSIONS_HEADLESS=1 \
-    --ae OPENAI_API_KEY \
+    --ae DEEPSEEK_API_KEY \
     -k 1 \
     -o jobs/tb4-$t
 done
