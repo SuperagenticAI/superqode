@@ -150,7 +150,12 @@ class UHPHarnessBackend:
             # A first turn has nothing to resume, which is not a failure.
             pass
         try:
-            async for event in adapter.send(ref, HarnessMessage("user", request.prompt)):
+            message_meta: dict[str, Any] = {}
+            for key in ("uhp_input_files", "uhp_inline_files", "uhp_download_dir"):
+                if request.metadata.get(key):
+                    message_meta[key] = request.metadata[key]
+            user_message = HarnessMessage("user", request.prompt, metadata=message_meta)
+            async for event in adapter.send(ref, user_message):
                 yield event
                 if event.type == "run.failed":
                     raise RuntimeError(str(event.data.get("error") or "UHP run failed"))

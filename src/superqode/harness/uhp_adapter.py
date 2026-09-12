@@ -8,7 +8,8 @@ controller through :meth:`session_state` and survive a restart.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
 from contextlib import suppress
 from typing import Any
 
@@ -166,6 +167,19 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
         model = str(session.metadata.get("model") or "")
         override = model if session.metadata.get("model_explicit") else ""
         previous_response_id = self._previous_response.get(session.session_id)
+        input_files = _path_list(
+            message.metadata.get("uhp_input_files")
+            or session.metadata.get("uhp_input_files")
+        )
+        inline_files = _path_list(
+            message.metadata.get("uhp_inline_files")
+            or session.metadata.get("uhp_inline_files")
+        )
+        download_dir = (
+            message.metadata.get("uhp_download_dir")
+            or session.metadata.get("uhp_download_dir")
+            or ""
+        )
 
         yield HarnessEvent(
             type="model.requested",
@@ -174,6 +188,7 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
                 "model": override or "(server default)",
                 "transport": "uhp",
                 "harness_id": harness_id,
+                "input_files": list(input_files),
             },
         )
 
@@ -187,6 +202,8 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
             model=override or None,
             previous_response_id=previous_response_id,
             max_output_tokens=self.max_output_tokens,
+            input_files=input_files or None,
+            inline_files=inline_files or None,
         )
         try:
             async for event in stream:
@@ -217,6 +234,13 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
             self._uhp_session[session.session_id] = final.session_id
 
         for citation in final.file_citations:
+            local_path = ""
+            if download_dir:
+                try:
+                    saved = await self._client.save_file(citation, download_dir)
+                    local_path = str(saved)
+                except Exception as exc:  # noqa: BLE001 - surface path, keep run
+                    local_path = f"download failed: {exc}"
             yield HarnessEvent(
                 type="artifact.created",
                 data={
@@ -226,6 +250,7 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
                     "name": citation.filename,
                     "container_id": citation.container_id,
                     "file_id": citation.file_id,
+                    "local_path": local_path,
                 },
             )
 
@@ -356,4 +381,15 @@ def _translate(
             ]
         return []
 
+    return []
+
+
+def _path_list(value: Any) -> list[str]:
+    """Normalize metadata file lists to plain path strings."""
+    if not value:
+        return []
+    if isinstance(value, (str, Path)):
+        return [str(value)]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [str(item) for item in value if item]
     return []

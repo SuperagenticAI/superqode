@@ -3,7 +3,7 @@
 UHP is an HTTP contract for handing a task to a complete agent harness and
 getting finished work back.  This module speaks that wire format directly:
 protocol discovery, harness listing, response creation, Server-Sent Event
-streaming, session files, and cancellation.
+streaming, file upload/download, session files, and cancellation.
 
 No SuperQode types appear in these signatures, so the client is usable on its
 own.  ``uhp_adapter`` wraps it for Harness Protocol v1.
@@ -11,10 +11,13 @@ own.  ``uhp_adapter`` wraps it for Harness Protocol v1.
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -274,6 +277,29 @@ class UHPFileCitation:
             file_id=str(payload.get("file_id") or ""),
             filename=str(payload.get("filename") or ""),
             download_url=str(payload.get("download_url") or ""),
+        )
+
+
+@dataclass(frozen=True)
+class UHPUploadedFile:
+    """A file accepted by ``POST /v1/files`` and referenceable as ``input_file``."""
+
+    id: str
+    filename: str = ""
+    bytes: int = 0
+    created_at: int | None = None
+    object: str = "file"
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> UHPUploadedFile:
+        return cls(
+            id=str(payload.get("id") or payload.get("file_id") or ""),
+            filename=str(payload.get("filename") or ""),
+            bytes=int(payload.get("bytes") or 0),
+            created_at=int(payload["created_at"]) if payload.get("created_at") is not None else None,
+            object=str(payload.get("object") or "file"),
+            raw=dict(payload),
         )
 
 
@@ -632,9 +658,36 @@ class UHPClient:
                         add(item)
         return tuple(models)
 
+    @staticmethod
+    def build_user_input(
+        text: str,
+        *,
+        file_ids: Sequence[str] | None = None,
+        inline_files: Sequence[tuple[str, bytes, str]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build a structured user message with optional ``input_file`` parts.
+
+        ``inline_files`` entries are ``(filename, raw_bytes, media_type)``. Prefer
+        ``file_ids`` from :meth:`upload_file` for anything larger than a few KB.
+        """
+        content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+        for file_id in file_ids or ():
+            content.append({"type": "input_file", "file_id": str(file_id)})
+        for filename, raw, media_type in inline_files or ():
+            encoded = base64.b64encode(raw).decode("ascii")
+            mime = media_type or "application/octet-stream"
+            content.append(
+                {
+                    "type": "input_file",
+                    "filename": filename,
+                    "file_data": f"data:{mime};base64,{encoded}",
+                }
+            )
+        return [{"role": "user", "content": content}]
+
     def build_response_body(
         self,
-        message: str,
+        message: str | Sequence[Mapping[str, Any]],
         *,
         harness_id: str | None = None,
         model: str | None = None,
@@ -650,7 +703,11 @@ class UHPClient:
         include: Sequence[str] | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Assemble a ``POST /v1/responses`` body, omitting unset fields."""
+        """Assemble a ``POST /v1/responses`` body, omitting unset fields.
+
+        ``message`` may be plain text (backward compatible) or a structured
+        ``input`` array as defined by UHP Files / Tasks.
+        """
         body: dict[str, Any] = {"input": message, "stream": stream, "store": store}
         merged_metadata: dict[str, Any] = dict(metadata or {})
         if harness_id:
@@ -677,16 +734,70 @@ class UHPClient:
         """Return a fresh key for one task submission."""
         return f"sq-{uuid.uuid4().hex}"
 
+    async def prepare_input(
+        self,
+        message: str | Sequence[Mapping[str, Any]],
+        *,
+        input_files: Sequence[str | Path] | None = None,
+        inline_files: Sequence[str | Path] | None = None,
+        inline_max_bytes: int = 512_000,
+    ) -> str | list[dict[str, Any]]:
+        """Return plain text or a structured input array with uploaded/inlined files.
+
+        Paths in ``input_files`` are uploaded via ``POST /v1/files`` and attached
+        by id. Paths in ``inline_files`` become data-URL ``input_file`` parts when
+        each file is at most ``inline_max_bytes``; larger files raise
+        ``UHPInvalidRequestError`` so callers switch to ``input_files``.
+        """
+        if isinstance(message, Sequence) and not isinstance(message, (str, bytes)):
+            if input_files or inline_files:
+                raise UHPInvalidRequestError(
+                    "Structured input cannot be combined with input_files/inline_files; "
+                    "attach files in the input array yourself."
+                )
+            return [dict(item) for item in message if isinstance(item, Mapping)]
+
+        text = str(message)
+        file_ids: list[str] = []
+        for path in input_files or ():
+            uploaded = await self.upload_file(path)
+            if not uploaded.id:
+                raise UHPServerError(f"UHP upload returned no file id for {path}")
+            file_ids.append(uploaded.id)
+
+        inlined: list[tuple[str, bytes, str]] = []
+        for path in inline_files or ():
+            file_path = Path(path)
+            raw = file_path.read_bytes()
+            if len(raw) > inline_max_bytes:
+                raise UHPInvalidRequestError(
+                    f"Inline file {file_path.name!r} is {len(raw)} bytes; "
+                    f"limit is {inline_max_bytes}. Use input_files= to upload instead.",
+                    code="file_too_large",
+                    param="inline_files",
+                )
+            mime, _ = mimetypes.guess_type(file_path.name)
+            inlined.append((file_path.name, raw, mime or "application/octet-stream"))
+
+        if not file_ids and not inlined:
+            return text
+        return self.build_user_input(text, file_ids=file_ids, inline_files=inlined)
+
     async def create_response(
         self,
-        message: str,
+        message: str | Sequence[Mapping[str, Any]],
         *,
         idempotency_key: str | None = None,
+        input_files: Sequence[str | Path] | None = None,
+        inline_files: Sequence[str | Path] | None = None,
         **kwargs: Any,
     ) -> UHPResponse:
         """Run one task to completion and return the finished response."""
         kwargs.pop("stream", None)
-        body = self.build_response_body(message, stream=False, **kwargs)
+        prepared = await self.prepare_input(
+            message, input_files=input_files, inline_files=inline_files
+        )
+        body = self.build_response_body(prepared, stream=False, **kwargs)
         headers = {IDEMPOTENCY_HEADER: idempotency_key or self.new_idempotency_key()}
         payload = await self._request("POST", "responses", json_body=body, headers=headers)
         if not isinstance(payload, Mapping):
@@ -695,9 +806,11 @@ class UHPClient:
 
     async def stream_response(
         self,
-        message: str,
+        message: str | Sequence[Mapping[str, Any]],
         *,
         idempotency_key: str | None = None,
+        input_files: Sequence[str | Path] | None = None,
+        inline_files: Sequence[str | Path] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[UHPStreamEvent]:
         """Run one task and yield each Server-Sent Event as it arrives.
@@ -710,7 +823,10 @@ class UHPClient:
         from httpx_sse import aconnect_sse
 
         kwargs.pop("stream", None)
-        body = self.build_response_body(message, stream=True, **kwargs)
+        prepared = await self.prepare_input(
+            message, input_files=input_files, inline_files=inline_files
+        )
+        body = self.build_response_body(prepared, stream=True, **kwargs)
         client = self._ensure_client()
         headers = {
             **self._headers,
@@ -787,6 +903,51 @@ class UHPClient:
         payload = await self._request("GET", f"sessions/{session_id}/files")
         return tuple(dict(item) for item in _items(payload, "files") if isinstance(item, Mapping))
 
+    async def upload_file(
+        self,
+        path: str | Path | None = None,
+        *,
+        data: bytes | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+    ) -> UHPUploadedFile:
+        """Upload one file via ``POST /v1/files`` (multipart) and return its id.
+
+        Pass ``path`` for a local file, or ``data`` plus ``filename`` for in-memory
+        bytes. This is the UHP Extended Files upload form; small files may instead
+        use inline ``file_data`` through :meth:`prepare_input`.
+        """
+        if path is None and data is None:
+            raise UHPInvalidRequestError("upload_file requires path= or data=")
+        if path is not None and data is not None:
+            raise UHPInvalidRequestError("pass path= or data=, not both")
+
+        if path is not None:
+            file_path = Path(path)
+            raw = file_path.read_bytes()
+            name = filename or file_path.name
+            mime = content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+        else:
+            raw = data or b""
+            name = filename or "upload.bin"
+            mime = content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+        client = self._ensure_client()
+        headers = {key: value for key, value in self._headers.items() if key.lower() != "accept"}
+        headers[VERSION_HEADER] = UHP_PROTOCOL_VERSION
+        try:
+            response = await client.post(
+                self._url("files"),
+                headers=headers,
+                files={"file": (name, raw, mime)},
+            )
+        except httpx.HTTPError as exc:
+            raise UHPServerError(f"UHP file upload failed: {exc}") from exc
+        payload = self._decode(response)
+        if not isinstance(payload, Mapping):
+            raise UHPServerError("UHP server returned no file object from upload")
+        return UHPUploadedFile.from_payload(payload)
+
     async def download_file(self, container_id: str, file_id: str) -> bytes:
         """Download one file produced by a harness run."""
         client = self._ensure_client()
@@ -798,6 +959,43 @@ class UHPClient:
         if response.status_code >= 400:
             self._decode(response)
         return response.content
+
+    async def save_file(
+        self,
+        citation: UHPFileCitation | Mapping[str, Any],
+        destination: str | Path,
+    ) -> Path:
+        """Download one citation into ``destination`` and return the path written."""
+        if isinstance(citation, Mapping):
+            citation = UHPFileCitation.from_payload(citation)
+        if not citation.container_id or not citation.file_id:
+            raise UHPInvalidRequestError(
+                "save_file requires container_id and file_id on the citation"
+            )
+        dest = Path(destination)
+        as_directory = (
+            dest.is_dir()
+            or str(destination).endswith(("/", "\\"))
+            or dest.suffix == ""
+        )
+        if as_directory:
+            dest = dest / (citation.filename or citation.file_id)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(await self.download_file(citation.container_id, citation.file_id))
+        return dest
+
+    async def download_citations(
+        self,
+        citations: Sequence[UHPFileCitation | Mapping[str, Any]],
+        directory: str | Path,
+    ) -> tuple[Path, ...]:
+        """Download every citation into ``directory`` (created if needed)."""
+        root = Path(directory)
+        root.mkdir(parents=True, exist_ok=True)
+        written: list[Path] = []
+        for citation in citations:
+            written.append(await self.save_file(citation, root))
+        return tuple(written)
 
 
 def _items(payload: Any, *keys: str) -> tuple[Any, ...]:

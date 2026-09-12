@@ -1133,3 +1133,120 @@ async def test_without_a_cap_the_field_is_omitted():
     await adapter.aclose()
 
     assert "max_output_tokens" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_upload_file_posts_multipart(tmp_path):
+    seen = {}
+    source = tmp_path / "notes.md"
+    source.write_text("# hello\n", encoding="utf-8")
+
+    def handler(request):
+        seen["path"] = request.url.path
+        seen["content_type"] = request.headers.get("content-type", "")
+        seen["uhp_version"] = request.headers.get("UHP-Version")
+        assert "multipart/form-data" in seen["content_type"]
+        return httpx.Response(
+            200,
+            json={
+                "id": "file_abc",
+                "object": "file",
+                "filename": "notes.md",
+                "bytes": source.stat().st_size,
+                "created_at": 1786400000,
+            },
+        )
+
+    async with _client(handler) as client:
+        uploaded = await client.upload_file(source)
+
+    assert uploaded.id == "file_abc"
+    assert uploaded.filename == "notes.md"
+    assert seen["path"] == "/v1/files"
+    assert seen["uhp_version"] == "2026-08-11"
+
+
+@pytest.mark.asyncio
+async def test_prepare_input_uploads_and_builds_structured_message(tmp_path):
+    source = tmp_path / "a.py"
+    source.write_text("print(1)\n", encoding="utf-8")
+    uploads = []
+
+    def handler(request):
+        if request.url.path == "/v1/files":
+            uploads.append(True)
+            return httpx.Response(
+                200,
+                json={"id": "file_1", "object": "file", "filename": "a.py", "bytes": 8},
+            )
+        return httpx.Response(404, json={"error": {"type": "invalid_request_error"}})
+
+    async with _client(handler) as client:
+        prepared = await client.prepare_input("Review this", input_files=[source])
+
+    assert uploads == [True]
+    assert prepared[0]["role"] == "user"
+    types = [part["type"] for part in prepared[0]["content"]]
+    assert types == ["input_text", "input_file"]
+    assert prepared[0]["content"][1]["file_id"] == "file_1"
+
+
+@pytest.mark.asyncio
+async def test_create_response_with_input_files_sends_structured_input(tmp_path):
+    source = tmp_path / "a.py"
+    source.write_text("x=1\n", encoding="utf-8")
+    bodies = []
+
+    def handler(request):
+        if request.url.path == "/v1/files":
+            return httpx.Response(
+                200,
+                json={"id": "file_9", "object": "file", "filename": "a.py", "bytes": 4},
+            )
+        if request.method == "POST" and request.url.path == "/v1/responses":
+            bodies.append(json.loads(request.content.decode("utf-8")))
+            return httpx.Response(200, json=_response_payload())
+        return httpx.Response(404, json={"error": {"type": "invalid_request_error"}})
+
+    async with _client(handler) as client:
+        response = await client.create_response(
+            "Review",
+            harness_id="chrn_a",
+            input_files=[source],
+        )
+
+    assert response.id == "resp_1"
+    assert bodies[0]["input"][0]["content"][1]["file_id"] == "file_9"
+
+
+@pytest.mark.asyncio
+async def test_save_file_writes_bytes(tmp_path):
+    dest_dir = tmp_path / "out"
+
+    def handler(request):
+        assert request.url.path == "/v1/containers/cont_1/files/file_1/content"
+        return httpx.Response(200, content=b"artifact-bytes")
+
+    async with _client(handler) as client:
+        path = await client.save_file(
+            {
+                "container_id": "cont_1",
+                "file_id": "file_1",
+                "filename": "report.md",
+            },
+            dest_dir,
+        )
+
+    assert path == dest_dir / "report.md"
+    assert path.read_bytes() == b"artifact-bytes"
+
+
+def test_build_user_input_supports_inline_data_url():
+    built = UHPClient.build_user_input(
+        "Summarise",
+        inline_files=[("note.txt", b"hi", "text/plain")],
+    )
+    part = built[0]["content"][1]
+    assert part["type"] == "input_file"
+    assert part["filename"] == "note.txt"
+    assert part["file_data"].startswith("data:text/plain;base64,")
