@@ -297,7 +297,9 @@ class UHPUploadedFile:
             id=str(payload.get("id") or payload.get("file_id") or ""),
             filename=str(payload.get("filename") or ""),
             bytes=int(payload.get("bytes") or 0),
-            created_at=int(payload["created_at"]) if payload.get("created_at") is not None else None,
+            created_at=int(payload["created_at"])
+            if payload.get("created_at") is not None
+            else None,
             object=str(payload.get("object") or "file"),
             raw=dict(payload),
         )
@@ -973,11 +975,7 @@ class UHPClient:
                 "save_file requires container_id and file_id on the citation"
             )
         dest = Path(destination)
-        as_directory = (
-            dest.is_dir()
-            or str(destination).endswith(("/", "\\"))
-            or dest.suffix == ""
-        )
+        as_directory = dest.is_dir() or str(destination).endswith(("/", "\\")) or dest.suffix == ""
         if as_directory:
             dest = dest / (citation.filename or citation.file_id)
         dest.parent.mkdir(parents=True, exist_ok=True)

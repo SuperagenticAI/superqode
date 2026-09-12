@@ -334,7 +334,11 @@ def serve_a2a(
 @click.option("--spec", "spec_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--provider", default="openai", envvar="SUPERQODE_PROVIDER", show_default=True)
 @click.option(
-    "--model", "model_name", default="", envvar="SUPERQODE_MODEL", help="Default model id advertised and used"
+    "--model",
+    "model_name",
+    default="",
+    envvar="SUPERQODE_MODEL",
+    help="Default model id advertised and used",
 )
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=8787, show_default=True, type=int)
@@ -390,10 +394,14 @@ def serve_uhp(
         api_key=api_key,
         harness_id=harness_id,
     )
-    console.print(f"[cyan]Serving SuperQode UHP {server.discovery_document()['default_version']} "
-                  f"on http://{host}:{port}[/cyan]")
-    console.print(f"[dim]Discovery: /v1/uhp · harness: {server.config.harness_id} · "
-                  f"class: {server.config.conformance_class}[/dim]")
+    console.print(
+        f"[cyan]Serving SuperQode UHP {server.discovery_document()['default_version']} "
+        f"on http://{host}:{port}[/cyan]"
+    )
+    console.print(
+        f"[dim]Discovery: /v1/uhp · harness: {server.config.harness_id} · "
+        f"class: {server.config.conformance_class}[/dim]"
+    )
     console.print(
         "[dim]Complementary to HarnessRouter: native SuperQode harness bind, "
         "not a multi-backend wrapper.[/dim]"

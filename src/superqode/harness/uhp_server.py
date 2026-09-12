@@ -663,7 +663,9 @@ class UHPServer:
             ignored.append("include")
 
         requested_model = body.get("model")
-        model = str(requested_model or self.config.default_model or self.config.model or "server-default")
+        model = str(
+            requested_model or self.config.default_model or self.config.model or "server-default"
+        )
 
         record = _response_payload(
             response_id=response_id,
@@ -702,11 +704,7 @@ class UHPServer:
             cancel_event=self._cancel_events[response_id],
             metadata={
                 "harness_id": self.config.harness_id,
-                **(
-                    dict(body["metadata"])
-                    if isinstance(body.get("metadata"), Mapping)
-                    else {}
-                ),
+                **(dict(body["metadata"]) if isinstance(body.get("metadata"), Mapping) else {}),
             },
         )
 

@@ -53,7 +53,6 @@ from ._group import harness
     default=None,
     help="Write UHP artifact citations into this directory after the run",
 )
-
 def harness_run(
     reference,
     task,
@@ -269,9 +268,7 @@ def harness_run(
         if download_dir is not None:
             message_meta["uhp_download_dir"] = str(download_dir)
         send_message = (
-            HarnessMessage("user", prompt, metadata=message_meta)
-            if message_meta
-            else prompt
+            HarnessMessage("user", prompt, metadata=message_meta) if message_meta else prompt
         )
         async for event in controller.send(session, send_message):
             events.append(event)

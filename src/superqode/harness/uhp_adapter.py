@@ -168,12 +168,10 @@ class UHPHarnessProtocolAdapter(BaseHarnessAdapter):
         override = model if session.metadata.get("model_explicit") else ""
         previous_response_id = self._previous_response.get(session.session_id)
         input_files = _path_list(
-            message.metadata.get("uhp_input_files")
-            or session.metadata.get("uhp_input_files")
+            message.metadata.get("uhp_input_files") or session.metadata.get("uhp_input_files")
         )
         inline_files = _path_list(
-            message.metadata.get("uhp_inline_files")
-            or session.metadata.get("uhp_inline_files")
+            message.metadata.get("uhp_inline_files") or session.metadata.get("uhp_inline_files")
         )
         download_dir = (
             message.metadata.get("uhp_download_dir")

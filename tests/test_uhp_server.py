@@ -33,8 +33,13 @@ async def _echo_runner(request: UHPRunRequest) -> UHPRunResult:
         text=text,
         model=request.model or "test-model",
         status="completed",
-        usage={"input_tokens": 1, "output_tokens": 2, "total_tokens": 3,
-               "cache_read_tokens": 0, "cache_write_tokens": 0},
+        usage={
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 3,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+        },
     )
 
 
@@ -200,15 +205,11 @@ async def test_auth_and_version_negotiation():
         assert denied.status_code == 401
         assert denied.json()["error"]["code"] == "missing_credential"
 
-        bad = await client.get(
-            "/v1/harnesses", headers={"Authorization": "Bearer wrong"}
-        )
+        bad = await client.get("/v1/harnesses", headers={"Authorization": "Bearer wrong"})
         assert bad.status_code == 401
         assert bad.json()["error"]["code"] == "invalid_credential"
 
-        ok = await client.get(
-            "/v1/harnesses", headers={"Authorization": "Bearer secret"}
-        )
+        ok = await client.get("/v1/harnesses", headers={"Authorization": "Bearer secret"})
         assert ok.status_code == 200
 
         unsupported = await client.get(
