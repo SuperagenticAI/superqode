@@ -97,23 +97,25 @@ Full tool output and the complete event graph stay in the harness run store (`.s
 
 ## Running on Terminal-Bench with Harbor
 
-[Harbor](https://www.harborframework.com/), the official harness for Terminal-Bench 2.x, has first-class ACP support, so SuperQode runs on the benchmark without adapter code. Harbor installs SuperQode inside each task container from the ACP registry manifest, speaks ACP to it, and records the full trajectory.
+[Harbor](https://www.harborframework.com/) is the official runner for Terminal-Bench. SuperQode runs on the benchmark without adapter code: Harbor installs it inside each task container from the ACP registry manifest, speaks ACP to it, and records the full trajectory.
+
+The current public dataset is Terminal-Bench 4.0 (`terminal-bench/terminal-bench@4.0.0`). Older aliases such as `terminal-bench@2.0` still work for historical suites; they are not comparable to 4.0. The start-to-finish benchmarking plan is [Benchmarking SuperQode](benchmarking.md).
 
 Once SuperQode is in the ACP registry:
 
 ```bash
-harbor run -d terminal-bench@2.0 -a acp:superqode -m <provider/model>
+harbor run -d terminal-bench/terminal-bench@4.0.0 -a acp:superqode -m <provider/model>
 ```
 
 Or point at a local registry manifest (before the registry listing, or to test manifest changes):
 
 ```bash
-harbor run -d terminal-bench@2.0 \
+harbor run -d terminal-bench/terminal-bench@4.0.0 \
   -a acp \
   --ak registry_entry_path=install/acp-registry/superqode/agent.json \
   --ak auth_policy=disabled \
   -m ollama/qwen3-coder \
-  -k 5 -o jobs
+  -k 1 -o jobs
 ```
 
 The benchmark's `-m` flag reaches SuperQode automatically via `HARBOR_ACP_REQUESTED_MODEL`.
@@ -123,7 +125,7 @@ The benchmark's `-m` flag reaches SuperQode automatically via `HARBOR_ACP_REQUES
 Interactive harnesses ask clarifying questions; benchmarks have no user to answer them. The built-in `benchmark-coding` template is the coding harness with an autonomous stance (never ask the user, investigate recoverable state such as reflog, stashes, and backups, always apply a concrete attempt, and verify before finishing) plus `yolo` approvals, since the task container is the sandbox:
 
 ```bash
-harbor run -d terminal-bench@2.0 -a acp:superqode -m <provider/model> \
+harbor run -d terminal-bench/terminal-bench@4.0.0 -a acp:superqode -m <provider/model> \
   --ae SUPERQODE_ACP_SPEC=template:benchmark-coding
 ```
 
@@ -133,7 +135,7 @@ Because the harness is selectable per run, you can benchmark the same model acro
 
 ```bash
 for t in coding benchmark-coding no-tool; do
-  harbor run -d terminal-bench@2.0 -a acp:superqode -m <provider/model> \
+  harbor run -d terminal-bench/terminal-bench@4.0.0 -a acp:superqode -m <provider/model> \
     --ae SUPERQODE_ACP_SPEC=template:$t -o jobs/$t
 done
 ```

@@ -73,6 +73,74 @@ class UHPRunResult:
     output_items: tuple[dict[str, Any], ...] = ()
 
 
+# AgentLoop (and most harness backends) return these on AgentResponse.stopped_reason
+# instead of raising. Empty content with stopped_reason="error" is a failed turn.
+_FAILED_STOPS = frozenset({"error", "blocked", "loop_detected"})
+_CANCELLED_STOPS = frozenset({"cancelled"})
+_INCOMPLETE_STOPS = frozenset({"needs_approval", "max_iterations"})
+
+
+def _usage_from_harness_result(result: Any) -> dict[str, int] | None:
+    tokens_in = getattr(result, "tokens_in", None)
+    tokens_out = getattr(result, "tokens_out", None)
+    if tokens_in is None and tokens_out is None:
+        return None
+    return {
+        "input_tokens": int(tokens_in or 0),
+        "output_tokens": int(tokens_out or 0),
+        "total_tokens": int(getattr(result, "total_tokens", None) or 0),
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+    }
+
+
+def uhp_result_from_harness_run(result: Any, *, model: str = "") -> UHPRunResult:
+    """Map a HarnessRunResult onto the UHP response status.
+
+    Provider failures are often returned as ``stopped_reason="error"`` with
+    empty content rather than an exception. Those must be UHP ``failed``, not
+    an empty ``completed`` response.
+    """
+    response = getattr(result, "response", None)
+    stopped = str(getattr(response, "stopped_reason", "") or "")
+    error = getattr(response, "error", None)
+    text = str(getattr(result, "content", None) or "")
+    resolved_model = model or str(getattr(response, "model", "") or "")
+    usage = _usage_from_harness_result(result)
+
+    if stopped in _CANCELLED_STOPS:
+        return UHPRunResult(status="cancelled", model=resolved_model, usage=usage)
+    if stopped in _INCOMPLETE_STOPS:
+        reason = (
+            str(error).strip()
+            if error
+            else ("Approval required." if stopped == "needs_approval" else stopped)
+        )
+        return UHPRunResult(
+            text=text,
+            model=resolved_model,
+            status="incomplete",
+            error_message=reason,
+            usage=usage,
+        )
+    if stopped in _FAILED_STOPS or error:
+        message = str(error).strip() if error else (text.strip() or "Harness run failed.")
+        return UHPRunResult(
+            text=text,
+            model=resolved_model,
+            status="failed",
+            error_code="harness_error",
+            error_message=message,
+            usage=usage,
+        )
+    return UHPRunResult(
+        text=text,
+        model=resolved_model,
+        status="completed",
+        usage=usage,
+    )
+
+
 @dataclass
 class UHPServerConfig:
     """Runtime settings for the native UHP server."""
@@ -929,23 +997,12 @@ class UHPServer:
             )
 
         if request.cancel_event and request.cancel_event.is_set():
-            return UHPRunResult(status="cancelled", model=model or result.response.model or "")
+            return UHPRunResult(
+                status="cancelled",
+                model=model or getattr(result.response, "model", "") or "",
+            )
 
-        usage = None
-        if result.tokens_in is not None or result.tokens_out is not None:
-            usage = {
-                "input_tokens": int(result.tokens_in or 0),
-                "output_tokens": int(result.tokens_out or 0),
-                "total_tokens": int(result.total_tokens or 0),
-                "cache_read_tokens": 0,
-                "cache_write_tokens": 0,
-            }
-        return UHPRunResult(
-            text=result.content or "",
-            model=model or getattr(result.response, "model", "") or "",
-            status="completed",
-            usage=usage,
-        )
+        return uhp_result_from_harness_run(result, model=model)
 
 
 def create_uhp_server(

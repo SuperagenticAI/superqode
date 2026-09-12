@@ -112,6 +112,14 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Skill Optimization](skill-optimization.md)
 
+-   **Benchmarking SuperQode**
+
+    ---
+
+    Start with a headless smoke test, compare native harnesses on HarnessBench, then run Terminal-Bench 4.0 on Harbor.
+
+    [:octicons-arrow-right-24: Benchmarking SuperQode](benchmarking.md)
+
 -   **HarnessBench**
 
     ---

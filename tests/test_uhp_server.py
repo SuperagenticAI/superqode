@@ -20,6 +20,7 @@ from superqode.harness.uhp_server import (
     UHPServerConfig,
     create_uhp_server,
     harness_id_from_name,
+    uhp_result_from_harness_run,
 )
 
 
@@ -284,3 +285,121 @@ async def test_cancel_in_progress():
     release.set()
     await server._await_response(response_id)
     assert server._responses[response_id]["status"] == "cancelled"
+
+
+class _HarnessResponse:
+    def __init__(self, stopped_reason: str, error: str | None = None, model: str = "gpt-test"):
+        self.stopped_reason = stopped_reason
+        self.error = error
+        self.model = model
+
+
+class _HarnessResult:
+    def __init__(
+        self,
+        content: str = "",
+        *,
+        stopped_reason: str = "complete",
+        error: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        total_tokens: int | None = None,
+    ):
+        self.content = content
+        self.response = _HarnessResponse(stopped_reason, error)
+        self.tokens_in = tokens_in
+        self.tokens_out = tokens_out
+        self.total_tokens = total_tokens
+
+
+def test_uhp_result_from_harness_run_maps_provider_failure():
+    """A LiteLLM/auth failure is stopped_reason=error with empty content, not an exception."""
+    mapped = uhp_result_from_harness_run(
+        _HarnessResult(
+            "",
+            stopped_reason="error",
+            error="AuthenticationError: The api_key client option must be set.",
+        ),
+        model="gpt-4o-mini",
+    )
+    assert mapped.status == "failed"
+    assert mapped.text == ""
+    assert mapped.error_code == "harness_error"
+    assert mapped.error_message and "api_key" in mapped.error_message
+    assert mapped.model == "gpt-4o-mini"
+
+
+def test_uhp_result_from_harness_run_maps_stops():
+    completed = uhp_result_from_harness_run(_HarnessResult("hello", stopped_reason="complete"))
+    assert completed.status == "completed"
+    assert completed.text == "hello"
+    assert completed.error_message is None
+
+    empty_ok = uhp_result_from_harness_run(_HarnessResult("", stopped_reason="complete"))
+    assert empty_ok.status == "completed"
+
+    cancelled = uhp_result_from_harness_run(_HarnessResult("", stopped_reason="cancelled"))
+    assert cancelled.status == "cancelled"
+
+    blocked = uhp_result_from_harness_run(
+        _HarnessResult("Prompt blocked by policy.", stopped_reason="blocked")
+    )
+    assert blocked.status == "failed"
+    assert blocked.error_message == "Prompt blocked by policy."
+
+    incomplete = uhp_result_from_harness_run(
+        _HarnessResult("partial", stopped_reason="needs_approval")
+    )
+    assert incomplete.status == "incomplete"
+    assert incomplete.text == "partial"
+
+    errored_complete = uhp_result_from_harness_run(
+        _HarnessResult("", stopped_reason="complete", error="gateway down")
+    )
+    assert errored_complete.status == "failed"
+    assert errored_complete.error_message == "gateway down"
+
+
+@pytest.mark.anyio
+async def test_failed_harness_is_not_empty_completed():
+    async def failing_runner(request: UHPRunRequest) -> UHPRunResult:
+        return uhp_result_from_harness_run(
+            _HarnessResult(
+                "",
+                stopped_reason="error",
+                error="AuthenticationError: The api_key client option must be set.",
+            ),
+            model=request.model,
+        )
+
+    server = _server(runner=failing_runner)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "fail-1"},
+            json={"input": "ping", "metadata": {"harness_id": "chrn_superqode"}},
+        )
+        assert created.status_code == 200
+        payload = created.json()
+        assert payload["status"] == "failed"
+        assert payload["output"] == []
+        assert payload["error"]["type"] == "harness_error"
+        assert payload["error"]["code"] == "harness_error"
+        assert "api_key" in payload["error"]["message"]
+
+        async with client.stream(
+            "POST",
+            "/v1/responses",
+            headers={
+                VERSION_HEADER: UHP_PROTOCOL_VERSION,
+                "Idempotency-Key": "fail-stream",
+                "Accept": "text/event-stream",
+            },
+            json={"input": "ping", "stream": True},
+        ) as response:
+            body = ""
+            async for chunk in response.aiter_text():
+                body += chunk
+        assert "event: response.failed" in body
+        assert "event: response.completed" not in body

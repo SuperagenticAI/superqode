@@ -66,3 +66,4 @@ For a public scorecard:
 
 HarnessBench is evidence, not a universal leaderboard. Its claim is deliberately narrower and reproducible: the observed harness effect for one fixed workload and model configuration.
 
+For a start-to-finish path that includes a headless smoke test and Terminal-Bench 4.0, see [Benchmarking SuperQode](benchmarking.md).
