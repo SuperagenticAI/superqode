@@ -65,12 +65,14 @@ bundled ACP agent in one place.
 
     [:octicons-arrow-right-24: Runtime Backends](../runtimes.md)
 
--   **MCP and A2A**
+-   **MCP, A2A, and UHP**
 
-    Connect tool servers through MCP and remote agent services through A2A.
+    Connect tool servers through MCP, remote agents through A2A, and harnesses
+    through UHP (client and native `serve uhp`).
 
     [:octicons-arrow-right-24: MCP Configuration](../configuration/mcp-config.md)
     [:octicons-arrow-right-24: A2A Providers](a2a.md)
+    [:octicons-arrow-right-24: UHP](uhp.md)
 
 -   **Unified Harness Protocol**
 

@@ -317,6 +317,23 @@ superqode a2a-keys issue "Acme Corp" --tier one-off --days 30
 
 Read the [A2A guide](docs/providers/a2a.md).
 
+## Serve a Harness Over UHP
+
+The same install that drives a remote UHP server can also expose a local
+HarnessSpec so other UHP clients call SuperQode:
+
+```bash
+superqode serve uhp --spec harness.yaml --port 8787
+superqode connect uhp --base-url http://127.0.0.1:8787
+superqode harness run uhp --prompt "summarise this repository"
+```
+
+`serve uhp` binds one HarnessSpec and advertises UHP Core. It is complementary
+to HarnessRouter, which wraps third-party CLIs as a catalog. Core names the
+surface SuperQode implements; it is not a conformance-suite certificate.
+
+Read the [UHP guide](docs/providers/uhp.md).
+
 ## Harness Execution Model
 
 ```text
@@ -352,11 +369,12 @@ superqode harness graph <run-id> --json
 
 | Guide | What it covers |
 | --- | --- |
-| [Website](https://superqode.dev) | Product, Hub, A2A agent |
+| [Website](https://superqode.dev) | Product, Hub, A2A and UHP |
 | [Quick Start](https://docs.superqode.dev/getting-started/quickstart/) | Install, connect, and run your first task |
 | [Harness Hub](https://docs.superqode.dev/harness-hub/) | Browsing, filtering, and the published catalog |
-| [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, and A2A routes |
+| [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, A2A, and UHP routes |
 | [A2A Agents](docs/providers/a2a.md) | Serving a harness over A2A, skills, API keys, and the Agent Card |
+| [UHP](docs/providers/uhp.md) | Client connect/run, file upload, and native `serve uhp` (Core class) |
 | [Developer Workflows](docs/developer-workflows.md) | The complete TUI and CLI command set |
 | [Harness System](docs/advanced/harness-system.md) | HarnessSpec fields, runtimes, and policy |
 | [Harness Protocol](docs/advanced/harness-protocol.md) | The versioned session and evidence contract |
