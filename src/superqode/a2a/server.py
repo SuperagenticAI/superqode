@@ -22,8 +22,15 @@ if TYPE_CHECKING:
     from superqode.agent.loop import AgentConfig
     from superqode.harness import HarnessProtocolController, HarnessSessionRef, HarnessSpec
 
+from superqode.a2a.context import (
+    ContextOwnershipError,
+    ContextOwnerStore,
+    SuperQodeA2AUser,
+    caller_principal,
+    request_principal,
+)
 from superqode.a2a.keys import ANONYMOUS_TIER, AccessDecision, decide_access
-from superqode.a2a.limits import RateLimiter, RateLimitPolicy, caller_identity
+from superqode.a2a.limits import RateLimiter, RateLimitPolicy
 
 
 #: The version reported in the Agent Card.
@@ -197,6 +204,7 @@ class SuperQodeA2AExecutor:
         self.config = config
         self._sessions: dict[str, HarnessSessionRef] = {}
         self._task_sessions: dict[str, HarnessSessionRef] = {}
+        self._owners = ContextOwnerStore()
         self._session_lock = asyncio.Lock()
 
     async def execute(self, context: Any, event_queue: Any) -> None:
@@ -216,6 +224,17 @@ class SuperQodeA2AExecutor:
         await updater.start_work()
 
         user_input = context.get_user_input()
+        principal = caller_principal(context)
+        try:
+            self._owners.claim(
+                context_id,
+                principal,
+                stored_owner=self._stored_owner(context_id),
+            )
+        except ContextOwnershipError as exc:
+            await updater.failed(updater.new_agent_message([sdk["Part"](text=str(exc))]))
+            return
+
         if self._wants_shortlist(context, user_input):
             await self._answer_shortlist(
                 updater,
@@ -246,7 +265,11 @@ class SuperQodeA2AExecutor:
             )
             return
 
-        session = await self._session_for(context_id)
+        try:
+            session = await self._session_for(context_id, principal)
+        except ContextOwnershipError as exc:
+            await updater.failed(updater.new_agent_message([sdk["Part"](text=str(exc))]))
+            return
         self._task_sessions[task_id] = session
         artifact_id = f"superqode-{task_id}"
         content: list[str] = []
@@ -418,6 +441,10 @@ class SuperQodeA2AExecutor:
         sdk = _a2a_sdk()
         task_id = _required_id(context.task_id, "task")
         context_id = _required_id(context.context_id, "context")
+        principal = caller_principal(context)
+        owner = self._owners.owner_of(context_id) or self._stored_owner(context_id)
+        if owner and owner != principal:
+            return
         session = self._task_sessions.get(task_id)
         if session is not None:
             try:
@@ -428,7 +455,14 @@ class SuperQodeA2AExecutor:
                 pass
         await sdk["TaskUpdater"](event_queue, task_id, context_id).cancel()
 
-    async def _session_for(self, context_id: str) -> HarnessSessionRef:
+    def _stored_owner(self, context_id: str) -> str | None:
+        record = self.controller.store.get_session(f"a2a-{context_id}")
+        if record is None:
+            return None
+        owner = str((record.metadata or {}).get("a2a_owner") or "").strip()
+        return owner or None
+
+    async def _session_for(self, context_id: str, principal: str) -> HarnessSessionRef:
         from superqode.harness import HarnessCreateRequest
 
         async with self._session_lock:
@@ -437,7 +471,11 @@ class SuperQodeA2AExecutor:
                 return cached
 
             session_id = f"a2a-{context_id}"
-            if self.controller.store.get_session(session_id) is not None:
+            stored = self.controller.store.get_session(session_id)
+            if stored is not None:
+                stored_owner = str((stored.metadata or {}).get("a2a_owner") or "").strip()
+                if stored_owner and stored_owner != principal:
+                    raise ContextOwnershipError(context_id)
                 session = await self.controller.resume(session_id)
             else:
                 descriptor = self.controller.descriptors()[0]
@@ -448,7 +486,11 @@ class SuperQodeA2AExecutor:
                         model=self.config.model,
                         working_directory=self.config.working_directory.resolve(),
                         session_id=session_id,
-                        metadata={"transport": "a2a", "a2a_context_id": context_id},
+                        metadata={
+                            "transport": "a2a",
+                            "a2a_context_id": context_id,
+                            "a2a_owner": principal,
+                        },
                     )
                 )
             self._sessions[context_id] = session
@@ -600,11 +642,7 @@ class A2AServer:
                     content={"detail": f"Unauthorized: {decision.reason}"},
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            identity = caller_identity(
-                decision.key_id,
-                getattr(getattr(request, "client", None), "host", None),
-                request.headers.get("x-forwarded-for"),
-            )
+            identity = request_principal(decision, request)
             limit = limiter.check(identity, decision.tier)
             if not limit.allowed:
                 return sdk["JSONResponse"](
@@ -616,6 +654,7 @@ class A2AServer:
             # Carried on the scope so the call-context builder, and through it
             # the executor, can see which tier is asking.
             request.state.superqode_access = decision
+            request.state.superqode_identity = identity
             return await call_next(request)
 
         if self._task_engine is not None:
@@ -879,8 +918,17 @@ def _AccessContextBuilder(sdk: dict[str, Any]) -> Any:
         def build(self, request: Any) -> Any:
             context = super().build(request)
             decision = getattr(request.state, "superqode_access", None)
+            identity = str(getattr(request.state, "superqode_identity", "") or "").strip()
             if isinstance(decision, AccessDecision):
                 context.state.update(decision.to_state())
+            if not identity and isinstance(decision, AccessDecision):
+                identity = request_principal(decision, request)
+            if identity:
+                context.state["identity"] = identity
+                authenticated = bool(
+                    isinstance(decision, AccessDecision) and not decision.anonymous
+                )
+                context.user = SuperQodeA2AUser(identity, authenticated=authenticated)
             return context
 
     return _Builder()

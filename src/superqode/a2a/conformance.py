@@ -84,6 +84,8 @@ async def run_a2a_conformance(
     send: bool = True,
     http_client=None,
     timeout: float = 180.0,
+    allowed_origins: tuple[str, ...] = (),
+    jws_trust_root: str = "",
 ) -> A2AConformanceReport:
     """Run the four checks against ``settings.url``."""
     from superqode.a2a.client import A2AClient, A2AClientError
@@ -105,6 +107,10 @@ async def run_a2a_conformance(
         client_key=settings.key or None,
         timeout=timeout,
     ) as client:
+        if allowed_origins:
+            client.allowed_origins = allowed_origins
+        if jws_trust_root:
+            client.jws_trust_root = jws_trust_root
         try:
             card = await client.get_agent_card()
         except A2AClientError as exc:

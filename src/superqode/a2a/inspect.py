@@ -97,6 +97,10 @@ class InspectLog:
     def auth(self, summary: str, **detail: Any) -> None:
         self.add("auth", summary, **detail)
 
+    def trust(self, summary: str, **detail: Any) -> None:
+        """One Agent Card protocol-risk finding (A2ABreak)."""
+        self.add("trust", summary, **detail)
+
     def lines(self) -> list[str]:
         return [event.summary for event in self.events]
 

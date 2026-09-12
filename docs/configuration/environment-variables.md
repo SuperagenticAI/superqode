@@ -58,6 +58,8 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_A2A_TLS_KEY` | path | unset | Private key PEM that pairs with `SUPERQODE_A2A_TLS_CERT`. |
 | `SUPERQODE_A2A_KEY_SECRET` | secret | unset | Signs and verifies customer API keys. Without it the server rejects every key. Generate with `superqode a2a-keys secret`. |
 | `SUPERQODE_A2A_REVOKED_KEYS` | comma-separated ids | unset | Key ids refused before their expiry. |
+| `SUPERQODE_A2A_ALLOWED_ORIGINS` | comma-separated hosts | unset | When set, `connect a2a` refuses Agent Card origins that are not on this list. `--allow-origin` adds entries for one invocation. |
+| `SUPERQODE_A2A_JWS_TRUST_ROOT` | path | unset | PEM or JWKS file used to root an Agent Card JWS. A signature without a trust root is not identity and is not authentication. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |
 | `SUPERQODE_PIPY_SESSION_DIR` | path | `<pipy dir>/sessions` | Where PiPy stores its session tree, one directory per working directory. |

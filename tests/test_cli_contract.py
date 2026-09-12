@@ -118,7 +118,10 @@ EXPECTED_COMMAND_COUNT = 280
 # Click command was added or removed and the count is unchanged.
 # Rebaselined for `superqode serve uhp`, which adds one Click command for a
 # native UHP Core bind of one SuperQode HarnessSpec (279 -> 280).
-EXPECTED_HELP_TREE_SHA256 = "5cc45e4360c108dc4f3abfe35d3004a12b6330e4f92f5d280a24066bb730d79d"
+# Rebaselined for `connect a2a --allow-origin` and `--jws-trust-root`, plus
+# inspect help naming card-review findings. Two new options on an existing
+# command, so the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "4d7032c57e6291a84c620cc2b5f0e0b5e923387180160f63c6fe4602bf57362c"
 
 
 def _render_help_tree() -> tuple[int, str]:

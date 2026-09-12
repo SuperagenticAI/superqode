@@ -23,6 +23,8 @@ and they are separate from the A2A TCK result recorded under
 [Conformance](#conformance), which measures the server. A saved connection
 lives at `~/.superqode/a2a.json`. Later: `:a2a call <name>`.
 From the shell, `superqode connect a2a --inspect` prints the trace and
+the Agent Card review findings (unattested skills, unsigned or unrooted JWS,
+push claims, host mismatch, security scheme honesty).
 `superqode connect a2a --conformance` runs the checks. `--no-send` skips the
 task so a card-only check does not wait on a cold host. Repeatable
 `--header NAME:VALUE` flags are sent on every call. If the card declares an
@@ -207,7 +209,7 @@ registrable where only 0.3 is accepted; pass `legacy_v0_3=False` in
 is absent the SDK negotiates down to 0.3, so a 1.0 method name without the
 header is rejected. A 0.3 client needs no header.
 
-Each A2A `contextId` maps to one SuperQode Harness Protocol session, so later tasks in the same context reuse harness history while each A2A task keeps its own lifecycle and artifacts.
+Each A2A `contextId` maps to one SuperQode Harness Protocol session, so later tasks in the same context reuse harness history while each A2A task keeps its own lifecycle and artifacts. The A2A spec does not assign ownership of `contextId`. SuperQode binds each context to the caller principal (API key id, operator, opaque `X-SuperQode-Caller-Key`, or per-caller anonymous isolation) and refuses cross-principal reuse. Official SDK List, Get, Cancel, and Subscribe are scoped to that same principal.
 
 !!! note "0.3 compatibility covers JSON-RPC, not the legacy REST paths"
 
@@ -649,5 +651,39 @@ Preferred boundary for collaboration is **A2A**:
 2. **Inside a QM-style sandbox (optional packaging):** the [QM deployment-layer example](https://github.com/SuperagenticAI/superqode/tree/main/examples/qm-deployment-layer) shows how a tool/skill bootstrap can invoke `superqode harness run` under both outer command policy and SuperQode execution policy.
 
 Do not treat the QM example as official QM support. Prefer protocol-level interop fixtures: discovery, path-aware interface URLs, authentication, context continuity, artifacts, cancellation, approvals, and restart recovery. See also [Protocols and tools](../integrations/protocols-tools.md#a2a-and-multiplayer-computers).
+
+## A2A protocol risks (A2ABreak)
+
+[A2ABreak](https://arxiv.org/abs/2609.10871) (arXiv:2609.10871) is a
+specification-driven security analysis of A2A v1.0. It documents eleven
+protocol-level findings that a fully compliant adversary can exploit when the
+spec omits ownership, attestation, or integrity primitives. These are protocol
+risks, not SuperQode product CVEs.
+
+`superqode connect a2a` and `--inspect` report the same card-review findings
+as SuperOptiX `agent-card-review`:
+
+- `skills.attestation` (high): Skill claims are self-asserted. A2A 1.0 provides no attestation or capability challenge (A2ABreak protocol risk: Unattested Skill Claims).
+- `signature` (high): Card is unsigned. Signed cards are the A2A 1.0 mechanism for proving the card came from the domain owner.
+- `signature.trust` (medium): JWS authenticates the card publisher, not skill capability. A signature does not attest that advertised skills are truthful (A2ABreak protocol risk: JWS Key Trust Model Gap).
+
+A JWS is never treated as authentication. If a card is signed, configure a
+trust root with `--jws-trust-root` or `SUPERQODE_A2A_JWS_TRUST_ROOT` before
+treating the signature as rooted. An origin allowlist (`--allow-origin` or
+`SUPERQODE_A2A_ALLOWED_ORIGINS`) refuses unlisted discovery origins.
+
+`superqode serve a2a` hardens the server-side context surface:
+
+- Client-supplied `contextId` is principal-bound. Same-principal reuse is accepted. Cross-principal reuse is rejected.
+- Callers are isolated by API key id, operator token, opaque `X-SuperQode-Caller-Key`, or the address identity already used for rate limits. SuperQode does not use SuperOptiX caller cookies.
+- Official SDK List, Get, Cancel, and Subscribe resolve the owner from that principal, so one caller cannot read or cancel another caller's tasks.
+
+Push notifications stay disabled (`pushNotifications: false` on
+`A2AServerConfig`), which mitigates the unverified-webhook finding.
+
+Deferred to SuperOptiX and upstream A2A: protocol principal tokens, skill
+attestation standards, and webhook ownership proofs. Multi-hop workflows still
+drop the original caller. Do not forward an operator token or customer key to
+a downstream agent.
 
 See also [ACP Agents](acp.md), [MCP Tools](../configuration/mcp-config.md), and [Harness Protocol](../advanced/harness-protocol.md).
