@@ -351,7 +351,7 @@ def serve_a2a(
     "--api-key",
     envvar="SUPERQODE_UHP_API_KEY",
     default=None,
-    help="Optional bearer token; when set, all routes except discovery require it",
+    help="Bearer token. Required with --allow-remote. Catalog GETs stay public.",
 )
 @click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
 @click.option(
@@ -380,10 +380,11 @@ def serve_uhp(
     is_loopback = host in {"127.0.0.1", "localhost", "::1"}
     if not is_loopback and not allow_remote:
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
-    if allow_remote and not api_key:
-        console.print(
-            "[yellow]Remote UHP bind without --api-key / SUPERQODE_UHP_API_KEY; "
-            "discovery is public and every other route is open.[/yellow]"
+    if allow_remote and not (api_key or "").strip():
+        raise click.ClickException(
+            "Remote UHP bind requires --api-key / SUPERQODE_UHP_API_KEY. "
+            "Catalog GETs stay public; harness turns need the bearer and "
+            "the caller's X-Provider-Api-Key."
         )
 
     server = create_uhp_server(
@@ -393,6 +394,8 @@ def serve_uhp(
         working_directory=working_dir.resolve(),
         api_key=api_key,
         harness_id=harness_id,
+        public_catalog=allow_remote,
+        require_caller_provider_key=allow_remote,
     )
     console.print(
         f"[cyan]Serving SuperQode UHP {server.discovery_document()['default_version']} "

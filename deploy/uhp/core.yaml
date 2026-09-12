@@ -1,0 +1,35 @@
+version: 1
+name: core
+description: Lean native coding harness for the public UHP Core bind.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  profile: core
+  config:
+    system_level: core
+    tool_profile: core
+    max_iterations: 0
+    session_history_limit: 20
+    parallel_tools: true
+execution_policy:
+  sandbox: local
+  approval_profile: yolo
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+agents:
+  - id: coder
+    role: implementation
+    tools:
+      - read
+      - write
+      - edit
+      - bash
+checks:
+  enabled: false
+metadata:
+  template: core
+  builtin_harness: true
+  public_bind: uhp

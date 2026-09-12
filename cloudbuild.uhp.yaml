@@ -1,0 +1,43 @@
+# Cloud Run continuous deploy for superqode-uhp only.
+#
+# Point a NEW Cloud Build trigger at this file. Do not change cloudbuild.yaml
+# (that trigger is superqode-a2a). Service name, image, and Dockerfile are
+# all UHP-specific.
+
+substitutions:
+  _SERVICE_NAME: superqode-uhp
+  _DEPLOY_REGION: us-central1
+  _AR_HOSTNAME: ${_DEPLOY_REGION}-docker.pkg.dev
+  _AR_REPOSITORY: cloud-run-source-deploy
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+      - -f
+      - Dockerfile.uhp
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - ${_SERVICE_NAME}
+      - --platform=managed
+      - --image=${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+      - --region=${_DEPLOY_REGION}
+      - --quiet
+
+images:
+  - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE

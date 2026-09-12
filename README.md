@@ -332,6 +332,12 @@ superqode harness run uhp --prompt "summarise this repository"
 to HarnessRouter, which wraps third-party CLIs as a catalog. Core names the
 surface SuperQode implements; it is not a conformance-suite certificate.
 
+The public hostname for that bind is [`uhp.superqode.dev`](https://uhp.superqode.dev/v1/uhp).
+Anonymous callers get discovery and the static harness catalog (no model call).
+A harness turn requires a SuperQode UHP API key and the caller's own provider
+key. SuperQode does not pay for that model. Until the hostname is mapped, use
+local `serve uhp` as above.
+
 Read the [UHP guide](docs/providers/uhp.md).
 
 ## Harness Execution Model

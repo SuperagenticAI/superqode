@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import time
 import uuid
@@ -27,7 +28,11 @@ try:
 except Exception:  # pragma: no cover - optional at import time
     FastAPIRequest = Any  # type: ignore[misc,assignment]
 
-from superqode.harness.uhp_client import UHP_PROTOCOL_VERSION, VERSION_HEADER
+from superqode.harness.uhp_client import (
+    PROVIDER_KEY_HEADER,
+    UHP_PROTOCOL_VERSION,
+    VERSION_HEADER,
+)
 
 #: Advertised and accepted protocol version.
 SUPPORTED_VERSION = UHP_PROTOCOL_VERSION
@@ -158,6 +163,10 @@ class UHPServerConfig:
     implementation_version: str = ""
     #: Honest claim: core endpoints only; suite not yet run.
     conformance_class: str = "core"
+    #: GET catalog without a bearer (remote public host). POST still requires api_key.
+    public_catalog: bool = False
+    #: Refuse a harness turn unless the caller sent PROVIDER_KEY_HEADER.
+    require_caller_provider_key: bool = False
 
 
 def _package_version() -> str:
@@ -167,6 +176,20 @@ def _package_version() -> str:
         return __version__
     except Exception:
         return "0.0.0"
+
+
+def _provider_key_env(provider: str) -> str:
+    """Env var LiteLLM reads for this provider (caller BYOK)."""
+    try:
+        from superqode.providers.registry import PROVIDERS
+
+        pdef = PROVIDERS.get(provider)
+        names = getattr(pdef, "env_vars", None) or ()
+        if names:
+            return str(names[0])
+    except Exception:
+        pass
+    return f"{(provider or 'OPENAI').upper()}_API_KEY"
 
 
 def harness_id_from_name(name: str) -> str:
@@ -369,8 +392,8 @@ class UHPServer:
                     content=negotiated,
                     headers={VERSION_HEADER: SUPPORTED_VERSION},
                 )
-            # Discovery is unauthenticated per the OpenAPI contract.
-            if not server._is_public_path(request.url.path):
+            # Discovery (and optional catalog GETs) stay unauthenticated.
+            if not server._is_public_request(request.method, request.url.path):
                 auth_error = server._check_auth(request.headers.get("authorization"))
                 if auth_error is not None:
                     return JSONResponse(
@@ -504,8 +527,27 @@ class UHPServer:
                 status, envelope = harness_error
                 return JSONResponse(status_code=status, content=envelope)
 
+            provider_api_key = (http_request.headers.get(PROVIDER_KEY_HEADER) or "").strip()
+            if server.config.require_caller_provider_key and not provider_api_key:
+                return JSONResponse(
+                    status_code=403,
+                    content=_error_envelope(
+                        error_type="permission_error",
+                        code="missing_provider_key",
+                        message=(
+                            f"Harness turns on this host require header '{PROVIDER_KEY_HEADER}' "
+                            "(your provider key). SuperQode does not attach a model key."
+                        ),
+                        param=PROVIDER_KEY_HEADER,
+                    ),
+                )
+
             stream = bool(body.get("stream"))
-            started = await server._start_response(body, idempotency_key=idempotency_key or None)
+            started = await server._start_response(
+                body,
+                idempotency_key=idempotency_key or None,
+                provider_api_key=provider_api_key or None,
+            )
             if isinstance(started, tuple):
                 status, envelope = started
                 return JSONResponse(status_code=status, content=envelope)
@@ -620,9 +662,18 @@ class UHPServer:
 
     # -- auth / version ---------------------------------------------------------
 
-    @staticmethod
-    def _is_public_path(path: str) -> bool:
-        return path in {"/v1/uhp", "/health", "/docs", "/openapi.json", "/redoc"}
+    def _is_public_request(self, method: str, path: str) -> bool:
+        path = path.rstrip("/") or "/"
+        if path in {"/v1/uhp", "/health", "/docs", "/openapi.json", "/redoc"}:
+            return True
+        if not self.config.public_catalog or method.upper() != "GET":
+            return False
+        if path in {"/v1/harnesses", "/v1/models"}:
+            return True
+        if path.startswith("/v1/harnesses/"):
+            rest = path[len("/v1/harnesses/") :]
+            return "/" not in rest or rest.endswith("/models")
+        return False
 
     def _negotiate_version(self, requested: str | None) -> dict[str, Any] | None:
         if not requested or not requested.strip():
@@ -684,7 +735,11 @@ class UHPServer:
     # -- response lifecycle -----------------------------------------------------
 
     async def _start_response(
-        self, body: Mapping[str, Any], *, idempotency_key: str | None
+        self,
+        body: Mapping[str, Any],
+        *,
+        idempotency_key: str | None,
+        provider_api_key: str | None = None,
     ) -> dict[str, Any]:
         prompt = _extract_prompt(body.get("input"))
         previous_response_id = body.get("previous_response_id")
@@ -773,6 +828,7 @@ class UHPServer:
             metadata={
                 "harness_id": self.config.harness_id,
                 **(dict(body["metadata"]) if isinstance(body.get("metadata"), Mapping) else {}),
+                **({"provider_api_key": provider_api_key} if provider_api_key else {}),
             },
         )
 
@@ -979,13 +1035,21 @@ class UHPServer:
         if request.instructions:
             prompt = f"{request.instructions.rstrip()}\n\n{prompt}"
 
+        run_metadata = {
+            key: value for key, value in dict(request.metadata).items() if key != "provider_api_key"
+        }
+        token = str(request.metadata.get("provider_api_key") or "")
+        env_name = _provider_key_env(provider)
+        previous = os.environ.get(env_name)
+        if token:
+            os.environ[env_name] = token
         try:
             result = await session.prompt(
                 prompt,
                 provider=provider,
                 model=model,
                 working_directory=request.working_directory,
-                metadata=dict(request.metadata),
+                metadata=run_metadata,
             )
         except Exception:
             return UHPRunResult(
@@ -995,6 +1059,12 @@ class UHPServer:
                 error_code="harness_error",
                 usage=None,
             )
+        finally:
+            if token:
+                if previous is None:
+                    os.environ.pop(env_name, None)
+                else:
+                    os.environ[env_name] = previous
 
         if request.cancel_event and request.cancel_event.is_set():
             return UHPRunResult(
@@ -1015,6 +1085,8 @@ def create_uhp_server(
     harness_id: str | None = None,
     harness_name: str | None = None,
     runner: HarnessRunner | None = None,
+    public_catalog: bool = False,
+    require_caller_provider_key: bool = False,
 ) -> UHPServer:
     """Build a UHP server bound to one SuperQode HarnessSpec."""
     from superqode.harness import get_harness_template, load_harness_spec
@@ -1047,5 +1119,7 @@ def create_uhp_server(
         api_key=api_key,
         implementation_version=_package_version(),
         conformance_class="core",
+        public_catalog=public_catalog,
+        require_caller_provider_key=require_caller_provider_key,
     )
     return UHPServer(config, runner=runner, spec=loaded)

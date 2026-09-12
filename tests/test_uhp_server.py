@@ -12,7 +12,11 @@ from click.testing import CliRunner
 pytest.importorskip("fastapi", reason="UHP server tests require FastAPI")
 
 from superqode.commands.serve import serve
-from superqode.harness.uhp_client import UHP_PROTOCOL_VERSION, VERSION_HEADER
+from superqode.harness.uhp_client import (
+    PROVIDER_KEY_HEADER,
+    UHP_PROTOCOL_VERSION,
+    VERSION_HEADER,
+)
 from superqode.harness.uhp_server import (
     UHPRunRequest,
     UHPRunResult,
@@ -224,6 +228,49 @@ async def test_auth_and_version_negotiation():
 
 
 @pytest.mark.anyio
+async def test_public_catalog_and_byok_on_remote_bind():
+    server = _server(api_key="secret")
+    server.config.public_catalog = True
+    server.config.require_caller_provider_key = True
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/v1/harnesses")).status_code == 200
+        assert (await client.get("/v1/models")).status_code == 200
+
+        denied = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "no-auth"},
+            json={"input": "hi"},
+        )
+        assert denied.status_code == 401
+
+        missing_provider = await client.post(
+            "/v1/responses",
+            headers={
+                VERSION_HEADER: UHP_PROTOCOL_VERSION,
+                "Idempotency-Key": "no-prov",
+                "Authorization": "Bearer secret",
+            },
+            json={"input": "hi"},
+        )
+        assert missing_provider.status_code == 403
+        assert missing_provider.json()["error"]["code"] == "missing_provider_key"
+
+        ok = await client.post(
+            "/v1/responses",
+            headers={
+                VERSION_HEADER: UHP_PROTOCOL_VERSION,
+                "Idempotency-Key": "with-prov",
+                "Authorization": "Bearer secret",
+                PROVIDER_KEY_HEADER: "sk-caller",
+            },
+            json={"input": "hi"},
+        )
+        assert ok.status_code == 200
+        assert ok.json()["status"] == "completed"
+
+
+@pytest.mark.anyio
 async def test_unknown_harness_on_create():
     server = _server()
     transport = httpx.ASGITransport(app=server.app)
@@ -254,6 +301,10 @@ def test_create_uhp_server_uses_template_and_cli_help():
     assert "--spec" in result.output
     assert "--api-key" in result.output
     assert "UHP" in result.output
+
+    denied = runner.invoke(serve, ["uhp", "--host", "0.0.0.0", "--allow-remote"])
+    assert denied.exit_code != 0
+    assert "api-key" in denied.output.lower()
 
 
 @pytest.mark.anyio

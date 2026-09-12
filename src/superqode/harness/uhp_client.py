@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
+import os
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -31,6 +32,15 @@ VERSION_HEADER = "UHP-Version"
 #: Retrying a task without this header starts a second agent in the same
 #: workspace, so every task submission carries one.
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+
+#: Caller model key for a BYOK UHP server. SuperQode does not send its own.
+PROVIDER_KEY_HEADER = "X-Provider-Api-Key"
+
+
+def _caller_provider_env() -> str:
+    provider = (os.environ.get("SUPERQODE_PROVIDER") or "deepseek").strip() or "deepseek"
+    return f"{provider.upper()}_API_KEY"
+
 
 _TERMINAL_STREAM_EVENTS = frozenset(
     {
@@ -505,6 +515,9 @@ class UHPClient:
         }
         if api_key:
             self._headers["Authorization"] = f"Bearer {api_key}"
+        provider_key = (os.environ.get(_caller_provider_env()) or "").strip()
+        if provider_key and PROVIDER_KEY_HEADER not in self._headers:
+            self._headers[PROVIDER_KEY_HEADER] = provider_key
         self._client = client
         self._owns_client = client is None
 

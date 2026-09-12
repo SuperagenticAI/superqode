@@ -501,7 +501,52 @@ and Full (harness management, sharing) are deferred.
 Use both when you want SuperQode's policy/evidence loop reachable over UHP
 *and* third-party CLIs reachable through a runner. Neither replaces the other.
 
-Point SuperQode's client at the native server for a round-trip smoke test:
+### Public host (`uhp.superqode.dev`)
+
+The public UHP hostname is a **native SuperQode bind**, the same job as local
+`serve uhp`. It is not a multi-backend catalog. Hub discovery (path C) can
+later list the same SuperQode ids this host advertises; it does not turn this
+host into a runner for Codex, Claude Code, or Hermes.
+
+| Surface | Role |
+| --- | --- |
+| `https://uhp.superqode.dev/v1/uhp` | Discovery. Anonymous. No model call. Class `core`. |
+| `GET /v1/harnesses`, `GET /v1/models` | Static catalog of the one bound SuperQode harness. Anonymous. No model call. |
+| `POST /v1/responses` and session/response writes | Harness turn. Requires a SuperQode UHP bearer **and** the caller's provider key. SuperQode does not attach a model key on this host. |
+| `https://superqode.dev` | Product site. Not a UHP endpoint. |
+| Local `superqode serve uhp` | The working bind until the hostname is mapped and serving. |
+
+Treat the public host as a catalog pilot plus optional BYOK runs. Tokens and
+provider keys never belong in the discovery document. Cold starts are expected
+on a scale-to-zero Cloud Run service.
+
+Anonymous:
+
+```bash
+curl -sS https://uhp.superqode.dev/v1/uhp
+superqode connect uhp --base-url https://uhp.superqode.dev --no-save
+```
+
+A harness turn (caller's DeepSeek key, not SuperQode's):
+
+```bash
+export SUPERQODE_UHP_API_KEY=...
+export DEEPSEEK_API_KEY=...
+superqode connect uhp --base-url https://uhp.superqode.dev --api-key "$SUPERQODE_UHP_API_KEY"
+```
+
+Reserve `uhp.superqode.dev` on the `superqode.dev` zone (GoDaddy). Point it at
+the dedicated Cloud Run service `superqode-uhp` with Cloud Run domain mapping,
+not at `a2a.superqode.dev` and not through a global HTTPS load balancer.
+
+Create a **new** Cloud Run service. Do not open or retarget `superqode-a2a`.
+Connect this GitHub repository, Dockerfile path `Dockerfile.uhp`, Cloud Build
+file `cloudbuild.uhp.yaml`, service name `superqode-uhp`, region `us-central1`.
+Set secret `SUPERQODE_UHP_API_KEY`. Do not set `DEEPSEEK_API_KEY` on the
+service. Callers send that key as `X-Provider-Api-Key`. See
+`deploy/uhp/README.md`.
+
+Until that mapping answers, smoke-test on loopback:
 
 ```bash
 superqode serve uhp --spec harness.yaml --port 8787

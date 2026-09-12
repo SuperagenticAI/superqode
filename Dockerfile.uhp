@@ -1,0 +1,44 @@
+# Container image for the SuperQode UHP Core bind (uhp.superqode.dev).
+#
+# Separate from the root Dockerfile, which is the A2A Cloud Run image.
+# Do not point the A2A trigger at this file, and do not point the UHP
+# trigger at Dockerfile.
+#
+# Cloud Run sets PORT. Bind 0.0.0.0 and pass --allow-remote.
+# SUPERQODE_UHP_API_KEY must come from Secret Manager. Do not set a
+# provider key (DEEPSEEK_API_KEY, OPENAI_API_KEY, ...) on this service:
+# harness turns use the caller's X-Provider-Api-Key header.
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    SUPERQODE_TELEMETRY=false \
+    SUPERQODE_NO_SPLASH=1 \
+    SUPERQODE_PROVIDER=deepseek \
+    SUPERQODE_MODEL=deepseek-v3
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY pyproject.toml README.md LICENSE NOTICE MANIFEST.in ./
+COPY src ./src
+COPY deploy/uhp/core.yaml /app/harness.yaml
+
+RUN uv pip install --system --no-cache ".[a2a]"
+
+ENV PORT=8080
+EXPOSE 8080
+
+CMD exec superqode serve uhp \
+    --spec /app/harness.yaml \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --allow-remote \
+    --api-key ${SUPERQODE_UHP_API_KEY} \
+    --provider ${SUPERQODE_PROVIDER} \
+    --model ${SUPERQODE_MODEL} \
+    --harness-id chrn_superqode_core \
+    --working-dir /app
