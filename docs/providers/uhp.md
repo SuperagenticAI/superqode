@@ -157,19 +157,36 @@ field removes the cap.
 ### The workspace is the server's
 
 The harness runs in its own workspace inside the server, not in your
-repository. SuperQode does not upload local files, so a prompt like "review
-this repository" describes whatever the server holds, not your code.
+repository. A bare prompt like "review this repository" describes whatever the
+server already holds.
 
-Include the material in the prompt when the harness needs to see your code:
+To send local files into that workspace, use UHP file upload (Extended Files):
 
 ```bash
-superqode harness run uhp --prompt "Review this module:
-
-$(cat src/example.py)"
+superqode harness run uhp \
+  --file src/example.py \
+  --prompt "Review the attached module" \
+  --download-dir .superqode/uhp/artifacts
 ```
 
-UHP defines a file input endpoint. SuperQode does not use it yet, so uploading
-a workspace is not available on this route.
+`--file` may be repeated. Uploads go through `POST /v1/files` and are attached
+as `input_file` parts on the task. `--download-dir` writes any
+`container_file_citation` artifacts from the response onto disk.
+
+From Python:
+
+```python
+async with UHPClient("https://your-server", api_key=key) as client:
+    response = await client.create_response(
+        "Summarise the attached notes",
+        harness_id="chrn_codex",
+        input_files=["notes.md"],
+    )
+    await client.download_citations(response.file_citations, ".superqode/uhp/artifacts")
+```
+
+Small files can also be inlined as data URLs with `inline_files=` (size-capped).
+Prefer `input_files=` for anything larger than a few hundred kilobytes.
 
 ---
 
@@ -236,6 +253,16 @@ async with UHPClient("https://your-server", api_key=key) as client:
     print(response.output_text)
     for citation in response.file_citations:
         print(citation.filename, citation.download_url)
+
+    # Upload local files, then pull artifacts back
+    with_files = await client.create_response(
+        "Review the attached module",
+        harness_id="chrn_codex",
+        input_files=["src/example.py"],
+    )
+    await client.download_citations(
+        with_files.file_citations, ".superqode/uhp/artifacts"
+    )
 ```
 
 Stream instead of waiting:
@@ -384,16 +411,17 @@ only when the payload nests a full error object.
 
 - The client targets one protocol version. `connect uhp` warns when a server
   does not list `2026-08-11` among its versions.
-- File artifacts are reported as citations with a download URL. SuperQode does
-  not copy them into the workspace automatically; use
-  `UHPClient.download_file` for that.
+- File artifacts are reported as citations with a download URL. Use
+  `UHPClient.save_file` / `download_citations`, or pass `--download-dir` on
+  `harness run uhp`, to copy them into a local directory.
 - **Harness configuration lives on the server.** A HarnessSpec does not drive a
   remote UHP harness, so tool policy, sandbox, approvals, the model, and the
   workspace are whatever the server was configured with. The adapter reports
   `policy_owner: server` in its descriptor metadata so this is visible rather
   than assumed.
-- **Local files do not reach the harness.** SuperQode does not implement UHP
-  file upload, so the harness sees the server's workspace only.
+- **Local files reach the harness through UHP upload.** Pass `--file` /
+  `input_files=` (multipart `POST /v1/files`) or `inline_files=` (data URL).
+  Without those, the harness still sees only the server's workspace.
 - `superqode connect uhp` verifies the catalog. It does not verify that the
   credential is sufficient to run a task, because listing and running can be
   authorized separately.

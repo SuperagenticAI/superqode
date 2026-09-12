@@ -40,11 +40,27 @@ from ._group import harness
     help="Force one prompt through the harness kernel, ignoring non-single workflow topology",
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+@click.option(
+    "--file",
+    "input_files",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Upload a local file to a UHP harness (repeatable; UHP route only)",
+)
+@click.option(
+    "--download-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Write UHP artifact citations into this directory after the run",
+)
+
 def harness_run(
     reference,
     task,
     spec_path,
     prompt,
+    input_files,
+    download_dir,
     provider,
     model_name,
     runtime_name,
@@ -213,6 +229,7 @@ def harness_run(
     async def _run_adapter():
         from superqode.harness import (
             HarnessCreateRequest,
+            HarnessMessage,
             HarnessProtocolController,
             create_harness_store,
             load_harness_adapter,
@@ -246,7 +263,17 @@ def harness_run(
                 )
             )
         events = []
-        async for event in controller.send(session, prompt):
+        message_meta = {}
+        if input_files:
+            message_meta["uhp_input_files"] = [str(path) for path in input_files]
+        if download_dir is not None:
+            message_meta["uhp_download_dir"] = str(download_dir)
+        send_message = (
+            HarnessMessage("user", prompt, metadata=message_meta)
+            if message_meta
+            else prompt
+        )
+        async for event in controller.send(session, send_message):
             events.append(event)
             if stream:
                 if json_output:
