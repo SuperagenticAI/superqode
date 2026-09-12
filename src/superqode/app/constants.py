@@ -586,6 +586,7 @@ COMMANDS = [
     ":serve api",
     ":serve acp",
     ":serve a2a",
+    ":serve uhp",
     ":a2a-keys",
     ":a2a-keys secret",
     ":a2a-keys issue",

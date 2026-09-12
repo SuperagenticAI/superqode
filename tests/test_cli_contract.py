@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 279
+EXPECTED_COMMAND_COUNT = 280
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -116,7 +116,9 @@ EXPECTED_COMMAND_COUNT = 279
 # a harness is implemented in. One new option on `hub` and `hub list`, and the
 # rendered `hub` help now lists the language choices, so the digest moves. No
 # Click command was added or removed and the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "33ec669e953c549c7a87bfcccc3deea4cb3925f4ea6e80414126cf14edc21b04"
+# Rebaselined for `superqode serve uhp`, which adds one Click command for a
+# native UHP Core bind of one SuperQode HarnessSpec (279 -> 280).
+EXPECTED_HELP_TREE_SHA256 = "5cc45e4360c108dc4f3abfe35d3004a12b6330e4f92f5d280a24066bb730d79d"
 
 
 def _render_help_tree() -> tuple[int, str]:

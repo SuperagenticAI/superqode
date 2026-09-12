@@ -10,12 +10,20 @@ complete agent harness and getting finished work back. A UHP server advertises
 the harnesses it runs, accepts a task, streams progress, and returns text and
 files.
 
-SuperQode speaks UHP as a client. Once connected, a harness on a UHP server is
-registered as the `uhp` route and runs through the same session, event, and
-evidence model as a local harness.
+SuperQode speaks UHP as a **client** and, separately, as a **native server**.
+
+As a client, a harness on a remote UHP server is registered as the `uhp` route
+and runs through the same session, event, and evidence model as a local harness.
+
+As a server (`superqode serve uhp`), SuperQode exposes **one configured
+HarnessSpec** over the UHP wire format: a native harness bind, not a
+multi-backend runner. That is complementary to [HarnessRouter](https://github.com/HarnessRouter/harnessrouter):
+HarnessRouter wraps Codex, Claude Code, and similar tools as a catalog;
+`serve uhp` makes SuperQode's own harness speak UHP so any UHP client can drive
+it. They are partners, not substitutes.
 
 SuperQode targets UHP version `2026-08-11` and sends that version on every
-request.
+client request. The native server answers that same version.
 
 ---
 
@@ -27,9 +35,10 @@ the SuperQode Harness Protocol, which stays the internal control plane.
 | Layer | What it does |
 | --- | --- |
 | Harness Protocol v1 | SuperQode's session, event, and evidence contract |
-| UHP adapter | Translates one UHP server into that contract |
-| UHP | The HTTP wire format between SuperQode and the server |
-| Harness | Codex, Claude Code, or whatever else the server runs |
+| UHP adapter | Translates one remote UHP server into that contract (client path) |
+| `serve uhp` | Native UHP server: one SuperQode HarnessSpec on the wire |
+| UHP | The HTTP wire format |
+| Harness | On `serve uhp`: the bound SuperQode harness. On HarnessRouter: Codex, Claude Code, … |
 
 The difference from every other connection method is that a UHP server is a
 **remote catalog**. An ACP agent is a local process SuperQode starts, and a
@@ -430,6 +439,80 @@ only when the payload nests a full error object.
 
 ---
 
+## Serve (native UHP harness)
+
+Expose a local HarnessSpec as a UHP server so other products can drive SuperQode
+through the same contract SuperQode uses as a client:
+
+```bash
+superqode serve uhp --spec harness.yaml
+superqode serve uhp --spec harness.yaml --host 127.0.0.1 --port 8787
+superqode serve uhp --api-key "$SUPERQODE_UHP_API_KEY"
+```
+
+| Option | Description |
+| --- | --- |
+| `--spec` | HarnessSpec file to bind (default: built-in coding template) |
+| `--host` / `--port` | Bind address (default `127.0.0.1:8787`) |
+| `--provider` / `--model` | Defaults for runs when the request omits a model |
+| `--api-key` | Optional bearer token (`SUPERQODE_UHP_API_KEY`). When set, every route except `GET /v1/uhp` requires it |
+| `--allow-remote` | Required to bind outside localhost |
+| `--harness-id` | Override the advertised id (must match `^chrn_`) |
+| `--working-dir` | Working directory for harness runs |
+
+### What it serves
+
+Core surface under `/v1/…` (protocol `2026-08-11`):
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1/uhp` | Discovery (unauthenticated). Claims conformance class **`core`** |
+| `GET` | `/v1/harnesses` | Lists the single bound SuperQode harness |
+| `GET` | `/v1/harnesses/{id}` | Harness detail |
+| `GET` | `/v1/models` | Model catalogue for the bind |
+| `GET` | `/v1/harnesses/{id}/models` | Per-harness models |
+| `POST` | `/v1/responses` | Run a task (`stream: false` JSON or `stream: true` SSE) |
+| `GET` | `/v1/responses/{id}` | Read a stored response |
+| `GET` | `/v1/responses/{id}/input_items` | Input echo |
+| `POST` | `/v1/responses/{id}/cancel` | Cancel (idempotent) |
+| `DELETE` | `/v1/responses/{id}` | Delete stored response (does not cancel) |
+| `POST` | `/v1/sessions/{id}/cancel` | Cancel in-flight work in a session |
+
+Also: `UHP-Version` negotiation (`unsupported_protocol_version` on mismatch),
+optional bearer auth, `Idempotency-Key`, `previous_response_id` session
+threading, and reserved `tools` / `include` accepted with
+`metadata.ignored_fields`.
+
+### Conformance honesty
+
+The server advertises `conformance_class: core` because that is the surface it
+implements. It has **not** been certified by the UHP conformance suite; passing
+endpoints locally is not a conformance claim. Extended (files, session listing)
+and Full (harness management, sharing) are deferred.
+
+### Partnership with HarnessRouter
+
+- **HarnessRouter**: multi-backend UHP *runner*: advertise and run Codex,
+  Claude Code, Hermes, etc. behind one catalog.
+- **`superqode serve uhp`**: native UHP *harness*: one SuperQode HarnessSpec
+  speaking the protocol so any UHP client (including SuperQode's own client,
+  or HarnessRouter as a client elsewhere) can call it.
+
+Use both when you want SuperQode's policy/evidence loop reachable over UHP
+*and* third-party CLIs reachable through a runner. Neither replaces the other.
+
+Point SuperQode's client at the native server for a round-trip smoke test:
+
+```bash
+superqode serve uhp --spec harness.yaml --port 8787
+# elsewhere:
+superqode connect uhp --base-url http://127.0.0.1:8787
+superqode harness run uhp --prompt "summarise this repository"
+```
+
+
+---
+
 ## See also
 
 - [Harness Protocol](../advanced/harness-protocol.md) for the lifecycle a UHP
@@ -438,3 +521,5 @@ only when the payload nests a full error object.
   agent loop
 - [Connection Methods](../concepts/modes.md) for how transports relate to the
   `:connect` question
+- [HarnessRouter / UHP](https://github.com/HarnessRouter/harnessrouter) for the
+  multi-backend runner and the protocol specification

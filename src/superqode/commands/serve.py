@@ -22,7 +22,7 @@ console = Console()
 @click.pass_context
 def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a"}:
+    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a", "uhp"}:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
@@ -328,6 +328,88 @@ def serve_a2a(
         server.run(host=host, port=port)
     except KeyboardInterrupt:
         console.print("\n[dim]A2A server stopped.[/dim]")
+
+
+@serve.command("uhp")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--provider", default="openai", envvar="SUPERQODE_PROVIDER", show_default=True)
+@click.option(
+    "--model",
+    "model_name",
+    default="",
+    envvar="SUPERQODE_MODEL",
+    help="Default model id advertised and used",
+)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8787, show_default=True, type=int)
+@click.option(
+    "--working-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+)
+@click.option(
+    "--api-key",
+    envvar="SUPERQODE_UHP_API_KEY",
+    default=None,
+    help="Optional bearer token; when set, all routes except discovery require it",
+)
+@click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
+@click.option(
+    "--harness-id",
+    default=None,
+    help="Override the advertised harness id (must match ^chrn_)",
+)
+def serve_uhp(
+    spec_path: Optional[Path],
+    provider: str,
+    model_name: str,
+    host: str,
+    port: int,
+    working_dir: Path,
+    api_key: Optional[str],
+    allow_remote: bool,
+    harness_id: Optional[str],
+):
+    """Expose a HarnessSpec as a native UHP 2026-08-11 HTTP server.
+
+    This is SuperQode's own harness speaking UHP — complementary to
+    HarnessRouter, not a multi-backend runner replacement.
+    """
+    from superqode.harness.uhp_server import create_uhp_server
+
+    is_loopback = host in {"127.0.0.1", "localhost", "::1"}
+    if not is_loopback and not allow_remote:
+        raise click.ClickException("Use --allow-remote to bind outside localhost.")
+    if allow_remote and not api_key:
+        console.print(
+            "[yellow]Remote UHP bind without --api-key / SUPERQODE_UHP_API_KEY; "
+            "discovery is public and every other route is open.[/yellow]"
+        )
+
+    server = create_uhp_server(
+        spec=spec_path,
+        provider=provider,
+        model=model_name,
+        working_directory=working_dir.resolve(),
+        api_key=api_key,
+        harness_id=harness_id,
+    )
+    console.print(
+        f"[cyan]Serving SuperQode UHP {server.discovery_document()['default_version']} "
+        f"on http://{host}:{port}[/cyan]"
+    )
+    console.print(
+        f"[dim]Discovery: /v1/uhp · harness: {server.config.harness_id} · "
+        f"class: {server.config.conformance_class}[/dim]"
+    )
+    console.print(
+        "[dim]Complementary to HarnessRouter: native SuperQode harness bind, "
+        "not a multi-backend wrapper.[/dim]"
+    )
+    try:
+        server.run(host=host, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[dim]UHP server stopped.[/dim]")
 
 
 @serve.command("api")
