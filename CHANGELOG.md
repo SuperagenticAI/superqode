@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-13
+
+The UHP server release. `serve uhp` serves session listing, inspection and
+turn history, so a client can find a session it did not record and rebuild its
+transcript. Core conformance stays at 40 of 40 with no skips.
+
+### 🧩 Unified Harness Protocol
+
+- **Sessions are inspectable.** `GET /v1/sessions` lists them newest first,
+  with cursor pagination that states the end of the listing instead of leaving
+  a client to infer it from a short page. `GET /v1/sessions/{id}` returns one,
+  and `GET /v1/sessions/{id}/turns` returns its ordered task history, each
+  turn carrying its response id, status, prompt and answer.
+- **Session listing is off on a shared bind.** The capability follows whether
+  the bind takes a caller-supplied provider key. One bearer shared by every
+  caller means a session list would hand each of them the others' prompts and
+  answers, so the public bind reports `session_listing: false` and answers
+  404, which is what a Core server does. A local bind reports it true.
+- Resuming a UHP session against a Core server no longer fails with an opaque
+  transport error. Turn history is an Extended surface, so a Core server
+  answering 404 there is correct and means there is no history to read. The
+  client now says the route cannot resume that session instead of reporting a
+  server failure.
+
 ## [2.2.5] - 2026-09-13
 
 SuperQode's UHP server adopts protocol `2026-09-12` and passes the UHP

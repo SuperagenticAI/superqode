@@ -497,6 +497,14 @@ Core surface under `/v1/…` (protocols `2026-09-12` and `2026-08-11`):
 | `POST` | `/v1/responses/{id}/cancel` | Cancel (idempotent) |
 | `DELETE` | `/v1/responses/{id}` | Delete stored response (does not cancel) |
 | `POST` | `/v1/sessions/{id}/cancel` | Cancel in-flight work in a session |
+| `GET` | `/v1/sessions` | List sessions, newest first, cursor paginated |
+| `GET` | `/v1/sessions/{id}` | Inspect one session |
+| `GET` | `/v1/sessions/{id}/turns` | Ordered task history for a transcript |
+
+The three session routes are an Extended surface and are served only when the
+bind reports `session_listing: true`. A bind that takes a caller-supplied
+provider key reports it false and answers 404 there, because one bearer shared
+by every caller would make a session list everyone's prompts.
 
 Also: `UHP-Version` negotiation (`unsupported_protocol_version` on mismatch),
 optional bearer auth, `Idempotency-Key`, `previous_response_id` session
@@ -506,14 +514,18 @@ threading, and reserved `tools` / `include` accepted with
 ### Conformance honesty
 
 `serve uhp` passes the UHP conformance suite at class **core**: 40 of 40
-checks, no failures and no skips, measured on SuperQode 2.2.5 against suite
+checks, no failures and no skips, measured on SuperQode 2.3.0 against suite
 `2026.9.12`. The report is at
-`docs/assets/uhp-conformance-2.2.5-core.json`.
+`docs/assets/uhp-conformance-2.3.0-extended.json`, which records the Extended
+run and so carries the Core result inside it.
 
 That makes the claim in the discovery document one the suite backs, which is
-the only kind the specification recognises. Extended (files, session listing)
-and Full (harness management, sharing, plugins) are deferred and reported
-`false` in `capabilities`.
+the only kind the specification recognises.
+
+Extended is partly there. Session listing, inspection and turns pass; file
+input passes; artifact listing and download are not implemented, so the class
+stays `core` and `files_output` is reported `false`. Full (harness management,
+sharing, plugins) is deferred.
 
 Two things the result does not cover. It measures a local bind carrying a
 server-side key, because the suite is a stock UHP client and does not send

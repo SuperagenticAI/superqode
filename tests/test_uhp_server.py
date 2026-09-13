@@ -917,3 +917,117 @@ async def test_a_waiting_caller_gets_the_cancelled_record_not_an_error():
 
     assert blocked.status_code == 200
     assert blocked.json()["status"] == "cancelled"
+
+
+# ── session listing, inspection and turns ──────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_sessions_can_be_listed_inspected_and_replayed():
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = (
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "s-1"},
+                json={"input": "summarise the readme"},
+            )
+        ).json()
+        session_id = first["metadata"]["session_id"]
+        await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "s-2"},
+            json={"input": "now the changelog", "previous_response_id": first["id"]},
+        )
+
+        listing = await client.get("/v1/sessions?limit=5")
+        assert listing.status_code == 200
+        body = listing.json()
+        assert "next_cursor" in body, "no explicit end-of-pagination marker"
+        assert body["next_cursor"] is None
+        entry = next(s for s in body["sessions"] if s["id"] == session_id)
+        assert entry["object"] == "session"
+        assert entry["harness_id"] == "chrn_superqode"
+        assert entry["title"] == "summarise the readme"
+        assert entry["status"] == "completed"
+        assert entry["created_at"] and entry["updated_at"]
+
+        one = await client.get(f"/v1/sessions/{session_id}")
+        assert one.status_code == 200
+        assert one.json()["id"] == session_id
+
+        turns = await client.get(f"/v1/sessions/{session_id}/turns")
+        assert turns.status_code == 200
+        items = turns.json()["turns"]
+        assert len(items) == 2, "both turns of the session should be listed, in order"
+        for turn in items:
+            assert turn["id"].startswith("resp_")
+            assert turn["status"] == "completed"
+        assert items[0]["user"] == "summarise the readme"
+        assert items[0]["assistant"] == "echo:summarise the readme"
+        assert items[1]["user"] == "now the changelog"
+
+        missing = await client.get("/v1/sessions/hsessnope")
+        assert missing.status_code == 404
+        assert missing.json()["error"]["code"] == "session_not_found"
+
+
+@pytest.mark.anyio
+async def test_session_listing_pages_with_an_explicit_cursor():
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        for index in range(3):
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": f"p-{index}"},
+                json={"input": f"task {index}"},
+            )
+
+        page = (await client.get("/v1/sessions?limit=2")).json()
+        assert len(page["sessions"]) == 2
+        # A full page that is not the last one must say so.
+        assert page["next_cursor"] is not None
+
+        rest = (await client.get(f"/v1/sessions?limit=2&cursor={page['next_cursor']}")).json()
+        assert len(rest["sessions"]) == 1
+        assert rest["next_cursor"] is None
+
+        seen = [s["id"] for s in page["sessions"]] + [s["id"] for s in rest["sessions"]]
+        assert len(set(seen)) == 3, "paging repeated or dropped a session"
+
+
+@pytest.mark.anyio
+async def test_session_listing_is_off_on_a_shared_bearer_bind():
+    """One bearer for every caller would make a list everyone's prompts."""
+    server = _server()
+    server.config.expose_session_listing = False
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/v1/uhp")).json()["capabilities"]["session_listing"] is False
+        for path in ("/v1/sessions", "/v1/sessions/hsess1", "/v1/sessions/hsess1/turns"):
+            response = await client.get(path)
+            assert response.status_code == 404, path
+
+
+def test_byok_bind_defaults_session_listing_off():
+    from superqode.harness.uhp_server import create_uhp_server
+
+    byok = create_uhp_server(require_caller_provider_key=True, runner=_echo_runner)
+    local = create_uhp_server(runner=_echo_runner)
+    assert byok.config.expose_session_listing is False
+    assert local.config.expose_session_listing is True
+
+
+@pytest.mark.anyio
+async def test_bad_limit_answers_in_the_uhp_error_envelope():
+    """A validation failure must not leak the framework's own error shape."""
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/v1/sessions?limit=abc")
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "invalid_input"
+    assert error["param"] == "limit"

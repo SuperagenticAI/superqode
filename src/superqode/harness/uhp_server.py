@@ -5,9 +5,9 @@ a *native* UHP server (Path A), complementary to HarnessRouter: SuperQode's own
 harness bind speaks the wire format directly, rather than wrapping Codex/Claude
 as a multi-backend runner.
 
-Targets UHP version ``2026-08-11``. Claims conformance class ``core`` honestly —
-the suite has not been run against this process, and Extended surfaces (files,
-session listing) are deferred.
+Serves UHP ``2026-09-12`` and ``2026-08-11``. Passes the conformance suite at
+class ``core``. Session listing is served where the bind is not shared; file
+artifacts are not implemented, so the class stays ``core``.
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ class UHPServerConfig:
     api_key: str | None = None
     implementation_name: str = "superqode"
     implementation_version: str = ""
-    #: Honest claim: core endpoints only; suite not yet run.
+    #: Backed by a suite run, which is the only claim the spec recognises.
     conformance_class: str = "core"
     #: GET catalog without a bearer (remote public host). POST still requires api_key.
     public_catalog: bool = False
@@ -195,6 +195,9 @@ class UHPServerConfig:
     #: Per-session directory under working_directory, so callers on a shared
     #: bind cannot read each other's files. Off locally: work in the project.
     isolate_session_workspaces: bool = False
+    #: Serve session listing. Off on a shared bind: one bearer for every
+    #: caller would make a list everyone's prompts.
+    expose_session_listing: bool = True
 
 
 def _package_version() -> str:
@@ -422,7 +425,7 @@ class UHPServer:
                 "cancellation": True,
                 "files_input": False,
                 "files_output": False,
-                "session_listing": False,
+                "session_listing": self.config.expose_session_listing,
                 "harness_management": False,
                 "session_sharing": False,
                 "idempotency": True,
@@ -729,6 +732,87 @@ class UHPServer:
             server._input_items.pop(response_id, None)
             return {"id": response_id, "deleted": True}
 
+        def _listing_disabled() -> Any:
+            return JSONResponse(
+                status_code=404,
+                content=_error_envelope(
+                    error_type="invalid_request_error",
+                    code="session_not_found",
+                    message="This bind does not serve session listing.",
+                ),
+            )
+
+        @app.get("/v1/sessions")
+        async def list_sessions(limit: str = "20", cursor: str = "", harness: str = "") -> Any:
+            # A string, so a bad value answers in the UHP error envelope.
+            if not server.config.expose_session_listing:
+                return _listing_disabled()
+            try:
+                requested = int(limit)
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    status_code=400,
+                    content=_error_envelope(
+                        error_type="invalid_request_error",
+                        code="invalid_input",
+                        # Truncated: it is echoed back to the caller.
+                        message=f"Query parameter 'limit' must be an integer, got '{limit[:32]}'.",
+                        param="limit",
+                    ),
+                )
+            ordered = sorted(
+                server._sessions.values(),
+                key=lambda item: (-int(item.get("updated_at") or 0), str(item.get("id") or "")),
+            )
+            if harness:
+                ordered = [s for s in ordered if str(s.get("harness_id") or "") == harness]
+            start = 0
+            if cursor:
+                ids = [str(s.get("id") or "") for s in ordered]
+                start = ids.index(cursor) + 1 if cursor in ids else len(ordered)
+            size = max(1, min(requested, 100))
+            page = ordered[start : start + size]
+            # Explicit end marker: a short page does not mean the last one.
+            remaining = ordered[start + size :]
+            return {
+                "sessions": [server._session_document(item) for item in page],
+                "next_cursor": (str(page[-1].get("id")) if page and remaining else None),
+            }
+
+        @app.get("/v1/sessions/{session_id}")
+        async def get_session(session_id: str) -> Any:
+            if not server.config.expose_session_listing:
+                return _listing_disabled()
+            session = server._sessions.get(session_id)
+            if session is None:
+                return JSONResponse(
+                    status_code=404,
+                    content=_error_envelope(
+                        error_type="invalid_request_error",
+                        code="session_not_found",
+                        message=f"No session with id '{session_id}'.",
+                        param="session_id",
+                    ),
+                )
+            return server._session_document(session)
+
+        @app.get("/v1/sessions/{session_id}/turns")
+        async def get_session_turns(session_id: str) -> Any:
+            if not server.config.expose_session_listing:
+                return _listing_disabled()
+            session = server._sessions.get(session_id)
+            if session is None:
+                return JSONResponse(
+                    status_code=404,
+                    content=_error_envelope(
+                        error_type="invalid_request_error",
+                        code="session_not_found",
+                        message=f"No session with id '{session_id}'.",
+                        param="session_id",
+                    ),
+                )
+            return {"object": "list", "turns": server._session_turns(session)}
+
         @app.post("/v1/sessions/{session_id}/cancel")
         async def cancel_session(session_id: str) -> Any:
             session = server._sessions.get(session_id)
@@ -815,6 +899,54 @@ class UHPServer:
                 message="Invalid API key.",
             )
         return None
+
+    def _output_text(self, record: Mapping[str, Any]) -> str:
+        """The assistant text of one response, in output order."""
+        parts: list[str] = []
+        for item in record.get("output") or ():
+            if not isinstance(item, Mapping):
+                continue
+            content = item.get("content")
+            if not isinstance(content, Sequence):
+                continue
+            for part in content:
+                if isinstance(part, Mapping) and part.get("type") == "output_text":
+                    parts.append(str(part.get("text") or ""))
+        return "".join(parts)
+
+    def _session_document(self, session: Mapping[str, Any]) -> dict[str, Any]:
+        response_ids = list(session.get("response_ids") or ())
+        latest = self._responses.get(response_ids[-1]) if response_ids else None
+        created_at = int(session.get("created_at") or 0)
+        return {
+            "id": str(session.get("id") or ""),
+            "object": "session",
+            "harness_id": str(session.get("harness_id") or self.config.harness_id),
+            "title": str(session.get("title") or ""),
+            "status": str((latest or {}).get("status") or "in_progress"),
+            "created_at": created_at,
+            "updated_at": int(session.get("updated_at") or created_at),
+        }
+
+    def _session_turns(self, session: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """The ordered task history, so a client can rebuild a transcript."""
+        turns: list[dict[str, Any]] = []
+        for response_id in session.get("response_ids") or ():
+            record = self._responses.get(response_id)
+            if record is None:
+                continue
+            turn: dict[str, Any] = {
+                "id": response_id,
+                "status": str(record.get("status") or ""),
+            }
+            user = _extract_prompt(self._input_items.get(response_id))
+            if user:
+                turn["user"] = user
+            assistant = self._output_text(record)
+            if assistant:
+                turn["assistant"] = assistant
+            turns.append(turn)
+        return turns
 
     def _workspace_for(self, session_id: str) -> Path:
         """The directory a turn runs in."""
@@ -943,9 +1075,16 @@ class UHPServer:
         self._cancel_events[response_id] = asyncio.Event()
         session = self._sessions.setdefault(
             session_id,
-            {"id": session_id, "harness_id": self.config.harness_id, "response_ids": []},
+            {
+                "id": session_id,
+                "harness_id": self.config.harness_id,
+                "response_ids": [],
+                "created_at": created_at,
+                "title": prompt.strip().splitlines()[0][:80] if prompt.strip() else "",
+            },
         )
         session["response_ids"].append(response_id)
+        session["updated_at"] = created_at
         if idempotency_key:
             self._idempotency[idempotency_key] = response_id
 
@@ -1263,10 +1402,13 @@ def create_uhp_server(
     public_catalog: bool = False,
     require_caller_provider_key: bool = False,
     isolate_session_workspaces: bool | None = None,
+    expose_session_listing: bool | None = None,
 ) -> UHPServer:
     """Build a UHP server bound to one SuperQode HarnessSpec.
 
-    ``isolate_session_workspaces`` defaults to whether the bind is BYOK.
+    ``isolate_session_workspaces`` defaults to whether the bind is BYOK, and
+    ``expose_session_listing`` to the opposite: one bearer shared by every
+    caller makes a session list everyone's prompts.
     """
     from superqode.harness import get_harness_template, load_harness_spec
 
@@ -1304,6 +1446,11 @@ def create_uhp_server(
             require_caller_provider_key
             if isolate_session_workspaces is None
             else isolate_session_workspaces
+        ),
+        expose_session_listing=(
+            not require_caller_provider_key
+            if expose_session_listing is None
+            else expose_session_listing
         ),
     )
     return UHPServer(config, runner=runner, spec=loaded)

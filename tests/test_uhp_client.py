@@ -1425,3 +1425,36 @@ def test_best_common_version_prefers_the_newest():
     alien = UHPDiscovery.from_payload({"versions": ["2019-01-01"]})
     assert alien.best_common_version == ""
     assert alien.speaks_target_version is False
+
+
+@pytest.mark.asyncio
+async def test_latest_response_id_tolerates_a_core_server():
+    """Turn history is Extended. A Core server 404s it and is still correct."""
+
+    def handler(request):
+        return httpx.Response(
+            404,
+            json={
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "session_not_found",
+                    "message": "No such route.",
+                }
+            },
+        )
+
+    async with _client(handler) as client:
+        assert await client.latest_response_id("hsess1") is None
+
+
+@pytest.mark.asyncio
+async def test_latest_response_id_still_raises_on_a_real_failure():
+    def handler(request):
+        return httpx.Response(
+            500,
+            json={"error": {"type": "server_error", "code": "boom", "message": "broke"}},
+        )
+
+    async with _client(handler) as client:
+        with pytest.raises(UHPError):
+            await client.latest_response_id("hsess1")

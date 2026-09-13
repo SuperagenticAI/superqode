@@ -991,8 +991,16 @@ class UHPClient:
         return tuple(dict(item) for item in _items(payload, "turns") if isinstance(item, Mapping))
 
     async def latest_response_id(self, session_id: str) -> str | None:
-        """Return the most recent response id recorded for a session."""
-        turns = await self.list_session_turns(session_id)
+        """Return the most recent response id recorded for a session.
+
+        Turn history is Extended: a Core server answers 404, meaning none.
+        """
+        try:
+            turns = await self.list_session_turns(session_id)
+        except UHPError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
         for turn in reversed(turns):
             for key in ("response_id", "id"):
                 value = turn.get(key)
