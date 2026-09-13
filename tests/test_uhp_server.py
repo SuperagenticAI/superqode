@@ -596,3 +596,24 @@ def test_non_ascii_bearer_is_rejected_not_crashed():
     assert envelope is not None
     assert envelope["error"]["type"] == "authentication_error"
     assert envelope["error"]["code"] == "invalid_credential"
+
+
+def test_missing_server_extra_names_the_uhp_extra(monkeypatch):
+    """A bare install must say what to install, not raise ModuleNotFoundError."""
+    import builtins
+
+    from superqode.harness.uhp_server import MissingUHPServerDependency
+
+    real_import = builtins.__import__
+
+    def no_fastapi(name, *args, **kwargs):
+        if name == "fastapi" or name.startswith("fastapi."):
+            raise ModuleNotFoundError("No module named 'fastapi'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_fastapi)
+
+    with pytest.raises(MissingUHPServerDependency) as excinfo:
+        _server()
+
+    assert "superqode[uhp]" in str(excinfo.value)

@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.2.3"
+version = "2.2.4"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -110,6 +110,13 @@ extras = [
 ]
 a2a = [
     "a2a-sdk[fastapi,sqlite]>=1.1.2,<2.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+]
+uhp = [
+    # `serve uhp` only. The UHP client needs nothing extra: httpx and
+    # httpx-sse are core. Deliberately no a2a-sdk, so hosting a UHP harness
+    # does not drag in an unrelated protocol stack.
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
 ]

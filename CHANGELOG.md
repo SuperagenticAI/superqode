@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-09-13
+
+Hosting a UHP harness gets its own install extra, so `serve uhp` no longer
+asks for the A2A stack. `scripts/run_uhp_conformance.sh` runs the HarnessRouter
+conformance suite against a local bind.
+
+### 🧩 Unified Harness Protocol
+
+- New `superqode[uhp]` extra: FastAPI and uvicorn, the two packages
+  `serve uhp` needs. Hosting a UHP harness no longer means installing
+  `superqode[a2a]` and its unrelated A2A stack. The client needs neither,
+  because httpx and httpx-sse are core dependencies.
+- `serve uhp` without those packages now names the extra to install. It exited
+  with a raw `ModuleNotFoundError` traceback.
+- `Dockerfile.uhp` installs `.[uhp]` instead of `.[a2a]`.
+- `scripts/run_uhp_conformance.sh` stands up a local bind and runs the
+  HarnessRouter conformance suite against it, in a scratch directory. The
+  suite is a stock UHP client and does not send `X-Provider-Api-Key`, so a
+  BYOK bind cannot be measured directly.
+
 ## [2.2.3] - 2026-09-13
 
 Security fixes for the UHP client and the BYOK server bind shipped in 2.2.2.

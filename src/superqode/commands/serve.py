@@ -375,7 +375,7 @@ def serve_uhp(
     This is SuperQode's own harness speaking UHP — complementary to
     HarnessRouter, not a multi-backend runner replacement.
     """
-    from superqode.harness.uhp_server import create_uhp_server
+    from superqode.harness.uhp_server import MissingUHPServerDependency, create_uhp_server
 
     is_loopback = host in {"127.0.0.1", "localhost", "::1"}
     if not is_loopback and not allow_remote:
@@ -387,16 +387,19 @@ def serve_uhp(
             "the caller's X-Provider-Api-Key."
         )
 
-    server = create_uhp_server(
-        spec=spec_path,
-        provider=provider,
-        model=model_name,
-        working_directory=working_dir.resolve(),
-        api_key=api_key,
-        harness_id=harness_id,
-        public_catalog=allow_remote,
-        require_caller_provider_key=allow_remote,
-    )
+    try:
+        server = create_uhp_server(
+            spec=spec_path,
+            provider=provider,
+            model=model_name,
+            working_directory=working_dir.resolve(),
+            api_key=api_key,
+            harness_id=harness_id,
+            public_catalog=allow_remote,
+            require_caller_provider_key=allow_remote,
+        )
+    except MissingUHPServerDependency as exc:
+        raise click.ClickException(str(exc)) from exc
     console.print(
         f"[cyan]Serving SuperQode UHP {server.discovery_document()['default_version']} "
         f"on http://{host}:{port}[/cyan]"

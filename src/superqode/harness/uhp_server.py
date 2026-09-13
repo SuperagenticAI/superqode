@@ -61,6 +61,10 @@ _PROVIDER_ENV_LOCK = asyncio.Lock()
 HarnessRunner = Callable[["UHPRunRequest"], Awaitable["UHPRunResult"]]
 
 
+class MissingUHPServerDependency(RuntimeError):
+    """Serving UHP needs the `uhp` extra; the client does not."""
+
+
 @dataclass(frozen=True)
 class UHPRunRequest:
     """Inputs handed to the bound harness runner."""
@@ -431,8 +435,15 @@ class UHPServer:
     # -- FastAPI app ------------------------------------------------------------
 
     def _build_app(self) -> Any:
-        from fastapi import FastAPI
-        from fastapi.responses import JSONResponse, StreamingResponse
+        try:
+            from fastapi import FastAPI
+            from fastapi.responses import JSONResponse, StreamingResponse
+        except ModuleNotFoundError as exc:  # pragma: no cover - install-shape error
+            raise MissingUHPServerDependency(
+                "Serving UHP needs FastAPI and uvicorn, which are not installed.\n"
+                "  pip install 'superqode[uhp]'\n"
+                "The UHP client works without them."
+            ) from exc
 
         app = FastAPI(
             title="SuperQode UHP Server",
