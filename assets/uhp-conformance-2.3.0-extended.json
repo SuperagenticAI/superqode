@@ -3,19 +3,21 @@
   "protocol_version": "2026-09-12",
   "suite_protocol_version": "2026-09-12",
   "suite_version": "2026.9.12",
-  "generated_at": "2026-09-13T13:49:43Z",
-  "target": "http://127.0.0.1:8892",
-  "requested_class": "core",
-  "conformant": true,
-  "conformant_with_skips": true,
-  "skipped_not_verified": [],
+  "generated_at": "2026-09-13T15:10:11Z",
+  "target": "http://127.0.0.1:8931",
+  "requested_class": "extended",
+  "conformant": false,
+  "conformant_with_skips": false,
+  "skipped_not_verified": [
+    "X-07"
+  ],
   "highest_class_passed": "core",
   "summary": {
-    "pass": 40,
-    "fail": 0,
-    "skip": 0,
+    "pass": 46,
+    "fail": 1,
+    "skip": 1,
     "error": 0,
-    "total": 40
+    "total": 48
   },
   "checks": [
     {
@@ -192,7 +194,7 @@
       "class": "core",
       "spec": "protocol/versions/2026-09-12/lifecycle.md#4-session-lifecycle",
       "outcome": "pass",
-      "detail": "session_id=hsess4ce22d11008f4f37"
+      "detail": "session_id=hsess9864bf92c22643fd"
     },
     {
       "id": "T-05",
@@ -296,7 +298,7 @@
       "class": "core",
       "spec": "protocol/versions/2026-09-12/sessions.md#1-continuing-a-session",
       "outcome": "pass",
-      "detail": "session hsess4ce22d11008f4f37 extended"
+      "detail": "session hsess9864bf92c22643fd extended"
     },
     {
       "id": "C-02",
@@ -313,6 +315,70 @@
       "spec": "protocol/versions/2026-09-12/sessions.md#4-cancelling",
       "outcome": "pass",
       "detail": "final status=cancelled"
+    },
+    {
+      "id": "X-01",
+      "title": "Sessions can be listed",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/sessions.md#2-listing-sessions",
+      "outcome": "pass",
+      "detail": "4 session(s)"
+    },
+    {
+      "id": "X-02",
+      "title": "Session listing reports the end of pagination explicitly",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/sessions.md#2-listing-sessions",
+      "outcome": "pass",
+      "detail": ""
+    },
+    {
+      "id": "X-03",
+      "title": "A session can be inspected",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/sessions.md#3-inspecting-a-session",
+      "outcome": "pass",
+      "detail": ""
+    },
+    {
+      "id": "X-04",
+      "title": "A session's turn history is available, in the specified shape",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/sessions.md#3-inspecting-a-session",
+      "outcome": "pass",
+      "detail": ""
+    },
+    {
+      "id": "X-05",
+      "title": "A file can be sent as task input",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/files.md#1-sending-files-in",
+      "outcome": "pass",
+      "detail": "accepted (the harness did not echo the token, which the protocol does not require)"
+    },
+    {
+      "id": "X-06",
+      "title": "Artifacts of a session can be listed",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/files.md#22-by-listing-the-session",
+      "outcome": "fail",
+      "detail": "GET /v1/sessions/{id}/files returned HTTP 404"
+    },
+    {
+      "id": "X-07",
+      "title": "An artifact downloads as raw bytes with nosniff",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/files.md#3-downloading",
+      "outcome": "skip",
+      "detail": "this session produced no artifacts to download"
+    },
+    {
+      "id": "X-08",
+      "title": "Artifact ids do not traverse outside their container",
+      "class": "extended",
+      "spec": "protocol/versions/2026-09-12/files.md#5-retention-and-scope",
+      "outcome": "pass",
+      "detail": "traversal probes refused"
     },
     {
       "id": "T-08",
