@@ -11,7 +11,7 @@ run.completed | run.failed | run.cancelled
     <span class=k>return</span> <span class=sa>f</span><span class=s2>&quot;handled by </span><span class=si>{</span><span class=n>session</span><span class=o>.</span><span class=n>harness_id</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>message</span><span class=o>.</span><span class=n>content</span><span class=si>}</span><span class=s2>&quot;</span>
 </code></pre></div> <p>Expose that function from <code>pyproject.toml</code>:</p> <div class=highlight><pre><span></span><code><span class=k>[project.entry-points.</span><span class=s2>&quot;superqode.harnesses&quot;</span><span class=k>]</span>
 <span class=n>team-reviewer</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=s2>&quot;my_package:run&quot;</span>
-</code></pre></div> <p>After installing the package, SuperQode handles registration, sessions, event storage, export, and conformance:</p> <div class=highlight><pre><span></span><code>pip<span class=w> </span>install<span class=w> </span>-e<span class=w> </span>.
+</code></pre></div> <p>After installing the package, SuperQode handles registration, sessions, event storage, export, and conformance:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>pip<span class=w> </span>install<span class=w> </span>-e<span class=w> </span>.
 superqode<span class=w> </span>harness<span class=w> </span>list
 superqode<span class=w> </span>harness<span class=w> </span>show<span class=w> </span>team-reviewer
 superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span>team-reviewer<span class=w> </span><span class=s2>&quot;Review the current diff&quot;</span>
