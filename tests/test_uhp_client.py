@@ -14,6 +14,7 @@ from superqode.harness import (
     UHPHarnessProtocolAdapter,
 )
 from superqode.harness.uhp_client import (
+    PROVIDER_KEY_HEADER,
     UHPAuthenticationError,
     UHPError,
     UHPHarnessError,
@@ -1250,3 +1251,105 @@ def test_build_user_input_supports_inline_data_url():
     assert part["type"] == "input_file"
     assert part["filename"] == "note.txt"
     assert part["file_data"].startswith("data:text/plain;base64,")
+
+
+# ── the caller's model key travels on task submission only ─────────────────────
+
+
+def _recording_client(seen, *, base_url=BASE_URL):
+    """A client that records the headers of every request it makes."""
+
+    def handler(request):
+        seen.append((request.url.path, dict(request.headers)))
+        if request.url.path.endswith("/uhp"):
+            return httpx.Response(200, json={"object": "uhp.discovery", "protocol": "uhp"})
+        if request.url.path.endswith("/harnesses"):
+            return httpx.Response(200, json={"harnesses": [{"id": "chrn_a"}]})
+        return httpx.Response(200, json=_response_payload())
+
+    transport = httpx.MockTransport(handler)
+    return UHPClient(
+        base_url,
+        api_key="key-123",
+        client=httpx.AsyncClient(transport=transport),
+    )
+
+
+@pytest.mark.anyio
+async def test_provider_key_is_withheld_from_discovery_and_catalog(monkeypatch):
+    """Discovery runs before the user has decided to trust the host."""
+    monkeypatch.setenv("SUPERQODE_PROVIDER", "google")
+    monkeypatch.setenv("GEMINI_API_KEY", "caller-gemini-key")
+    seen = []
+
+    async with _recording_client(seen) as client:
+        await client.discover()
+        await client.list_harnesses()
+
+    assert seen, "no requests were recorded"
+    for path, headers in seen:
+        assert PROVIDER_KEY_HEADER.lower() not in headers, f"{path} carried the provider key"
+
+
+@pytest.mark.anyio
+async def test_provider_key_is_sent_on_task_submission(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_PROVIDER", "google")
+    monkeypatch.setenv("GEMINI_API_KEY", "caller-gemini-key")
+    seen = []
+
+    async with _recording_client(seen) as client:
+        await client.create_response("run this")
+
+    path, headers = seen[-1]
+    assert path.endswith("/responses")
+    assert headers[PROVIDER_KEY_HEADER.lower()] == "caller-gemini-key"
+
+
+@pytest.mark.anyio
+async def test_provider_key_from_headers_argument_is_also_held_back(monkeypatch):
+    """However the key arrived, it is a credential and not a transport header."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, dict(request.headers)))
+        return httpx.Response(200, json={"object": "uhp.discovery", "protocol": "uhp"})
+
+    client = UHPClient(
+        BASE_URL,
+        headers={PROVIDER_KEY_HEADER: "explicit-key"},
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    async with client:
+        await client.discover()
+
+    assert PROVIDER_KEY_HEADER.lower() not in seen[0][1]
+
+
+@pytest.mark.anyio
+async def test_provider_key_is_withheld_over_plaintext_http(monkeypatch, caplog):
+    """Withheld, not fatal: an http server may not want the key at all."""
+    monkeypatch.setenv("SUPERQODE_PROVIDER", "google")
+    monkeypatch.setenv("GEMINI_API_KEY", "caller-gemini-key")
+    seen = []
+
+    with caplog.at_level("WARNING"):
+        async with _recording_client(seen, base_url="http://uhp.example.com") as client:
+            await client.create_response("run this")
+
+    assert PROVIDER_KEY_HEADER.lower() not in seen[-1][1]
+    assert "plaintext http" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_plaintext_loopback_still_carries_the_key(monkeypatch):
+    """HarnessRouter CE runs on loopback, where nothing leaves the machine."""
+    monkeypatch.setenv("SUPERQODE_PROVIDER", "google")
+    monkeypatch.setenv("GEMINI_API_KEY", "caller-gemini-key")
+    seen = []
+
+    async with _recording_client(seen, base_url="http://127.0.0.1:3000") as client:
+        await client.create_response("run this")
+
+    assert seen[-1][1][PROVIDER_KEY_HEADER.lower()] == "caller-gemini-key"

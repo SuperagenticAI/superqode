@@ -13,12 +13,14 @@ session listing) are deferred.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -41,6 +43,20 @@ SUPPORTED_VERSION = UHP_PROTOCOL_VERSION
 DISCOVERY_OBJECT = "uhp.discovery"
 
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+
+#: Runtime controls, not caller context. A request body may not set these.
+RESERVED_METADATA_KEYS = frozenset(
+    {
+        "agent_max_iterations",
+        "delegation_depth",
+        "harness_digest",
+        "harness_source",
+        "provider_api_key",
+    }
+)
+
+#: Guards the caller key in os.environ, which the whole process shares.
+_PROVIDER_ENV_LOCK = asyncio.Lock()
 
 HarnessRunner = Callable[["UHPRunRequest"], Awaitable["UHPRunResult"]]
 
@@ -167,6 +183,9 @@ class UHPServerConfig:
     public_catalog: bool = False
     #: Refuse a harness turn unless the caller sent PROVIDER_KEY_HEADER.
     require_caller_provider_key: bool = False
+    #: Per-session directory under working_directory, so callers on a shared
+    #: bind cannot read each other's files. Off locally: work in the project.
+    isolate_session_workspaces: bool = False
 
 
 def _package_version() -> str:
@@ -178,18 +197,58 @@ def _package_version() -> str:
         return "0.0.0"
 
 
-def _provider_key_env(provider: str) -> str:
-    """Env var LiteLLM reads for this provider (caller BYOK)."""
+def _provider_key_envs(provider: str) -> tuple[str, ...]:
+    """Every env var LiteLLM may read for this provider (caller BYOK).
+
+    All of them, not just the first: which one LiteLLM reads is its choice,
+    and Google alone has two.
+    """
     try:
         from superqode.providers.registry import PROVIDERS
 
         pdef = PROVIDERS.get(provider)
-        names = getattr(pdef, "env_vars", None) or ()
+        names = tuple(str(name) for name in (getattr(pdef, "env_vars", None) or ()) if name)
         if names:
-            return str(names[0])
+            return names
     except Exception:
         pass
-    return f"{(provider or 'OPENAI').upper()}_API_KEY"
+    return (f"{(provider or 'OPENAI').upper()}_API_KEY",)
+
+
+@asynccontextmanager
+async def _caller_provider_key(token: str, env_names: Sequence[str]) -> AsyncIterator[None]:
+    """Hold one caller's model key in ``os.environ`` for the length of a turn.
+
+    Serialises BYOK turns: the environment is process-global, so overlapping
+    turns would otherwise send each other's key.
+    """
+    if not token:
+        yield
+        return
+    async with _PROVIDER_ENV_LOCK:
+        previous = {name: os.environ.get(name) for name in env_names}
+        for name in env_names:
+            os.environ[name] = token
+        try:
+            yield
+        finally:
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+
+def _caller_metadata(body: Mapping[str, Any]) -> dict[str, Any]:
+    """Caller-supplied metadata with the runtime's own control keys removed."""
+    raw = body.get("metadata")
+    if not isinstance(raw, Mapping):
+        return {}
+    return {
+        str(key): value
+        for key, value in raw.items()
+        if str(key) not in RESERVED_METADATA_KEYS and not str(key).startswith("_")
+    }
 
 
 def harness_id_from_name(name: str) -> str:
@@ -706,13 +765,23 @@ class UHPServer:
                 code="invalid_credential",
                 message="Authorization must be a Bearer token.",
             )
-        if token != expected:
+        # Bytes, because compare_digest rejects a non-ASCII str.
+        if not hmac.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
             return _error_envelope(
                 error_type="authentication_error",
                 code="invalid_credential",
                 message="Invalid API key.",
             )
         return None
+
+    def _workspace_for(self, session_id: str) -> Path:
+        """The directory a turn runs in."""
+        root = Path(self.config.working_directory)
+        if not self.config.isolate_session_workspaces:
+            return root
+        workspace = root / "sessions" / session_id
+        workspace.mkdir(parents=True, exist_ok=True)
+        return workspace
 
     def _validate_harness_selection(
         self, body: Mapping[str, Any]
@@ -816,7 +885,7 @@ class UHPServer:
             prompt=prompt,
             model=model,
             provider=self.config.provider,
-            working_directory=Path(self.config.working_directory),
+            working_directory=self._workspace_for(session_id),
             session_id=session_id,
             response_id=response_id,
             previous_response_id=previous_response_id,
@@ -827,7 +896,7 @@ class UHPServer:
             cancel_event=self._cancel_events[response_id],
             metadata={
                 "harness_id": self.config.harness_id,
-                **(dict(body["metadata"]) if isinstance(body.get("metadata"), Mapping) else {}),
+                **_caller_metadata(body),
                 **({"provider_api_key": provider_api_key} if provider_api_key else {}),
             },
         )
@@ -1039,18 +1108,15 @@ class UHPServer:
             key: value for key, value in dict(request.metadata).items() if key != "provider_api_key"
         }
         token = str(request.metadata.get("provider_api_key") or "")
-        env_name = _provider_key_env(provider)
-        previous = os.environ.get(env_name)
-        if token:
-            os.environ[env_name] = token
         try:
-            result = await session.prompt(
-                prompt,
-                provider=provider,
-                model=model,
-                working_directory=request.working_directory,
-                metadata=run_metadata,
-            )
+            async with _caller_provider_key(token, _provider_key_envs(provider)):
+                result = await session.prompt(
+                    prompt,
+                    provider=provider,
+                    model=model,
+                    working_directory=request.working_directory,
+                    metadata=run_metadata,
+                )
         except Exception:
             return UHPRunResult(
                 status="failed",
@@ -1059,12 +1125,6 @@ class UHPServer:
                 error_code="harness_error",
                 usage=None,
             )
-        finally:
-            if token:
-                if previous is None:
-                    os.environ.pop(env_name, None)
-                else:
-                    os.environ[env_name] = previous
 
         if request.cancel_event and request.cancel_event.is_set():
             return UHPRunResult(
@@ -1087,8 +1147,12 @@ def create_uhp_server(
     runner: HarnessRunner | None = None,
     public_catalog: bool = False,
     require_caller_provider_key: bool = False,
+    isolate_session_workspaces: bool | None = None,
 ) -> UHPServer:
-    """Build a UHP server bound to one SuperQode HarnessSpec."""
+    """Build a UHP server bound to one SuperQode HarnessSpec.
+
+    ``isolate_session_workspaces`` defaults to whether the bind is BYOK.
+    """
     from superqode.harness import get_harness_template, load_harness_spec
 
     if spec is None:
@@ -1121,5 +1185,10 @@ def create_uhp_server(
         conformance_class="core",
         public_catalog=public_catalog,
         require_caller_provider_key=require_caller_provider_key,
+        isolate_session_workspaces=(
+            require_caller_provider_key
+            if isolate_session_workspaces is None
+            else isolate_session_workspaces
+        ),
     )
     return UHPServer(config, runner=runner, spec=loaded)

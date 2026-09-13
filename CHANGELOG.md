@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-09-13
+
+Security fixes for the UHP client and the BYOK server bind shipped in 2.2.2.
+Anyone who ran `superqode connect uhp` on 2.2.2 sent their model key to the
+address they connected to, including on the anonymous discovery request, so
+upgrading is worth doing before the next connect. No API changed and no
+protocol behaviour changed: the Core conformance result is the same 38/40.
+
+### 🔐 UHP security
+
+- The client sends `X-Provider-Api-Key` on a task submission only. It was
+  attached to every request, including the anonymous discovery and catalog
+  GETs, so `connect uhp --base-url <address>` handed that address the caller's
+  model key before the caller had decided to trust it. The key is also
+  withheld from a remote plaintext `http://` origin, with a warning.
+- A caller's model key no longer races with another caller's. It is written to
+  every environment variable the provider reads, and BYOK turns are serialised
+  for as long as it is in the process environment, which LiteLLM reads
+  credentials from. Concurrent turns previously overwrote each other's key.
+- `Dockerfile.uhp` no longer passes `--api-key` on the command line. The bearer
+  came from the environment either way, and the argument published it in
+  `/proc/1/cmdline`, which the bound harness's shell tool can read.
+- On a remote bind each session gets its own directory under the working
+  directory, so callers cannot read each other's files or session transcripts.
+  A local bind still runs in the directory it was given.
+- Request metadata can no longer set harness runtime controls such as
+  `agent_max_iterations`. Caller context is still passed through.
+- Bearer comparison is constant time.
+
 ## [2.2.2] - 2026-09-12
 
 The installed CLI can complete a harness turn against a BYOK UHP host such as

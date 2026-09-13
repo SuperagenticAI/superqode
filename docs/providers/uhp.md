@@ -447,15 +447,19 @@ through the same contract SuperQode uses as a client:
 ```bash
 superqode serve uhp --spec harness.yaml
 superqode serve uhp --spec harness.yaml --host 127.0.0.1 --port 8787
-superqode serve uhp --api-key "$SUPERQODE_UHP_API_KEY"
+SUPERQODE_UHP_API_KEY=... superqode serve uhp --spec harness.yaml
 ```
+
+Pass the bearer through the environment, not `--api-key`, on a shared or
+long-lived host. A token on the command line is readable from the process
+table by anything running beside it, including the harness's own shell tool.
 
 | Option | Description |
 | --- | --- |
 | `--spec` | HarnessSpec file to bind (default: built-in coding template) |
 | `--host` / `--port` | Bind address (default `127.0.0.1:8787`) |
 | `--provider` / `--model` | Defaults for runs when the request omits a model |
-| `--api-key` | Optional bearer token (`SUPERQODE_UHP_API_KEY`). When set, every route except `GET /v1/uhp` requires it |
+| `--api-key` | Optional bearer token. Prefer the `SUPERQODE_UHP_API_KEY` environment variable, which the option also reads. When set, every route except `GET /v1/uhp` requires it |
 | `--allow-remote` | Required to bind outside localhost |
 | `--harness-id` | Override the advertised id (must match `^chrn_`) |
 | `--working-dir` | Working directory for harness runs |

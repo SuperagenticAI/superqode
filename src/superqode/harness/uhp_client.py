@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import mimetypes
 import os
 import uuid
@@ -20,8 +21,11 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 UHP_PROTOCOL_VERSION = "2026-08-11"
 
@@ -34,7 +38,11 @@ VERSION_HEADER = "UHP-Version"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 #: Caller model key for a BYOK UHP server. SuperQode does not send its own.
+#: A SuperQode extension, not part of UHP. Task submission only.
 PROVIDER_KEY_HEADER = "X-Provider-Api-Key"
+
+#: Plaintext http is safe enough to carry a key to these.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 def _caller_provider_api_key() -> str:
@@ -494,7 +502,8 @@ class UHPClient:
             timeout, because a harness can work for minutes between events.
         headers: Extra headers merged into every request.  A cookie header
             belongs here for a server that gates the API with a console
-            session instead of a bearer token.
+            session instead of a bearer token.  ``PROVIDER_KEY_HEADER`` is the
+            exception: it rides task submission only.
         client: An existing ``httpx.AsyncClient`` to borrow instead of creating
             one.  A borrowed client is never closed by ``aclose``.
     """
@@ -511,18 +520,45 @@ class UHPClient:
         self.base_url = self._normalize_base_url(base_url)
         self.api_key = api_key
         self.timeout = timeout
-        self._headers = {
+        merged = {
             "Accept": "application/json",
             VERSION_HEADER: UHP_PROTOCOL_VERSION,
             **dict(headers or {}),
         }
+        # Held aside, not merged: a model key rides task submission only.
+        self._provider_key = str(merged.pop(PROVIDER_KEY_HEADER, "") or "").strip()
+        self._headers = merged
         if api_key:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        provider_key = _caller_provider_api_key()
-        if provider_key and PROVIDER_KEY_HEADER not in self._headers:
-            self._headers[PROVIDER_KEY_HEADER] = provider_key
         self._client = client
         self._owns_client = client is None
+
+    def _origin_is_confidential(self) -> bool:
+        """Whether this base URL protects a credential in transit."""
+        parsed = urlparse(self.base_url)
+        if parsed.scheme == "https":
+            return True
+        return (parsed.hostname or "").lower() in _LOOPBACK_HOSTS
+
+    def _provider_key_headers(self) -> dict[str, str]:
+        """The caller's model key, for a task submission only.
+
+        Withheld from a plaintext origin, not refused there: a server reached
+        over http may not want the key at all, and one that does answers
+        ``missing_provider_key``.
+        """
+        key = self._provider_key or _caller_provider_api_key()
+        if not key:
+            return {}
+        if not self._origin_is_confidential():
+            logger.warning(
+                "Not sending %s to %s: the connection is plaintext http, which would put the "
+                "model key on the wire in clear. Use an https base URL if this server needs it.",
+                PROVIDER_KEY_HEADER,
+                self.base_url,
+            )
+            return {}
+        return {PROVIDER_KEY_HEADER: key}
 
     @staticmethod
     def _normalize_base_url(base_url: str) -> str:
@@ -816,7 +852,10 @@ class UHPClient:
             message, input_files=input_files, inline_files=inline_files
         )
         body = self.build_response_body(prepared, stream=False, **kwargs)
-        headers = {IDEMPOTENCY_HEADER: idempotency_key or self.new_idempotency_key()}
+        headers = {
+            IDEMPOTENCY_HEADER: idempotency_key or self.new_idempotency_key(),
+            **self._provider_key_headers(),
+        }
         payload = await self._request("POST", "responses", json_body=body, headers=headers)
         if not isinstance(payload, Mapping):
             raise UHPServerError("UHP server returned no response object")
@@ -850,6 +889,7 @@ class UHPClient:
             **self._headers,
             "Accept": "text/event-stream",
             IDEMPOTENCY_HEADER: idempotency_key or self.new_idempotency_key(),
+            **self._provider_key_headers(),
         }
         pending_error: UHPError | None = None
         try:

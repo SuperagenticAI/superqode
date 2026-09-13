@@ -454,3 +454,145 @@ async def test_failed_harness_is_not_empty_completed():
                 body += chunk
         assert "event: response.failed" in body
         assert "event: response.completed" not in body
+
+
+# ── shared-bind hardening ──────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_caller_metadata_cannot_set_runtime_controls():
+    """agent_max_iterations is the runtime's iteration ceiling, not the caller's."""
+    seen = {}
+
+    async def capture(request: UHPRunRequest) -> UHPRunResult:
+        seen.update(request.metadata)
+        return UHPRunResult(text="ok", model=request.model, status="completed")
+
+    server = _server(runner=capture)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "meta"},
+            json={
+                "input": "hi",
+                "metadata": {
+                    "agent_max_iterations": 999999,
+                    "delegation_depth": 7,
+                    "harness_source": "spoofed",
+                    "_harness_store": "spoofed",
+                    "project": "keep-me",
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert "agent_max_iterations" not in seen
+    assert "delegation_depth" not in seen
+    assert "harness_source" not in seen
+    assert "_harness_store" not in seen
+    # Caller context that is not a runtime control still reaches the harness.
+    assert seen["project"] == "keep-me"
+
+
+@pytest.mark.anyio
+async def test_sessions_get_their_own_workspace_on_a_shared_bind(tmp_path):
+    """Two callers on one bind must not read each other's files or transcripts."""
+    seen = []
+
+    async def capture(request: UHPRunRequest) -> UHPRunResult:
+        seen.append(request.working_directory)
+        return UHPRunResult(text="ok", model=request.model, status="completed")
+
+    server = _server(runner=capture)
+    server.config.working_directory = tmp_path
+    server.config.isolate_session_workspaces = True
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        for key in ("one", "two"):
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": key},
+                json={"input": "hi"},
+            )
+
+    assert len(seen) == 2
+    assert seen[0] != seen[1], "two sessions shared one working directory"
+    for path in seen:
+        assert path.is_dir()
+        assert tmp_path in path.parents
+
+
+@pytest.mark.anyio
+async def test_local_bind_keeps_the_working_directory_it_was_given(tmp_path):
+    """Working in the project is the point of a local bind, so nothing is nested."""
+    seen = []
+
+    async def capture(request: UHPRunRequest) -> UHPRunResult:
+        seen.append(request.working_directory)
+        return UHPRunResult(text="ok", model=request.model, status="completed")
+
+    server = _server(runner=capture)
+    server.config.working_directory = tmp_path
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "local"},
+            json={"input": "hi"},
+        )
+
+    assert seen == [tmp_path]
+
+
+@pytest.mark.anyio
+async def test_concurrent_byok_turns_never_see_another_caller_key(monkeypatch):
+    """Overlapping turns must not overwrite each other's key in os.environ."""
+    import os
+
+    from superqode.harness.uhp_server import _caller_provider_key
+
+    observed = []
+
+    async def turn(token: str) -> None:
+        async with _caller_provider_key(token, ("GOOGLE_API_KEY", "GEMINI_API_KEY")):
+            # Yield control mid-turn, which is where the race used to open.
+            await asyncio.sleep(0)
+            observed.append(
+                (token, os.environ.get("GOOGLE_API_KEY"), os.environ.get("GEMINI_API_KEY"))
+            )
+            await asyncio.sleep(0)
+
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    await asyncio.gather(*(turn(f"key-{index}") for index in range(8)))
+
+    assert len(observed) == 8
+    for token, google, gemini in observed:
+        assert google == token, f"{token} saw GOOGLE_API_KEY={google}"
+        assert gemini == token, f"{token} saw GEMINI_API_KEY={gemini}"
+    # The environment is left exactly as it was found.
+    assert "GOOGLE_API_KEY" not in os.environ
+    assert "GEMINI_API_KEY" not in os.environ
+
+
+def test_provider_key_envs_covers_every_slot_for_the_provider():
+    from superqode.harness.uhp_server import _provider_key_envs
+
+    google = _provider_key_envs("google")
+    assert "GOOGLE_API_KEY" in google and "GEMINI_API_KEY" in google
+    assert _provider_key_envs("nonesuch") == ("NONESUCH_API_KEY",)
+
+
+def test_non_ascii_bearer_is_rejected_not_crashed():
+    """compare_digest raises on a non-ASCII str; Starlette decodes as latin-1.
+
+    Driven directly because httpx refuses to send such a header.
+    """
+    server = _server(api_key="secret")
+
+    envelope = server._check_auth("Bearer s\xe9cret")
+
+    assert envelope is not None
+    assert envelope["error"]["type"] == "authentication_error"
+    assert envelope["error"]["code"] == "invalid_credential"
