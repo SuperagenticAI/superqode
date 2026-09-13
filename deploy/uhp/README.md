@@ -59,6 +59,20 @@ traffic that matters:
   in the container. That is the intended shape of a BYOK runner, and it is why
   no model key or other secret beyond the bearer belongs on this service.
 
+## Session listing is off here
+
+`GET /v1/sessions`, `/{id}` and `/{id}/turns` answer 404 on this bind and the
+discovery document reports `session_listing: false`. With one bearer shared by
+every caller, a session list would hand each of them the others' prompts and
+answers. A local `serve uhp` is single-user and serves them.
+
+## Sessions do not survive a cold start
+
+Server state is in memory and the service scales to zero, so a continuation
+after an idle period answers `404 session_expired`. That is the protocol's own
+way of saying a session aged out, and a client can act on it. Persisting
+sessions is deferred.
+
 ## Iteration ceiling
 
 `deploy/uhp/core.yaml` sets `max_iterations: 0`, which means unlimited: a turn

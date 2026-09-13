@@ -1,11 +1,32 @@
 <p align="center">
-  <img src="assets/superqode-banner.png" alt="SuperQode" width="760">
+  <a href="https://superqode.dev"><img src="assets/superqode-logo.png" alt="SuperQode" width="104"></a>
 </p>
 
-<h2 align="center">The harness layer for coding agents.</h2>
+<h1 align="center">SuperQode</h1>
+
+<h3 align="center">The harness layer for coding agents.</h3>
+
 <p align="center">
   Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal.<br>
   Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.
+</p>
+
+<p align="center">
+  <a href="https://superqode.dev"><img src="https://img.shields.io/badge/superqode.dev-Visit%20the%20site-7c3aed?style=for-the-badge" alt="superqode.dev"></a>
+  &nbsp;
+  <a href="https://docs.superqode.dev/"><img src="https://img.shields.io/badge/Read%20the-Documentation-1f2937?style=for-the-badge" alt="Documentation"></a>
+  &nbsp;
+  <a href="https://docs.superqode.dev/getting-started/quickstart/"><img src="https://img.shields.io/badge/Start%20in-2%20minutes-16a34a?style=for-the-badge" alt="Quick Start"></a>
+</p>
+
+<p align="center">
+  <a href="https://docs.superqode.dev/harness-hub/">Harness Hub</a>
+  &nbsp;·&nbsp;
+  <a href="https://uhp.superqode.dev/v1/uhp">UHP host</a>
+  &nbsp;·&nbsp;
+  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">Demo</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
 </p>
 
 <p align="center">
@@ -17,25 +38,15 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/superqode?utm_source=badge-follow&utm_medium=badge&utm_source=badge-superqode" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=1155543&theme=light" alt="SuperQode - The&#0032;harness&#0032;interoperability&#0032;layer&#0032;for&#0032;coding&#0032;agent | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-</p>
-
-<p align="center">
-  <a href="https://docs.superqode.dev/"><strong>Documentation</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://docs.superqode.dev/getting-started/quickstart/">Quick Start</a>
-  &nbsp;·&nbsp;
-  <a href="https://docs.superqode.dev/harness-hub/">Harness Hub</a>
-  &nbsp;·&nbsp;
-  <a href="https://superqode.dev">superqode.dev</a>
-  &nbsp;·&nbsp;
-  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">Demo</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
-</p>
-
-<p align="center">
   <img src="assets/superqode-hero.png" alt="The SuperQode terminal interface" width="880">
+</p>
+
+<p align="center">
+  <img src="assets/superqode-banner.png" alt="" width="760">
+</p>
+
+<p align="center">
+  <a href="https://www.producthunt.com/products/superqode?utm_source=badge-follow&utm_medium=badge&utm_source=badge-superqode" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=1155543&theme=light" alt="SuperQode on Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 </p>
 
 ## What is SuperQode?

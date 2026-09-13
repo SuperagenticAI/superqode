@@ -511,6 +511,40 @@ optional bearer auth, `Idempotency-Key`, `previous_response_id` session
 threading, and reserved `tools` / `include` accepted with
 `metadata.ignored_fields`.
 
+### Budgets on a task
+
+Four request fields bound one turn. All are optional, and all are honoured
+rather than accepted and dropped.
+
+| Field | Effect |
+| --- | --- |
+| `timeout_seconds` | Wall-clock budget. The turn stops at the budget and reports `incomplete` with `incomplete_details.reason: "timeout"` |
+| `max_step` | Ceiling on agent steps for this turn |
+| `max_output_tokens` | Ceiling on generated tokens |
+| `background` | Returns as soon as the task is accepted, with `status: in_progress`. Follow it with `GET /v1/responses/{id}` |
+
+Work stopped at a budget is `incomplete`, never `completed`. A server that
+reported `completed` for truncated work would leave a client unable to tell a
+finished answer from a cut-off one.
+
+### What a client should expect back
+
+| Situation | Response |
+| --- | --- |
+| Request names no harness | The response says which one ran, in `metadata.harness_id` |
+| Request names a model this bind cannot serve | `422 model_unavailable`, with `detail.available` listing what it does serve. The model that ran is never misreported |
+| `previous_response_id` the server no longer holds | `404 session_expired`, distinguishable from `session_not_found` |
+| Two tasks at once in one session | `409 session_busy` |
+| Repeated `Idempotency-Key` while the first is running | The server waits for the first and returns its result, never a partial |
+| `POST /v1/responses/{id}/cancel` | The turn is stopped and the call returns once it is actually over, so the response it hands back is already terminal |
+
+Session ids carry the `hsess` prefix and response ids `resp_`, so an id is
+never ambiguous about what it points at.
+
+On the public bind, sessions do not survive a cold start. The service scales
+to zero, so a continuation after one answers `session_expired`, which is the
+protocol's own way of saying a session aged out.
+
 ### Conformance honesty
 
 `serve uhp` passes the UHP conformance suite at class **core**: 40 of 40
