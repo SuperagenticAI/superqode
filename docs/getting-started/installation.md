@@ -339,6 +339,7 @@ uv tool install "superqode[<extra>]"
 | `sandbox-cloud` | E2B, Modal, and Daytona together |
 | `web` | Browser-hosted Textual TUI |
 | `a2a` | A2A HTTP server dependencies |
+| `uhp` | UHP server dependencies for `serve uhp`. The UHP client needs none |
 | `adk` | Google Agent Development Kit runtime |
 | `openai-agents` | OpenAI Agents SDK runtime |
 | `codex-sdk` | OpenAI Codex SDK runtime |

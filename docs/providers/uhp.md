@@ -601,8 +601,8 @@ host into a runner for Codex, Claude Code, or Hermes.
 
 | Surface | Role |
 | --- | --- |
-| `https://uhp.superqode.dev/v1/uhp` | Discovery. Anonymous. No model call. Class `core`. |
-| `GET /v1/harnesses`, `GET /v1/models` | Static catalog of the one bound SuperQode harness. Anonymous. No model call. |
+| `https://uhp.superqode.dev/v1/uhp` | Discovery. The one unauthenticated route. No model call. Class `core`. |
+| `GET /v1/harnesses`, `GET /v1/models` | Static catalog of the one bound SuperQode harness. Needs the bearer. No model call. |
 | `POST /v1/responses` and session/response writes | Harness turn. Requires a SuperQode UHP bearer **and** the caller's provider key. SuperQode does not attach a model key on this host. |
 | `https://superqode.dev` | Product site. Not a UHP endpoint. |
 | Local `superqode serve uhp` | The working bind until the hostname is mapped and serving. |
@@ -611,10 +611,12 @@ Treat the public host as a catalog pilot plus optional BYOK runs. Tokens and
 provider keys never belong in the discovery document. Cold starts are expected
 on a scale-to-zero Cloud Run service.
 
-Anonymous:
+Discovery needs no credential. The catalog and everything else do:
 
 ```bash
 curl -sS https://uhp.superqode.dev/v1/uhp
+
+export SUPERQODE_UHP_API_KEY=...
 superqode connect uhp --base-url https://uhp.superqode.dev --no-save
 ```
 

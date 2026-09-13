@@ -355,6 +355,11 @@ def serve_a2a(
 )
 @click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
 @click.option(
+    "--public-catalog",
+    is_flag=True,
+    help="Serve the harness catalog without a bearer. Architecture section 5 allows\n    only discovery unauthenticated, so this leaves the bind non-conformant.",
+)
+@click.option(
     "--harness-id",
     default=None,
     help="Override the advertised harness id (must match ^chrn_)",
@@ -368,6 +373,7 @@ def serve_uhp(
     working_dir: Path,
     api_key: Optional[str],
     allow_remote: bool,
+    public_catalog: bool,
     harness_id: Optional[str],
 ):
     """Expose a HarnessSpec as a native UHP 2026-08-11 HTTP server.
@@ -395,7 +401,7 @@ def serve_uhp(
             working_directory=working_dir.resolve(),
             api_key=api_key,
             harness_id=harness_id,
-            public_catalog=allow_remote,
+            public_catalog=public_catalog,
             require_caller_provider_key=allow_remote,
         )
     except MissingUHPServerDependency as exc:

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🧩 Unified Harness Protocol
+
+- A remote bind no longer serves the harness catalog without a bearer.
+  Architecture section 5 of the specification allows one unauthenticated
+  route, discovery, so opening the catalog left the bind failing the suite's
+  authentication checks. `serve uhp --public-catalog` restores the old
+  behaviour for anyone who wants it, and says in its help what it costs.
+- The `uhp` extra is listed in the installation reference.
+
 ## [2.3.1] - 2026-09-13
 
 A saved UHP connection is now scoped to the server it was saved against.

@@ -28,7 +28,9 @@ Then map `uhp.superqode.dev` on this service (Cloud Run domain mapping).
 GoDaddy CNAME Host `uhp` → the record Google shows (`ghs.googlehosted.com.`
 unless the console lists something else).
 
-Anonymous catalog: `GET https://uhp.superqode.dev/v1/uhp`.
+Discovery is the only unauthenticated route:
+`GET https://uhp.superqode.dev/v1/uhp`. Architecture section 5 of the
+specification allows no others, so the harness catalog needs the bearer too.
 A harness turn needs `Authorization: Bearer …` and `X-Provider-Api-Key`
 (the caller’s Gemini / Google AI Studio key).
 
