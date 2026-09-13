@@ -15,8 +15,6 @@
   <a href="https://superqode.dev"><img src="https://img.shields.io/badge/superqode.dev-Visit%20the%20site-7c3aed?style=for-the-badge" alt="superqode.dev"></a>
   &nbsp;
   <a href="https://docs.superqode.dev/"><img src="https://img.shields.io/badge/Read%20the-Documentation-1f2937?style=for-the-badge" alt="Documentation"></a>
-  &nbsp;
-  <a href="https://docs.superqode.dev/getting-started/quickstart/"><img src="https://img.shields.io/badge/Start%20in-2%20minutes-16a34a?style=for-the-badge" alt="Quick Start"></a>
 </p>
 
 <p align="center">
