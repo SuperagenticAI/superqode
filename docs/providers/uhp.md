@@ -442,7 +442,19 @@ only when the payload nests a full error object.
 ## Serve (native UHP harness)
 
 Expose a local HarnessSpec as a UHP server so other products can drive SuperQode
-through the same contract SuperQode uses as a client:
+through the same contract SuperQode uses as a client.
+
+Serving needs the `uhp` extra, which adds FastAPI and uvicorn:
+
+```bash
+uv tool install 'superqode[uhp]'   # CLI installed as a tool
+uv pip install 'superqode[uhp]'    # inside a virtual environment
+```
+
+The client side needs nothing extra. `connect uhp` and `harness run uhp` work
+on a plain install, because httpx and httpx-sse are core dependencies. The
+`uhp` extra deliberately does not pull in `a2a-sdk`: hosting a UHP harness is
+unrelated to serving A2A.
 
 ```bash
 superqode serve uhp --spec harness.yaml
@@ -493,6 +505,20 @@ The server advertises `conformance_class: core` because that is the surface it
 implements. It has **not** been certified by the UHP conformance suite; passing
 endpoints locally is not a conformance claim. Extended (files, session listing)
 and Full (harness management, sharing) are deferred.
+
+To measure it, `scripts/run_uhp_conformance.sh` stands up a local bind and runs
+the HarnessRouter suite against it, in a scratch directory outside the
+repository:
+
+```bash
+export GEMINI_API_KEY=...
+scripts/run_uhp_conformance.sh
+```
+
+It runs about six real model turns and writes a JSON report. The suite is a
+stock UHP client and does not send `X-Provider-Api-Key`, so it measures a local
+bind carrying a server-side key. A BYOK bind such as the public host refuses
+every task it sends and cannot be scored this way.
 
 ### Partnership with HarnessRouter
 

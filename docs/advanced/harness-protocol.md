@@ -63,7 +63,7 @@ After installing the package, SuperQode handles registration, sessions, event
 storage, export, and conformance:
 
 ```bash
-pip install -e .
+uv pip install -e .
 superqode harness list
 superqode harness show team-reviewer
 superqode harness run team-reviewer "Review the current diff"

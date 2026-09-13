@@ -616,4 +616,4 @@ def test_missing_server_extra_names_the_uhp_extra(monkeypatch):
     with pytest.raises(MissingUHPServerDependency) as excinfo:
         _server()
 
-    assert "superqode[uhp]" in str(excinfo.value)
+    assert "uv pip install 'superqode[uhp]'" in str(excinfo.value)

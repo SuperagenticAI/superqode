@@ -441,7 +441,8 @@ class UHPServer:
         except ModuleNotFoundError as exc:  # pragma: no cover - install-shape error
             raise MissingUHPServerDependency(
                 "Serving UHP needs FastAPI and uvicorn, which are not installed.\n"
-                "  pip install 'superqode[uhp]'\n"
+                "  uv tool install 'superqode[uhp]'   (if you installed the CLI as a tool)\n"
+                "  uv pip install 'superqode[uhp]'    (inside a virtual environment)\n"
                 "The UHP client works without them."
             ) from exc
 

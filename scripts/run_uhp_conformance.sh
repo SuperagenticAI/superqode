@@ -41,11 +41,15 @@ esac
 cd "$WORK"
 echo "==> workspace $WORK"
 
+command -v uv >/dev/null || {
+  echo "uv is required: https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 1
+}
+
 echo "==> 1/5 SuperQode with the uhp extra"
 echo "    source: $SQ_SOURCE"
-python3 -m venv sq
-./sq/bin/pip install -q --upgrade pip
-./sq/bin/pip install -q "$SQ_SOURCE"
+uv venv -q sq
+uv pip install -q --python sq/bin/python "$SQ_SOURCE"
 ./sq/bin/superqode --version
 ./sq/bin/python -c "import fastapi, uvicorn" || {
   echo "the uhp extra did not install; is it published in $SQ_SOURCE?" >&2
@@ -54,9 +58,8 @@ python3 -m venv sq
 
 echo "==> 2/5 conformance suite, in its own venv"
 [ -d harnessrouter ] || git clone -q --depth 1 https://github.com/HarnessRouter/harnessrouter
-python3 -m venv conf
-./conf/bin/pip install -q --upgrade pip
-./conf/bin/pip install -q -e harnessrouter/protocol/conformance
+uv venv -q conf
+uv pip install -q --python conf/bin/python -e harnessrouter/protocol/conformance
 
 if [ -z "${SQ_SPEC:-}" ]; then
   SQ_SPEC="$WORK/core.yaml"
