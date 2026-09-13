@@ -338,3 +338,79 @@ def test_a_nonsense_cap_is_ignored_rather_than_sent(monkeypatch):
     for value in ("0", "-5", "lots", ""):
         monkeypatch.setenv(MAX_OUTPUT_TOKENS_ENV, value)
         assert resolve_settings().max_output_tokens is None
+
+
+# ── saved settings belong to the server they were saved against ────────────────
+
+
+def _save(tmp_path, monkeypatch, **fields):
+    import json
+
+    from superqode.providers import uhp as settings
+
+    path = tmp_path / "uhp.json"
+    path.write_text(json.dumps({"base_url": "https://saved.example", **fields}))
+    monkeypatch.setattr(settings, "connection_path", lambda: path)
+    for env in (
+        settings.BASE_URL_ENV,
+        settings.API_KEY_ENV,
+        settings.HARNESS_ENV,
+        settings.MAX_OUTPUT_TOKENS_ENV,
+    ):
+        monkeypatch.delenv(env, raising=False)
+    return settings
+
+
+def test_saved_bearer_does_not_travel_to_another_server(tmp_path, monkeypatch):
+    """A credential saved for one host must not be sent to a different one."""
+    settings = _save(
+        tmp_path,
+        monkeypatch,
+        api_key="bearer-for-saved",
+        harness_id="chrn_saved",
+        max_output_tokens=2000,
+    )
+
+    elsewhere = settings.resolve_settings(base_url="https://other.example")
+
+    assert elsewhere.api_key == ""
+    assert elsewhere.harness_id == "", "chrn_ ids are scoped to the server that issued them"
+    assert elsewhere.max_output_tokens is None
+
+
+def test_saved_settings_still_apply_to_their_own_server(tmp_path, monkeypatch):
+    settings = _save(
+        tmp_path,
+        monkeypatch,
+        api_key="bearer-for-saved",
+        harness_id="chrn_saved",
+        max_output_tokens=2000,
+    )
+
+    same = settings.resolve_settings(base_url="https://saved.example")
+    assert same.api_key == "bearer-for-saved"
+    assert same.harness_id == "chrn_saved"
+    assert same.max_output_tokens == 2000
+
+    # And with no base_url at all, the saved connection is the connection.
+    default = settings.resolve_settings()
+    assert default.base_url == "https://saved.example"
+    assert default.api_key == "bearer-for-saved"
+
+
+def test_same_server_ignores_trailing_slash_and_v1(tmp_path, monkeypatch):
+    settings = _save(tmp_path, monkeypatch, api_key="bearer-for-saved")
+
+    for variant in ("https://saved.example/", "https://saved.example/v1", "HTTPS://SAVED.EXAMPLE"):
+        assert settings.resolve_settings(base_url=variant).api_key == "bearer-for-saved", variant
+
+
+def test_explicit_arguments_and_env_still_win(tmp_path, monkeypatch):
+    settings = _save(tmp_path, monkeypatch, api_key="bearer-for-saved")
+
+    explicit = settings.resolve_settings(base_url="https://other.example", api_key="mine")
+    assert explicit.api_key == "mine"
+
+    monkeypatch.setenv(settings.API_KEY_ENV, "from-env")
+    from_env = settings.resolve_settings(base_url="https://other.example")
+    assert from_env.api_key == "from-env"

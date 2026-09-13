@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-09-13
+
+A saved UHP connection is now scoped to the server it was saved against.
+
+### 🔐 UHP security
+
+- A saved UHP connection no longer applies to a different server. The bearer,
+  the selected harness and the token cap were resolved field by field with no
+  regard for which host they were saved against, so connecting to a second
+  server sent it the credential saved for the first. A `chrn_` id carried the
+  same way named a harness that server had never heard of. Explicit arguments
+  and environment variables are unchanged, and reconnecting to the saved
+  server still uses everything saved for it. Present since the UHP client
+  shipped in 2.2.1.
+
 ## [2.3.0] - 2026-09-13
 
 The UHP server release. `serve uhp` serves session listing, inspection and

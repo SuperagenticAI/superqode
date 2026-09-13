@@ -102,22 +102,44 @@ def _optional_int(value: object) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _same_server(one: str, other: str) -> bool:
+    """Whether two base URLs name the same server."""
+
+    def key(value: str) -> str:
+        trimmed = (value or "").strip().rstrip("/")
+        if trimmed.endswith("/v1"):
+            trimmed = trimmed[: -len("/v1")]
+        return trimmed.lower()
+
+    return bool(one) and key(one) == key(other)
+
+
 def resolve_settings(
     base_url: str | None = None,
     api_key: str | None = None,
     harness_id: str | None = None,
     max_output_tokens: int | None = None,
 ) -> UHPSettings:
-    """Resolve settings from arguments, then the environment, then the file."""
+    """Resolve settings from arguments, then the environment, then the file.
+
+    Saved values belong to the server they were saved against. A bearer must
+    never travel to another host, and a ``chrn_`` id means nothing there.
+    """
     saved = load_saved_connection()
+    resolved = (base_url or os.environ.get(BASE_URL_ENV) or saved.base_url or "").strip()
+    known = _same_server(resolved, saved.base_url)
     return UHPSettings(
-        base_url=(base_url or os.environ.get(BASE_URL_ENV) or saved.base_url or "").strip(),
-        api_key=(api_key or os.environ.get(API_KEY_ENV) or saved.api_key or "").strip(),
-        harness_id=(harness_id or os.environ.get(HARNESS_ENV) or saved.harness_id or "").strip(),
+        base_url=resolved,
+        api_key=(
+            api_key or os.environ.get(API_KEY_ENV) or (saved.api_key if known else "") or ""
+        ).strip(),
+        harness_id=(
+            harness_id or os.environ.get(HARNESS_ENV) or (saved.harness_id if known else "") or ""
+        ).strip(),
         max_output_tokens=(
             max_output_tokens
             or _optional_int(os.environ.get(MAX_OUTPUT_TOKENS_ENV))
-            or saved.max_output_tokens
+            or (saved.max_output_tokens if known else None)
         ),
     )
 
