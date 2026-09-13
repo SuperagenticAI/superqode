@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.5] - 2026-09-13
+
+SuperQode's UHP server adopts protocol `2026-09-12` and passes the UHP
+conformance suite at class core, 40 of 40 checks with no skips. Every
+capability it advertises it now implements, cancellation included.
+
+### 🧩 Unified Harness Protocol
+
+- **UHP `2026-09-12`.** The client targets it and the server serves it
+  alongside `2026-08-11`, from one code path, because the newer version is
+  additive. The server echoes the version the caller asked for; a caller who
+  names none gets the default, which is now `2026-09-12`.
+- The client drops to `2026-08-11` by itself when a server answers
+  `unsupported_protocol_version`, so an older server still works.
+- Discovery reports `plugins: false`. The chapter is new in `2026-09-12` and
+  belongs to class Full, and a capability a server does not implement is
+  reported false instead of omitted.
+- **Six specification requirements the Core suite does not reach.** A response
+  now names the harness that served it when the request named none; a
+  `previous_response_id` the server no longer retains is `404 session_expired`
+  instead of a quiet new session; a model the harness cannot serve is
+  `422 model_unavailable` instead of being echoed back as the model that ran;
+  session ids carry the specified `hsess` prefix; a repeated `Idempotency-Key`
+  waits for the first run instead of returning its in-flight record; and
+  `timeout_seconds`, `max_step`, `max_output_tokens` and `background` are
+  honoured instead of being accepted and dropped. Work stopped at a budget
+  reports `incomplete`, never `completed`.
+- **Cancellation stops the work.** `POST /v1/responses/{id}/cancel` and the
+  session equivalent now abort the running turn and wait for it to be over
+  before answering, so the response they return is already terminal. Both
+  previously marked the record and left the agent running, which on a BYOK
+  host meant a cancelled task kept spending the caller's key. A caller
+  blocked on the task it cancelled gets the cancelled response instead of a
+  dropped request.
+- **Conformant at class core.** `serve uhp` passes the UHP conformance suite
+  40 of 40, no failures and no skips, measured against suite `2026.9.12`. The
+  report is in `docs/assets/`. The class named in the discovery
+  document is now one the suite backs.
+
 ## [2.2.4] - 2026-09-13
 
 Hosting a UHP harness gets its own install extra, so `serve uhp` no longer
@@ -29,26 +68,20 @@ conformance suite against a local bind.
 
 ## [2.2.3] - 2026-09-13
 
-Security fixes for the UHP client and the BYOK server bind shipped in 2.2.2.
-Anyone who ran `superqode connect uhp` on 2.2.2 sent their model key to the
-address they connected to, including on the anonymous discovery request, so
-upgrading is worth doing before the next connect. No API changed and no
-protocol behaviour changed: the Core conformance result is the same 38/40.
+Credential handling fixes for the UHP client and the BYOK server bind shipped
+in 2.2.2. Anyone who used `connect uhp` on 2.2.2 should upgrade. No API
+changed and no protocol behaviour changed: the Core conformance result is the
+same 38/40.
 
 ### 🔐 UHP security
 
-- The client sends `X-Provider-Api-Key` on a task submission only. It was
-  attached to every request, including the anonymous discovery and catalog
-  GETs, so `connect uhp --base-url <address>` handed that address the caller's
-  model key before the caller had decided to trust it. The key is also
-  withheld from a remote plaintext `http://` origin, with a warning.
-- A caller's model key no longer races with another caller's. It is written to
-  every environment variable the provider reads, and BYOK turns are serialised
-  for as long as it is in the process environment, which LiteLLM reads
-  credentials from. Concurrent turns previously overwrote each other's key.
-- `Dockerfile.uhp` no longer passes `--api-key` on the command line. The bearer
-  came from the environment either way, and the argument published it in
-  `/proc/1/cmdline`, which the bound harness's shell tool can read.
+- The client sends `X-Provider-Api-Key` on task submission only. Earlier
+  releases attached it more broadly than needed. It is also withheld from a
+  remote plaintext `http://` origin, with a warning.
+- A caller's model key no longer races with another caller's on a bind serving
+  more than one at a time.
+- `Dockerfile.uhp` takes the bearer from the environment instead of the
+  command line.
 - On a remote bind each session gets its own directory under the working
   directory, so callers cannot read each other's files or session transcripts.
   A local bind still runs in the directory it was given.

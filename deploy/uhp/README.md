@@ -20,9 +20,9 @@ Brand-new Cloud Run service. Do not edit or retarget the A2A service,
     send their own Gemini key as `X-Provider-Api-Key`.
 
 The container reads that secret from the environment. It is deliberately not
-passed as `--api-key`, which would publish the bearer in `/proc/1/cmdline`
-where the harness's own shell tool can read it. The bind refuses to start
-without it, so a missing secret fails the deploy instead of opening the host.
+passed as `--api-key`, which would put the bearer in the container's process
+arguments. The bind refuses to start without it, so a missing secret fails the
+deploy instead of opening the host.
 
 Then map `uhp.superqode.dev` on this service (Cloud Run domain mapping).
 GoDaddy CNAME Host `uhp` → the record Google shows (`ghs.googlehosted.com.`

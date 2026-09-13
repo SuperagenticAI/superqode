@@ -167,11 +167,11 @@ def _render(
     if settings.max_output_tokens:
         click.echo(f"Token cap:  {settings.max_output_tokens} per task")
     if result["discovered"] and not result["speaks_target_version"]:
-        from superqode.harness.uhp_client import UHP_PROTOCOL_VERSION
+        from superqode.harness.uhp_client import UHP_SUPPORTED_VERSIONS
 
+        spoken = " or ".join(UHP_SUPPORTED_VERSIONS)
         click.echo(
-            f"\n!  This server does not list {UHP_PROTOCOL_VERSION}, "
-            "which is the version SuperQode speaks."
+            f"\n!  This server lists no version SuperQode speaks ({spoken}). Tasks will be refused."
         )
 
     if not harnesses:

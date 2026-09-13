@@ -322,15 +322,20 @@ Read the [A2A guide](docs/providers/a2a.md).
 The same install that drives a remote UHP server can also expose a local
 HarnessSpec so other UHP clients call SuperQode:
 
+Serving needs the `uhp` extra (FastAPI and uvicorn). The client side needs
+nothing extra.
+
 ```bash
+uv tool install 'superqode[uhp]'
 superqode serve uhp --spec harness.yaml --port 8787
 superqode connect uhp --base-url http://127.0.0.1:8787
 superqode harness run uhp --prompt "summarise this repository"
 ```
 
-`serve uhp` binds one HarnessSpec and advertises UHP Core. It is complementary
-to HarnessRouter, which wraps third-party CLIs as a catalog. Core names the
-surface SuperQode implements; it is not a conformance-suite certificate.
+`serve uhp` binds one HarnessSpec and is complementary to HarnessRouter, which
+wraps third-party CLIs as a catalog. It passes the UHP conformance suite at
+class core, 40 of 40 checks with no skips, and serves protocol `2026-09-12`
+alongside `2026-08-11`.
 
 The public hostname for that bind is [`uhp.superqode.dev`](https://uhp.superqode.dev/v1/uhp).
 Anonymous callers get discovery and the static harness catalog (no model call).

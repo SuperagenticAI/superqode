@@ -27,7 +27,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-UHP_PROTOCOL_VERSION = "2026-08-11"
+UHP_PROTOCOL_VERSION = "2026-09-12"
+
+#: Versions this client can read, newest first. 2026-09-12 is additive to
+#: 2026-08-11, so one client parses both; only the header differs.
+UHP_SUPPORTED_VERSIONS: tuple[str, ...] = ("2026-09-12", "2026-08-11")
 
 #: Sent on every request so a server does not silently answer at another
 #: version than the one this client was written against.
@@ -197,10 +201,18 @@ class UHPDiscovery:
 
     @property
     def speaks_target_version(self) -> bool:
-        """Whether the server offers the version this client was built for."""
-        return UHP_PROTOCOL_VERSION in self.versions or (
-            self.default_version == UHP_PROTOCOL_VERSION
-        )
+        """Whether this client and the server have a version in common."""
+        offered = set(self.versions) | ({self.default_version} if self.default_version else set())
+        return bool(offered & set(UHP_SUPPORTED_VERSIONS))
+
+    @property
+    def best_common_version(self) -> str:
+        """The newest version both sides speak, or empty when there is none."""
+        offered = set(self.versions) | ({self.default_version} if self.default_version else set())
+        for version in UHP_SUPPORTED_VERSIONS:
+            if version in offered:
+                return version
+        return ""
 
     def supports(self, capability: str) -> bool:
         """Whether the server declared one named capability."""
@@ -599,17 +611,49 @@ class UHPClient:
         headers: Mapping[str, str] | None = None,
     ) -> Any:
         client = self._ensure_client()
+        for attempt in (0, 1):
+            try:
+                response = await client.request(
+                    method,
+                    self._url(path),
+                    json=dict(json_body) if json_body is not None else None,
+                    params=dict(params) if params else None,
+                    headers={**self._headers, **dict(headers or {})},
+                )
+            except httpx.HTTPError as exc:
+                raise UHPServerError(f"UHP request to {path} failed: {exc}") from exc
+            if attempt == 0 and self._downgrade_version(response):
+                continue
+            return self._decode(response)
+        return None
+
+    def _downgrade_version(self, response: httpx.Response) -> bool:
+        """Drop to an older version the server does list, once.
+
+        A server that does not serve the newest version answers
+        `unsupported_protocol_version` with the ones it does, so a client
+        written against the newer additive version can still talk to it.
+        """
+        if response.status_code != 400:
+            return False
         try:
-            response = await client.request(
-                method,
-                self._url(path),
-                json=dict(json_body) if json_body is not None else None,
-                params=dict(params) if params else None,
-                headers={**self._headers, **dict(headers or {})},
-            )
-        except httpx.HTTPError as exc:
-            raise UHPServerError(f"UHP request to {path} failed: {exc}") from exc
-        return self._decode(response)
+            payload = response.json()
+        except ValueError:
+            return False
+        error = payload.get("error") if isinstance(payload, Mapping) else None
+        if not isinstance(error, Mapping) or error.get("code") != "unsupported_protocol_version":
+            return False
+        detail = error.get("detail")
+        offered = detail.get("supported") if isinstance(detail, Mapping) else None
+        if not isinstance(offered, Sequence):
+            return False
+        current = self._headers.get(VERSION_HEADER)
+        for version in UHP_SUPPORTED_VERSIONS:
+            if version in offered and version != current:
+                logger.info("UHP server does not serve %s; retrying at %s", current, version)
+                self._headers[VERSION_HEADER] = version
+                return True
+        return False
 
     @staticmethod
     def _decode(response: httpx.Response) -> Any:

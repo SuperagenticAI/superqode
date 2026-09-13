@@ -33,11 +33,16 @@ except Exception:  # pragma: no cover - optional at import time
 from superqode.harness.uhp_client import (
     PROVIDER_KEY_HEADER,
     UHP_PROTOCOL_VERSION,
+    UHP_SUPPORTED_VERSIONS,
     VERSION_HEADER,
 )
 
-#: Advertised and accepted protocol version.
+#: Default protocol version: what a caller gets when it names none.
 SUPPORTED_VERSION = UHP_PROTOCOL_VERSION
+
+#: Every version served, newest first. 2026-09-12 is additive to 2026-08-11,
+#: so both answer from one code path and only the echoed header differs.
+SUPPORTED_VERSIONS: tuple[str, ...] = UHP_SUPPORTED_VERSIONS
 
 #: Discovery document object type.
 DISCOVERY_OBJECT = "uhp.discovery"
@@ -333,13 +338,15 @@ def _response_payload(
     created_at: int,
     previous_response_id: str | None,
     session_id: str,
+    harness_id: str,
     store: bool = True,
     usage: Mapping[str, int] | None = None,
     error: Mapping[str, Any] | None = None,
     ignored_fields: Sequence[str] = (),
     extra_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    metadata: dict[str, Any] = {"session_id": session_id}
+    # tasks §1.2: a request that names no harness MUST be told which one ran.
+    metadata: dict[str, Any] = {"session_id": session_id, "harness_id": harness_id}
     if ignored_fields:
         metadata["ignored_fields"] = list(ignored_fields)
     if extra_metadata:
@@ -406,7 +413,7 @@ class UHPServer:
         return {
             "object": DISCOVERY_OBJECT,
             "protocol": "uhp",
-            "versions": [SUPPORTED_VERSION],
+            "versions": list(SUPPORTED_VERSIONS),
             "default_version": SUPPORTED_VERSION,
             "conformance_class": self.config.conformance_class,
             "capabilities": {
@@ -419,6 +426,11 @@ class UHPServer:
                 "harness_management": False,
                 "session_sharing": False,
                 "idempotency": True,
+                # 2026-09-12 adds plugins. Reported false, not omitted: a
+                # client must be able to tell "not supported" from "older
+                # than this field". `plugin_schemas` belongs to a server that
+                # answers true, so it stays off the document.
+                "plugins": False,
             },
             "implementation": {
                 "name": self.config.implementation_name,
@@ -470,10 +482,11 @@ class UHPServer:
                     return JSONResponse(
                         status_code=401,
                         content=auth_error,
-                        headers={VERSION_HEADER: SUPPORTED_VERSION},
+                        headers={VERSION_HEADER: negotiated},
                     )
             response = await call_next(request)
-            response.headers[VERSION_HEADER] = SUPPORTED_VERSION
+            # The version actually served, which is the one the caller asked for.
+            response.headers[VERSION_HEADER] = negotiated
             return response
 
         @app.get("/v1/uhp")
@@ -591,7 +604,12 @@ class UHPServer:
                             media_type="text/event-stream",
                             headers={VERSION_HEADER: SUPPORTED_VERSION},
                         )
-                    return existing
+                    # tasks §6: a repeated key waits for the first run and
+                    # returns its result. Handing back an in-flight record
+                    # would make a retry look like a finished, empty task.
+                    if not body.get("background"):
+                        await server._await_response(existing_id)
+                    return server._responses.get(existing_id, existing)
 
             harness_error = server._validate_harness_selection(body)
             if harness_error is not None:
@@ -629,8 +647,11 @@ class UHPServer:
                     media_type="text/event-stream",
                     headers={VERSION_HEADER: SUPPORTED_VERSION},
                 )
+            if body.get("background"):
+                # Accepted and running; the caller follows it by id.
+                return record
             await server._await_response(record["id"])
-            return server._responses[record["id"]]
+            return server._responses.get(record["id"], record)
 
         @app.get("/v1/responses/{response_id}")
         async def get_response(response_id: str) -> Any:
@@ -677,12 +698,17 @@ class UHPServer:
                         param="response_id",
                     ),
                 )
-            event = server._cancel_events.get(response_id)
-            if event is not None:
-                event.set()
+            # Terminal already: cancel changes nothing and says so.
+            if record.get("status") != "in_progress":
+                return record
+            await server._stop(response_id)
+            record = server._responses.get(response_id, record)
+            # _execute owns the terminal status. It only stays in_progress if
+            # the run was never started, so name it cancelled here.
             if record.get("status") == "in_progress":
                 record["status"] = "cancelled"
                 record["error"] = None
+            if record.get("status") == "cancelled":
                 record["incomplete_details"] = {"reason": "cancelled"}
             return record
 
@@ -716,13 +742,16 @@ class UHPServer:
                         param="session_id",
                     ),
                 )
-            for response_id in session.get("response_ids", []):
-                event = server._cancel_events.get(response_id)
-                if event is not None:
-                    event.set()
+            for response_id in list(session.get("response_ids", [])):
                 record = server._responses.get(response_id)
-                if record is not None and record.get("status") == "in_progress":
+                if record is None or record.get("status") != "in_progress":
+                    continue
+                await server._stop(response_id)
+                record = server._responses.get(response_id, record)
+                if record.get("status") == "in_progress":
                     record["status"] = "cancelled"
+                if record.get("status") == "cancelled":
+                    record["incomplete_details"] = {"reason": "cancelled"}
             return {"id": session_id, "status": "cancelled"}
 
         @app.get("/health")
@@ -746,18 +775,19 @@ class UHPServer:
             return "/" not in rest or rest.endswith("/models")
         return False
 
-    def _negotiate_version(self, requested: str | None) -> dict[str, Any] | None:
+    def _negotiate_version(self, requested: str | None) -> str | dict[str, Any]:
+        """The version to answer at, or the error envelope refusing to."""
         if not requested or not requested.strip():
-            return None
+            return SUPPORTED_VERSION
         version = requested.strip()
-        if version == SUPPORTED_VERSION:
-            return None
+        if version in SUPPORTED_VERSIONS:
+            return version
         return _error_envelope(
             error_type="invalid_request_error",
             code="unsupported_protocol_version",
             message=f"Unsupported UHP-Version '{version}'.",
             param="UHP-Version",
-            detail={"supported": [SUPPORTED_VERSION]},
+            detail={"supported": list(SUPPORTED_VERSIONS)},
         )
 
     def _check_auth(self, authorization: str | None) -> dict[str, Any] | None:
@@ -832,9 +862,21 @@ class UHPServer:
         if previous_response_id:
             prior = self._responses.get(previous_response_id)
             if prior is None:
-                # Soft-fail into a new session rather than 404 — some clients
-                # resume after retention expiry; store a fresh session.
-                session_id = None
+                # lifecycle §4: an expired session is a 404 a client can act
+                # on. Starting a fresh one quietly loses the conversation it
+                # asked to continue, and says nothing.
+                return (
+                    404,
+                    _error_envelope(
+                        error_type="invalid_request_error",
+                        code="session_expired",
+                        message=(
+                            f"No response '{previous_response_id}' is retained, so the session "
+                            "it belongs to cannot be continued."
+                        ),
+                        param="previous_response_id",
+                    ),
+                )
             else:
                 meta = prior.get("metadata") if isinstance(prior.get("metadata"), Mapping) else {}
                 session_id = str(meta.get("session_id") or "") or None
@@ -856,7 +898,8 @@ class UHPServer:
                     )
 
         if not session_id:
-            session_id = f"sess_{uuid.uuid4().hex[:16]}"
+            # architecture §3 fixes the session prefix as `hsess`.
+            session_id = f"hsess{uuid.uuid4().hex[:16]}"
 
         response_id = f"resp_{uuid.uuid4().hex}"
         created_at = int(time.time())
@@ -866,10 +909,22 @@ class UHPServer:
         if body.get("include") is not None:
             ignored.append("include")
 
+        served = self.config.default_model or self.config.model or "server-default"
         requested_model = body.get("model")
-        model = str(
-            requested_model or self.config.default_model or self.config.model or "server-default"
-        )
+        if requested_model and str(requested_model) != served:
+            # tasks §1.3: refuse, or substitute and say so. Never report a
+            # model that did not run. This bind serves exactly what it lists.
+            return (
+                422,
+                _error_envelope(
+                    error_type="invalid_request_error",
+                    code="model_unavailable",
+                    message=f"This harness cannot serve model '{requested_model}'.",
+                    param="model",
+                    detail={"available": [served], "requested": str(requested_model)},
+                ),
+            )
+        model = str(requested_model or served)
 
         record = _response_payload(
             response_id=response_id,
@@ -879,6 +934,7 @@ class UHPServer:
             created_at=created_at,
             previous_response_id=previous_response_id,
             session_id=session_id,
+            harness_id=self.config.harness_id,
             store=bool(body.get("store", True)),
             ignored_fields=ignored,
         )
@@ -931,9 +987,36 @@ class UHPServer:
         return []
 
     async def _await_response(self, response_id: str) -> None:
+        """Wait for one run to settle, cancellation included."""
         task = self._tasks.get(response_id)
-        if task is not None:
+        if task is None:
+            return
+        try:
             await task
+        except asyncio.CancelledError:
+            # The run was cancelled, not this caller: the record is terminal
+            # and the caller still wants it. Anything else is our own
+            # cancellation and has to keep travelling.
+            if not task.cancelled():
+                raise
+
+    async def _stop(self, response_id: str) -> None:
+        """Stop one running task and wait for it to actually be over."""
+        event = self._cancel_events.get(response_id)
+        if event is not None:
+            event.set()
+        task = self._tasks.get(response_id)
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            if not task.cancelled():
+                raise
+        except Exception:
+            # The run raised on its way out. The record already says so.
+            pass
 
     async def _execute(self, response_id: str, request: UHPRunRequest) -> None:
         record = self._responses[response_id]
@@ -941,7 +1024,22 @@ class UHPServer:
             if request.cancel_event and request.cancel_event.is_set():
                 record["status"] = "cancelled"
                 return
-            result = await self._runner(request)
+            if request.timeout_seconds:
+                # tasks §1.1: stop at the budget and report incomplete. Work
+                # truncated by a budget is never `completed`.
+                try:
+                    result = await asyncio.wait_for(
+                        self._runner(request), timeout=float(request.timeout_seconds)
+                    )
+                except TimeoutError:
+                    if request.cancel_event is not None:
+                        request.cancel_event.set()
+                    record["status"] = "incomplete"
+                    record["incomplete_details"] = {"reason": "timeout"}
+                    record["error"] = None
+                    return
+            else:
+                result = await self._runner(request)
             if request.cancel_event and request.cancel_event.is_set():
                 record["status"] = "cancelled"
                 record["error"] = None
@@ -1119,6 +1217,11 @@ class UHPServer:
         run_metadata = {
             key: value for key, value in dict(request.metadata).items() if key != "provider_api_key"
         }
+        # The request's budgets, in the keys the harness runtime reads.
+        if request.max_step:
+            run_metadata["agent_max_iterations"] = int(request.max_step)
+        if request.max_output_tokens:
+            run_metadata["agent_max_tokens"] = int(request.max_output_tokens)
         token = str(request.metadata.get("provider_api_key") or "")
         try:
             async with _caller_provider_key(token, _provider_key_envs(provider)):

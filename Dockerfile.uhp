@@ -33,9 +33,8 @@ ENV PORT=8080
 EXPOSE 8080
 
 # --api-key is deliberately absent: the option reads SUPERQODE_UHP_API_KEY
-# from the environment, and passing it here would publish the shared bearer
-# in /proc/1/cmdline, which the harness's own shell tool can read. The bind
-# still refuses to start without it.
+# from the environment, and an argument would put the shared bearer in the
+# container's process arguments. The bind still refuses to start without it.
 CMD exec superqode serve uhp \
     --spec /app/harness.yaml \
     --host 0.0.0.0 \

@@ -22,8 +22,11 @@ HarnessRouter wraps Codex, Claude Code, and similar tools as a catalog;
 `serve uhp` makes SuperQode's own harness speak UHP so any UHP client can drive
 it. They are partners, not substitutes.
 
-SuperQode targets UHP version `2026-08-11` and sends that version on every
-client request. The native server answers that same version.
+SuperQode targets UHP version `2026-09-12` and sends it on every client
+request. The native server serves `2026-09-12` and `2026-08-11` from one code
+path, because the newer version is additive: it answers either, and echoes back
+the one the caller asked for. A client that meets a server offering only the
+older version drops to it automatically.
 
 ---
 
@@ -59,7 +62,7 @@ advertises, and selects one when the server offers only one.
 
 ```text
 Connected:  https://your-server
-Protocol:   UHP 2026-08-11 (full)
+Protocol:   UHP 2026-09-12 (full)
 Auth:       bearer key
 
 Harnesses (2):
@@ -418,8 +421,9 @@ only when the payload nests a full error object.
 
 ## Limits
 
-- The client targets one protocol version. `connect uhp` warns when a server
-  does not list `2026-08-11` among its versions.
+- The client reads `2026-09-12` and `2026-08-11`. It asks for the newer one
+  and retries at the older when a server answers `unsupported_protocol_version`.
+  `connect uhp` warns only when there is no version in common.
 - File artifacts are reported as citations with a download URL. Use
   `UHPClient.save_file` / `download_citations`, or pass `--download-dir` on
   `harness run uhp`, to copy them into a local directory.
@@ -463,8 +467,8 @@ SUPERQODE_UHP_API_KEY=... superqode serve uhp --spec harness.yaml
 ```
 
 Pass the bearer through the environment, not `--api-key`, on a shared or
-long-lived host. A token on the command line is readable from the process
-table by anything running beside it, including the harness's own shell tool.
+long-lived host. A token given as a command-line argument is visible in the
+process list.
 
 | Option | Description |
 | --- | --- |
@@ -478,7 +482,7 @@ table by anything running beside it, including the harness's own shell tool.
 
 ### What it serves
 
-Core surface under `/v1/…` (protocol `2026-08-11`):
+Core surface under `/v1/…` (protocols `2026-09-12` and `2026-08-11`):
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -501,10 +505,21 @@ threading, and reserved `tools` / `include` accepted with
 
 ### Conformance honesty
 
-The server advertises `conformance_class: core` because that is the surface it
-implements. It has **not** been certified by the UHP conformance suite; passing
-endpoints locally is not a conformance claim. Extended (files, session listing)
-and Full (harness management, sharing) are deferred.
+`serve uhp` passes the UHP conformance suite at class **core**: 40 of 40
+checks, no failures and no skips, measured on SuperQode 2.2.5 against suite
+`2026.9.12`. The report is at
+`docs/assets/uhp-conformance-2.2.5-core.json`.
+
+That makes the claim in the discovery document one the suite backs, which is
+the only kind the specification recognises. Extended (files, session listing)
+and Full (harness management, sharing, plugins) are deferred and reported
+`false` in `capabilities`.
+
+Two things the result does not cover. It measures a local bind carrying a
+server-side key, because the suite is a stock UHP client and does not send
+`X-Provider-Api-Key`; a BYOK bind such as the public host refuses every task it
+sends. And a skip is never a pass, which is why a run with zero skips is the
+only one worth publishing.
 
 To measure it, `scripts/run_uhp_conformance.sh` stands up a local bind and runs
 the HarnessRouter suite against it, in a scratch directory outside the

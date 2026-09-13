@@ -15,6 +15,7 @@ from superqode.harness import (
 )
 from superqode.harness.uhp_client import (
     PROVIDER_KEY_HEADER,
+    UHP_PROTOCOL_VERSION,
     UHPAuthenticationError,
     UHPError,
     UHPHarnessError,
@@ -604,7 +605,7 @@ async def test_version_header_is_sent_on_every_request():
     async with _client(handler) as client:
         await client.list_harnesses()
 
-    assert seen["/v1/harnesses"] == "2026-08-11"
+    assert seen["/v1/harnesses"] == UHP_PROTOCOL_VERSION
 
 
 @pytest.mark.asyncio
@@ -1164,7 +1165,7 @@ async def test_upload_file_posts_multipart(tmp_path):
     assert uploaded.id == "file_abc"
     assert uploaded.filename == "notes.md"
     assert seen["path"] == "/v1/files"
-    assert seen["uhp_version"] == "2026-08-11"
+    assert seen["uhp_version"] == UHP_PROTOCOL_VERSION
 
 
 @pytest.mark.asyncio
@@ -1353,3 +1354,74 @@ async def test_plaintext_loopback_still_carries_the_key(monkeypatch):
         await client.create_response("run this")
 
     assert seen[-1][1][PROVIDER_KEY_HEADER.lower()] == "caller-gemini-key"
+
+
+@pytest.mark.asyncio
+async def test_client_downgrades_to_a_version_the_server_serves():
+    """An older server refuses the newest version and names what it has."""
+    seen = []
+
+    def handler(request):
+        version = request.headers.get("uhp-version")
+        seen.append(version)
+        if version != "2026-08-11":
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "type": "invalid_request_error",
+                        "code": "unsupported_protocol_version",
+                        "message": "Unsupported UHP-Version.",
+                        "param": "UHP-Version",
+                        "detail": {"supported": ["2026-08-11"]},
+                    }
+                },
+            )
+        return httpx.Response(200, json={"harnesses": [{"id": "chrn_a"}]})
+
+    async with _client(handler) as client:
+        harnesses = await client.list_harnesses()
+        assert harnesses[0].id == "chrn_a"
+        assert seen == ["2026-09-12", "2026-08-11"]
+        # The negotiated version sticks for later calls.
+        await client.list_harnesses()
+        assert seen[-1] == "2026-08-11"
+
+
+@pytest.mark.asyncio
+async def test_unsupported_version_with_nothing_in_common_still_raises():
+    def handler(request):
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "unsupported_protocol_version",
+                    "message": "Unsupported UHP-Version.",
+                    "detail": {"supported": ["2019-01-01"]},
+                }
+            },
+        )
+
+    async with _client(handler) as client:
+        with pytest.raises(UHPError) as excinfo:
+            await client.list_harnesses()
+    assert excinfo.value.code == "unsupported_protocol_version"
+
+
+def test_best_common_version_prefers_the_newest():
+    from superqode.harness.uhp_client import UHPDiscovery
+
+    both = UHPDiscovery.from_payload(
+        {"versions": ["2026-08-11", "2026-09-12"], "default_version": "2026-09-12"}
+    )
+    assert both.best_common_version == "2026-09-12"
+    assert both.speaks_target_version is True
+
+    old = UHPDiscovery.from_payload({"versions": ["2026-08-11"], "default_version": "2026-08-11"})
+    assert old.best_common_version == "2026-08-11"
+    assert old.speaks_target_version is True
+
+    alien = UHPDiscovery.from_payload({"versions": ["2019-01-01"]})
+    assert alien.best_common_version == ""
+    assert alien.speaks_target_version is False

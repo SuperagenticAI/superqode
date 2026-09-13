@@ -335,6 +335,7 @@ def _create_runtime_for_request(
         plan_mode=profile.name == "plan",
         tools_enabled=request.spec.flavor != HarnessFlavor.NO_TOOL,
         max_iterations=_max_iterations_for_request(request, model_policy),
+        max_tokens=_optional_positive_int(request.metadata.get("agent_max_tokens")),
         temperature=model_policy.temperature,
         reasoning_effort=model_policy.reasoning,
         enable_session_storage=True,
@@ -510,3 +511,12 @@ def _max_iterations_for_request(
     if request.metadata.get("agent_max_iterations") is not None:
         return int(request.metadata["agent_max_iterations"])
     return model_policy.max_iterations
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    """A per-run token ceiling, or None when there is no usable one."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None

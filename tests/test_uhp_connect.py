@@ -265,7 +265,7 @@ def test_server_on_another_version_is_flagged(monkeypatch, capsys):
     _stub_client(monkeypatch, handler)
     connect_uhp_server("https://uhp.test", harness_id="chrn_codex", save=False)
 
-    assert "does not list 2026-08-11" in capsys.readouterr().out
+    assert "lists no version SuperQode speaks" in capsys.readouterr().out
 
 
 def test_configured_connection_registers_a_runnable_uhp_adapter(monkeypatch):

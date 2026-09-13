@@ -18,6 +18,7 @@ from superqode.harness.uhp_client import (
     VERSION_HEADER,
 )
 from superqode.harness.uhp_server import (
+    SUPPORTED_VERSIONS,
     UHPRunRequest,
     UHPRunResult,
     UHPServer,
@@ -128,7 +129,7 @@ async def test_create_get_cancel_and_idempotency():
         assert payload["status"] == "completed"
         assert payload["output"][0]["content"][0]["text"] == "echo:hello"
         assert set(payload["metadata"]["ignored_fields"]) == {"tools", "include"}
-        assert payload["metadata"]["session_id"].startswith("sess_")
+        assert payload["metadata"]["session_id"].startswith("hsess")
         response_id = payload["id"]
         assert response_id.startswith("resp_")
 
@@ -224,7 +225,8 @@ async def test_auth_and_version_negotiation():
         assert unsupported.status_code == 400
         err = unsupported.json()["error"]
         assert err["code"] == "unsupported_protocol_version"
-        assert err["detail"]["supported"] == [UHP_PROTOCOL_VERSION]
+        assert err["detail"]["supported"] == list(SUPPORTED_VERSIONS)
+        assert UHP_PROTOCOL_VERSION in err["detail"]["supported"]
 
 
 @pytest.mark.anyio
@@ -617,3 +619,301 @@ def test_missing_server_extra_names_the_uhp_extra(monkeypatch):
         _server()
 
     assert "uv pip install 'superqode[uhp]'" in str(excinfo.value)
+
+
+# ── protocol version 2026-09-12 ────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_serves_both_versions_and_echoes_the_one_asked_for():
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = (await client.get("/v1/uhp")).json()
+        assert body["versions"] == ["2026-09-12", "2026-08-11"]
+        assert body["default_version"] == "2026-09-12"
+        # Additive chapter this server does not implement: false, not absent.
+        assert body["capabilities"]["plugins"] is False
+        assert "plugin_schemas" not in body
+
+        for version in ("2026-09-12", "2026-08-11"):
+            response = await client.get("/v1/harnesses", headers={VERSION_HEADER: version})
+            assert response.status_code == 200
+            assert response.headers[VERSION_HEADER] == version
+
+        # No header means the server's default, stated in the response.
+        bare = await client.get("/v1/harnesses")
+        assert bare.headers[VERSION_HEADER] == "2026-09-12"
+
+
+# ── spec MUSTs the Core suite does not reach ───────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_response_names_the_harness_that_ran(_unused=None):
+    """tasks §1.2: a request naming no harness is told which one served it."""
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = (
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "h1"},
+                json={"input": "hi"},
+            )
+        ).json()
+    assert body["metadata"]["harness_id"] == "chrn_superqode"
+
+
+@pytest.mark.anyio
+async def test_expired_session_is_404_not_a_quiet_new_one():
+    """lifecycle §4: continuing a response that is gone must say so."""
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "gone"},
+            json={"input": "hi", "previous_response_id": "resp_" + "0" * 32},
+        )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "session_expired"
+
+
+@pytest.mark.anyio
+async def test_unservable_model_is_refused_not_echoed():
+    """tasks §1.3: never report a model that did not run."""
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "m1"},
+            json={"input": "hi", "model": "no-such-model"},
+        )
+        assert response.status_code == 422
+        error = response.json()["error"]
+        assert error["code"] == "model_unavailable"
+        assert error["detail"]["available"] == ["test-model"]
+
+        served = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "m2"},
+            json={"input": "hi", "model": "test-model"},
+        )
+        assert served.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_session_ids_use_the_specified_prefix():
+    """architecture §3 fixes the prefix as `hsess`."""
+    server = _server()
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = (
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "p1"},
+                json={"input": "hi"},
+            )
+        ).json()
+    assert body["metadata"]["session_id"].startswith("hsess")
+
+
+@pytest.mark.anyio
+async def test_idempotent_retry_waits_for_the_first_run():
+    """tasks §6: a repeated key returns the first result, never a partial."""
+    release = asyncio.Event()
+
+    async def slow(request: UHPRunRequest) -> UHPRunResult:
+        await release.wait()
+        return UHPRunResult(text="done", model=request.model, status="completed")
+
+    server = _server(runner=slow)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = {VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "same"}
+        first = asyncio.create_task(
+            client.post("/v1/responses", headers=headers, json={"input": "hi"})
+        )
+        await asyncio.sleep(0)
+        second = asyncio.create_task(
+            client.post("/v1/responses", headers=headers, json={"input": "hi"})
+        )
+        await asyncio.sleep(0)
+        release.set()
+        one, two = await asyncio.gather(first, second)
+
+    assert one.json()["id"] == two.json()["id"], "the retry started a second run"
+    for response in (one, two):
+        assert response.json()["status"] == "completed"
+        assert response.json()["output"], "a retry returned an empty in-flight record"
+
+
+@pytest.mark.anyio
+async def test_timeout_budget_reports_incomplete_not_completed():
+    """tasks §1.1: work stopped at a budget is incomplete, never completed."""
+
+    async def never(request: UHPRunRequest) -> UHPRunResult:
+        await asyncio.sleep(30)
+        return UHPRunResult(text="too late", model=request.model, status="completed")
+
+    server = _server(runner=never)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = (
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "t1"},
+                json={"input": "hi", "timeout_seconds": 1},
+            )
+        ).json()
+    assert body["status"] == "incomplete"
+    assert body["incomplete_details"]["reason"] == "timeout"
+
+
+@pytest.mark.anyio
+async def test_budgets_reach_the_runner():
+    seen = {}
+
+    async def capture(request: UHPRunRequest) -> UHPRunResult:
+        seen["max_step"] = request.max_step
+        seen["max_output_tokens"] = request.max_output_tokens
+        return UHPRunResult(text="ok", model=request.model, status="completed")
+
+    server = _server(runner=capture)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "b1"},
+            json={"input": "hi", "max_step": 3, "max_output_tokens": 256},
+        )
+    assert seen == {"max_step": 3, "max_output_tokens": 256}
+
+
+@pytest.mark.anyio
+async def test_background_returns_before_the_task_finishes():
+    release = asyncio.Event()
+
+    async def slow(request: UHPRunRequest) -> UHPRunResult:
+        await release.wait()
+        return UHPRunResult(text="done", model=request.model, status="completed")
+
+    server = _server(runner=slow)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = (
+            await client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "bg"},
+                json={"input": "hi", "background": True},
+            )
+        ).json()
+        assert body["status"] == "in_progress"
+        release.set()
+        await server._await_response(body["id"])
+        assert server._responses[body["id"]]["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_cancel_actually_stops_the_run():
+    """A cancel that returns 200 and leaves the agent running passes every
+    other kind of check, so this one watches the runner itself."""
+    started = asyncio.Event()
+    finished = False
+    interrupted = False
+
+    async def long_run(request: UHPRunRequest) -> UHPRunResult:
+        nonlocal finished, interrupted
+        started.set()
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            interrupted = True
+            raise
+        finished = True
+        return UHPRunResult(text="never", model=request.model, status="completed")
+
+    server = _server(runner=long_run)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        accepted = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "stop"},
+            json={"input": "count forever", "background": True},
+        )
+        response_id = accepted.json()["id"]
+        await started.wait()
+
+        cancelled = await client.post(f"/v1/responses/{response_id}/cancel")
+        assert cancelled.status_code == 200
+        body = cancelled.json()
+
+    assert interrupted, "the runner was never interrupted"
+    assert not finished, "the run carried on to completion after being cancelled"
+    assert body["status"] == "cancelled"
+    assert body["incomplete_details"]["reason"] == "cancelled"
+    # Terminal states do not move afterwards.
+    assert server._responses[response_id]["status"] == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_cancelling_a_session_stops_its_running_task():
+    started = asyncio.Event()
+    interrupted = False
+
+    async def long_run(request: UHPRunRequest) -> UHPRunResult:
+        nonlocal interrupted
+        started.set()
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            interrupted = True
+            raise
+        return UHPRunResult(text="never", model=request.model, status="completed")
+
+    server = _server(runner=long_run)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        accepted = await client.post(
+            "/v1/responses",
+            headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "sess-stop"},
+            json={"input": "count forever", "background": True},
+        )
+        session_id = accepted.json()["metadata"]["session_id"]
+        await started.wait()
+
+        stopped = await client.post(f"/v1/sessions/{session_id}/cancel")
+        assert stopped.status_code == 200
+
+    assert interrupted, "cancelling the session left its task running"
+
+
+@pytest.mark.anyio
+async def test_a_waiting_caller_gets_the_cancelled_record_not_an_error():
+    """The blocking POST is awaiting the task that cancel kills."""
+    started = asyncio.Event()
+
+    async def long_run(request: UHPRunRequest) -> UHPRunResult:
+        started.set()
+        await asyncio.sleep(30)
+        return UHPRunResult(text="never", model=request.model, status="completed")
+
+    server = _server(runner=long_run)
+    transport = httpx.ASGITransport(app=server.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        pending = asyncio.create_task(
+            client.post(
+                "/v1/responses",
+                headers={VERSION_HEADER: UHP_PROTOCOL_VERSION, "Idempotency-Key": "waiter"},
+                json={"input": "count forever"},
+            )
+        )
+        await started.wait()
+        response_id = next(iter(server._responses))
+        await client.post(f"/v1/responses/{response_id}/cancel")
+        blocked = await pending
+
+    assert blocked.status_code == 200
+    assert blocked.json()["status"] == "cancelled"
