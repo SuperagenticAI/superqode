@@ -7,13 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🧩 Unified Harness Protocol
+## [2.3.2] - 2026-09-13
+
+A remote UHP bind no longer serves the harness catalog without a bearer.
+
+### 🔐 UHP security
 
 - A remote bind no longer serves the harness catalog without a bearer.
   Architecture section 5 of the specification allows one unauthenticated
   route, discovery, so opening the catalog left the bind failing the suite's
-  authentication checks. `serve uhp --public-catalog` restores the old
-  behaviour for anyone who wants it, and says in its help what it costs.
+  authentication checks and disclosing the harness id, the model list and the
+  harness configuration to anyone who found the host. The new
+  `serve uhp --public-catalog` flag restores the old behaviour for anyone who
+  wants it, and says in its help what it costs. Present since `serve uhp`
+  shipped in 2.2.2.
+
+### 🧩 Unified Harness Protocol
+
+- Core conformance is now measured by HarnessRouter rather than by us. Their
+  `conformance-measure` workflow ran suite `2026.9.12` against
+  `uhp.superqode.dev` itself at class full: core passed 40 of 40, including
+  both authentication checks. The badge and report are on the UHP conformance
+  page. Extended stays out of reach on that host, because artifact retrieval
+  is deferred and session listing is off wherever one bearer is shared.
+
+### 📦 Packaging
+
+- The `uhp` extra is recorded in `uv.lock`. It has been declared in
+  `pyproject.toml` since 2.2.4, so a locked install of the extra resolved
+  against a lock file that did not know it existed.
 - The `uhp` extra is listed in the installation reference.
 
 ## [2.3.1] - 2026-09-13

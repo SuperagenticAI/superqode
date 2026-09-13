@@ -548,27 +548,33 @@ protocol's own way of saying a session aged out.
 ### Conformance honesty
 
 `serve uhp` passes the UHP conformance suite at class **core**: 40 of 40
-checks, no failures and no skips, measured on SuperQode 2.3.0 against suite
-`2026.9.12`. The report is at
-`docs/assets/uhp-conformance-2.3.0-extended.json`, which records the Extended
-run and so carries the Core result inside it.
+checks, no failures and no skips.
+
+The result is measured by HarnessRouter, not by us. On 2026-09-13 their
+`conformance-measure` workflow ran suite `2026.9.12` against
+`https://uhp.superqode.dev` itself at class full, with a bearer we issued and
+their own Google key in `X-Provider-Api-Key`. Core passed 40 of 40, including
+both authentication checks. The run is listed under measured implementations
+on the [conformance page](https://unifiedharnessprotocol.org/conformance#measured-implementations),
+and the badge names the host rather than a local bind:
+
+[![UHP core 2026-09-12](https://unifiedharnessprotocol.org/badges/superqode.svg)](https://unifiedharnessprotocol.org/conformance#measured-implementations)
 
 That makes the claim in the discovery document one the suite backs, which is
 the only kind the specification recognises.
 
-Extended is partly there. Session listing, inspection and turns pass; file
-input passes; artifact listing and download are not implemented, so the class
-stays `core` and `files_output` is reported `false`. Full (harness management,
-sharing, plugins) is deferred.
+Extended is partly there. File input passes. Artifact listing and download are
+not implemented, so `files_output` is reported `false` and the class stays
+`core`. Session listing, inspection and turns pass on a bind of your own, and
+are off on the public host: one bearer is shared across callers there, so
+listing sessions would show every caller's work to every other. Full (harness
+management, sharing, plugins) is deferred.
 
-Two things the result does not cover. It measures a local bind carrying a
-server-side key, because the suite is a stock UHP client and does not send
-`X-Provider-Api-Key`; a BYOK bind such as the public host refuses every task it
-sends. And a skip is never a pass, which is why a run with zero skips is the
-only one worth publishing.
+A skip is never a pass, which is why a run with zero skips is the only one
+worth publishing.
 
-To measure it, `scripts/run_uhp_conformance.sh` stands up a local bind and runs
-the HarnessRouter suite against it, in a scratch directory outside the
+To measure a bind of your own, `scripts/run_uhp_conformance.sh` stands it up
+and runs the HarnessRouter suite against it, in a scratch directory outside the
 repository:
 
 ```bash
@@ -576,10 +582,12 @@ export GEMINI_API_KEY=...
 scripts/run_uhp_conformance.sh
 ```
 
-It runs about six real model turns and writes a JSON report. The suite is a
-stock UHP client and does not send `X-Provider-Api-Key`, so it measures a local
-bind carrying a server-side key. A BYOK bind such as the public host refuses
-every task it sends and cannot be scored this way.
+It runs about six real model turns and writes a JSON report;
+`docs/assets/uhp-conformance-2.3.0-extended.json` is one such run, recording
+Extended and so carrying Core inside it. The stock suite client does not send
+`X-Provider-Api-Key`, so the script measures a bind carrying a server-side key.
+Scoring a BYOK bind needs a runner that supplies the caller key, which is what
+HarnessRouter's workflow does.
 
 ### Partnership with HarnessRouter
 

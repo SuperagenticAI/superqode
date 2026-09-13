@@ -30,6 +30,7 @@
 <p align="center">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed&label=pypi" alt="PyPI"></a>
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square&color=3776ab" alt="Python"></a>
+  <a href="https://unifiedharnessprotocol.org/conformance#measured-implementations"><img src="https://unifiedharnessprotocol.org/badges/superqode.svg" alt="UHP core 2026-09-12"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License"></a>
   <a href="https://github.com/SuperagenticAI/superqode/stargazers"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=f59e0b" alt="Stars"></a>
   <a href="https://github.com/SuperagenticAI/superqode/discussions"><img src="https://img.shields.io/github/discussions/SuperagenticAI/superqode?style=flat-square" alt="Discussions"></a>
