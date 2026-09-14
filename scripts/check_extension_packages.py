@@ -2,9 +2,9 @@
 """Build and exercise real Extensible Core Python packages in a temporary venv.
 
 The outer mode builds SuperQode plus independent tool, policy, skill, broken,
-HOL Guard, and tool-upgrade wheels. It validates discovery, execution, policy,
-skills, disable-before-import, failure isolation, upgrade, and uninstall across
-fresh processes. The repository's development environment is not modified.
+and tool-upgrade wheels. It validates discovery, execution, policy, skills,
+disable-before-import, failure isolation, upgrade, and uninstall across fresh
+processes. The repository's development environment is not modified.
 """
 
 from __future__ import annotations
@@ -57,7 +57,6 @@ def run_lifecycle() -> None:
             "policy-extension",
             "skill-extension",
             "broken-extension",
-            "hol-guard-extension",
             "tool-extension-v2",
         )
         for package_dir in package_dirs:
@@ -77,7 +76,6 @@ def run_lifecycle() -> None:
         policy = _wheel(dist, "superqode-example-policy-extension", "0.1.0")
         skill = _wheel(dist, "superqode-example-skill-extension", "0.1.0")
         broken = _wheel(dist, "superqode-example-broken-extension", "0.1.0")
-        hol_guard = _wheel(dist, "superqode-hol-guard-extension", "0.1.0")
         superqode = _wheel(dist, "superqode", "0.2.68")
 
         venv = temp / "venv"
@@ -96,7 +94,6 @@ def run_lifecycle() -> None:
                 str(policy),
                 str(skill),
                 str(broken),
-                str(hol_guard),
             ]
         )
 
@@ -167,7 +164,7 @@ async def _check_installed(
     disable_plugin("broken-probe", workspace)
     runtime = load_extension_runtime(workspace)
     loaded = {extension.id: extension for extension in runtime.extensions}
-    expected_ids = {"example-policy", "example-skill", "hol-guard"}
+    expected_ids = {"example-policy", "example-skill"}
     if not expect_tool_missing:
         expected_ids.add("example-tool")
     if not expected_ids.issubset(loaded):
