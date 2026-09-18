@@ -544,6 +544,15 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
         detect=lambda: True,
     ),
     ConnectionProfile(
+        id="harness-systemone",
+        label="SystemOne",
+        description="Coding models write code; Jev checks decisions and discovers tools",
+        connector="harness-use",
+        runtime="systemone",
+        menu=CONNECT_MENU_HARNESS,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
         id="harness-presets",
         label="Tuned presets",
         description="Presets for Qwen, GLM, Kimi, MiniMax, DS4 and Gemma",

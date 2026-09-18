@@ -126,6 +126,7 @@ def test_harness_step_lists_the_built_in_harnesses_with_core_first():
         "harness-rlm",
         "harness-pipy",
         "harness-workbench",
+        "harness-systemone",
         "harness-presets",
         "harness-repo",
     ]
@@ -144,6 +145,14 @@ def test_choosing_a_harness_activates_it():
     assert dispatch("harness-rlm").harness_commands == ["switch rlm"]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
     assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
+
+
+def test_systemone_selection_switches_to_the_coding_harness():
+    selected = dispatch("harness-systemone")
+    assert selected.harness_commands == ["switch systemone"]
+    profile = get_connection_profile("harness-systemone")
+    assert profile.label == "SystemOne"
+    assert profile.available
 
 
 def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeypatch):
@@ -1231,6 +1240,7 @@ def test_new_harness_rows_are_addressable_by_name():
         "harness-rlm",
         "harness-workbench",
         "harness-pipy",
+        "harness-systemone",
         "harness-presets",
         "harness-repo",
     ):

@@ -5,6 +5,23 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-09-18
+
+### Fixed
+
+- SystemOne now appears after Workbench in the `:connect` harness picker.
+  Selecting it activates the SystemOne coding harness before model selection.
+- Agent Card publication checks confirm failed HEAD requests with GET and
+  tolerate temporary host errors while preserving failures for confirmed missing
+  images and card mismatches.
+
+### Usage
+
+- In the TUI, open `:connect`, choose "Connect a harness with your model",
+  then select "SystemOne" and connect your coding model.
+- Direct selection remains available with `:harness use systemone`.
+  Live Jev evaluations require `TYPESAFE_API_KEY` before launching the TUI.
+
 ## [2.4.2] - 2026-09-18
 
 ### Added
