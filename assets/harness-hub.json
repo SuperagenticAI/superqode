@@ -1,7 +1,7 @@
 {
   "schema_version": "1.6",
-  "generated_at": "2026-09-07T06:34:55.224591+00:00",
-  "count": 104,
+  "generated_at": "2026-09-18T18:24:49.587879+00:00",
+  "count": 105,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -292,6 +292,73 @@
       ],
       "based_on": "workbench",
       "popularity_rank": 230,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
+    },
+    {
+      "id": "systemone",
+      "name": "SystemOne",
+      "description": "SystemOne harness: coding models write code; Jev shadows tool gates and discovery.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch systemone",
+        ":harness show systemone",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run systemone \"Describe your task\"",
+        "superqode harness show systemone"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "full"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: enabled"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Parallel tool calls",
+        "Structured run events"
+      ],
+      "based_on": "systemone",
+      "popularity_rank": 500,
       "setup_steps": [],
       "openness": "open",
       "license": "Apache-2.0",
