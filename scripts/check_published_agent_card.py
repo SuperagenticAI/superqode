@@ -40,7 +40,9 @@ USER_AGENT = "superqode-agent-card-check/1.0 (+https://github.com/SuperagenticAI
 
 
 def fetch(url: str) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    request = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": USER_AGENT}
+    )
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -61,7 +63,7 @@ def icon_problem(card: dict[str, Any]) -> tuple[str, bool] | None:
     Host platforms render this in their agent gallery, so a dead URL shows as
     a broken image rather than as no image at all.
 
-    A 404 or another error status is a real defect and fails the build. Two
+    A confirmed missing image is a real defect and fails the build. Two
     conditions are not. Being unable to reach the host says nothing about the
     card, and neither does a 200 that carries an HTML body: that is what a bot
     filter or a captive portal returns to a datacenter address, and the same
@@ -74,10 +76,16 @@ def icon_problem(card: dict[str, Any]) -> tuple[str, bool] | None:
     if not url:
         return None
     headers = {"User-Agent": USER_AGENT, "Accept": "image/*,*/*;q=0.8"}
+    content_type = ""
     try:
         request = urllib.request.Request(url, headers=headers, method="HEAD")
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            content_type = response.headers.get("Content-Type", "")
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                content_type = response.headers.get("Content-Type", "")
+        except urllib.error.HTTPError:
+            # Static hosts and bot filters can reject HEAD while serving GET.
+            # Confirm with the request clients actually use before failing.
+            pass
         if content_type.startswith("image/"):
             return None
 
@@ -88,7 +96,10 @@ def icon_problem(card: dict[str, Any]) -> tuple[str, bool] | None:
             if looks_like_image(response.read(1024)):
                 return None
     except urllib.error.HTTPError as error:
-        return f"iconUrl {url} returned HTTP {error.code}", True
+        # Access filtering, rate limits and upstream outages do not prove that
+        # the publication artifact points at a nonexistent image.
+        conclusive = error.code not in {403, 408, 425, 429} and error.code < 500
+        return f"iconUrl {url} returned HTTP {error.code} on GET", conclusive
     except (urllib.error.URLError, TimeoutError) as error:
         return f"Could not reach iconUrl {url}: {error}", False
     return (
