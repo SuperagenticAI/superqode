@@ -1,0 +1,16 @@
+version: 1
+name: systemone-tool-gate
+description: Evaluate the frozen tool_gate pack over structured state.
+flavor: decision
+runtime:
+  backend: systemone
+systemone:
+  enabled: true
+  client: live
+  pack: tool_gate
+  model: jev-1.13.0
+  timeout_ms: 5000
+  airplane: skip
+
+metadata:
+  example: true

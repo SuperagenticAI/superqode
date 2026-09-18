@@ -335,6 +335,52 @@ def test_harness_spec_schema_includes_optimization_policy():
     assert "editable_surfaces" in schema["properties"]["optimization"]["properties"]
 
 
+def test_harness_spec_round_trip_preserves_systemone(tmp_path: Path):
+    spec = harness_spec_from_dict(
+        {
+            "name": "core-so",
+            "systemone": {
+                "enabled": True,
+                "client": "stub",
+                "pack": "tool_gate",
+                "timeout_ms": 500,
+            },
+        }
+    )
+    payload = harness_spec_to_dict(spec)
+    restored = harness_spec_from_dict(payload)
+
+    assert spec.systemone.enabled is True
+    assert payload["systemone"]["enabled"] is True
+    assert payload["systemone"]["client"] == "stub"
+    assert restored.systemone.pack == "tool_gate"
+    assert restored.systemone.timeout_ms == 500
+    assert restored.systemone.airplane == "skip"
+
+    path = tmp_path / "core-so.yaml"
+    path.write_text(
+        "name: core-so\n"
+        "flavor: coding\n"
+        "systemone:\n"
+        "  enabled: true\n"
+        "  client: stub\n"
+        "  pack: tool_gate\n",
+        encoding="utf-8",
+    )
+    loaded = load_harness_spec(path)
+    assert loaded.systemone.enabled is True
+    assert loaded.systemone.client == "stub"
+
+
+def test_harness_spec_schema_includes_systemone():
+    from superqode.harness import harness_spec_json_schema
+
+    schema = harness_spec_json_schema()
+    props = schema["properties"]["systemone"]["properties"]
+    assert props["client"]["enum"] == ["stub", "replay", "live"]
+    assert props["airplane"]["enum"] == ["skip"]
+
+
 def test_workflow_preset_expands_harness_agents_and_mode():
     spec = harness_spec_from_dict(
         {

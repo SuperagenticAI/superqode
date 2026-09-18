@@ -658,6 +658,9 @@ class AgentConfig:
     harness_sandbox_backend: str = "local"
     harness_delegation_depth: int = 0
 
+    # Opt-in System One tool gate. None means "read from harness_spec / env".
+    systemone: Optional[Any] = None
+
 
 @dataclass
 class AgentMessage:
@@ -747,6 +750,7 @@ class AgentResponse:
     # and any schema-validation errors (empty list means valid).
     structured_output: Optional[Any] = None
     schema_errors: Optional[List[str]] = None
+    rubric_result: Optional[Dict[str, Any]] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
@@ -798,6 +802,8 @@ class AgentLoop:
         permission_manager: Optional[PermissionManager] = None,
         hooks: Optional["HookRegistry"] = None,  # Lifecycle hooks (before/after llm/tool/turn)
         allow_peer_agents: bool = True,  # False inside sub/peer agents (no nesting)
+        systemone_client: Optional[Any] = None,
+        on_systemone: Optional[Callable[[Dict[str, Any]], None]] = None,
     ):
         self.gateway = gateway
         self.tools = tools
@@ -891,6 +897,8 @@ class AgentLoop:
         from .hooks import HookRegistry
 
         self.hooks: HookRegistry = hooks if hooks is not None else HookRegistry()
+        self._systemone_client = systemone_client
+        self.on_systemone = on_systemone
         self._current_iteration: int = 0
         # session_start fires once per AgentLoop instance, on the first run().
         self._session_started: bool = False
@@ -999,6 +1007,7 @@ class AgentLoop:
             on_tool_call=self.on_tool_call,
             on_tool_result=self.on_tool_result,
             on_thinking=self.on_thinking,
+            on_systemone=getattr(self, "on_systemone", None),
             parallel_tools=self.parallel_tools,
             mcp_executor=self.mcp_executor,
             mcp_tools=self._mcp_tools,
@@ -1315,6 +1324,7 @@ class AgentLoop:
             on_tool_call=self.on_tool_call,
             on_tool_result=self.on_tool_result,
             on_thinking=self.on_thinking,
+            on_systemone=getattr(self, "on_systemone", None),
             parallel_tools=self.parallel_tools,
             mcp_executor=self.mcp_executor,
             mcp_tools=self._mcp_tools,
@@ -1357,8 +1367,12 @@ class AgentLoop:
            otherwise-ASK command.
         3. The manager's own **deny** (e.g. dangerous-command guards) still wins
            over a permissive hook or rule - hard safety rules are not overridable.
-        4. Manager **allow** passes through; otherwise (ASK) we honour a hook or
-           rule allow, or fall back to the pause/prompt flow.
+        4. Opt-in System One may **deny** an otherwise-allowed call, or
+           **allow** an otherwise-ASK call. Model ASK requires approval.
+           Unavailable evaluations visibly fall back to the existing policy.
+           YAML and manager denials never call the client.
+        5. Manager **allow** passes through; otherwise (ASK) we honour a hook,
+           rule, or System One allow, or fall back to the pause/prompt flow.
         """
         from .hooks import PERMISSION_REQUEST
 
@@ -1405,11 +1419,18 @@ class AgentLoop:
                 error=f"Permission denied for tool: {name}",
                 metadata={"permission": "deny", "tool": name},
             )
-        if permission == Permission.ALLOW and not rule_ask:
+
+        from ..systemone.runtime import apply_systemone_gate
+
+        so_denied, so_allow, so_ask = await apply_systemone_gate(self, name, arguments)
+        if so_denied is not None:
+            return so_denied
+
+        if permission == Permission.ALLOW and not rule_ask and not so_ask:
             return None
         if tool_call_id and tool_call_id in self._approved_tool_call_ids:
             return None
-        if (verdict.allowed or rule_allow) and not rule_ask:
+        if (verdict.allowed or rule_allow or so_allow) and not rule_ask and not so_ask:
             return None
 
         if self.pause_on_approval:
@@ -2275,6 +2296,7 @@ class AgentLoop:
         auto_continues = 0
         length_parts: List[str] = []
         rubric_rounds = 0
+        rubric_result = None
 
         # Emit initial processing log
         if self.on_thinking:
@@ -2626,6 +2648,7 @@ class AgentLoop:
                 if self.config.rubric and rubric_rounds < max(0, self.config.max_rubric_rounds):
                     from .rubric import grade_against_rubric
 
+                    rubric_evidence = {}
                     verdict, feedback = await grade_against_rubric(
                         messages,
                         response_content,
@@ -2633,7 +2656,10 @@ class AgentLoop:
                         self.gateway,
                         self.config.provider,
                         self.config.model,
+                        spec=self.config.harness_spec,
+                        on_result=lambda result: rubric_evidence.update(result),
                     )
+                    rubric_result = {**rubric_evidence, "verdict": verdict, "feedback": feedback}
                     if verdict == "needs_revision" and feedback:
                         rubric_rounds += 1
                         if self.on_thinking:
@@ -2652,9 +2678,11 @@ class AgentLoop:
                             )
                         )
                         continue
-                    if verdict == "failed" and self.on_thinking:
-                        await self.on_thinking(f"Rubric review: failed - {feedback[:120]}")
+                    if verdict in {"failed", "ungraded"} and self.on_thinking:
+                        await self.on_thinking(f"Rubric review: {verdict} - {feedback[:120]}")
 
+                if self.config.rubric and rubric_rounds >= max(0, self.config.max_rubric_rounds):
+                    rubric_result = {"verdict": "ungraded", "reason": "Rubric round limit reached"}
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
                 from .hooks import AFTER_TURN_COMPLETE
@@ -2675,6 +2703,7 @@ class AgentLoop:
                     tool_calls_made=tool_calls_made,
                     iterations=iterations,
                     stopped_reason="complete",
+                    rubric_result=rubric_result,
                 )
                 return await _finish(final)
 
@@ -3123,6 +3152,8 @@ class AgentLoop:
                 # No tool calls - we have the final response
                 # If we had tool calls in previous iterations but no content now,
                 # the model should still provide a summary
+                if self.config.rubric and rubric_rounds >= max(0, self.config.max_rubric_rounds):
+                    rubric_result = {"verdict": "ungraded", "reason": "Rubric round limit reached"}
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
                 if self._session_manager and full_content.strip():

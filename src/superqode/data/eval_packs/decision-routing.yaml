@@ -1,0 +1,41 @@
+metadata:
+  id: decision-routing
+  name: Labelled route decisions
+  description: Small synthetic starter set, not a calibrated accuracy benchmark.
+tasks:
+  - id: review-patch
+    split: held-in
+    prompt: Review this patch for correctness and security before merge.
+    evaluator:
+      type: decision
+      expected: {route: review}
+  - id: private-repository
+    split: held-in
+    prompt: All processing must stay on this machine. No data may leave the laptop.
+    evaluator:
+      type: decision
+      expected: {route: private}
+  - id: local-provider
+    split: held-in
+    prompt: Use Ollama locally for this task; cloud fallback is acceptable.
+    evaluator:
+      type: decision
+      expected: {route: local}
+  - id: audit-change
+    split: held-out
+    prompt: Act as a reviewer and critique the correctness of this implementation.
+    evaluator:
+      type: decision
+      expected: {route: review}
+  - id: confidential-work
+    split: held-out
+    prompt: This repository is confidential. Use only local OSS models and block cloud handoff.
+    evaluator:
+      type: decision
+      expected: {route: private}
+  - id: architecture
+    split: held-out
+    prompt: Use the strongest configured model to design the permission architecture, regardless of cost.
+    evaluator:
+      type: decision
+      expected: {route: best}

@@ -8,6 +8,16 @@ from superqode.providers.harness_catalog import CONNECT_MENU_DEFAULT
 
 
 @pytest.fixture(autouse=True)
+def _isolate_systemone_env(monkeypatch):
+    """Keep a live TUI session from turning the gate on in unit tests.
+
+    ``SUPERQODE_SYSTEMONE=live`` in the developer's shell is how you try the
+    opt-in gate. Tests that want that env set it themselves.
+    """
+    monkeypatch.delenv("SUPERQODE_SYSTEMONE", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _default_connect_menu(monkeypatch):
     """Keep connect IA on the compiled default unless a test opts out.
 

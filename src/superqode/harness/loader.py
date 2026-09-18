@@ -22,6 +22,7 @@ from .spec import (
     ObservabilitySpec,
     OptimizationSpec,
     RecursionSpec,
+    SystemOneSpec,
     RemoteHarnessSpec,
     RuntimeSpec,
     ChecksSpec,
@@ -65,6 +66,15 @@ def resolve_harness_inheritance(
     remain distinguishable from explicit default-looking values.
     """
     raw = dict(data.get("harness") if isinstance(data.get("harness"), dict) else data)
+    if isinstance(raw.get("systemone"), dict):
+        decision_config = dict(raw["systemone"])
+        for field in ("pack", "replay_path", "record_dir"):
+            value = decision_config.get(field)
+            if value and (field != "pack" or Path(str(value)).suffix in {".yaml", ".yml", ".json"}):
+                path = Path(str(value)).expanduser()
+                if not path.is_absolute():
+                    decision_config[field] = str((Path(base_dir or ".") / path).resolve())
+        raw["systemone"] = decision_config
     inherited = raw.get("inherits", raw.get("extends"))
     if not inherited:
         return raw
@@ -163,6 +173,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         observability=_observability(raw.get("observability")),
         hooks=_hooks(raw.get("hooks")),
         optimization=_optimization(raw.get("optimization")),
+        systemone=_systemone(raw.get("systemone")),
         metadata=dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {},
     )
     return apply_workflow_preset(spec)
@@ -376,6 +387,37 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                 }
             }
             if _include_optimization(spec.optimization)
+            else {}
+        ),
+        **(
+            {
+                "systemone": {
+                    "enabled": spec.systemone.enabled,
+                    "client": spec.systemone.client,
+                    "pack": spec.systemone.pack,
+                    **(
+                        {"replay_path": spec.systemone.replay_path}
+                        if spec.systemone.replay_path
+                        else {}
+                    ),
+                    **(
+                        {"replay_trace": spec.systemone.replay_trace}
+                        if spec.systemone.replay_trace
+                        else {}
+                    ),
+                    "model": spec.systemone.model,
+                    "endpoint": spec.systemone.endpoint,
+                    "api_key_env": spec.systemone.api_key_env,
+                    **(
+                        {"record_dir": spec.systemone.record_dir}
+                        if spec.systemone.record_dir
+                        else {}
+                    ),
+                    "timeout_ms": spec.systemone.timeout_ms,
+                    "airplane": spec.systemone.airplane,
+                }
+            }
+            if _include_systemone(spec.systemone)
             else {}
         ),
         "metadata": spec.metadata,
@@ -619,6 +661,23 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "heldout_fraction": {"type": "number", "minimum": 0, "maximum": 1},
                     "max_candidate_edits": {"type": "integer", "minimum": 1},
                     "config": {"type": "object"},
+                },
+            },
+            "systemone": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "client": {"type": "string", "enum": ["stub", "replay", "live"]},
+                    "endpoint": {"type": "string"},
+                    "api_key_env": {"type": "string"},
+                    "pack": {"type": "string"},
+                    "model": {"type": "string"},
+                    "replay_path": {"type": "string"},
+                    "replay_trace": {"type": "string"},
+                    "record_dir": {"type": "string"},
+                    "timeout_ms": {"type": "integer", "minimum": 1},
+                    "airplane": {"type": "string", "enum": ["skip"]},
                 },
             },
             "metadata": {"type": "object"},
@@ -938,6 +997,37 @@ def _optimization(value: Any) -> OptimizationSpec:
         max_candidate_edits=int(max_candidate_edits) if max_candidate_edits is not None else None,
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
     )
+
+
+def _systemone(value: Any) -> SystemOneSpec:
+    data = value if isinstance(value, dict) else {}
+    client = str(data.get("client") or "stub").strip().lower() or "stub"
+    if client not in {"stub", "replay", "live"}:
+        raise ValueError("systemone.client must be stub, replay, or live")
+    airplane = str(data.get("airplane") or "skip").strip().lower() or "skip"
+    if airplane != "skip":
+        raise ValueError("systemone.airplane must be 'skip'")
+    timeout_ms = int(data.get("timeout_ms") or 5000)
+    if timeout_ms < 1:
+        raise ValueError("systemone.timeout_ms must be >= 1")
+    return SystemOneSpec(
+        enabled=bool(data.get("enabled", False)),
+        client=client,
+        pack=str(data.get("pack") or "tool_gate").strip() or "tool_gate",
+        model=str(data.get("model") or "jev-1.13.0").strip() or "jev-1.13.0",
+        endpoint=str(data.get("endpoint") or "https://api.typesafe.ai/v1/systemone"),
+        api_key_env=str(data.get("api_key_env", "TYPESAFE_API_KEY")),
+        replay_path=str(data.get("replay_path") or ""),
+        replay_trace=str(data.get("replay_trace") or ""),
+        record_dir=str(data.get("record_dir") or ""),
+        timeout_ms=timeout_ms,
+        airplane=airplane,
+    )
+
+
+def _include_systemone(spec: SystemOneSpec) -> bool:
+    default = SystemOneSpec()
+    return spec != default
 
 
 def _include_optimization(spec: OptimizationSpec) -> bool:

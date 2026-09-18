@@ -103,9 +103,9 @@ def test_parse_grader_response_variants():
         "satisfied",
         "",
     )
-    # Fails open: garbage means satisfied (never trap a run).
-    assert parse_grader_response("not json")[0] == "satisfied"
-    assert parse_grader_response('{"verdict": "weird"}')[0] == "satisfied"
+    # Invalid grading ends the run without claiming satisfaction.
+    assert parse_grader_response("not json")[0] == "ungraded"
+    assert parse_grader_response('{"verdict": "weird"}')[0] == "ungraded"
 
 
 class RubricScriptedGateway(GatewayInterface):

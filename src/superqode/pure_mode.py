@@ -95,6 +95,7 @@ class PureMode:
         self._load_env_harness()
 
         # Callbacks for UI updates
+        self.on_systemone: Optional[Callable[[dict[str, Any]], None]] = None
         self.on_tool_call: Optional[Callable[[str, Dict], None]] = None
         self.on_tool_result: Optional[Callable[[str, ToolResult], None]] = None
         self.on_thinking: Optional[Callable[[str], Awaitable[None]]] = None
@@ -170,6 +171,34 @@ class PureMode:
         self._harness_session = None
         self._harness_session_id = ""
         self._sync_harness_session_fields()
+
+    def connect_decision(self, pack: str = "factory_route", *, spec=None) -> None:
+        """Connect a decision harness without selecting a generation provider."""
+        from superqode.harness.loader import harness_spec_from_dict
+        from superqode.systemone.config import resolve_systemone
+        from superqode.systemone.pack import load_pack
+
+        if spec is None:
+            loaded = load_pack(pack)
+            spec = harness_spec_from_dict(
+                {
+                    "name": f"decision-{loaded.id}",
+                    "flavor": "decision",
+                    "runtime": {"backend": "systemone"},
+                    "systemone": {"enabled": True, "client": "live", "pack": pack},
+                }
+            )
+        if not spec.is_decision or spec.runtime.backend != "systemone":
+            raise ValueError("Select a decision harness using the systemone backend")
+        load_pack(spec.systemone.pack)
+        settings = resolve_systemone(spec=spec)
+        if not settings.enabled or settings.skip_client:
+            reason = settings.skip_reason or "disabled"
+            raise ValueError(
+                f"Decision client is {reason}; check {settings.api_key_env} and System One settings"
+            )
+        self.set_harness(spec)
+        self.connect("systemone", settings.model)
 
     def clear_harness(self) -> None:
         """Return to the built-in core harness."""
@@ -412,6 +441,7 @@ class PureMode:
             harness_source=getattr(self._harness_definition, "source", "built-in"),
             harness_digest=getattr(self._harness_definition, "digest", ""),
             tool_contract_version=("core-tools-v1" if selected_id == "core" else "workbench-v1"),
+            harness_spec=self._harness_spec or getattr(self._harness_definition, "spec", None),
         )
 
         runtime_kwargs: dict[str, Any] = {}
@@ -424,6 +454,9 @@ class PureMode:
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
+            runtime_kwargs["on_systemone"] = (
+                lambda event: self.on_systemone(event) if self.on_systemone else None
+            )
         # Only vendor CLI runtimes take these. ``builtin`` forwards unknown
         # kwargs straight to AgentLoop, which has no ``approval_mode``; and the
         # SDK runtimes treat ``permission_manager is None`` as "route tool calls
@@ -629,7 +662,7 @@ class PureMode:
                     working_directory=self.session.working_directory,
                     runtime=self._harness_spec.runtime.backend,
                 ):
-                    if rich_events:
+                    if rich_events or event.type == "systemone.decision":
                         chunk = self._handle_runtime_harness_event(event)
                     elif event.type in {"delta", "model_delta"}:
                         chunk = str(event.data.get("text", ""))
@@ -690,6 +723,10 @@ class PureMode:
 
     def _handle_runtime_harness_event(self, event) -> str:
         """Forward runtime harness events into PureMode callbacks."""
+        if event.type == "systemone.decision":
+            if self.on_systemone:
+                self.on_systemone(event.data)
+            return ""
         if event.type == "model_delta":
             return str(event.data.get("text") or "")
         if event.type == "thinking":

@@ -55,6 +55,7 @@ from .spec import (
     RuntimeSpec,
     ChecksSpec,
     CheckStepSpec,
+    SystemOneSpec,
     WorkflowMode,
     WorkflowSpec,
 )
@@ -378,6 +379,7 @@ __all__ = [
     "ObservabilitySpec",
     "OptimizationSpec",
     "RecursionSpec",
+    "SystemOneSpec",
     "RemoteHarnessSpec",
     "RuntimeSpec",
     "WorkflowMode",

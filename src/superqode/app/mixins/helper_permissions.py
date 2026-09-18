@@ -41,6 +41,9 @@ class HelperPermissionsMixin:
             return self._request_runtime_permission(tool_name, arguments, log)
 
         pure.on_permission_request = on_permission_request
+        from superqode.systemone.runtime import format_decision
+
+        pure.on_systemone = lambda event: self._call_ui(log.add_system, format_decision(event))
 
     def _announce_pending_approvals(self, source, log) -> None:
         """Surface pending approvals from an active runtime or HarnessSpec session."""

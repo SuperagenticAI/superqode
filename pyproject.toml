@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.3.2"
+version = "2.4.0"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -49,6 +49,9 @@ dependencies = [
     # execution, the way pi validates against TypeBox. Already present through
     # mcp/fastmcp; declared because superqode.pipy imports it directly.
     "jsonschema>=4.20.0",
+    # Typed System One packs and answers. Already imported by harness/output.py;
+    # declared because superqode.systemone uses it as the I/O contract.
+    "pydantic>=2.0,<3",
     "python-frontmatter>=1.1.0",
     "superopt>=0.1.1",
     # Native asyncio host for Prime Agent's public RPC mode. Kept as a small,
@@ -270,6 +273,7 @@ superqode = [
     "data/*.yaml",
     "data/eval_fixtures/*.log",
     "data/eval_packs/*.yaml",
+    "systemone/packs/*.yaml",
     "local/data/*.yaml",
     "local/data/model-packs/*.yaml",
     "py.typed",

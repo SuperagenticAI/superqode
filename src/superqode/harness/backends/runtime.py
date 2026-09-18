@@ -59,6 +59,7 @@ class RuntimeHarnessBackend:
                         "stopped_reason": response.stopped_reason,
                         "tool_calls_made": response.tool_calls_made,
                         "iterations": response.iterations,
+                        "rubric_result": getattr(response, "rubric_result", None),
                     },
                 )
             )
@@ -475,6 +476,9 @@ def _builtin_event_callbacks(event_sink: list[HarnessEvent]) -> dict:
         "on_tool_call": on_tool_call,
         "on_tool_result": on_tool_result,
         "on_thinking": on_thinking,
+        "on_systemone": lambda event: event_sink.append(
+            HarnessEvent(type="systemone.decision", data=event)
+        ),
     }
 
 

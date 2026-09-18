@@ -121,7 +121,10 @@ EXPECTED_COMMAND_COUNT = 280
 # Rebaselined for `connect a2a --allow-origin` and `--jws-trust-root`, plus
 # inspect help naming card-review findings. Two new options on an existing
 # command, so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "4d7032c57e6291a84c620cc2b5f0e0b5e923387180160f63c6fe4602bf57362c"
+# Rebaselined for 2.4.0 Jev integration help: labelled `harness eval` flags,
+# rubric-grader env, and related help wording. No Click command was added or
+# removed, so the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "408b8fb687021bf1a47590903d0dd141c2b0bd047d521f5cf3a1b2105bb7aab7"
 
 
 def _render_help_tree() -> tuple[int, str]:

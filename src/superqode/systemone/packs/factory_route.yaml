@@ -1,0 +1,44 @@
+id: factory_route
+version: "1.0.0"
+description: >
+  Choose one existing SuperQode factory route. Standalone decisions; does not automatically switch the coding session.
+  Returns a suggested route for the caller to apply.
+questions:
+  route:
+    type: choice
+    instructions:
+      question: Which factory route should handle `task` given `constraints`?
+      inspect: ["`task`", "`constraints`", "`available_routes`"]
+      focus: Pick one listed preset. Do not invent a route.
+    criteria:
+      private:
+        what: Local OSS models only; block cloud handoff.
+        not_for: Work that needs a frontier cloud model.
+        examples: ["Stay on this machine", "No data leaves the laptop"]
+      local:
+        what: Prefer local providers where possible.
+        not_for: Strict no-cloud, or a request for the strongest model.
+        examples: ["Run on Ollama"]
+      cheap:
+        what: Low-cost or local models for routine work.
+        not_for: Hard debugging, architecture, or review.
+        examples: ["Rename a symbol", "Add a unit test"]
+      best:
+        what: Strongest configured model or runtime.
+        not_for: Trivial edits or a no-cloud constraint.
+        examples: ["Design the permission model", "Track down a race"]
+      review:
+        what: Reviewer or critic harness and high-reasoning models.
+        not_for: Implementation-only work.
+        examples: ["Review this patch before merge"]
+      long-context:
+        what: Large repository or long transcript.
+        not_for: A single-file change.
+        examples: ["Summarize this 200-file diff"]
+      no-subscription:
+        what: Local OSS or BYOK; avoid subscription-only runtimes.
+        not_for: A user who asked for Claude Code or Codex.
+        examples: ["No ChatGPT or Claude subscription"]
+
+state_schema: {"type": "object", "required": ["task"], "properties": {"task": {"type": "string", "minLength": 1}, "constraints": {}, "available_routes": {}}, "additionalProperties": true}
+input_key: task

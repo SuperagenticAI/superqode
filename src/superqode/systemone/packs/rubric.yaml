@@ -1,0 +1,27 @@
+id: rubric
+version: "1.0.0"
+description: >
+  Rubric verdict only. Standalone evaluation of work against a rubric. The caller owns revision
+  and feedback; this pack does not run the headless rubric loop.
+questions:
+  verdict:
+    type: choice
+    instructions:
+      question: Does the assistant's work satisfy the rubric in `rubric` given `work`?
+      inspect: ["`rubric`", "`work`"]
+      focus: Judge only against the rubric. Do not invent new requirements.
+    criteria:
+      satisfied:
+        what: Every rubric requirement is verifiably met.
+        not_for: Fixable gaps or an impossible requirement.
+        examples: ["All listed checks have evidence in the work"]
+      needs_revision:
+        what: Fixable gaps remain.
+        not_for: The work already meets the rubric, or it cannot be saved.
+        examples: ["Tests were not run", "A required file was not changed"]
+      failed:
+        what: The rubric cannot be satisfied from here.
+        not_for: Ordinary remaining edits.
+        examples: ["Wrong codebase", "Requirement is impossible"]
+
+state_schema: {"type": "object", "required": ["rubric", "work"], "properties": {"rubric": {"type": "string", "minLength": 1}, "work": {"type": "string"}}, "additionalProperties": false}

@@ -230,7 +230,7 @@ show status, or display its local help where supported.
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
-| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks` |
+| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks`, `:systemone` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a`, `:connect protocols` |
@@ -830,3 +830,57 @@ For slow TUI performance:
 1. **Reduce terminal size**
 2. **Disable syntax highlighting**
 3. **Use quick mode instead of deep mode**
+
+### Jev tool checks
+
+For the native Core/BYOK runtime, set `TYPESAFE_API_KEY` in the launching shell,
+then use `:systemone live`. `:systemone` shows configuration and the last check.
+Jev evaluates tool requests; your connected coding model still writes code.
+External agent runtimes do not use this native gate.
+
+Every evaluation displays its outcome in the conversation, including model,
+latency, and input-token usage on success. ALLOW permits the call unless a hard
+policy or explicit policy ASK prevents it. DENY blocks it. Model ASK enters the
+normal approval flow, even for tools otherwise allowed automatically. API errors
+and unavailable clients visibly fall back to the existing permission policy.
+
+For a standalone evaluation that executes no tools:
+
+```sh
+uv run superqode harness run examples/harnesses/systemone-tool-gate.yaml -p '{"tool":"bash","arguments":{"command":"pytest"},"grant":["bash"],"task":"run tests"}'
+```
+
+The JSON includes the actual response model, HTTP status, latency, and usage.
+A request failure fails the command. `systemone.timeout_ms` defaults to 5000 and
+bounds the entire evaluation including retries. Set `systemone.record_dir` in a
+harness spec to record sanitized requests and responses for replay.
+`SYSTEMONE_LIVE_RECORD_DIR` is only a destination override for live tests.
+
+### Direct decision sessions
+
+Use `:systemone connect factory_route` (or `:connect systemone factory_route`)
+with `TYPESAFE_API_KEY` set to connect directly to Jev. This connection needs no
+coding provider. Enter `Review this patch for correctness and security` to get
+a typed route suggestion. The suggestion does not switch or execute a route.
+`:systemone packs` lists the bundled packs.
+
+For a custom pack or a configured compatible endpoint:
+
+```text
+:systemone connect examples/systemone/ticket-triage-pack.yaml
+:systemone connect --spec examples/harnesses/systemone-ticket-triage.yaml
+```
+
+With the ticket pack, enter `Our production checkout is down. Please help
+immediately.` The result includes department (Choice), severity (Score), urgency
+(Noul), confidence, and usage. A result with `status: abstain` retains the raw
+answers but sets uncertain output values to null. The caller decides what to do
+next; the decision harness executes no tools.
+
+Open-ended chat such as “What's the capital of the UK?” uses a coding/chat model:
+`:connect` → Connect model to harness → Core → BYOK → provider/model. Enter that
+provider's API key, not the TypeSafe key. `:systemone live` separately enables
+Jev tool checks. A chat answer that uses no tools will not invoke the gate.
+
+See [general decision harnesses](../advanced/systemone.md) for pack schemas,
+confidence policy, compatible endpoints, and CLI examples.

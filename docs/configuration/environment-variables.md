@@ -37,6 +37,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_ORG_POLICY` | path | unset | Load the organization-level contextual policy applied before project and harness policy. |
 | `SUPERQODE_NET_STRICT` | `0`/`1` | off | Restrict network tools to the configured destination allowlist. |
 | `SUPERQODE_NET_ALLOW` | domains (`,`-sep) | unset | Add domains to the default network destination allowlist. |
+| `TYPESAFE_API_KEY` | secret | unset | Credential for live Jev decisions, tool checks, and rubric grading. Set it in the launching process; coding-provider credentials remain separate. |
+| `SUPERQODE_RUBRIC_GRADER` | `systemone` | unset | Opt in to Jev rubric verdicts for `--rubric`; uncertainty remains ungraded. Unset uses the utility model. |
+| `SUPERQODE_SYSTEMONE` | `0`/`stub`/`replay`/`live` | unset | Opt-in System One tool gate. Unset leaves the gate off. `stub`/`replay`/`live` enable it; `0` forces it off. `live` skips when no API key is set. |
 
 ## Providers & models
 

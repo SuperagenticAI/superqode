@@ -53,6 +53,141 @@ class SlashCommandMixin:
             return False
         return bool(self._connect_prime_rpc("", log, pure=pure, select_default=False))
 
+    def _systemone_cmd(self, args: str, log: ConversationLog) -> None:
+        """Show or enable the System One tool gate in this TUI process."""
+        from superqode.systemone.config import LIVE_API_KEY_ENV, SYSTEMONE_ENV, resolve_systemone
+
+        try:
+            words = shlex.split(args)
+        except ValueError:
+            log.add_error("Invalid quoting. Use :systemone connect <pack>.")
+            return
+        action = words[0].lower() if words else ""
+        if action == "packs":
+            from superqode.systemone.pack import builtin_pack_ids, load_pack
+
+            for pack_id in builtin_pack_ids():
+                pack = load_pack(pack_id)
+                log.add_system(f"{pack.id}: {pack.description}")
+            log.add_system(
+                "Connect: :systemone connect <pack> or :systemone connect --spec <harness.yaml>"
+            )
+            return
+        if action == "connect":
+            pure = self._ensure_pure_mode()
+            try:
+                if len(words) == 3 and words[1] == "--spec":
+                    from superqode.harness.loader import load_harness_spec
+
+                    pure.connect_decision(spec=load_harness_spec(words[2]))
+                elif len(words) <= 2:
+                    pure.connect_decision(words[1] if len(words) == 2 else "factory_route")
+                else:
+                    raise ValueError(
+                        "Use :systemone connect <pack> or :systemone connect --spec <harness.yaml>"
+                    )
+            except (ValueError, OSError) as exc:
+                log.add_error(str(exc))
+                return
+            self._activate_decision_connection(pure, log)
+            return
+        if action not in {"", "status", "live", "on", "off", "0"}:
+            log.add_error("Use :systemone [status|live|off|packs|connect <pack>]")
+            return
+        spec = None
+        pure = (
+            getattr(self, "_pure_mode", None) or getattr(self, "_ensure_pure_mode", lambda: None)()
+        )
+        if pure is not None:
+            spec = getattr(pure, "_harness_spec", None)
+        key_env = getattr(getattr(spec, "systemone", None), "api_key_env", LIVE_API_KEY_ENV)
+        key_set = bool(os.environ.get(key_env, "").strip()) if key_env else True
+        if action in {"live", "on"}:
+            if not key_set:
+                log.add_error(
+                    f"Set {key_env} in this shell, then restart the TUI, then :systemone live"
+                )
+                return
+            os.environ[SYSTEMONE_ENV] = "live"
+            log.add_system(
+                "System One live enabled for the native runtime. Tool checks will report request outcomes."
+            )
+        elif action in {"off", "0"}:
+            os.environ[SYSTEMONE_ENV] = "0"
+            log.add_system("System One gate forced off.")
+        settings = resolve_systemone(spec=spec)
+        last = getattr(getattr(pure, "_agent", None), "last_systemone_decision", None)
+        t = Text()
+        is_decision = bool(getattr(spec, "is_decision", False))
+        title = "System One decision harness" if is_decision else "System One tool gate"
+        if (
+            not is_decision
+            and pure is not None
+            and getattr(pure, "runtime_name", "builtin") != "builtin"
+        ):
+            t.append(
+                "Jev tool checks require the native Core/BYOK runtime.\n", style=THEME["warning"]
+            )
+        if last:
+            from superqode.systemone.runtime import format_decision
+
+            t.append(format_decision(last) + "\n", style=THEME["muted"])
+        t.append(f"\n  {title}\n\n", style=f"bold {THEME['purple']}")
+        connected = bool(pure and pure.session.connected)
+        t.append(f"    connected   {connected}\n", style=THEME["muted"])
+        if not connected:
+            t.append(
+                "\n  For chat: :connect → Connect model to harness → Core → BYOK.\n",
+                style=THEME["muted"],
+            )
+            t.append(
+                "  Use your coding provider's key; Jev uses TYPESAFE_API_KEY separately.\n",
+                style=THEME["muted"],
+            )
+            t.append("  Simple chat without tools does not call Jev.\n\n", style=THEME["muted"])
+        t.append(f"    enabled     {settings.enabled}\n", style=THEME["muted"])
+        t.append(f"    client      {settings.client}\n", style=THEME["muted"])
+        t.append(f"    model       {settings.model}\n", style=THEME["muted"])
+        t.append(f"    pack        {settings.pack}\n", style=THEME["muted"])
+        t.append(f"    skip        {settings.skip_reason or 'no'}\n", style=THEME["muted"])
+        t.append(f"    api key     {'set' if key_set else 'missing'}\n", style=THEME["muted"])
+        t.append(
+            "\n  :systemone live   turn the sidecar on (needs the API key)\n", style=THEME["dim"]
+        )
+        t.append("  :systemone off    force the sidecar off\n", style=THEME["dim"])
+        t.append("  :systemone connect <pack>   evaluate directly with Jev\n", style=THEME["dim"])
+        t.append("  :systemone packs           list decision packs\n", style=THEME["dim"])
+        self._show_command_output(log, t)
+
+    def _activate_decision_connection(self, pure, log: ConversationLog) -> None:
+        get_session().execution_mode = "pure"
+        self.current_mode = "pure"
+        self.current_agent = "pure"
+        self.current_provider = "systemone"
+        self.current_model = pure.session.model
+        self._install_pure_permission_bridge(pure, log)
+        self._set_status_runtime("systemone")
+        self._set_status_model(pure.session.model)
+        pack = pure._harness_spec.systemone.pack
+        log.add_system(
+            f"Connected to decision pack {pack} with {pure.session.model}. Enter state for this pack; no coding model or tool execution is involved."
+        )
+        from superqode.systemone.pack import load_pack
+
+        loaded = load_pack(pack)
+        if loaded.input_key:
+            log.add_system(
+                f"Enter plain text for {loaded.input_key}, or a JSON object. Low-confidence results abstain."
+            )
+        elif loaded.state_schema:
+            import json
+
+            log.add_system("Input schema: " + json.dumps(loaded.state_schema))
+        else:
+            log.add_system(
+                "Enter text or JSON state. The pack defines the questions and answer choices."
+            )
+
     def _handle_command(self, cmd: str, log: ConversationLog):
         # Command aliases for Vim-friendly shortcuts. The single-letter
         # :h/:s/:i shortcuts were retired in favour of the full commands.
@@ -297,6 +432,8 @@ class SlashCommandMixin:
             self._handle_fork_session(args, log)
         elif c == "compact":
             self._handle_compact(log)
+        elif c == "connect" and (args == "systemone" or args.startswith("systemone ")):
+            self._systemone_cmd("connect " + args[len("systemone") :].strip(), log)
         elif c == "connect":
             # Parse subcommand: :connect [acp|byok|local] [args...]
             if not args:
@@ -393,6 +530,8 @@ class SlashCommandMixin:
             self._health_cmd(args, log)
         elif c == "mode":
             self._set_approval_mode(args, log)
+        elif c == "systemone":
+            self._systemone_cmd(args, log)
         elif c == "log":
             self._handle_log_verbosity(args, log)
         elif c == "thinking":
@@ -1542,6 +1681,15 @@ class SlashCommandMixin:
         # Python RPC connection on the first prompt instead of asking the user
         # to run an unrelated ``:connect`` command.
         self._auto_connect_configured_prime_harness(log)
+        pure = getattr(self, "_pure_mode", None)
+        decision_spec = getattr(pure, "_harness_spec", None)
+        if getattr(decision_spec, "is_decision", False) and not pure.session.connected:
+            try:
+                pure.connect_decision(spec=decision_spec)
+                self._activate_decision_connection(pure, log)
+            except (ValueError, OSError) as exc:
+                log.add_error(str(exc))
+                return
 
         # Check if in provider mode
         if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
@@ -1566,7 +1714,9 @@ class SlashCommandMixin:
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
         else:
-            log.add_info("Not connected. Use :connect to choose a runtime or agent.")
+            log.add_info(
+                "Not connected. Use :connect for chat/coding, or :systemone connect <pack> for direct Jev decisions. :systemone live only enables tool checks."
+            )
 
     def _handle_agent_question_input(self, response: str, log: ConversationLog) -> bool:
         """Resolve a pending ask_user/confirm question from the prompt input."""

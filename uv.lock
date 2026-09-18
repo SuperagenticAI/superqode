@@ -23143,7 +23143,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "2.3.2"
+version = "2.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -23157,6 +23157,7 @@ dependencies = [
     { name = "mcp" },
     { name = "prime-agent-python-client" },
     { name = "prompt-toolkit" },
+    { name = "pydantic" },
     { name = "python-frontmatter" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -23382,6 +23383,7 @@ requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "protobuf", marker = "extra == 'antigravity-sdk'", specifier = ">=7.35.0" },
     { name = "protobuf", marker = "extra == 'vendor-sdks'", specifier = ">=7.35.0" },
+    { name = "pydantic", specifier = ">=2.0,<3" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai-logfire'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-monty", marker = "extra == 'monty'", specifier = ">=0.0.21" },
