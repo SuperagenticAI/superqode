@@ -184,3 +184,73 @@ async def test_harness_spec_enables_the_gate(tmp_path):
     denied = await loop._check_tool_permission("bash", {"command": "echo hi"})
     assert denied is not None
     assert denied.metadata["pack"].startswith("tool_gate@")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answers", [_ALLOW_ANSWERS, _DENY_ANSWERS])
+async def test_shadow_preserves_auto_allow_and_records_full_answers(tmp_path, answers):
+    import json
+
+    client = StubSystemOneClient(answers)
+    loop = _loop(
+        tmp_path,
+        systemone=SystemOneSpec(enabled=True, mode="shadow", trace_dir=str(tmp_path / "traces")),
+        client=client,
+    )
+    assert await loop._check_tool_permission("bash", {"command": "echo token=secret"}, "c1") is None
+    event = json.loads(next((tmp_path / "traces").glob("*.json")).read_text())
+    assert event["policyAction"] == event["permissionAction"] == "allow"
+    assert (
+        event["answers"]["disposition"]["probabilities"] == answers["disposition"]["probabilities"]
+    )
+    assert "secret" not in json.dumps(event)
+    assert "humanAction" not in event
+
+
+@pytest.mark.asyncio
+async def test_shadow_allow_cannot_preapprove_policy_ask(tmp_path):
+    from superqode.agent.loop import ToolApprovalRequired
+
+    loop = _loop(
+        tmp_path,
+        systemone=SystemOneSpec(enabled=True, mode="shadow"),
+        client=StubSystemOneClient(_ALLOW_ANSWERS),
+        default=Permission.ASK,
+    )
+    loop.pause_on_approval = True
+    with pytest.raises(ToolApprovalRequired):
+        await loop._check_tool_permission("bash", {"command": "pytest"}, "c1")
+    assert loop.last_systemone_decision["intendedAction"] == "allow"
+    assert loop.last_systemone_decision["permissionAction"] == "ask"
+
+
+@pytest.mark.asyncio
+async def test_shadow_hard_deny_records_skip_without_model_call(tmp_path, monkeypatch):
+    import json
+
+    policy = tmp_path / "policy.yaml"
+    policy.write_text("rules:\n  - pattern: 'git push*'\n    action: deny\n")
+    monkeypatch.setenv("SUPERQODE_EXEC_POLICY", str(policy))
+    client = StubSystemOneClient(_ALLOW_ANSWERS)
+    loop = _loop(
+        tmp_path,
+        systemone=SystemOneSpec(enabled=True, mode="shadow", trace_dir=str(tmp_path / "traces")),
+        client=client,
+    )
+    assert await loop._check_tool_permission("bash", {"command": "git push"}) is not None
+    event = json.loads(next((tmp_path / "traces").glob("*.json")).read_text())
+    assert client.calls == []
+    assert event["intendedAction"] is None
+    assert event["evaluation"]["status"] == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_shadow_recording_failure_cannot_change_permissions(tmp_path):
+    path = tmp_path / "not-a-directory"
+    path.write_text("occupied")
+    loop = _loop(
+        tmp_path,
+        systemone=SystemOneSpec(enabled=True, mode="shadow", trace_dir=str(path)),
+        client=StubSystemOneClient(_DENY_ANSWERS),
+    )
+    assert await loop._check_tool_permission("bash", {"command": "echo hi"}) is None

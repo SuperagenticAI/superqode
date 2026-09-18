@@ -121,6 +121,15 @@ class ToolGateState(BaseModel):
         }
         if self.last_diff:
             payload["last_diff"] = _clip(_redact_string(self.last_diff), DIFF_CHARS)
+        truncated = []
+        if len(_redact_string(self.task).strip()) > TASK_CHARS:
+            truncated.append("task")
+        if self.last_diff and len(_redact_string(self.last_diff).strip()) > DIFF_CHARS:
+            truncated.append("last_diff")
+        if arguments.get("_truncated") is True:
+            truncated.append("arguments")
+        if truncated:
+            payload["truncated_fields"] = truncated
         return payload
 
 

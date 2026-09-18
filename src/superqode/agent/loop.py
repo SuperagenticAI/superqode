@@ -1353,6 +1353,20 @@ class AgentLoop:
     async def _check_tool_permission(
         self, name: str, arguments: Dict[str, Any], tool_call_id: Optional[str] = None
     ) -> Optional[ToolResult]:
+        from ..systemone.audit import finish_trace
+
+        self.last_systemone_decision = None
+        try:
+            result = await self._check_tool_permission_inner(name, arguments, tool_call_id)
+        except ToolApprovalRequired:
+            finish_trace(self, tool_call_id, "ask")
+            raise
+        finish_trace(self, tool_call_id, "allow" if result is None else "deny", result)
+        return result
+
+    async def _check_tool_permission_inner(
+        self, name: str, arguments: Dict[str, Any], tool_call_id: Optional[str] = None
+    ) -> Optional[ToolResult]:
         """Apply central permission checks before any local tool executes.
 
         Order of authority:
@@ -1422,7 +1436,15 @@ class AgentLoop:
 
         from ..systemone.runtime import apply_systemone_gate
 
+        baseline_allowed = (
+            (permission == Permission.ALLOW and not rule_ask)
+            or (tool_call_id and tool_call_id in self._approved_tool_call_ids)
+            or ((verdict.allowed or rule_allow) and not rule_ask)
+        )
+        baseline = "allow" if baseline_allowed else "ask"
         so_denied, so_allow, so_ask = await apply_systemone_gate(self, name, arguments)
+        if self.last_systemone_decision is not None:
+            self.last_systemone_decision["policyAction"] = baseline
         if so_denied is not None:
             return so_denied
 

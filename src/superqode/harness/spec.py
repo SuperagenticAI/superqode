@@ -226,6 +226,8 @@ class SystemOneSpec:
     """
 
     enabled: bool = False
+    mode: str = "enforce"  # enforce | shadow
+    trace_dir: str = ""
     client: str = "stub"  # stub | replay | live
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"

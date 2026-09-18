@@ -325,6 +325,7 @@ COMMANDS = [
     ":evals",
     ":systemone",
     ":systemone live",
+    ":systemone shadow",
     ":systemone off",
     ":systemone packs",
     ":systemone connect",

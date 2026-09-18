@@ -59,6 +59,7 @@ class GateDecision:
         pack = f"{self.pack_id}@{self.pack_version}" if self.pack_id else ""
         return {
             "permission": "systemone",
+            "answers": getattr(self, "answers", {}),
             "evaluation": self.evaluation,
             "pack": pack,
             "pack_hash": self.pack_hash,
@@ -212,6 +213,7 @@ async def evaluate_tool_gate(
             **fields,
         )
     decision = compose_tool_gate(answers, pack=pack, client_name=client_name)
+    decision.answers = answers.model_dump(mode="json")["answers"]
     decision.evaluation = {
         "status": "success",
         "latency_ms": round((time.monotonic() - started) * 1000),

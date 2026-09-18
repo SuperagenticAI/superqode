@@ -31,6 +31,7 @@ def test_root_menu_asks_one_question_in_three_answers():
         "agents",
         "models",
         "build",
+        "systemone-models",
         "protocols",
     ]
     # Root entries are a flat list, so they carry no group headers.
@@ -148,6 +149,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "agents",
     "models",
     "build",
+    "systemone-models",
     "protocols",
     "agent-subscriptions",
     "agent-acp",
@@ -192,6 +194,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "build-preset",
     "build-wizard",
     "build-blank",
+    "jev",
     # Open catalog rows, then Closed. Both are appended by _flat_profiles so
     # `--connect` and completion accept every row the pickers draw.
     "tau",

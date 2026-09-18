@@ -1509,7 +1509,32 @@ class ConnectMixin:
             if conn == "acp":
                 log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
                 return
-        if conn == "copilot":
+        if conn == "systemone-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_SYSTEMONE
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_SYSTEMONE)
+        elif conn == "systemone":
+            import os
+
+            if not os.environ.get("TYPESAFE_API_KEY", "").strip():
+                log.add_info(
+                    "Jev needs a TypeSafe AI API key. Get one at https://console.typesafe.ai "
+                    "(request access at https://typesafe.ai if needed). In your terminal, run "
+                    "export TYPESAFE_API_KEY='your-key', restart SuperQode, then choose "
+                    ":connect → Connect with SystemOne models → Jev."
+                )
+                return
+            pure = self._ensure_pure_mode()
+            try:
+                pure.connect_decision("factory_route")
+            except (ValueError, OSError) as exc:
+                log.add_error(str(exc))
+                return
+            self._activate_decision_connection(pure, log)
+            log.add_info(
+                "Use :systemone packs to explore packs, then :systemone connect <pack> to switch."
+            )
+        elif conn == "copilot":
             self._connect_copilot_subscription(profile, log)
         elif conn == "prime-rpc":
             self._connect_prime_rpc("", log)

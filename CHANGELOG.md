@@ -5,6 +5,24 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-09-18
+
+### Added
+
+- Theme-aware Jev JSON replies with highlighted decisions, key fields, numeric
+  values, and abstentions; System One Models on the welcome screen.
+- A SystemOne model route in `:connect`, with Jev, API-key setup guidance, and
+  direct decision-pack sessions.
+- Opt-in Jev shadow tool checks with `:systemone shadow` or
+  `SUPERQODE_SYSTEMONE_MODE=shadow`. Jev recommendations do not change existing
+  permission decisions in this mode.
+- Sanitized decision traces with full typed answers, probability distributions,
+  confidence, policy and permission outcomes, thresholds, and truncation markers.
+- Distribution diagnostics for near ties and spread, plus `harness decision-report`
+  for policy or explicit human-label comparisons, confidence buckets, and offline
+  confidence threshold sweeps. Reports do not apply thresholds or infer safety
+  from confidence or successful execution.
+
 ## [2.4.0] - 2026-09-18
 
 ### Jev integration

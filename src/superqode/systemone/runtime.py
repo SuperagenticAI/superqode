@@ -57,6 +57,8 @@ def publish_decision(loop: Any, decision: GateDecision, tool: str) -> None:
         "message": decision.message,
         **decision.metadata(),
     }
+    settings = _settings(loop)
+    event.update(mode=settings.mode, intendedAction=decision.action.value)
     loop.last_systemone_decision = event
     callback = getattr(loop, "on_systemone", None)
     if callback:
@@ -75,7 +77,7 @@ def publish_decision(loop: Any, decision: GateDecision, tool: str) -> None:
 def format_decision(event: dict[str, Any]) -> str:
     evaluation = event.get("evaluation") or {}
     status = evaluation.get("status", "skipped")
-    details = f"Jev {status} · {event.get('tool', '')} · {event.get('action', 'ask').upper()}"
+    details = f"Jev {event.get('mode', 'enforce')} {status} · {event.get('tool', '')} · {event.get('action', 'ask').upper()}"
     if status == "success":
         details += f" · {evaluation.get('model', event.get('client', ''))} · {evaluation.get('latency_ms', 0)}ms"
         usage = evaluation.get("usage") or {}
@@ -174,6 +176,16 @@ async def apply_systemone_gate(
         )
         return None, False, False
     publish_decision(loop, decision, name)
+    event = loop.last_systemone_decision
+    event["state"] = state.to_payload()
+    event["model"] = settings.model
+    event["thresholds"] = pack.thresholds.model_dump()
+    from .audit import distribution_diagnostics
+
+    disposition = event.get("answers", {}).get("disposition", {})
+    event["distribution"] = distribution_diagnostics(disposition.get("probabilities", {}))
+    if settings.mode == "shadow":
+        return None, False, False
     if decision.action is GateAction.DENY:
         return (
             ToolResult(

@@ -91,8 +91,8 @@ class SlashCommandMixin:
                 return
             self._activate_decision_connection(pure, log)
             return
-        if action not in {"", "status", "live", "on", "off", "0"}:
-            log.add_error("Use :systemone [status|live|off|packs|connect <pack>]")
+        if action not in {"", "status", "live", "shadow", "on", "off", "0"}:
+            log.add_error("Use :systemone [status|live|shadow|off|packs|connect <pack>]")
             return
         spec = None
         pure = (
@@ -102,15 +102,16 @@ class SlashCommandMixin:
             spec = getattr(pure, "_harness_spec", None)
         key_env = getattr(getattr(spec, "systemone", None), "api_key_env", LIVE_API_KEY_ENV)
         key_set = bool(os.environ.get(key_env, "").strip()) if key_env else True
-        if action in {"live", "on"}:
+        if action in {"live", "shadow", "on"}:
             if not key_set:
                 log.add_error(
                     f"Set {key_env} in this shell, then restart the TUI, then :systemone live"
                 )
                 return
             os.environ[SYSTEMONE_ENV] = "live"
+            os.environ["SUPERQODE_SYSTEMONE_MODE"] = "shadow" if action == "shadow" else "enforce"
             log.add_system(
-                "System One live enabled for the native runtime. Tool checks will report request outcomes."
+                f"System One {os.environ['SUPERQODE_SYSTEMONE_MODE']} enabled for the native runtime."
             )
         elif action in {"off", "0"}:
             os.environ[SYSTEMONE_ENV] = "0"
@@ -146,6 +147,7 @@ class SlashCommandMixin:
             )
             t.append("  Simple chat without tools does not call Jev.\n\n", style=THEME["muted"])
         t.append(f"    enabled     {settings.enabled}\n", style=THEME["muted"])
+        t.append(f"    mode        {settings.mode}\n", style=THEME["muted"])
         t.append(f"    client      {settings.client}\n", style=THEME["muted"])
         t.append(f"    model       {settings.model}\n", style=THEME["muted"])
         t.append(f"    pack        {settings.pack}\n", style=THEME["muted"])

@@ -192,3 +192,81 @@ task. See `examples/systemone/rubric-eval.yaml`. Judgment evidence and judge usa
 are recorded separately from the harness's execution usage. No LLM fallback is
 automatic in this release. Model judgments do not prove that tests ran or replace
 executable verification.
+
+## Shadow tool checks and disagreement reports
+
+Shadow mode evaluates the native coding loop's proposed tool calls while leaving
+existing permissions in control. Jev cannot approve, deny, or force an approval
+in this mode. Hard hook, YAML, and manager denials still skip model evaluation.
+This setting affects tool gates, not standalone decision packs or rubric grading.
+
+```sh
+export TYPESAFE_API_KEY=api_key...
+export SUPERQODE_SYSTEMONE=live
+export SUPERQODE_SYSTEMONE_MODE=shadow
+export SUPERQODE_SYSTEMONE_TRACE_DIR=.superqode/decision-traces
+superqode --harness core
+```
+
+The TUI also supports `:systemone shadow`; `:systemone live` switches back to
+enforcement. A harness can declare `systemone.mode: shadow` and
+`systemone.trace_dir`. Trace paths in YAML resolve relative to the harness file.
+Trace recording is opt-in and produces one sanitized JSON file per permission
+check, with restrictive file permissions. Recording failures do not change
+permission decisions. These traces contain task and command context; review them
+before sharing. Pattern redaction cannot catch every secret.
+
+Traces distinguish `intendedAction` (Jev recommendation), `policyAction` (existing
+policy before Jev), and `permissionAction` (final permission outcome, not proof
+of execution). Evaluated traces include full typed answers and distributions,
+model, thresholds, pack hash, bounded state and truncation indicators. Hard-denied
+checks have a skipped status and no invented Jev recommendation. Approval retries
+are separate records identified by session and tool-call IDs.
+
+```sh
+superqode harness decision-report .superqode/decision-traces
+superqode harness decision-report .superqode/decision-traces --reference humanAction
+```
+
+The JSON report includes a confusion matrix, disagreements, allow-against-deny,
+deny-against-allow, allow-against-ask, ASK rate, errors, skipped checks, and median
+latency. Policy disagreement is not a measured safety error. For human comparison,
+review the trace against your authorization policy and add `humanAction` with
+`allow`, `deny`, or `ask` to a copy of the trace. Unlabelled decisions remain
+unlabelled; approvals, successful execution, and missing handlers do not supply
+human labels automatically. Keep reviewed tuning and held-out trace directories
+separate when selecting thresholds. Choice confidence is distribution certainty,
+not permission or a safety probability.
+
+Each evaluated trace also records distribution entropy, the top probability,
+and the margin between the top two disposition options. A small margin identifies
+near ties; none of these statistics establishes permission or safety. Reports
+break labelled disagreements into confidence buckets.
+
+Compare confidence thresholds against reviewed labels without making live calls:
+
+```sh
+superqode harness decision-report reviewed-traces --reference humanAction \
+  --allow-confidence 0.75 --allow-confidence 0.90 --allow-confidence 0.95
+```
+
+The sweep recomposes full recorded answers with their recorded thresholds,
+changing only `allow_confidence` (used for both Choice allow and Choice deny).
+Missing answers and failed or skipped evaluations are excluded and counted.
+Atomic Noul thresholds remain unchanged. Sweeps never edit packs or enable
+enforcement. Use separate datasets for each model and pack version; retain a
+held-out dataset before adopting thresholds. A quiet disagreement report alone
+is insufficient if there are few labels or the data omits risky actions.
+
+## Connect to Jev from the TUI
+
+Open `:connect`, choose **Connect with SystemOne models**, then **Jev (TypeSafe AI)**.
+With `TYPESAFE_API_KEY` set in the launching shell, this connects to the
+`factory_route` decision pack. Enter a task to get a typed route suggestion.
+Use `:systemone packs` to browse other packs and `:systemone connect <pack>` to
+switch. This connection runs decision packs; coding sessions use their own model
+connection and can enable the Jev tool-check sidecar separately.
+
+If the key is missing, selecting Jev shows the TypeSafe console and access links,
+the environment-variable setup command, and instructions to restart and reconnect.
+The picker never asks you to paste credentials into chat or saves your key.

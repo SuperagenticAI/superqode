@@ -72,6 +72,7 @@ CONNECT_MENU_MODELS = "models"
 CONNECT_MENU_KEY_MODELS = "key-models"
 CONNECT_MENU_PLAN = "plan"
 CONNECT_MENU_BUILD = "build"
+CONNECT_MENU_SYSTEMONE = "systemone-models"
 #: ``:connect subscriptions`` maps to the vendor plan list.
 CONNECT_MENU_SUBSCRIPTIONS = CONNECT_MENU_VENDORS
 CONNECT_MENUS = (
@@ -88,6 +89,7 @@ CONNECT_MENUS = (
     CONNECT_MENU_KEY_MODELS,
     CONNECT_MENU_PLAN,
     CONNECT_MENU_BUILD,
+    CONNECT_MENU_SYSTEMONE,
 )
 
 #: Screen names that used to exist, mapped to where their content lives now.
@@ -478,6 +480,28 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
         connector="build-picker",
         detect=lambda: True,
     ),
+]
+
+_ROOT_PROFILES.append(
+    ConnectionProfile(
+        id="systemone-models",
+        label="Connect with SystemOne models",
+        description="Typed decisions with Jev from TypeSafe AI",
+        connector="systemone-picker",
+        detect=lambda: True,
+    )
+)
+
+_SYSTEMONE_PROFILES = [
+    ConnectionProfile(
+        id="jev",
+        label="Jev (TypeSafe AI)",
+        description="Connect to typed decision packs: routing, tool checks, and rubric judgments",
+        connector="systemone",
+        menu=CONNECT_MENU_SYSTEMONE,
+        detect=lambda: bool(os.environ.get("TYPESAFE_API_KEY", "").strip()),
+        unavailable_hint="Get a key at https://console.typesafe.ai, set TYPESAFE_API_KEY, then restart SuperQode",
+    )
 ]
 
 # Step one of the harness route: which harness runs. The model is chosen
@@ -1330,6 +1354,7 @@ _PROFILES: List[ConnectionProfile] = [
     *_MODEL_PROFILES,
     *_PLAN_PROFILES,
     *_BUILD_PROFILES,
+    *_SYSTEMONE_PROFILES,
 ]
 
 #: Pre-ladder alias kept for callers that import the old list name.
@@ -1411,6 +1436,7 @@ _BY_ID = {
 
 _BY_MENU = {
     CONNECT_MENU_ROOT: _ROOT_PROFILES,
+    CONNECT_MENU_SYSTEMONE: _SYSTEMONE_PROFILES,
     CONNECT_MENU_AGENTS: _AGENT_CATEGORY_PROFILES,
     CONNECT_MENU_PROTOCOLS: _PROTOCOL_PROFILES,
     CONNECT_MENU_VENDORS: _AGENT_PROFILES,
@@ -1426,6 +1452,10 @@ _BY_MENU = {
 
 #: Human titles and subtitles for each ``:connect`` screen.
 CONNECT_MENU_TITLES = {
+    CONNECT_MENU_SYSTEMONE: (
+        "SystemOne models",
+        "Choose a model for typed decisions. Requires its own API key.",
+    ),
     CONNECT_MENU_ROOT: (
         "Connect",
         "Start from Detected, or choose how the loop runs.",
@@ -1841,6 +1871,7 @@ __all__ = [
     "CONNECT_MENUS",
     "CONNECT_MENU_AGENTS",
     "CONNECT_MENU_BUILD",
+    "CONNECT_MENU_SYSTEMONE",
     "CONNECT_MENU_ACP",
     "CONNECT_MENU_LANGUAGE",
     "CONNECT_MENU_LANGUAGE_PREFIX",

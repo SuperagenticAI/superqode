@@ -23,6 +23,8 @@ class SystemOneSettings:
     """Resolved runtime settings for one AgentLoop."""
 
     enabled: bool = False
+    mode: str = "enforce"  # enforce | shadow
+    trace_dir: str = ""
     client: str = "stub"
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"
@@ -110,6 +112,11 @@ def resolve_systemone(
     if client not in _CLIENTS:
         client = "stub"
 
+    mode = str(env.get("SUPERQODE_SYSTEMONE_MODE") or getattr(declared, "mode", "enforce"))
+    if mode not in {"enforce", "shadow"}:
+        raise ValueError("System One mode must be enforce or shadow")
+    trace_dir = str(env.get("SUPERQODE_SYSTEMONE_TRACE_DIR") or getattr(declared, "trace_dir", ""))
+
     skip_reason = ""
     if enabled and is_airplane(spec, env) and airplane == "skip":
         skip_reason = "airplane"
@@ -120,6 +127,8 @@ def resolve_systemone(
 
     return SystemOneSettings(
         enabled=enabled,
+        mode=mode,
+        trace_dir=trace_dir,
         client=client,
         pack=pack,
         model=model,

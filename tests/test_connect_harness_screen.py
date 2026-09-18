@@ -102,6 +102,7 @@ def test_root_offers_the_ways_to_get_a_harness():
         ("agents", "Use an agent you already have"),
         ("models", "Connect a harness with your model"),
         ("build", "Build your own harness"),
+        ("systemone-models", "Connect with SystemOne models"),
         ("protocols", "Reach a remote agent with protocols"),
     ]
 
@@ -1739,3 +1740,68 @@ def test_prime_only_offers_local_engines_it_can_be_pointed_at():
     assert "openai-compatible" not in allowed
     for provider_id in allowed:
         assert resolve_base_url(resolve_provider_def(provider_id)), provider_id
+
+
+def test_systemone_picker_opens_jev_menu():
+    from superqode.providers.connection_profiles import CONNECT_MENU_SYSTEMONE
+
+    stub = dispatch("systemone-models")
+    assert stub.menus == [CONNECT_MENU_SYSTEMONE]
+    assert [p.id for p in list_connection_profiles(CONNECT_MENU_SYSTEMONE)] == ["jev"]
+
+
+def test_jev_missing_key_shows_setup_without_connecting(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    stub = DispatchStub()
+    log = FakeLog()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("jev"), log)
+    rendered = " ".join(log.items)
+    assert "https://console.typesafe.ai" in rendered
+    assert "export TYPESAFE_API_KEY" in rendered
+    assert "restart SuperQode" in rendered
+
+
+def test_jev_key_connects_existing_decision_session_without_exposing_key(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-private-key")
+
+    class Pure:
+        def connect_decision(self, pack):
+            self.pack = pack
+
+    class Stub(DispatchStub):
+        pure = Pure()
+
+        def _ensure_pure_mode(self):
+            return self.pure
+
+        def _activate_decision_connection(self, pure, log):
+            self.activated = pure
+
+    stub = Stub()
+    log = FakeLog()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("jev"), log)
+    assert stub.activated is stub.pure
+    assert stub.pure.pack == "factory_route"
+    assert "test-private-key" not in " ".join(log.items)
+
+
+def test_jev_connection_error_is_visible(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-private-key")
+
+    class Pure:
+        def connect_decision(self, pack):
+            raise ValueError("Decision client is disabled")
+
+    class Stub(DispatchStub):
+        def _ensure_pure_mode(self):
+            return Pure()
+
+    log = FakeLog()
+    SuperQodeApp._dispatch_connection_profile(Stub(), get_connection_profile("jev"), log)
+    assert "ERROR Decision client is disabled" in log.items

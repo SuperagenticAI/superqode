@@ -1908,7 +1908,12 @@ class ConversationLog(RichLog):
         width-safe: Rich reflows code panels and tables within the remaining
         width. Shared by the streaming and final-commit paths so both match.
         """
-        return Padding(render_agent_markdown(block), (0, 0, 0, 2))
+        from superqode.rendering.systemone import render_systemone_json
+
+        decision = render_systemone_json(block, THEME)
+        return Padding(
+            decision if decision is not None else render_agent_markdown(block), (0, 0, 0, 2)
+        )
 
     def add_thinking(self, text: str, category: str = "general"):
         """

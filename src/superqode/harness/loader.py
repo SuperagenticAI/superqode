@@ -68,7 +68,7 @@ def resolve_harness_inheritance(
     raw = dict(data.get("harness") if isinstance(data.get("harness"), dict) else data)
     if isinstance(raw.get("systemone"), dict):
         decision_config = dict(raw["systemone"])
-        for field in ("pack", "replay_path", "record_dir"):
+        for field in ("pack", "replay_path", "record_dir", "trace_dir"):
             value = decision_config.get(field)
             if value and (field != "pack" or Path(str(value)).suffix in {".yaml", ".yml", ".json"}):
                 path = Path(str(value)).expanduser()
@@ -393,6 +393,8 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             {
                 "systemone": {
                     "enabled": spec.systemone.enabled,
+                    "mode": spec.systemone.mode,
+                    "trace_dir": spec.systemone.trace_dir,
                     "client": spec.systemone.client,
                     "pack": spec.systemone.pack,
                     **(
@@ -668,6 +670,8 @@ def harness_spec_json_schema() -> dict[str, Any]:
                 "additionalProperties": False,
                 "properties": {
                     "enabled": {"type": "boolean"},
+                    "mode": {"type": "string", "enum": ["enforce", "shadow"]},
+                    "trace_dir": {"type": "string"},
                     "client": {"type": "string", "enum": ["stub", "replay", "live"]},
                     "endpoint": {"type": "string"},
                     "api_key_env": {"type": "string"},
@@ -1010,7 +1014,12 @@ def _systemone(value: Any) -> SystemOneSpec:
     timeout_ms = int(data.get("timeout_ms") or 5000)
     if timeout_ms < 1:
         raise ValueError("systemone.timeout_ms must be >= 1")
+    mode = str(data.get("mode", "enforce"))
+    if mode not in {"enforce", "shadow"}:
+        raise ValueError("systemone.mode must be enforce or shadow")
     return SystemOneSpec(
+        mode=mode,
+        trace_dir=str(data.get("trace_dir") or ""),
         enabled=bool(data.get("enabled", False)),
         client=client,
         pack=str(data.get("pack") or "tool_gate").strip() or "tool_gate",
