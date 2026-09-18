@@ -25,8 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Jev decision sessions initialize the top-bar provider/model and usage identity,
-  and retain the active decision harness instead of displaying unknown or Core.
+- Jev decision sessions initialize provider/model and usage identity instead of
+  reporting unknown. The decision-session top bar shows only `SystemOne · Jev`,
+  omitting runtime, harness, BUILD mode, and usage details.
+- Jev JSON replies open at the top of the response card. Final completion output
+  no longer scrolls to the bottom; the next task restores normal scrolling.
 
 ## [2.4.0] - 2026-09-18
 
