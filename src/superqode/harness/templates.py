@@ -10,6 +10,7 @@ from .spec import (
     ModelPolicySpec,
     RuntimeSpec,
     ChecksSpec,
+    SystemOneSpec,
 )
 from .model_routes import model_policy_for_route
 
@@ -112,6 +113,26 @@ def workbench_template(*, name: str = "workbench", backend: str = "builtin") -> 
             ),
             "metadata": {"template": "workbench", "builtin_harness": True},
         }
+    )
+
+
+def systemone_template(*, name: str = "systemone") -> HarnessSpec:
+    """Native coding with Jev observing tool gates and deferred discovery."""
+    base = workbench_template(name=name)
+    from dataclasses import replace
+
+    return replace(
+        base,
+        description="SystemOne harness: coding models write code; Jev shadows tool gates and discovery.",
+        model_policy=replace(
+            base.model_policy,
+            config={**base.model_policy.config, "deferred_tools": "all"},
+        ),
+        agents=(replace(base.agents[0], tools=("full",)),),
+        systemone=SystemOneSpec(
+            enabled=True, client="live", mode="shadow", tool_search_mode="shadow"
+        ),
+        metadata={**base.metadata, "template": "systemone", "category": "workflow"},
     )
 
 
@@ -864,6 +885,7 @@ def benchmark_coding_template() -> HarnessSpec:
 
 BUILTIN_TEMPLATES = {
     "core": core_template,
+    "systemone": systemone_template,
     "workbench": workbench_template,
     "coding": coding_template,
     "benchmark-coding": benchmark_coding_template,

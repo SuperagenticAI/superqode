@@ -228,6 +228,7 @@ class SystemOneSpec:
     enabled: bool = False
     mode: str = "enforce"  # enforce | shadow
     trace_dir: str = ""
+    tool_search_mode: str = "off"  # off | shadow | rerank
     client: str = "stub"  # stub | replay | live
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"

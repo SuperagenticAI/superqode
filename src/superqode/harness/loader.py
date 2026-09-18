@@ -395,6 +395,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                     "enabled": spec.systemone.enabled,
                     "mode": spec.systemone.mode,
                     "trace_dir": spec.systemone.trace_dir,
+                    "tool_search_mode": spec.systemone.tool_search_mode,
                     "client": spec.systemone.client,
                     "pack": spec.systemone.pack,
                     **(
@@ -672,6 +673,7 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "enabled": {"type": "boolean"},
                     "mode": {"type": "string", "enum": ["enforce", "shadow"]},
                     "trace_dir": {"type": "string"},
+                    "tool_search_mode": {"type": "string", "enum": ["off", "shadow", "rerank"]},
                     "client": {"type": "string", "enum": ["stub", "replay", "live"]},
                     "endpoint": {"type": "string"},
                     "api_key_env": {"type": "string"},
@@ -1017,7 +1019,11 @@ def _systemone(value: Any) -> SystemOneSpec:
     mode = str(data.get("mode", "enforce"))
     if mode not in {"enforce", "shadow"}:
         raise ValueError("systemone.mode must be enforce or shadow")
+    tool_search_mode = str(data.get("tool_search_mode", "off"))
+    if tool_search_mode not in {"off", "shadow", "rerank"}:
+        raise ValueError("systemone.tool_search_mode must be off, shadow, or rerank")
     return SystemOneSpec(
+        tool_search_mode=tool_search_mode,
         mode=mode,
         trace_dir=str(data.get("trace_dir") or ""),
         enabled=bool(data.get("enabled", False)),

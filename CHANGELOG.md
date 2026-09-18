@@ -5,6 +5,31 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2026-09-18
+
+### Added
+
+- Selectable SystemOne coding harness with Jev shadow tool gates and deferred
+  tool discovery, alongside the existing standalone decision backend.
+- Opt-in Jev tool-search reranking over a bounded candidate set, explicit
+  abstention, lexical fallback on evaluation errors, and separate sanitized
+  discovery traces. Schema activation does not grant execution permission.
+
+### Usage
+
+- Launch with `superqode --harness systemone` or select `:harness use systemone`
+  in a connected coding session. Live Jev evaluations require `TYPESAFE_API_KEY`.
+- Tool gates and discovery default to shadow mode. Set
+  `SUPERQODE_SYSTEMONE_TOOL_SEARCH=rerank` to let Jev select a deferred schema;
+  uncertain decisions activate nothing and evaluation errors retain lexical search.
+- Set `SUPERQODE_SYSTEMONE_TRACE_DIR` to record discovery evidence under
+  `tool-search/`, separately from permission calibration traces.
+
+### Validation
+
+- SystemOne, tool discovery, harness and TUI regressions: 299 passed, 4 skipped.
+- Live Jev tool-selection accuracy and threshold calibration remain to be evaluated.
+
 ## [2.4.1] - 2026-09-18
 
 ### Added

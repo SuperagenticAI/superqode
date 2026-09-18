@@ -28,6 +28,7 @@ from .templates import (
     tau_template,
     uhp_template,
     workbench_template,
+    systemone_template,
 )
 
 
@@ -149,6 +150,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     """Return selectable harnesses shipped with SuperQode."""
     core = core_template()
     workbench = workbench_template()
+    systemone = systemone_template()
     no_tool = no_tool_template(name="no-tool")
     pipy = pipy_template()
     rlm = rlm_template()
@@ -206,6 +208,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=workbench,
             loop_policy=workbench_loop_policy(),
             aliases=("coding", "native", "build"),
+        ),
+        HarnessDefinition(
+            id="systemone",
+            display_name="SystemOne",
+            description=systemone.description,
+            runtime=systemone.runtime.backend,
+            source="built-in",
+            spec=systemone,
+            loop_policy=workbench_loop_policy(),
+            aliases=("systemone-coding",),
         ),
         HarnessDefinition(
             id="no-tool",

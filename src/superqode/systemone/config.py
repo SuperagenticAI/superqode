@@ -25,6 +25,7 @@ class SystemOneSettings:
     enabled: bool = False
     mode: str = "enforce"  # enforce | shadow
     trace_dir: str = ""
+    tool_search_mode: str = "off"
     client: str = "stub"
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"
@@ -117,6 +118,17 @@ def resolve_systemone(
         raise ValueError("System One mode must be enforce or shadow")
     trace_dir = str(env.get("SUPERQODE_SYSTEMONE_TRACE_DIR") or getattr(declared, "trace_dir", ""))
 
+    tool_search_mode = (
+        str(
+            env.get("SUPERQODE_SYSTEMONE_TOOL_SEARCH")
+            or getattr(declared, "tool_search_mode", "off")
+        )
+        .strip()
+        .lower()
+    )
+    if tool_search_mode not in {"off", "shadow", "rerank"}:
+        raise ValueError("System One tool search mode must be off, shadow, or rerank")
+
     skip_reason = ""
     if enabled and is_airplane(spec, env) and airplane == "skip":
         skip_reason = "airplane"
@@ -129,6 +141,7 @@ def resolve_systemone(
         enabled=enabled,
         mode=mode,
         trace_dir=trace_dir,
+        tool_search_mode=tool_search_mode,
         client=client,
         pack=pack,
         model=model,

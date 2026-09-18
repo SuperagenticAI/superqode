@@ -15,9 +15,11 @@ from superqode.tools.permissions import Permission, PermissionConfig, Permission
 
 
 @pytest.fixture(autouse=True)
-def _isolate_live_api_key(monkeypatch):
-    """Loop tests never call the network; a shell API key must not un-skip live."""
+def _isolate_systemone_environment(monkeypatch):
+    """Loop tests use explicit modes and never call the network."""
     monkeypatch.delenv(LIVE_API_KEY_ENV, raising=False)
+    monkeypatch.delenv("SUPERQODE_SYSTEMONE_MODE", raising=False)
+    monkeypatch.delenv("SUPERQODE_SYSTEMONE_TRACE_DIR", raising=False)
 
 
 _ALLOW_ANSWERS = {

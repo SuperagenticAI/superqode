@@ -70,6 +70,8 @@ class ToolContext:
     # with window/used/compaction_threshold. Set by the agent loop.
     context_status: Optional[Callable[[], Dict[str, Any]]] = None
     # Harness run context, populated when tools execute inside HarnessKernel.
+    systemone: Optional[Any] = None
+    systemone_client: Optional[Any] = None
     harness_store: Optional[Any] = None
     harness_spec: Optional[Any] = None
     harness_run_id: str = ""

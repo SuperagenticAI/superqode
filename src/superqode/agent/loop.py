@@ -865,7 +865,14 @@ class AgentLoop:
         try:
             from ..tools.tool_search import apply_deferred_tool_policy
 
-            apply_deferred_tool_policy(self.tools, provider=config.provider, model=config.model)
+            apply_deferred_tool_policy(
+                self.tools,
+                provider=config.provider,
+                model=config.model,
+                policy=getattr(
+                    getattr(config.harness_spec, "model_policy", None), "config", {}
+                ).get("deferred_tools", ""),
+            )
         except ImportError:
             pass
 
@@ -1253,6 +1260,8 @@ class AgentLoop:
             peer_manager=self._get_peer_manager(),
             permission_manager=self.permission_manager,
             context_status=self._context_status,
+            systemone=self.config.systemone,
+            systemone_client=self._systemone_client,
             harness_store=self.config.harness_store,
             harness_spec=self.config.harness_spec,
             harness_run_id=self.config.harness_run_id,

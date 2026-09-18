@@ -11,6 +11,7 @@ model-selected commands.
 | Workflow | Entry point | Result |
 | --- | --- | --- |
 | Check coding tools | Core/BYOK plus `:systemone live` | Allow, deny, or request approval |
+| Code with Jev observing decisions | `--harness systemone` | Shadow tool gates and tool discovery |
 | Evaluate a decision pack | `harness run` or `:systemone connect` | Typed decision output |
 | Compare decisions with labels | `harness eval` with a `decision` evaluator | Scorecard and per-task evidence |
 | Grade and revise coding work | `--rubric` plus `SUPERQODE_RUBRIC_GRADER=systemone` | Bounded revisions and rubric result |
@@ -19,6 +20,48 @@ model-selected commands.
 Live Jev calls require `TYPESAFE_API_KEY` in the launching environment. Your
 coding provider uses its own credentials. Enabling tool checks does not connect
 a coding model; see [TUI setup](tui.md#jev-tool-checks).
+
+## SystemOne coding harness and tool search
+
+Select the bundled `systemone` harness with your usual coding provider:
+
+```sh
+superqode --harness systemone
+```
+
+In a connected coding session, use `:harness use systemone`. The coding model
+continues to write code. Jev observes tool gates in shadow mode and recommends
+tools during deferred discovery. Without `TYPESAFE_API_KEY`, Jev is skipped and
+the existing permission policy and lexical tool search continue to work.
+The separate `:connect` SystemOne models option still runs standalone decision packs.
+
+This harness defers optional tool schemas and exposes `tool_search`. A search
+retrieves up to eight candidates from the registered deferred tools. Jev chooses
+from that closed set or `none`. When lexical retrieval finds no match, catalogs
+of eight or fewer deferred tools can be considered directly. Larger catalogs
+require a matching retrieval query; this is not an embedding search.
+
+The default `tool_search_mode: shadow` records Jev's recommendation while
+preserving lexical activation. To let Jev select which schema to activate:
+
+```sh
+export SUPERQODE_SYSTEMONE_TOOL_SEARCH=rerank
+```
+
+Selection requires Choice confidence at least 0.75, candidate-fit Noul at least
+0.8, and the selected option's probability to exceed every other option by at
+least 0.1. These are initial selection thresholds, not calibrated safety scores.
+Uncertain answers and `none` activate nothing; client or schema errors fall back
+to lexical search. Activating a schema never executes its tool or grants permission.
+
+Set `SUPERQODE_SYSTEMONE_TRACE_DIR` to record sanitized discovery events under
+its `tool-search/` subdirectory. Events include candidates, baseline tools,
+Jev's selection, raw answers, distribution diagnostics and activated tools.
+They are separate from permission allow/deny calibration records.
+
+Custom specs can set `systemone.tool_search_mode` to `off`, `shadow`, or `rerank`.
+`model_policy.config.deferred_tools: all` enables deferred schemas for any
+provider. `SUPERQODE_DEFERRED_TOOLS=off` overrides the harness default.
 
 ## Run a pack
 

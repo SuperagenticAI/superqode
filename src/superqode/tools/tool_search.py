@@ -103,13 +103,15 @@ def search_deferred(registry: ToolRegistry, query: str, limit: int = 3) -> List[
     return scored[:limit]
 
 
-def apply_deferred_tool_policy(registry: ToolRegistry, provider: str = "", model: str = "") -> int:
+def apply_deferred_tool_policy(
+    registry: ToolRegistry, provider: str = "", model: str = "", *, policy: str = ""
+) -> int:
     """Defer tools per the SUPERQODE_DEFERRED_TOOLS policy. Returns count deferred.
 
     Registers the tool_search tool whenever anything was deferred so the
     model can always find what was hidden.
     """
-    raw = os.environ.get(DEFERRED_TOOLS_ENV, "").strip().lower()
+    raw = os.environ.get(DEFERRED_TOOLS_ENV, policy).strip().lower()
     if not raw or raw in ("0", "off", "false", "no"):
         return 0
     if not hasattr(registry, "defer"):
@@ -185,7 +187,16 @@ class ToolSearchTool(Tool):
             )
 
         matches = search_deferred(registry, query)
+        from ..systemone.tool_search import select_discovery_tools
+
+        matches, decision = await select_discovery_tools(ctx, query, matches, deferred)
         if not matches:
+            if decision.get("status") == "success" and decision.get("mode") == "rerank":
+                return ToolResult(
+                    success=True,
+                    output="Jev abstained from tool discovery. No additional tool was activated. Refine the query.",
+                    metadata={"activated": [], "systemone": decision},
+                )
             available = ", ".join(t.name for t in deferred)
             return ToolResult(
                 success=True,
@@ -193,6 +204,7 @@ class ToolSearchTool(Tool):
                     f"No deferred tool matched {query!r}. "
                     f"Deferred tools that can be activated: {available}"
                 ),
+                metadata={"activated": [], "systemone": decision},
             )
 
         activated = []
@@ -206,7 +218,7 @@ class ToolSearchTool(Tool):
                 "Activated tool(s) - full schemas are available from your next step:\n"
                 + "\n".join(activated)
             ),
-            metadata={"activated": [t.name for _s, t in matches]},
+            metadata={"activated": [t.name for _s, t in matches], "systemone": decision},
         )
 
 
