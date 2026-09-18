@@ -2337,8 +2337,13 @@ class DialogsMixin:
         # Keep the view pinned to the latest response. We no longer clear the
         # log each turn, so scrolling home would jump away from the answer the
         # user just asked for — scroll to the end and resume follow mode.
-        log.auto_scroll = True
-        self.set_timer(0.1, lambda: log.scroll_end(animate=False))
+        from superqode.rendering.systemone import render_systemone_json
+
+        if render_systemone_json(response_text, THEME) is not None:
+            log.reveal_decision_response()
+        else:
+            log.auto_scroll = True
+            self.set_timer(0.1, lambda: log.scroll_end(animate=False))
 
     #: Suggested commands, in the order they become useful. Only unused ones
     #: are offered.

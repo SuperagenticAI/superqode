@@ -1805,3 +1805,49 @@ def test_jev_connection_error_is_visible(monkeypatch):
     log = FakeLog()
     SuperQodeApp._dispatch_connection_profile(Stub(), get_connection_profile("jev"), log)
     assert "ERROR Decision client is disabled" in log.items
+
+
+def test_jev_activation_initializes_status_and_usage_identity(monkeypatch):
+    from types import SimpleNamespace
+    from superqode.app_main import SuperQodeApp
+    from superqode.app.widgets import ColorfulStatusBar
+    from superqode.providers.usage import UsageTracker
+
+    tracker = UsageTracker.__new__(UsageTracker)
+    tracker._current_session = None
+    tracker._history = []
+    monkeypatch.setattr("superqode.providers.usage.get_usage_tracker", lambda: tracker)
+    status = ColorfulStatusBar()
+    pure = SimpleNamespace(
+        session=SimpleNamespace(model="jev-1.13.0", connected=True),
+        runtime_name="systemone",
+        _harness_spec=SimpleNamespace(
+            name="decision-factory_route",
+            is_decision=True,
+            systemone=SimpleNamespace(pack="factory_route"),
+        ),
+    )
+
+    class Stub:
+        def query_one(self, selector, widget_type):
+            assert selector == "#status-bar"
+            return status
+
+        def _install_pure_permission_bridge(self, pure, log):
+            pass
+
+        def _set_status_runtime(self, runtime):
+            status.active_runtime = runtime
+
+        def _set_status_model(self, model):
+            status.active_model = model
+
+    stub = Stub()
+    stub._pure_mode = pure
+    SuperQodeApp._activate_decision_connection(stub, pure, FakeLog())
+    tracker.add_usage(210, 0, cost=0)
+    SuperQodeApp._refresh_harness_panel(stub)
+    assert tracker.get_summary()["provider"] == status.byok_provider == "systemone"
+    assert tracker.get_summary()["model"] == status.byok_model == "jev-1.13.0"
+    assert status.active_harness == "decision-factory_route"
+    assert status.active_runtime == "systemone"

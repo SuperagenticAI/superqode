@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confidence threshold sweeps. Reports do not apply thresholds or infer safety
   from confidence or successful execution.
 
+### Fixed
+
+- Jev decision sessions initialize the top-bar provider/model and usage identity,
+  and retain the active decision harness instead of displaying unknown or Core.
+
 ## [2.4.0] - 2026-09-18
 
 ### Jev integration

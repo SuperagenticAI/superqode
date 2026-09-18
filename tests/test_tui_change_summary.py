@@ -108,3 +108,53 @@ def test_no_git_fallback_for_ambient_working_tree(monkeypatch):
     log = _StubLog()
     SuperQodeApp._show_final_outcome(_app(), "Just answering.", "qwen", _summary(), log)
     assert "changed" not in log.text
+
+
+def test_jev_card_stays_at_top_after_final_outcome_and_delayed_scroll():
+    import asyncio
+    import json
+    from textual.app import App, ComposeResult
+    from superqode.app.widgets import ConversationLog
+
+    class Preview(App):
+        def compose(self) -> ComposeResult:
+            yield ConversationLog(id="log")
+
+        def _record_milestone(self, *args):
+            pass
+
+        def _run_used_shell(self, summary):
+            return False
+
+        def _run_hit_an_error(self, summary):
+            return False
+
+        def _maybe_reveal_next_capability(self, log):
+            pass
+
+    async def check():
+        async with Preview().run_test(size=(80, 20)) as pilot:
+            log = pilot.app.query_one("#log", ConversationLog)
+            log.start_agent_session("Jev", "jev-1.13.0")
+            response = json.dumps(
+                {
+                    "status": "decided",
+                    "outputs": {"route": "review"},
+                    "answers": {f"check_{i}": {"noul": 0.9} for i in range(25)},
+                    "abstained": [],
+                    "metadata": {"pack": "test@1.0.0"},
+                }
+            )
+            log.end_agent_session(response_text=response)
+            SuperQodeApp._show_final_outcome(pilot.app, response, "Jev", _summary(), log)
+            await pilot.pause(0.2)
+            visible = "\n".join(
+                line.text for line in log.lines[int(log.scroll_y) : int(log.scroll_y) + 20]
+            )
+            assert "Jev · System One decision" in visible
+            assert log.scroll_y < log.max_scroll_y
+            assert not log.auto_scroll
+            log.add_user("Next task")
+            assert log.auto_scroll
+
+    asyncio.run(check())

@@ -155,7 +155,10 @@ class HelpersMixin(
             if not harness and pure is not None:
                 runtime_name = str(getattr(pure, "runtime_name", "") or "")
                 connected = bool(getattr(getattr(pure, "session", None), "connected", False))
-                if connected and runtime_name in getattr(
+                spec = getattr(pure, "_harness_spec", None)
+                if connected and getattr(spec, "is_decision", False):
+                    harness = str(spec.name)
+                elif connected and runtime_name in getattr(
                     self, "_SELF_CONTAINED_RUNTIMES", frozenset()
                 ):
                     # These runtimes own the agent loop and tool harness. The

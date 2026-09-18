@@ -167,6 +167,24 @@ class SlashCommandMixin:
         self.current_agent = "pure"
         self.current_provider = "systemone"
         self.current_model = pure.session.model
+        from superqode.providers.usage import get_usage_tracker
+
+        tracker = get_usage_tracker()
+        tracker.set_provider("systemone", pure.session.model)
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            status = self.query_one("#status-bar", ColorfulStatusBar)
+            summary = tracker.get_summary()
+            status.update_byok_status(
+                provider="systemone",
+                model=pure.session.model,
+                tokens=summary["tokens"],
+                cost=summary["cost"],
+            )
+            status.active_harness = pure._harness_spec.name
+        except Exception:  # noqa: BLE001 - status updates must not break connect
+            pass
         self._install_pure_permission_bridge(pure, log)
         self._set_status_runtime("systemone")
         self._set_status_model(pure.session.model)

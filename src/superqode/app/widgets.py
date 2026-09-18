@@ -227,7 +227,13 @@ class ColorfulStatusBar(Static):
         provider_limit = 24 if medium else 12 if width >= 64 else 8
         conn_start = cell_len(result.plain)
         conn_action = ""
-        if self.byok_provider:
+        decision_session = self.active_runtime == "systemone"
+        if decision_session:
+            conn_action = "disconnect"
+            result.append("SystemOne", style="bold #06b6d4")
+            result.append(" · ", style="#71717a")
+            result.append("Jev", style="bold #a855f7")
+        elif self.byok_provider:
             separator()
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
@@ -266,113 +272,118 @@ class ColorfulStatusBar(Static):
             result.append("Model: not connected", style="#a1a1aa")
         conn_end = cell_len(result.plain)
 
-        # A specialized runtime is useful when a model is also named. The
-        # default built-in runtime is intentionally omitted as visual noise.
-        runtime = (self.active_runtime or "").strip()
-        if runtime and self.active_model:
-            separator()
-            result.append("rt ", style="#71717a")
-            runtime_limit = 20 if medium else 7
-            result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
+        if not decision_session:
+            # A specialized runtime is useful when a model is also named. The
+            # default built-in runtime is intentionally omitted as visual noise.
+            runtime = (self.active_runtime or "").strip()
+            if runtime and self.active_model:
+                separator()
+                result.append("rt ", style="#71717a")
+                runtime_limit = 20 if medium else 7
+                result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
 
-        harness = (self.active_harness or "").strip()
-        if harness:
-            separator()
-            result.append("harness " if wide else "h ", style="#71717a")
-            harness_limit = 18 if wide else 10 if medium else 6
-            result.append(
-                self._truncate_status_value(harness, harness_limit),
-                style="bold #a855f7",
-            )
-
-        # Interaction mode is always visible, on the right cluster.
-        mode = (self.interaction_mode or "").strip().lower()
-        if mode:
-            mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(mode, mode.upper())
-            mode_color = {
-                "chat": "#06b6d4",
-                "plan": "#fbbf24",
-                "build": "#22c55e",
-            }.get(mode, "#a855f7")
-            right.append(mode_label, style=f"bold {mode_color}")
-
-        # Keep the interaction mode and the optional input mode distinct.
-        vim_state = (self.vim_state or "").strip().lower()
-        if vim_state:
-            vim_label = {
-                "normal": "NORMAL",
-                "insert": "INSERT",
-                "command": "COMMAND",
-                "search": "SEARCH",
-            }.get(vim_state, vim_state.upper())
-            vim_color = {
-                "normal": "#a855f7",
-                "insert": "#06b6d4",
-                "command": "#fbbf24",
-                "search": "#ec4899",
-            }.get(vim_state, "#a855f7")
-            if right.plain:
-                right_separator()
-            if medium:
-                right.append("VIM ", style="#a1a1aa")
-                right.append(vim_label, style=f"bold {vim_color}")
-            else:
-                right.append(vim_label[:1], style=f"bold {vim_color}")
-
-        # Usage remains visible whenever known. Figures compact on narrower
-        # terminals, while connection/runtime/mode retain priority.
-        context_used = self.context_used or self.byok_tokens
-        if medium and self.context_window > 0 and context_used > 0:
-            pct = min(100, round(100 * context_used / self.context_window))
-            if pct < 60:
-                context_color = "#22c55e"
-            elif pct < 85:
-                context_color = "#fbbf24"
-            else:
-                context_color = "#ef4444"
-            if right.plain:
-                right_separator()
-            right.append("ctx ", style="#a1a1aa")
-            right.append(f"{pct}%", style=context_color)
-            if wide:
-                right.append(
-                    f" · {self._format_token_count(context_used)}/"
-                    f"{self._format_token_count(self.context_window)}",
-                    style="#a1a1aa",
+            harness = (self.active_harness or "").strip()
+            if harness:
+                separator()
+                result.append("harness " if wide else "h ", style="#71717a")
+                harness_limit = 18 if wide else 10 if medium else 6
+                result.append(
+                    self._truncate_status_value(harness, harness_limit),
+                    style="bold #a855f7",
                 )
-        elif medium and self.byok_tokens > 0:
-            if right.plain:
-                right_separator()
-            right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
-            right.append(" tok", style="#71717a")
 
-        # Launch fires the models.dev and ACP registry refreshes behind the
-        # first frame. Saying so costs one chip and turns a quiet couple of
-        # seconds into visible progress.
-        if self.catalog_state and medium:
-            if right.plain:
-                right_separator()
-            right.append("⟳ ", style="#06b6d4")
-            right.append(self.catalog_state.strip(), style="#a1a1aa")
+            # Interaction mode is always visible, on the right cluster.
+            mode = (self.interaction_mode or "").strip().lower()
+            if mode:
+                mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(
+                    mode, mode.upper()
+                )
+                mode_color = {
+                    "chat": "#06b6d4",
+                    "plan": "#fbbf24",
+                    "build": "#22c55e",
+                }.get(mode, "#a855f7")
+                right.append(mode_label, style=f"bold {mode_color}")
 
-        if self.plan_state:
-            state = self.plan_state.strip()
-            color = {
-                "ON": "#fbbf24",
-                "pending": "#f59e0b",
-                "active": "#06b6d4",
-                "approved": "#22c55e",
-            }.get(state, "#a855f7")
-            if right.plain:
-                right_separator()
-            right.append("PLAN", style=f"bold {color}")
-            right.append(f" {state}", style=color)
+            # Keep the interaction mode and the optional input mode distinct.
+            vim_state = (self.vim_state or "").strip().lower()
+            if vim_state:
+                vim_label = {
+                    "normal": "NORMAL",
+                    "insert": "INSERT",
+                    "command": "COMMAND",
+                    "search": "SEARCH",
+                }.get(vim_state, vim_state.upper())
+                vim_color = {
+                    "normal": "#a855f7",
+                    "insert": "#06b6d4",
+                    "command": "#fbbf24",
+                    "search": "#ec4899",
+                }.get(vim_state, "#a855f7")
+                if right.plain:
+                    right_separator()
+                if medium:
+                    right.append("VIM ", style="#a1a1aa")
+                    right.append(vim_label, style=f"bold {vim_color}")
+                else:
+                    right.append(vim_label[:1], style=f"bold {vim_color}")
 
-        if self.byok_cost > 0 and medium:
-            if right.plain:
-                right_separator()
-            cost = f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
-            right.append(cost, style="#fbbf24")
+            # Usage remains visible whenever known. Figures compact on narrower
+            # terminals, while connection/runtime/mode retain priority.
+            context_used = self.context_used or self.byok_tokens
+            if medium and self.context_window > 0 and context_used > 0:
+                pct = min(100, round(100 * context_used / self.context_window))
+                if pct < 60:
+                    context_color = "#22c55e"
+                elif pct < 85:
+                    context_color = "#fbbf24"
+                else:
+                    context_color = "#ef4444"
+                if right.plain:
+                    right_separator()
+                right.append("ctx ", style="#a1a1aa")
+                right.append(f"{pct}%", style=context_color)
+                if wide:
+                    right.append(
+                        f" · {self._format_token_count(context_used)}/"
+                        f"{self._format_token_count(self.context_window)}",
+                        style="#a1a1aa",
+                    )
+            elif medium and self.byok_tokens > 0:
+                if right.plain:
+                    right_separator()
+                right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
+                right.append(" tok", style="#71717a")
+
+            # Launch fires the models.dev and ACP registry refreshes behind the
+            # first frame. Saying so costs one chip and turns a quiet couple of
+            # seconds into visible progress.
+            if self.catalog_state and medium:
+                if right.plain:
+                    right_separator()
+                right.append("⟳ ", style="#06b6d4")
+                right.append(self.catalog_state.strip(), style="#a1a1aa")
+
+            if self.plan_state:
+                state = self.plan_state.strip()
+                color = {
+                    "ON": "#fbbf24",
+                    "pending": "#f59e0b",
+                    "active": "#06b6d4",
+                    "approved": "#22c55e",
+                }.get(state, "#a855f7")
+                if right.plain:
+                    right_separator()
+                right.append("PLAN", style=f"bold {color}")
+                right.append(f" {state}", style=color)
+
+            if self.byok_cost > 0 and medium:
+                if right.plain:
+                    right_separator()
+                cost = (
+                    f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
+                )
+                right.append(cost, style="#fbbf24")
 
         # The way out of a session sits at the far right, where a window
         # control would be: one fixed place, present at every width, and
@@ -2731,6 +2742,13 @@ class ConversationLog(RichLog):
         # Store and render the final response once. Streaming chunks are kept
         # out of the log so markdown tables/code render cleanly here.
         final_response = response_text or self._streaming_response
+        from superqode.rendering.systemone import render_systemone_json
+
+        decision_response = success and render_systemone_json(final_response, THEME) is not None
+        response_start_y = len(self.lines)
+        if decision_response:
+            self.auto_scroll = False
+            self._writing_feedback = True
         if final_response:
             self._streaming_response = final_response
             self.write_final_response(
@@ -2779,6 +2797,28 @@ class ConversationLog(RichLog):
 
         summary_content.append("\n")
         self.write(summary_content)
+        if decision_response:
+            self._writing_feedback = False
+            self.reveal_decision_response(response_start_y)
+
+    def reveal_decision_response(self, fallback_y: int = 0) -> None:
+        """Reveal the latest Jev card after completion chrome has been written."""
+        self.auto_scroll = False
+        self._feedback_anchor_active = True
+
+        def reveal() -> None:
+            if not self._feedback_anchor_active:
+                return
+            anchor_y = fallback_y
+            for index in range(len(self.lines) - 1, -1, -1):
+                if "Jev · System One decision" in self.lines[index].text:
+                    anchor_y = index
+                    break
+            self.scroll_to(y=anchor_y, animate=False)
+
+        reveal()
+        self.call_after_refresh(reveal)
+        self.set_timer(0.1, reveal)
 
     def get_thinking_text(self) -> str:
         """Get all thinking text for copying."""
