@@ -17,6 +17,7 @@ class HarnessFlavor(str, Enum):
 
     CODING = "coding"
     NO_TOOL = "no_tool"
+    DECISION = "decision"
 
 
 class WorkflowMode(str, Enum):
@@ -217,6 +218,27 @@ class ObservabilitySpec:
 
 
 @dataclass(frozen=True)
+class SystemOneSpec:
+    """Opt-in System One decision plane. Disabled by default.
+
+    Code owns ALLOW / DENY / ASK. ``stub`` and ``replay`` need no network.
+    ``live`` skips when no API key is configured.
+    """
+
+    enabled: bool = False
+    client: str = "stub"  # stub | replay | live
+    pack: str = "tool_gate"
+    endpoint: str = "https://api.typesafe.ai/v1/systemone"
+    api_key_env: str = "TYPESAFE_API_KEY"
+    model: str = "jev-1.13.0"
+    replay_path: str = ""
+    replay_trace: str = ""
+    record_dir: str = ""
+    timeout_ms: int = 5000
+    airplane: str = "skip"
+
+
+@dataclass(frozen=True)
 class OptimizationSpec:
     """Policy boundaries for self-improving harness optimization."""
 
@@ -250,6 +272,7 @@ class HarnessSpec:
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)
     hooks: HooksSpec = field(default_factory=HooksSpec)
     optimization: OptimizationSpec = field(default_factory=OptimizationSpec)
+    systemone: SystemOneSpec = field(default_factory=SystemOneSpec)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -259,6 +282,10 @@ class HarnessSpec:
     @property
     def is_coding(self) -> bool:
         return self.flavor == HarnessFlavor.CODING
+
+    @property
+    def is_decision(self) -> bool:
+        return self.flavor == HarnessFlavor.DECISION
 
 
 CompiledProfileName = Literal["build", "plan", "review", "no-tool"]

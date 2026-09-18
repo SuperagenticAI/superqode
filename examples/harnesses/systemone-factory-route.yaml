@@ -1,0 +1,12 @@
+version: 1
+name: route-decision
+description: Suggest an existing factory route without executing it.
+flavor: decision
+runtime:
+  backend: systemone
+systemone:
+  enabled: true
+  client: live
+  pack: factory_route
+metadata:
+  example: true

@@ -34,6 +34,11 @@ _ALWAYS_KEEP = {
 }
 
 
+def is_secret_name(name: str) -> bool:
+    """True when ``name`` looks like a credential-bearing key."""
+    return bool(name) and bool(_SECRET_NAME_RE.search(name))
+
+
 def env_policy() -> str:
     try:
         from superqode.governance import active_governance
@@ -72,4 +77,4 @@ def build_shell_env(base: Optional[Dict[str, str]] = None) -> Optional[Dict[str,
     }
 
 
-__all__ = ["ALLOW_ENV", "POLICY_ENV", "build_shell_env", "env_policy"]
+__all__ = ["ALLOW_ENV", "POLICY_ENV", "build_shell_env", "env_policy", "is_secret_name"]

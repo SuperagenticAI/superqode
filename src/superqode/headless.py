@@ -299,10 +299,13 @@ async def run_headless(
     )
     harness_source = "built-in" if profile.name in {"core", "workbench", "no-tool"} else "profile"
     harness_digest = ""
+    harness_spec = None
     if harness_source == "built-in":
         from .harness import resolve_harness
 
-        harness_digest = resolve_harness(profile.name).digest
+        definition = resolve_harness(profile.name)
+        harness_digest = definition.digest
+        harness_spec = definition.spec
     config = AgentConfig(
         provider=provider,
         model=model,
@@ -321,6 +324,7 @@ async def run_headless(
         harness_source=harness_source,
         harness_digest=harness_digest,
         tool_contract_version=("core-tools-v1" if profile.name == "core" else "workbench-v1"),
+        harness_spec=harness_spec,
     )
 
     runtime_name = resolve_runtime_name(cli=runtime)
@@ -543,6 +547,10 @@ def response_to_json(
         payload["error"] = response.error
     if change_summary is not None:
         payload["changes"] = change_summary
+    if getattr(response, "rubric_result", None) is not None:
+        payload["rubric_result"] = response.rubric_result
+        if response.rubric_result.get("verdict") != "satisfied":
+            payload["success"] = False
     if getattr(response, "schema_errors", None) is not None:
         payload["structured_output"] = response.structured_output
         payload["schema_errors"] = response.schema_errors

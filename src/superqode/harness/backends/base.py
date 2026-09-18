@@ -27,6 +27,7 @@ class HarnessBackendCapabilities:
     supports_mcp: bool = False
     supports_typed_output: bool = True
     supports_workflow_children: bool = True
+    supports_decision: bool = False
     event_detail: str = "coarse"
     availability: str = "unknown"
     install_hint: str | None = None
@@ -44,6 +45,7 @@ class HarnessBackendCapabilities:
             "supports_mcp": self.supports_mcp,
             "supports_typed_output": self.supports_typed_output,
             "supports_workflow_children": self.supports_workflow_children,
+            "supports_decision": self.supports_decision,
             "event_detail": self.event_detail,
             "availability": self.availability,
             "install_hint": self.install_hint,

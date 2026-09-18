@@ -207,6 +207,8 @@ nav:
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🧪 Harness Examples: examples.md
     - 🏗️ Harness System: advanced/harness-system.md
+    - Jev Integration: advanced/systemone.md
+    - Release 2.4.0: advanced/release-2.4.0.md
     - π PiPy: advanced/pipy.md
     - 🐍 Native RLM: advanced/rlm.md
     - 🐍 Prime Agent Python Client: prime-agent-python-client.md

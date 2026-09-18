@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import time
+import hashlib
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from .evaluators import evaluate_content, validate_evaluator
 from .loader import load_harness_spec
 from .store import create_harness_store
 from .kernel import init_harness
@@ -74,13 +76,18 @@ def load_eval_tasks(path: str | Path) -> dict[str, Any]:
             raise ValueError(f"Eval task at index {index} requires id")
         if not str(task.get("prompt") or "").strip():
             raise ValueError(f"Eval task {task.get('id') or index} requires prompt")
+        validate_evaluator(task)
         normalized = dict(task)
         normalized["split"] = _normalize_eval_split(task.get("split"))
         normalized_tasks.append(normalized)
+    ids = [task["id"] for task in normalized_tasks]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Eval task ids must be unique")
     variants = data.get("variants", [])
     if variants is not None and not isinstance(variants, list):
         raise ValueError("Eval variants must be a list")
     return {
+        "tasks_hash": "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest(),
         "tasks": normalized_tasks,
         "variants": variants or [],
         "metadata": data.get("metadata") or {},
@@ -138,6 +145,8 @@ async def run_harness_eval(
     regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
     return {
         "tasks_file": str(tasks_path),
+        "tasks_hash": task_file.get("tasks_hash"),
+        "task_metadata": task_file.get("metadata") or {},
         "split": split,
         "task_count": len(tasks),
         "split_counts": task_file.get("split_counts") or eval_task_split_counts(task_file["tasks"]),
@@ -215,7 +224,8 @@ async def _run_variant_eval(
     passed = sum(1 for item in task_results if item["status"] == "passed")
     failed = sum(1 for item in task_results if item["status"] == "failed")
     score = passed / len(task_results) if task_results else 0.0
-    status = "error" if failed and passed == 0 else "passed"
+    unresolved = sum(item["status"] in {"error", "abstained", "ungraded"} for item in task_results)
+    status = "error" if unresolved or (failed and passed == 0) else "passed"
     duration_seconds = round(time.monotonic() - started, 3)
     usage = _aggregate_task_usage(task_results)
     return {
@@ -226,6 +236,11 @@ async def _run_variant_eval(
         "score": round(score, 3),
         "passed": passed,
         "failed": failed,
+        "abstained": sum(item["status"] == "abstained" for item in task_results),
+        "errors": sum(item["status"] == "error" for item in task_results),
+        "ungraded": sum(item["status"] == "ungraded" for item in task_results),
+        "coverage": round((passed + failed) / len(task_results), 3) if task_results else 0.0,
+        "accuracy_when_graded": round(passed / (passed + failed), 3) if passed + failed else None,
         "skipped": sum(1 for item in task_results if item["status"] == "skipped"),
         "duration_seconds": duration_seconds,
         "usage": usage,
@@ -288,11 +303,14 @@ async def _run_eval_task(
             content = result.content or ""
             run_id = result.run_id
         usage = _usage_from_result(result)
-        passed, reason = _score_content(content, task)
+        evaluation = await evaluate_content(content, task, spec=spec)
+        passed = evaluation.status == "passed"
+        reason = evaluation.reason
         return {
             "id": task["id"],
             "split": task.get("split") or "held-in",
-            "status": "passed" if passed else "failed",
+            "status": evaluation.status,
+            "evaluation": evaluation.model_dump(mode="json"),
             "score": 1.0 if passed else 0.0,
             "duration_seconds": round(time.monotonic() - started, 3),
             "run_id": run_id,
@@ -324,10 +342,15 @@ async def _run_eval_task(
         return {
             "id": task["id"],
             "split": task.get("split") or "held-in",
-            "status": "failed",
+            "status": "error",
             "score": 0.0,
             "duration_seconds": round(time.monotonic() - started, 3),
-            "reason": str(exc),
+            "reason": "Task execution or evaluation failed",
+            "evaluation": {
+                "evaluator": "execution",
+                "status": "error",
+                "reason": type(exc).__name__,
+            },
             "failure_digest": build_failure_digest(
                 [
                     type(
@@ -336,7 +359,7 @@ async def _run_eval_task(
                         {
                             "name": "eval_task",
                             "status": "failed",
-                            "error": str(exc),
+                            "error": type(exc).__name__,
                             "details": {"task_id": task["id"]},
                         },
                     )()
@@ -499,7 +522,8 @@ def render_harness_eval(payload: dict[str, Any]) -> str:
         lines.append(
             f"  {variant['harness']:<24} score={variant['score']:.3f} "
             f"passed={variant['passed']} failed={variant['failed']} "
-            f"skipped={variant['skipped']} delta={variant['delta_vs_baseline']:+.3f}"
+            f"abstained={variant.get('abstained', 0)} ungraded={variant.get('ungraded', 0)} "
+            f"errors={variant.get('errors', 0)} skipped={variant['skipped']} delta={variant['delta_vs_baseline']:+.3f}"
         )
         usage = variant.get("usage") or {}
         if usage.get("total_tokens") is not None or usage.get("cost_usd") is not None:

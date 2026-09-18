@@ -1,0 +1,9 @@
+metadata:
+  description: Example model judgment; does not establish that tests actually ran.
+tasks:
+  - id: explain-approval
+    split: held-out
+    prompt: Explain when a tool needs human approval and what happens when its permission classifier is unavailable.
+    evaluator:
+      type: jev_rubric
+      rubric: The answer explains that uncertain tool decisions can require human approval and distinguishes classifier errors from approval.

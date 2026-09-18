@@ -14,7 +14,11 @@ def test_harness_examples_load_and_match_backend(path: Path):
 
     assert spec.name
     assert spec.runtime.backend
-    assert spec.agents
+    if spec.is_decision:
+        assert spec.runtime.backend == "systemone"
+        assert spec.systemone.enabled
+    else:
+        assert spec.agents
     assert spec.metadata.get("example")
 
     inspection = inspect_harness_backend(spec.runtime.backend, spec)

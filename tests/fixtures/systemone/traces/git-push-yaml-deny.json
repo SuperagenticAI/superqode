@@ -1,0 +1,25 @@
+{
+  "id": "git-push-yaml-deny",
+  "expect": "deny",
+  "hard_deny": true,
+  "note": "YAML deny wins even if the stub would allow.",
+  "state": {
+    "tool": "bash",
+    "arguments": {"command": "git push origin main"},
+    "grant": ["bash"],
+    "policy": "balanced",
+    "task": "ship the branch"
+  },
+  "answers": {
+    "in_grant": {"noul": 0.95},
+    "args_plausible": {"noul": 0.93},
+    "destructive": {"noul": 0.20},
+    "exfil_risk": {"noul": 0.10},
+    "on_task": {"noul": 0.90},
+    "disposition": {
+      "choice": "allow",
+      "probabilities": {"allow": 0.85, "deny": 0.05, "ask": 0.10},
+      "confidence": 0.82
+    }
+  }
+}

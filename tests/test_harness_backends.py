@@ -113,6 +113,7 @@ def test_known_harness_backends_include_current_runtime_backends():
     names = known_harness_backend_names()
 
     assert "builtin" in names
+    assert "systemone" in names
     assert "adk" in names
     assert "codex-sdk" in names
     assert "openai-agents" in names

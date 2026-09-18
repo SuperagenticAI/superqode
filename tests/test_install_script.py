@@ -319,7 +319,15 @@ def _run_installer_on_a_terminal(tmp_path: Path, uv_body: str, timeout: float = 
     import select
 
     env, _ = _fake_tool_environment(tmp_path)
-    env.update(TERM="xterm-256color", COLORTERM="truecolor", LANG="en_US.UTF-8", COLUMNS="90")
+    env.pop("NO_COLOR", None)
+    env.pop("SUPERQODE_INSTALL_VERBOSE", None)
+    env.update(
+        TERM="xterm-256color",
+        COLORTERM="truecolor",
+        LANG="en_US.UTF-8",
+        LC_ALL="en_US.UTF-8",
+        COLUMNS="90",
+    )
     _write_executable(tmp_path / "commands" / "uv", uv_body)
 
     pid, fd = pty.fork()

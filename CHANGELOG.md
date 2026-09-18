@@ -5,7 +5,66 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.0] - 2026-09-18
+
+### Jev integration
+
+SuperQode 2.4.0 adds a general decision harness for Jev, native tool-permission
+checks, labelled decision evaluations, and opt-in rubric grading. Coding models
+continue to generate code; Jev supplies typed decisions that SuperQode validates
+and applies through explicit policies.
+
+### Added
+
+- **General decision harness.** The `systemone` backend evaluates reviewed
+  Choice, Score, and Noul question packs. Input schemas, confidence thresholds,
+  abstention, and pack hashes make each decision inspectable and reproducible.
+  Examples cover ticket triage, factory-route suggestions, and tool permissions.
+- **Native tool-permission checks.** `:systemone live` enables Jev checks in
+  Core/BYOK sessions. Hard policy denials remain authoritative; model ASK uses
+  the approval flow even for otherwise auto-allowed tools. Client failures are
+  visible and fall back to the existing permission policy.
+- **Direct decision sessions.** `:systemone connect <pack>` and
+  `:connect systemone <pack>` connect the TUI directly to Jev without a coding
+  provider. Status distinguishes a decision session from the tool-check sidecar.
+- **Labelled evaluations.** `harness eval` supports exact typed output labels
+  and explicit evaluator results. Scorecards include coverage, accuracy among
+  graded cases, abstentions, errors, dataset hashes, and decision evidence.
+  Synthetic routing and tool-permission starter datasets include held-in and
+  held-out splits.
+- **Rubric grading.** `SUPERQODE_RUBRIC_GRADER=systemone` uses Jev verdicts in
+  the native rubric revision loop. A `jev_rubric` task evaluator judges another
+  harness's response. Headless JSON exposes `rubric_result`.
+- **Transport and observability.** Live decisions report returned model, HTTP
+  status, latency, and available token usage. Configurable compatible endpoints,
+  stub clients, sanitized recordings, and replay support development and testing.
+
+### Changed
+
+- Invalid, uncertain, or unavailable rubric judgments are explicitly `ungraded`.
+  Utility-grader errors no longer count as `satisfied`. Headless runs with an
+  unsatisfied or ungraded rubric report `success: false` and exit with code 2.
+- Legacy evaluation tasks retain their non-empty smoke check, now identified as
+  `smoke_only`. Use labelled or rubric evaluators for stronger assessment.
+
+### Reliability
+
+- Tool-gate pack 1.1.0 requires low destructive and exfiltration risk before
+  auto-approval. Uncertain risk cannot produce ALLOW.
+- Live criteria serialization matches the API contract. Evaluation deadlines
+  include retries, and recording failures do not discard valid decisions.
+- Input redaction covers common credential fields, headers, command flags,
+  URL credentials, and private-key blocks. Offline policies remain respected.
+
+### Scope
+
+Jev integration is opt-in and requires separate TypeSafe credentials for live
+use. The native gate does not intercept external agent runtimes. Route decisions
+are suggestions; automatic factory routing and automatic LLM fallback are not
+included. Starter datasets are examples, not published accuracy benchmarks.
+
+See [the Jev integration guide](docs/advanced/systemone.md) and
+[2.4.0 release notes](docs/advanced/release-2.4.0.md) for setup and migration.
 
 ## [2.3.2] - 2026-09-13
 

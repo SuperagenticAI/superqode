@@ -34,8 +34,9 @@ from .runtime import (
 from .pipy import PiPyHarnessBackend
 from .tau import TauHarnessBackend
 from .uhp import UHPHarnessBackend
+from .systemone import SystemOneHarnessBackend
 
-_RUNTIME_BACKENDS = {"builtin"}
+_RUNTIME_BACKENDS = {"builtin", "systemone"}
 _OPTIONAL_BACKENDS = {
     "adk",
     "anthropic-managed",
@@ -61,6 +62,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
     resolved = (name or "builtin").strip().lower()
     if resolved == "builtin":
         return RuntimeHarnessBackend(resolved)
+    if resolved == "systemone":
+        return SystemOneHarnessBackend()
     if resolved == "adk":
         return ADKHarnessBackend()
     if resolved == "openai-agents":
@@ -117,6 +120,14 @@ def inspect_harness_backend(
                 severity="error",
                 code="no_tool_unsupported",
                 message=f"Backend '{backend.name}' does not support no-tool harnesses.",
+            )
+        )
+    if getattr(spec, "is_decision", False) and not capabilities.supports_decision:
+        issues.append(
+            HarnessBackendIssue(
+                severity="error",
+                code="decision_unsupported",
+                message=f"Backend '{backend.name}' does not support decision harnesses.",
             )
         )
     if spec.is_coding and not capabilities.supports_coding:

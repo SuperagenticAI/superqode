@@ -901,6 +901,13 @@ def cli_main(
                 if rendered_changes:
                     click.echo()
                     click.echo(rendered_changes)
+            if (
+                getattr(response, "rubric_result", None)
+                and response.rubric_result.get("verdict") != "satisfied"
+            ):
+                if output_mode != "json":
+                    click.echo(f"Rubric review: {response.rubric_result.get('verdict')}", err=True)
+                ctx.exit(2)
             if output_schema and response.schema_errors:
                 ctx.exit(2)
             ctx.exit(0 if response.stopped_reason == "complete" and not response.error else 1)

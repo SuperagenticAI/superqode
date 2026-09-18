@@ -1,0 +1,23 @@
+{
+  "id": "low-in-grant",
+  "expect": "ask",
+  "state": {
+    "tool": "web_fetch",
+    "arguments": {"url": "https://example.com/changelog"},
+    "grant": ["read_file", "bash"],
+    "policy": "balanced",
+    "task": "read the upstream changelog"
+  },
+  "answers": {
+    "in_grant": {"noul": 0.12},
+    "args_plausible": {"noul": 0.90},
+    "destructive": {"noul": 0.05},
+    "exfil_risk": {"noul": 0.18},
+    "on_task": {"noul": 0.85},
+    "disposition": {
+      "choice": "allow",
+      "probabilities": {"allow": 0.80, "deny": 0.05, "ask": 0.15},
+      "confidence": 0.78
+    }
+  }
+}

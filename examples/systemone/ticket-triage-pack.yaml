@@ -1,0 +1,30 @@
+id: ticket_triage
+version: "1.0.0"
+description: Classify a support request, score severity, and flag urgency.
+state_schema:
+  type: string
+  minLength: 1
+questions:
+  department:
+    type: choice
+    instructions: Which department should handle this support request?
+    criteria:
+      billing: Payments, invoices, refunds, and subscriptions.
+      technical: Bugs, broken functionality, and outages.
+      sales: Pricing, demos, and purchase enquiries.
+      other: Requests that do not fit the listed departments.
+  severity:
+    type: score
+    instructions: How severe is the reported problem?
+    criteria:
+      - Informational question with no broken functionality.
+      - Minor inconvenience with a workaround.
+      - Important functionality is blocked.
+      - Critical outage affecting the whole service.
+  urgent:
+    type: noul
+    instructions: Does the request explicitly require immediate attention?
+decision_policy:
+  min_confidence: 0.75
+  noul_false_max: 0.2
+  noul_true_min: 0.8
