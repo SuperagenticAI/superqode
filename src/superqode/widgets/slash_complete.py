@@ -54,6 +54,15 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":permissions", "Show permission policy and pending approvals", category="workflow"
     ),
     SlashCommand(":policy", "Show permission policy", category="workflow"),
+    SlashCommand(
+        ":systemone discovery", "Inspect SystemOne tool discovery", category="workflow"
+    ),
+    SlashCommand(
+        ":discovery", "Inspect the latest progressive tool discovery", category="workflow"
+    ),
+    SlashCommand(
+        ":discovery status", "Show discovery configuration and lifecycle", category="workflow"
+    ),
     SlashCommand("/harness", "Load or inspect a HarnessSpec", category="workflow"),
     SlashCommand(":harness", "Load or inspect a HarnessSpec", category="workflow"),
     SlashCommand("/harness inspect", "Summarize the active HarnessSpec", category="workflow"),

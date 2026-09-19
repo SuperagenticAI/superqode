@@ -180,36 +180,141 @@ class ToolSearchTool(Tool):
             return ToolResult(success=False, output="", error="Provide a query.")
 
         deferred = registry.deferred_tools()
-        if not deferred:
+        matches = search_deferred(registry, query)
+        discovery: dict[str, Any] = {}
+        discovery_candidates = None
+        activation_limit = 3
+        catalogue_names = [tool.name for tool in deferred]
+        settings = None
+        try:
+            from .discovery import (
+                descriptors_from_mcp,
+                descriptors_from_tools,
+                resolve_discovery_settings,
+                retrieve,
+            )
+
+            settings = resolve_discovery_settings(getattr(ctx, "harness_spec", None))
+            if settings.enabled and settings.mode in {"shadow", "unified"}:
+                native_deferred = deferred
+                if settings.mcp_mode == "deferred_tools":
+                    native_deferred = [
+                        tool for tool in deferred if tool.name not in {"mcp_search", "mcp_execute"}
+                    ]
+                elif settings.mcp_mode == "disabled":
+                    native_deferred = [
+                        tool for tool in deferred if not tool.name.startswith("mcp_")
+                    ]
+                catalogue = descriptors_from_tools(native_deferred)
+                if settings.mcp_mode == "deferred_tools" and getattr(
+                    ctx, "mcp_allowed", True
+                ):
+                    catalogue.extend(await descriptors_from_mcp())
+                catalogue_names = [item.exposed_name for item in catalogue]
+                discovery_candidates, retrieval = await retrieve(
+                    query, catalogue, settings
+                )
+                unified_matches = [
+                    (candidate.score, candidate.descriptor.payload)
+                    for candidate in discovery_candidates
+                    if candidate.descriptor.payload is not None
+                ]
+                activation_limit = settings.activation_limit
+                discovery = {
+                    "mode": settings.mode,
+                    "catalogSize": len(catalogue),
+                    "retriever": retrieval,
+                    "candidates": [
+                        {
+                            "id": candidate.descriptor.id,
+                            "name": candidate.descriptor.exposed_name,
+                            "source": candidate.descriptor.source,
+                            "rank": candidate.rank,
+                            "score": candidate.score,
+                            "signals": dict(candidate.signals),
+                            "retrievedBy": list(candidate.retrieved_by),
+                        }
+                        for candidate in discovery_candidates
+                    ],
+                }
+                if settings.mode == "unified":
+                    matches = unified_matches[:activation_limit]
+                else:
+                    discovery["shadowActivated"] = [
+                        tool.name for _score, tool in unified_matches[:activation_limit]
+                    ]
+        except Exception as exc:
+            # Discovery configuration may explicitly request failure.  Retrieval
+            # itself implements fallback/empty/fail; preserve legacy activation
+            # here only when the whole optional layer cannot be resolved.
+            if settings is not None and settings.on_error == "fail":
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Configured tool discovery failed: {type(exc).__name__}",
+                    metadata={"activated": [], "discovery": {"status": "error"}},
+                )
+            discovery = {"status": "error", "error": type(exc).__name__}
+
+        if not deferred and not discovery_candidates:
             return ToolResult(
                 success=True,
                 output="No additional tools are deferred - everything available is already loaded.",
+                metadata={"activated": [], "discovery": discovery},
             )
-
-        matches = search_deferred(registry, query)
         from ..systemone.tool_search import select_discovery_tools
 
-        matches, decision = await select_discovery_tools(ctx, query, matches, deferred)
+        matches, decision = await select_discovery_tools(
+            ctx, query, matches, deferred, candidates=discovery_candidates
+        )
+        discovery_origin: dict[str, Any] = {}
+        if settings is not None and settings.enabled and discovery:
+            try:
+                from .discovery import record_discovery_trace
+
+                discovery.update(
+                    query=query,
+                    sessionId=getattr(ctx, "session_id", ""),
+                    judge=decision,
+                    activated=[tool.name for _score, tool in matches],
+                )
+                discovery = record_discovery_trace(settings, discovery)
+                discovery_origin = {
+                    "discoveryId": discovery["discoveryId"],
+                    "query": query,
+                }
+            except OSError as exc:
+                discovery["traceError"] = type(exc).__name__
+            callback = getattr(ctx, "on_discovery", None)
+            if callback is not None:
+                callback_result = callback(dict(discovery))
+                if hasattr(callback_result, "__await__"):
+                    await callback_result
         if not matches:
             if decision.get("status") == "success" and decision.get("mode") == "rerank":
                 return ToolResult(
                     success=True,
                     output="Jev abstained from tool discovery. No additional tool was activated. Refine the query.",
-                    metadata={"activated": [], "systemone": decision},
+                    metadata={"activated": [], "systemone": decision, "discovery": discovery},
                 )
-            available = ", ".join(t.name for t in deferred)
+            available = ", ".join(catalogue_names)
             return ToolResult(
                 success=True,
                 output=(
                     f"No deferred tool matched {query!r}. "
                     f"Deferred tools that can be activated: {available}"
                 ),
-                metadata={"activated": [], "systemone": decision},
+                metadata={"activated": [], "systemone": decision, "discovery": discovery},
             )
 
         activated = []
         for _score, tool in matches:
-            registry.activate(tool.name)
+            if registry.get(tool.name) is None:
+                registry.register(tool)
+                if discovery_origin:
+                    registry.set_activation_origin(tool.name, discovery_origin)
+            else:
+                registry.activate(tool.name, origin=discovery_origin or None)
             first_sentence = tool.description.split(". ")[0][:140]
             activated.append(f"- {tool.name}: {first_sentence}")
         return ToolResult(
@@ -218,7 +323,11 @@ class ToolSearchTool(Tool):
                 "Activated tool(s) - full schemas are available from your next step:\n"
                 + "\n".join(activated)
             ),
-            metadata={"activated": [t.name for _s, t in matches], "systemone": decision},
+            metadata={
+                "activated": [t.name for _s, t in matches],
+                "systemone": decision,
+                "discovery": discovery,
+            },
         )
 
 

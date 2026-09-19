@@ -230,7 +230,7 @@ show status, or display its local help where supported.
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
-| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks`, `:systemone` |
+| Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks`, `:systemone`, `:discovery` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a`, `:connect protocols` |
@@ -832,6 +832,19 @@ For slow TUI performance:
 3. **Use quick mode instead of deep mode**
 
 ### Jev tool checks
+
+The built-in SystemOne coding harness includes progressive tool discovery, so
+users do not need an example file or source-tree path:
+
+```sh
+uv run superqode --tui --harness systemone
+```
+
+It defaults to unified BM25 retrieval with configurable ranking, Jev shadow
+judging over the shortlist, deferred native and MCP schemas, and the normal
+permission path. `:systemone` shows both the tool gate and a discovery summary;
+`:systemone discovery` shows the ranked candidates, selection, activation, and
+execution outcome. `:discovery` is an alias for that detailed view.
 
 For the native Core/BYOK runtime, set `TYPESAFE_API_KEY` in the launching shell,
 then use `:systemone live`. `:systemone` shows configuration and the last check.

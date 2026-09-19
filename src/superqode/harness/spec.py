@@ -218,6 +218,26 @@ class ObservabilitySpec:
 
 
 @dataclass(frozen=True)
+class ToolDiscoverySpec:
+    """Portable progressive tool-discovery policy.
+
+    SuperQode owns the pipeline contract, while each stage remains replaceable.
+    ``legacy`` preserves the existing native and MCP search tools; ``shadow``
+    evaluates the configured pipeline without changing activation; ``unified``
+    makes the configured pipeline authoritative.
+    """
+
+    enabled: bool = False
+    mode: str = "legacy"  # legacy | shadow | unified
+    trace_dir: str = ""
+    search: dict[str, Any] = field(default_factory=dict)
+    rank: dict[str, Any] = field(default_factory=dict)
+    judge: dict[str, Any] = field(default_factory=dict)
+    activation: dict[str, Any] = field(default_factory=dict)
+    mcp: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class SystemOneSpec:
     """Opt-in System One decision plane. Disabled by default.
 
@@ -273,6 +293,7 @@ class HarnessSpec:
     context: ContextSpec = field(default_factory=ContextSpec)
     checks: ChecksSpec = field(default_factory=ChecksSpec)
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)
+    tool_discovery: ToolDiscoverySpec = field(default_factory=ToolDiscoverySpec)
     hooks: HooksSpec = field(default_factory=HooksSpec)
     optimization: OptimizationSpec = field(default_factory=OptimizationSpec)
     systemone: SystemOneSpec = field(default_factory=SystemOneSpec)

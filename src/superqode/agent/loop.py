@@ -864,7 +864,9 @@ class AgentLoop:
         # so heavy schemas stay out of the prompt until tool_search loads them.
         try:
             from ..tools.tool_search import apply_deferred_tool_policy
+            from ..tools.discovery import resolve_discovery_settings
 
+            self._discovery_settings = resolve_discovery_settings(config.harness_spec)
             apply_deferred_tool_policy(
                 self.tools,
                 provider=config.provider,
@@ -873,8 +875,30 @@ class AgentLoop:
                     getattr(config.harness_spec, "model_policy", None), "config", {}
                 ).get("deferred_tools", ""),
             )
+            if self._discovery_settings.enabled and self._discovery_settings.mode == "unified":
+                apply_deferred_tool_policy(
+                    self.tools,
+                    provider=config.provider,
+                    model=config.model,
+                    policy="all",
+                )
+                from ..tools.tool_search import ToolSearchTool
+
+                if self.tools.get("tool_search") is None:
+                    self.tools.register(ToolSearchTool())
+                if self._discovery_settings.mcp_mode == "deferred_tools":
+                    self.tools.defer("mcp_search", "mcp_execute")
+                elif self._discovery_settings.mcp_mode == "disabled":
+                    self.tools.defer(
+                        "mcp_search",
+                        "mcp_execute",
+                        "mcp_list_resources",
+                        "mcp_read_resource",
+                        "mcp_list_prompts",
+                        "mcp_get_prompt",
+                    )
         except ImportError:
-            pass
+            self._discovery_settings = None
 
         # PERFORMANCE: Cache tool definitions, recomputed when the registry
         # version changes (deferred-tool activation).
@@ -931,6 +955,9 @@ class AgentLoop:
 
         # Aggregate diff of the most recent turn's file changes.
         self.last_turn_diff: str = ""
+        # Latest sanitized progressive-discovery event for the TUI. This is
+        # intentionally in-memory and never contains tool arguments or output.
+        self.last_discovery_event: Dict[str, Any] = {}
 
         # Peer agents (spawn_agent/...). Lazily created; None inside
         # sub/peer agents so the hierarchy stays one level deep.
@@ -1165,7 +1192,13 @@ class AgentLoop:
             )
 
         # Inject MCP search/execute tools if requested
-        if self.include_mcp:
+        discovery_owns_mcp = bool(
+            getattr(self, "_discovery_settings", None)
+            and self._discovery_settings.enabled
+            and self._discovery_settings.mode == "unified"
+            and self._discovery_settings.mcp_mode in {"deferred_tools", "disabled"}
+        )
+        if self.include_mcp and not discovery_owns_mcp:
             try:
                 from ..tools.mcp_tools import get_mcp_tools
 
@@ -1184,15 +1217,23 @@ class AgentLoop:
                 pass
 
         # Add explicitly passed MCP tools if available
-        definitions.extend(self._mcp_tools)
+        if not discovery_owns_mcp:
+            definitions.extend(self._mcp_tools)
 
         # Hide tools the resolved model profile excludes.
         profile = resolve_model_profile(self.config.provider, self.config.model)
         if profile.excluded_tools:
             definitions = [d for d in definitions if d.name not in profile.excluded_tools]
 
-        definitions.sort(key=lambda d: d.name)
-        return definitions
+        # Keep the initial prefix deterministic, then append newly activated
+        # schemas so progressive discovery preserves provider cache prefixes.
+        previous_names = [
+            definition.name for definition in getattr(self, "_cached_tool_defs", ())
+        ]
+        by_name = {definition.name: definition for definition in definitions}
+        ordered_names = [name for name in previous_names if name in by_name]
+        ordered_names.extend(sorted(name for name in by_name if name not in ordered_names))
+        return [by_name[name] for name in ordered_names]
 
     def _get_tool_definitions(self) -> List[ToolDefinition]:
         """Get tool definitions, recomputing when the registry changed.
@@ -1271,7 +1312,13 @@ class AgentLoop:
             harness_model=self.config.model,
             harness_sandbox_backend=self.config.harness_sandbox_backend,
             delegation_depth=self.config.harness_delegation_depth,
+            mcp_allowed=self.config.loop_policy.mcp,
+            on_discovery=self._record_discovery_event,
         )
+
+    def _record_discovery_event(self, event: Dict[str, Any]) -> None:
+        """Expose the latest sanitized discovery lifecycle to local UX."""
+        self.last_discovery_event = dict(event)
 
     def _context_status(self) -> Dict[str, Any]:
         """Live context-budget snapshot for the get_context_remaining tool."""
@@ -1512,6 +1559,27 @@ class AgentLoop:
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finalize(result: ToolResult) -> ToolResult:
+            origin = (
+                self.tools.activation_origin(name)
+                if hasattr(self.tools, "activation_origin")
+                else {}
+            )
+            if origin:
+                result.metadata = {
+                    **(result.metadata or {}),
+                    "activatedByDiscovery": origin,
+                }
+                current = self.last_discovery_event
+                if current.get("discoveryId") == origin.get("discoveryId"):
+                    executions = list(current.get("executions") or [])
+                    executions.append(
+                        {
+                            "tool": name,
+                            "status": "success" if result.success else "error",
+                            "permission": str((result.metadata or {}).get("permission") or "allowed"),
+                        }
+                    )
+                    self.last_discovery_event = {**current, "executions": executions[-10:]}
             result = self._bound_tool_result(name, result)
             await self.hooks.fire(AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result)
             return result

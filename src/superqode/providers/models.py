@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
-LATEST_GOOGLE_FLASH_MODEL = "gemini-3.7-flash"
+LATEST_GOOGLE_FLASH_MODEL = "gemini-3.8-flash"
+LATEST_GOOGLE_FLASH_3_7_MODEL = "gemini-3.7-flash"
 LATEST_GOOGLE_FLASH_3_6_MODEL = "gemini-3.6-flash"
 LATEST_GOOGLE_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
 LATEST_GOOGLE_STANDARD_FLASH_MODEL = "gemini-3.5-flash"
@@ -30,6 +31,7 @@ LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
 # lifecycle-reviewed BYOK chat/coding catalog and its display order.
 LATEST_GOOGLE_MODEL_IDS = (
     LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
     LATEST_GOOGLE_STANDARD_FLASH_MODEL,
@@ -631,6 +633,27 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GOOGLE
     # =========================================================================
     "google": {
+        "gemini-3.8-flash": ModelInfo(
+            id="gemini-3.8-flash",
+            name="Gemini 3.8 Flash",
+            provider="google",
+            input_price=0.75,
+            output_price=3.75,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest Gemini Flash model for long-horizon coding and agentic execution",
+            recommended_for=["coding", "agentic workflows", "complex workflows"],
+            released="2026-09-02",
+        ),
         "gemini-3.7-flash": ModelInfo(
             id="gemini-3.7-flash",
             name="Gemini 3.7 Flash",
@@ -648,7 +671,7 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Latest Gemini 3.7 Flash model for coding and agentic execution",
+            description="Previous-generation Gemini Flash model for coding and agentic execution",
             recommended_for=["coding", "agentic workflows", "general"],
             released="2026-08-01",
         ),

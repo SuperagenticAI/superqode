@@ -300,6 +300,71 @@ Example: Execute web_search on exa server with query argument."""
             )
 
 
+class MCPProxyTool(Tool):
+    """A real, permission-visible Tool bound to one MCP capability.
+
+    Unlike ``mcp_execute``, this preserves the capability identity through the
+    normal hook, permission, System One, and audit pipeline.
+    """
+
+    def __init__(
+        self,
+        *,
+        exposed_name: str,
+        server: str,
+        original_name: str,
+        description: str,
+        input_schema: dict[str, Any],
+        read_only: bool = False,
+        mcp_manager_getter=None,
+    ):
+        self._exposed_name = exposed_name
+        self.server = server
+        self.original_name = original_name
+        self._description = description
+        self._input_schema = input_schema
+        self.read_only = read_only
+        self._mcp_manager_getter = mcp_manager_getter
+
+    @property
+    def name(self) -> str:
+        return self._exposed_name
+
+    @property
+    def description(self) -> str:
+        return f"[MCP:{self.server}] {self._description}"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return self._input_schema
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        manager = await _resolve_mcp_manager(self._mcp_manager_getter)
+        if manager is None:
+            return ToolResult(success=False, output="", error="MCP client not available")
+        try:
+            result = await manager.execute_tool(self.server, self.original_name, args)
+        except Exception as exc:
+            return ToolResult(success=False, output="", error=f"MCP execution error: {exc}")
+        if result.is_error:
+            return ToolResult(
+                success=False,
+                output="",
+                error=result.error_message or "MCP tool execution failed",
+                metadata={"server": self.server, "tool": self.original_name},
+            )
+        output_parts = []
+        for item in result.content:
+            output_parts.append(
+                item.get("text", str(item)) if isinstance(item, dict) else str(item)
+            )
+        return ToolResult(
+            success=True,
+            output="\n".join(output_parts) if output_parts else "(no output)",
+            metadata={"server": self.server, "tool": self.original_name},
+        )
+
+
 class MCPListResourcesTool(Tool):
     """List resources exposed by connected MCP servers."""
 

@@ -11,6 +11,7 @@ from .spec import (
     RuntimeSpec,
     ChecksSpec,
     SystemOneSpec,
+    ToolDiscoverySpec,
 )
 from .model_routes import model_policy_for_route
 
@@ -123,7 +124,7 @@ def systemone_template(*, name: str = "systemone") -> HarnessSpec:
 
     return replace(
         base,
-        description="SystemOne harness: coding models write code; Jev shadows tool gates and discovery.",
+        description="SystemOne coding harness with progressive tool discovery and Jev decisions.",
         model_policy=replace(
             base.model_policy,
             config={**base.model_policy.config, "deferred_tools": "all"},
@@ -131,6 +132,24 @@ def systemone_template(*, name: str = "systemone") -> HarnessSpec:
         agents=(replace(base.agents[0], tools=("full",)),),
         systemone=SystemOneSpec(
             enabled=True, client="live", mode="shadow", tool_search_mode="shadow"
+        ),
+        tool_discovery=ToolDiscoverySpec(
+            enabled=True,
+            mode="unified",
+            search={
+                "backend": "bm25",
+                "limit": 20,
+                "on_error": "fallback",
+                "fallback_chain": ["bm25", "lexical"],
+            },
+            rank={
+                "backend": "score",
+                "candidate_limit": 8,
+                "exact_name_boost": 4.0,
+            },
+            judge={"backend": "jev", "mode": "shadow"},
+            activation={"limit": 3},
+            mcp={"mode": "deferred_tools"},
         ),
         metadata={**base.metadata, "template": "systemone", "category": "workflow"},
     )

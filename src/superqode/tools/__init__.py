@@ -26,6 +26,13 @@ from .batch_tool import BatchTool
 from .shell_tools import BashTool
 from .search_tools import GrepTool, GlobTool, CodeSearchTool, LocalCodeSearchTool
 from .semantic_search import SemanticSearchTool, is_semantic_search_available
+from .discovery import (
+    DiscoverySettings,
+    ToolCandidate,
+    ToolDescriptor,
+    evaluate_retrieval,
+    resolve_discovery_settings,
+)
 from .diagnostics import DiagnosticsTool
 from .context_handle import ContextHandleTool
 from .network_tools import FetchTool, DownloadTool
@@ -34,7 +41,7 @@ from .spawn_harness import SpawnHarnessTool
 from .dynamic_workflow import DynamicWorkflowScriptTool, DynamicWorkflowTool
 from .lsp_tools import LSPTool
 from .web_tools import WebSearchTool, WebFetchTool
-from .mcp_tools import MCPSearchTool, MCPExecuteTool, create_mcp_tools
+from .mcp_tools import MCPSearchTool, MCPExecuteTool, MCPProxyTool, create_mcp_tools
 from .skill_tools import SkillTool, ReadSkillTool, CreateSkillTool, create_skill_tools
 from .compact_tool import CompactTool, create_compact_tool
 from .question_tool import QuestionTool, ConfirmTool, set_question_handler, get_question_handler
@@ -76,6 +83,11 @@ __all__ = [
     "LocalCodeSearchTool",
     "SemanticSearchTool",
     "is_semantic_search_available",
+    "DiscoverySettings",
+    "ToolCandidate",
+    "ToolDescriptor",
+    "evaluate_retrieval",
+    "resolve_discovery_settings",
     # Diagnostics
     "DiagnosticsTool",
     "ContextHandleTool",
@@ -88,6 +100,7 @@ __all__ = [
     # MCP tools
     "MCPSearchTool",
     "MCPExecuteTool",
+    "MCPProxyTool",
     "create_mcp_tools",
     # Skill tools
     "SkillTool",

@@ -23,6 +23,7 @@ from superqode.design_system import (
 )
 from superqode.providers.models import (
     LATEST_GOOGLE_FLASH_3_6_MODEL,
+    LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
 )
@@ -140,9 +141,16 @@ class ModelCatalogMixin:
         return [
             {
                 "id": LATEST_GOOGLE_FLASH_MODEL,
+                "name": "Gemini 3.8 Flash",
+                "context": 1000000,
+                "desc": "Latest stable Gemini 3.8 Flash - 1M context",
+                "recommended": True,
+            },
+            {
+                "id": LATEST_GOOGLE_FLASH_3_7_MODEL,
                 "name": "Gemini 3.7 Flash",
                 "context": 1000000,
-                "desc": "Latest stable Gemini 3.7 Flash from models.dev - 1M context",
+                "desc": "Gemini 3.7 Flash - 1M context",
                 "recommended": True,
             },
             {
@@ -1536,11 +1544,13 @@ class ModelCatalogMixin:
                     "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
+                    "gemini-3.8-flash",
                     "gemini-3.7-flash",
                     "gemini-3.6-flash",
                     "gemini-3.5-flash-lite",
                     "gemini-3.5-flash",
                     "gemini-3.1-pro",
+                    "gemini 3.8",
                     "gemini 3.7",
                     "gemini 3.5",
                     "gemini 3.1",
@@ -2054,11 +2064,13 @@ class ModelCatalogMixin:
                 "5.3",
                 "gpt-5.2",
                 "5.2",
+                "gemini-3.8-flash",
                 "gemini-3.7-flash",
                 "gemini-3.6-flash",
                 "gemini-3.5-flash-lite",
                 "gemini-3.5-flash",
                 "gemini-3.1-pro",
+                "gemini 3.8",
                 "gemini 3.7",
                 "gemini 3.5",
                 "gemini 3.1",

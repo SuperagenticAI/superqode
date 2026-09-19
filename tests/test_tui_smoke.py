@@ -21,6 +21,7 @@ from superqode.harness import (
     HarnessSpec,
     WorkflowMode,
     WorkflowSpec,
+    harness_spec_from_dict,
     list_harnesses,
     load_harness_spec,
 )
@@ -173,6 +174,77 @@ def make_app() -> SuperQodeApp:
     app.set_timer = lambda *args, **kwargs: None
     app._ensure_input_focus = lambda: None
     return app
+
+
+def test_discovery_command_renders_sanitized_lifecycle():
+    app = make_app()
+    log = FakeLog()
+    spec = harness_spec_from_dict(
+        {
+            "name": "demo",
+            "tool_discovery": {
+                "enabled": True,
+                "mode": "unified",
+                "search": {"backend": "bm25"},
+                "judge": {"backend": "jev", "mode": "rerank"},
+                "mcp": {"mode": "deferred_tools"},
+            },
+        }
+    )
+    app._pure_mode = SimpleNamespace(
+        runtime_name="builtin",
+        _harness_spec=spec,
+        _agent=SimpleNamespace(
+            last_discovery_event={
+                "discoveryId": "demo-trace",
+                "query": "create a github issue",
+                "retriever": {"backend": "bm25", "ranker": "score"},
+                "candidates": [
+                    {
+                        "name": "mcp__github__create_issue",
+                        "source": "mcp",
+                        "score": 8.25,
+                    },
+                    {"name": "web_fetch", "source": "native", "score": 1.5},
+                ],
+                "judge": {
+                    "status": "success",
+                    "reason": "selected",
+                    "selectedTool": "mcp__github__create_issue",
+                    "confidence": 0.94,
+                },
+                "activated": ["mcp__github__create_issue"],
+                "executions": [
+                    {
+                        "tool": "mcp__github__create_issue",
+                        "status": "success",
+                        "permission": "allowed",
+                    }
+                ],
+            }
+        ),
+    )
+
+    app._discovery_cmd("", log)
+
+    rendered = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
+    assert "Progressive tool discovery" in rendered
+    assert "create a github issue" in rendered
+    assert "bm25 → score" in rendered
+    assert "mcp__github__create_issue" in rendered
+    assert "confidence 0.94" in rendered
+    assert "permission allowed" in rendered
+    assert "demo-trace" in rendered
+
+    log.items.clear()
+    app._systemone_cmd("discovery", log)
+    alias_rendered = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
+    assert "Progressive tool discovery" in alias_rendered
+    assert "demo-trace" in alias_rendered
 
 
 def test_byok_picker_includes_models_dev_provider_and_full_model_lookup(monkeypatch):

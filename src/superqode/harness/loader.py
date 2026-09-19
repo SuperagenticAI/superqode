@@ -23,6 +23,7 @@ from .spec import (
     OptimizationSpec,
     RecursionSpec,
     SystemOneSpec,
+    ToolDiscoverySpec,
     RemoteHarnessSpec,
     RuntimeSpec,
     ChecksSpec,
@@ -171,6 +172,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         context=_context(raw.get("context")),
         checks=_checks(raw.get("checks")),
         observability=_observability(raw.get("observability")),
+        tool_discovery=_tool_discovery(raw.get("tool_discovery")),
         hooks=_hooks(raw.get("hooks")),
         optimization=_optimization(raw.get("optimization")),
         systemone=_systemone(raw.get("systemone")),
@@ -346,6 +348,16 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "exporters": list(spec.observability.exporters),
             "run_store": spec.observability.run_store,
             **({"config": spec.observability.config} if spec.observability.config else {}),
+        },
+        "tool_discovery": {
+            "enabled": spec.tool_discovery.enabled,
+            "mode": spec.tool_discovery.mode,
+            "trace_dir": spec.tool_discovery.trace_dir,
+            "search": spec.tool_discovery.search,
+            "rank": spec.tool_discovery.rank,
+            "judge": spec.tool_discovery.judge,
+            "activation": spec.tool_discovery.activation,
+            "mcp": spec.tool_discovery.mcp,
         },
         **(
             {
@@ -628,6 +640,23 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     },
                     "run_store": {"type": "string"},
                     "config": {"type": "object"},
+                },
+            },
+            "tool_discovery": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "trace_dir": {"type": "string"},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["legacy", "shadow", "unified"],
+                    },
+                    "search": {"type": "object"},
+                    "rank": {"type": "object"},
+                    "judge": {"type": "object"},
+                    "activation": {"type": "object"},
+                    "mcp": {"type": "object"},
                 },
             },
             "hooks": {
@@ -953,6 +982,26 @@ def _observability(value: Any) -> ObservabilitySpec:
         exporters=tuple(exporters),
         run_store=str(data.get("run_store") or "memory"),
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
+    )
+
+
+def _tool_discovery(value: Any) -> ToolDiscoverySpec:
+    data = value if isinstance(value, dict) else {}
+    mode = str(data.get("mode") or "legacy").strip().lower()
+    if mode not in {"legacy", "shadow", "unified"}:
+        raise ValueError("tool_discovery.mode must be one of: legacy, shadow, unified")
+
+    sections: dict[str, dict[str, Any]] = {}
+    for key in ("search", "rank", "judge", "activation", "mcp"):
+        raw = data.get(key)
+        if raw is not None and not isinstance(raw, dict):
+            raise ValueError(f"tool_discovery.{key} must be a mapping")
+        sections[key] = dict(raw or {})
+    return ToolDiscoverySpec(
+        enabled=bool(data.get("enabled", False)),
+        mode=mode,
+        trace_dir=str(data.get("trace_dir") or ""),
+        **sections,
     )
 
 

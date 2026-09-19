@@ -25,6 +25,10 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_SEARCH_ROOTS` | paths (`:`-sep) | unset | Extra read-only roots for read/search tools (cloned repos outside the project). |
 | `SUPERQODE_ALLOW_EXTERNAL_SEARCH` | `0`/`1` | off | Permission-gate for absolute search paths outside the workspace. |
 | `SUPERQODE_MCP_SEARCH` | `0`/`1` | off | Inject MCP search/execute tools into the registry. |
+| `SUPERQODE_TOOL_DISCOVERY` | `0`/`1`/`legacy`/`shadow`/`unified` | per harness | Enable portable progressive discovery or select its rollout mode. |
+| `SUPERQODE_TOOL_DISCOVERY_MODE` | `legacy`/`shadow`/`unified` | per harness | Override the configured discovery mode. |
+| `SUPERQODE_TOOL_SEARCH_BACKEND` | `bm25`/`lexical`/configured backend | per harness | Override the configured retrieval backend. |
+| `SUPERQODE_TOOL_DISCOVERY_TRACE_DIR` | path | unset | Write sanitized progressive-discovery traces below `tool-discovery/`. |
 
 ## Safety & policy
 
@@ -40,6 +44,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `TYPESAFE_API_KEY` | secret | unset | Credential for live Jev decisions, tool checks, and rubric grading. Set it in the launching process; coding-provider credentials remain separate. |
 | `SUPERQODE_RUBRIC_GRADER` | `systemone` | unset | Opt in to Jev rubric verdicts for `--rubric`; uncertainty remains ungraded. Unset uses the utility model. |
 | `SUPERQODE_SYSTEMONE` | `0`/`stub`/`replay`/`live` | unset | Opt-in System One tool gate. Unset leaves the gate off. `stub`/`replay`/`live` enable it; `0` forces it off. `live` skips when no API key is set. |
+| `SUPERQODE_SYSTEMONE_MODE` | `enforce`/`shadow` | per harness | Override whether Jev tool-gate decisions enforce or only observe policy. |
+| `SUPERQODE_SYSTEMONE_TOOL_SEARCH` | `off`/`shadow`/`rerank` | per harness | Override Jev's role in deferred tool selection. |
+| `SUPERQODE_SYSTEMONE_TRACE_DIR` | path | unset | Write sanitized System One decision and tool-search traces. |
 
 ## Providers & models
 

@@ -21,6 +21,7 @@ from superqode.providers.gateway.base import GatewayResponse
 from superqode.tools.base import ToolRegistry, ToolContext
 from superqode.tools.mcp_tools import (
     MCPExecuteTool,
+    MCPProxyTool,
     MCPGetPromptTool,
     MCPListPromptsTool,
     MCPListResourcesTool,
@@ -151,6 +152,28 @@ async def test_mcp_execute_tool_accepts_async_manager_getter(tmp_path):
     assert result.success
     assert result.output == "found"
     assert manager.executed == ("docs", "lookup", {"q": "x"})
+
+
+@pytest.mark.asyncio
+async def test_mcp_proxy_preserves_real_identity_and_executes_bound_tool(tmp_path):
+    manager = _FakeManager()
+    proxy = MCPProxyTool(
+        exposed_name="mcp__docs__lookup",
+        server="docs_with_underscore",
+        original_name="lookup_project_docs",
+        description="Look up project docs",
+        input_schema={"type": "object", "properties": {}},
+        mcp_manager_getter=lambda: manager,
+    )
+    result = await proxy.execute(
+        {"query": "x"}, ToolContext(session_id="t", working_directory=tmp_path)
+    )
+    assert result.success
+    assert manager.executed == (
+        "docs_with_underscore",
+        "lookup_project_docs",
+        {"query": "x"},
+    )
 
 
 @pytest.mark.asyncio

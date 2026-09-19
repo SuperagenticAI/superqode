@@ -22,6 +22,7 @@ import json
 # Type aliases for callbacks
 OutputCallback = Callable[[str], Union[None, Awaitable[None]]]
 ProgressCallback = Callable[[float, str], Union[None, Awaitable[None]]]
+DiscoveryCallback = Callable[[Dict[str, Any]], Union[None, Awaitable[None]]]
 
 
 @dataclass
@@ -80,6 +81,10 @@ class ToolContext:
     harness_provider: str = ""
     harness_model: str = ""
     harness_sandbox_backend: str = "local"
+    # Whether this runtime policy permits MCP catalogue discovery/execution.
+    mcp_allowed: bool = True
+    # Receives a sanitized discovery lifecycle event for live TUI inspection.
+    on_discovery: Optional[DiscoveryCallback] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -200,6 +205,7 @@ class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, Tool] = {}
         self._deferred: set[str] = set()
+        self._activation_origins: Dict[str, Dict[str, Any]] = {}
         self.version: int = 0
 
     def register(self, tool: Tool) -> None:
@@ -226,13 +232,23 @@ class ToolRegistry:
             self.version += 1
         return count
 
-    def activate(self, name: str) -> bool:
+    def activate(self, name: str, *, origin: Optional[Dict[str, Any]] = None) -> bool:
         """Expose a deferred tool's schema to the model again."""
+        if origin:
+            self._activation_origins[name] = dict(origin)
         if name in self._deferred:
             self._deferred.discard(name)
             self.version += 1
             return True
         return False
+
+    def set_activation_origin(self, name: str, origin: Dict[str, Any]) -> None:
+        """Link a visible tool to the discovery event that activated it."""
+        if name in self._tools:
+            self._activation_origins[name] = dict(origin)
+
+    def activation_origin(self, name: str) -> Dict[str, Any]:
+        return dict(self._activation_origins.get(name) or {})
 
     def deferred_names(self) -> List[str]:
         return sorted(self._deferred)
@@ -253,6 +269,8 @@ class ToolRegistry:
                 registry.register(tool)
                 if name in self._deferred:
                     registry.defer(name)
+                if name in self._activation_origins:
+                    registry.set_activation_origin(name, self._activation_origins[name])
         return registry
 
     def to_openai_format(self) -> List[Dict[str, Any]]:

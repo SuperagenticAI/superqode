@@ -34,12 +34,18 @@ def test_systemone_is_selectable_coding_harness_with_shadow_defaults(tmp_path):
     assert harness.spec.systemone.client == "live"
     assert harness.spec.systemone.mode == "shadow"
     assert harness.spec.systemone.tool_search_mode == "shadow"
+    assert harness.spec.tool_discovery.enabled is True
+    assert harness.spec.tool_discovery.mode == "unified"
+    assert harness.spec.tool_discovery.search["backend"] == "bm25"
+    assert harness.spec.tool_discovery.judge == {"backend": "jev", "mode": "shadow"}
+    assert harness.spec.tool_discovery.mcp["mode"] == "deferred_tools"
     assert harness.spec.model_policy.primary is None
     assert compile_to_headless_profile(harness.spec).tools is None
     assert "web_fetch" in harness.tools
     assert harness.id in {entry.id for entry in recommended_harnesses(tmp_path)}
     restored = harness_spec_from_dict(harness_spec_to_dict(harness.spec))
     assert restored.systemone == harness.spec.systemone
+    assert restored.tool_discovery == harness.spec.tool_discovery
     registry = _registry()
     apply_deferred_tool_policy(registry, policy="all")
     assert registry.get("tool_search") is not None

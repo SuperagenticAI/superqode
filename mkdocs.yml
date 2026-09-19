@@ -271,6 +271,7 @@ nav:
       - 🧰 Tools & Search:
         - 🧰 Tools Catalog: advanced/tools-catalog.md
         - 🔧 Tools System: advanced/tools-system.md
+        - 🧭 Progressive Tool Discovery: advanced/progressive-tool-discovery.md
         - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
         - 🏗️ Workspace System: advanced/workspace-system.md
         - 📝 LSP Integration: advanced/lsp-integration.md

@@ -56,6 +56,7 @@ from .spec import (
     ChecksSpec,
     CheckStepSpec,
     SystemOneSpec,
+    ToolDiscoverySpec,
     WorkflowMode,
     WorkflowSpec,
 )
@@ -372,6 +373,7 @@ __all__ = [
     "ExecutionPolicySpec",
     "HarnessFlavor",
     "HarnessSpec",
+    "ToolDiscoverySpec",
     "HookRuleSpec",
     "HooksSpec",
     "ModelPolicySpec",

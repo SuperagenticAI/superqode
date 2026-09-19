@@ -63,6 +63,9 @@ class SlashCommandMixin:
             log.add_error("Invalid quoting. Use :systemone connect <pack>.")
             return
         action = words[0].lower() if words else ""
+        if action == "discovery" and len(words) == 1:
+            self._discovery_cmd("", log)
+            return
         if action == "packs":
             from superqode.systemone.pack import builtin_pack_ids, load_pack
 
@@ -92,7 +95,9 @@ class SlashCommandMixin:
             self._activate_decision_connection(pure, log)
             return
         if action not in {"", "status", "live", "shadow", "on", "off", "0"}:
-            log.add_error("Use :systemone [status|live|shadow|off|packs|connect <pack>]")
+            log.add_error(
+                "Use :systemone [status|discovery|live|shadow|off|packs|connect <pack>]"
+            )
             return
         spec = None
         pure = (
@@ -153,12 +158,144 @@ class SlashCommandMixin:
         t.append(f"    pack        {settings.pack}\n", style=THEME["muted"])
         t.append(f"    skip        {settings.skip_reason or 'no'}\n", style=THEME["muted"])
         t.append(f"    api key     {'set' if key_set else 'missing'}\n", style=THEME["muted"])
+        from superqode.tools.discovery import resolve_discovery_settings
+
+        discovery = resolve_discovery_settings(spec)
+        latest_discovery = dict(
+            getattr(getattr(pure, "_agent", None), "last_discovery_event", None) or {}
+        )
+        t.append("\n  Tool discovery\n", style=f"bold {THEME['purple']}")
+        t.append(
+            f"    {discovery.mode} · {discovery.search_backend} → "
+            f"{discovery.rank_backend} · Jev {discovery.judge_mode} · MCP {discovery.mcp_mode}\n",
+            style=THEME["muted"],
+        )
+        if latest_discovery:
+            decision = latest_discovery.get("judge") or {}
+            t.append(
+                f"    latest      {latest_discovery.get('query') or '—'}\n"
+                f"    outcome     {decision.get('reason') or 'retrieved'} · "
+                f"activated {len(latest_discovery.get('activated') or [])} · "
+                f"executed {len(latest_discovery.get('executions') or [])}\n",
+                style=THEME["muted"],
+            )
+        else:
+            t.append("    latest      no discovery event yet\n", style=THEME["dim"])
         t.append(
             "\n  :systemone live   turn the sidecar on (needs the API key)\n", style=THEME["dim"]
         )
         t.append("  :systemone off    force the sidecar off\n", style=THEME["dim"])
         t.append("  :systemone connect <pack>   evaluate directly with Jev\n", style=THEME["dim"])
         t.append("  :systemone packs           list decision packs\n", style=THEME["dim"])
+        t.append("  :systemone discovery       inspect ranked tool discovery\n", style=THEME["dim"])
+        self._show_command_output(log, t)
+
+    def _discovery_cmd(self, args: str, log: ConversationLog) -> None:
+        """Show the active discovery pipeline and its latest lifecycle event."""
+        if args.strip().lower() not in {"", "status"}:
+            log.add_error("Use :discovery [status]")
+            return
+
+        from superqode.tools.discovery import resolve_discovery_settings
+
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None) if pure is not None else None
+        try:
+            settings = resolve_discovery_settings(spec)
+        except ValueError as exc:
+            log.add_error(f"Invalid tool discovery configuration: {exc}")
+            return
+        agent = getattr(pure, "_agent", None)
+        event = dict(getattr(agent, "last_discovery_event", None) or {})
+
+        t = Text()
+        t.append("\n  Progressive tool discovery\n\n", style=f"bold {THEME['purple']}")
+        if pure is not None and getattr(pure, "runtime_name", "builtin") != "builtin":
+            t.append(
+                "  Live discovery inspection requires the native Core/BYOK runtime.\n\n",
+                style=THEME["warning"],
+            )
+        t.append(f"    enabled       {settings.enabled}\n", style=THEME["muted"])
+        t.append(f"    mode          {settings.mode}\n", style=THEME["muted"])
+        t.append(f"    search        {settings.search_backend}\n", style=THEME["muted"])
+        t.append(f"    rank          {settings.rank_backend}\n", style=THEME["muted"])
+        judge = (
+            f"{settings.judge_backend} ({settings.judge_mode})"
+            if settings.judge_backend != "none"
+            else "off"
+        )
+        t.append(f"    Jev           {judge}\n", style=THEME["muted"])
+        t.append(f"    MCP           {settings.mcp_mode}\n", style=THEME["muted"])
+
+        if not event:
+            t.append(
+                "\n  No discovery event in this session yet. Ask the agent for a capability "
+                "that is not currently loaded, then run :discovery again.\n",
+                style=THEME["dim"],
+            )
+            self._show_command_output(log, t)
+            return
+
+        retrieval = event.get("retriever") or {}
+        t.append("\n  Latest query\n", style=f"bold {THEME['purple']}")
+        t.append(f"    {event.get('query') or '—'}\n", style=THEME["muted"])
+        t.append(
+            f"    backend       {retrieval.get('backend') or '—'}"
+            f" → {retrieval.get('ranker') or '—'}\n",
+            style=THEME["muted"],
+        )
+
+        candidates = list(event.get("candidates") or [])
+        selected = str((event.get("judge") or {}).get("selectedTool") or "")
+        activated = {str(name) for name in event.get("activated") or []}
+        t.append("\n  Ranked candidates\n", style=f"bold {THEME['purple']}")
+        if not candidates:
+            t.append("    no candidates\n", style=THEME["warning"])
+        for index, candidate in enumerate(candidates, start=1):
+            name = str(candidate.get("name") or candidate.get("id") or "unknown")
+            marker = "◆" if name == selected else ("✓" if name in activated else "·")
+            source = str(candidate.get("source") or "native")
+            score = float(candidate.get("score") or 0.0)
+            style = THEME["success"] if name in activated else THEME["muted"]
+            t.append(f"    {marker} {index:>2}  {name}", style=style)
+            t.append(f"  [{source}]  {score:.3f}\n", style=THEME["dim"])
+
+        decision = event.get("judge") or {}
+        t.append("\n  Jev selection\n", style=f"bold {THEME['purple']}")
+        if not decision:
+            t.append("    off — retrieval order used\n", style=THEME["muted"])
+        else:
+            t.append(
+                f"    {decision.get('status') or 'unknown'} · "
+                f"{decision.get('reason') or '—'} · selected {selected or 'none'}",
+                style=THEME["muted"],
+            )
+            confidence = decision.get("confidence")
+            if confidence is not None:
+                t.append(f" · confidence {float(confidence):.2f}", style=THEME["muted"])
+            t.append("\n")
+
+        t.append("\n  Activated schemas\n", style=f"bold {THEME['purple']}")
+        t.append(
+            f"    {', '.join(sorted(activated)) if activated else 'none'}\n",
+            style=THEME["success"] if activated else THEME["warning"],
+        )
+        t.append("\n  Execution outcome\n", style=f"bold {THEME['purple']}")
+        executions = list(event.get("executions") or [])
+        if not executions:
+            t.append("    not executed yet\n", style=THEME["dim"])
+        for execution in executions:
+            status = str(execution.get("status") or "unknown")
+            style = THEME["success"] if status == "success" else THEME["warning"]
+            t.append(
+                f"    {execution.get('tool') or 'unknown'} · {status} · "
+                f"permission {execution.get('permission') or 'unknown'}\n",
+                style=style,
+            )
+        t.append(
+            f"\n  trace {event.get('discoveryId') or 'not persisted'}\n",
+            style=THEME["dim"],
+        )
         self._show_command_output(log, t)
 
     def _activate_decision_connection(self, pure, log: ConversationLog) -> None:
@@ -552,6 +689,8 @@ class SlashCommandMixin:
             self._set_approval_mode(args, log)
         elif c == "systemone":
             self._systemone_cmd(args, log)
+        elif c == "discovery":
+            self._discovery_cmd(args, log)
         elif c == "log":
             self._handle_log_verbosity(args, log)
         elif c == "thinking":

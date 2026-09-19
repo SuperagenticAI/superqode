@@ -22,35 +22,50 @@ MAX_CANDIDATES = 8
 
 
 async def select_discovery_tools(
-    ctx: Any, query: str, matches: list, deferred: list
+    ctx: Any, query: str, matches: list, deferred: list, *, candidates: list | None = None
 ) -> tuple[list, dict]:
     """Shadow lexical activation, or rerank with explicit abstention and fallback."""
     settings = resolve_systemone(spec=ctx.harness_spec, explicit=ctx.systemone)
     mode = settings.tool_search_mode
+    try:
+        from ..tools.discovery import resolve_discovery_settings
+
+        discovery = resolve_discovery_settings(ctx.harness_spec)
+        if discovery.enabled and discovery.judge_backend == "jev":
+            mode = discovery.judge_mode
+    except (AttributeError, TypeError, ValueError):
+        pass
     if not settings.enabled or mode == "off":
         return matches, {}
-    from ..tools.tool_search import search_deferred
+    if candidates is not None:
+        candidate_tools = [
+            candidate.descriptor.payload
+            for candidate in candidates[:MAX_CANDIDATES]
+            if candidate.descriptor.payload is not None
+        ]
+    else:
+        from ..tools.tool_search import search_deferred
 
-    ranked = search_deferred(ctx.tool_registry, query, limit=MAX_CANDIDATES)
-    # A small catalog can still be considered when lexical retrieval misses synonyms.
-    candidates = [tool for _, tool in ranked]
-    if not candidates and len(deferred) <= MAX_CANDIDATES:
-        candidates = sorted(deferred, key=lambda tool: tool.name)
-    options = {f"candidate_{i}": tool for i, tool in enumerate(candidates)}
+        ranked = search_deferred(ctx.tool_registry, query, limit=MAX_CANDIDATES)
+        candidate_tools = [tool for _, tool in ranked]
+    # A small catalog can still be considered when retrieval misses synonyms.
+    if not candidate_tools and len(deferred) <= MAX_CANDIDATES:
+        candidate_tools = sorted(deferred, key=lambda tool: tool.name)
+    options = {f"candidate_{i}": tool for i, tool in enumerate(candidate_tools)}
     event: dict[str, Any] = {
         "kind": "tool_search",
         "mode": mode,
         "model": settings.model,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "session_id": ctx.session_id,
-        "candidates": [tool.name for tool in candidates],
+        "candidates": [tool.name for tool in candidate_tools],
         "baselineTools": [tool.name for _, tool in matches],
         "selectedTool": None,
         "status": "skipped",
         "thresholds": {"confidence": 0.75, "necessary": 0.8, "margin": 0.1},
     }
     effective = matches
-    if settings.skip_client or not candidates:
+    if settings.skip_client or not candidate_tools:
         event["reason"] = settings.skip_reason or "no_candidates"
     else:
         try:
