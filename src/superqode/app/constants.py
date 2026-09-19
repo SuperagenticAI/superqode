@@ -328,6 +328,7 @@ COMMANDS = [
     ":systemone shadow",
     ":systemone off",
     ":systemone packs",
+    ":systemone tune",
     ":systemone connect",
     ":systemone discovery",
     ":discovery",

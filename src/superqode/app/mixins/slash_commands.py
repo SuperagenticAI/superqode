@@ -63,6 +63,27 @@ class SlashCommandMixin:
             log.add_error("Invalid quoting. Use :systemone connect <pack>.")
             return
         action = words[0].lower() if words else ""
+        if action == "tune":
+            from superqode.widgets.systemone_tune import SystemOneTuneScreen
+
+            if len(words) != 1:
+                log.add_error("Use :systemone tune; choose the pack and examples in the screen.")
+                return
+
+            def tuned(path):
+                if path:
+                    from superqode.harness.loader import load_harness_spec
+
+                    try:
+                        pure = self._ensure_pure_mode()
+                        pure.connect_decision(spec=load_harness_spec(path))
+                        self._activate_decision_connection(pure, log)
+                    except (ValueError, OSError) as exc:
+                        log.add_error(str(exc))
+                self._ensure_input_focus()
+
+            self.push_screen(SystemOneTuneScreen(), callback=tuned)
+            return
         if action == "discovery" and len(words) == 1:
             self._discovery_cmd("", log)
             return
@@ -95,7 +116,9 @@ class SlashCommandMixin:
             self._activate_decision_connection(pure, log)
             return
         if action not in {"", "status", "live", "shadow", "on", "off", "0"}:
-            log.add_error("Use :systemone [status|discovery|live|shadow|off|packs|connect <pack>]")
+            log.add_error(
+                "Use :systemone [status|discovery|live|shadow|off|packs|tune|connect <pack>]"
+            )
             return
         spec = None
         pure = (
@@ -185,6 +208,10 @@ class SlashCommandMixin:
         t.append("  :systemone off    force the sidecar off\n", style=THEME["dim"])
         t.append("  :systemone connect <pack>   evaluate directly with Jev\n", style=THEME["dim"])
         t.append("  :systemone packs           list decision packs\n", style=THEME["dim"])
+        t.append(
+            "  :systemone tune            improve decisions from reviewed examples\n",
+            style=THEME["dim"],
+        )
         t.append("  :systemone discovery       inspect ranked tool discovery\n", style=THEME["dim"])
         self._show_command_output(log, t)
 

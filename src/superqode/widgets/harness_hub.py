@@ -305,11 +305,13 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         with Horizontal(id="hub-actions"):
             yield Button("Build your own", id="hub-build")
             yield Button("Inspect", id="hub-inspect")
+            yield Button("Improve decisions", id="hub-tune")
             yield Button("Use", id="hub-use", variant="primary")
             yield Button("Back", id="hub-close")
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#hub-tune", Button).display = False
         self.set_class(self.size.width < 82, "narrow")
         self._refresh_items()
         search = self.query_one("#hub-search", Input)
@@ -403,6 +405,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             option_list.add_option(Option(self._option_label(item), id=item.id))
 
         if not self.filtered_items:
+            self.query_one("#hub-tune", Button).display = False
             option_list.add_option(
                 Option("No harnesses match this view", id="hub-empty", disabled=True)
             )
@@ -740,6 +743,10 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             self.action_inspect()
         elif button_id == "hub-build":
             self.action_build()
+        elif button_id == "hub-tune":
+            item = self._selected_item()
+            if item and item.id == "systemone":
+                self.dismiss(HarnessHubResult("tune", item.id))
         elif button_id == "hub-close":
             self.action_close()
 
@@ -769,6 +776,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self.dismiss(HarnessHubResult("use", item.id))
 
     def _update_primary_action(self, item: HarnessPickerItem) -> None:
+        self.query_one("#hub-tune", Button).display = item.id == "systemone"
         button = self.query_one("#hub-use", Button)
         button.disabled = False
         state = self._run_state(item)

@@ -161,6 +161,66 @@ sanitized live recordings. Airplane mode skips network evaluation; it does not
 substitute a decision. Transport failures report an error, never a successful
 classification. The native coding gate separately falls back to existing policy.
 
+## Improve decisions with SystemOne Tune
+
+Open `:systemone tune` in the TUI, or select **Improve decisions** on the
+SystemOne entry in Harness Hub. The CLI provides the same workflow:
+
+```sh
+superqode harness tune
+```
+
+Tune currently improves one fixed Choice question, including structured
+instructions and criteria. Choose a built-in pack or a SystemOne decision
+harness, then import CSV, JSONL, JSON or YAML examples. With no file, the wizard
+offers a small synthetic routing demo. Missing labels are collected one at a
+time with an optional rationale, and each judgment is saved immediately.
+
+Install the optional, tested optimization runtime with the TUI's **Install
+tuning support** button or `superqode harness tune --setup`, then restart
+SuperQode. This installs a pinned GEPA source revision into SuperQode's Python
+environment. Jev needs its configured API credentials; reflection uses a
+separate model. Tune detects configured OpenAI, Anthropic and Gemini API keys,
+or accepts a LiteLLM `provider/model` identifier. It does not reuse coding-agent
+subscription credentials.
+
+```sh
+superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
+  --data reviewed-tickets.csv --input request --label route \
+  --max-evals 120 --max-reflection-cost 2 --live --json
+
+# Resume annotation, change the reflection model, or inspect completed results
+superqode harness tune --resume .superqode/tuning/<run>
+```
+
+Input rows use `state`, `label`, and optional `id`, `rationale`, `group`, and
+`split` fields. `--input` and `--label` map other column names. Use `group` to
+keep related tickets/session examples together. Explicit splits are `train`,
+`validation`, and `test`; existing `held-in`/`held-out` decision eval files are
+also supported. Otherwise Tune partitions examples deterministically before
+annotation. Duplicate inputs are rejected, and test examples never enter GEPA.
+
+An experiment preserves output labels, schema, model configuration and
+confidence policy. It writes `candidate-pack.yaml`, `candidate-harness.yaml`,
+`changes.diff`, evaluation evidence and `report.json` under `.superqode/tuning`.
+The comparison counts abstentions and errors separately, and checks for
+regressions against the baseline. Small runs (fewer than 30 training or 30 test
+examples) are marked as pilots and cannot qualify for adoption; larger runs
+still require representative data and human review. **Use this version** opens
+a standalone decision session after a qualifying comparison, not automatic
+coding-session routing.
+
+The reflection spend limit is checked between model calls and excludes Jev
+usage. The final baseline/candidate test calls are additional to `--max-evals`;
+both allowances are displayed before starting. Inputs go to Jev; development
+examples and rationales also go to the reflection provider. Existing state
+redaction applies, but example files should not contain secrets.
+
+Stop saves completed evidence. Annotation can be resumed; an interrupted
+optimization requires a new experiment and budget, avoiding silent renewed
+spend. Recent-session acquisition, new-question discovery, Noul/Score tuning,
+and automatic adoption into permission or revision loops are not included.
+
 ## Labelled decision evaluations
 
 Use the normal harness evaluator to compare decision outputs against labels:
