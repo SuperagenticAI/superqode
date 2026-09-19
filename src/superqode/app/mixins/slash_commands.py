@@ -95,9 +95,7 @@ class SlashCommandMixin:
             self._activate_decision_connection(pure, log)
             return
         if action not in {"", "status", "live", "shadow", "on", "off", "0"}:
-            log.add_error(
-                "Use :systemone [status|discovery|live|shadow|off|packs|connect <pack>]"
-            )
+            log.add_error("Use :systemone [status|discovery|live|shadow|off|packs|connect <pack>]")
             return
         spec = None
         pure = (

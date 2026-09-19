@@ -206,14 +206,10 @@ class ToolSearchTool(Tool):
                         tool for tool in deferred if not tool.name.startswith("mcp_")
                     ]
                 catalogue = descriptors_from_tools(native_deferred)
-                if settings.mcp_mode == "deferred_tools" and getattr(
-                    ctx, "mcp_allowed", True
-                ):
+                if settings.mcp_mode == "deferred_tools" and getattr(ctx, "mcp_allowed", True):
                     catalogue.extend(await descriptors_from_mcp())
                 catalogue_names = [item.exposed_name for item in catalogue]
-                discovery_candidates, retrieval = await retrieve(
-                    query, catalogue, settings
-                )
+                discovery_candidates, retrieval = await retrieve(query, catalogue, settings)
                 unified_matches = [
                     (candidate.score, candidate.descriptor.payload)
                     for candidate in discovery_candidates

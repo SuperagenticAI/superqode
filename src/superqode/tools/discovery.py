@@ -132,9 +132,11 @@ def resolve_discovery_settings(
     if mode not in {"legacy", "shadow", "unified"}:
         raise ValueError("Tool discovery mode must be legacy, shadow, or unified")
 
-    backend = str(
-        env.get("SUPERQODE_TOOL_SEARCH_BACKEND") or search.get("backend") or "bm25"
-    ).strip().lower()
+    backend = (
+        str(env.get("SUPERQODE_TOOL_SEARCH_BACKEND") or search.get("backend") or "bm25")
+        .strip()
+        .lower()
+    )
     on_error = str(search.get("on_error") or "fallback").strip().lower()
     if on_error not in {"fallback", "empty", "fail"}:
         raise ValueError("tool_discovery.search.on_error must be fallback, empty, or fail")
@@ -149,9 +151,7 @@ def resolve_discovery_settings(
         raise ValueError("tool_discovery.judge.mode must be off, shadow, or rerank")
     mcp_mode = str(mcp.get("mode") or "meta_tools").strip().lower()
     if mcp_mode not in {"disabled", "meta_tools", "deferred_tools"}:
-        raise ValueError(
-            "tool_discovery.mcp.mode must be disabled, meta_tools, or deferred_tools"
-        )
+        raise ValueError("tool_discovery.mcp.mode must be disabled, meta_tools, or deferred_tools")
 
     return DiscoverySettings(
         enabled=enabled,
@@ -169,7 +169,9 @@ def resolve_discovery_settings(
         candidate_limit=max(1, int(rank.get("candidate_limit", 8) or 8)),
         activation_limit=max(1, int(activation.get("limit", 3) or 3)),
         on_error=on_error,
-        fallback_backends=tuple(str(item).strip().lower() for item in fallbacks if str(item).strip()),
+        fallback_backends=tuple(
+            str(item).strip().lower() for item in fallbacks if str(item).strip()
+        ),
         exact_name_boost=float(rank.get("exact_name_boost", 4.0) or 0.0),
         judge_backend=judge_backend,
         judge_mode=judge_mode,
@@ -198,14 +200,23 @@ class LexicalSearcher:
             for term in query_tokens:
                 lexical += 3.0 if term in name_tokens else 0.0
                 lexical += min(description.get(term, 0), 3)
-                lexical += 1.0 if any(
-                    token.startswith(term) or term.startswith(token) for token in name_tokens
-                ) else 0.0
-            exact = self.exact_name_boost if normalized_query in {
-                normalize_identifier(descriptor.original_name),
-                normalize_identifier(descriptor.exposed_name),
-                normalize_identifier(descriptor.id),
-            } else 0.0
+                lexical += (
+                    1.0
+                    if any(
+                        token.startswith(term) or term.startswith(token) for token in name_tokens
+                    )
+                    else 0.0
+                )
+            exact = (
+                self.exact_name_boost
+                if normalized_query
+                in {
+                    normalize_identifier(descriptor.original_name),
+                    normalize_identifier(descriptor.exposed_name),
+                    normalize_identifier(descriptor.id),
+                }
+                else 0.0
+            )
             score = lexical + exact
             if score > 0:
                 found.append(
@@ -252,15 +263,18 @@ class BM25Searcher:
                     continue
                 df = doc_frequency[term]
                 inverse = math.log((len(documents) - df + 0.5) / (df + 0.5) + 1)
-                denominator = tf + self.k1 * (
-                    1 - self.b + self.b * len(document) / average_length
-                )
+                denominator = tf + self.k1 * (1 - self.b + self.b * len(document) / average_length)
                 bm25 += inverse * tf * (self.k1 + 1) / denominator
-            exact = self.exact_name_boost if normalized_query in {
-                normalize_identifier(descriptor.original_name),
-                normalize_identifier(descriptor.exposed_name),
-                normalize_identifier(descriptor.id),
-            } else 0.0
+            exact = (
+                self.exact_name_boost
+                if normalized_query
+                in {
+                    normalize_identifier(descriptor.original_name),
+                    normalize_identifier(descriptor.exposed_name),
+                    normalize_identifier(descriptor.id),
+                }
+                else 0.0
+            )
             score = bm25 + exact
             if score > 0:
                 found.append(
@@ -300,7 +314,9 @@ class CallableSearcher:
                 score = float(item.get("score", 1.0))
                 signals = dict(item.get("signals") or {})
             else:
-                raise TypeError("Custom tool search results must be ids, mappings, or ToolCandidate")
+                raise TypeError(
+                    "Custom tool search results must be ids, mappings, or ToolCandidate"
+                )
             if descriptor is not None:
                 candidates.append(
                     ToolCandidate(
@@ -332,13 +348,19 @@ class CallableRanker:
             if isinstance(item, ToolCandidate):
                 ranked.append(item)
                 continue
-            tool_id = str(item.get("id") or item.get("tool_id") or "") if isinstance(
-                item, Mapping
-            ) else str(item)
+            tool_id = (
+                str(item.get("id") or item.get("tool_id") or "")
+                if isinstance(item, Mapping)
+                else str(item)
+            )
             original = by_id.get(tool_id)
             if original is None:
                 continue
-            score = float(item.get("score", original.score)) if isinstance(item, Mapping) else original.score
+            score = (
+                float(item.get("score", original.score))
+                if isinstance(item, Mapping)
+                else original.score
+            )
             signals = (
                 {**dict(original.signals), **dict(item.get("signals") or {})}
                 if isinstance(item, Mapping)
@@ -367,9 +389,7 @@ async def retrieve(
     for backend in backends:
         try:
             searcher = _searcher(backend, settings)
-            searched = list(
-                await searcher.search(query, catalogue, limit=settings.search_limit)
-            )
+            searched = list(await searcher.search(query, catalogue, limit=settings.search_limit))
             candidates = await _apply_ranker(query, searched, settings)
             return list(candidates), {
                 "backend": backend,
@@ -449,9 +469,7 @@ async def evaluate_retrieval(
     }
 
 
-def record_discovery_trace(
-    settings: DiscoverySettings, event: Mapping[str, Any]
-) -> dict[str, Any]:
+def record_discovery_trace(settings: DiscoverySettings, event: Mapping[str, Any]) -> dict[str, Any]:
     """Add stable identity/time and optionally persist a sanitized JSON trace."""
 
     payload = {

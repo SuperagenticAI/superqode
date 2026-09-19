@@ -454,8 +454,8 @@ class PureMode:
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
-            runtime_kwargs["on_systemone"] = (
-                lambda event: self.on_systemone(event) if self.on_systemone else None
+            runtime_kwargs["on_systemone"] = lambda event: (
+                self.on_systemone(event) if self.on_systemone else None
             )
         # Only vendor CLI runtimes take these. ``builtin`` forwards unknown
         # kwargs straight to AgentLoop, which has no ``approval_mode``; and the

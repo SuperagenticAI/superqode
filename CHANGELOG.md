@@ -5,6 +5,27 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.4] - 2026-09-19
+
+### Progressive tool discovery
+
+- 🔍 Catalogue → search → rank → Jev → activate → permission → execute, without loading every tool schema into context.
+- 🚀 SystemOne ships unified BM25 retrieval, an eight-candidate shortlist, Jev shadow judging, and deferred MCP tools by default.
+- 🛡️ Search never grants permission and never executes. Activation only reveals the chosen schema for the next model step.
+- 🧩 Bring your own retrieval backend while SuperQode owns lifecycle, activation, permissions, and traces.
+- 💻 Inspect the live path in the TUI with `:systemone`, `:systemone discovery`, or the `:discovery` alias.
+
+### Usage
+
+- Launch SystemOne with progressive discovery already enabled:
+
+  ```sh
+  superqode --tui --harness systemone
+  ```
+
+- Or pick SystemOne from `:connect` → Connect a harness with your model.
+- Live Jev evaluations still require `TYPESAFE_API_KEY` before launching the TUI.
+
 ## [2.4.3] - 2026-09-18
 
 ### Fixed

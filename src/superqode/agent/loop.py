@@ -1227,9 +1227,7 @@ class AgentLoop:
 
         # Keep the initial prefix deterministic, then append newly activated
         # schemas so progressive discovery preserves provider cache prefixes.
-        previous_names = [
-            definition.name for definition in getattr(self, "_cached_tool_defs", ())
-        ]
+        previous_names = [definition.name for definition in getattr(self, "_cached_tool_defs", ())]
         by_name = {definition.name: definition for definition in definitions}
         ordered_names = [name for name in previous_names if name in by_name]
         ordered_names.extend(sorted(name for name in by_name if name not in ordered_names))
@@ -1576,7 +1574,9 @@ class AgentLoop:
                         {
                             "tool": name,
                             "status": "success" if result.success else "error",
-                            "permission": str((result.metadata or {}).get("permission") or "allowed"),
+                            "permission": str(
+                                (result.metadata or {}).get("permission") or "allowed"
+                            ),
                         }
                     )
                     self.last_discovery_event = {**current, "executions": executions[-10:]}

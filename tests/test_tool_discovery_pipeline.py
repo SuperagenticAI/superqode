@@ -91,9 +91,7 @@ async def test_bm25_exact_identifier_is_deterministic_top_one():
             description="Send a notification to a user",
         ),
     ]
-    found = await BM25Searcher().search(
-        "notification_send_user", catalogue, limit=2
-    )
+    found = await BM25Searcher().search("notification_send_user", catalogue, limit=2)
     assert [item.descriptor.original_name for item in found] == [
         "notification_send_user",
         "notification_send_channel",
@@ -200,9 +198,7 @@ async def test_unified_search_uses_one_shortlist_and_activates_mcp_proxy(monkeyp
             )
         ]
 
-    monkeypatch.setattr(
-        "superqode.tools.discovery.descriptors_from_mcp", fake_mcp_descriptors
-    )
+    monkeypatch.setattr("superqode.tools.discovery.descriptors_from_mcp", fake_mcp_descriptors)
     spec = harness_spec_from_dict(
         {
             "name": "unified",
