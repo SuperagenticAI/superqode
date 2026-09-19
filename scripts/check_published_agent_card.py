@@ -98,7 +98,9 @@ def icon_problem(card: dict[str, Any]) -> tuple[str, bool] | None:
     except urllib.error.HTTPError as error:
         # Access filtering, rate limits and upstream outages do not prove that
         # the publication artifact points at a nonexistent image.
-        conclusive = error.code not in {403, 408, 425, 429} and error.code < 500
+        # 406/415 show up when a host or bot filter rejects our Accept/Range probe
+        # while still serving the image to ordinary browsers.
+        conclusive = error.code not in {403, 406, 408, 415, 425, 429} and error.code < 500
         return f"iconUrl {url} returned HTTP {error.code} on GET", conclusive
     except (urllib.error.URLError, TimeoutError) as error:
         return f"Could not reach iconUrl {url}: {error}", False
