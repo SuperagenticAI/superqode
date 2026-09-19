@@ -1,0 +1,71 @@
+id,state,label,split,rationale
+private-1,Keep this customer dump on the laptop. No cloud models.,private,train,Matches private route criteria.
+private-2,"Offline only: proprietary firmware tree, block every network call.",private,train,Matches private route criteria.
+private-3,"Confidential HR notes. Local OSS models only, no handoff.",private,train,Matches private route criteria.
+private-4,Air-gapped lab machine. Do not leave the premises with the code.,private,train,Matches private route criteria.
+private-5,Private medical research repo. Cloud providers are forbidden.,private,train,Matches private route criteria.
+private-6,NDA source. Stay on-device with local weights only.,private,test,Matches private route criteria.
+private-7,Secret key ceremony docs. No remote inference allowed.,private,test,Matches private route criteria.
+private-8,Board deck with unreleased numbers. Process entirely offline.,private,test,Matches private route criteria.
+private-9,Incident forensics on a sealed laptop. Zero egress.,private,test,Matches private route criteria.
+private-10,Draft acquisition memo. Must not touch a hosted API.,private,test,Matches private route criteria.
+local-1,Prefer Ollama on this workstation; cloud fallback is fine if needed.,local,train,Matches local route criteria.
+local-2,"Run against the office GPU box first, then widen if quality is poor.",local,train,Matches local route criteria.
+local-3,Use the LAN llama.cpp server when possible.,local,train,Matches local route criteria.
+local-4,"Start local, escalate only if the local model stalls.",local,train,Matches local route criteria.
+local-5,Try the desktop GGUF build before paying for tokens.,local,train,Matches local route criteria.
+local-6,"Home lab preference: LM Studio, then hosted if it fails.",local,test,Matches local route criteria.
+local-7,Company policy: local provider preferred for routine refactors.,local,test,Matches local route criteria.
+local-8,Spin this on the shared workstation model first.,local,test,Matches local route criteria.
+local-9,Use on-prem inference when it is warm; otherwise continue.,local,test,Matches local route criteria.
+local-10,Default to the local stack for scaffolding this module.,local,test,Matches local route criteria.
+cheap-1,Rename a helper and update call sites. Keep cost tiny.,cheap,train,Matches cheap route criteria.
+cheap-2,Add a boring unit test for a pure function.,cheap,train,Matches cheap route criteria.
+cheap-3,Fix a typo in the README footer.,cheap,train,Matches cheap route criteria.
+cheap-4,Format imports and run the cheapest suitable model.,cheap,train,Matches cheap route criteria.
+cheap-5,Generate a one-line docstring for a getter.,cheap,train,Matches cheap route criteria.
+cheap-6,Bump a patch version in pyproject.toml.,cheap,test,Matches cheap route criteria.
+cheap-7,Rewrite a changelog bullet for clarity.,cheap,test,Matches cheap route criteria.
+cheap-8,Convert tabs to spaces in one file.,cheap,test,Matches cheap route criteria.
+cheap-9,Add a missing type hint on a simple parameter.,cheap,test,Matches cheap route criteria.
+cheap-10,Delete an unused import across the package.,cheap,test,Matches cheap route criteria.
+best-1,Design the multi-tenant permission model carefully.,best,train,Matches best route criteria.
+best-2,Hunt a rare race in the async job scheduler.,best,train,Matches best route criteria.
+best-3,Propose the migration plan for the auth rewrite.,best,train,Matches best route criteria.
+best-4,Find the root cause of intermittent data loss.,best,train,Matches best route criteria.
+best-5,Architect the plugin sandbox boundary.,best,train,Matches best route criteria.
+best-6,Diagnose a heisenbug in production traces.,best,test,Matches best route criteria.
+best-7,Choose the concurrency strategy for the agent loop.,best,test,Matches best route criteria.
+best-8,Stress-test the recovery path after partial writes.,best,test,Matches best route criteria.
+best-9,Invent a safe rollout for breaking API changes.,best,test,Matches best route criteria.
+best-10,Debug corrupted checkpoint files under load.,best,test,Matches best route criteria.
+review-1,Review this PR for security and correctness before merge.,review,train,Matches review route criteria.
+review-2,Critique the patch as a skeptical senior reviewer.,review,train,Matches review route criteria.
+review-3,Check the diff for injection and auth bypass risks.,review,train,Matches review route criteria.
+review-4,Reviewer pass: does this meet the acceptance tests?,review,train,Matches review route criteria.
+review-5,"Second pair of eyes on the crypto change, please.",review,train,Matches review route criteria.
+review-6,Review the migration SQL for destructive mistakes.,review,test,Matches review route criteria.
+review-7,Assess whether this hotfix is safe to ship tonight.,review,test,Matches review route criteria.
+review-8,Reviewer mode: challenge every assumption in the design.,review,test,Matches review route criteria.
+review-9,Security review of the new webhook handler.,review,test,Matches review route criteria.
+review-10,Pre-merge review focusing on edge cases and rollbacks.,review,test,Matches review route criteria.
+long-context-1,Summarize this 200-file monorepo migration diff.,long-context,train,Matches long-context route criteria.
+long-context-2,Compare behavior across the entire services/ tree.,long-context,train,Matches long-context route criteria.
+long-context-3,Read the full incident timeline and extract themes.,long-context,train,Matches long-context route criteria.
+long-context-4,Map dependencies through the whole workspace.,long-context,train,Matches long-context route criteria.
+long-context-5,Digest three years of ADR markdown into a short brief.,long-context,train,Matches long-context route criteria.
+long-context-6,Analyze the giant generated protobuf surface area.,long-context,test,Matches long-context route criteria.
+long-context-7,Walk the complete call graph for the billing subsystem.,long-context,test,Matches long-context route criteria.
+long-context-8,Summarize every CHANGELOG entry since 2023.,long-context,test,Matches long-context route criteria.
+long-context-9,Review a multi-repo patch spanning twelve packages.,long-context,test,Matches long-context route criteria.
+long-context-10,Condensing a long agent transcript into decisions.,long-context,test,Matches long-context route criteria.
+no-subscription-1,No ChatGPT or Claude subscription. Use local OSS or BYOK.,no-subscription,train,Matches no-subscription route criteria.
+no-subscription-2,Avoid subscription-only coding agents for this task.,no-subscription,train,Matches no-subscription route criteria.
+no-subscription-3,We cancelled Copilot. Prefer open weights or pay-per-token.,no-subscription,train,Matches no-subscription route criteria.
+no-subscription-4,Cannot use Claude Code or Codex CLI here.,no-subscription,train,Matches no-subscription route criteria.
+no-subscription-5,Stay on BYOK endpoints; no seat-based products.,no-subscription,train,Matches no-subscription route criteria.
+no-subscription-6,Policy blocks subscription IDEs. Local or API keys only.,no-subscription,test,Matches no-subscription route criteria.
+no-subscription-7,Do not route through a subscribed coding agent runtime.,no-subscription,test,Matches no-subscription route criteria.
+no-subscription-8,Team has no Claude or ChatGPT seats left this month.,no-subscription,test,Matches no-subscription route criteria.
+no-subscription-9,Prefer open models we already host over subscription UIs.,no-subscription,test,Matches no-subscription route criteria.
+no-subscription-10,Skip anything that needs a monthly coding-agent plan.,no-subscription,test,Matches no-subscription route criteria.
