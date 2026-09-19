@@ -11,11 +11,11 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker"><span class="sq-gradient-text">The Harness Layer</span> for Coding Agents</p>
+<p class="sq-kicker"><span class="sq-gradient-text">The Harness Interoperability Layer</span> for coding agents</p>
 
-<p class="sq-tagline">Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal. Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.</p>
+<p class="sq-tagline">Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal. Interoperable over ACP, A2A, MCP and UHP. Coding models still write the code; <strong>Jev</strong> supplies typed decisions that the <strong>SystemOne</strong> harness validates through explicit policies.</p>
 
-<p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
+<p>Terminal-first · Jev · SystemOne · Any agent · Any model · Open source</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -25,13 +25,54 @@ hide:
   <a href="https://superqode.dev"><img src="https://img.shields.io/badge/website-superqode.dev-7c3aed?style=flat-square" alt="Website"></a>
 </p>
 
-[Start Coding](getting-started/first-session.md){ .md-button .md-button--primary }
+[SuperQode · Jev guide](advanced/systemone.md){ .md-button .md-button--primary }
+[SystemOne Harness](advanced/systemone.md){ .md-button }
+[Progressive tool discovery](advanced/progressive-tool-discovery.md){ .md-button }
+[Website](https://superqode.dev){ .md-button }
+[Meet the A2A agent](https://a2a.superqode.dev){ .md-button }
+[Start Coding](getting-started/first-session.md){ .md-button }
 [Explore the Harness Hub](harness-hub.md){ .md-button }
-[A2A Agent](https://a2a.superqode.dev){ .md-button }
-[Choose an Agent, Model, or Harness](concepts/modes.md){ .md-button }
-[Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button }
-[Optimize Local Models](local-agentic-coding.md){ .md-button }
-[SuperQode Website](https://superqode.dev){ .md-button }
+
+</div>
+
+---
+
+## Core attraction: Jev and SystemOne
+
+The primary SuperQode surface after install is the **SystemOne** coding harness, powered by **Jev** typed decisions:
+
+- Progressive tool discovery: catalogue → search → rank → Jev → activate → permission → execute
+- Deferred MCP and native schemas until a tool is selected
+- Shadow or live tool gates without replacing your coding model
+- Standalone decision packs when you need Choice, Score, or Noul answers
+
+<div class="grid cards" markdown>
+
+-   :material-brain:{ .lg .middle } **Jev typed decisions**
+
+    ---
+
+    Choice, Score and Noul packs with confidence thresholds. Coding models still write code; Jev decides.
+
+    [:octicons-arrow-right-24: Jev & SystemOne guide](advanced/systemone.md)
+
+-   :material-magnify:{ .lg .middle } **Progressive tool discovery**
+
+    ---
+
+    BM25 shortlist, Jev selection or abstention, schema activation, then the normal permission path.
+
+    [:octicons-arrow-right-24: Progressive tool discovery](advanced/progressive-tool-discovery.md)
+
+-   :material-rocket-launch:{ .lg .middle } **Launch SystemOne**
+
+    ---
+
+    ```sh
+    superqode --tui --harness systemone
+    ```
+
+    Or `:connect` → Connect a harness with your model → SystemOne.
 
 </div>
 
@@ -39,7 +80,7 @@ hide:
 
 ## Watch the demo
 
-The terminal, the Harness Hub and the A2A agent, end to end.
+SystemOne with Jev, the terminal, the Harness Hub and the A2A agent, end to end.
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">
