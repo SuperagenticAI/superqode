@@ -37,8 +37,33 @@ class TuneCancelled(Exception):
     """A user stopped a tuning experiment."""
 
 
+def tuning_support_available() -> bool:
+    """True when GEPA optimize_anything imports in this process."""
+    try:
+        from gepa.optimize_anything import OptimizeAnythingConfig, optimize_anything  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def refresh_tuning_support_import() -> bool:
+    """Clear stale import failures so a just-installed GEPA can load without restart."""
+    import importlib
+    import sys
+
+    for name in list(sys.modules):
+        if name == "gepa" or name.startswith("gepa."):
+            del sys.modules[name]
+    importlib.invalidate_caches()
+    return tuning_support_available()
+
+
 def install_support() -> str:
-    """Explicit setup action targeting SuperQode's own Python environment."""
+    """Explicit setup action targeting SuperQode's own Python environment.
+
+    Installs GEPA (and light deps) into the same interpreter SuperQode is running.
+    After install we refresh imports so most users can continue without restarting the TUI.
+    """
     import shlex
     import subprocess
     from superqode.providers.env_introspect import python_package_install_command
@@ -55,7 +80,16 @@ def install_support() -> str:
         raise ValueError(
             "Tuning support installation failed. Check Git access to github.com/gepa-ai/gepa and package-index access."
         )
-    return "Tuning support installed. Restart SuperQode, then open :systemone tune again. Your reflection model preference is restored automatically; saved judgments can be resumed."
+    if refresh_tuning_support_import():
+        return (
+            "Tuning support is ready in this session. You can Prepare examples and Start without restarting. "
+            "Your reflection model preference is saved automatically."
+        )
+    return (
+        "Tuning support installed, but this session still cannot import it. "
+        "Restart SuperQode once, then open :systemone tune again. "
+        "Your reflection model preference is restored automatically; saved judgments can be resumed."
+    )
 
 
 @dataclass
@@ -445,7 +479,7 @@ def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
             from gepa.optimize_anything import OptimizeAnythingConfig, optimize_anything  # noqa: F401
         except ImportError as exc:
             raise ValueError(
-                "Tuning support is not installed or is out of date. Run: superqode harness tune --setup, then restart SuperQode."
+                "Tuning support is not installed. Click Install tuning support in this screen, or run: superqode harness tune --setup."
             ) from exc
     return {
         "endpoint": settings.endpoint,

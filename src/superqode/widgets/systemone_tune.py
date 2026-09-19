@@ -119,6 +119,20 @@ class SystemOneTuneScreen(Screen[str | None]):
             self.query_one("#tune-evals", Input).value = str(prefs["max_evals"])
         if "max_reflection_cost" in prefs:
             self.query_one("#tune-cost", Input).value = str(prefs["max_reflection_cost"])
+        self._refresh_support_status()
+
+
+    def _refresh_support_status(self) -> None:
+        ready = tune.tuning_support_available()
+        install_btn = self.query_one("#tune-install", Button)
+        install_btn.disabled = ready
+        if ready:
+            self._status("Tuning support is ready. Fill the pack and examples, then Prepare.")
+        else:
+            self._status(
+                "Tuning support (GEPA) is not installed yet. Click Install tuning support first so you do not fill everything in and then get blocked."
+            )
+            install_btn.variant = "primary"
 
     def _remember_preferences(self) -> None:
         model = self._value("model") or tune.preferred_reflection_model()
@@ -146,6 +160,11 @@ class SystemOneTuneScreen(Screen[str | None]):
     def prepare(self) -> None:
         try:
             self._remember_preferences()
+            if not tune.tuning_support_available():
+                self._status(
+                    "Install tuning support first (button above). That keeps you from labeling examples and then hitting a missing-dependency error."
+                )
+                return
             resume = self._value("resume")
             if resume:
                 self.output = Path(resume).expanduser()
@@ -247,6 +266,11 @@ class SystemOneTuneScreen(Screen[str | None]):
             return
         try:
             self._remember_preferences()
+            if not tune.tuning_support_available():
+                self._status(
+                    "Install tuning support first, then Start. No restart is usually required after Install succeeds."
+                )
+                return
             self.manifest["options"].update(
                 reflection_lm=self._value("model") or tune.preferred_reflection_model(),
                 max_evals=int(self._value("evals")),
@@ -310,12 +334,17 @@ class SystemOneTuneScreen(Screen[str | None]):
     def _installation_finished(self, message: str) -> None:
         self.running = False
         self.installing = False
-        self.query_one("#tune-back", Button).disabled = False
+        for name in ("install", "start", "prepare", "back"):
+            try:
+                self.query_one(f"#tune-{name}", Button).disabled = False
+            except Exception:
+                pass
+        self._refresh_support_status()
         self._status(
             message
-            + "\nYour reflection model preference was saved and will reload after restart."
-            + (f"\nSaved judgments: {self.output}" if self.output else "")
+            + ("\nSaved judgments: " + str(self.output) if self.output else "")
         )
+
 
     def _finished(self, report: dict) -> None:
         self.report = report

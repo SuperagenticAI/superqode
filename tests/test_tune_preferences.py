@@ -21,3 +21,18 @@ def test_preferred_reflection_model_persists(tmp_path, monkeypatch):
     assert tune.preferred_reflection_model() == "gemini/gemini-3.6-flash"
     tune.save_tune_preferences(reflection_lm="")
     assert "reflection_lm" not in tune.load_tune_preferences()
+
+
+def test_tuning_support_available_is_bool():
+    from superqode.systemone import tune
+
+    assert isinstance(tune.tuning_support_available(), bool)
+
+
+def test_refresh_tuning_support_import_returns_bool(monkeypatch):
+    from superqode.systemone import tune
+
+    monkeypatch.setattr(tune, "tuning_support_available", lambda: True)
+    # refresh still runs importlib path; just ensure it returns bool when available monkeypatched mid-call is hard —
+    # call the real function: should not raise
+    assert isinstance(tune.refresh_tuning_support_import(), bool)
