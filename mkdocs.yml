@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://docs.superqode.dev
-site_description: "Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal. Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one."
+site_description: "Jev-powered SystemOne harness for coding agents. Progressive tool discovery, typed decisions, and interoperability over ACP, A2A, MCP and UHP from one terminal."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -142,6 +142,7 @@ extra_css:
 
 
 nav:
+  - 🌐 Website: https://superqode.dev
   - 🚀 Quick Start:
     - ⚡ Quick Start: getting-started/quickstart.md
     - 🏠 Documentation Home: index.md
@@ -207,8 +208,6 @@ nav:
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🧪 Harness Examples: examples.md
     - 🏗️ Harness System: advanced/harness-system.md
-    - Jev Integration: advanced/systemone.md
-    - Release 2.4.0: advanced/release-2.4.0.md
     - π PiPy: advanced/pipy.md
     - 🐍 Native RLM: advanced/rlm.md
     - 🐍 Prime Agent Python Client: prime-agent-python-client.md
@@ -220,6 +219,10 @@ nav:
     - 🔀 SuperQode and Omnigent: advanced/superqode-vs-omnigent.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
+  - 🧠 SystemOne:
+    - Jev & SystemOne: advanced/systemone.md
+    - Progressive Tool Discovery: advanced/progressive-tool-discovery.md
+    - Release 2.4.0: advanced/release-2.4.0.md
   - 🔁 A2A: providers/a2a.md
 
   - 📈 Evaluate & Optimise:
@@ -271,7 +274,6 @@ nav:
       - 🧰 Tools & Search:
         - 🧰 Tools Catalog: advanced/tools-catalog.md
         - 🔧 Tools System: advanced/tools-system.md
-        - 🧭 Progressive Tool Discovery: advanced/progressive-tool-discovery.md
         - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
         - 🏗️ Workspace System: advanced/workspace-system.md
         - 📝 LSP Integration: advanced/lsp-integration.md
