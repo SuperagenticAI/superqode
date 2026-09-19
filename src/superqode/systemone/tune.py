@@ -37,8 +37,33 @@ class TuneCancelled(Exception):
     """A user stopped a tuning experiment."""
 
 
+def tuning_support_available() -> bool:
+    """True when GEPA optimize_anything imports in this process."""
+    try:
+        from gepa.optimize_anything import OptimizeAnythingConfig, optimize_anything  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def refresh_tuning_support_import() -> bool:
+    """Clear stale import failures so a just-installed GEPA can load without restart."""
+    import importlib
+    import sys
+
+    for name in list(sys.modules):
+        if name == "gepa" or name.startswith("gepa."):
+            del sys.modules[name]
+    importlib.invalidate_caches()
+    return tuning_support_available()
+
+
 def install_support() -> str:
-    """Explicit setup action targeting SuperQode's own Python environment."""
+    """Explicit setup action targeting SuperQode's own Python environment.
+
+    Installs GEPA (and light deps) into the same interpreter SuperQode is running.
+    After install we refresh imports so most users can continue without restarting the TUI.
+    """
     import shlex
     import subprocess
     from superqode.providers.env_introspect import python_package_install_command
@@ -55,8 +80,15 @@ def install_support() -> str:
         raise ValueError(
             "Tuning support installation failed. Check Git access to github.com/gepa-ai/gepa and package-index access."
         )
+    if refresh_tuning_support_import():
+        return (
+            "Tuning support is ready in this session. You can Prepare examples and Start without restarting. "
+            "Your reflection model preference is saved automatically."
+        )
     return (
-        "Tuning support installed. Restart SuperQode before tuning; saved judgments can be resumed."
+        "Tuning support installed, but this session still cannot import it. "
+        "Restart SuperQode once, then open :systemone tune again. "
+        "Your reflection model preference is restored automatically; saved judgments can be resumed."
     )
 
 
@@ -68,6 +100,43 @@ class TuneOptions:
     max_evals: int = 120
     max_reflection_cost: float = 2.0
     seed: int = 0
+
+
+def tune_preferences_path() -> Path:
+    """User preference file for Tune UI defaults (no secrets)."""
+    return Path.home() / ".superqode" / "tune-preferences.json"
+
+
+def load_tune_preferences() -> dict:
+    path = tune_preferences_path()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_tune_preferences(**updates: str | int | float) -> None:
+    """Persist non-secret Tune UI choices across restarts (reflection model, budgets)."""
+    path = tune_preferences_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    current = load_tune_preferences()
+    for key, value in updates.items():
+        if value is None or value == "":
+            current.pop(key, None)
+        else:
+            current[key] = value
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def preferred_reflection_model() -> str:
+    """Last Tune reflection model if set; otherwise credential-based default."""
+    saved = str(load_tune_preferences().get("reflection_lm") or "").strip()
+    return saved or default_reflection_model()
 
 
 def default_reflection_model() -> str:
@@ -410,7 +479,7 @@ def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
             from gepa.optimize_anything import OptimizeAnythingConfig, optimize_anything  # noqa: F401
         except ImportError as exc:
             raise ValueError(
-                "Tuning support is not installed or is out of date. Run: superqode harness tune --setup, then restart SuperQode."
+                "Tuning support is not installed. Click Install tuning support in this screen, or run: superqode harness tune --setup."
             ) from exc
     return {
         "endpoint": settings.endpoint,

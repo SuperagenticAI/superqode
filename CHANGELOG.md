@@ -5,6 +5,15 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.6] - 2026-09-19
+
+### SystemOne Tune
+
+- Remember the reflection model (OpenAI, Anthropic, Gemini, or any provider/model) across Install and TUI restart via `~/.superqode/tune-preferences.json`.
+- Probe GEPA as soon as `:systemone tune` opens; highlight Install before you fill the form.
+- After Install, refresh imports so a TUI restart is only needed when this process still cannot load GEPA.
+- Default Gemini reflection model stays `gemini/gemini-3.6-flash` (2.5 is retired for new users).
+
 ## [2.4.5] - 2026-09-19
 
 ### SystemOne Tune
