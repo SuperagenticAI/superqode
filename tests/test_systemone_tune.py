@@ -425,8 +425,15 @@ async def test_tui_completed_run_exposes_diff_but_not_pilot_adoption(tmp_path):
 @pytest.mark.asyncio
 async def test_tui_start_worker_produces_report(tmp_path, monkeypatch):
     out = prepare(tmp_path)
+    monkeypatch.setattr(tune, "tuning_support_available", lambda: True)
     monkeypatch.setattr(
-        tune, "preflight", lambda *args, **kwargs: {"model": "fake", "endpoint": "local test"}
+        tune,
+        "preflight",
+        lambda *args, **kwargs: {
+            "model": "fake",
+            "endpoint": "local test",
+            "reflection_model": "fake",
+        },
     )
     original = tune.run_tune
     main_thread = threading.get_ident()

@@ -121,7 +121,6 @@ class SystemOneTuneScreen(Screen[str | None]):
             self.query_one("#tune-cost", Input).value = str(prefs["max_reflection_cost"])
         self._refresh_support_status()
 
-
     def _refresh_support_status(self) -> None:
         ready = tune.tuning_support_available()
         install_btn = self.query_one("#tune-install", Button)
@@ -130,7 +129,7 @@ class SystemOneTuneScreen(Screen[str | None]):
             self._status("Tuning support is ready. Fill the pack and examples, then Prepare.")
         else:
             self._status(
-                "Tuning support (GEPA) is not installed yet. Click Install tuning support first so you do not fill everything in and then get blocked."
+                "Tuning support (GEPA) is not installed yet. Click Install tuning support before Start. Prepare and labeling work without it."
             )
             install_btn.variant = "primary"
 
@@ -160,11 +159,6 @@ class SystemOneTuneScreen(Screen[str | None]):
     def prepare(self) -> None:
         try:
             self._remember_preferences()
-            if not tune.tuning_support_available():
-                self._status(
-                    "Install tuning support first (button above). That keeps you from labeling examples and then hitting a missing-dependency error."
-                )
-                return
             resume = self._value("resume")
             if resume:
                 self.output = Path(resume).expanduser()
@@ -287,7 +281,9 @@ class SystemOneTuneScreen(Screen[str | None]):
         self.query_one("#tune-limits").display = False
         self.query_one("#tune-back", Button).label = "Stop"
         self._status(
-            f"Starting · reflection {details['reflection_model']} · Jev {details['model']} at {details['endpoint']}"
+            "Starting · reflection "
+            f"{details.get('reflection_model') or details.get('model')} · "
+            f"Jev {details.get('model')} at {details.get('endpoint')}"
         )
         self._run()
 
@@ -340,11 +336,7 @@ class SystemOneTuneScreen(Screen[str | None]):
             except Exception:
                 pass
         self._refresh_support_status()
-        self._status(
-            message
-            + ("\nSaved judgments: " + str(self.output) if self.output else "")
-        )
-
+        self._status(message + ("\nSaved judgments: " + str(self.output) if self.output else ""))
 
     def _finished(self, report: dict) -> None:
         self.report = report
