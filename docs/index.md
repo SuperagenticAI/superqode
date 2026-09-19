@@ -37,9 +37,9 @@ hide:
 
 ---
 
-## Core attraction: Jev and SystemOne
+## SystemOne with Jev
 
-The primary SuperQode surface after install is the **SystemOne** coding harness, powered by **Jev** typed decisions:
+Use the **SystemOne** coding harness with **Jev** typed decisions:
 
 - Progressive tool discovery: catalogue → search → rank → Jev → activate → permission → execute
 - Deferred MCP and native schemas until a tool is selected
