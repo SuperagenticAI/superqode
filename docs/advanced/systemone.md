@@ -173,7 +173,7 @@ superqode harness tune
 Tune currently improves one fixed Choice question, including structured
 instructions and criteria. Choose a built-in pack or a SystemOne decision
 harness, then import CSV, JSONL, JSON or YAML examples. With no file, the wizard
-offers a small synthetic routing demo. Missing labels are collected one at a
+offers a small synthetic routing demo (`--demo` on the CLI). Use `--pack` to pick a built-in pack, `--output` for the run directory, `--reflection-lm` to override the reflection model, and `--seed` for deterministic splits. Missing labels are collected one at a
 time with an optional rationale, and each judgment is saved immediately.
 
 Install the optional, tested optimization runtime with the TUI's **Install
@@ -185,9 +185,14 @@ or accepts a LiteLLM `provider/model` identifier. It does not reuse coding-agent
 subscription credentials.
 
 ```sh
+# Built-in pack + demo dataset (live experiment, not a benchmark)
+superqode harness tune --demo --live
+
+# Reviewed examples
 superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
   --data reviewed-tickets.csv --input request --label route \
-  --max-evals 120 --max-reflection-cost 2 --live --json
+  --reflection-lm openai/gpt-5 --max-evals 120 --max-reflection-cost 2 \
+  --output .superqode/tuning/routing-v2 --seed 0 --live --json
 
 # Resume annotation, change the reflection model, or inspect completed results
 superqode harness tune --resume .superqode/tuning/<run>

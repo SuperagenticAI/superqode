@@ -5,6 +5,37 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.5] - 2026-09-19
+
+### SystemOne Tune
+
+- Improve a fixed Choice decision pack from reviewed examples with GEPA, then compare the candidate on held-out data before you use it.
+- CLI: `superqode harness tune` with guided labeling, `--demo`, `--resume`, and optional `--setup` for the pinned GEPA runtime.
+- TUI: `:systemone tune`, plus **Improve decisions** on SystemOne in Harness Hub.
+- Experiments stage `candidate-pack.yaml`, `candidate-harness.yaml`, `changes.diff`, and `report.json` under `.superqode/tuning` without changing the active harness.
+- Small pilots stay labeled as pilots; adoption still requires human review.
+
+### Usage
+
+```sh
+# Optional once: install pinned tuning support, then restart SuperQode
+superqode harness tune --setup
+
+# Guided flow, or a demo routing dataset
+superqode harness tune
+superqode harness tune --demo --live
+
+# From reviewed examples
+superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
+  --data reviewed-tickets.csv --input request --label route \
+  --max-evals 120 --max-reflection-cost 2 --live
+
+# TUI
+:systemone tune
+```
+
+Live Jev evaluations still need `TYPESAFE_API_KEY`. Reflection uses a separate configured model or API key.
+
 ## [2.4.4] - 2026-09-19
 
 ### Progressive tool discovery
