@@ -75,7 +75,7 @@ def default_reflection_model() -> str:
     for key, model in (
         ("OPENAI_API_KEY", "openai/gpt-4.1-mini"),
         ("ANTHROPIC_API_KEY", "anthropic/claude-sonnet-4-6"),
-        ("GEMINI_API_KEY", "gemini/gemini-2.5-flash"),
+        ("GEMINI_API_KEY", "gemini/gemini-3.6-flash"),
     ):
         if os.environ.get(key):
             return model
