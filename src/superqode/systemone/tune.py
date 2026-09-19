@@ -55,9 +55,7 @@ def install_support() -> str:
         raise ValueError(
             "Tuning support installation failed. Check Git access to github.com/gepa-ai/gepa and package-index access."
         )
-    return (
-        "Tuning support installed. Restart SuperQode before tuning; saved judgments can be resumed."
-    )
+    return "Tuning support installed. Restart SuperQode, then open :systemone tune again. Your reflection model preference is restored automatically; saved judgments can be resumed."
 
 
 @dataclass
@@ -68,6 +66,43 @@ class TuneOptions:
     max_evals: int = 120
     max_reflection_cost: float = 2.0
     seed: int = 0
+
+
+def tune_preferences_path() -> Path:
+    """User preference file for Tune UI defaults (no secrets)."""
+    return Path.home() / ".superqode" / "tune-preferences.json"
+
+
+def load_tune_preferences() -> dict:
+    path = tune_preferences_path()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_tune_preferences(**updates: str | int | float) -> None:
+    """Persist non-secret Tune UI choices across restarts (reflection model, budgets)."""
+    path = tune_preferences_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    current = load_tune_preferences()
+    for key, value in updates.items():
+        if value is None or value == "":
+            current.pop(key, None)
+        else:
+            current[key] = value
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def preferred_reflection_model() -> str:
+    """Last Tune reflection model if set; otherwise credential-based default."""
+    saved = str(load_tune_preferences().get("reflection_lm") or "").strip()
+    return saved or default_reflection_model()
 
 
 def default_reflection_model() -> str:
