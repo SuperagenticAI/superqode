@@ -75,6 +75,19 @@ from the same terminal.
 
 ## Quick Start
 
+### Improve decisions with SystemOne Tune
+
+Teach SystemOne how your team routes or judges work from reviewed examples, then compare the candidate on held-out data before you use it:
+
+```sh
+superqode harness tune --setup          # once: install pinned GEPA support
+superqode harness tune                  # guided labeling + experiment
+superqode harness tune --demo --live    # small synthetic routing demo
+```
+
+In the TUI, run `:systemone tune` or open **Improve decisions** on SystemOne in Harness Hub. See the [SystemOne Tune guide](https://docs.superqode.dev/advanced/systemone/#improve-decisions-with-systemone-tune).
+
+
 ```bash
 curl -fsSL https://superqode.dev/install.sh | sh
 ```
