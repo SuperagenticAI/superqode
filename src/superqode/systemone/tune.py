@@ -100,6 +100,7 @@ class TuneOptions:
     max_evals: int = 120
     max_reflection_cost: float = 2.0
     seed: int = 0
+    batch_size: int = 5
 
 
 def tune_preferences_path() -> Path:
@@ -412,6 +413,9 @@ def prepare_run(options: TuneOptions, rows: list[dict], output: Path) -> dict:
     manifest = {
         "version": 1,
         "status": "review",
+        "workflow": "active" if all(row.get("label") is None for row in rows) else "batch",
+        "round": 1,
+        "history": [],
         "options": asdict(options),
         "pack": pack.model_dump(mode="json"),
         "harness": harness_spec_to_dict(spec) if spec else None,
@@ -426,6 +430,10 @@ def load_run(output: Path) -> dict:
     if not isinstance(manifest, dict) or manifest.get("version") != 1:
         raise ValueError("Unsupported Tune experiment version.")
     try:
+        manifest["options"].setdefault("batch_size", 5)
+        manifest.setdefault("workflow", "batch")
+        manifest.setdefault("round", 1)
+        manifest.setdefault("history", [])
         TuneOptions(**manifest["options"])
         pack = QuestionPack.model_validate(manifest["pack"])
         if (
@@ -434,7 +442,14 @@ def load_run(output: Path) -> dict:
             or not isinstance(next(iter(pack.questions.values())), ChoiceQuestion)
         ):
             raise ValueError("Saved experiment must contain one Choice question.")
-        if manifest["status"] not in {"review", "running", "completed", "cancelled", "failed"}:
+        if manifest["status"] not in {
+            "review",
+            "running",
+            "decision",
+            "completed",
+            "cancelled",
+            "failed",
+        }:
             raise ValueError("Invalid experiment status.")
         if not isinstance(manifest["examples"], list) or not manifest["examples"]:
             raise ValueError("Saved experiment has no examples.")
@@ -456,9 +471,180 @@ def save_label(output: Path, example_id: str, label: str, rationale: str = "") -
     if label not in next(iter(pack.questions.values())).criteria:
         raise ValueError("Choose one of the decision's existing labels.")
     row = next(row for row in manifest["examples"] if row["id"] == example_id)
+    if manifest.get("workflow") == "active" and row.get("selected_round") != int(
+        manifest.get("round") or 1
+    ):
+        raise ValueError("Only examples selected for the current round can be labelled.")
     row.update(label=label, rationale=prepare_decision_state(rationale))
     write_json(output / "run.json", manifest)
     return manifest
+
+
+def review_batch(manifest: dict) -> list[dict]:
+    """Return the current round's selected, still-unlabelled examples."""
+    if manifest.get("workflow") != "active":
+        return [row for row in manifest["examples"] if row.get("label") is None]
+    round_number = int(manifest.get("round") or 1)
+    return [
+        row
+        for row in manifest["examples"]
+        if row.get("label") is None and row.get("selected_round") == round_number
+    ]
+
+
+def _choice_ambiguity(answer: dict) -> float:
+    """Normalize Choice uncertainty to 0 (clear) through 1 (ambiguous)."""
+    probabilities = answer.get("probabilities") or {}
+    if isinstance(probabilities, dict) and len(probabilities) >= 2:
+        ranked = sorted((float(value) for value in probabilities.values()), reverse=True)
+        return max(0.0, min(1.0, 1.0 - (ranked[0] - ranked[1])))
+    return max(0.0, min(1.0, 1.0 - float(answer.get("confidence") or 0.0)))
+
+
+def acquire_review_batch(
+    output: Path,
+    *,
+    client=None,
+    progress: Callable[[str], None] = lambda _: None,
+) -> list[dict]:
+    """Prevent CLI and TUI from scoring the same pool concurrently."""
+    lock = output / "acquisition.lock"
+    try:
+        fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise ValueError("This experiment is already selecting a review batch.") from exc
+    try:
+        with os.fdopen(fd, "w") as stream:
+            stream.write(str(os.getpid()))
+        return _acquire_review_batch(output, client=client, progress=progress)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _acquire_review_batch(
+    output: Path,
+    *,
+    client=None,
+    progress: Callable[[str], None] = lambda _: None,
+) -> list[dict]:
+    """Select uncertain development rows plus a random audit and sealed sample.
+
+    Selection is persisted before any labels are collected, so resume never
+    silently changes the batch. Reserved test rows are sampled randomly and
+    are not evaluated during acquisition.
+    """
+    manifest = load_run(output)
+    if manifest.get("workflow") != "active":
+        return review_batch(manifest)
+    if manifest["status"] != "review":
+        raise ValueError("Resolve the pending candidate before selecting another review batch.")
+    pending = review_batch(manifest)
+    if pending:
+        return pending
+    options = TuneOptions(**manifest["options"])
+    round_number = int(manifest.get("round") or 1)
+    if not 2 <= options.batch_size <= 20:
+        raise ValueError("Review batch size must be between 2 and 20.")
+    pack = QuestionPack.model_validate(manifest["pack"])
+    candidates = [
+        row for row in manifest["examples"] if row["split"] != "test" and row.get("label") is None
+    ]
+    if not candidates:
+        raise ValueError("No unlabelled development examples remain.")
+    qid = next(iter(pack.questions))
+    cache_path = output / "pool-predictions.json"
+    cached_rows: dict[str, dict] = {}
+    if cache_path.is_file():
+        try:
+            cached = json.loads(cache_path.read_text())
+            if cached.get("pack_hash") == pack.content_hash():
+                cached_rows = {row["id"]: row for row in cached.get("rows", [])}
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            cached_rows = {}
+    scored = [cached_rows[row["id"]] for row in candidates if row["id"] in cached_rows]
+    missing = [row for row in candidates if row["id"] not in cached_rows]
+    if missing and client is None:
+        preflight_acquisition(manifest)
+        client = build_client(_settings(manifest))
+    for index, row in enumerate(missing, start=1):
+        progress(f"Finding uncertain examples · {index}/{len(missing)}")
+        try:
+            decision = asyncio.run(evaluate_decision(client, row["state"], pack))
+            ambiguity = _choice_ambiguity(decision.answers[qid])
+            predicted = decision.outputs[qid]
+        except Exception as exc:
+            raise ValueError(
+                "Jev could not score the review pool. No examples were selected; check the endpoint and try again."
+            ) from exc
+        scored.append(
+            {
+                "id": row["id"],
+                "ambiguity": ambiguity,
+                "predicted": predicted,
+                "pack_hash": pack.content_hash(),
+            }
+        )
+    write_json(
+        cache_path,
+        {"round": manifest.get("round", 1), "pack_hash": pack.content_hash(), "rows": scored},
+    )
+    by_id = {row["id"]: row for row in manifest["examples"]}
+    ranked = sorted(scored, key=lambda row: (-row["ambiguity"], row["id"]))
+    count = min(options.batch_size, len(ranked))
+    uncertain_count = max(1, count - 1)
+    selected = ranked[:uncertain_count]
+    selected_ids = {row["id"] for row in selected}
+    remainder = [row for row in ranked if row["id"] not in selected_ids]
+    audit_id = None
+    if remainder and len(selected) < count:
+        audit = random.Random(options.seed + int(manifest.get("round") or 1)).sample(remainder, 1)[
+            0
+        ]
+        audit_id = audit["id"]
+        selected.append(audit)
+    # Keep both optimizer-visible partitions represented whenever possible.
+    for split_name in ("train", "validation"):
+        if any(by_id[item["id"]]["split"] == split_name for item in selected):
+            continue
+        replacement = next(
+            (item for item in ranked if by_id[item["id"]]["split"] == split_name), None
+        )
+        if replacement is not None and selected:
+            replace_at = next(
+                (
+                    index
+                    for index in range(len(selected) - 1, -1, -1)
+                    if selected[index]["id"] != audit_id
+                ),
+                len(selected) - 1,
+            )
+            selected[replace_at] = replacement
+    # De-duplicate after a partition replacement, then refill by uncertainty.
+    selected_by_id = {item["id"]: item for item in selected}
+    for item in ranked:
+        if len(selected_by_id) >= count:
+            break
+        selected_by_id.setdefault(item["id"], item)
+    selected = list(selected_by_id.values())
+    round_number = int(manifest.get("round") or 1)
+    most_uncertain = {row["id"] for row in ranked[:uncertain_count]}
+    for item in selected:
+        row = by_id[item["id"]]
+        row.update(
+            selected_round=round_number,
+            acquired_by="audit" if item["id"] == audit_id else "uncertain",
+            ambiguity=item["ambiguity"],
+        )
+    test_rows = [
+        row for row in manifest["examples"] if row["split"] == "test" and row.get("label") is None
+    ]
+    holdout_count = min(max(1, round(count * 0.2)), len(test_rows))
+    if holdout_count:
+        rng = random.Random(options.seed + round_number)
+        for row in rng.sample(test_rows, holdout_count):
+            row.update(selected_round=round_number, acquired_by="holdout")
+    write_json(output / "run.json", manifest)
+    return review_batch(manifest)
 
 
 def new_output() -> Path:
@@ -527,9 +713,13 @@ def _settings(manifest: dict):
 
 def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
     options = TuneOptions(**manifest["options"])
-    if options.max_evals < 1 or not 0 < options.max_reflection_cost <= 1000:
+    if (
+        options.max_evals < 1
+        or not 0 < options.max_reflection_cost <= 1000
+        or not 2 <= options.batch_size <= 20
+    ):
         raise ValueError(
-            "Set a positive evaluation budget and a reflection limit between $0 and $1000."
+            "Set a positive evaluation budget, a reflection limit between $0 and $1000, and a review batch size from 2 to 20."
         )
     reflection = options.reflection_lm.strip()
     # Peek at SystemOne config for the expected live key name without requiring live yet.
@@ -560,8 +750,33 @@ def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
         "reflection_model": options.reflection_lm,
         "max_evals": options.max_evals,
         "max_reflection_cost": options.max_reflection_cost,
-        "final_test_evals": 2 * sum(row["split"] == "test" for row in manifest["examples"]),
+        "final_test_evals": 2
+        * sum(
+            row["split"] == "test" and row.get("label") is not None for row in manifest["examples"]
+        ),
     }
+
+
+def preflight_acquisition(manifest: dict) -> dict:
+    """Validate only the Jev side needed to rank an unlabeled pool."""
+    from types import SimpleNamespace
+    from superqode.harness.loader import harness_spec_from_dict
+
+    spec = harness_spec_from_dict(manifest["harness"]) if manifest.get("harness") else None
+    probe = resolve_systemone(
+        spec=spec, explicit=None if spec else SimpleNamespace(enabled=True, client="live")
+    )
+    api_key_env = str(getattr(probe, "api_key_env", "TYPESAFE_API_KEY") or "").strip()
+    if api_key_env and not str(os.environ.get(api_key_env) or "").strip():
+        raise ValueError(
+            format_missing_tune_credentials(
+                [
+                    f"Set {api_key_env} for live Jev scoring (export {api_key_env}=... in this shell, then restart SuperQode)."
+                ]
+            )
+        )
+    settings = _settings(manifest)
+    return {"endpoint": settings.endpoint, "model": settings.model}
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -630,17 +845,42 @@ def _run_tune_locked(
     manifest = load_run(output)
     if manifest["status"] == "completed":
         return json.loads((output / "report.json").read_text())
+    if manifest["status"] == "decision":
+        return json.loads((output / "report.json").read_text())
     if manifest["status"] != "review":
         raise ValueError(
             "This experiment already started. Inspect its evidence or start a new bounded experiment."
         )
-    if any(row.get("label") is None for row in manifest["examples"]):
+    if manifest.get("workflow") == "active":
+        selected = [
+            row
+            for row in manifest["examples"]
+            if row.get("selected_round") == int(manifest.get("round") or 1)
+        ]
+        if not selected:
+            raise ValueError("Select a review batch before starting optimization.")
+        if any(row.get("label") is None for row in selected):
+            raise ValueError("Review every selected example before starting optimization.")
+    elif any(row.get("label") is None for row in manifest["examples"]):
         raise ValueError("Review every example before starting optimization.")
     options = TuneOptions(**manifest["options"])
+    active_workflow = manifest.get("workflow") == "active"
+    round_number = int(manifest.get("round") or 1)
+    round_output = output / "rounds" / f"round-{round_number:04d}" if active_workflow else output
+    round_output.mkdir(parents=True, exist_ok=True)
     pack = QuestionPack.model_validate(manifest["pack"])
     codec = PackCodec(pack)
     # Revalidate persisted inputs and split ownership before any model call.
     partitions = split_examples(normalize_examples(manifest["examples"], pack), options.seed)
+    if manifest.get("workflow") == "active":
+        partitions = {
+            name: [row for row in rows if row.get("label") is not None]
+            for name, rows in partitions.items()
+        }
+        if any(not rows for rows in partitions.values()):
+            raise ValueError(
+                "This round needs reviewed training, validation, and reserved-test examples. Select another batch or add explicit splits."
+            )
     if client is None:
         preflight(manifest)
         client = build_client(_settings(manifest))
@@ -665,7 +905,7 @@ def _run_tune_locked(
         candidate_pack = codec.decode(candidate)
         row = score(candidate_pack, example)
         journal.append({"phase": "optimization", "pack_hash": candidate_pack.content_hash(), **row})
-        write_json(output / "evaluations.json", journal)
+        write_json(round_output / "evaluations.json", journal)
         progress(f"Improving decisions · evaluation {count}/{options.max_evals}")
         return float(row["correct"]), {
             "state": example["state"],
@@ -711,30 +951,37 @@ def _run_tune_locked(
             dataset=partitions["train"],
             valset=partitions["validation"],
             options=options,
-            output=output,
+            output=round_output,
             cancel=cancelled,
         )
         check_cancel()
         candidate_pack = codec.decode(result.best_candidate)
         baseline_text = yaml.safe_dump(pack.model_dump(mode="json"), sort_keys=False)
         candidate_text = yaml.safe_dump(candidate_pack.model_dump(mode="json"), sort_keys=False)
-        (output / "baseline-pack.yaml").write_text(baseline_text)
-        (output / "candidate-pack.yaml").write_text(candidate_text)
+        prefix = f"round-{round_number:04d}-" if active_workflow else ""
+        baseline_path = output / f"{prefix}baseline-pack.yaml"
+        candidate_path = output / f"{prefix}candidate-pack.yaml"
+        harness_path = output / f"{prefix}candidate-harness.yaml"
+        diff_path = output / f"{prefix}changes.diff"
+        baseline_path.write_text(baseline_text)
+        candidate_path.write_text(candidate_text)
         diff = "".join(
             difflib.unified_diff(
                 baseline_text.splitlines(True),
                 candidate_text.splitlines(True),
-                fromfile="baseline-pack.yaml",
-                tofile="candidate-pack.yaml",
+                fromfile=baseline_path.name,
+                tofile=candidate_path.name,
             )
         )
-        (output / "changes.diff").write_text(diff)
+        diff_path.write_text(diff)
         progress("Checking baseline and candidate on sealed examples…")
         baseline, candidate = [], []
         for example in partitions["test"]:
             baseline.append(score(pack, example))
             candidate.append(score(candidate_pack, example))
-            write_json(output / "heldout.json", {"baseline": baseline, "candidate": candidate})
+            write_json(
+                round_output / "heldout.json", {"baseline": baseline, "candidate": candidate}
+            )
         check_cancel()
         before, after = summarize(baseline), summarize(candidate)
         regressions = [
@@ -757,13 +1004,14 @@ def _run_tune_locked(
             "systemone": {"enabled": True, "client": "live"},
         }
         harness.pop("inherits", None)
-        harness["systemone"]["pack"] = "./candidate-pack.yaml"
-        (output / "candidate-harness.yaml").write_text(yaml.safe_dump(harness, sort_keys=False))
+        harness["systemone"]["pack"] = f"./{candidate_path.name}"
+        harness_path.write_text(yaml.safe_dump(harness, sort_keys=False))
         from superqode.harness.loader import load_harness_spec
 
-        load_harness_spec(output / "candidate-harness.yaml")
+        load_harness_spec(harness_path)
         report = {
-            "status": "completed",
+            "status": "pending_decision" if active_workflow else "completed",
+            "round": round_number,
             "baseline": before,
             "candidate": after,
             "regressions": regressions,
@@ -784,16 +1032,20 @@ def _run_tune_locked(
             "optimizer": "gepa",
             "optimizer_source": GEPA_REQUIREMENT,
             "reflection_cost_usd": (getattr(result, "metadata", {}) or {}).get("adapter_cost"),
-            "candidate_harness": str((output / "candidate-harness.yaml").resolve()),
-            "candidate_harness_hash": hashlib.sha256(
-                (output / "candidate-harness.yaml").read_bytes()
-            ).hexdigest(),
+            "candidate_harness": str(harness_path.resolve()),
+            "candidate_harness_hash": hashlib.sha256(harness_path.read_bytes()).hexdigest(),
             "diff": diff,
             "cost_note": "Reflection limit excludes Jev evaluation usage; unknown costs remain unknown.",
         }
         write_json(output / "report.json", report)
-        manifest["status"] = "completed"
-        progress("Finished. Candidate and comparison saved; the active harness was not changed.")
+        if active_workflow:
+            write_json(round_output / "report.json", report)
+        manifest["status"] = "decision" if active_workflow else "completed"
+        progress(
+            "Finished. Review and accept or reject the candidate."
+            if active_workflow
+            else "Finished. Candidate and comparison saved; the active harness was not changed."
+        )
         return report
     except BaseException as exc:
         manifest["status"] = (
@@ -859,21 +1111,93 @@ def render_report(report: dict) -> str:
         verdict += " · regressions found"
     if report["pilot"]:
         verdict += " · small pilot, more independent examples needed before adoption"
+    decision = ""
+    if report.get("status") == "pending_decision":
+        decision = "\nDecision pending: accept, reject, or resume later."
+    elif report.get("decision"):
+        decision = f"\nDecision: {report['decision']}"
     return (
         f"{verdict}\n"
         f"Sealed examples correct: {before['correct']}/{before['total']} → {after['correct']}/{after['total']}\n"
         f"Abstentions: {before['abstentions']} → {after['abstentions']} · errors: {before['errors']} → {after['errors']}\n"
         f"Eligible for adoption: {'yes' if report['eligible'] else 'no'}\n"
         f"Staged harness: {report['candidate_harness']}\n"
-        "The active harness is unchanged. Review changes.diff and report.json before using a candidate."
+        "The active harness is unchanged. Review the saved diff and report before using a candidate."
+        + decision
     )
+
+
+def decide_candidate(
+    output: Path,
+    decision: str,
+    *,
+    allow_experimental: bool = False,
+) -> dict:
+    """Persist a human accept/reject decision and advance an active session."""
+    if decision not in {"accept", "reject"}:
+        raise ValueError("Decision must be accept or reject.")
+    manifest = load_run(output)
+    if manifest.get("workflow") != "active" or manifest["status"] != "decision":
+        raise ValueError("This experiment has no pending candidate decision.")
+    report = json.loads((output / "report.json").read_text())
+    adoption = None
+    if decision == "accept":
+        if not report.get("eligible") and not allow_experimental:
+            raise ValueError(
+                "This candidate is not verified. Accept it explicitly as experimental or reject it."
+            )
+        if not report.get("eligible") and report.get("candidate", {}).get("errors"):
+            raise ValueError("A candidate with evaluation errors cannot be accepted.")
+        from superqode.harness.loader import load_harness_spec
+
+        if (
+            hashlib.sha256(Path(report["candidate_harness"]).read_bytes()).hexdigest()
+            != report["candidate_harness_hash"]
+        ):
+            raise ValueError("The staged decision harness has changed since evaluation.")
+        spec = load_harness_spec(report["candidate_harness"])
+        candidate_pack = load_pack(spec.systemone.pack)
+        if candidate_pack.content_hash() != report["candidate_pack_hash"]:
+            raise ValueError("The staged question pack has changed since evaluation.")
+        manifest["pack"] = candidate_pack.model_dump(mode="json")
+        adoption = "verified" if report.get("eligible") else "experimental"
+    report.update(
+        status="accepted" if decision == "accept" else "rejected",
+        decision=decision,
+        adoption=adoption,
+    )
+    manifest.setdefault("history", []).append(
+        {
+            "round": int(manifest.get("round") or 1),
+            "decision": decision,
+            "adoption": adoption,
+            "candidate_pack_hash": report["candidate_pack_hash"],
+            "baseline": report["baseline"],
+            "candidate": report["candidate"],
+            "candidate_harness": report["candidate_harness"],
+        }
+    )
+    remaining = any(
+        row["split"] != "test" and row.get("label") is None for row in manifest["examples"]
+    )
+    if remaining:
+        manifest["round"] = int(manifest.get("round") or 1) + 1
+        manifest["status"] = "review"
+    else:
+        manifest["status"] = "completed"
+    write_json(output / "report.json", report)
+    round_report = output / "rounds" / f"round-{int(report.get('round') or 1):04d}" / "report.json"
+    if round_report.parent.is_dir():
+        write_json(round_report, report)
+    write_json(output / "run.json", manifest)
+    return report
 
 
 def candidate_use_path(report: dict) -> str:
     """Verify that the pack selected in the UI is the one actually evaluated."""
     from superqode.harness.loader import load_harness_spec
 
-    if not report.get("eligible"):
+    if not report.get("eligible") and report.get("decision") != "accept":
         raise ValueError("This candidate did not qualify for adoption.")
     path = report["candidate_harness"]
     if hashlib.sha256(Path(path).read_bytes()).hexdigest() != report["candidate_harness_hash"]:

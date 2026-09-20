@@ -169,6 +169,111 @@ def test_label_save_is_resumable_and_redacted(tmp_path):
     assert (out / "run.json").stat().st_mode & 0o777 == 0o600
 
 
+def test_active_round_selects_uncertain_audit_and_sealed_examples(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    manifest = tune.load_run(out)
+    assert manifest["workflow"] == "active"
+    test_ids = {row["id"] for row in manifest["examples"] if row["split"] == "test"}
+
+    class PoolClient:
+        name = "pool"
+
+        def __init__(self):
+            self.ids = []
+
+        async def evaluate(self, state, questions):
+            index = int(state["task"].split()[-1])
+            self.ids.append(str(index))
+            confidence = 0.5 + (index % 5) / 10
+            return await StubSystemOneClient(
+                {
+                    "route": {
+                        "choice": "cheap",
+                        "confidence": confidence,
+                        "probabilities": {
+                            "private": 0.0,
+                            "cheap": confidence,
+                            "review": 1 - confidence,
+                        },
+                    }
+                }
+            ).evaluate(state, questions)
+
+    client = PoolClient()
+    selected = tune.acquire_review_batch(out, client=client)
+    assert len(selected) == 6  # Five development judgments plus one sealed judgment.
+    assert not set(client.ids) & test_ids
+    assert {row["acquired_by"] for row in selected} >= {"uncertain", "audit", "holdout"}
+    assert {row["split"] for row in selected} >= {"train", "validation", "test"}
+    assert tune.acquire_review_batch(out, client=client) == selected
+
+
+def test_active_round_accepts_experimental_candidate_and_continues(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    selected = tune.acquire_review_batch(out, client=CandidateClient())
+    for row in selected:
+        index = int(row["state"]["task"].split()[-1])
+        tune.save_label(
+            out,
+            row["id"],
+            "review" if index % 2 else "cheap",
+            "Human-reviewed boundary",
+        )
+
+    report = tune.run_tune(out, client=CandidateClient(), optimizer=improve)
+    assert report["status"] == "pending_decision"
+    assert tune.load_run(out)["status"] == "decision"
+    with pytest.raises(ValueError, match="experimental"):
+        tune.decide_candidate(out, "accept")
+
+    harness_path = Path(report["candidate_harness"])
+    harness_text = harness_path.read_text()
+    harness_path.write_text(harness_text + "\n# changed after evaluation\n")
+    with pytest.raises(ValueError, match="harness has changed"):
+        tune.decide_candidate(out, "accept", allow_experimental=True)
+    assert tune.load_run(out)["status"] == "decision"
+    harness_path.write_text(harness_text)
+
+    accepted = tune.decide_candidate(out, "accept", allow_experimental=True)
+    manifest = tune.load_run(out)
+    assert accepted["adoption"] == "experimental"
+    assert manifest["status"] == "review"
+    assert manifest["round"] == 2
+    assert manifest["history"][0]["decision"] == "accept"
+    assert "improved criteria" in json.dumps(manifest["pack"])
+    assert tune.candidate_use_path(accepted) == accepted["candidate_harness"]
+    assert not tune.review_batch(manifest)
+
+
+def test_active_round_rejection_keeps_current_pack(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    original = tune.load_run(out)["pack"]
+    for row in tune.acquire_review_batch(out, client=CandidateClient()):
+        index = int(row["state"]["task"].split()[-1])
+        tune.save_label(out, row["id"], "review" if index % 2 else "cheap")
+    tune.run_tune(out, client=CandidateClient(), optimizer=improve)
+    rejected = tune.decide_candidate(out, "reject")
+    manifest = tune.load_run(out)
+    assert rejected["status"] == "rejected"
+    assert manifest["pack"] == original
+    assert manifest["round"] == 2
+    # Rejection keeps the same pack, so the next acquisition reuses pool scores.
+    next_batch = tune.acquire_review_batch(
+        out, client=StubSystemOneClient(error=RuntimeError("should not be called"))
+    )
+    assert next_batch
+    assert all(row["selected_round"] == 2 for row in next_batch)
+
+
 def test_duplicate_input_rejected_across_splits():
     rows = examples()
     rows[-1]["state"] = rows[0]["state"]
@@ -316,6 +421,16 @@ def test_active_run_cannot_start_twice_or_change_labels(tmp_path):
     assert (out / "active.lock").exists()
 
 
+def test_active_acquisition_cannot_start_twice(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    (out / "acquisition.lock").write_text("123")
+    with pytest.raises(ValueError, match="already selecting"):
+        tune.acquire_review_batch(out, client=CandidateClient())
+
+
 def test_installer_targets_running_python_without_shell(monkeypatch):
     import subprocess
     import sys
@@ -392,6 +507,25 @@ def test_cli_json_live_round_trip(tmp_path, monkeypatch):
     assert report["reflection_model"] == "fake/new-model"
 
 
+def test_cli_can_accept_pending_experimental_round(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    for row in tune.acquire_review_batch(out, client=CandidateClient()):
+        index = int(row["state"]["task"].split()[-1])
+        tune.save_label(out, row["id"], "review" if index % 2 else "cheap")
+    tune.run_tune(out, client=CandidateClient(), optimizer=improve)
+
+    result = CliRunner().invoke(
+        harness,
+        ["tune", "--resume", str(out), "--accept", "--experimental", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["adoption"] == "experimental"
+    assert tune.load_run(out)["round"] == 2
+
+
 class TuneApp(App):
     def on_mount(self):
         self.push_screen(SystemOneTuneScreen())
@@ -428,6 +562,67 @@ async def test_tui_labels_and_resumes(tmp_path, monkeypatch):
         await pilot.pause()
         assert not screen.pending
         assert screen.query_one("#tune-start").display
+
+
+@pytest.mark.asyncio
+async def test_tui_active_round_finds_only_selected_examples(tmp_path, monkeypatch):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    real_acquire = tune.acquire_review_batch
+
+    monkeypatch.setattr(tune, "preflight_acquisition", lambda *args, **kwargs: {})
+
+    def acquire(output, **kwargs):
+        return real_acquire(
+            output,
+            client=CandidateClient(),
+            progress=kwargs.get("progress", lambda _: None),
+        )
+
+    monkeypatch.setattr(tune, "acquire_review_batch", acquire)
+    app = TuneApp()
+    async with app.run_test(size=(100, 48)) as pilot:
+        screen = app.screen
+        screen.query_one("#tune-resume", Input).value = str(out)
+        screen.prepare()
+        await pilot.pause()
+        assert screen.query_one("#tune-acquire").display
+        await pilot.click("#tune-acquire")
+        await screen.workers.wait_for_complete()
+        await pilot.pause()
+        assert len(screen.pending) == 6
+        assert screen.query_one("#tune-review").display
+        rendered = str(screen.query_one("#tune-example", Static).render()).lower()
+        assert "uncertain" in rendered or "audit" in rendered or "sealed" in rendered
+
+
+@pytest.mark.asyncio
+async def test_tui_can_reject_pending_round_and_continue(tmp_path):
+    rows = examples(30)
+    for row in rows:
+        row["label"] = None
+    out = prepare(tmp_path, rows)
+    selected = await asyncio.to_thread(tune.acquire_review_batch, out, client=CandidateClient())
+    for row in selected:
+        index = int(row["state"]["task"].split()[-1])
+        tune.save_label(out, row["id"], "review" if index % 2 else "cheap")
+    await asyncio.to_thread(tune.run_tune, out, client=CandidateClient(), optimizer=improve)
+
+    app = TuneApp()
+    async with app.run_test(size=(100, 48)) as pilot:
+        screen = app.screen
+        screen.query_one("#tune-resume", Input).value = str(out)
+        screen.prepare()
+        await pilot.pause()
+        assert screen.query_one("#tune-use").display
+        assert screen.query_one("#tune-reject").display
+        assert "experimental" in str(screen.query_one("#tune-use").label).lower()
+        await pilot.click("#tune-reject")
+        await pilot.pause()
+        assert tune.load_run(out)["history"][0]["decision"] == "reject"
+        assert screen.query_one("#tune-acquire").display
 
 
 @pytest.mark.asyncio

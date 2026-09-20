@@ -55,6 +55,20 @@ from superqode.systemone import tune
 )
 @click.option("--seed", type=int, default=0)
 @click.option(
+    "--batch-size",
+    type=click.IntRange(min=2, max=20),
+    default=5,
+    show_default=True,
+    help="Examples to review per active-learning round.",
+)
+@click.option("--accept", "accept_candidate", is_flag=True, help="Accept a pending candidate.")
+@click.option("--reject", "reject_candidate", is_flag=True, help="Reject a pending candidate.")
+@click.option(
+    "--experimental",
+    is_flag=True,
+    help="Allow --accept before the candidate has enough evidence to be verified.",
+)
+@click.option(
     "--live", is_flag=True, help="Start model calls without the interactive start prompt."
 )
 @click.option(
@@ -77,6 +91,10 @@ def harness_tune(
     max_evals,
     max_reflection_cost,
     seed,
+    batch_size,
+    accept_candidate,
+    reject_candidate,
+    experimental,
     live,
     json_output,
 ):
@@ -87,6 +105,10 @@ def harness_tune(
     """
     interactive = sys.stdin.isatty() and not json_output
     try:
+        if accept_candidate and reject_candidate:
+            raise ValueError("Choose either --accept or --reject, not both.")
+        if (accept_candidate or reject_candidate) and not resume:
+            raise ValueError("Use --accept or --reject together with --resume.")
         if setup:
             message = tune.install_support()
             click.echo(
@@ -109,6 +131,7 @@ def harness_tune(
                 for name, value in (
                     ("max_evals", max_evals),
                     ("max_reflection_cost", max_reflection_cost),
+                    ("batch_size", batch_size),
                 ):
                     if (
                         click.get_current_context().get_parameter_source(name)
@@ -152,6 +175,7 @@ def harness_tune(
                 max_evals=max_evals,
                 max_reflection_cost=max_reflection_cost,
                 seed=seed,
+                batch_size=batch_size,
             )
             rows = (
                 tune.demo_examples()
@@ -164,15 +188,52 @@ def harness_tune(
             report = json.loads((output / "report.json").read_text())
             click.echo(json.dumps(report) if json_output else tune.render_report(report))
             return
+        if manifest["status"] == "decision":
+            report = json.loads((output / "report.json").read_text())
+            decision = "accept" if accept_candidate else "reject" if reject_candidate else ""
+            if not decision and interactive:
+                decision = click.prompt(
+                    tune.render_report(report) + "\nChoose",
+                    type=click.Choice(["accept", "reject", "later"]),
+                    default="later",
+                )
+            if decision in {"accept", "reject"}:
+                report = tune.decide_candidate(
+                    output,
+                    decision,
+                    allow_experimental=experimental,
+                )
+            click.echo(json.dumps(report) if json_output else tune.render_report(report))
+            return
         if manifest["status"] != "review":
             raise ValueError(
                 f"Experiment is {manifest['status']}. Evidence is in {output}; start a new experiment for a new budget."
             )
+        if manifest.get("workflow") == "active" and not tune.review_batch(manifest):
+            if not live:
+                if not interactive:
+                    raise ValueError(
+                        f"Unlabeled pool saved. Add --live to --resume {output} to select a review batch."
+                    )
+                if not click.confirm(
+                    "Use Jev to find uncertain examples plus a random audit sample?", default=True
+                ):
+                    return
+            tune.acquire_review_batch(
+                output,
+                progress=(lambda message: click.echo(message, err=True))
+                if not json_output
+                else lambda _: None,
+            )
+            manifest = tune.load_run(output)
         question = next(iter(manifest["pack"]["questions"].values()))
         labels = list(question["criteria"])
-        for row in manifest["examples"]:
-            if row.get("label") is not None:
-                continue
+        rows_to_review = (
+            tune.review_batch(manifest)
+            if manifest.get("workflow") == "active"
+            else [row for row in manifest["examples"] if row.get("label") is None]
+        )
+        for row in rows_to_review:
             if not interactive:
                 raise ValueError(
                     f"Unlabeled examples saved. Resume in a terminal: superqode harness tune --resume {output}"
@@ -213,6 +274,18 @@ def harness_tune(
             if not json_output
             else lambda _: None,
         )
+        if report.get("status") == "pending_decision" and interactive:
+            decision = click.prompt(
+                tune.render_report(report) + "\nChoose",
+                type=click.Choice(["accept", "reject", "later"]),
+                default="later",
+            )
+            if decision in {"accept", "reject"}:
+                report = tune.decide_candidate(
+                    output,
+                    decision,
+                    allow_experimental=(decision == "accept" and not report["eligible"]),
+                )
         click.echo(json.dumps(report) if json_output else tune.render_report(report))
     except KeyboardInterrupt:
         raise click.ClickException(f"Stopped. Saved work: {output}") from None

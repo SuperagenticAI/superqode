@@ -93,6 +93,9 @@ class SystemOneTuneScreen(Screen[str | None]):
                     placeholder="Reflection dollar limit (Jev usage additional)",
                     id="tune-cost",
                 )
+                yield Input(
+                    value="5", placeholder="Examples to review per round (2–20)", id="tune-batch"
+                )
                 yield Button("Install tuning support", id="tune-install")
             with Vertical(id="tune-review"):
                 yield Static("", id="tune-example")
@@ -103,13 +106,22 @@ class SystemOneTuneScreen(Screen[str | None]):
             yield Static("", id="tune-summary")
             yield Static("", id="tune-diff")
             with Horizontal():
+                yield Button("Find examples to review", variant="primary", id="tune-acquire")
                 yield Button("Start experiment", variant="primary", id="tune-start")
                 yield Button("Use this version", variant="primary", id="tune-use")
+                yield Button("Reject candidate", id="tune-reject")
                 yield Button("Back", id="tune-back")
         yield Footer()
 
     def on_mount(self) -> None:
-        for selector in ("#tune-review", "#tune-start", "#tune-use", "#tune-diff"):
+        for selector in (
+            "#tune-review",
+            "#tune-acquire",
+            "#tune-start",
+            "#tune-use",
+            "#tune-reject",
+            "#tune-diff",
+        ):
             self.query_one(selector).display = False
         prefs = tune.load_tune_preferences()
         model = str(prefs.get("reflection_lm") or tune.preferred_reflection_model()).strip()
@@ -119,6 +131,8 @@ class SystemOneTuneScreen(Screen[str | None]):
             self.query_one("#tune-evals", Input).value = str(prefs["max_evals"])
         if "max_reflection_cost" in prefs:
             self.query_one("#tune-cost", Input).value = str(prefs["max_reflection_cost"])
+        if "batch_size" in prefs:
+            self.query_one("#tune-batch", Input).value = str(prefs["batch_size"])
         self._refresh_support_status()
 
     def _credential_status(self) -> str:
@@ -175,6 +189,10 @@ class SystemOneTuneScreen(Screen[str | None]):
             updates["max_reflection_cost"] = float(self._value("cost"))
         except ValueError:
             pass
+        try:
+            updates["batch_size"] = int(self._value("batch"))
+        except ValueError:
+            pass
         if updates:
             tune.save_tune_preferences(**updates)
 
@@ -199,6 +217,7 @@ class SystemOneTuneScreen(Screen[str | None]):
                     reflection_lm=self._value("model") or tune.preferred_reflection_model(),
                     max_evals=int(self._value("evals")),
                     max_reflection_cost=float(self._value("cost")),
+                    batch_size=int(self._value("batch")),
                 )
                 data = self._value("data")
                 if not data and (options.spec or options.pack != "factory_route"):
@@ -216,7 +235,7 @@ class SystemOneTuneScreen(Screen[str | None]):
                 )
                 self.output = tune.new_output()
                 self.manifest = tune.prepare_run(options, rows, self.output)
-            if self.manifest["status"] == "completed":
+            if self.manifest["status"] in {"decision", "completed"}:
                 self._finished(json.loads((self.output / "report.json").read_text()))
                 return
             if self.manifest["status"] != "review":
@@ -228,9 +247,10 @@ class SystemOneTuneScreen(Screen[str | None]):
                 ("model", "reflection_lm"),
                 ("evals", "max_evals"),
                 ("cost", "max_reflection_cost"),
+                ("batch", "batch_size"),
             ):
                 self.query_one(f"#tune-{name}", Input).value = str(saved_options[key])
-            self.pending = [row for row in self.manifest["examples"] if row.get("label") is None]
+            self.pending = tune.review_batch(self.manifest)
             labels = list(next(iter(self.manifest["pack"]["questions"].values()))["criteria"])
             self.query_one("#tune-choice", Select).set_options([(label, label) for label in labels])
             self.query_one("#tune-setup").display = False
@@ -239,14 +259,19 @@ class SystemOneTuneScreen(Screen[str | None]):
             self._status(str(exc))
 
     def _next_example(self) -> None:
+        self.query_one("#tune-acquire").display = False
+        self.query_one("#tune-start").display = False
         self.query_one("#tune-review").display = bool(self.pending)
         if self.pending:
             row = self.pending[0]
-            split = (
-                "Reserved test · excluded from optimization"
-                if row["split"] == "test"
-                else "Development example"
-            )
+            if row["split"] == "test":
+                split = "Reserved test · random sealed sample · excluded from optimization"
+            elif row.get("acquired_by") == "uncertain":
+                split = f"Development · uncertain ({float(row.get('ambiguity') or 0):.0%})"
+            elif row.get("acquired_by") == "audit":
+                split = "Development · random audit sample"
+            else:
+                split = "Development example"
             self.query_one("#tune-example", Static).update(
                 Text(
                     f"{split}\n{len(self.pending)} judgments remaining\n\n"
@@ -258,10 +283,26 @@ class SystemOneTuneScreen(Screen[str | None]):
             self._status(f"Labels save after each judgment. Resume from: {self.output}")
         else:
             options = self.manifest["options"]
-            test_count = sum(row["split"] == "test" for row in self.manifest["examples"])
+            if self.manifest.get("workflow") == "active":
+                selected = [
+                    row
+                    for row in self.manifest["examples"]
+                    if row.get("selected_round") == self.manifest.get("round", 1)
+                ]
+                if not selected:
+                    self.query_one("#tune-acquire").display = True
+                    self._status(
+                        f"Round {self.manifest.get('round', 1)} is ready. Jev will score only the development pool, then select uncertain examples plus a random audit and reserved sample.\nSaved experiment: {self.output}"
+                    )
+                    return
+            test_count = sum(
+                row["split"] == "test" and row.get("label") is not None
+                for row in self.manifest["examples"]
+            )
+            reviewed_count = sum(row.get("label") is not None for row in self.manifest["examples"])
             creds = self._credential_status()
             self._status(
-                f"Ready · {len(self.manifest['examples'])} reviewed examples\n"
+                f"Ready · {reviewed_count} reviewed examples\n"
                 f"Up to {options['max_evals']} optimization evaluations + {2 * test_count} final test evaluations.\n"
                 f"Reflection: {options['reflection_lm'] or 'not configured'} · ceiling ${options['max_reflection_cost']:.2f}. Jev usage/retries are additional.\n"
                 "Jev receives example inputs and criteria. The reflection provider also receives development examples and rationales.\n"
@@ -269,6 +310,42 @@ class SystemOneTuneScreen(Screen[str | None]):
                 + (("\n" + creds) if creds else "")
             )
             self.query_one("#tune-start").display = True
+
+    @on(Button.Pressed, "#tune-acquire")
+    def acquire(self) -> None:
+        if self.running:
+            return
+        try:
+            self._remember_preferences()
+            self.manifest["options"]["batch_size"] = int(self._value("batch"))
+            tune.write_json(self.output / "run.json", self.manifest)
+            tune.preflight_acquisition(self.manifest)
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            self._status(str(exc))
+            return
+        self.running = True
+        self.query_one("#tune-acquire", Button).disabled = True
+        self.query_one("#tune-back", Button).label = "Wait"
+        self._acquire()
+
+    @work(thread=True, group="tune-acquire")
+    def _acquire(self) -> None:
+        try:
+            tune.acquire_review_batch(
+                self.output,
+                progress=lambda text: self.app.call_from_thread(self._status, text),
+            )
+            self.app.call_from_thread(self._acquired)
+        except Exception as exc:
+            self.app.call_from_thread(self._failed, str(exc))
+
+    def _acquired(self) -> None:
+        self.running = False
+        self.query_one("#tune-acquire", Button).disabled = False
+        self.query_one("#tune-back", Button).label = "Back"
+        self.manifest = tune.load_run(self.output)
+        self.pending = tune.review_batch(self.manifest)
+        self._next_example()
 
     @on(Button.Pressed, "#tune-save")
     def save(self) -> None:
@@ -304,6 +381,7 @@ class SystemOneTuneScreen(Screen[str | None]):
                 reflection_lm=self._value("model") or tune.preferred_reflection_model(),
                 max_evals=int(self._value("evals")),
                 max_reflection_cost=float(self._value("cost")),
+                batch_size=int(self._value("batch")),
             )
             tune.write_json(self.output / "run.json", self.manifest)
             details = tune.preflight(self.manifest)
@@ -340,6 +418,16 @@ class SystemOneTuneScreen(Screen[str | None]):
     def _failed(self, message: str) -> None:
         self.running = False
         self.query_one("#tune-start").display = False
+        self.query_one("#tune-acquire", Button).disabled = False
+        if self.output:
+            try:
+                self.manifest = tune.load_run(self.output)
+            except (ValueError, OSError):
+                pass
+        if self.manifest and self.manifest.get("workflow") == "active":
+            self.query_one("#tune-acquire").display = self.manifest.get(
+                "status"
+            ) == "review" and not bool(tune.review_batch(self.manifest))
         self.query_one("#tune-back", Button).label = "Back"
         self._status(f"{message}\nSaved experiment: {self.output}")
 
@@ -350,7 +438,7 @@ class SystemOneTuneScreen(Screen[str | None]):
         self._remember_preferences()
         self.running = True
         self.installing = True
-        for name in ("install", "start", "prepare", "back"):
+        for name in ("install", "acquire", "start", "prepare", "back"):
             self.query_one(f"#tune-{name}", Button).disabled = True
         self._status(
             "Installing tested tuning support into SuperQode's Python environment. No model calls are made."
@@ -368,7 +456,7 @@ class SystemOneTuneScreen(Screen[str | None]):
     def _installation_finished(self, message: str) -> None:
         self.running = False
         self.installing = False
-        for name in ("install", "start", "prepare", "back"):
+        for name in ("install", "acquire", "start", "prepare", "back"):
             try:
                 self.query_one(f"#tune-{name}", Button).disabled = False
             except Exception:
@@ -385,16 +473,47 @@ class SystemOneTuneScreen(Screen[str | None]):
         self.query_one("#tune-summary", Static).update(Text(tune.render_report(report)))
         self.query_one("#tune-diff", Static).update(Text(report["diff"] or "No question changes."))
         self.query_one("#tune-diff").display = True
-        self.query_one("#tune-use").display = bool(report["eligible"])
+        active = report.get("status") == "pending_decision"
+        self.query_one("#tune-use", Button).label = (
+            "Accept verified candidate"
+            if report.get("eligible")
+            else "Accept experimental candidate"
+        )
+        self.query_one("#tune-use").display = bool(report["eligible"] or active)
+        self.query_one("#tune-reject").display = active
         self._status("Review the comparison and criteria changes below.")
 
     @on(Button.Pressed, "#tune-use")
     def use_version(self) -> None:
-        if self.report and self.report["eligible"]:
+        if self.report and (
+            self.report["eligible"] or self.report.get("status") == "pending_decision"
+        ):
             try:
+                if self.report.get("status") == "pending_decision":
+                    self.report = tune.decide_candidate(
+                        self.output,
+                        "accept",
+                        allow_experimental=not self.report["eligible"],
+                    )
                 self.dismiss(tune.candidate_use_path(self.report))
             except (ValueError, OSError) as exc:
                 self._status(str(exc))
+
+    @on(Button.Pressed, "#tune-reject")
+    def reject_version(self) -> None:
+        try:
+            tune.decide_candidate(self.output, "reject")
+            self.manifest = tune.load_run(self.output)
+            self.report = None
+            self.query_one("#tune-diff").display = False
+            self.query_one("#tune-use").display = False
+            self.query_one("#tune-reject").display = False
+            self.query_one("#tune-summary", Static).update("")
+            self.query_one("#tune-limits").display = True
+            self.pending = tune.review_batch(self.manifest)
+            self._next_example()
+        except (ValueError, OSError) as exc:
+            self._status(str(exc))
 
     @on(Button.Pressed, "#tune-back")
     def back(self) -> None:

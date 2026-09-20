@@ -173,8 +173,18 @@ superqode harness tune
 Tune currently improves one fixed Choice question, including structured
 instructions and criteria. Choose a built-in pack or a SystemOne decision
 harness, then import CSV, JSONL, JSON or YAML examples. With no file, the wizard
-offers a small synthetic routing demo (`--demo` on the CLI). Use `--pack` to pick a built-in pack, `--output` for the run directory, `--reflection-lm` to override the reflection model, and `--seed` for deterministic splits. Missing labels are collected one at a
-time with an optional rationale, and each judgment is saved immediately.
+offers a small synthetic routing demo (`--demo` on the CLI). Use `--pack` to pick
+a built-in pack, `--output` for the run directory, `--reflection-lm` to override
+the reflection model, and `--seed` for deterministic splits. Each judgment and
+optional rationale is saved immediately.
+
+Fully labeled or partially labeled files keep the bounded one-shot workflow.
+When every imported label is empty, Tune starts an active-learning session.
+For each round Jev scores only the development pool, selects the most uncertain
+examples plus a random audit example, and randomly selects a reserved test
+example without scoring the test pool. The TUI explains why each example was
+selected. `--batch-size` controls the 2–20 development judgments collected per
+round and defaults to five.
 
 Install the optional, tested optimization runtime with the TUI's **Install
 tuning support** button or `superqode harness tune --setup`, then restart
@@ -196,6 +206,10 @@ superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
 
 # Resume annotation, change the reflection model, or inspect completed results
 superqode harness tune --resume .superqode/tuning/<run>
+
+# Resolve a proposal from a script; experimental is required below verification threshold
+superqode harness tune --resume .superqode/tuning/<run> --accept --experimental --json
+superqode harness tune --resume .superqode/tuning/<run> --reject --json
 ```
 
 Input rows use `state`, `label`, and optional `id`, `rationale`, `group`, and
@@ -206,15 +220,21 @@ also supported. Otherwise Tune partitions examples deterministically before
 annotation. Duplicate inputs are rejected, and test examples never enter GEPA.
 
 An experiment preserves output labels, schema, model configuration and
-confidence policy. It writes `candidate-pack.yaml`, `candidate-harness.yaml`,
-`changes.diff`, evaluation evidence and `report.json` under `.superqode/tuning`.
+confidence policy. It writes candidate packs, harnesses, diffs, evaluation
+evidence and reports under `.superqode/tuning`. Active sessions use versioned
+candidate files, keep each round's GEPA output and evaluation evidence under
+`rounds/round-NNNN`, and record accept/reject history in `run.json`. A proposal
+can be accepted, rejected, or left pending and resumed later. Accepted
+candidates seed the next round; rejected candidates leave the current pack
+unchanged and reuse its cached pool predictions.
 The comparison counts abstentions and errors separately, and checks for
 regressions against the baseline. Small runs (fewer than 30 optimizer-visible
 development examples or 30 test examples) are marked as pilots and cannot
 qualify for adoption; larger runs
 still require representative data and human review. **Use this version** opens
-a standalone decision session after a qualifying comparison, not automatic
-coding-session routing.
+a standalone decision session. Active sessions may explicitly accept a small
+candidate as **experimental**; only a candidate that passes the evidence gate is
+marked **verified**. Acceptance never changes an active coding-session route.
 
 The reflection spend limit is checked between model calls and excludes Jev
 usage. The final baseline/candidate test calls are additional to `--max-evals`;
@@ -222,10 +242,11 @@ both allowances are displayed before starting. Inputs go to Jev; development
 examples and rationales also go to the reflection provider. Existing state
 redaction applies, but example files should not contain secrets.
 
-Stop saves completed evidence. Annotation can be resumed; an interrupted
-optimization requires a new experiment and budget, avoiding silent renewed
-spend. Recent-session acquisition, new-question discovery, Noul/Score tuning,
-and automatic adoption into permission or revision loops are not included.
+Stop saves completed evidence. Annotation and pending candidate decisions can
+be resumed; an interrupted optimization requires a new experiment and budget,
+avoiding silent renewed spend. Production-call capture, new-question discovery,
+Noul/Score tuning, and automatic adoption into permission or revision loops are
+not included.
 
 ## Labelled decision evaluations
 

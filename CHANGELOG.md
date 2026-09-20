@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### SystemOne Tune
+
+- Fully unlabeled datasets now use an active-learning loop: Jev ranks the
+  development pool by uncertainty, adds a random audit example and a random
+  sealed example, and asks for only 2–20 judgments per round.
+- Tune sessions persist accepted and rejected candidates across rounds. A
+  pending decision can be resumed without repeating GEPA or Jev calls.
+- Developers can explicitly accept a small candidate as experimental while the
+  existing evidence threshold remains required for verified adoption.
+- Pool predictions are cached for rejected rounds, and each round keeps its own
+  GEPA output, evaluation journal, held-out comparison, and report.
+
 ### Fixed
 
 - SystemOne Tune preferences are best-effort, so a read-only user directory no
