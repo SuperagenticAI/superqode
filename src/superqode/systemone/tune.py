@@ -151,6 +151,53 @@ def default_reflection_model() -> str:
     return ""
 
 
+def reflection_api_key_env(model: str) -> str | None:
+    """Env var required for this reflection model id, when the provider is known."""
+    name = (model or "").strip().lower()
+    if not name:
+        return None
+    provider = name.split("/", 1)[0]
+    return {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "google": "GEMINI_API_KEY",
+    }.get(provider)
+
+
+def missing_tune_credentials(
+    *, reflection_lm: str = "", api_key_env: str = "TYPESAFE_API_KEY"
+) -> list[str]:
+    """Blockers that would make Start do nothing useful without a clear error."""
+    missing: list[str] = []
+    key_env = (api_key_env or "TYPESAFE_API_KEY").strip() or "TYPESAFE_API_KEY"
+    if not str(os.environ.get(key_env) or "").strip():
+        missing.append(
+            f"Set {key_env} for live Jev scoring (export {key_env}=... in this shell, then restart SuperQode)."
+        )
+    model = (reflection_lm or "").strip()
+    if not model:
+        missing.append(
+            "Choose a reflection model (provider/model), or set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY so a default can be chosen."
+        )
+    else:
+        provider_env = reflection_api_key_env(model)
+        if provider_env and not str(os.environ.get(provider_env) or "").strip():
+            missing.append(
+                f"Reflection model {model} needs {provider_env} (export {provider_env}=..., then restart SuperQode)."
+            )
+    return missing
+
+
+def format_missing_tune_credentials(missing: list[str]) -> str:
+    if not missing:
+        return ""
+    lines = ["Cannot start the experiment yet:"]
+    lines.extend(f"• {item}" for item in missing)
+    lines.append("Fix the items above, then click Start experiment again.")
+    return "\n".join(lines)
+
+
 def load_tune_pack(options: TuneOptions) -> tuple[QuestionPack, Any]:
     from superqode.harness.loader import load_harness_spec
 
@@ -457,6 +504,12 @@ def _settings(manifest: dict):
         spec=spec, explicit=None if spec else SimpleNamespace(enabled=True, client="live")
     )
     if settings.skip_client or not settings.enabled or settings.client != "live":
+        missing = missing_tune_credentials(
+            reflection_lm=str((manifest.get("options") or {}).get("reflection_lm") or ""),
+            api_key_env=getattr(settings, "api_key_env", "TYPESAFE_API_KEY"),
+        )
+        if missing:
+            raise ValueError(format_missing_tune_credentials(missing))
         raise ValueError(
             "Tune needs live Jev evaluation. Check SystemOne settings and API credentials; stub/replay cannot measure new prompts."
         )
@@ -469,10 +522,21 @@ def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
         raise ValueError(
             "Set a positive evaluation budget and a reflection limit between $0 and $1000."
         )
-    if not options.reflection_lm.strip():
-        raise ValueError(
-            "Choose a reflection model (provider/model) or configure OPENAI_API_KEY, ANTHROPIC_API_KEY or GEMINI_API_KEY."
-        )
+    reflection = options.reflection_lm.strip()
+    # Peek at SystemOne config for the expected live key name without requiring live yet.
+    from types import SimpleNamespace
+    from superqode.harness.loader import harness_spec_from_dict
+    from superqode.systemone.config import resolve_systemone
+
+    spec = harness_spec_from_dict(manifest["harness"]) if manifest.get("harness") else None
+    probe = resolve_systemone(
+        spec=spec, explicit=None if spec else SimpleNamespace(enabled=True, client="live")
+    )
+    missing = missing_tune_credentials(
+        reflection_lm=reflection, api_key_env=getattr(probe, "api_key_env", "TYPESAFE_API_KEY")
+    )
+    if missing:
+        raise ValueError(format_missing_tune_credentials(missing))
     settings = _settings(manifest)
     if check_gepa:
         try:

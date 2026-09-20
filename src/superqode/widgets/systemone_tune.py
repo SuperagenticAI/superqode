@@ -121,12 +121,33 @@ class SystemOneTuneScreen(Screen[str | None]):
             self.query_one("#tune-cost", Input).value = str(prefs["max_reflection_cost"])
         self._refresh_support_status()
 
+    def _credential_status(self) -> str:
+        model = self._value("model") if self.is_mounted else ""
+        model = model or tune.preferred_reflection_model()
+        api_key_env = "TYPESAFE_API_KEY"
+        try:
+            from types import SimpleNamespace
+            from superqode.systemone.config import resolve_systemone
+
+            probe = resolve_systemone(
+                spec=None, explicit=SimpleNamespace(enabled=True, client="live")
+            )
+            api_key_env = getattr(probe, "api_key_env", api_key_env) or api_key_env
+        except Exception:
+            pass
+        missing = tune.missing_tune_credentials(reflection_lm=model, api_key_env=api_key_env)
+        return tune.format_missing_tune_credentials(missing)
+
     def _refresh_support_status(self) -> None:
         ready = tune.tuning_support_available()
         install_btn = self.query_one("#tune-install", Button)
         install_btn.disabled = ready
         if ready:
-            self._status("Tuning support is ready. Fill the pack and examples, then Prepare.")
+            creds = self._credential_status()
+            if creds:
+                self._status(creds)
+            else:
+                self._status("Tuning support is ready. Fill the pack and examples, then Prepare.")
         else:
             self._status(
                 "Tuning support (GEPA) is not installed yet. Click Install tuning support before Start. Prepare and labeling work without it."
@@ -230,12 +251,14 @@ class SystemOneTuneScreen(Screen[str | None]):
         else:
             options = self.manifest["options"]
             test_count = sum(row["split"] == "test" for row in self.manifest["examples"])
+            creds = self._credential_status()
             self._status(
                 f"Ready · {len(self.manifest['examples'])} reviewed examples\n"
                 f"Up to {options['max_evals']} optimization evaluations + {2 * test_count} final test evaluations.\n"
                 f"Reflection: {options['reflection_lm'] or 'not configured'} · ceiling ${options['max_reflection_cost']:.2f}. Jev usage/retries are additional.\n"
                 "Jev receives example inputs and criteria. The reflection provider also receives development examples and rationales.\n"
                 f"Saved experiment: {self.output}\nSmall demos are pilots and cannot qualify for adoption."
+                + (("\n" + creds) if creds else "")
             )
             self.query_one("#tune-start").display = True
 
@@ -260,6 +283,10 @@ class SystemOneTuneScreen(Screen[str | None]):
             return
         try:
             self._remember_preferences()
+            creds = self._credential_status()
+            if creds:
+                self._status(creds)
+                return
             if not tune.tuning_support_available():
                 self._status(
                     "Install tuning support first, then Start. No restart is usually required after Install succeeds."
@@ -272,8 +299,11 @@ class SystemOneTuneScreen(Screen[str | None]):
             )
             tune.write_json(self.output / "run.json", self.manifest)
             details = tune.preflight(self.manifest)
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, KeyError, TypeError) as exc:
             self._status(str(exc))
+            return
+        except Exception as exc:
+            self._status(f"Could not start the experiment: {exc}")
             return
         self.cancel.clear()
         self.running = True
