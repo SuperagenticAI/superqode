@@ -1,6 +1,6 @@
 # Moved: SuperQode 2.4.0 Jev notes
 
-The release-specific 2.4.0 page was folded into the lasting **Jev** docs so one
+The release-specific 2.4.0 page was folded into the lasting **SystemOne Harness** docs so one
 section covers the SystemOne harness end to end:
 
 - [Jev Integration](systemone.md)
