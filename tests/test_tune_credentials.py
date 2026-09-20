@@ -44,3 +44,33 @@ def test_preflight_surfaces_missing_keys(monkeypatch):
     manifest = {"options": asdict(opts), "examples": [], "harness": None}
     with pytest.raises(ValueError, match="TYPESAFE_API_KEY|Cannot start"):
         tune.preflight(manifest, check_gepa=False)
+
+
+def test_no_auth_systemone_endpoint_does_not_require_typesafe_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    harness = {
+        "version": 1,
+        "name": "local-decision",
+        "flavor": "decision",
+        "runtime": {"backend": "systemone"},
+        "systemone": {
+            "enabled": True,
+            "client": "live",
+            "endpoint": "http://127.0.0.1:9000/v1/systemone",
+            "api_key_env": "",
+            "pack": "factory_route",
+        },
+    }
+    opts = tune.TuneOptions(
+        reflection_lm="ollama/local-reflector", max_evals=10, max_reflection_cost=1.0
+    )
+    manifest = {
+        "options": asdict(opts),
+        "examples": [{"split": "test"}],
+        "harness": harness,
+    }
+    details = tune.preflight(manifest, check_gepa=False)
+    assert details["endpoint"].startswith("http://127.0.0.1")
+    assert (
+        tune.missing_tune_credentials(reflection_lm="ollama/local-reflector", api_key_env="") == []
+    )

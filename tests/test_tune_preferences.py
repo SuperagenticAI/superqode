@@ -23,6 +23,16 @@ def test_preferred_reflection_model_persists(tmp_path, monkeypatch):
     assert "reflection_lm" not in tune.load_tune_preferences()
 
 
+def test_unwritable_preferences_never_block_tune(tmp_path, monkeypatch):
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("occupied", encoding="utf-8")
+    monkeypatch.setattr(tune, "tune_preferences_path", lambda: blocker / "preferences.json")
+
+    tune.save_tune_preferences(reflection_lm="gemini/gemini-3.6-flash")
+
+    assert tune.load_tune_preferences() == {}
+
+
 def test_tuning_support_available_is_bool():
     from superqode.systemone import tune
 

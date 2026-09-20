@@ -5,6 +5,18 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- SystemOne Tune preferences are best-effort, so a read-only user directory no
+  longer blocks preparing, labeling, or starting an experiment.
+- Custom no-auth SystemOne endpoints no longer incorrectly require
+  `TYPESAFE_API_KEY`, including in the TUI preflight.
+- The Tune pilot gate counts both search and validation rows as
+  optimizer-visible development evidence. The checked-in 35-development / 35-test
+  routing dataset is no longer misclassified as having only 27 development rows.
+
 ## [2.4.7] - 2026-09-20
 
 ### Fixed

@@ -20,6 +20,12 @@ from superqode.systemone.pack import load_pack
 from superqode.widgets.systemone_tune import SystemOneTuneScreen
 
 
+@pytest.fixture(autouse=True)
+def isolated_tune_preferences(tmp_path, monkeypatch):
+    """TUI tests never read or write the developer's real preferences."""
+    monkeypatch.setattr(tune, "tune_preferences_path", lambda: tmp_path / "preferences.json")
+
+
 def examples(n=12):
     return [
         {
@@ -255,6 +261,22 @@ def test_eligible_candidate_and_tamper_check(tmp_path):
         tune.candidate_use_path(report)
 
 
+def test_checked_in_demo_has_enough_development_and_test_evidence(tmp_path):
+    rows = tune.read_examples(
+        Path(__file__).resolve().parents[1] / "examples" / "tune" / "factory-route-free.csv"
+    )
+    out = prepare(tmp_path, rows)
+
+    def candidate_only(**kwargs):
+        candidate = dict(kwargs["seed_candidate"])
+        candidate[next(iter(candidate))] = "improved criteria"
+        return SimpleNamespace(best_candidate=candidate)
+
+    report = tune.run_tune(out, client=CandidateClient(), optimizer=candidate_only)
+    assert report["split_counts"] == {"train": 27, "validation": 8, "test": 35}
+    assert not report["pilot"]
+
+
 def test_regression_rejects_even_when_overall_score_improves(tmp_path):
     rows = examples(160)
     out = prepare(tmp_path, rows)
@@ -460,6 +482,32 @@ async def test_tui_start_worker_produces_report(tmp_path, monkeypatch):
         assert screen.report is not None
         assert screen.report["candidate"]["score"] == 1
         assert not screen.running
+
+
+@pytest.mark.asyncio
+async def test_tui_honors_no_auth_systemone_harness(tmp_path, monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    harness = tmp_path / "local-decision.yaml"
+    harness.write_text(
+        "version: 1\n"
+        "name: local-decision\n"
+        "flavor: decision\n"
+        "runtime: {backend: systemone}\n"
+        "systemone:\n"
+        "  enabled: true\n"
+        "  client: live\n"
+        "  endpoint: http://127.0.0.1:9000/v1/systemone\n"
+        '  api_key_env: ""\n'
+        "  pack: factory_route\n",
+        encoding="utf-8",
+    )
+    app = TuneApp()
+    async with app.run_test(size=(100, 48)) as pilot:
+        screen = app.screen
+        screen.query_one("#tune-spec", Input).value = str(harness)
+        screen.query_one("#tune-model", Input).value = "ollama/local-reflector"
+        await pilot.pause()
+        assert screen._credential_status() == ""
 
 
 @pytest.mark.asyncio

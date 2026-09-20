@@ -119,18 +119,27 @@ def load_tune_preferences() -> dict:
 
 
 def save_tune_preferences(**updates: str | int | float) -> None:
-    """Persist non-secret Tune UI choices across restarts (reflection model, budgets)."""
+    """Persist non-secret Tune UI choices when the user directory is writable.
+
+    Preferences improve the next launch, but they must never block preparing,
+    labeling, or starting an experiment.
+    """
     path = tune_preferences_path()
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    current = load_tune_preferences()
-    for key, value in updates.items():
-        if value is None or value == "":
-            current.pop(key, None)
-        else:
-            current[key] = value
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        current = load_tune_preferences()
+        for key, value in updates.items():
+            if value is None or value == "":
+                current.pop(key, None)
+            else:
+                current[key] = value
+        temporary = path.with_suffix(".tmp")
+        write_json(temporary, current)
+        temporary.replace(path)
+    except OSError:
+        # The experiment manifest remains authoritative and is stored under
+        # the workspace. A read-only home should only lose this convenience.
+        return
 
 
 def preferred_reflection_model() -> str:
@@ -170,8 +179,8 @@ def missing_tune_credentials(
 ) -> list[str]:
     """Blockers that would make Start do nothing useful without a clear error."""
     missing: list[str] = []
-    key_env = (api_key_env or "TYPESAFE_API_KEY").strip() or "TYPESAFE_API_KEY"
-    if not str(os.environ.get(key_env) or "").strip():
+    key_env = str(api_key_env).strip()
+    if key_env and not str(os.environ.get(key_env) or "").strip():
         missing.append(
             f"Set {key_env} for live Jev scoring (export {key_env}=... in this shell, then restart SuperQode)."
         )
@@ -736,8 +745,10 @@ def _run_tune_locked(
             and after["score"] > before["score"]
         )
         gate_passed = improved and not regressions and not before["errors"] and not after["errors"]
+        # Training and validation are both optimizer-visible development data.
         # Small runs are useful plumbing, but cannot qualify for adoption.
-        pilot = len(partitions["test"]) < 30 or len(partitions["train"]) < 30
+        development_count = len(partitions["train"]) + len(partitions["validation"])
+        pilot = len(partitions["test"]) < 30 or development_count < 30
         harness = deepcopy(manifest.get("harness")) or {
             "version": 1,
             "name": f"{pack.id}-tuned",

@@ -127,12 +127,20 @@ class SystemOneTuneScreen(Screen[str | None]):
         api_key_env = "TYPESAFE_API_KEY"
         try:
             from types import SimpleNamespace
+            from superqode.harness.loader import harness_spec_from_dict, load_harness_spec
             from superqode.systemone.config import resolve_systemone
 
+            spec = None
+            if self.manifest and self.manifest.get("harness"):
+                spec = harness_spec_from_dict(self.manifest["harness"])
+            elif self.is_mounted and self._value("spec"):
+                spec = load_harness_spec(self._value("spec"))
             probe = resolve_systemone(
-                spec=None, explicit=SimpleNamespace(enabled=True, client="live")
+                spec=spec,
+                explicit=None if spec else SimpleNamespace(enabled=True, client="live"),
             )
-            api_key_env = getattr(probe, "api_key_env", api_key_env) or api_key_env
+            # An empty value deliberately means a no-auth compatible endpoint.
+            api_key_env = getattr(probe, "api_key_env", api_key_env)
         except Exception:
             pass
         missing = tune.missing_tune_credentials(reflection_lm=model, api_key_env=api_key_env)

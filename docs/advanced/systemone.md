@@ -209,8 +209,9 @@ An experiment preserves output labels, schema, model configuration and
 confidence policy. It writes `candidate-pack.yaml`, `candidate-harness.yaml`,
 `changes.diff`, evaluation evidence and `report.json` under `.superqode/tuning`.
 The comparison counts abstentions and errors separately, and checks for
-regressions against the baseline. Small runs (fewer than 30 training or 30 test
-examples) are marked as pilots and cannot qualify for adoption; larger runs
+regressions against the baseline. Small runs (fewer than 30 optimizer-visible
+development examples or 30 test examples) are marked as pilots and cannot
+qualify for adoption; larger runs
 still require representative data and human review. **Use this version** opens
 a standalone decision session after a qualifying comparison, not automatic
 coding-session routing.
