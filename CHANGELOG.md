@@ -5,6 +5,11 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.7] - 2026-09-20
+
+### Fixed
+- SystemOne Tune now explains when `TYPESAFE_API_KEY` or the reflection provider key (OpenAI, Anthropic, Gemini) is missing, instead of Start looking like a no-op.
+
 ## [2.4.6] - 2026-09-19
 
 ### SystemOne Tune
