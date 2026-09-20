@@ -1,4 +1,18 @@
-# Jev integration and decision harnesses
+# Jev Integration
+
+Connect **Jev** as a typed decision service inside the **SystemOne** harness.
+Coding models still write code and explanations. Jev answers Choice, Score, and
+Noul questions that SuperQode validates through pack schemas and confidence
+policy.
+
+Everything about SystemOne and Jev lives under the **Jev** docs tab:
+
+| Page | What it covers |
+| --- | --- |
+| **Jev Integration** (this page) | Packs, coding harness, tool gates, labelled evals, rubric grading |
+| [Progressive Tool Discovery](progressive-tool-discovery.md) | Catalogue → search → rank → Jev → activate → permission |
+| [SystemOne Tune (GEPA)](systemone-tune.md) | Improve packs from examples with GEPA-backed Tune |
+
 
 SuperQode can evaluate reviewed question packs independently of a coding model.
 A pack defines the input contract, atomic questions, and confidence policy.
@@ -21,7 +35,7 @@ Live Jev calls require `TYPESAFE_API_KEY` in the launching environment. Your
 coding provider uses its own credentials. Enabling tool checks does not connect
 a coding model; see [TUI setup](tui.md#jev-tool-checks).
 
-## SystemOne coding harness and tool search
+## SystemOne coding harness
 
 Select the bundled `systemone` harness with your usual coding provider:
 
@@ -35,33 +49,9 @@ tools during deferred discovery. Without `TYPESAFE_API_KEY`, Jev is skipped and
 the existing permission policy and lexical tool search continue to work.
 The separate `:connect` SystemOne models option still runs standalone decision packs.
 
-This harness defers optional tool schemas and exposes `tool_search`. A search
-retrieves up to eight candidates from the registered deferred tools. Jev chooses
-from that closed set or `none`. When lexical retrieval finds no match, catalogs
-of eight or fewer deferred tools can be considered directly. Larger catalogs
-require a matching retrieval query; this is not an embedding search.
-
-The default `tool_search_mode: shadow` records Jev's recommendation while
-preserving lexical activation. To let Jev select which schema to activate:
-
-```sh
-export SUPERQODE_SYSTEMONE_TOOL_SEARCH=rerank
-```
-
-Selection requires Choice confidence at least 0.75, candidate-fit Noul at least
-0.8, and the selected option's probability to exceed every other option by at
-least 0.1. These are initial selection thresholds, not calibrated safety scores.
-Uncertain answers and `none` activate nothing; client or schema errors fall back
-to lexical search. Activating a schema never executes its tool or grants permission.
-
-Set `SUPERQODE_SYSTEMONE_TRACE_DIR` to record sanitized discovery events under
-its `tool-search/` subdirectory. Events include candidates, baseline tools,
-Jev's selection, raw answers, distribution diagnostics and activated tools.
-They are separate from permission allow/deny calibration records.
-
-Custom specs can set `systemone.tool_search_mode` to `off`, `shadow`, or `rerank`.
-`model_policy.config.deferred_tools: all` enables deferred schemas for any
-provider. `SUPERQODE_DEFERRED_TOOLS=off` overrides the harness default.
+For catalogue → search → rank → Jev → activate configuration, modes, BM25
+shortlists, and MCP deferral, see
+[Progressive Tool Discovery](progressive-tool-discovery.md).
 
 ## Run a pack
 
@@ -163,117 +153,10 @@ classification. The native coding gate separately falls back to existing policy.
 
 ## Improve decisions with SystemOne Tune
 
-Open `:systemone tune` in the TUI, or select **Improve decisions** on the
-SystemOne entry in Harness Hub. The CLI provides the same workflow:
-
-```sh
-superqode harness tune
-```
-
-Tune currently improves one fixed Choice question, including structured
-instructions and criteria. Choose a built-in pack or a SystemOne decision
-harness, then import CSV, JSONL, JSON or YAML examples. With no file, the wizard
-offers a small synthetic routing demo (`--demo` on the CLI). Use `--pack` to pick
-a built-in pack, `--output` for the run directory, `--reflection-lm` to override
-the reflection model, and `--seed` for deterministic splits. Each judgment and
-optional rationale is saved immediately.
-
-Fully labeled or partially labeled files keep the bounded one-shot workflow.
-When every imported label is empty, Tune starts an active-learning session.
-For each round Jev scores only the development pool, selects the most uncertain
-examples plus a random audit example, and randomly selects a reserved test
-example without scoring the test pool. The TUI explains why each example was
-selected. `--batch-size` controls the 2 to 20 development judgments collected per
-round and defaults to five.
-
-Install the optional, tested optimization runtime with the TUI's **Install
-tuning support** button or `superqode harness tune --setup`, then restart
-SuperQode. This installs a pinned GEPA source revision into SuperQode's Python
-environment. Jev needs its configured API credentials; reflection uses a
-separate model. Tune detects configured OpenAI, Anthropic and Gemini API keys,
-or accepts a LiteLLM `provider/model` identifier. It does not reuse coding-agent
-subscription credentials.
-
-```sh
-# Built-in pack + demo dataset (live experiment, not a benchmark)
-superqode harness tune --demo --live
-
-# Multi-round active-learning demo from a repository checkout
-superqode harness tune --data examples/tune/factory-route-active.csv \
-  --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
-
-# Reviewed examples
-superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
-  --data reviewed-tickets.csv --input request --label route \
-  --reflection-lm openai/gpt-5 --max-evals 120 --max-reflection-cost 2 \
-  --output .superqode/tuning/routing-v2 --seed 0 --live --json
-
-# Resume annotation, change the reflection model, or inspect completed results
-superqode harness tune --resume .superqode/tuning/<run>
-
-# Resolve a proposal from a script; experimental is required below verification threshold
-superqode harness tune --resume .superqode/tuning/<run> --accept --experimental --json
-superqode harness tune --resume .superqode/tuning/<run> --reject --json
-```
-
-### Demo the active-learning loop
-
-The checked-in `examples/tune/factory-route-active.csv` contains 35 development
-and 35 reserved routing inputs with blank labels. Configure the Jev credential
-and a reflection provider, run the active-learning command above, and confirm
-pool evaluation. The first round presents five development cards and one
-randomly sampled sealed card. The card heading identifies uncertain, random
-audit, and sealed selections.
-
-Label the six examples, optionally explain important boundaries, and start the
-GEPA experiment. The result screen shows the sealed comparison and exact
-question-pack diff. Accepting the first small run records an experimental
-version; rejecting it keeps the current pack. Choosing to decide later leaves
-the proposal intact for `--resume`. Resume again after accepting or rejecting
-to acquire the next batch. Rejected rounds reuse cached pool predictions;
-accepted rounds score the remaining pool against the newly accepted pack.
-
-The active demo does not become verified after one round. Verification still
-requires at least 30 reviewed development examples, 30 reviewed sealed examples,
-an improved sealed score, no individual regression, and no evaluation errors.
-The file IDs retain their intended route prefix to make live demonstrations
-repeatable; the ID is not sent to Jev.
-
-Input rows use `state`, `label`, and optional `id`, `rationale`, `group`, and
-`split` fields. `--input` and `--label` map other column names. Use `group` to
-keep related tickets/session examples together. Explicit splits are `train`,
-`validation`, and `test`; existing `held-in`/`held-out` decision eval files are
-also supported. Otherwise Tune partitions examples deterministically before
-annotation. Duplicate inputs are rejected, and test examples never enter GEPA.
-
-An experiment preserves output labels, schema, model configuration and
-confidence policy. It writes candidate packs, harnesses, diffs, evaluation
-evidence and reports under `.superqode/tuning`. Active sessions use versioned
-candidate files, keep each round's GEPA output and evaluation evidence under
-`rounds/round-NNNN`, and record accept/reject history in `run.json`. A proposal
-can be accepted, rejected, or left pending and resumed later. Accepted
-candidates seed the next round; rejected candidates leave the current pack
-unchanged and reuse its cached pool predictions.
-The comparison counts abstentions and errors separately, and checks for
-regressions against the baseline. Small runs (fewer than 30 optimizer-visible
-development examples or 30 test examples) are marked as pilots and cannot
-qualify for adoption; larger runs
-still require representative data and human review. **Use this version** opens
-a standalone decision session. Active sessions may explicitly accept a small
-candidate as **experimental**; only a candidate that passes the evidence gate is
-marked **verified**. Acceptance never changes an active coding-session route.
-
-The reflection spend limit is checked between model calls and excludes Jev
-usage. The final baseline/candidate test calls are additional to `--max-evals`;
-both allowances are displayed before starting. Inputs go to Jev; development
-examples and rationales also go to the reflection provider. Existing state
-redaction applies, but example files should not contain secrets.
-
-Stop saves completed evidence. Annotation and pending candidate decisions can
-be resumed; an interrupted optimization requires a new experiment and budget,
-avoiding silent renewed spend. Production-call capture, new-question discovery,
-Noul/Score tuning, and automatic adoption into permission or revision loops are
-not included.
+Teach Jev from unlabeled or partially labeled examples, stage an experimental
+candidate pack, and keep the active harness unchanged until you accept or
+reject it. Full CLI, TUI, active-learning, and verification details live on the
+[SystemOne Tune (GEPA)](systemone-tune.md) page.
 
 ## Labelled decision evaluations
 

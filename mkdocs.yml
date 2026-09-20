@@ -220,9 +220,9 @@ nav:
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
   - 🧠 Jev:
-    - Jev & SystemOne: advanced/systemone.md
+    - Jev Integration: advanced/systemone.md
     - Progressive Tool Discovery: advanced/progressive-tool-discovery.md
-    - Release 2.4.0: advanced/release-2.4.0.md
+    - GEPA Jev Optimization: advanced/systemone-tune.md
   - 🔁 A2A: providers/a2a.md
 
   - 📈 Evaluate & Optimise:
