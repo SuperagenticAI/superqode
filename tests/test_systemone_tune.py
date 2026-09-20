@@ -382,6 +382,48 @@ def test_checked_in_demo_has_enough_development_and_test_evidence(tmp_path):
     assert not report["pilot"]
 
 
+def test_checked_in_active_demo_starts_uncertainty_round(tmp_path):
+    rows = tune.read_examples(
+        Path(__file__).resolve().parents[1] / "examples" / "tune" / "factory-route-active.csv"
+    )
+    assert len(rows) == 70
+    assert all(row["label"] is None and not row["rationale"] for row in rows)
+    out = prepare(tmp_path, rows)
+    manifest = tune.load_run(out)
+    assert manifest["workflow"] == "active"
+    assert {
+        split: sum(row["split"] == split for row in manifest["examples"])
+        for split in ("train", "validation", "test")
+    } == {"train": 27, "validation": 8, "test": 35}
+
+    class DemoPoolClient:
+        name = "demo-pool"
+
+        def __init__(self):
+            self.count = 0
+
+        async def evaluate(self, state, questions):
+            self.count += 1
+            confidence = 0.5 + (self.count % 5) / 10
+            return await StubSystemOneClient(
+                {
+                    "route": {
+                        "choice": "cheap",
+                        "confidence": confidence,
+                        "probabilities": {
+                            "private": 0,
+                            "cheap": confidence,
+                            "review": 1 - confidence,
+                        },
+                    }
+                }
+            ).evaluate(state, questions)
+
+    selected = tune.acquire_review_batch(out, client=DemoPoolClient())
+    assert len(selected) == 6
+    assert {row["acquired_by"] for row in selected} >= {"uncertain", "audit", "holdout"}
+
+
 def test_regression_rejects_even_when_overall_score_improves(tmp_path):
     rows = examples(160)
     out = prepare(tmp_path, rows)

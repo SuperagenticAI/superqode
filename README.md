@@ -83,6 +83,10 @@ Teach SystemOne how your team routes or judges work from reviewed examples, then
 superqode harness tune --setup          # once: install pinned GEPA support
 superqode harness tune                  # guided labeling + experiment
 superqode harness tune --demo --live    # small synthetic routing demo
+
+# From a repository checkout: uncertainty-ranked, multi-round demo
+superqode harness tune --data examples/tune/factory-route-active.csv \
+  --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
 ```
 
 In the TUI, run `:systemone tune` or open **Improve decisions** on SystemOne in Harness Hub. See the [SystemOne Tune guide](https://docs.superqode.dev/advanced/systemone/#improve-decisions-with-systemone-tune).

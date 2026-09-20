@@ -183,7 +183,7 @@ When every imported label is empty, Tune starts an active-learning session.
 For each round Jev scores only the development pool, selects the most uncertain
 examples plus a random audit example, and randomly selects a reserved test
 example without scoring the test pool. The TUI explains why each example was
-selected. `--batch-size` controls the 2–20 development judgments collected per
+selected. `--batch-size` controls the 2 to 20 development judgments collected per
 round and defaults to five.
 
 Install the optional, tested optimization runtime with the TUI's **Install
@@ -198,6 +198,10 @@ subscription credentials.
 # Built-in pack + demo dataset (live experiment, not a benchmark)
 superqode harness tune --demo --live
 
+# Multi-round active-learning demo from a repository checkout
+superqode harness tune --data examples/tune/factory-route-active.csv \
+  --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
+
 # Reviewed examples
 superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
   --data reviewed-tickets.csv --input request --label route \
@@ -211,6 +215,29 @@ superqode harness tune --resume .superqode/tuning/<run>
 superqode harness tune --resume .superqode/tuning/<run> --accept --experimental --json
 superqode harness tune --resume .superqode/tuning/<run> --reject --json
 ```
+
+### Demo the active-learning loop
+
+The checked-in `examples/tune/factory-route-active.csv` contains 35 development
+and 35 reserved routing inputs with blank labels. Configure the Jev credential
+and a reflection provider, run the active-learning command above, and confirm
+pool evaluation. The first round presents five development cards and one
+randomly sampled sealed card. The card heading identifies uncertain, random
+audit, and sealed selections.
+
+Label the six examples, optionally explain important boundaries, and start the
+GEPA experiment. The result screen shows the sealed comparison and exact
+question-pack diff. Accepting the first small run records an experimental
+version; rejecting it keeps the current pack. Choosing to decide later leaves
+the proposal intact for `--resume`. Resume again after accepting or rejecting
+to acquire the next batch. Rejected rounds reuse cached pool predictions;
+accepted rounds score the remaining pool against the newly accepted pack.
+
+The active demo does not become verified after one round. Verification still
+requires at least 30 reviewed development examples, 30 reviewed sealed examples,
+an improved sealed score, no individual regression, and no evaluation errors.
+The file IDs retain their intended route prefix to make live demonstrations
+repeatable; the ID is not sent to Jev.
 
 Input rows use `state`, `label`, and optional `id`, `rationale`, `group`, and
 `split` fields. `--input` and `--label` map other column names. Use `group` to

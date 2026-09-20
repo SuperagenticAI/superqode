@@ -7,25 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### SystemOne Tune
+## [2.4.8] - 2026-09-20
 
-- Fully unlabeled datasets now use an active-learning loop: Jev ranks the
+### 🧠 SystemOne Tune
+
+- 🎯 Fully unlabeled datasets now use an active-learning loop: Jev ranks the
   development pool by uncertainty, adds a random audit example and a random
-  sealed example, and asks for only 2–20 judgments per round.
-- Tune sessions persist accepted and rejected candidates across rounds. A
+  sealed example, and asks for only 2 to 20 judgments per round.
+- 🔁 Tune sessions persist accepted and rejected candidates across rounds. A
   pending decision can be resumed without repeating GEPA or Jev calls.
-- Developers can explicitly accept a small candidate as experimental while the
+- 🧪 Developers can explicitly accept a small candidate as experimental while the
   existing evidence threshold remains required for verified adoption.
-- Pool predictions are cached for rejected rounds, and each round keeps its own
+- 💾 Pool predictions are cached for rejected rounds, and each round keeps its own
   GEPA output, evaluation journal, held-out comparison, and report.
+- 🎬 A checked-in unlabeled routing pool and demo guide exercise the complete
+  acquire, label, optimize, accept/reject, and resume workflow.
 
-### Fixed
+### 🛠️ Fixed
 
-- SystemOne Tune preferences are best-effort, so a read-only user directory no
+- 🏠 SystemOne Tune preferences are best-effort, so a read-only user directory no
   longer blocks preparing, labeling, or starting an experiment.
-- Custom no-auth SystemOne endpoints no longer incorrectly require
+- 🔓 Custom no-auth SystemOne endpoints no longer incorrectly require
   `TYPESAFE_API_KEY`, including in the TUI preflight.
-- The Tune pilot gate counts both search and validation rows as
+- 📊 The Tune pilot gate counts both search and validation rows as
   optimizer-visible development evidence. The checked-in 35-development / 35-test
   routing dataset is no longer misclassified as having only 27 development rows.
 
