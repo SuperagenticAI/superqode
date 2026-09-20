@@ -1,5 +1,12 @@
 # Progressive tool discovery
 
+This page is part of the **Jev** docs:
+
+- [Jev Integration](systemone.md) - SystemOne harness, packs, tool gates, evals
+- **Progressive Tool Discovery** - this page
+- [SystemOne Tune (GEPA)](systemone-tune.md) - improve packs from examples
+
+
 SuperQode can search native and MCP capabilities without loading every tool
 schema into the model context. The discovery pipeline is configurable: the
 harness supplies lifecycle, activation, permission, execution, and traces, but

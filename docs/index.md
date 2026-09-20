@@ -25,7 +25,7 @@ hide:
   <a href="https://superqode.dev"><img src="https://img.shields.io/badge/website-superqode.dev-7c3aed?style=flat-square" alt="Website"></a>
 </p>
 
-[SuperQode · Jev guide](advanced/systemone.md){ .md-button .md-button--primary }
+[Jev Integration](advanced/systemone.md){ .md-button .md-button--primary }
 [SystemOne Harness](advanced/systemone.md){ .md-button }
 [Progressive tool discovery](advanced/progressive-tool-discovery.md){ .md-button }
 [Website](https://superqode.dev){ .md-button }
@@ -54,7 +54,7 @@ Use the **SystemOne** coding harness with **Jev** typed decisions:
 
     Choice, Score and Noul packs with confidence thresholds. Coding models still write code; Jev decides.
 
-    [:octicons-arrow-right-24: Jev & SystemOne guide](advanced/systemone.md)
+    [:octicons-arrow-right-24: Jev Integration](advanced/systemone.md)
 
 -   :material-magnify:{ .lg .middle } **Progressive tool discovery**
 
@@ -63,6 +63,15 @@ Use the **SystemOne** coding harness with **Jev** typed decisions:
     BM25 shortlist, Jev selection or abstention, schema activation, then the normal permission path.
 
     [:octicons-arrow-right-24: Progressive tool discovery](advanced/progressive-tool-discovery.md)
+
+-   :material-tune:{ .lg .middle } **SystemOne Tune (GEPA)**
+
+    ---
+
+    Improve decision packs from unlabeled examples. Experimental candidates stay
+    staged until you accept or reject them.
+
+    [:octicons-arrow-right-24: GEPA Jev optimization](advanced/systemone-tune.md)
 
 -   :material-rocket-launch:{ .lg .middle } **Launch SystemOne**
 
