@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.9] - 2026-09-20
+
+### Changed
+- Install banner and welcome screen call out Smart Decisions with Jev and SystemOne Harness beside ACP / A2A / UHP.
+- Shortcut bar adds `🧭 :systemone` next to connect, hub, home, and help.
+
 ## [2.4.8] - 2026-09-20
 
 ### 🧠 SystemOne Tune

@@ -321,7 +321,9 @@ banner() {
     printf '  %s%sSuperQode%s\n' "$C_BOLD" "$C_G3" "$C_RESET"
     printf '  %sthe harness interoperability layer for coding agents.%s\n' \
         "$C_TEXT" "$C_RESET"
-    printf '  %sAgent to Agent communication over ACP, A2A and UHP%s\n\n' \
+    printf '  %sAgent to Agent communication over ACP, A2A and UHP.%s\n' \
+        "$C_DIM" "$C_RESET"
+    printf '  %sSmart Decisions with Jev and SystemOne Harness%s\n\n' \
         "$C_DIM" "$C_RESET"
 }
 
