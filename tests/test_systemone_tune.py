@@ -425,6 +425,9 @@ async def test_tui_completed_run_exposes_diff_but_not_pilot_adoption(tmp_path):
 @pytest.mark.asyncio
 async def test_tui_start_worker_produces_report(tmp_path, monkeypatch):
     out = prepare(tmp_path)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "typesafe-test")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
+    monkeypatch.setattr(tune, "missing_tune_credentials", lambda **kwargs: [])
     monkeypatch.setattr(tune, "tuning_support_available", lambda: True)
     monkeypatch.setattr(
         tune,
