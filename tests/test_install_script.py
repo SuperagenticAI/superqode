@@ -359,6 +359,7 @@ def test_installer_paints_the_brand_on_a_real_terminal(tmp_path: Path):
     # Banner: the mark from the logo, the name, and the positioning line.
     assert "SuperQode" in output
     assert "the harness interoperability layer for coding agents." in output
+    assert "Smart Decisions with Jev and SystemOne Harness" in output
     assert "Agent to Agent communication over ACP, A2A and UHP" in output
 
     # The wordmark closes the install.
