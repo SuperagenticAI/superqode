@@ -8,7 +8,7 @@ Tune uses a pinned [GEPA](https://github.com/gepa-ai/gepa) revision through
 SuperQode's optional tuning support. In the TUI the product language is **Tune**
 and **tuning support**; GEPA is the optimizer under the hood.
 
-This page is part of the **Jev** docs:
+This page is part of the **SystemOne Harness** docs:
 
 - [Jev Integration](systemone.md) - SystemOne harness, packs, tool gates, evals
 - [Progressive Tool Discovery](progressive-tool-discovery.md) - catalogue → search → rank → Jev → activate

@@ -5,7 +5,7 @@ Coding models still write code and explanations. Jev answers Choice, Score, and
 Noul questions that SuperQode validates through pack schemas and confidence
 policy.
 
-Everything about SystemOne and Jev lives under the **Jev** docs tab:
+Everything about SystemOne and Jev lives under the **SystemOne Harness** docs tab:
 
 | Page | What it covers |
 | --- | --- |
