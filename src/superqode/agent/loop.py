@@ -804,6 +804,7 @@ class AgentLoop:
         allow_peer_agents: bool = True,  # False inside sub/peer agents (no nesting)
         systemone_client: Optional[Any] = None,
         on_systemone: Optional[Callable[[Dict[str, Any]], None]] = None,
+        tool_router: Optional[Any] = None,
     ):
         self.gateway = gateway
         self.tools = tools
@@ -930,6 +931,15 @@ class AgentLoop:
         self.hooks: HookRegistry = hooks if hooks is not None else HookRegistry()
         self._systemone_client = systemone_client
         self.on_systemone = on_systemone
+        if tool_router is None:
+            try:
+                from ..systemone.tool_router import build_tool_router
+
+                tool_router = build_tool_router()
+            except (ImportError, ValueError):
+                tool_router = None
+        self.tool_router = tool_router
+        self.last_tool_routing_plan = None
         self._current_iteration: int = 0
         # session_start fires once per AgentLoop instance, on the first run().
         self._session_started: bool = False
@@ -2397,6 +2407,25 @@ class AgentLoop:
         rubric_rounds = 0
         rubric_result = None
 
+        # Route once and hold the result for the entire turn. This keeps the
+        # schema prefix byte-stable across model steps and preserves provider
+        # prompt-cache reuse. Shadow mode records the same plan without
+        # changing the catalogue sent to the model.
+        routed_tool_plan = None
+        if not fast_chat and self.tool_router is not None:
+            initial_tool_defs = self._get_tool_definitions()
+            routed_tool_plan = await self.tool_router.plan(user_message, initial_tool_defs)
+            self.last_tool_routing_plan = routed_tool_plan
+            if self.on_thinking:
+                if routed_tool_plan.status == "ok":
+                    await self.on_thinking(
+                        "JEV tools "
+                        f"{len(routed_tool_plan.original)}→{len(routed_tool_plan.selected)} "
+                        f"({routed_tool_plan.mode}, {routed_tool_plan.latency_ms}ms)"
+                    )
+                elif routed_tool_plan.status == "fail_open":
+                    await self.on_thinking("JEV tool routing failed open; using all tools")
+
         # Emit initial processing log
         if self.on_thinking:
             await self.on_thinking("Processing request...")
@@ -2434,6 +2463,8 @@ class AgentLoop:
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
             tool_defs = [] if fast_chat else self._get_tool_definitions()
+            if routed_tool_plan is not None:
+                tool_defs = self.tool_router.apply(tool_defs, routed_tool_plan)
 
             # Emit iteration log
             if self.on_thinking:

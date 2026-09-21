@@ -348,6 +348,10 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":local migrate", "Plan prompt/skill migration to local models", category="workflow"
     ),
     SlashCommand(":local optimize", "Benchmark local model routing", category="workflow"),
+    SlashCommand(":optimize", "Show Jev Tool Routing launcher status", category="workflow"),
+    SlashCommand(":optimize enable", "Create local *-jev launchers", category="workflow"),
+    SlashCommand(":optimize disable", "Remove selected *-jev launchers", category="workflow"),
+    SlashCommand(":optimize uninstall", "Remove every managed *-jev launcher", category="workflow"),
     SlashCommand("/skills", "List local skills", category="workflow"),
     SlashCommand("/skills add", "Create a local skill template", category="workflow"),
     SlashCommand("/skills import", "Import a local skill file or directory", category="workflow"),

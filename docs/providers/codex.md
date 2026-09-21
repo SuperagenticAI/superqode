@@ -39,6 +39,27 @@ superqode --connect codex --print "review the current repository"
 SuperQode selects the `codex-sdk` runtime automatically. The profile is ready
 when the `openai_codex` package is installed and `~/.codex/auth.json` exists.
 
+The runtime already drives the official Codex app-server lifecycle through the
+Python SDK. For applications that supply their own experimental app-server
+`dynamicTools`, SuperQode also provides `CodexDynamicToolsAdapter`:
+
+```python
+from superqode.jev_tools import CodexDynamicToolsAdapter, JevToolRouting
+
+adapter = CodexDynamicToolsAdapter(JevToolRouting())
+params, decision = await adapter.thread_start_params(
+    task,
+    dynamic_tools,
+    base={"cwd": project_dir},
+)
+```
+
+Pass `adapter.initialize_capabilities()` as the app-server initialize
+capabilities and use `params` for `thread/start`. This routes client-owned
+dynamic tools only. Codex app-server does not expose a supported client hook to
+replace the built-in tool catalogue, so SuperQode does not claim savings for
+those hidden built-ins.
+
 ## Codex over ACP
 
 Use the Codex CLI as an external ACP coding agent:

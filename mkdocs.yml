@@ -318,6 +318,7 @@ nav:
       - 🏖️ Sandbox: cli-reference/sandbox-commands.md
       - 📊 Benchmark: cli-reference/benchmark-commands.md
       - 🎛️ Profiles/Tools: cli-reference/profiles-commands.md
+      - 🧠 Jev Tool Routing: cli-reference/optimize-commands.md
       - 🚀 Serve: cli-reference/serve-commands.md
       - 🩺 Doctor: cli-reference/doctor-command.md
       - ⬆️ Update: cli-reference/update-command.md

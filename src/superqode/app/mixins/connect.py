@@ -3509,7 +3509,7 @@ class ConnectMixin:
         if not is_root:
             t.append("Esc", style=THEME["purple"])
             t.append(" back  ", style=THEME["dim"])
-        t.append("·  1-4\n" if is_root else "·  or type a number\n", style=THEME["dim"])
+        t.append("·  1-5\n" if is_root else "·  or type a number\n", style=THEME["dim"])
 
         if preserve_log:
             # Opened underneath something the user still needs to read, such as

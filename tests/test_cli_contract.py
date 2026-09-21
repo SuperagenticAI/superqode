@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 280
+EXPECTED_COMMAND_COUNT = 297
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -124,7 +124,20 @@ EXPECTED_COMMAND_COUNT = 280
 # Rebaselined for 2.4.0 Jev integration help: labelled `harness eval` flags,
 # rubric-grader env, and related help wording. No Click command was added or
 # removed, so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "408b8fb687021bf1a47590903d0dd141c2b0bd047d521f5cf3a1b2105bb7aab7"
+# Rebaselined for the cross-harness optimizer and the accumulated local gateway
+# command surface in this release (`optimize doctor/env/run` and
+# `serve optimize`), moving the rendered tree from 280 to 287 commands. The
+# labeled `optimize bench` command adds one more command (287 -> 288).
+# Rebaselined for the reusable Jev Tool Routing service: `optimize mcp` exposes
+# the local stdio transport and `serve jev` exposes authenticated HTTP +
+# Streamable HTTP MCP (288 -> 290).
+# The developer-preview `optimize setup` and `optimize verify` readiness
+# commands complete the local shipping surface (290 -> 292).
+# Native Gemini gateway support adds `x-goog-api-key` to the existing
+# `serve optimize --upstream-key-header` choice without adding a command.
+# Managed launcher lifecycle adds enable, status, disable, uninstall, and the
+# hidden shim target `launch` (292 -> 297).
+EXPECTED_HELP_TREE_SHA256 = "d4aefbf165ea14d5a63a439484a77fe180cd35db29a2aee308d306704e94a8e7"
 
 
 def _render_help_tree() -> tuple[int, str]:

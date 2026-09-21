@@ -134,6 +134,18 @@ async def test_enter_activates_the_focused_hub_button() -> None:
 
 
 @pytest.mark.asyncio
+async def test_hub_exposes_jev_tool_routing_action() -> None:
+    app = _HubApp()
+    async with app.run_test(size=(110, 34)) as pilot:
+        await pilot.pause()
+
+        assert await pilot.click("#hub-jev-routing")
+        await pilot.pause()
+
+        assert app.selection == HarnessHubResult("jev-routing")
+
+
+@pytest.mark.asyncio
 async def test_zcode_is_browsable_but_enter_opens_inspection() -> None:
     zcode = next(item for item in hub_ecosystem_picker_items() if item.id == "ecosystem:zcode")
     app = App()

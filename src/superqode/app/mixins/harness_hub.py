@@ -211,6 +211,9 @@ class HarnessHubMixin:
         if action == "tune":
             self._handle_command(":systemone tune", log)
             return
+        if action == "jev-routing":
+            self._handle_command(":optimize status", log)
+            return
         item_id = str(getattr(result, "item_id", "") or "")
         item = next((candidate for candidate in items if candidate.id == item_id), None)
         if item is None:

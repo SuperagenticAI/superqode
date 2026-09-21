@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.10] - 2026-09-21
+
+### Jev Tool Routing — Developer Preview
+
+- Route tool catalogues once per turn through Jev in the native SuperQode loop
+  or a local OpenAI, Anthropic, or native Gemini gateway, with shadow mode, a
+  core-tool safety floor, stable turn caching, and fail-open behavior.
+- Launch Codex, Claude Code, OpenCode, Grok Build, Pi, and SuperQode through
+  non-persistent local adapters. Codex is explicitly gateway-limited when its
+  subscription service injects hidden tools; Antigravity remains detect-only.
+- Use the provider-neutral `superqode.jev_tools` Python API, Codex app-server
+  dynamic-tool adapter, local stdio MCP server, or authenticated HTTP/MCP
+  service. Cloud Run deployment artifacts are included but hosting is optional.
+- `superqode optimize setup` performs a non-persistent readiness and Jev
+  connectivity check. `superqode optimize verify <harness>` validates the
+  adapter, controlled schema reduction, and turn-cache reuse without spending
+  coding-model tokens or claiming synthetic savings as harness results.
+- Aggregate gateway reports expose tool and schema-byte reduction without
+  persisting prompts, tool arguments, request bodies, or credentials.
+- OpenCode and Pi use their native Gemini transports so Gemini 3 thought
+  signatures survive tool-call round trips. Generated profiles contain only a
+  local placeholder; the gateway owns and injects the real `GEMINI_API_KEY`.
+- `superqode optimize enable` creates separate managed `*-jev` launchers backed
+  by non-secret 0600 preferences. `status`, `disable`, and `uninstall` complete
+  the reversible lifecycle, and Harness Hub exposes the same Jev routing entry.
+
 ## [2.4.9] - 2026-09-20
 
 ### Changed

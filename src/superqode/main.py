@@ -1300,6 +1300,7 @@ from superqode.providers.manager import ProviderManager
 from superqode.commands.providers import providers as providers_cmd
 from superqode.commands.auth import auth as auth_cmd
 from superqode.commands.serve import serve as serve_cmd
+from superqode.commands.optimize import optimize as optimize_cmd
 
 
 @cli_main.command("help")
@@ -1360,6 +1361,19 @@ def help_command():
                 ("superqode providers recommend [task]", "Get model recommendations by task"),
                 ("superqode providers guide [provider]", "Show quality labels and setup help"),
                 ("superqode providers smoke <provider>", "Test a local provider's reachability"),
+            ],
+        ),
+        (
+            "📉  Harness Optimization",
+            [
+                ("superqode optimize doctor", "Detect supported local coding harnesses"),
+                ("superqode optimize setup", "Check local readiness and print launch commands"),
+                ("superqode optimize verify <harness>", "Verify its adapter and Jev decision path"),
+                ("superqode optimize bench", "Benchmark Jev routing quality and latency"),
+                ("superqode optimize env <harness>", "Preview the ephemeral launch adapter"),
+                ("superqode optimize run <harness>", "Run a harness through local Jev routing"),
+                ("superqode optimize mcp", "Serve Jev routing to local MCP clients"),
+                ("superqode serve jev", "Host the Jev HTTP and MCP service"),
             ],
         ),
         (
@@ -1468,6 +1482,9 @@ cli_main.add_command(auth_cmd, name="auth")
 
 # Add Server commands (superqode serve lsp, superqode serve web, etc.)
 cli_main.add_command(serve_cmd, name="serve")
+
+# Add cross-harness tool-schema optimization commands.
+cli_main.add_command(optimize_cmd, name="optimize")
 
 # Add runtime management commands (superqode runtime list, superqode runtime doctor)
 from superqode.commands.runtime import runtime_cmd  # noqa: E402

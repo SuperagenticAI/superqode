@@ -53,6 +53,79 @@ For catalogue → search → rank → Jev → activate configuration, modes, BM2
 shortlists, and MCP deferral, see
 [Progressive Tool Discovery](progressive-tool-discovery.md).
 
+### Jev Tool Routing
+
+The native SuperQode loop can ask Jev which tool schemas a request is likely to
+need before its first coding-model call. One decision is held for every model
+step in that turn, preserving a stable prompt prefix. Start in observation mode:
+
+```sh
+export TYPESAFE_API_KEY="..."
+export SUPERQODE_TOOL_ROUTING=shadow
+superqode
+```
+
+After reviewing the `JEV tools N→M` events, enable filtering with
+`SUPERQODE_TOOL_ROUTING=enforce`. Workspace primitives always remain available.
+A timeout, invalid or incomplete response, missing key, or empty selection uses
+the complete tool list. External harnesses use the same router through the local
+gateway. No fork or persistent harness edit is needed:
+
+```sh
+superqode optimize setup
+superqode optimize verify opencode
+superqode optimize doctor
+superqode optimize bench
+superqode optimize enable opencode --provider google --model gemini-3.8-flash
+opencode-jev run "review this repository"
+superqode optimize run codex -- exec "fix the failing tests"
+superqode optimize run claude
+superqode optimize run opencode --provider anthropic
+superqode optimize run opencode --provider google --model gemini-3.8-flash -- run "review this repository"
+superqode optimize run grok
+superqode optimize run pi --provider anthropic --model claude-sonnet-4-6
+superqode optimize run pi --provider google --model gemini-3.8-flash
+```
+
+Setup is non-persistent: it detects installations, checks the existing
+`TYPESAFE_API_KEY`, makes one small connectivity call, and prints launch
+commands. Verify exercises a controlled catalogue and cache reuse without
+calling the coding model; the report from `optimize run` is the proof for
+actual harness traffic.
+
+For daily use, `optimize enable` creates separate managed launchers such as
+`opencode-jev` and `pi-jev`; it never replaces the original harness command or
+edits that harness's configuration. Use `superqode optimize status`, `disable`,
+or `uninstall` to inspect or remove them. The Harness Hub's **Jev routing**
+action opens the same local status and setup surface.
+
+Google routes use each harness's native Gemini protocol rather than the OpenAI
+compatibility endpoint. Set `GEMINI_API_KEY`; the generated OpenCode overlay and
+Pi profile contain a non-secret local placeholder, while the gateway injects the
+real key only on the request to Google. Stock Pi exposes four core tools, which
+the safety floor normally retains; routing savings appear when Pi extensions or
+other integrations add a larger catalogue.
+
+The launcher starts and stops the gateway with the harness, applies only a
+process-local argument/environment overlay, and prints an aggregate local report
+on exit. Start with the default `shadow` mode; use `--mode enforce` after checking
+the recommended reductions. Codex, Claude Code, OpenCode, Grok Build, and Pi have
+profiles. Antigravity is detected but cannot yet be intercepted because its CLI
+does not expose a model endpoint. SuperQode uses the native router. For manual
+gateway operation, see
+[`superqode serve optimize`](../cli-reference/serve-commands.md#serve-optimize).
+
+Current Codex subscription requests are transport-compatible with the gateway,
+but Codex 0.155 injects its tools server-side and sends no `tools` catalogue in
+the Responses request. The gateway therefore cannot reduce Codex's catalogue;
+that profile is reported as `gateway-limited` until a native/app-server hook is
+implemented. This limitation is surfaced rather than reported as a saving.
+
+`superqode optimize bench` runs five small labeled routing scenarios against a
+20-tool catalogue and reports reduction, required-tool recall, and Jev latency.
+It calls Jev but does not call a coding model or execute any selected tool. Use
+it to check a key and compare thresholds before enabling enforce mode.
+
 ## Run a pack
 
 ```sh

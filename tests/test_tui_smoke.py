@@ -1948,6 +1948,8 @@ def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
         rows = []
         if isinstance(command, click.Group):
             for name, subcommand in command.commands.items():
+                if subcommand.hidden:
+                    continue
                 path = prefix + (name,)
                 rows.append(path)
                 rows.extend(walk(subcommand, path))
@@ -2025,11 +2027,12 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     picker_ids = [entry.id for entry in app._harness_selection_list]
     # RLM and PiPy sit with the other native coding harnesses, ahead of the
     # optional integrations.
-    assert picker_ids[:7] == [
+    assert picker_ids[:8] == [
         "core",
         "rlm",
         "pipy",
         "workbench",
+        "systemone",
         "no-tool",
         "codex",
         "claude",
@@ -5908,9 +5911,9 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     """The first connect screen names each owner of the coding loop.
 
     The old screen mixed "a whole agent" with "a model for our agent" and put
-    a transport name (ACP) beside both, so the five rows were not comparable
-    choices. These four are: three owners you name, and one for a loop that
-    lives behind a protocol.
+    a transport name (ACP) beside both, so the rows were not comparable
+    choices. These five separate existing agents, owned harnesses, harness
+    creation, SystemOne decisions, and remote protocols.
     """
     app = make_app()
     log = FakeLog()
@@ -5923,7 +5926,8 @@ def test_connect_root_picker_asks_who_runs_the_loop():
         (1, "Use an agent you already have"),
         (2, "Connect a harness with your model"),
         (3, "Build your own harness"),
-        (4, "Reach a remote agent with protocols"),
+        (4, "Connect with SystemOne models"),
+        (5, "Reach a remote agent with protocols"),
     ]
     # Vendor products and transports live one screen deeper now.
     assert "Codex subscription" not in rendered
@@ -5980,7 +5984,7 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
     text = console.export_text()
     nonblank = [line for line in text.splitlines() if line.strip()]
 
-    assert len(nonblank) <= 14
+    assert len(nonblank) <= 16
     assert all(len(line) <= width for line in text.splitlines())
     assert "Use an agent you already have" in text
     assert "Connect a harness with your model" in text

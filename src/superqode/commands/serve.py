@@ -22,10 +22,143 @@ console = Console()
 @click.pass_context
 def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a", "uhp"}:
+    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a", "uhp", "optimize", "jev"}:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
+
+
+@serve.command("optimize")
+@click.option("--upstream", required=True, envvar="SUPERQODE_GATEWAY_UPSTREAM")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8787, show_default=True, type=int)
+@click.option(
+    "--mode",
+    type=click.Choice(["shadow", "enforce"]),
+    default="shadow",
+    show_default=True,
+)
+@click.option("--threshold", default=0.30, show_default=True, type=click.FloatRange(0.0, 1.0))
+@click.option("--jev-timeout-ms", default=1500, show_default=True, type=click.IntRange(min=1))
+@click.option("--turn-ttl", default=1800, show_default=True, type=click.IntRange(min=1))
+@click.option(
+    "--upstream-key-env",
+    default="",
+    help="Environment variable containing the upstream provider API key",
+)
+@click.option(
+    "--upstream-key-header",
+    type=click.Choice(["auto", "authorization", "x-api-key", "x-goog-api-key"]),
+    default="auto",
+    show_default=True,
+    help="Authentication header; auto recognizes api.anthropic.com",
+)
+@click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
+def serve_optimize(
+    upstream: str,
+    host: str,
+    port: int,
+    mode: str,
+    threshold: float,
+    jev_timeout_ms: int,
+    turn_ttl: int,
+    upstream_key_env: str,
+    upstream_key_header: str,
+    allow_remote: bool,
+):
+    """Run the local multi-protocol Jev Tool Routing gateway."""
+    import os
+
+    is_loopback = host in {"127.0.0.1", "localhost", "::1"}
+    if not is_loopback and not allow_remote:
+        raise click.ClickException("Use --allow-remote to bind outside localhost.")
+    if upstream_key_env and not os.environ.get(upstream_key_env, "").strip():
+        raise click.ClickException(f"{upstream_key_env} is not set")
+
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise click.ClickException(
+            "Tool gateway dependencies are missing; reinstall superqode"
+        ) from exc
+
+    from superqode.systemone.tool_router import ToolRoutingSettings, build_tool_router
+    from superqode.tool_gateway import (
+        GatewayConfig,
+        ToolRequestRouter,
+        TurnPlanCache,
+        create_tool_gateway_app,
+    )
+
+    settings = ToolRoutingSettings(
+        mode=mode,
+        threshold=threshold,
+        timeout_ms=jev_timeout_ms,
+    )
+    router = build_tool_router(settings)
+    request_router = (
+        ToolRequestRouter(router, cache=TurnPlanCache(ttl_seconds=turn_ttl)) if router else None
+    )
+    if request_router is None:
+        console.print(
+            "[yellow]TYPESAFE_API_KEY is not set; starting in transparent passthrough mode.[/yellow]"
+        )
+    api_key = os.environ.get(upstream_key_env, "").strip() if upstream_key_env else ""
+    try:
+        app = create_tool_gateway_app(
+            GatewayConfig(
+                upstream=upstream,
+                upstream_api_key=api_key,
+                upstream_api_key_header=upstream_key_header,
+            ),
+            request_router,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    console.print(f"[cyan]SuperQode Jev Tool Routing: http://{host}:{port}/v1[/cyan]")
+    console.print(f"[dim]Upstream: {upstream} · routing: {mode if router else 'passthrough'}[/dim]")
+    if allow_remote:
+        console.print(
+            "[yellow]Remote gateway enabled; protect this endpoint and its keys.[/yellow]"
+        )
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+@serve.command("jev")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8080, envvar="PORT", show_default=True, type=int)
+@click.option("--jev-timeout-ms", default=1500, show_default=True, type=click.IntRange(min=1))
+@click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
+def serve_jev(host: str, port: int, jev_timeout_ms: int, allow_remote: bool) -> None:
+    """Serve the Jev Tool Routing HTTP API and MCP endpoint.
+
+    HTTP clients use POST /v1/route-tools. MCP clients use /mcp. Remote
+    binds require SUPERQODE_JEV_SERVICE_TOKEN in addition to TYPESAFE_API_KEY.
+    """
+    import os
+
+    is_loopback = host in {"127.0.0.1", "localhost", "::1"}
+    if not is_loopback and not allow_remote:
+        raise click.ClickException("Use --allow-remote to bind outside localhost.")
+    if not os.getenv("TYPESAFE_API_KEY", "").strip():
+        raise click.ClickException("TYPESAFE_API_KEY is required")
+    token = os.getenv("SUPERQODE_JEV_SERVICE_TOKEN", "").strip()
+    if not is_loopback and not token:
+        raise click.ClickException("SUPERQODE_JEV_SERVICE_TOKEN is required for a remote bind")
+
+    import uvicorn
+
+    from superqode.jev_tools.service import RoutingCoordinator, create_jev_service_app
+
+    try:
+        coordinator = RoutingCoordinator(timeout_ms=jev_timeout_ms)
+        app = create_jev_service_app(coordinator=coordinator, token=token)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    console.print(f"[cyan]Jev Tool Routing API: http://{host}:{port}/v1/route-tools[/cyan]")
+    console.print(f"[cyan]Jev Tool Routing MCP: http://{host}:{port}/mcp[/cyan]")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 @serve.command("web")

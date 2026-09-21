@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.4.9"
+version = "2.4.10"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -45,6 +45,10 @@ dependencies = [
     "anyio>=4.0.0",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
+    # Local tool-schema gateway. FastMCP already uses the same ASGI stack;
+    # declaring it directly keeps `superqode serve optimize` one-install.
+    "starlette>=0.41.0",
+    "uvicorn>=0.32.0",
     # PiPy validates tool-call arguments against each tool's JSON Schema before
     # execution, the way pi validates against TypeBox. Already present through
     # mcp/fastmcp; declared because superqode.pipy imports it directly.

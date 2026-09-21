@@ -1,0 +1,47 @@
+# Dedicated continuous deployment for the Jev Tool Routing service.
+# Create the two Secret Manager secrets and grant the Cloud Run service
+# identity roles/secretmanager.secretAccessor before enabling this trigger.
+
+substitutions:
+  _SERVICE_NAME: superqode-jev
+  _DEPLOY_REGION: europe-west1
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _TYPESAFE_SECRET: superqode-typesafe-api-key
+  _TYPESAFE_SECRET_VERSION: "1"
+  _SERVICE_TOKEN_SECRET: superqode-jev-service-token
+  _SERVICE_TOKEN_SECRET_VERSION: "1"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_DEPLOY_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}
+      - -f
+      - Dockerfile.jev
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_DEPLOY_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --platform=managed
+      - --image=${_DEPLOY_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}
+      - --region=${_DEPLOY_REGION}
+      - --port=8080
+      - --service-account=superqode-jev@${PROJECT_ID}.iam.gserviceaccount.com
+      - --allow-unauthenticated
+      - --set-secrets=TYPESAFE_API_KEY=${_TYPESAFE_SECRET}:${_TYPESAFE_SECRET_VERSION},SUPERQODE_JEV_SERVICE_TOKEN=${_SERVICE_TOKEN_SECRET}:${_SERVICE_TOKEN_SECRET_VERSION}
+      - --quiet
+
+images:
+  - ${_DEPLOY_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE

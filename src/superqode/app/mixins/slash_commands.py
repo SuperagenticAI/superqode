@@ -493,6 +493,8 @@ class SlashCommandMixin:
             self._mode_cmd(args, log)
         elif c == "hub":
             self._hub_cmd(args, log)
+        elif c == "optimize":
+            self._jev_optimize_cmd(args, log)
         elif c == "context":
             self._show_context(log)
         elif c == "status":

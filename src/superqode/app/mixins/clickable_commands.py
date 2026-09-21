@@ -28,6 +28,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "hub",
         "memory",
         "skills",
+        "systemone",
     }
 )
 

@@ -43,6 +43,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `mcp` | [MCP Command](mcp-command.md) |
 | `memory` | [Memory Commands](memory-commands.md) |
 | `models` | [Models Commands](models-commands.md) |
+| `optimize` | [Jev Tool Routing Commands](optimize-commands.md) |
 | `plugins` | [Plugins Commands](plugins-commands.md) |
 | `policy` | [Policy Commands](policy-commands.md) |
 | `profiles` | [Profiles and Tools Commands](profiles-commands.md) |

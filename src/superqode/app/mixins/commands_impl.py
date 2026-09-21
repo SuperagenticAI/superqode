@@ -943,6 +943,35 @@ class CommandImplMixin:
                 log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
             return False
 
+    def _jev_optimize_cmd(self, args: str, log: ConversationLog) -> None:
+        """Manage local Jev launchers from the TUI through the public CLI."""
+        try:
+            tokens = shlex.split(args or "status")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :optimize arguments: {exc}")
+            return
+        if tokens[0] not in {
+            "enable",
+            "status",
+            "disable",
+            "uninstall",
+            "doctor",
+            "setup",
+            "verify",
+        }:
+            log.add_info(
+                "Usage: :optimize [status|enable [harness...]|disable [harness...]|"
+                "uninstall|doctor|setup|verify <harness>]"
+            )
+            return
+        self.run_worker(
+            self._superqode_cli_cmd(
+                ["optimize", *tokens],
+                log,
+                "Jev Tool Routing",
+            )
+        )
+
     def _skills_doctor(self, skills_root: Path, log: ConversationLog) -> None:
         """Validate local skill files and show actionable issues."""
         t = Text()

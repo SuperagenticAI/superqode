@@ -1,0 +1,25 @@
+# Cloud Run image for the shared Jev Tool Routing API + MCP service.
+# Credentials are injected by Cloud Run from Secret Manager at runtime.
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    SUPERQODE_TELEMETRY=false \
+    SUPERQODE_NO_SPLASH=1 \
+    PORT=8080
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml README.md LICENSE NOTICE MANIFEST.in ./
+COPY src ./src
+
+RUN uv pip install --system --no-cache . \
+    && useradd --create-home --uid 10001 superqode
+
+USER 10001
+EXPOSE 8080
+
+CMD exec superqode serve jev --host 0.0.0.0 --port ${PORT} --allow-remote

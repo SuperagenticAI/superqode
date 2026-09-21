@@ -52,6 +52,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         Binding("enter", "use", "Use", priority=True),
         Binding("i", "inspect", "Inspect"),
         Binding("b", "build", "Build"),
+        Binding("j", "jev_routing", "Jev routing"),
         Binding("a", "filter_all", "All", show=False),
         Binding("r", "filter_ready", "Ready", show=False),
         Binding("s", "filter_setup", "Setup", show=False),
@@ -304,6 +305,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
         with Horizontal(id="hub-actions"):
             yield Button("Build your own", id="hub-build")
+            yield Button("Jev routing", id="hub-jev-routing")
             yield Button("Inspect", id="hub-inspect")
             yield Button("Improve decisions", id="hub-tune")
             yield Button("Use", id="hub-use", variant="primary")
@@ -743,6 +745,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             self.action_inspect()
         elif button_id == "hub-build":
             self.action_build()
+        elif button_id == "hub-jev-routing":
+            self.action_jev_routing()
         elif button_id == "hub-tune":
             item = self._selected_item()
             if item and item.id == "systemone":
@@ -800,6 +804,9 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
     def action_build(self) -> None:
         self.dismiss(HarnessHubResult("build"))
+
+    def action_jev_routing(self) -> None:
+        self.dismiss(HarnessHubResult("jev-routing"))
 
     def action_filter_all(self) -> None:
         self.filter_name = "all"

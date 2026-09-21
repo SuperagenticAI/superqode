@@ -19,6 +19,14 @@ from .live import LiveSystemOneClient
 from .pack import QuestionPack, ToolGateThresholds, builtin_pack_ids, load_pack
 from .runtime import apply_systemone_gate
 from .state import ToolGateState
+from .tool_router import (
+    SystemOneToolDecisionProvider,
+    ToolRouter,
+    ToolRoutingSettings,
+    TurnToolPlan,
+    build_tool_router,
+    resolve_tool_routing,
+)
 from .types import (
     Answers,
     ChoiceAnswer,
@@ -58,6 +66,10 @@ __all__ = [
     "SystemOneTimeout",
     "ToolGateState",
     "ToolGateThresholds",
+    "SystemOneToolDecisionProvider",
+    "ToolRouter",
+    "ToolRoutingSettings",
+    "TurnToolPlan",
     "apply_systemone_gate",
     "bind_answers",
     "builtin_pack_ids",
@@ -65,4 +77,6 @@ __all__ = [
     "evaluate_tool_gate",
     "load_pack",
     "resolve_systemone",
+    "build_tool_router",
+    "resolve_tool_routing",
 ]

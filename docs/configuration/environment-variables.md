@@ -47,6 +47,11 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_SYSTEMONE_MODE` | `enforce`/`shadow` | per harness | Override whether Jev tool-gate decisions enforce or only observe policy. |
 | `SUPERQODE_SYSTEMONE_TOOL_SEARCH` | `off`/`shadow`/`rerank` | per harness | Override Jev's role in deferred tool selection. |
 | `SUPERQODE_SYSTEMONE_TRACE_DIR` | path | unset | Write sanitized System One decision and tool-search traces. |
+| `SUPERQODE_TOOL_ROUTING` | `off`/`shadow`/`enforce` | `off` | Ask Jev once per native SuperQode turn which tool schemas are needed. Shadow records the decision; enforce sends only the selected schemas. Missing credentials and decision failures keep the full list. |
+| `SUPERQODE_TOOL_ROUTING_THRESHOLD` | float from `0` to `1` | `0.30` | Minimum Jev Noul probability for a non-core tool to remain visible. |
+| `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | positive integer | `1500` | Deadline for the once-per-turn Jev routing decision. |
+| `SUPERQODE_TOOL_ROUTING_ALWAYS_KEEP` | names (`,`-sep) | unset | Add tool names to the built-in workspace-tool safety floor. |
+| `SUPERQODE_GATEWAY_UPSTREAM` | absolute HTTP(S) URL | unset | Default upstream for `superqode serve optimize`; equivalent to `--upstream`. |
 
 ## Providers & models
 
@@ -164,6 +169,19 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 | --- | --- | --- | --- |
 | `SUPERQODE_MCP_PROVIDER` | provider id | HarnessSpec route | Override the provider used by the harness MCP server. |
 | `SUPERQODE_MCP_MODEL` | model id | HarnessSpec route | Override the model used by the harness MCP server. |
+
+## Jev Tool Routing service
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `TYPESAFE_API_KEY` | secret | unset | TypeSafe credential used by local routing, the HTTP service, and routing MCP server. |
+| `GEMINI_API_KEY` | secret | unset | Google upstream credential for `optimize run ... --provider google`; held by the local gateway and never written into generated harness configuration. |
+| `SUPERQODE_JEV_SERVICE_TOKEN` | secret | unset | Bearer token required by `serve jev` on a non-loopback bind. Protects every endpoint except `/healthz`. |
+| `SUPERQODE_TOOL_ROUTING` | `off`/`shadow`/`enforce` | `off` | Native-loop Jev Tool Routing mode. |
+| `SUPERQODE_TOOL_ROUTING_THRESHOLD` | `0.0`-`1.0` | `0.30` | Minimum keep probability for native-loop routing. |
+| `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | integer | `1500` | Jev decision deadline for native-loop routing. |
+| `SUPERQODE_TOOL_ROUTING_ALWAYS_KEEP` | comma/space-separated names | core workspace tools | Add tools to the native routing safety floor. |
+| `SUPERQODE_BIN_DIR` | directory | `~/.local/bin` | Destination for managed `*-jev` launchers created by `superqode optimize enable`. |
 
 ## Core, sessions, and state
 
