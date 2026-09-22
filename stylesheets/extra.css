@@ -282,6 +282,29 @@
   text-align: center;
 }
 
+/* Evidence summaries stay neutral so the result, rather than a status color, leads. */
+.md-typeset .sq-measurement {
+  margin: 1.25rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(17, 24, 39, 0.16);
+  border-radius: 0.45rem;
+  background: rgba(17, 24, 39, 0.035);
+  color: var(--md-typeset-color);
+}
+
+.md-typeset .sq-measurement > :first-child {
+  margin-top: 0;
+}
+
+.md-typeset .sq-measurement > :last-child {
+  margin-bottom: 0;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .sq-measurement {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+}
+
 /* Documentation CTAs use explicit monochrome contrast in both schemes. */
 .md-typeset .sq-doc-cta {
   display: flex;
