@@ -9,17 +9,26 @@ The coding model still writes every command, path, patch, and tool argument.
 The harness still owns permissions and execution. Jev only selects tool
 definitions from a closed catalogue.
 
-!!! success "Measured on 21 September 2026"
-    The five-scenario evaluation produced **64% average catalogue reduction**,
-    **100% required-tool recall**, and **667ms average local Jev latency**. The
-    hosted service selected the same tools with **556ms average server-reported
-    latency**. End-to-end runs measured **25 → 7 tools for Grok Build**,
-    **28 → 2 for Claude Code**, and **10 → 6 for OpenCode**. Every included
-    coding task passed.
+<div class="sq-measurement" markdown>
+
+**Measured on 21 September 2026**
+
+The five-scenario evaluation produced **64% average catalogue reduction**,
+**100% required-tool recall**, and **667ms average local Jev latency**. The
+hosted service selected the same tools with **556ms average server-reported
+latency**. End-to-end runs measured **25 → 7 tools for Grok Build**,
+**28 → 2 for Claude Code**, and **10 → 6 for OpenCode**. Every included coding
+task passed.
+
+</div>
+
+<div class="sq-doc-cta" markdown>
 
 [Start locally](#quick-start){ .md-button .md-button--primary }
 [Benchmark results](#benchmark-results){ .md-button }
 [Reproduce the benchmarks](../cli-reference/optimize-commands.md#reproduce-the-benchmarks){ .md-button }
+
+</div>
 
 ## What problem it solves
 
