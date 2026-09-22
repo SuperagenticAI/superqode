@@ -214,7 +214,7 @@ provider credentials are never serialized into those generated files.
 | Variable | Values | Default | Purpose |
 | --- | --- | --- | --- |
 | `SUPERQODE_TOOL_ROUTING` | `off`, `shadow`, `enforce` | `off` | Native SuperQode routing mode |
-| `SUPERQODE_TOOL_ROUTING_THRESHOLD` | `0.0`–`1.0` | `0.30` | Minimum keep probability |
+| `SUPERQODE_TOOL_ROUTING_THRESHOLD` | `0.0` to `1.0` | `0.30` | Minimum keep probability |
 | `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | Positive integer | `1500` | Native decision deadline |
 | `SUPERQODE_TOOL_ROUTING_ALWAYS_KEEP` | Comma- or space-separated names | Core tools | Additional protected tools |
 | `SUPERQODE_BIN_DIR` | Directory | `~/.local/bin` | Managed launcher destination |
