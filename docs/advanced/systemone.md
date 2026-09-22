@@ -12,6 +12,7 @@ Everything about SystemOne and Jev lives under the **SystemOne Harness** docs ta
 | **Jev Integration** (this page) | Packs, coding harness, tool gates, labelled evals, rubric grading |
 | [Progressive Tool Discovery](progressive-tool-discovery.md) | Catalogue → search → rank → Jev → activate → permission |
 | [SystemOne Tune (GEPA)](systemone-tune.md) | Improve packs from examples with GEPA-backed Tune |
+| [Jev Tool Routing](jev-tool-routing.md) | Reduce tool-schema context across SuperQode and external coding harnesses |
 
 
 SuperQode can evaluate reviewed question packs independently of a coding model.
@@ -125,6 +126,18 @@ implemented. This limitation is surfaced rather than reported as a saving.
 20-tool catalogue and reports reduction, required-tool recall, and Jev latency.
 It calls Jev but does not call a coding model or execute any selected tool. Use
 it to check a key and compare thresholds before enabling enforce mode.
+
+The 21 September 2026 benchmark snapshot recorded 64% average catalogue
+reduction, 100% required-tool recall, and 667ms average local Jev latency across
+those five scenarios. The hosted service selected the same tool sets with 556ms
+average server-reported latency. Two-run calculator comparisons also covered
+Grok Build, Claude Code, and OpenCode, while Pi and Codex documented their
+current catalogue boundaries. See the dedicated
+[Jev Tool Routing guide](jev-tool-routing.md) for setup, architecture,
+supported harnesses, environment variables, SDK and service usage, benchmark
+results, and operational boundaries. The
+[command reference](../cli-reference/optimize-commands.md#benchmark-snapshot-21-september-2026)
+contains the full reproduction procedure.
 
 ## Run a pack
 

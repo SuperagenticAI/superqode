@@ -223,6 +223,11 @@ nav:
     - Jev Integration: advanced/systemone.md
     - Progressive Tool Discovery: advanced/progressive-tool-discovery.md
     - GEPA Jev Optimization: advanced/systemone-tune.md
+  - 🧠 Jev Tool Routing:
+    - Overview, Setup & Architecture: advanced/jev-tool-routing.md
+    - Commands & Benchmark Reproduction: cli-reference/optimize-commands.md
+    - HTTP, Python & MCP Service: cli-reference/serve-commands.md
+    - Environment Variables: configuration/environment-variables.md
   - 🔁 A2A: providers/a2a.md
 
   - 📈 Evaluate & Optimise:

@@ -25,7 +25,8 @@ hide:
   <a href="https://superqode.dev"><img src="https://img.shields.io/badge/website-superqode.dev-7c3aed?style=flat-square" alt="Website"></a>
 </p>
 
-[Jev Integration](advanced/systemone.md){ .md-button .md-button--primary }
+[Jev Tool Routing](advanced/jev-tool-routing.md){ .md-button .md-button--primary }
+[Jev Integration](advanced/systemone.md){ .md-button }
 [SystemOne Harness](advanced/systemone.md){ .md-button }
 [Progressive tool discovery](advanced/progressive-tool-discovery.md){ .md-button }
 [Website](https://superqode.dev){ .md-button }
@@ -84,6 +85,27 @@ Use the **SystemOne** coding harness with **Jev** typed decisions:
     Or `:connect` → Connect a harness with your model → SystemOne.
 
 </div>
+
+---
+
+## Jev Tool Routing across coding harnesses
+
+Route a smaller, stable tool catalogue into OpenCode, Claude Code, Grok Build,
+Pi, and native SuperQode from one shared decision core. Start in shadow mode,
+verify the adapter, then enforce the selection without replacing the original
+harness command or editing its persistent configuration.
+
+| Measured result | Value |
+| --- | ---: |
+| Average catalogue reduction across five labelled scenarios | **64%** |
+| Required-tool recall | **100%** |
+| Hosted average server-reported routing latency | **556ms** |
+| Grok Build coding catalogue | **25 → 7 tools** |
+| Claude Code coding catalogue | **28 → 2 tools** |
+| OpenCode coding catalogue | **10 → 6 tools** |
+
+[Read the complete guide](advanced/jev-tool-routing.md){ .md-button .md-button--primary }
+[Reproduce the benchmarks](cli-reference/optimize-commands.md#reproduce-the-benchmarks){ .md-button }
 
 ---
 

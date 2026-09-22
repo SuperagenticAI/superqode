@@ -170,18 +170,27 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 | `SUPERQODE_MCP_PROVIDER` | provider id | HarnessSpec route | Override the provider used by the harness MCP server. |
 | `SUPERQODE_MCP_MODEL` | model id | HarnessSpec route | Override the model used by the harness MCP server. |
 
-## Jev Tool Routing service
+## Jev Tool Routing
+
+The [Jev Tool Routing guide](../advanced/jev-tool-routing.md) explains how
+these variables apply to native routing, external harness launchers, the Python
+SDK, HTTP, and MCP.
 
 | Variable | Values | Default | Effect |
 | --- | --- | --- | --- |
 | `TYPESAFE_API_KEY` | secret | unset | TypeSafe credential used by local routing, the HTTP service, and routing MCP server. |
-| `GEMINI_API_KEY` | secret | unset | Google upstream credential for `optimize run ... --provider google`; held by the local gateway and never written into generated harness configuration. |
+| `OPENAI_API_KEY` | secret | unset | OpenAI upstream credential for an API-key-backed optimized run. |
+| `ANTHROPIC_API_KEY` | secret | unset | Anthropic upstream credential, including Claude Code gateway runs. |
+| `GEMINI_API_KEY` | secret | unset | Google upstream credential for native Gemini runs from OpenCode or Pi. It is never written into generated harness configuration. |
+| `XAI_API_KEY` | secret | unset | xAI upstream credential for Grok Build gateway runs. |
 | `SUPERQODE_JEV_SERVICE_TOKEN` | secret | unset | Bearer token required by `serve jev` on a non-loopback bind. Protects every endpoint except `/healthz`. |
 | `SUPERQODE_TOOL_ROUTING` | `off`/`shadow`/`enforce` | `off` | Native-loop Jev Tool Routing mode. |
 | `SUPERQODE_TOOL_ROUTING_THRESHOLD` | `0.0`-`1.0` | `0.30` | Minimum keep probability for native-loop routing. |
 | `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | integer | `1500` | Jev decision deadline for native-loop routing. |
 | `SUPERQODE_TOOL_ROUTING_ALWAYS_KEEP` | comma/space-separated names | core workspace tools | Add tools to the native routing safety floor. |
 | `SUPERQODE_BIN_DIR` | directory | `~/.local/bin` | Destination for managed `*-jev` launchers created by `superqode optimize enable`. |
+| `SUPERQODE_HOME` | directory | `~/.superqode` | Parent for the non-secret `jev-routing.json` launcher preferences. |
+| `PORT` | integer | `8080` | Port used by `superqode serve jev`, including Cloud Run. |
 
 ## Core, sessions, and state
 
