@@ -2259,7 +2259,11 @@ async def test_harness_python_extra_install_resumes_without_restart(monkeypatch)
         stdout="installed",
         stderr="",
     )
-    monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: completed)
+
+    async def fake_install(title, command, target_log):
+        return completed
+
+    monkeypatch.setattr(app, "_run_install_with_progress", fake_install)
     resumed = []
     app._harness_cmd = lambda command, target_log: resumed.append((command, target_log))
     pending = {
@@ -3609,13 +3613,38 @@ def test_doctor_tui_dashboard_renders_readiness(tmp_path, monkeypatch):
     app.current_model = "claude-sonnet"
     app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
 
-    app._doctor_cmd("tui", log)
+    app._doctor_cmd("connection", log)
     text = render_plain(log.items[-1])
 
     assert "TUI Doctor Dashboard" in text
-    assert "Provider" in text
-    assert "anthropic/claude-sonnet" in text
+    assert "Connection" in text
+    assert "anthropic provider" in text
+    assert "Model" in text and "claude-sonnet" in text
+    assert "Auth" in text
     assert "Recipes" in text
+
+
+def test_doctor_tui_dashboard_recognizes_an_acp_agent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "superqode.agents.discovery.get_agent_by_short_name",
+        lambda name: {"short_name": name, "run_command": {"*": name}},
+    )
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda spec: True)
+    app = make_app()
+    log = FakeLog()
+    app.current_agent = "opencode"
+    app.current_provider = ""
+    app.current_model = ""
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._doctor_cmd("tui", log)
+    text = render_plain(log.items[-1])
+
+    assert "opencode coding agent" in text
+    assert "ACP" in text
+    assert "agent executable available" in text
+    assert "no agent or provider selected" not in text
 
 
 def test_prompt_completion_suggests_attach_and_prompt_paths(tmp_path, monkeypatch):
@@ -4882,17 +4911,17 @@ def test_tool_output_modes_minimal_normal_verbose():
     assert "boom" in error
 
 
-def test_tool_running_rows_are_hidden_until_verbose():
+def test_tool_running_rows_show_command_in_all_modes():
     log = ConversationLog()
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
 
     log.tool_output_mode = "normal"
     log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
-    assert writes == []
+    assert "uv run pytest" in render_plain(writes[-1])
 
     log.add_tool_call("bash", status="success", arguments={"command": "uv run pytest"}, output="ok")
-    assert len(writes) == 1
+    assert len(writes) == 2
     assert "Run" in render_plain(writes[-1])
 
     log.tool_output_mode = "verbose"
@@ -4900,7 +4929,23 @@ def test_tool_running_rows_are_hidden_until_verbose():
     assert "Run" in render_plain(writes[-1])
 
 
-def test_active_tool_status_tracks_running_tools_without_log_rows():
+def test_tool_command_is_copyable_and_metadata_command_is_visible():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    command = ("pytest " + "tests/test_module.py::test_case " * 6).strip()
+
+    log.add_tool_call("bash", status="running", arguments={"command": command})
+    assert command in render_plain(writes[-1])
+
+    log.add_tool_call("bash", status="success", metadata={"command": command})
+    assert command in render_plain(writes[-1])
+
+    log.add_tool_call("bash", status="running")
+    assert "command not supplied by agent" in render_plain(writes[-1])
+
+
+def test_active_tool_status_tracks_running_tools_with_log_rows():
     log = ConversationLog()
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
@@ -4908,7 +4953,7 @@ def test_active_tool_status_tracks_running_tools_without_log_rows():
     log.tool_output_mode = "normal"
 
     log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
-    assert writes == []
+    assert "uv run pytest" in render_plain(writes[-1])
     active = render_plain(log._active_tools_renderable())
     assert "running" in active
     assert "Run" in active
@@ -5370,8 +5415,6 @@ def test_diff_review_overlay_supports_file_navigation(tmp_path, monkeypatch):
 
     screen = pushed[0][0]
     assert len(screen._entries) >= 2
-    assert screen._index == -1
-    screen.action_next_file()
     assert screen._index == 0
     assert "File 1/" in screen._current_text
     assert "a.txt" in screen._current_text
@@ -5474,7 +5517,6 @@ def test_diff_review_overlay_can_copy_current_file_patch(tmp_path, monkeypatch):
     copied = []
     screen = pushed[0][0]
     screen._copy_to_clipboard = lambda text: copied.append(text)
-    screen.action_next_file()
     screen.action_copy_current_patch()
 
     assert copied
@@ -6968,6 +7010,35 @@ def test_calm_verb_target_renders_command_for_bash():
     verb, target = SuperQodeApp._calm_verb_target(_Stub(), "bash", {"command": "pytest -q"})
     assert verb == "bash" or verb == "run"  # widget formatter unavailable → fallback verb
     assert target == "pytest -q"
+
+
+def test_calm_shell_tool_writes_copyable_command_rows():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    command = ("pytest " + "tests/test_module.py::test_case " * 4).strip()
+
+    class _Stub:
+        _CALM_VERB_ICONS = {}
+
+        def query_one(self, *_a, **_k):
+            raise RuntimeError("no widget in unit test")
+
+        def _calm_verb_target(self, name, args):
+            return SuperQodeApp._calm_verb_target(self, name, args)
+
+        def _set_thinking_status(self, status):
+            pass
+
+        def _maybe_show_thinking_hint(self, log):
+            pass
+
+    stub = _Stub()
+    SuperQodeApp._calm_tool_running(stub, "bash", {"command": command}, log)
+    assert command in render_plain(writes[-1])
+
+    SuperQodeApp._calm_tool_done(stub, "bash", {"command": command}, log)
+    assert command in render_plain(writes[-1])
 
 
 def test_harness_display_name_capitalizes_for_labels():

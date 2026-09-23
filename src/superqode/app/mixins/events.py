@@ -42,6 +42,7 @@ class EventHandlerMixin:
             "retry": ":retry",
             "work_summary": ":work",
             "doctor_current": ":doctor current",
+            "doctor_connection": ":doctor connection",
             "session_current": ":session current",
             "review_diff": ":diff",
             "connect": ":connect",
@@ -252,6 +253,17 @@ class EventHandlerMixin:
                 self._selection_digit_buffer = ""
         log = self.query_one("#log", ConversationLog)
 
+        if getattr(self, "_install_in_progress", False):
+            if text.lower() in {":cancel", "/cancel", "cancel"}:
+                self._cancel_install()
+                event.input.value = ""
+                log.add_info("Stopping the installer…")
+            else:
+                log.add_info(
+                    "Installation is running. Your draft stays in the prompt. Esc cancels."
+                )
+            return
+
         # Handle Enter key (empty input) for selections
         if not text:
             # Inline setup prompts win first: Enter = install / start with defaults.
@@ -397,9 +409,12 @@ class EventHandlerMixin:
 
         if command_prefix:
             cmd = text[len(command_prefix) :].strip().lower()
-            # Inside a connect submenu, :back steps up one screen instead of
-            # dropping the user out of the connect flow entirely.
-            if cmd == "back" and self.action_connect_menu_back():
+            if cmd == "back":
+                if not self._navigate_back():
+                    if self._in_selection_mode():
+                        self.action_smart_cancel()
+                    else:
+                        log.add_info("Nothing to go back to.")
                 return
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (

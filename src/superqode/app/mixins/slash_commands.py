@@ -576,6 +576,8 @@ class SlashCommandMixin:
             self._handle_paste_image(args, log)
         elif c == "queue":
             self._handle_queue(args, log)
+        elif c == "steer":
+            self._steer_message(args, log)
         elif c == "stash":
             self._handle_stash(args, log)
         elif c == "view":
@@ -833,11 +835,75 @@ class SlashCommandMixin:
         log.add_info(f"📤 Restored stashed draft ({len(stash)} remaining). Edit and press Enter.")
 
     def _handle_queue(self, args: str, log: ConversationLog):
-        """View or clear the type-ahead message queue."""
-        arg = (args or "").strip().lower()
+        """View, add, edit, reorder, or remove queued messages."""
+        raw = (args or "").strip()
+        words = raw.split(maxsplit=2)
+        arg = words[0].lower() if words else ""
         queue = getattr(self, "_typeahead_queue", [])
+        cancelling_edit = arg == "edit" and len(words) > 1 and words[1].lower() == "cancel"
+        if not queue and arg in {"edit", "move", "drop"} and raw != "drop" and not cancelling_edit:
+            log.add_info("No queued messages to change.")
+            return
         if arg in ("clear", "reset", "drop"):
+            if arg == "drop" and len(words) > 1:
+                if not words[1].isdigit() or not 1 <= int(words[1]) <= len(queue):
+                    log.add_error(f"Choose a queued message from 1 to {len(queue)}.")
+                    return
+                index = int(words[1]) - 1
+                queue.pop(index)
+                edit_index = getattr(self, "_queue_edit_index", None)
+                if edit_index == index:
+                    self._queue_edit_index = None
+                elif isinstance(edit_index, int) and edit_index > index:
+                    self._queue_edit_index = edit_index - 1
+                self._render_queued_input()
+                log.add_info(f"Removed queued message {index + 1}.")
+                return
             self._clear_message_queue(log)
+            return
+        if arg == "add":
+            if not getattr(self, "is_busy", False):
+                log.add_info("No run is active. Type the message and press Enter to send it now.")
+                return
+            message = raw[len(words[0]) :].strip()
+            if not message:
+                log.add_error("Use :queue add <message>.")
+                return
+            self._enqueue_message(message, replace_edit=False)
+            log.add_info("Message queued for the next run.")
+            return
+        if arg == "edit":
+            if len(words) > 1 and words[1].lower() == "cancel":
+                self._queue_edit_index = None
+                log.add_info("Queue edit cancelled; the original message is unchanged.")
+                if not getattr(self, "is_busy", False):
+                    self._drain_message_queue()
+                return
+            if len(words) < 2 or not words[1].isdigit() or not 1 <= int(words[1]) <= len(queue):
+                log.add_error(f"Use :queue edit <1-{len(queue)}>.")
+                return
+            index = int(words[1]) - 1
+            self._queue_edit_index = index
+            self._set_prompt_prefill(queue[index])
+            log.add_info(
+                f"Editing queued message {index + 1}; Enter replaces it. The original stays until then."
+            )
+            return
+        if arg == "move":
+            indices = raw.split()
+            if (
+                len(indices) != 3
+                or not all(part.isdigit() for part in indices[1:])
+                or not all(1 <= int(part) <= len(queue) for part in indices[1:])
+            ):
+                log.add_error(f"Use :queue move <from 1-{len(queue)}> <to 1-{len(queue)}>.")
+                return
+            source, target = int(indices[1]) - 1, int(indices[2]) - 1
+            message = queue.pop(source)
+            queue.insert(target, message)
+            self._queue_edit_index = None
+            self._render_queued_input()
+            log.add_info(f"Moved queued message {source + 1} to {target + 1}.")
             return
         if not queue:
             log.add_info(
@@ -854,8 +920,11 @@ class SlashCommandMixin:
             t.append(f"  {index}. ", style=THEME["dim"])
             t.append(f"{preview}\n", style=THEME["text"])
         t.append("\n  ", style="")
-        t.append(":queue clear", style=f"bold {THEME['cyan']}")
-        t.append(" to drop them.\n", style=THEME["muted"])
+        t.append(
+            ":queue edit N · :queue edit cancel · :queue move N N · :queue drop N · :queue clear",
+            style=f"bold {THEME['cyan']}",
+        )
+        t.append("\n", style=THEME["muted"])
         log.write(t)
 
     def _handle_export(self, args: str, log: ConversationLog) -> None:
@@ -1788,7 +1857,7 @@ class SlashCommandMixin:
                 return
 
         if getattr(self, "is_busy", False):
-            # Type-ahead: queue the message and send it when the agent is free.
+            # Enter explicitly means "send next". :steer changes this run.
             self._enqueue_message(text)
             return
 

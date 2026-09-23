@@ -75,6 +75,14 @@ def extract_tool_arguments(update: dict[str, Any]) -> dict[str, Any]:
         value = update.get(key)
         if isinstance(value, dict):
             return dict(value)
+        if isinstance(value, str) and value.strip():
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                parsed = None
+            return dict(parsed) if isinstance(parsed, dict) else {"input": value}
+        if isinstance(value, list) and value:
+            return {"argv": value}
     return {}
 
 

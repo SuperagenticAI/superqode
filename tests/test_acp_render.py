@@ -41,6 +41,14 @@ def test_display_title_and_arguments_from_update_are_tolerant():
     assert extract_tool_arguments(update) == {"path": "a.py"}
 
 
+def test_extract_tool_arguments_accepts_string_and_argv_inputs():
+    assert extract_tool_arguments({"rawInput": '{"command": "pytest -q"}'}) == {
+        "command": "pytest -q"
+    }
+    assert extract_tool_arguments({"rawInput": "pytest -q"}) == {"input": "pytest -q"}
+    assert extract_tool_arguments({"rawInput": ["pytest", "-q"]}) == {"argv": ["pytest", "-q"]}
+
+
 def test_extract_raw_output_text_prefers_stdout_over_dict_dump():
     assert extract_raw_output_text({"stdout": "ok", "metadata": {"x": 1}}) == "ok"
     compact = extract_raw_output_text({"metadata": {"x": 1}})

@@ -4,10 +4,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import queue
 import subprocess
 import shutil
 import shlex
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,8 +26,300 @@ from superqode.app.welcome import _harness_display_name
 from superqode.app.recipes import PromptCompletionCandidate, LocalRecipe
 
 
+class InstallCancelled(Exception):
+    """The user stopped an optional dependency installation."""
+
+
 class CommandImplMixin:
     """Per-command implementations (:claude, :skills, :providers, :vim, …)."""
+
+    _INSTALL_HEARTBEAT_SECONDS = 5.0
+
+    def _cancel_install(self) -> bool:
+        """Stop the active installer without leaving its worker running."""
+        cancel = getattr(self, "_install_cancel_event", None)
+        if cancel is None or cancel.is_set():
+            return False
+        cancel.set()
+        process = getattr(self, "_install_process", None)
+        if process is not None and process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass
+        return True
+
+    def _show_install_progress(
+        self, title: str, command: str, phase: str, elapsed: float = 0
+    ) -> None:
+        """Keep installation state visible above the transcript while it runs."""
+        from textual.widgets import Static
+
+        try:
+            panel = self.query_one("#install-progress", Static)
+        except Exception:
+            return
+        if not phase:
+            panel.update("")
+            panel.remove_class("visible")
+            return
+        panel.update(f"◈ {title} · {phase} · {elapsed:.0f}s\n{command}")
+        panel.add_class("visible")
+        try:
+            hint = self.query_one("#run-input-hint", Static)
+            hint.update("Installing · Esc cancels" if phase == "Installing" else "")
+            hint.set_class(phase == "Installing", "visible")
+        except Exception:
+            pass
+
+    def _copy_setup_command(self, command: str, log) -> bool:
+        """Copy the exact displayed setup command with an explicit result."""
+        copied = bool(command and self._copy_text_to_clipboard(command))
+        if copied:
+            log.add_success("Install command copied to clipboard.")
+        else:
+            log.add_error(
+                "Could not reach the clipboard. Select the command shown above to copy it."
+            )
+        return copied
+
+    def _show_install_recovery(self, title: str, command: str, log, retry) -> None:
+        """Keep retry and copy reachable after a failed or cancelled install."""
+        prompts = getattr(self, "_prompts", None)
+        if prompts is None:
+            return
+        from superqode.app.prompt_stack import PromptSpec
+
+        def choose(option) -> None:
+            action = option[0]
+            if action == "retry":
+                self._show_install_progress(title, command, "")
+                retry()
+            elif action == "copy":
+                self._show_install_recovery(title, command, log, retry)
+                self._copy_setup_command(command, log)
+            else:
+                self._show_install_progress(title, command, "")
+                log.add_info("Install setup closed. Reopen it from :connect or :harness.")
+
+        if not prompts.is_active("install_recovery"):
+            prompts.push(
+                PromptSpec(
+                    name="install_recovery",
+                    kind="picker",
+                    options=lambda: [
+                        ("retry", "Retry installation", "run the same approved command"),
+                        ("copy", "Copy install command", "run it yourself"),
+                        ("back", "Back", "leave this setup"),
+                    ],
+                    on_select=choose,
+                    on_cancel=lambda: choose(("back",)),
+                    render=lambda: self._show_install_recovery(title, command, log, retry),
+                )
+            )
+        text = Text()
+        text.append(
+            f"\n  ◈ {title} installation needs attention\n\n", style=f"bold {THEME['purple']}"
+        )
+        text.append(f"    {command}\n\n", style=THEME["cyan"])
+        for index, option in enumerate(prompts.active.options(), 1):
+            marker = "▶" if prompts.index == index - 1 else " "
+            text.append(f"  {marker} [{index}] {option[1]}\n", style=THEME["text"])
+        text.append("\n  ↑↓ navigate · Enter select · Esc back\n", style=THEME["muted"])
+        log.write(text)
+        self._ensure_input_focus()
+
+    def _show_external_cli_setup(
+        self,
+        *,
+        name: str,
+        binary: str,
+        command: str,
+        log,
+        resume,
+        check_ready=None,
+        purpose: str = "subscription sign-in",
+        alternative: str = "",
+    ) -> None:
+        """Give a missing external agent or CLI copy and recheck actions."""
+        from superqode.app.prompt_stack import PromptSpec
+
+        def choose(option) -> None:
+            action = option[0]
+            if action == "copy":
+                self._show_external_cli_setup(
+                    name=name,
+                    binary=binary,
+                    command=command,
+                    log=log,
+                    resume=resume,
+                    check_ready=check_ready,
+                    purpose=purpose,
+                    alternative=alternative,
+                )
+                self._copy_setup_command(command, log)
+            elif action == "recheck":
+                check_error = ""
+                try:
+                    ready = check_ready() if check_ready is not None else shutil.which(binary)
+                except Exception as exc:
+                    ready = False
+                    check_error = f"Could not check {name}: {exc}"
+                if ready:
+                    log.add_success(f"{name} is installed. Continuing connection.")
+                    resume()
+                else:
+                    self._show_external_cli_setup(
+                        name=name,
+                        binary=binary,
+                        command=command,
+                        log=log,
+                        resume=resume,
+                        check_ready=check_ready,
+                        purpose=purpose,
+                        alternative=alternative,
+                    )
+                    if check_error:
+                        log.add_error(check_error)
+                    else:
+                        log.add_info(
+                            f"{name} is still not on PATH. Run the command above, then check again."
+                        )
+            else:
+                self._show_connect_type_picker(log)
+
+        if not self._prompts.is_active("external_cli_setup"):
+            self._prompts.push(
+                PromptSpec(
+                    name="external_cli_setup",
+                    kind="picker",
+                    options=lambda: [
+                        ("copy", "Copy install command", "copy it to your clipboard"),
+                        ("recheck", "I installed it — check again", "verify and continue"),
+                        ("cancel", "Back to connections", "choose another service"),
+                    ],
+                    on_select=choose,
+                    on_cancel=lambda: self._show_connect_type_picker(log),
+                    render=lambda: self._show_external_cli_setup(
+                        name=name,
+                        binary=binary,
+                        command=command,
+                        log=log,
+                        resume=resume,
+                        check_ready=check_ready,
+                        purpose=purpose,
+                        alternative=alternative,
+                    ),
+                )
+            )
+        text = Text()
+        text.append(f"\n  ◈ {name} is needed for {purpose}\n\n", style=f"bold {THEME['purple']}")
+        text.append(f"    {command}\n\n", style=THEME["cyan"])
+        if alternative:
+            text.append(f"  {alternative}\n\n", style=THEME["muted"])
+        for index, option in enumerate(self._prompts.active.options(), 1):
+            marker = "▶" if self._prompts.index == index - 1 else " "
+            text.append(f"  {marker} [{index}] {option[1]}\n", style=THEME["text"])
+        text.append("\n  ↑↓ navigate · Enter select · Esc back\n", style=THEME["muted"])
+        log.clear()
+        log.write(text)
+        self._ensure_input_focus()
+
+    async def _run_install_with_progress(self, title: str, command: str, log):
+        """Stream installer output and heartbeats into the visible transcript."""
+        started = time.monotonic()
+        self._install_in_progress = True
+        cancel = threading.Event()
+        self._install_cancel_event = cancel
+        self._install_process = None
+        self._show_install_progress(title, command, "Installing", 0)
+        output_lines: queue.Queue[str] = queue.Queue()
+
+        def run_install() -> subprocess.CompletedProcess[str]:
+            argv = shlex.split(command)
+            with subprocess.Popen(
+                argv,
+                cwd=Path.cwd(),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+            ) as process:
+                self._install_process = process
+                if cancel.is_set():
+                    process.kill()
+                timed_out = threading.Event()
+
+                def stop_timed_out_install() -> None:
+                    if process.poll() is not None:
+                        return
+                    timed_out.set()
+                    try:
+                        process.kill()
+                    except OSError:
+                        pass
+
+                timeout = threading.Timer(1200, stop_timed_out_install)
+                timeout.start()
+                chunks: list[str] = []
+                try:
+                    assert process.stdout is not None
+                    for line in process.stdout:
+                        chunks.append(line)
+                        output_lines.put(line)
+                    returncode = process.wait()
+                finally:
+                    timeout.cancel()
+                if timed_out.is_set():
+                    raise subprocess.TimeoutExpired(argv, 1200, output="".join(chunks))
+                if cancel.is_set():
+                    raise InstallCancelled
+                return subprocess.CompletedProcess(argv, returncode, "".join(chunks), "")
+
+        try:
+            task = asyncio.create_task(asyncio.to_thread(run_install))
+            last_heartbeat = started
+            last_display_second = -1
+            while True:
+                drained = 0
+                while drained < 50:
+                    try:
+                        line = output_lines.get_nowait()
+                    except queue.Empty:
+                        break
+                    if line.strip():
+                        log.add_install_output(line.rstrip()[:500])
+                    drained += 1
+                elapsed = time.monotonic() - started
+                if int(elapsed) != last_display_second:
+                    self._show_install_progress(title, command, "Installing", elapsed)
+                    last_display_second = int(elapsed)
+                if time.monotonic() - last_heartbeat >= self._INSTALL_HEARTBEAT_SECONDS:
+                    log.add_install_output(
+                        f"Installing {title}… {elapsed:.0f}s elapsed", heartbeat=True
+                    )
+                    last_heartbeat = time.monotonic()
+                if task.done() and output_lines.empty():
+                    completed = await task
+                    self._show_install_progress(title, command, "Verifying", elapsed)
+                    return completed
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=0.25)
+                except asyncio.TimeoutError:
+                    pass
+        except (OSError, subprocess.SubprocessError):
+            self._show_install_progress(title, command, "Failed", time.monotonic() - started)
+            raise
+        except InstallCancelled:
+            self._show_install_progress(title, command, "Cancelled", time.monotonic() - started)
+            raise
+        except asyncio.CancelledError:
+            self._cancel_install()
+            raise
+        finally:
+            self._install_in_progress = False
+            self._install_cancel_event = None
+            self._install_process = None
 
     @staticmethod
     def _runtime_install_message(runtime_name: str, install_hint: str | None) -> str:
@@ -93,6 +387,25 @@ class CommandImplMixin:
             log.write(text)
             return
 
+        if choice == "copy":
+            self._show_dependency_install_picker(runtime_name, log)
+            self._copy_setup_command(command, log)
+            return
+
+        if choice == "recheck":
+            from superqode.runtime import list_runtimes
+
+            ready = next((r for r in list_runtimes() if r.name == runtime_name), None)
+            if ready is not None and ready.installed:
+                log.add_success(f"{runtime_name} is installed. Connecting now.")
+                self._runtime_cmd(runtime_name, log)
+            else:
+                self._show_dependency_install_picker(runtime_name, log)
+                log.add_info(
+                    f"{runtime_name} is still missing from SuperQode's Python environment."
+                )
+            return
+
         if choice == "cancel":
             # Returning to the runtime picker would just re-offer the runtime
             # that was declined, so go back to the main connection screen.
@@ -123,6 +436,24 @@ class CommandImplMixin:
             text.append(f":connect acp {agent_data.get('short_name') or ''}", style=THEME["cyan"])
             text.append(" to connect.\n", style=THEME["muted"])
             log.write(text)
+            return
+
+        if choice == "copy":
+            self._show_agent_install_picker(agent_data, log)
+            self._copy_setup_command(install.raw, log)
+            return
+
+        if choice == "recheck":
+            from superqode.commands.acp import check_agent_installed
+
+            if check_agent_installed(agent_data):
+                log.add_success(f"{name} is installed. Connecting now.")
+                self._connect_agent(str(agent_data.get("short_name") or ""))
+            else:
+                self._show_agent_install_picker(agent_data, log)
+                log.add_info(
+                    f"{name} is still not available on PATH. Run the command above, then check again."
+                )
             return
 
         if choice == "cancel":
@@ -157,6 +488,12 @@ class CommandImplMixin:
         if choice in {"y", "yes", "install", "ok"}:
             self._apply_dependency_install_choice("install", pending=pending, log=log)
             return True
+        if choice in {"c", "copy"}:
+            self._apply_dependency_install_choice("copy", pending=pending, log=log)
+            return True
+        if choice in {"r", "recheck", "check"}:
+            self._apply_dependency_install_choice("recheck", pending=pending, log=log)
+            return True
         if choice in {"n", "no", "cancel", "skip", "q"}:
             self._apply_dependency_install_choice("cancel", pending=pending, log=log)
             return True
@@ -182,21 +519,29 @@ class CommandImplMixin:
 
         log.add_info(f"Installing {runtime_name} into SuperQode's current environment...")
 
-        def run_install() -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
-                shlex.split(command),
-                cwd=Path.cwd(),
-                text=True,
-                capture_output=True,
-                timeout=1200,
-                check=False,
-            )
-
         self.is_busy = True
         try:
-            completed = await asyncio.to_thread(run_install)
+            completed = await self._run_install_with_progress(runtime_name, command, log)
+        except InstallCancelled:
+            log.add_info(
+                f"{runtime_name} installation cancelled. Run :runtime {runtime_name} to retry."
+            )
+            self._show_install_recovery(
+                runtime_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_runtime_extra_then_continue(pending, log)),
+            )
+            return
         except (OSError, subprocess.SubprocessError) as exc:
             log.add_error(f"{runtime_name} installation failed: {exc}")
+            log.add_info(f"Run :runtime {runtime_name} to retry or copy its install command.")
+            self._show_install_recovery(
+                runtime_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_runtime_extra_then_continue(pending, log)),
+            )
             return
         finally:
             self.is_busy = False
@@ -205,16 +550,24 @@ class CommandImplMixin:
             part.strip() for part in (completed.stdout, completed.stderr) if part.strip()
         )
         if completed.returncode != 0:
+            self._show_install_progress(runtime_name, command, "Failed")
             if hasattr(log, "add_shell"):
-                log.add_shell(command, output or "Installation failed.", False)
+                log.add_shell(command, "Installation failed. See output above.", False)
             else:
                 log.add_error(output or "Installation failed.")
             log.add_error(f"{runtime_name} installation exited with {completed.returncode}.")
+            log.add_info(f"Run :runtime {runtime_name} to retry or copy its install command.")
+            self._show_install_recovery(
+                runtime_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_runtime_extra_then_continue(pending, log)),
+            )
             return
 
         importlib.invalidate_caches()
         if hasattr(log, "add_shell"):
-            log.add_shell(command, output or "Installation completed.", True)
+            log.add_shell(command, "Installation completed. See output above.", True)
         else:
             log.add_info(output or "Installation completed.")
 
@@ -222,6 +575,7 @@ class CommandImplMixin:
 
         info = next((r for r in list_runtimes() if r.name == runtime_name), None)
         if info is not None and not info.installed:
+            self._show_install_progress(runtime_name, command, "Verification failed")
             # A resolver can report success and still leave nothing importable,
             # e.g. when an extra's pin only matches pre-releases. Say so here
             # rather than failing later inside the runtime.
@@ -229,12 +583,20 @@ class CommandImplMixin:
                 f"{runtime_name} installed but is still not importable from {sys.executable}. "
                 "Check the output above, then restart SuperQode."
             )
+            self._show_install_recovery(
+                runtime_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_runtime_extra_then_continue(pending, log)),
+            )
             return
 
         log.add_success(f"{runtime_name} installed. Continuing without restarting the TUI.")
+        self._show_install_progress(runtime_name, command, "Connecting")
         self._runtime_cmd(runtime_name, log)
         if runtime_name not in self._SELF_CONTAINED_RUNTIMES:
             self._show_byok_providers(log)
+        self._show_install_progress(runtime_name, command, "")
 
     def _show_vendor_runtime_setup(self, log) -> None:
         """Show optional vendor SDK and external CLI setup without installing."""
@@ -1487,6 +1849,15 @@ class CommandImplMixin:
             )
             if not codex_auth.exists() and not has_env_key:
                 if shutil.which("codex") is None:
+                    if getattr(self, "_prompts", None) is not None:
+                        self._show_external_cli_setup(
+                            name="Codex",
+                            binary="codex",
+                            command="npm i -g @openai/codex",
+                            log=log,
+                            resume=lambda: self._runtime_cmd("codex-sdk", log),
+                        )
+                        return
                     log.add_error(
                         "The Codex CLI is not installed, so the Codex "
                         "subscription route is unavailable."
@@ -4703,18 +5074,9 @@ class CommandImplMixin:
         resume_command: str,
     ) -> None:
         """Offer an in-TUI install for a controlled SuperQode Python extra."""
-        from superqode.providers.env_introspect import (
-            environment_info,
-            install_command,
-            python_package_install_command,
-            running_context,
-        )
+        from superqode.providers.env_introspect import environment_info, extra_install_command
 
-        command = (
-            install_command(extra)
-            if running_context() == "dev-checkout"
-            else python_package_install_command(f"superqode[{extra}]")
-        )
+        command = extra_install_command(extra)
         env = environment_info()
         self._awaiting_harness_selection = False
         self._awaiting_harness_confirmation = False
@@ -4744,6 +5106,10 @@ class CommandImplMixin:
         text.append(f"  {command}\n\n", style=THEME["cyan"])
         text.append("  Enter", style=f"bold {THEME['cyan']}")
         text.append(" install and continue  ", style=THEME["dim"])
+        text.append("c", style=f"bold {THEME['cyan']}")
+        text.append(" copy command  ", style=THEME["dim"])
+        text.append("r", style=f"bold {THEME['cyan']}")
+        text.append(" check again  ", style=THEME["dim"])
         text.append("n", style=f"bold {THEME['cyan']}")
         text.append(" cancel\n", style=THEME["dim"])
         text.append("  You can also run it through the shell executor with ", style=THEME["muted"])
@@ -4764,6 +5130,15 @@ class CommandImplMixin:
             self._clear_key_harness_session()
             log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
             return True
+        if choice in {"c", "copy"}:
+            self._copy_setup_command(str(pending.get("command") or ""), log)
+            return True
+        if choice in {"r", "recheck", "check"}:
+            # Re-run the selected harness switch; its own readiness probe is
+            # authoritative and will reopen setup if the extra is still absent.
+            self._awaiting_harness_install = None
+            self._harness_cmd(str(pending.get("resume_command") or "switch"), log)
+            return True
         if choice not in {"", "y", "yes", "install", "ok"}:
             log.add_error("Press Enter to install the shown Python extra, or type n to cancel.")
             return True
@@ -4782,40 +5157,56 @@ class CommandImplMixin:
             return
         log.add_info(f"Installing {display_name} into SuperQode's current environment...")
 
-        def run_install() -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
-                shlex.split(command),
-                cwd=Path.cwd(),
-                text=True,
-                capture_output=True,
-                timeout=1200,
-                check=False,
-            )
-
         try:
-            completed = await asyncio.to_thread(run_install)
+            completed = await self._run_install_with_progress(display_name, command, log)
+        except InstallCancelled:
+            log.add_info(f"{display_name} installation cancelled. Run :harness to retry.")
+            self._show_install_recovery(
+                display_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_harness_extra_then_continue(pending, log)),
+            )
+            return
         except (OSError, subprocess.SubprocessError) as exc:
             log.add_error(f"{display_name} installation failed: {exc}")
+            log.add_info("Run :harness to reopen setup and copy or retry the command.")
+            self._show_install_recovery(
+                display_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_harness_extra_then_continue(pending, log)),
+            )
             return
 
         output = "\n".join(
             part.strip() for part in (completed.stdout, completed.stderr) if part.strip()
         )
         if completed.returncode != 0:
+            self._show_install_progress(display_name, command, "Failed")
             if hasattr(log, "add_shell"):
-                log.add_shell(command, output or "Installation failed.", False)
+                log.add_shell(command, "Installation failed. See output above.", False)
             else:
                 log.add_error(output or "Installation failed.")
             log.add_error(f"{display_name} installation exited with {completed.returncode}.")
+            log.add_info("Run :harness to reopen setup and copy or retry the command.")
+            self._show_install_recovery(
+                display_name,
+                command,
+                log,
+                lambda: self.run_worker(self._install_harness_extra_then_continue(pending, log)),
+            )
             return
 
         importlib.invalidate_caches()
         if hasattr(log, "add_shell"):
-            log.add_shell(command, output or "Installation completed.", True)
+            log.add_shell(command, "Installation completed. See output above.", True)
         else:
             log.add_info(output or "Installation completed.")
         log.add_success(f"{display_name} installed. Continuing without restarting the TUI.")
+        self._show_install_progress(display_name, command, "Connecting")
         self._harness_cmd(str(pending.get("resume_command") or "switch"), log)
+        self._show_install_progress(display_name, command, "")
 
     def _prepare_acp_harness_switch(self, entry, log) -> None:
         """Capture a bounded, user-visible context replay for an ACP switch."""
@@ -6746,7 +7137,7 @@ class CommandImplMixin:
         from superqode.providers.registry import PROVIDERS
 
         tokens = (args or "").split()
-        if any(token in ("tui", "dashboard", "all", "harness") for token in tokens):
+        if any(token in ("tui", "dashboard", "all", "harness", "connection") for token in tokens):
             self._show_tui_doctor_dashboard(log)
             return
         live = any(token in ("--live", "live", "smoke") for token in tokens)

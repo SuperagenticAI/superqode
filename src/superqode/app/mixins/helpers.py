@@ -403,6 +403,16 @@ class HelpersMixin(
 
     def watch_is_busy(self, old: bool, new: bool) -> None:
         """When the agent becomes idle, drain any queued type-ahead messages."""
+        try:
+            from textual.widgets import Static
+
+            hint = self.query_one("#run-input-hint", Static)
+            hint.update(
+                "Enter queues next · :steer <text> changes this run · Esc stops" if new else ""
+            )
+            hint.set_class(new, "visible")
+        except Exception:
+            pass
         if old and not new and getattr(self, "_typeahead_queue", []):
             # Small delay lets the completion render settle before the next turn.
             self.set_timer(0.2, self._drain_message_queue)
@@ -782,6 +792,31 @@ class HelpersMixin(
             return True
 
         if binary_path(spec) is None:
+            if getattr(self, "_prompts", None) is not None:
+                install_line = next(
+                    (
+                        line
+                        for line in spec.install_hint.splitlines()
+                        if ("PowerShell" in line) == (os.name == "nt")
+                    ),
+                    spec.install_hint.splitlines()[0],
+                )
+                command = install_line.partition(":")[2].strip() or install_line.strip()
+                alternative = {
+                    "codex": "No subscription? Use :connect byok openai <model>",
+                    "grok": "No subscription? Use :connect byok xai grok-4.5",
+                }.get(spec.id, "")
+                self._show_external_cli_setup(
+                    name=spec.label,
+                    binary=spec.binary,
+                    command=command,
+                    log=log,
+                    resume=lambda: self._begin_subscription_login(
+                        product, log, on_success=on_success, reason=reason, force=force
+                    ),
+                    alternative=alternative,
+                )
+                return True
             log.add_error(
                 f"The {spec.label} CLI is not installed, so the subscription route is unavailable."
             )
@@ -1054,6 +1089,23 @@ class HelpersMixin(
         # Someone without the product installed should get install steps, not
         # be told to run a command that does not exist on their machine.
         if shutil.which("grok") is None:
+            if getattr(self, "_prompts", None) is not None:
+                command = (
+                    "irm https://x.ai/cli/install.ps1 | iex"
+                    if os.name == "nt"
+                    else "curl -fsSL https://x.ai/cli/install.sh | bash"
+                )
+                self._show_external_cli_setup(
+                    name="Grok",
+                    binary="grok",
+                    command=command,
+                    log=log,
+                    resume=lambda: self._ensure_grok_cli_login(
+                        log, on_login_success=on_login_success
+                    ),
+                    alternative="No subscription? Use :connect byok xai grok-4.5",
+                )
+                return False
             log.add_error(
                 "The Grok CLI is not installed, so the subscription route is unavailable."
             )
@@ -1812,6 +1864,19 @@ class HelpersMixin(
             if full and "actions" in full:
                 cmd = full.get("actions", {}).get("*", {}).get("install", {}).get("command", "")
                 if cmd:
+                    if getattr(self, "_prompts", None) is not None:
+                        from superqode.commands.acp import check_agent_installed
+
+                        self._show_external_cli_setup(
+                            name=agent.name,
+                            binary=agent.short_name,
+                            command=cmd,
+                            log=log,
+                            resume=lambda: self._connect_agent(agent_id),
+                            check_ready=lambda: check_agent_installed(full),
+                            purpose="ACP connection",
+                        )
+                        return
                     t = Text()
                     t.append(
                         f"\n  📦 Install {agent.icon} {agent.name}:\n\n",

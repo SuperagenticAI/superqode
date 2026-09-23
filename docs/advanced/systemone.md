@@ -1,5 +1,8 @@
 # Jev Integration
 
+Open SystemOne from the TUI with `:connect harness-systemone`, or choose its
+model routes with `:connect systemone-models`.
+
 Connect **Jev** as a typed decision service inside the **SystemOne** harness.
 Coding models still write code and explanations. Jev answers Choice, Score, and
 Noul questions that SuperQode validates through pack schemas and confidence

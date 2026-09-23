@@ -215,7 +215,7 @@ class SuperQodeApp(
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
         Binding("ctrl+k", "command_palette", "Commands", show=True),
         Binding("ctrl+r", "rewind", "Rewind", show=True),
-        Binding("ctrl+f", "search_transcript", "Search", show=True),
+        Binding("ctrl+f", "search_transcript", "Search", show=True, priority=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
         Binding("pageup", "scroll_log_page_up", "Scroll Up", show=False),
         Binding("pagedown", "scroll_log_page_down", "Scroll Down", show=False),
@@ -289,7 +289,7 @@ class SuperQodeApp(
         # External editor
         Binding("ctrl+e", "open_editor", "Editor", show=False),
         # Reword and resend the previous prompt
-        Binding("ctrl+p", "edit_last_message", "Edit last message", show=False),
+        Binding("ctrl+p", "edit_last_message", "Edit last message", show=False, priority=True),
         # Focus input (always return focus to prompt)
         Binding("ctrl+i", "focus_input", "Focus Input", show=False),
         # Leader key
@@ -421,8 +421,9 @@ class SuperQodeApp(
             with Container(id="content"):
                 # Colorful status bar - ALWAYS visible at top
                 yield ColorfulStatusBar(id="status-bar")
+                yield Static("", id="install-progress")
 
-                # Prompt area at TOP (below SuperQode logo) - hidden when agent is thinking
+                # Prompt area stays usable while an agent is working.
                 with Container(id="prompt-area"):
                     yield ModeBadge(id="mode-badge")
                     with Horizontal(id="input-box"):
@@ -434,6 +435,7 @@ class SuperQodeApp(
                             # No restrict parameter - allow all characters including colon
                         )
                     yield Static("", id="prompt-completions")
+                    yield Static("", id="run-input-hint")
                     yield Static("", id="queued-input")
                     yield HintsBar(id="hints")
 
@@ -881,11 +883,19 @@ class SuperQodeApp(
 
     def action_smart_cancel(self):
         """Cancel agent if running, cancel selection mode, or do nothing (don't exit)."""
+        if getattr(self, "_install_in_progress", False):
+            if self._cancel_install():
+                self.query_one("#log", ConversationLog).add_info("Stopping the installer…")
+            return
         # A registry-driven prompt is always the topmost modal thing on screen,
         # so it cancels first. Going through the stack runs the prompt's own
         # on_cancel hook, which is what returns to the picker underneath it.
         if getattr(self, "_prompts", None) is not None and self._prompts.active is not None:
             self._prompts.cancel()
+            return
+
+        # The visible Back control and Escape should restore the same screen.
+        if self._in_selection_mode() and self._history.can_go_back and self._navigate_back():
             return
 
         # First check if we're in any selection mode

@@ -142,10 +142,10 @@ class AgentRunMixin:
         # IMPORTANT: Enable auto-scroll so user sees agent's work in real-time
         log.auto_scroll = True
 
-        # Hide prompt area when agent is thinking
+        # Keep the composer available for live steering or the next message.
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("hidden")
+            prompt_area.add_class("working")
         except Exception:
             pass
 
@@ -177,10 +177,10 @@ class AgentRunMixin:
         """Stop the streaming animation."""
         self.is_busy = False
 
-        # Show prompt area again
+        # Restore the idle composer styling.
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.remove_class("hidden")
+            prompt_area.remove_class("working")
             # Re-focus the input
             self.query_one("#prompt-input", SelectionAwareInput).focus()
         except Exception:
@@ -246,10 +246,10 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Hide prompt area
+        # Keep the composer available while the run is active.
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("hidden")
+            prompt_area.add_class("working")
         except Exception:
             pass
 
@@ -292,10 +292,10 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show prompt area again
+        # Restore the idle composer styling.
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.remove_class("hidden")
+            prompt_area.remove_class("working")
             self.query_one("#prompt-input", SelectionAwareInput).focus()
         except Exception:
             pass
@@ -686,9 +686,18 @@ class AgentRunMixin:
                 items.append(value)
 
         def _record_tool_activity(name: str, args: dict):
+            from superqode.tools.display import extract_tool_command
+
             tool_lower = name.lower()
             file_path = args.get("path") or args.get("file_path") or args.get("filePath") or ""
-            command = args.get("command", "")
+            command = (
+                extract_tool_command(args)
+                if any(
+                    marker in tool_lower
+                    for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+                )
+                else ""
+            )
             query = args.get("query") or args.get("pattern") or args.get("include") or ""
             started_at = monotonic()
             kind = "tool"
@@ -775,13 +784,35 @@ class AgentRunMixin:
 
         def on_tool_call(name: str, args: dict):
             """Handle tool call - calm mode folds it into the live throbber."""
+            from superqode.tools.display import extract_tool_command
+
+            args = dict(args) if isinstance(args, dict) else {"input": args} if args else {}
             _record_tool_activity(name, args)
             in_flight_args.setdefault(name, []).append(args or {})
             if self._is_calm_output():
                 _safe_call(self._calm_tool_running, name, args, log)
                 return
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
-            command = args.get("command", "")
+            command = (
+                extract_tool_command(args)
+                if any(
+                    marker in name.lower()
+                    for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+                )
+                or any(
+                    args.get(key)
+                    for key in (
+                        "command",
+                        "cmd",
+                        "commandLine",
+                        "command_line",
+                        "shellCommand",
+                        "script",
+                        "argv",
+                    )
+                )
+                else ""
+            )
             if not file_path and not command:
                 command = (
                     args.get("query")
@@ -810,7 +841,35 @@ class AgentRunMixin:
                 output = result.output if result.output else result.error
                 output_str = str(output) if output else ""
                 metadata = result.metadata or {}
-                result_path = str(metadata.get("path") or "")
+                display_args = {**call_args, **metadata}
+                from superqode.tools.display import extract_tool_command
+
+                result_command = (
+                    extract_tool_command(display_args)
+                    if any(
+                        marker in name.lower()
+                        for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+                    )
+                    or any(
+                        display_args.get(key)
+                        for key in (
+                            "command",
+                            "cmd",
+                            "commandLine",
+                            "command_line",
+                            "shellCommand",
+                            "script",
+                            "argv",
+                        )
+                    )
+                    else ""
+                )
+                result_path = str(
+                    display_args.get("path")
+                    or display_args.get("file_path")
+                    or display_args.get("filePath")
+                    or ""
+                )
                 if result_path:
                     try:
                         path_obj = Path(result_path)
@@ -829,6 +888,15 @@ class AgentRunMixin:
                 if status == "success" and output_str and not diff_text:
                     formatted = self._format_tool_output(name, output_str, log)
                     if formatted:
+                        _safe_call(
+                            log.add_tool_call,
+                            name,
+                            status,
+                            result_path,
+                            result_command,
+                            "",
+                            display_args,
+                        )
                         return
 
                 # Fallback - show full output, no truncation
@@ -837,9 +905,9 @@ class AgentRunMixin:
                     name,
                     status,
                     result_path,
-                    "",
+                    result_command,
                     output_str,
-                    None,
+                    display_args,
                     diff_text,
                     None,
                     additions if isinstance(additions, int) else None,
@@ -857,10 +925,11 @@ class AgentRunMixin:
                 if output_str:
                     formatted = self._format_tool_output(name, output_str, log)
                     if formatted:
+                        _safe_call(log.add_tool_call, name, "success", "", "", "", call_args)
                         return
 
                 # Show full output, no truncation
-                _safe_call(log.add_tool_call, name, "success", "", "", output_str)
+                _safe_call(log.add_tool_call, name, "success", "", "", output_str, call_args)
 
         async def on_thinking_async(text: str):
             """Handle thinking - toggleable with Ctrl+T."""
@@ -2144,14 +2213,18 @@ class AgentRunMixin:
         # One committed calm line per tool call id, whether the completion
         # arrives on the initial tool_call or a later tool_call_update.
         calm_committed_tool_ids: set = set()
+        visible_running_tool_ids: dict[str, str] = {}
 
         async def on_tool_call(tool_call: dict) -> None:
             """Handle tool calls - ALWAYS visible (this is the agent's actual work)."""
+            from superqode.acp.render import extract_tool_arguments, normalize_acp_tool_status
+            from superqode.tools.display import extract_tool_command
+
             # Flush any pending thinking before showing tool call
             _flush_thinking_buffer()
 
             title = tool_call.get("title", "")
-            raw_input = tool_call.get("rawInput", {})
+            raw_input = extract_tool_arguments(tool_call)
             kind = tool_call.get("kind", "")
             tool_actions.append({"tool": title, "input": raw_input})
 
@@ -2168,13 +2241,34 @@ class AgentRunMixin:
             # row. Some agents send a single tool_call already carrying its
             # final status with no follow-up update; without honoring it here
             # the tool never left a visible line at all.
-            command = raw_input.get("command", "")
+            command = (
+                extract_tool_command(raw_input)
+                if (
+                    kind == "execute"
+                    or any(
+                        marker in title.lower()
+                        for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+                    )
+                    or any(
+                        raw_input.get(key)
+                        for key in (
+                            "command",
+                            "cmd",
+                            "commandLine",
+                            "command_line",
+                            "shellCommand",
+                            "script",
+                            "argv",
+                        )
+                    )
+                )
+                else ""
+            )
             if self._is_calm_output():
-                from superqode.acp.render import normalize_acp_tool_status
-
                 call_status = normalize_acp_tool_status(tool_call.get("status", ""))
                 call_id = str(tool_call.get("toolCallId") or "")
                 if call_status in ("completed", "failed"):
+                    visible_running_tool_ids.pop(call_id, None)
                     if call_id not in calm_committed_tool_ids:
                         if call_id:
                             calm_committed_tool_ids.add(call_id)
@@ -2186,8 +2280,19 @@ class AgentRunMixin:
                             call_status == "completed",
                         )
                 else:
-                    self._call_ui(self._calm_tool_running, title, raw_input, log)
+                    signature = f"{title}:{command}:{file_path}"
+                    if not call_id or visible_running_tool_ids.get(call_id) != signature:
+                        if call_id:
+                            visible_running_tool_ids[call_id] = signature
+                        self._call_ui(self._calm_tool_running, title, raw_input, log)
                 return
+            call_status = normalize_acp_tool_status(tool_call.get("status", ""))
+            if call_status in ("completed", "failed"):
+                await on_tool_update(tool_call)
+                return
+            call_id = str(tool_call.get("toolCallId") or "")
+            if call_id:
+                visible_running_tool_ids[call_id] = f"{title}:{command}:{file_path}"
             # Verbose: show the tool call row - the agent's actual work.
             self._call_ui(
                 log.add_tool_call,
@@ -2220,6 +2325,7 @@ class AgentRunMixin:
                 normalize_acp_tool_status,
                 render_acp_tool_output,
             )
+            from superqode.tools.display import extract_tool_command
 
             status = normalize_acp_tool_status(update.get("status", ""))
             raw_output = update.get("rawOutput") or update.get("output") or update.get("result")
@@ -2228,14 +2334,38 @@ class AgentRunMixin:
             tool_title = display_title_from_update(update)
             raw_input = extract_tool_arguments(update)
             file_path = raw_input.get("path", raw_input.get("filePath", ""))
-            command = raw_input.get("command", "")
+            command = (
+                extract_tool_command(raw_input)
+                if (
+                    kind == "execute"
+                    or any(
+                        marker in tool_title.lower()
+                        for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+                    )
+                    or any(
+                        raw_input.get(key)
+                        for key in (
+                            "command",
+                            "cmd",
+                            "commandLine",
+                            "command_line",
+                            "shellCommand",
+                            "script",
+                            "argv",
+                        )
+                    )
+                )
+                else ""
+            )
             mode = getattr(log, "tool_output_mode", "normal")
+            call_id = str(update.get("toolCallId") or "")
 
             # Calm mode: one tidy line on completion/failure, throbber while
             # running - no raw output/diffs (flip to :thinking verbose for all).
             if self._is_calm_output():
                 call_id = str(update.get("toolCallId") or "")
                 if status in ("completed", "failed"):
+                    visible_running_tool_ids.pop(call_id, None)
                     if call_id and call_id in calm_committed_tool_ids:
                         return  # already committed from the initial tool_call
                     if call_id:
@@ -2244,10 +2374,15 @@ class AgentRunMixin:
                         self._calm_tool_done, tool_title, raw_input, log, status == "completed"
                     )
                 elif status == "running":
-                    self._call_ui(self._calm_tool_running, tool_title, raw_input, log)
+                    signature = f"{tool_title}:{command}:{file_path}"
+                    if not call_id or visible_running_tool_ids.get(call_id) != signature:
+                        if call_id:
+                            visible_running_tool_ids[call_id] = signature
+                        self._call_ui(self._calm_tool_running, tool_title, raw_input, log)
                 return
 
             if status == "completed":
+                visible_running_tool_ids.pop(call_id, None)
                 output_str = render_acp_tool_output(
                     kind=kind,
                     status="completed",
@@ -2271,16 +2406,34 @@ class AgentRunMixin:
                     )
                     return
 
-                # Suppressed path: no output line, just the action row
-                # stays as the visual record. The user can flip to
-                # verbose with `:log verbose` if they need details.
+                # Suppress noisy output, not the completion itself. The
+                # command/target must stay visible even when stdout is hidden.
                 if output_str is None:
+                    self._call_ui(
+                        log.add_tool_call,
+                        tool_title,
+                        "success",
+                        file_path,
+                        command,
+                        "",
+                        raw_input,
+                    )
                     return
 
                 # Legacy path: JSON parsing for structured outputs,
                 # fallback to summary line.
                 formatted = self._format_tool_output(tool_title, output_str, log)
-                if not formatted:
+                if formatted:
+                    self._call_ui(
+                        log.add_tool_call,
+                        tool_title,
+                        "success",
+                        file_path,
+                        command,
+                        "",
+                        raw_input,
+                    )
+                else:
                     self._call_ui(
                         log.add_tool_call,
                         tool_title,
@@ -2291,6 +2444,7 @@ class AgentRunMixin:
                         raw_input,
                     )
             elif status == "failed":
+                visible_running_tool_ids.pop(call_id, None)
                 # Errors are *always* shown, even in minimal mode.
                 # A failure is the one place where hiding output
                 # would cost more than the noise saves.
@@ -2314,6 +2468,11 @@ class AgentRunMixin:
                     raw_input,
                 )
             elif status == "running":
+                signature = f"{tool_title}:{command}:{file_path}"
+                if call_id and visible_running_tool_ids.get(call_id) == signature:
+                    return
+                if call_id:
+                    visible_running_tool_ids[call_id] = signature
                 self._call_ui(
                     log.add_tool_call,
                     tool_title,
@@ -3021,9 +3180,15 @@ class AgentRunMixin:
                                     self._call_ui(self._show_thinking_line, f"🧠 {text}", log)
 
                             elif update_type == "tool_call":
+                                from superqode.acp.render import (
+                                    extract_tool_arguments,
+                                    normalize_acp_tool_status,
+                                )
+                                from superqode.tools.display import extract_tool_command
+
                                 tool_id = update.get("toolCallId", "")
                                 title = update.get("title", "")
-                                raw_input = update.get("rawInput", {})
+                                raw_input = extract_tool_arguments(update)
                                 status = update.get("status", "")
 
                                 # Track tool_id to title mapping for detailed logging
@@ -3044,38 +3209,70 @@ class AgentRunMixin:
                                         if file_path not in files_read:
                                             files_read.append(file_path)
 
-                                msg_text = self._format_tool_message_rich(title, raw_input)
-                                self._call_ui(self._show_thinking_line, msg_text, log)
+                                call_status = normalize_acp_tool_status(status)
+                                self._call_ui(
+                                    log.add_tool_call,
+                                    title,
+                                    "success"
+                                    if call_status == "completed"
+                                    else "error"
+                                    if call_status == "failed"
+                                    else "running",
+                                    file_path,
+                                    extract_tool_command(raw_input),
+                                    "",
+                                    raw_input,
+                                )
 
                             elif update_type == "tool_call_update":
+                                from superqode.acp.render import (
+                                    extract_tool_arguments,
+                                    normalize_acp_tool_status,
+                                )
+                                from superqode.tools.display import extract_tool_command
+
                                 tool_id = update.get("toolCallId", "")
-                                status = update.get("status", "")
+                                status = normalize_acp_tool_status(update.get("status", ""))
                                 output = update.get("output", update.get("result", ""))
                                 # Get tool info from our tracking map
                                 tool_info = getattr(self, "_tool_id_map", {}).get(tool_id, {})
-                                tool_title = tool_info.get("title", "Tool")
+                                tool_title = update.get("title") or tool_info.get("title", "Tool")
+                                tool_input = {
+                                    **tool_info.get("input", {}),
+                                    **extract_tool_arguments(update),
+                                }
+                                tool_info["input"] = tool_input
+                                file_path = tool_input.get("path", tool_input.get("filePath", ""))
+                                command = extract_tool_command(tool_input)
                                 if status == "completed":
-                                    if output:
-                                        output_str = str(output)
-                                        # Show full output, no truncation
-                                        self._call_ui(
-                                            self._show_thinking_line,
-                                            f"✅ {tool_title}: {output_str}",
-                                            log,
-                                        )
-                                    else:
-                                        self._call_ui(
-                                            self._show_thinking_line,
-                                            f"✅ {tool_title} completed",
-                                            log,
-                                        )
-                                elif status == "failed":
-                                    # Show full error message, no truncation
-                                    error_msg = str(output) if output else "failed"
                                     self._call_ui(
-                                        self._show_thinking_line,
-                                        f"❌ {tool_title} failed: {error_msg}",
-                                        log,
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "success",
+                                        file_path,
+                                        command,
+                                        str(output) if output else "",
+                                        tool_input,
+                                    )
+                                elif status == "failed":
+                                    self._call_ui(
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "error",
+                                        file_path,
+                                        command,
+                                        str(output) if output else "failed",
+                                        tool_input,
+                                    )
+                                elif status == "running":
+                                    self._call_ui(
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "running",
+                                        file_path,
+                                        command,
+                                        "",
+                                        tool_input,
                                     )
 
                             elif update_type == "plan":
@@ -3585,9 +3782,15 @@ class AgentRunMixin:
                                     self._call_ui(self._show_thinking_line, f"🧠 {text}", log)
 
                             elif update_type == "tool_call":
+                                from superqode.acp.render import (
+                                    extract_tool_arguments,
+                                    normalize_acp_tool_status,
+                                )
+                                from superqode.tools.display import extract_tool_command
+
                                 tool_id = update.get("toolCallId", "")
                                 title = update.get("title", "")
-                                raw_input = update.get("rawInput", {})
+                                raw_input = extract_tool_arguments(update)
                                 status = update.get("status", "")
 
                                 # Track tool_id to title mapping for detailed logging
@@ -3608,38 +3811,70 @@ class AgentRunMixin:
                                         if file_path not in files_read:
                                             files_read.append(file_path)
 
-                                msg_text = self._format_tool_message_rich(title, raw_input)
-                                self._call_ui(self._show_thinking_line, msg_text, log)
+                                call_status = normalize_acp_tool_status(status)
+                                self._call_ui(
+                                    log.add_tool_call,
+                                    title,
+                                    "success"
+                                    if call_status == "completed"
+                                    else "error"
+                                    if call_status == "failed"
+                                    else "running",
+                                    file_path,
+                                    extract_tool_command(raw_input),
+                                    "",
+                                    raw_input,
+                                )
 
                             elif update_type == "tool_call_update":
+                                from superqode.acp.render import (
+                                    extract_tool_arguments,
+                                    normalize_acp_tool_status,
+                                )
+                                from superqode.tools.display import extract_tool_command
+
                                 tool_id = update.get("toolCallId", "")
-                                status = update.get("status", "")
+                                status = normalize_acp_tool_status(update.get("status", ""))
                                 output = update.get("output", update.get("result", ""))
                                 # Get tool info from our tracking map
                                 tool_info = getattr(self, "_tool_id_map", {}).get(tool_id, {})
-                                tool_title = tool_info.get("title", "Tool")
+                                tool_title = update.get("title") or tool_info.get("title", "Tool")
+                                tool_input = {
+                                    **tool_info.get("input", {}),
+                                    **extract_tool_arguments(update),
+                                }
+                                tool_info["input"] = tool_input
+                                file_path = tool_input.get("path", tool_input.get("filePath", ""))
+                                command = extract_tool_command(tool_input)
                                 if status == "completed":
-                                    if output:
-                                        output_str = str(output)
-                                        # Show full output, no truncation
-                                        self._call_ui(
-                                            self._show_thinking_line,
-                                            f"✅ {tool_title}: {output_str}",
-                                            log,
-                                        )
-                                    else:
-                                        self._call_ui(
-                                            self._show_thinking_line,
-                                            f"✅ {tool_title} completed",
-                                            log,
-                                        )
-                                elif status == "failed":
-                                    # Show full error message, no truncation
-                                    error_msg = str(output) if output else "failed"
                                     self._call_ui(
-                                        self._show_thinking_line,
-                                        f"❌ {tool_title} failed: {error_msg}",
-                                        log,
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "success",
+                                        file_path,
+                                        command,
+                                        str(output) if output else "",
+                                        tool_input,
+                                    )
+                                elif status == "failed":
+                                    self._call_ui(
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "error",
+                                        file_path,
+                                        command,
+                                        str(output) if output else "failed",
+                                        tool_input,
+                                    )
+                                elif status == "running":
+                                    self._call_ui(
+                                        log.add_tool_call,
+                                        tool_title,
+                                        "running",
+                                        file_path,
+                                        command,
+                                        "",
+                                        tool_input,
                                     )
 
                             elif update_type == "plan":
@@ -3916,6 +4151,8 @@ class AgentRunMixin:
 
     def _calm_verb_target(self, name: str, args: Optional[dict] = None) -> tuple:
         """Map a tool name + args to a friendly (verb, short target) pair."""
+        from superqode.tools.display import extract_tool_command
+
         args = args or {}
         try:
             log = self.query_one("#log", ConversationLog)
@@ -3926,7 +4163,7 @@ class AgentRunMixin:
             args.get("path")
             or args.get("file_path")
             or args.get("filePath")
-            or args.get("command")
+            or extract_tool_command(args)
             or args.get("pattern")
             or args.get("query")
             or args.get("url")
@@ -3960,6 +4197,11 @@ class AgentRunMixin:
     def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
         """Update the live throbber with the in-progress action."""
         verb, target = self._calm_verb_target(name, args)
+        if any(
+            marker in name.lower()
+            for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+        ):
+            log.add_tool_call(name, "running", arguments=args or {})
         icons = getattr(self, "_CALM_VERB_ICONS", {})
         icon = icons.get(verb, "⚡")
         label = verb.capitalize()
@@ -3971,6 +4213,12 @@ class AgentRunMixin:
         self, name: str, args: Optional[dict], log: ConversationLog, ok: bool = True
     ) -> None:
         """Commit one tidy line for a finished tool (no raw output/diff)."""
+        if any(
+            marker in name.lower()
+            for marker in ("bash", "shell", "terminal", "exec", "run", "command")
+        ):
+            log.add_tool_call(name, "success" if ok else "error", arguments=args or {})
+            return
         verb, target = self._calm_verb_target(name, args)
         self._calm_actions = getattr(self, "_calm_actions", 0) + 1
         icon = "✓" if ok else "✗"

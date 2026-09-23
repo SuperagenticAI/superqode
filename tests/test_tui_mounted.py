@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
+import sys
 
 import pytest
 
@@ -24,6 +26,7 @@ from superqode.app.widgets import ColorfulStatusBar, ConversationLog
 def _isolate_mounted_app_startup(monkeypatch):
     """Keep interaction tests independent of process-wide startup state."""
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     monkeypatch.setattr(SuperQodeApp, "_prewarm_litellm", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_models_dev_refresh", lambda self: None)
 
@@ -55,6 +58,161 @@ async def test_status_setters_update_mounted_status_bar():
         rendered = bar.render().plain
         assert "codex-sdk" in rendered
         assert "gpt-5.5" in rendered  # full, not shortened
+
+
+async def test_composer_stays_available_while_agent_is_working():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        composer = app.query_one("#prompt-area")
+        hint = app.query_one("#run-input-hint", Static)
+
+        app._start_thinking()
+        await pilot.pause()
+        assert composer.display
+        assert composer.has_class("working")
+        assert hint.has_class("visible")
+        assert "steer" in str(hint.render())
+
+        app._stop_thinking()
+        await pilot.pause()
+        assert composer.display
+        assert not composer.has_class("working")
+        assert not hint.has_class("visible")
+
+
+async def test_install_progress_is_visible_until_cleared():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        panel = app.query_one("#install-progress", Static)
+        app._show_install_progress("Codex SDK", "uv pip install codex", "Installing", 12)
+        await pilot.pause()
+        assert panel.has_class("visible")
+        assert "12s" in str(panel.render())
+        assert "uv pip install codex" in str(panel.render())
+
+        app._show_install_progress("Codex SDK", "uv pip install codex", "")
+        await pilot.pause()
+        assert not panel.has_class("visible")
+
+
+async def test_installer_streams_output_and_heartbeats_before_exit(monkeypatch):
+    """A quiet SDK install must never leave the transcript frozen."""
+    app = SuperQodeApp()
+    monkeypatch.setattr(app, "_INSTALL_HEARTBEAT_SECONDS", 0.25)
+    script = 'import time; print("download started", flush=True); time.sleep(1.5); print("download done", flush=True)'
+    command = f"{shlex.quote(sys.executable)} -u -c {shlex.quote(script)}"
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.auto_scroll = False  # Setup pickers leave it disabled.
+        task = asyncio.create_task(app._run_install_with_progress("Test SDK", command, log))
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "download started" in rendered
+        assert "Installing Test SDK" in rendered
+        assert log.auto_scroll
+        assert not task.done(), "progress only appeared after the command finished"
+
+        completed = await task
+        await pilot.pause()
+        rendered = "\n".join(line.text for line in log.lines)
+        assert completed.returncode == 0
+        assert "download done" in rendered
+
+
+async def test_escape_cancels_an_active_installer():
+    from superqode.app.mixins.commands_impl import InstallCancelled
+
+    app = SuperQodeApp()
+    script = "import time; time.sleep(30)"
+    command = f"{shlex.quote(sys.executable)} -u -c {shlex.quote(script)}"
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        task = asyncio.create_task(app._run_install_with_progress("Test SDK", command, log))
+        for _ in range(30):
+            if getattr(app, "_install_process", None) is not None:
+                break
+            await asyncio.sleep(0.05)
+        process = app._install_process
+        assert process is not None
+
+        try:
+            app.query_one("#prompt-input", SelectionAwareInput).focus()
+            await pilot.press("escape")
+            with pytest.raises(InstallCancelled):
+                await asyncio.wait_for(task, 3)
+        finally:
+            if process.poll() is None:
+                process.kill()
+        await pilot.pause()
+        assert process.poll() is not None
+        assert not app._install_in_progress
+        assert "Cancelled" in str(app.query_one("#install-progress", Static).render())
+
+
+async def test_cancelled_sdk_install_offers_retry_and_copy(monkeypatch):
+    from superqode.app.mixins.commands_impl import InstallCancelled
+
+    async def cancelled_install(title, command, log):
+        raise InstallCancelled
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        copied = []
+        retries = []
+        monkeypatch.setattr(app, "_run_install_with_progress", cancelled_install)
+        monkeypatch.setattr(
+            app, "_copy_text_to_clipboard", lambda text: copied.append(text) or True
+        )
+
+        def capture_retry(coroutine):
+            retries.append(True)
+            coroutine.close()
+
+        monkeypatch.setattr(app, "run_worker", capture_retry)
+        pending = {"runtime": "codex-sdk", "extra": "codex-sdk"}
+        await app._install_runtime_extra_then_continue(pending, log)
+        await _settle(pilot)
+
+        assert app._prompts.is_active("install_recovery")
+        app._prompts.select_index(1)
+        assert copied and "codex-sdk" in copied[0]
+        assert app._prompts.is_active("install_recovery")
+        app._prompts.select_index(0)
+        assert retries == [True]
+        assert not app._prompts.is_active("install_recovery")
+
+
+async def test_queue_can_be_edited_moved_and_dropped_without_implicit_steering():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        app.is_busy = True
+        app._enqueue_message("first")
+        app._enqueue_message("second")
+        assert app._typeahead_queue == ["first", "second"]
+
+        app._handle_queue("move 2 1", log)
+        assert app._typeahead_queue == ["second", "first"]
+        app._handle_queue("edit 1", log)
+        assert prompt.value == "second"
+        assert app._typeahead_queue == ["second", "first"]
+        app._enqueue_message("revised")
+        assert app._typeahead_queue == ["revised", "first"]
+        app._handle_queue("drop 2", log)
+        assert app._typeahead_queue == ["revised"]
+
+        app._pure_mode = type("Steerable", (), {"steer": lambda self, text: True})()
+        assert app._steer_message("urgent correction", log)
+        assert app._typeahead_queue == ["revised"]
+        app._pure_mode = None
+        assert not app._steer_message("keep this draft", log)
+        assert prompt.value == "keep this draft"
+        assert app._typeahead_queue == ["revised"]
+        await pilot.pause()
 
 
 async def test_mounted_status_header_keeps_identity_and_operational_state(monkeypatch):
@@ -210,15 +368,9 @@ async def test_harness_command_opens_complete_integration_switcher():
         assert app._prompt_completion_visible is False
         assert app._awaiting_harness_selection is True
         ids = [entry.id for entry in app._harness_selection_list]
-        assert ids[:7] == [
-            "core",
-            "rlm",
-            "pipy",
-            "workbench",
-            "no-tool",
-            "codex",
-            "claude",
-        ]
+        assert ids[:4] == ["core", "rlm", "pipy", "workbench"]
+        for integration in ("systemone", "no-tool", "codex", "claude"):
+            assert integration in ids
         assert app._harness_highlighted_index == 0
         assert "kimi-coding" in ids
         assert "kimi-k3-coding" in ids
@@ -1015,8 +1167,9 @@ async def test_install_choice_runs_the_command_and_resumes(monkeypatch):
     # so record every invocation rather than assuming ours is the only one.
     ran = []
 
-    def fake_run(argv, **kwargs):
-        ran.append(list(argv))
+    async def fake_install(title, command, log):
+        argv = shlex.split(command)
+        ran.append(argv)
         return _subprocess.CompletedProcess(argv, 0, "installed ok", "")
 
     resumed = []
@@ -1035,7 +1188,7 @@ async def test_install_choice_runs_the_command_and_resumes(monkeypatch):
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
-        monkeypatch.setattr(_subprocess, "run", fake_run)
+        monkeypatch.setattr(app, "_run_install_with_progress", fake_install)
         monkeypatch.setattr(
             "superqode.providers.env_introspect.extra_install_command",
             lambda extra: f"uv pip install --python /safe/py 'superqode[{extra}]'",
@@ -1068,17 +1221,32 @@ async def test_install_that_leaves_nothing_importable_is_reported(monkeypatch):
     failing later inside the runtime.
     """
     import subprocess as _subprocess
+    import superqode.runtime as _runtime_pkg
 
-    def fake_run(argv, **kwargs):
-        return _subprocess.CompletedProcess(argv, 0, "resolved something else", "")
+    async def fake_install(title, command, log):
+        return _subprocess.CompletedProcess(command, 0, "resolved something else", "")
 
     resumed = []
 
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
-        monkeypatch.setattr(_subprocess, "run", fake_run)
+        monkeypatch.setattr(app, "_run_install_with_progress", fake_install)
         monkeypatch.setattr(app, "_runtime_cmd", lambda name, log: resumed.append(name))
+        monkeypatch.setattr(
+            _runtime_pkg,
+            "list_runtimes",
+            lambda: [
+                _runtime_pkg.RuntimeInfo(
+                    name="codex-sdk",
+                    description="OpenAI Codex Python SDK",
+                    installed=False,
+                    install_hint=None,
+                    implemented=True,
+                    ready=False,
+                )
+            ],
+        )
 
         pending = {
             "runtime": "codex-sdk",
@@ -1286,14 +1454,116 @@ async def test_dependency_prompt_arrow_keys_work_as_real_keypresses():
         await _settle(pilot)
         assert app._prompts.index == 2
 
-        # Clamped at the end rather than wrapping or overflowing.
-        await pilot.press("down")
-        await _settle(pilot)
-        assert app._prompts.index == 2
+        # The extra Copy and Check again actions remain keyboard reachable.
+        for expected in (3, 4, 4):
+            await pilot.press("down")
+            await _settle(pilot)
+            assert app._prompts.index == expected
 
         await pilot.press("up")
         await _settle(pilot)
-        assert app._prompts.index == 1
+        assert app._prompts.index == 3
+
+
+async def test_dependency_install_command_can_be_copied_without_leaving_setup(monkeypatch):
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        copied = []
+        monkeypatch.setattr(
+            app, "_copy_text_to_clipboard", lambda value: copied.append(value) or True
+        )
+        app._show_dependency_install_picker("codex-sdk", log)
+        app._prompts.select_index(3)
+        await _settle(pilot)
+
+        assert app._prompts.is_active("dependency_install")
+        assert copied == [app._awaiting_dependency_install["command"]]
+        assert "copied to clipboard" in "\n".join(line.text for line in log.lines)
+
+
+async def test_external_cli_setup_copies_then_rechecks_and_resumes(monkeypatch):
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        copied = []
+        resumed = []
+        monkeypatch.setattr(
+            app, "_copy_text_to_clipboard", lambda value: copied.append(value) or True
+        )
+        monkeypatch.setattr(
+            "superqode.app.mixins.commands_impl.shutil.which", lambda name: name == "codex"
+        )
+        app._show_external_cli_setup(
+            name="Codex",
+            binary="codex",
+            command="npm i -g @openai/codex",
+            log=log,
+            resume=lambda: resumed.append(True),
+        )
+        app._prompts.select_index(0)
+        assert copied == ["npm i -g @openai/codex"]
+        assert app._prompts.is_active("external_cli_setup")
+        app._prompts.select_index(1)
+        await _settle(pilot)
+        assert resumed == [True]
+        assert not app._prompts.is_active("external_cli_setup")
+
+
+async def test_missing_grok_cli_offers_copy_and_resumes_sign_in(monkeypatch):
+    from superqode.providers import subscription_login as sl
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        copied = []
+        monkeypatch.setattr(
+            app, "_copy_text_to_clipboard", lambda value: copied.append(value) or True
+        )
+        monkeypatch.setattr(sl, "login_ready", lambda spec: False)
+        monkeypatch.setattr(sl, "binary_path", lambda spec: None)
+
+        assert app._begin_subscription_login("grok", log)
+        assert app._prompts.is_active("external_cli_setup")
+        app._prompts.select_index(0)
+        assert copied and "x.ai/cli/install" in copied[0]
+
+        monkeypatch.setattr(sl, "binary_path", lambda spec: "/usr/bin/grok")
+        monkeypatch.setattr("superqode.app.mixins.commands_impl.shutil.which", lambda name: True)
+        app._prompts.select_index(1)
+        await _settle(pilot)
+        assert not app._prompts.is_active("external_cli_setup")
+        assert app._awaiting_subscription_login["product"] == "grok"
+
+
+async def test_agent_store_install_uses_the_same_copy_and_recheck_setup(monkeypatch):
+    from superqode.app.models import AgentInfo, AgentStatus
+    from superqode.agents import discovery
+
+    async def fake_lookup(name):
+        return {
+            "short_name": name,
+            "run_command": {"*": name},
+            "actions": {"*": {"install": {"command": f"npm install -g {name}"}}},
+        }
+
+    monkeypatch.setattr(discovery, "get_agent_by_short_name_async", fake_lookup)
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._agents = [
+            AgentInfo("demo.example", "Demo Agent", "demo", "", "", AgentStatus.AVAILABLE)
+        ]
+        copied = []
+        monkeypatch.setattr(
+            app, "_copy_text_to_clipboard", lambda value: copied.append(value) or True
+        )
+
+        app._install_agent("demo", log)
+        await _settle(pilot, frames=10)
+        assert app._prompts.is_active("external_cli_setup")
+        app._prompts.select_index(0)
+        assert copied == ["npm install -g demo"]
 
 
 async def test_dependency_prompt_enter_selects_the_highlighted_row():
@@ -1350,9 +1620,9 @@ async def test_every_route_to_the_install_prompt_accepts_enter(entry, monkeypatc
 
     ran = []
 
-    def fake_run(argv, **kwargs):
-        ran.append(list(argv))
-        return _subprocess.CompletedProcess(argv, 0, "ok", "")
+    async def fake_install(title, command, log):
+        ran.append(shlex.split(command))
+        return _subprocess.CompletedProcess(command, 0, "ok", "")
 
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
@@ -1377,7 +1647,7 @@ async def test_every_route_to_the_install_prompt_accepts_enter(entry, monkeypatc
 
         assert app._prompts.is_active("dependency_install"), f"{entry} did not open the prompt"
 
-        monkeypatch.setattr(_subprocess, "run", fake_run)
+        monkeypatch.setattr(app, "_run_install_with_progress", fake_install)
         await pilot.press("enter")
         for _ in range(6):
             await _settle(pilot)
@@ -1878,8 +2148,8 @@ def _modal_body(app) -> str:
     return app.screen.query_one("#outcome-content").query_one(Static).render().plain
 
 
-async def test_a_finished_state_change_opens_an_acknowledgeable_modal():
-    """A toast for "agent connected" was easy to miss and hard to read."""
+async def test_a_routine_success_does_not_interrupt_input():
+    """A successful connection should not put a dismissal in the typing path."""
     app = SuperQodeApp()
     async with app.run_test(size=(92, 30)) as pilot:
         await _settle(pilot)
@@ -1888,6 +2158,22 @@ async def test_a_finished_state_change_opens_an_acknowledgeable_modal():
             primary="OpenCode",
             detail="opencode/big-pickle via ACP",
             severity="success",
+        )
+        await _settle(pilot)
+        assert len(app.screen_stack) == 1
+
+
+async def test_an_explicit_state_change_opens_an_acknowledgeable_modal():
+    """Callers can request a modal for outcomes that need confirmation."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(92, 30)) as pilot:
+        await _settle(pilot)
+        app._announce_transition(
+            title="Agent connected",
+            primary="OpenCode",
+            detail="opencode/big-pickle via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
 
@@ -1905,13 +2191,21 @@ async def test_a_second_announcement_reuses_the_open_modal():
     async with app.run_test(size=(92, 30)) as pilot:
         await _settle(pilot)
         app._announce_transition(
-            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+            title="Agent connected",
+            primary="OpenCode",
+            detail="via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
         depth = len(app.screen_stack)
 
         app._announce_transition(
-            title="Model ready", primary="big-pickle", detail="OpenCode via ACP", severity="success"
+            title="Model ready",
+            primary="big-pickle",
+            detail="OpenCode via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
 
@@ -1926,7 +2220,11 @@ async def test_enter_dismisses_the_state_change_modal():
     async with app.run_test(size=(92, 30)) as pilot:
         await _settle(pilot)
         app._announce_transition(
-            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+            title="Agent connected",
+            primary="OpenCode",
+            detail="via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
         assert len(app.screen_stack) == 2
@@ -1944,7 +2242,11 @@ async def test_the_modal_can_always_be_dismissed_with_the_mouse():
     async with app.run_test(size=(92, 30)) as pilot:
         await _settle(pilot)
         app._announce_transition(
-            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+            title="Agent connected",
+            primary="OpenCode",
+            detail="via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
 
@@ -1963,7 +2265,11 @@ async def test_replacing_with_a_recoverable_failure_keeps_both_buttons():
     async with app.run_test(size=(92, 30)) as pilot:
         await _settle(pilot)
         app._announce_transition(
-            title="Agent connected", primary="OpenCode", detail="via ACP", severity="success"
+            title="Agent connected",
+            primary="OpenCode",
+            detail="via ACP",
+            severity="success",
+            modal=True,
         )
         await _settle(pilot)
         depth = len(app.screen_stack)
@@ -2217,7 +2523,12 @@ async def test_npm_agent_is_manual_only(monkeypatch):
         assert "I will install it myself" in rendered
         assert "npm install -g @kilocode/cli" in rendered
         assert "External agent installers are manual-only" in rendered
-        assert len(list(app._prompts.active.options())) == 2
+        assert [option[0] for option in app._prompts.active.options()] == [
+            "manual",
+            "cancel",
+            "copy",
+            "recheck",
+        ]
 
         # Enter chooses the manual path; it must only display guidance.
         await pilot.press("enter")
@@ -2246,8 +2557,13 @@ async def test_pipe_to_shell_agent_is_never_offered_for_install(monkeypatch):
         assert "Install it for me" not in rendered
         assert "I will install it myself" in rendered
         assert "does not run those for you" in rendered
-        # Only the two safe options are selectable.
-        assert len(list(app._prompts.active.options())) == 2
+        # Copy and recheck do not run the vendor installer either.
+        assert [option[0] for option in app._prompts.active.options()] == [
+            "manual",
+            "cancel",
+            "copy",
+            "recheck",
+        ]
 
 
 async def test_external_agent_install_choice_is_defensively_rejected(monkeypatch):

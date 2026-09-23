@@ -244,7 +244,7 @@ class FeedbackMixin:
         dedupe_key: str = "",
         restore_focus: bool = True,
         popup: bool | None = None,
-        modal: bool = True,
+        modal: bool | None = None,
     ) -> bool:
         """Announce a user-visible state transition.
 
@@ -252,9 +252,8 @@ class FeedbackMixin:
         Routine success and information transitions stay in the transcript and
         status bar unless a caller explicitly requests a popup.
 
-        ``modal=False`` keeps the popup but makes it a toast that clears itself,
-        for results that repeat often enough that demanding a keypress each time
-        becomes an obstacle rather than an acknowledgement.
+        Successes use a toast by default so routine connection and mode changes
+        do not interrupt input. Warnings and errors remain acknowledgeable.
         """
         title = " ".join(str(title).split())
         primary = " ".join(str(primary).split())
@@ -279,16 +278,12 @@ class FeedbackMixin:
                 item_key: timestamp for item_key, timestamp in recent.items() if timestamp >= cutoff
             }
 
-        # A completed state change must be visible without scrolling.  Routine
-        # information may stay quiet, but success, warning and error all get a
-        # popup in addition to the persistent status/transcript state.
+        # Completed changes stay visible without scrolling. Routine successes
+        # use a toast; warnings and errors require an acknowledgeable modal.
         show_popup = severity != "information" if popup is None else popup
-        # A completed result is acknowledged in a modal; a progress note is not,
-        # because nothing has finished yet and demanding a keypress mid-flow is
-        # worse than the toast it replaces. ``persist`` is already the difference
-        # between the two: only persisted announcements become an Outcome.
+        should_modal = severity in {"warning", "error"} if modal is None else modal
         modal_shown = False
-        if show_popup and persist and modal:
+        if show_popup and persist and should_modal:
             modal_shown = self._show_transition_modal(
                 title=title,
                 primary=primary,

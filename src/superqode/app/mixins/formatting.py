@@ -39,7 +39,7 @@ class FormattingMixin:
         t = Text()
         t.append(f"  ⏳ queued ({len(queue)})  ", style=f"bold {THEME['warning']}")
         t.append("sends when the agent is free  •  ", style=THEME["dim"])
-        t.append(":queue clear", style=f"bold {THEME['cyan']}")
+        t.append(":queue edit N · :queue drop N", style=f"bold {THEME['cyan']}")
         t.append("\n", style="")
         for index, msg in enumerate(queue[:5], 1):
             preview = " ".join(str(msg).split())
@@ -747,9 +747,12 @@ class FormattingMixin:
         if _matches("read", "write", "edit", "patch", "create") and file_path:
             return f"{icon} {file_path}"
         if _matches("bash", "shell", "terminal", "exec", "command", "run"):
-            cmd = _first_arg("command", "cmd", "script")
+            from superqode.tools.display import extract_tool_command
+
+            cmd = extract_tool_command(tool_input)
             if cmd:
                 return f"{icon} {cmd}"
+            return f"{icon} {tool_name} (command not supplied by agent)"
         if _matches("search", "grep", "find"):
             query = _first_arg("pattern", "query", "search", "regex")
             if query:
@@ -797,7 +800,9 @@ class FormattingMixin:
             label += f" (+{total_add}/-{total_del})"
         line.append(label, style=SQ_COLORS.text_secondary)
         line.append("  ·  ", style=SQ_COLORS.text_muted)
-        line.append(":diff", style=f"bold {SQ_COLORS.info}")
+        line.append(
+            ":diff ↗", style=f"bold {SQ_COLORS.info} not underline link superqode://cmd/diff"
+        )
         line.append(" to view  ·  ", style=SQ_COLORS.text_muted)
         line.append(":work verbose", style=f"bold {SQ_COLORS.info}")
         line.append(" for inline diffs\n", style=SQ_COLORS.text_muted)

@@ -214,8 +214,10 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "protocol-a2a": "providers/a2a.md",
         "protocol-uhp": "providers/uhp.md",
         "models": "providers/index.md",
+        "systemone-models": "advanced/systemone.md",
         "build": "concepts/modes.md",
         "harness-core": "concepts/modes.md",
+        "harness-systemone": "advanced/systemone.md",
         "harness-rlm": "advanced/rlm.md",
         "harness-workbench": "concepts/modes.md",
         "harness-pipy": "advanced/pipy.md",
@@ -261,6 +263,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "muse": "concepts/modes.md",
         "prime-agent": "providers/prime-agent.md",
         "grok": "providers/grok.md",
+        "jev": "advanced/jev-tool-routing.md",
         "glm-cli": "providers/zai.md",
         "other-harnesses": "cli-reference/harness-commands.md",
         # v2 replaces the Other row with these two category rows.

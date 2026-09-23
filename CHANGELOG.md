@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.11] - 2026-09-23
+
+### Improved
+
+- Show ACP and BYOK tool actions and shell commands while they run, including
+  in calm output mode, and retain command details across sparse status updates.
+- Stream SDK and agent installer output with elapsed-time progress, cancellation,
+  verification, retry, and copyable recovery commands.
+- Clarify connection setup, picker navigation, permission decisions, and
+  non-blocking transition feedback while preserving SuperQode's visual identity.
+- Make queued prompts explicit and add controls to edit, reorder, or steer a
+  supported agent's active turn.
+
 ## [2.4.10] - 2026-09-21
 
 ### Jev Tool Routing — Developer Preview

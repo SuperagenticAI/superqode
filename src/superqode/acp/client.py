@@ -1139,7 +1139,9 @@ class ACPClient:
             if tool_call_id in self._tool_calls:
                 # Merge update into existing tool call
                 for key, value in update.items():
-                    if value is not None:
+                    # A few agents include an empty rawInput/title in their
+                    # status-only update. Keep the original command/target.
+                    if value is not None and not (key in {"rawInput", "title"} and not value):
                         self._tool_calls[tool_call_id][key] = value
             else:
                 # Late-arriving update with no prior tool_call event —

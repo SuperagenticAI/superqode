@@ -96,6 +96,17 @@ CollapsibleSidebar CollapsibleTitle:hover {
     border-bottom: solid #27272a;
 }
 
+#install-progress {
+    display: none;
+    height: auto;
+    margin: 0 2;
+    padding: 0 1;
+    color: #e4e4e7;
+    border-left: thick #a855f7;
+    background: #12101a;
+}
+#install-progress.visible { display: block; }
+
 /* Scanning line - shown at TOP when agent is thinking */
 #thinking-wave { height: 1; width: 100%; margin: 0; padding: 0; display: none; }
 #thinking-wave.visible { display: block; }
@@ -129,9 +140,10 @@ ConversationLog {
     margin: 0;
 }
 
-/* Prompt area - at TOP (below SuperQode logo), hidden when agent is thinking */
+/* Prompt area stays at the top and remains usable during agent work. */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
 #prompt-area.hidden { display: none; }
+#prompt-area.working #input-box { border: solid #a855f7; }
 #mode-badge { display: none; }
 #input-box {
     height: auto;
@@ -186,6 +198,8 @@ ConversationLog {
 #prompt-completions.visible {
     display: block;
 }
+#run-input-hint { display: none; height: 1; margin: 0 2; color: #c4b5fd; }
+#run-input-hint.visible { display: block; }
 #hints { text-align: center; color: #71717a; height: 1; margin-top: 0; padding: 0; }
 
 #active-tools {

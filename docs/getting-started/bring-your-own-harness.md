@@ -104,6 +104,7 @@ superqode harness init my-coder -t qwen-coding
 | --- | --- |
 | `core` | Lean native harness with read, write, edit, and shell tools |
 | `workbench` | Complete native coding workbench |
+| `systemone` | Progressive tool discovery and Jev-backed typed decisions |
 | `rlm` | Native one-tool RLM harness with a persistent Python environment |
 | `rlm-docker` | RLM kernel inside a Docker container with networking disabled |
 | `rlm-monty` | RLM kernel on Monty, with no filesystem, subprocess, or network access |

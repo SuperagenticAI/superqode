@@ -407,6 +407,9 @@ def test_escape_from_a_build_screen_returns_to_the_build_menu(tmp_path, monkeypa
         def query_one(self, *args, **kwargs):
             return self._log
 
+        def _in_selection_mode(self):
+            return False
+
         def _show_connect_type_picker(self, log, menu=None, **kwargs):
             self.menus.append(menu)
 

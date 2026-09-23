@@ -23,7 +23,7 @@ from rich.box import ROUNDED, HEAVY
 
 from superqode import __version__
 from superqode.rendering.markdown import render_agent_markdown
-from superqode.tools.display import format_tool_call_compact
+from superqode.tools.display import extract_tool_command, format_tool_call_compact
 
 from .constants import (
     ASCII_LOGO,
@@ -1083,12 +1083,11 @@ class HintsBar(Static):
         if self.connected:
             hints = [
                 ("⏏", ":disconnect", THEME["pink"]),
-                ("⚓", ":hub", THEME["link"]),
-                ("🧭", ":systemone", THEME["cyan"]),
+                ("◈", ":harness", THEME["link"]),
                 ("🧠", ":memory", THEME["link"]),
                 ("📊", ":eval", THEME["link"]),
                 ("⚡", ":skills", THEME["link"]),
-                ("◈", ":harness", THEME["link"]),
+                ("⚓", ":hub", THEME["link"]),
                 ("?", ":help", THEME["link"]),
             ]
         else:
@@ -1641,6 +1640,15 @@ class ConversationLog(RichLog):
                 line = " " * ((width - len(line.strip())) // 2) + line.strip()
         self._write_feedback(Text(line, style=THEME["dim"]))
 
+    def add_install_output(self, text: str, *, heartbeat: bool = False) -> None:
+        """Follow live installer output even after a picker froze scrolling."""
+        icon = "◈" if heartbeat else "│"
+        self._messages.append(("shell", text, ""))
+        self._feedback_anchor_active = False
+        self.auto_scroll = True
+        self.write(Text(f"  {icon} {text}", style=THEME["dim"]))
+        self.scroll_end(animate=False)
+
     def add_warning(self, text: str):
         self._messages.append(("warning", text, ""))
         self._write_feedback(Text(f"  ⚠️ {text}", style=THEME["warning"]))
@@ -2188,6 +2196,34 @@ class ConversationLog(RichLog):
         """
         display_args = dict(arguments or {})
         metadata = dict(metadata or {})
+        for key in (
+            "command",
+            "cmd",
+            "commandLine",
+            "command_line",
+            "shellCommand",
+            "script",
+            "input",
+            "argv",
+            "args",
+            "path",
+            "file_path",
+            "filePath",
+            "target_file",
+            "pattern",
+            "query",
+        ):
+            if not display_args.get(key) and metadata.get(key):
+                display_args[key] = metadata[key]
+        command_tool = any(
+            marker in tool_name.lower()
+            for marker in ("bash", "shell", "terminal", "exec", "command", "run")
+        )
+        if command_tool or any(
+            display_args.get(key)
+            for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script")
+        ):
+            command = command or extract_tool_command(display_args)
 
         # Keep the pinned plan/todo panel in sync whenever a todo tool runs.
         if "todo" in tool_name.lower():
@@ -2272,12 +2308,9 @@ class ConversationLog(RichLog):
         status_icon, status_color = status_map.get(status, ("●", THEME["muted"]))
         mode = getattr(self, "tool_output_mode", "normal")
 
-        # RichLog is append-only, so showing both a "running" row and a
-        # completion row creates noisy duplicates. Keep live running rows for
-        # verbose/debug mode; normal/minimal transcripts show the completed
-        # result row only.
-        if status in ("pending", "running") and mode != "verbose":
-            return
+        # The developer must see an action while it is happening, not only
+        # after it completes. The active strip provides the live summary and
+        # this row preserves the exact command/target in the transcript.
 
         # Tool type icons
         tool_icons = {
@@ -2683,12 +2716,27 @@ class ConversationLog(RichLog):
     ) -> str:
         """Return the important target for a tool row without noisy JSON."""
         lower = tool_name.lower()
+        command_tool = any(
+            marker in lower for marker in ("bash", "shell", "terminal", "exec", "command", "run")
+        )
+        if command_tool or any(
+            arguments.get(key)
+            for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script")
+        ):
+            command = extract_tool_command(arguments)
+            if command:
+                # The transcript is the copyable record; only the pinned
+                # active-tool strip should abbreviate a running command.
+                return (
+                    " ".join(command.split())
+                    if max_length > 42
+                    else _clip_single_line(command, max_length)
+                )
         keys_by_kind = (
             (
                 ("read", "write", "edit", "patch", "create"),
                 ("path", "file_path", "filePath", "target_file"),
             ),
-            (("bash", "shell", "terminal", "exec"), ("command", "cmd")),
             (("grep", "search", "repo_search"), ("pattern", "query", "search")),
             (("glob", "list", "ls"), ("path", "directory", "pattern")),
             (("todo",), ("todos",)),
@@ -2702,6 +2750,8 @@ class ConversationLog(RichLog):
                     if key == "todos" and isinstance(value, list):
                         return f"{len(value)} item{'s' if len(value) != 1 else ''}"
                     return _clip_single_line(str(value), max_length)
+        if command_tool:
+            return "command not supplied by agent"
         compact = format_tool_call_compact(tool_name, arguments, max_length=max_length)
         prefix = f"{tool_name}("
         if compact.startswith(prefix) and compact.endswith(")"):

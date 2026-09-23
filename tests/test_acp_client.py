@@ -1241,6 +1241,8 @@ class TestToolUpdateMerging:
                     "sessionUpdate": "tool_call_update",
                     "toolCallId": "call-1",
                     "status": "completed",
+                    "rawInput": {},
+                    "title": "",
                 }
             }
         )

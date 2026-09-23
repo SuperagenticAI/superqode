@@ -176,6 +176,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "harness-rlm",
     "harness-pipy",
     "harness-workbench",
+    "harness-systemone",
     "harness-presets",
     "harness-repo",
     "local",

@@ -19,6 +19,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "back",
         "connect",
         "disconnect",
+        "diff",
         "eval",
         "exit",
         "explore",

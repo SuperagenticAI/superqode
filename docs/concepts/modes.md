@@ -108,7 +108,15 @@ rung of the ownership ladder. Open any of them directly:
 :connect agents
 :connect models
 :connect build
+:connect harness-systemone
+:connect systemone-models
+:connect jev
 ```
+
+`harness-systemone` selects the SystemOne harness, `systemone-models` opens its
+model routes, and `jev` opens Jev Tool Routing setup. See the
+[SystemOne guide](../advanced/systemone.md) and
+[Jev Tool Routing guide](../advanced/jev-tool-routing.md).
 
 | Root option | What it asks | What it opens |
 | --- | --- | --- |

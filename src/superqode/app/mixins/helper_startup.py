@@ -196,6 +196,14 @@ class HelperStartupMixin:
                 "connection",
             ),
             PaletteCommand(
+                "doctor_connection",
+                "Connection Doctor",
+                "Check agent, protocol, SDK/CLI, authentication, and model",
+                "◈",
+                ":doctor connection",
+                "connection",
+            ),
+            PaletteCommand(
                 "recommend",
                 "Recommend Model",
                 "Pick a model for coding, review, testing, budget, or large context",

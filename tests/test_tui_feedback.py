@@ -114,19 +114,14 @@ async def test_model_transition_is_visible_without_scrolling(monkeypatch) -> Non
         for _ in range(6):
             await pilot.pause()
 
-        # A finished state change is acknowledged in a modal rather than a
-        # toast: the toast was easy to miss and, against this app's dark panel,
-        # its themed title was barely readable.
-        from textual.widgets import Static
-
+        # Routine success feedback is non-blocking; the transcript retains
+        # the receipt after the toast disappears.
         from superqode.widgets.outcome_screen import OutcomeScreen
 
-        assert isinstance(app.screen, OutcomeScreen)
-        body = app.screen.query_one("#outcome-content").query_one(Static).render().plain
-        assert "Model ready" in body
-        assert "Laguna S 2.1 Free" in body
+        assert not isinstance(app.screen, OutcomeScreen)
         # The transcript still keeps the receipt, so it survives dismissal.
         assert "Model ready" in "\n".join(line.text for line in log.lines)
+        assert "Laguna S 2.1 Free" in "\n".join(line.text for line in log.lines)
 
 
 @pytest.mark.asyncio

@@ -605,6 +605,8 @@ class PickerNavigationMixin:
         options: list[tuple[str, str, str]] = [
             ("manual", "I will install it myself", "show the vendor command and go back"),
             ("cancel", "Cancel", "return to the connection screen"),
+            ("copy", "Copy install command", "copy the exact vendor command"),
+            ("recheck", "I installed it — check again", "verify and connect this agent"),
         ]
 
         if reset_highlight and not self._prompts.is_active("agent_install"):
@@ -842,7 +844,9 @@ class PickerNavigationMixin:
     _DEPENDENCY_INSTALL_OPTIONS = (
         ("install", "Install it for me", "SuperQode runs the command and connects"),
         ("manual", "I will install it myself", "show the command and go back"),
-        ("cancel", "Cancel", "return to the runtime picker"),
+        ("cancel", "Cancel", "return to connections"),
+        ("copy", "Copy install command", "copy the exact command shown above"),
+        ("recheck", "I installed it — check again", "verify the SDK and connect"),
     )
 
     def _show_dependency_install_picker(

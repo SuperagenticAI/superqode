@@ -4,10 +4,44 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+import json
+import shlex
 from typing import Any
 
 
 _PATH_KEYS = ("path", "file_path", "filePath", "target_file", "directory")
+
+
+def extract_tool_command(arguments: Mapping[str, Any] | None) -> str:
+    """Recover a shell command from common BYOK/ACP argument shapes."""
+    args = dict(arguments or {})
+    for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script", "input"):
+        value = args.get(key)
+        if isinstance(value, Mapping):
+            nested = extract_tool_command(value)
+            if nested:
+                return nested
+        elif isinstance(value, str) and value.strip():
+            value = value.strip()
+            if value.startswith("{"):
+                try:
+                    parsed = json.loads(value)
+                except ValueError:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    nested = extract_tool_command(parsed)
+                    if nested:
+                        return nested
+            suffix = args.get("args")
+            if key != "input" and isinstance(suffix, (list, tuple)) and suffix:
+                return f"{value} {shlex.join(str(part) for part in suffix)}"
+            return value
+        elif isinstance(value, (list, tuple)) and value:
+            return shlex.join(str(part) for part in value)
+    argv = args.get("argv")
+    if isinstance(argv, (list, tuple)) and argv:
+        return shlex.join(str(part) for part in argv)
+    return ""
 
 
 def format_tool_call_compact(
@@ -40,7 +74,7 @@ def _tool_details(name: str, args: Mapping[str, Any]) -> str:
         return _path_arg(args) or "."
 
     if name in {"bash", "shell", "execute"}:
-        command = _clean(args.get("command") or args.get("cmd") or args.get("input"))
+        command = _clean(extract_tool_command(args))
         timeout = args.get("timeout") or args.get("timeout_seconds")
         if command and timeout:
             return f"{_quote(command)}, timeout={timeout}"

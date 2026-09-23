@@ -122,7 +122,7 @@ def test_integration_catalog_covers_the_public_integration_families():
     )
 
 
-def test_integrations_is_a_top_level_tab_without_expanding_desktop_navigation():
+def test_integrations_and_new_harness_guides_are_top_level_tabs():
     root = Path(__file__).resolve().parents[1]
     mkdocs = (root / "mkdocs.yml").read_text(encoding="utf-8")
     nav_yaml = "nav:\n" + mkdocs.split("\nnav:\n", maxsplit=1)[1]
@@ -131,21 +131,24 @@ def test_integrations_is_a_top_level_tab_without_expanding_desktop_navigation():
     labels = [next(iter(entry)) for entry in navigation]
 
     assert labels == [
+        "🌐 Website",
         "🚀 Quick Start",
         "🔌 Connect",
         "⚓ Build Harness",
+        "🧭 SystemOne Harness",
+        "🧠 Jev Tool Routing",
         "🔁 A2A",
         "📈 Evaluate & Optimise",
         "🛠️ Operate",
         "🔗 Integrations",
         "📚 Reference",
     ]
-    quick_start_navigation = navigation[0]["🚀 Quick Start"]
+    quick_start_navigation = navigation[1]["🚀 Quick Start"]
     assert quick_start_navigation[0] == {"⚡ Quick Start": "getting-started/quickstart.md"}
     assert {
         "📘 Complete Getting Started Guide": "getting-started/complete-guide.md"
     } in quick_start_navigation
-    integration_navigation = navigation[6]["🔗 Integrations"]
+    integration_navigation = navigation[9]["🔗 Integrations"]
     assert integration_navigation == [
         {"🧭 Integration Overview": "integrations/index.md"},
         {"📋 All Integrations": "integrations/all.md"},

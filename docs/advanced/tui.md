@@ -153,6 +153,9 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:hub setup` - Open the Hub filtered to entries that need setup
 - `:hub custom` - Open the Hub filtered to repository-owned harnesses
 - `:activity` - Revisit important results, state changes, and their next actions
+- `:steer <message>` - Send a correction to the current run when its agent supports live steering
+- `:steer` - Show how to steer a supported running agent
+- `:optimize` - Open Jev Tool Routing setup and status
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)

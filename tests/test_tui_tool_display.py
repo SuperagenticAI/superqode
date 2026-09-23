@@ -1,7 +1,7 @@
 """Tests for compact TUI tool display helpers."""
 
 from superqode.app.widgets import _diff_stats_from_text, _format_duration, summarize_tool_output
-from superqode.tools.display import format_tool_call_compact
+from superqode.tools.display import extract_tool_command, format_tool_call_compact
 
 
 def test_repo_search_output_is_summarized():
@@ -53,6 +53,16 @@ def test_compact_display_formats_shell_tool_with_timeout():
     label = format_tool_call_compact("bash", {"command": "uv run pytest tests", "timeout": 120})
 
     assert label == 'bash("uv run pytest tests", timeout=120)'
+
+
+def test_shell_command_extraction_accepts_agent_argument_variants():
+    assert extract_tool_command({"script": "pytest -q"}) == "pytest -q"
+    assert extract_tool_command({"commandLine": "npm test"}) == "npm test"
+    assert extract_tool_command({"argv": ["git", "status", "--short"]}) == "git status --short"
+    assert extract_tool_command({"input": '{"command": "ls -la"}'}) == "ls -la"
+    assert (
+        extract_tool_command({"command": "python", "args": ["-m", "pytest"]}) == "python -m pytest"
+    )
 
 
 def test_compact_display_formats_python_repl_multiline():

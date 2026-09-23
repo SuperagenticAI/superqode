@@ -1,5 +1,7 @@
 # Jev Tool Routing
 
+Open the TUI setup route with `:connect jev`.
+
 Jev Tool Routing reduces the tool-schema context sent to coding models. It asks
 [TypeSafe AI's Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
 which tools a request is likely to need, applies SuperQode's safety rules, and

@@ -152,6 +152,12 @@ class SelectionAwareInput(TextArea):
         """Intercept key events for selection navigation and number selection."""
         app = self.app
 
+        if event.key == "escape" and getattr(app, "_install_in_progress", False):
+            app.action_smart_cancel()
+            event.stop()
+            event.prevent_default()
+            return
+
         if getattr(app, "_prompt_completion_visible", False):
             vim_token = getattr(event, "character", None) or event.key
             if (

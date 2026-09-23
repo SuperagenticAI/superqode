@@ -32,6 +32,7 @@ overlays, and temporary files that are removed after the run.
 | `superqode optimize doctor` | Report installed harnesses and their integration status. |
 | `superqode optimize env HARNESS` | Preview the non-persistent command, environment overlay, and generated files. |
 | `superqode optimize run HARNESS` | Start the loopback gateway, run the harness, print aggregate routing metrics, and clean up. |
+| `superqode optimize launch HARNESS` | Launch a supported harness with its current Jev routing configuration. |
 | `superqode optimize bench` | Run the small labeled, coding-model-free routing evaluation. |
 | `superqode optimize mcp` | Expose the same router as a local stdio MCP server. |
 

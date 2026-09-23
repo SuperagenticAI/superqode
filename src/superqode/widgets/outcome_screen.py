@@ -62,8 +62,8 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
     """Focused, acknowledgeable result that never lands below the fold."""
 
     BINDINGS = [
-        Binding("escape", "close", "Back"),
-        Binding("enter", "close", "Continue"),
+        Binding("escape", "close", "Close"),
+        Binding("enter", "close", "Close"),
     ]
 
     CSS = """

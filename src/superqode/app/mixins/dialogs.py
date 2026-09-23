@@ -1887,13 +1887,13 @@ class DialogsMixin:
 
         prompt.append("\n")
         prompt.append("[y]", style=f"bold {THEME['success']}")
-        prompt.append("es  ", style=THEME["muted"])
+        prompt.append(" allow once  ", style=THEME["muted"])
         prompt.append("[n]", style=f"bold {THEME['error']}")
-        prompt.append("o  ", style=THEME["muted"])
+        prompt.append(" deny  ", style=THEME["muted"])
         prompt.append("[a]", style=f"bold {THEME['cyan']}")
-        prompt.append("llow session  ", style=THEME["muted"])
+        prompt.append(" allow for session  ", style=THEME["muted"])
         prompt.append("[esc]", style=f"bold {THEME['muted']}")
-        prompt.append(" cancel\n", style=THEME["muted"])
+        prompt.append(" deny\n", style=THEME["muted"])
 
         log.write(
             Panel(
@@ -1927,9 +1927,10 @@ class DialogsMixin:
             }
 
             #permission-dialog {
-                width: 38;
+                width: 72;
+                max-width: 94%;
                 height: auto;
-                max-height: 12;
+                max-height: 70%;
                 background: #000000;
                 border: tall #ffffff;
                 padding: 0 1;
@@ -1945,7 +1946,7 @@ class DialogsMixin:
 
             #permission-content {
                 height: auto;
-                max-height: 4;
+                max-height: 16;
                 overflow-y: auto;
                 margin-bottom: 0;
                 padding: 0;
@@ -2032,14 +2033,21 @@ class DialogsMixin:
 
                     # Buttons (subtle, full text)
                     with Horizontal(id="permission-buttons"):
-                        yield Button("yes", id="btn-allow", classes="permission-btn allow-btn")
-                        yield Button("no", id="btn-deny", classes="permission-btn deny-btn")
                         yield Button(
-                            "allow", id="btn-allow-all", classes="permission-btn allow-all-btn"
+                            "Allow once", id="btn-allow", classes="permission-btn allow-btn"
+                        )
+                        yield Button("Deny", id="btn-deny", classes="permission-btn deny-btn")
+                        yield Button(
+                            "Allow for session",
+                            id="btn-allow-all",
+                            classes="permission-btn allow-all-btn",
                         )
 
                     # Hints (very subtle)
-                    yield Static("[y/n/a]", id="permission-hints")
+                    yield Static(
+                        "y allow once · n deny · a allow for session · Esc deny",
+                        id="permission-hints",
+                    )
 
             def _format_permission_content(self):
                 """Format the permission request content."""
@@ -2049,16 +2057,15 @@ class DialogsMixin:
 
                 # Show only essential info - first parameter if available (high contrast white text)
                 if self.tool_input:
-                    # Show first 1-2 key parameters
-                    items = list(self.tool_input.items())[:2]
+                    # Keep the command and file target intact for review.
+                    items = list(self.tool_input.items())[:6]
                     for key, value in items:
                         val_str = str(value)
-                        if len(val_str) > 25:
-                            val_str = val_str[:22] + "..."
+                        if len(val_str) > 500:
+                            val_str = val_str[:497] + "..."
                         t.append(f"{key}: ", style="#ffffff")
                         t.append(f"{val_str}", style="#cccccc")
-                        if key != items[-1][0]:  # Add separator if not last item
-                            t.append(" • ", style="#888888")
+                        t.append("\n")
 
                 return t
 
@@ -3567,18 +3574,115 @@ class DialogsMixin:
         def add(label: str, status: str, detail: str, action: str = "") -> None:
             rows.append((label, status, detail, action))
 
-        provider = self.current_provider or "-"
-        model = self.current_model or "-"
-        if self.current_provider and self.current_model:
-            provider_status = "ready"
-            provider_detail = f"{provider}/{model}"
-        elif self.current_provider:
-            provider_status = "warn"
-            provider_detail = f"{provider}/-"
+        agent = str(getattr(self, "current_agent", "") or "").strip()
+        provider = str(getattr(self, "current_provider", "") or "").strip()
+        model = str(getattr(self, "current_model", "") or "").strip()
+        try:
+            status_bar = self.query_one("#status-bar")
+            runtime = str(status_bar.active_runtime or "").strip()
+            model = model or str(status_bar.active_model or "").strip()
+        except Exception:
+            runtime = ""
+        if agent:
+            add("Connection", "ready", f"{agent} coding agent", ":connect")
+            add("Protocol", "ready", "ACP", ":acp doctor")
+        elif provider:
+            add("Connection", "ready" if model else "warn", f"{provider} provider", ":connect")
+            add("Protocol", "ready", "model API / selected harness", ":harness")
+        elif runtime:
+            add("Connection", "warn", f"{runtime} selected; no model yet", ":models")
+            add("Protocol", "ready", "runtime", ":runtime")
         else:
-            provider_status = "blocked"
-            provider_detail = "no provider/model connected"
-        add("Provider", provider_status, provider_detail, ":connect")
+            add("Connection", "blocked", "no agent or provider selected", ":connect")
+            add("Protocol", "warn", "not selected", ":connect")
+
+        add("Runtime", "ready" if runtime else "warn", runtime or "not selected", ":runtime")
+        if agent:
+            try:
+                from superqode.agents.discovery import get_agent_by_short_name
+                from superqode.commands.acp import check_agent_installed
+
+                spec = get_agent_by_short_name(agent)
+                installed = bool(spec and check_agent_installed(spec))
+                add(
+                    "SDK / CLI",
+                    "ready" if installed else "warn",
+                    "agent executable available" if installed else "agent executable not found",
+                    f":acp install {agent}",
+                )
+            except Exception as exc:
+                add("SDK / CLI", "warn", f"check unavailable: {exc}", ":acp list")
+        elif runtime:
+            try:
+                from superqode.runtime import list_runtimes
+
+                info = next((item for item in list_runtimes() if item.name == runtime), None)
+                if info is not None:
+                    add(
+                        "SDK / CLI",
+                        "ready" if info.usable else "blocked",
+                        "available" if info.usable else info.status_detail or "needs setup",
+                        f":runtime {runtime}",
+                    )
+                else:
+                    add("SDK / CLI", "warn", "runtime not in registry", ":runtime")
+            except Exception as exc:
+                add("SDK / CLI", "warn", f"check unavailable: {exc}", f":runtime {runtime}")
+
+        subscription = {
+            "codex-sdk": "codex",
+            "grok": "grok",
+            "copilot": "copilot",
+            "muse": "muse",
+        }.get(runtime)
+        if subscription:
+            try:
+                from superqode.providers.subscription_login import (
+                    binary_path,
+                    get_login_spec,
+                    has_env_key,
+                    login_ready,
+                )
+
+                spec = get_login_spec(subscription)
+                cli_ready = binary_path(spec) is not None
+                authenticated = login_ready(spec)
+                key_ready = has_env_key(spec)
+                auth_ready = authenticated and (cli_ready or key_ready)
+                auth_detail = (
+                    "API key available; subscription CLI missing"
+                    if key_ready and not cli_ready
+                    else "CLI missing"
+                    if not cli_ready
+                    else "signed in"
+                    if authenticated
+                    else "sign-in needed"
+                )
+                add(
+                    "Auth",
+                    "ready" if auth_ready else "blocked",
+                    auth_detail,
+                    f":connect {subscription}",
+                )
+            except Exception as exc:
+                add("Auth", "warn", f"check unavailable: {exc}", ":connect")
+        elif provider:
+            try:
+                from superqode.providers.recommendations import provider_doctor_cards
+
+                card = provider_doctor_cards([provider])[0]
+                add(
+                    "Auth",
+                    "ready" if card["configured"] else "blocked",
+                    "provider configured" if card["configured"] else card["setup_hint"],
+                    f":providers {provider}",
+                )
+            except Exception:
+                add("Auth", "warn", "check provider credentials", f":providers {provider}")
+        elif agent:
+            add("Auth", "warn", "managed by agent; checked on connect", f":connect acp {agent}")
+        model_detail = model or ("agent-managed" if agent else "not selected")
+        add("Model", "ready" if model or agent else "warn", model_detail, ":models")
 
         try:
             from superqode.mcp import integration
@@ -3816,8 +3920,12 @@ class DialogsMixin:
                 self._content = full_content
                 self._title = "Diff Review"
                 self._entries = entries
-                self._index = -1
-                self._current_text = full_content
+                self._index = 0 if entries else -1
+                self._current_text = (
+                    format_entry(entries[0], index=0, total=len(entries))
+                    if entries
+                    else full_content
+                )
 
             def compose(self):
                 with Vertical():
