@@ -466,8 +466,11 @@ agent's ACP session and queues a bounded replay of recent user and agent
 messages for its first prompt. SuperQode reports the replay count in the switch
 receipt. Agent-native session resumption remains separate. Add `--fork` only
 for HarnessSpec entries. `:sessions switch` opens a picker that labels every
-session with its latest harness. Selecting one restores its harness, model, and
-conversation history.
+session with a human name such as `PiPy · gpt-4.1 · refactor auth · 2h ago`.
+Selecting one restores its harness, BYOK provider and model, working directory,
+and the same transcript. Missing credentials or harnesses fail clearly instead
+of opening a blank session. BYOK and PiPy harness sessions remain listed after
+disconnect.
 
 Share artifacts are local/offline `superqode-share-v1` JSON files. They are
 intended for moving a session between machines or teammates without requiring a

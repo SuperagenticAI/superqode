@@ -2848,9 +2848,9 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     assert app._awaiting_session_resume is True
     rendered = render_plain(log.items[-1])
     assert "Switch Sessions" in rendered
-    assert "restores its harness" in rendered
-    assert "workbench" in rendered
-    assert ":sessions switch <id>" in rendered
+    assert "restores harness" in rendered
+    assert "Workbench" in rendered
+    assert ":sessions switch <id-or-name>" in rendered
 
     app.action_navigate_session_resume_down()
     expected_id = app._session_resume_list[app._session_resume_highlighted_index].session_id

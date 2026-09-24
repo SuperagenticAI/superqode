@@ -34,6 +34,15 @@ class SessionMetadata:
     harness_digest: str = ""
     tool_contract_version: str = ""
     harness_transitions: List[Dict[str, Any]] = field(default_factory=list)
+    # True when the conversation is owned by a HarnessSpec / FileHarnessStore /
+    # PiPy backend rather than the builtin AgentLoop JSONL history.
+    harness_session: bool = False
+    # Absolute path to an external transcript (e.g. PiPy *.jsonl) when dual-written.
+    backend_session_path: str = ""
+    # Human harness label (e.g. "PiPy") distinct from harness_id ("pipy").
+    harness_display_name: str = ""
+    # Absolute cwd the session belonged to (for resume scoping).
+    working_directory: str = ""
 
 
 @dataclass
@@ -46,6 +55,15 @@ class SessionMessage:
     tool_calls: Optional[List[Dict]] = None
     tool_name: Optional[str] = None
     tool_result: Optional[str] = None
+
+
+
+def _metadata_from_dict(data: Dict[str, Any]) -> SessionMetadata:
+    """Build SessionMetadata while ignoring unknown persisted keys."""
+    from dataclasses import fields
+
+    known = {item.name for item in fields(SessionMetadata)}
+    return SessionMetadata(**{key: value for key, value in data.items() if key in known})
 
 
 class SessionStore:
@@ -124,6 +142,10 @@ class SessionStore:
                     "harness_digest": metadata.harness_digest,
                     "tool_contract_version": metadata.tool_contract_version,
                     "harness_transitions": list(metadata.harness_transitions),
+                    "harness_session": bool(metadata.harness_session),
+                    "backend_session_path": metadata.backend_session_path,
+                    "harness_display_name": metadata.harness_display_name,
+                    "working_directory": metadata.working_directory,
                 },
                 indent=2,
             )
@@ -159,7 +181,7 @@ class SessionStore:
             return None
         try:
             data = json.loads(meta_path.read_text())
-            return SessionMetadata(**data)
+            return _metadata_from_dict(data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return None
 
@@ -322,8 +344,8 @@ class SessionStore:
         for meta_file in self.base_dir.glob("*.meta.json"):
             try:
                 data = json.loads(meta_file.read_text())
-                sessions.append(SessionMetadata(**data))
-            except (json.JSONDecodeError, KeyError):
+                sessions.append(_metadata_from_dict(data))
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 continue
 
         # Sort by updated_at descending

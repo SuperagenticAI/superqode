@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dual-write BYOK HarnessSpec and PiPy sessions into SessionManager so
+  `:sessions` lists them after disconnect, with human labels such as
+  `PiPy · gpt-4.1 · refactor auth · 2h ago`.
+- Make `:sessions switch` / `:resume` restore harness, provider/model, working
+  directory, and the same harness or PiPy transcript. Missing API keys or
+  harnesses fail with a clear message instead of a blank session.
+- Make `:pipy resume <n|path>` reopen a prior PiPy session into the live chat
+  and register it for `:sessions`.
+
 ## [2.4.11] - 2026-09-23
 
 ### Improved

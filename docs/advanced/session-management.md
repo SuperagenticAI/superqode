@@ -91,22 +91,28 @@ Open the session switcher to return to any saved session:
 :sessions switch
 ```
 
-The picker shows the latest harness for every session. Resuming a session
-restores its harness, provider, model, and stored messages. A direct switch is
-also available:
+The picker shows a human label for every session in this directory, for example
+`PiPy · gpt-4.1 · refactor auth · 2h ago`, plus a short id you can type.
+Resuming a session restores its harness, BYOK provider and model, working
+directory, and the same harness or PiPy transcript so the next message
+continues that conversation. If a required API key or harness is missing,
+resume fails with a clear message instead of opening a blank session.
+
+A direct switch accepts an id, unique prefix, or title fragment:
 
 ```text
-:sessions switch <session-id>
+:sessions switch <session-id-or-name>
 ```
 
 This is the terminal session-switching workflow. No web or mobile control plane
 is required.
 
-The picker covers sessions stored in SuperQode's normalized JSONL session
-store. Vendor-owned thread stores remain available through their runtime
-commands, including `:codex sessions` and `:claude sessions`. The catalog uses
-`context replay`, `exact resume`, or `fresh session` to state the continuity a
-harness adapter can provide.
+BYOK and HarnessSpec sessions (including PiPy) dual-write into SuperQode's
+session store so they appear in `:sessions` after disconnect. Vendor-owned
+thread stores remain available through their runtime commands, including
+`:codex sessions` and `:claude sessions`. The catalog uses `context replay`,
+`exact resume`, or `fresh session` to state the continuity a harness adapter
+can provide.
 
 ### List Sessions
 
@@ -114,25 +120,27 @@ harness adapter can provide.
 /sessions
 ```
 
-Shows recent sessions with harness metadata:
+Shows recent sessions with human labels:
 
 ```text
 Recent Sessions:
 --------------------------------------------------
-1. abc12345 | workbench  | <openai-model> | 5 msgs
-2. def67890 | code-review | <anthropic-balanced-model> | 12 msgs
+abc12345  Workbench · gpt-4.1 · fix login · 10m ago
+def67890  PiPy · qwen2.5-coder · refactor auth · 2h ago
 --------------------------------------------------
-Use :sessions switch <id> to restore its harness and continue
+Use :sessions switch <id-or-name> to restore harness, model, and history
 ```
 
 ### Resume Session
 
 ```text
-/resume <session_id>
+:resume <session_id_or_name>
+:sessions switch <session_id_or_name>
 ```
 
-Resumes a previous session and restores the same harness, provider, model, and
-conversation history.
+Resumes a previous session and restores the same harness, BYOK provider and
+model, working directory, and conversation transcript. Prefer the human label
+from `:sessions` when ids are hard to remember.
 
 ### Compact Context
 

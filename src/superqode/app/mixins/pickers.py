@@ -1235,8 +1235,11 @@ class PickerNavigationMixin:
 
     def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable picker for resuming local sessions."""
-        manager = self._get_session_manager()
-        sessions = manager.list_all_sessions()[:12]
+        from pathlib import Path as _Path
+
+        from superqode.session.harness_bridge import ensure_sessions_listed
+
+        sessions = ensure_sessions_listed(cwd=_Path.cwd())[:12]
 
         self._awaiting_session_resume = bool(sessions)
         self._session_resume_list = sessions
@@ -1251,7 +1254,7 @@ class PickerNavigationMixin:
         t.append("\n  📂 ", style=f"bold {THEME['purple']}")
         t.append("Switch Sessions\n", style=f"bold {THEME['text']}")
         t.append(
-            "  Resuming a session restores its harness, model, and conversation history.\n\n",
+            "  Resuming restores harness, provider/model, cwd, and the same transcript.\n\n",
             style=THEME["muted"],
         )
 
@@ -1262,17 +1265,19 @@ class PickerNavigationMixin:
             t.append(" or ", style=THEME["muted"])
             t.append(":connect local", style=THEME["cyan"])
             t.append(".\n", style=THEME["muted"])
+            t.append(
+                "  Existing HarnessSpec / PiPy runs for this directory are listed automatically when present.\n",
+                style=THEME["dim"],
+            )
             self._show_command_output(log, t, clear_log=clear_log)
             return
+
+        from superqode.session.harness_bridge import format_session_label
 
         for idx, session in enumerate(sessions, 1):
             highlighted = (idx - 1) == self._session_resume_highlighted_index
             display_id = session.session_id[:8]
-            provider = session.provider or "-"
-            model = session.model or "unknown"
-            harness = session.harness_id or "workbench"
-            route = f"{provider}/{model}"
-            title = session.title or "(unnamed)"
+            label = format_session_label(session)
             if highlighted:
                 t.append("  ▶ ", style=f"bold {THEME['success']}")
                 t.append(
@@ -1285,16 +1290,11 @@ class PickerNavigationMixin:
                 t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                 style = THEME["text"]
             id_style = f"bold {THEME['cyan']}" if not highlighted else style
-            count_style = THEME["muted"] if not highlighted else style
-            title_style = THEME["dim"] if not highlighted else style
             t.append(f"{display_id:<10}", style=id_style)
-            t.append(f"{harness[:17]:<19}", style=THEME["purple"] if not highlighted else style)
-            t.append(f"{route[:27]:<29}", style=style)
-            t.append(f"{session.message_count:>3} msgs  ", style=count_style)
-            t.append(f"{title[:28]}\n", style=title_style)
+            t.append(f"{label}\n", style=style)
 
         t.append("\n  ↑↓ navigate  Enter resume  or type ", style=THEME["muted"])
-        t.append(":sessions switch <id>", style=THEME["cyan"])
+        t.append(":sessions switch <id-or-name>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t, clear_log=clear_log)
         self._scroll_to_highlighted_item(log, self._session_resume_highlighted_index, len(sessions))

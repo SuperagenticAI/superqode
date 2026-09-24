@@ -1480,15 +1480,32 @@ class SlashCommandMixin:
             return
 
         pure_mode = self._ensure_pure_mode()
-        messages = pure_mode.resume_session(session_id)
-        if not messages:
+        try:
+            messages = pure_mode.resume_session(session_id)
+        except Exception as exc:
+            from superqode.session.harness_bridge import SessionResumeError
+
+            if isinstance(exc, SessionResumeError):
+                self._announce_transition(
+                    title="Session not resumed",
+                    primary=session_id,
+                    detail=str(exc),
+                    severity="error",
+                    log=log,
+                    guidance="Fix the missing credential or harness, then retry.",
+                )
+                return
+            raise
+        # None means unresolved. An empty list is a valid harness / PiPy resume
+        # where history lives outside SessionManager JSONL.
+        if messages is None:
             self._announce_transition(
                 title="Session not resumed",
                 primary=session_id,
-                detail="The session was not found or the prefix is ambiguous",
+                detail="The session was not found or the name/id is ambiguous",
                 severity="error",
                 log=log,
-                guidance="Use /sessions to review recent session IDs.",
+                guidance="Use :sessions to review names and ids for this directory.",
             )
             return
 
@@ -1516,12 +1533,30 @@ class SlashCommandMixin:
             self._refresh_harness_panel()
         except (AttributeError, TypeError):
             pass
-        detail_parts = [f"{len(messages)} messages"]
+        from superqode.session.harness_bridge import format_session_label
+
+        label = resolved_id[:8]
+        try:
+            meta = pure_mode._session_manager.get_session_info(resolved_id) if pure_mode._session_manager else None
+            if meta is not None:
+                label = format_session_label(meta)
+        except Exception:
+            pass
+        detail_parts = [
+            f"{len(messages)} messages restored"
+            if messages
+            else "harness transcript attached"
+        ]
         if harness_name:
             detail_parts.append(_harness_display_name(harness_name))
+        session_state = getattr(pure_mode, "session", None)
+        provider = str(getattr(session_state, "provider", "") or "")
+        model = str(getattr(session_state, "model", "") or "")
+        if provider and model:
+            detail_parts.append(f"{provider}/{model}")
         self._announce_transition(
             title="Session resumed",
-            primary=resolved_id[:8],
+            primary=label,
             detail=" · ".join(detail_parts),
             severity="success",
             log=log,
