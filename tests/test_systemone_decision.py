@@ -43,7 +43,7 @@ def test_builtin_backend_rejects_decision_flavor():
 
 
 def test_example_decision_spec_loads():
-    path = Path("examples/harnesses/systemone-tool-gate.yaml")
+    path = Path("examples/harnesses/systemone/tool-gate.yaml")
     spec = load_harness_spec(path)
     assert spec.flavor is HarnessFlavor.DECISION
     assert spec.runtime.backend == "systemone"

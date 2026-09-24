@@ -145,8 +145,8 @@ contains the full reproduction procedure.
 ## Run a pack
 
 ```sh
-uv run superqode harness run examples/harnesses/systemone-ticket-triage.yaml -p 'Our production checkout is down. Please help immediately.'
-uv run superqode harness run examples/harnesses/systemone-factory-route.yaml -p 'Review this patch for correctness and security'
+uv run superqode harness run examples/harnesses/systemone/ticket-triage.yaml -p 'Our production checkout is down. Please help immediately.'
+uv run superqode harness run examples/harnesses/systemone/factory-route.yaml -p 'Review this patch for correctness and security'
 ```
 
 For the TUI, launch `uv run superqode`, then enter:
@@ -156,7 +156,7 @@ For the TUI, launch `uv run superqode`, then enter:
 Review this patch for correctness and security
 ```
 
-Alternatively launch with `--harness examples/harnesses/systemone-ticket-triage.yaml`.
+Alternatively launch with `--harness examples/harnesses/systemone/ticket-triage.yaml`.
 The selected decision harness connects on the first input without a coding provider.
 TypeSafe's live endpoint needs `TYPESAFE_API_KEY` in the launching environment.
 
@@ -253,12 +253,12 @@ Use the normal harness evaluator to compare decision outputs against labels:
 
 ```bash
 superqode harness eval-packs decision-routing
-superqode harness eval --spec examples/harnesses/systemone-factory-route.yaml \
+superqode harness eval --spec examples/harnesses/systemone/factory-route.yaml \
   --tasks src/superqode/data/eval_packs/decision-routing.yaml --split held-out --live --json
 ```
 
 For installed packages, use the path printed by `harness eval-packs`. The
-`decision-tool-gate` pack works with `examples/harnesses/systemone-tool-gate.yaml`.
+`decision-tool-gate` pack works with `examples/harnesses/systemone/tool-gate.yaml`.
 It classifies proposed commands without executing them. Both datasets are small,
 synthetic starter examples; they do not establish real-world accuracy or safety.
 Review the labels against your policy and add representative examples before

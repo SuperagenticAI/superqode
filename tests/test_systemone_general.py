@@ -143,7 +143,7 @@ def test_compatible_endpoint_roundtrip_and_no_default_key_leak(monkeypatch):
 
 def test_example_pack_path_is_relative_to_spec(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    spec = load_harness_spec(ROOT / "examples/harnesses/systemone-ticket-triage.yaml")
+    spec = load_harness_spec(ROOT / "examples/harnesses/systemone/ticket-triage.yaml")
     assert load_pack(spec.systemone.pack).id == "ticket_triage"
 
 

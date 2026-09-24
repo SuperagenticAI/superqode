@@ -8,6 +8,6 @@ systemone:
   enabled: true
   client: live
   model: jev-1.13.0
-  pack: ../systemone/ticket-triage-pack.yaml
+  pack: ../../systemone/ticket-triage-pack.yaml
 metadata:
   example: true

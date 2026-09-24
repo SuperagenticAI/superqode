@@ -868,7 +868,7 @@ and unavailable clients visibly fall back to the existing permission policy.
 For a standalone evaluation that executes no tools:
 
 ```sh
-uv run superqode harness run examples/harnesses/systemone-tool-gate.yaml -p '{"tool":"bash","arguments":{"command":"pytest"},"grant":["bash"],"task":"run tests"}'
+uv run superqode harness run examples/harnesses/systemone/tool-gate.yaml -p '{"tool":"bash","arguments":{"command":"pytest"},"grant":["bash"],"task":"run tests"}'
 ```
 
 The JSON includes the actual response model, HTTP status, latency, and usage.
@@ -889,7 +889,7 @@ For a custom pack or a configured compatible endpoint:
 
 ```text
 :systemone connect examples/systemone/ticket-triage-pack.yaml
-:systemone connect --spec examples/harnesses/systemone-ticket-triage.yaml
+:systemone connect --spec examples/harnesses/systemone/ticket-triage.yaml
 ```
 
 With the ticket pack, enter `Our production checkout is down. Please help
