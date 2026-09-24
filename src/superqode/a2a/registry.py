@@ -2,17 +2,21 @@
 A2A Agent Registry - Discover and manage A2A agents.
 
 Provides agent discovery from URLs, known endpoints, and custom registries.
+
+Routing identity is the normalized agent URL (origin-bound). The Agent Card
+``name`` field is presentational metadata, not a stable routing key. Storing
+or looking up peers by remote card name alone enables name-collision
+wrong-peer dispatch (see arXiv:2609.27624).
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from ..a2a.client import A2AClient
-from ..a2a.types import AgentCard
+from ..a2a.connection import normalize_url
 
 
 @dataclass
@@ -27,13 +31,21 @@ class A2AAgentEntry:
     verified: bool = False
 
 
+class AmbiguousAgentName(ValueError):
+    """More than one registered URL shares the same presentational name."""
+
+
 class A2ARegistry:
     """Registry for managing A2A agent connections.
+
+    Entries are keyed by normalized URL. ``name`` is a local presentational
+    alias (user-chosen on :meth:`add`, or the card name on discover). Looking
+    up by alias rejects collisions instead of silently picking one peer.
 
     Usage:
         registry = A2ARegistry()
 
-        # Add agent
+        # Add agent (local alias + URL)
         await registry.add("gemini", "http://localhost:8000")
 
         # Discover all
@@ -44,20 +56,48 @@ class A2ARegistry:
     """
 
     def __init__(self, config_path: Optional[str] = None):
+        # Stable identity: normalized URL -> entry
         self._agents: Dict[str, A2AAgentEntry] = {}
         self._config_path = config_path or ".superqode/a2a_agents.json"
+
+    def _key(self, url: str) -> str:
+        return normalize_url(url)
+
+    def _entries_named(self, name: str) -> List[A2AAgentEntry]:
+        return [entry for entry in self._agents.values() if entry.name == name]
+
+    def _require_unique_alias(self, name: str, url: str) -> None:
+        """Reject a presentational name already bound to a different URL."""
+        key = self._key(url)
+        clashes = [
+            entry for entry in self._entries_named(name) if self._key(entry.url) != key
+        ]
+        if clashes:
+            urls = ", ".join(sorted({self._key(e.url) for e in clashes} | {key}))
+            raise AmbiguousAgentName(
+                f"Agent name {name!r} is already bound to another URL; "
+                f"route by URL instead. Conflicting URLs: {urls}"
+            )
+
+    def _put(self, entry: A2AAgentEntry) -> A2AAgentEntry:
+        key = self._key(entry.url)
+        entry.url = key
+        self._require_unique_alias(entry.name, key)
+        self._agents[key] = entry
+        return entry
 
     async def add(self, name: str, url: str, description: str = "") -> bool:
         """Add an agent to the registry.
 
         Args:
-            name: Unique name for the agent
-            url: A2A server URL
+            name: Local presentational alias for the agent (not a remote identity)
+            url: A2A server URL (stable routing key)
             description: Optional description
 
         Returns:
             True if agent is reachable, False otherwise
         """
+        key = self._key(url)
         try:
             client = A2AClient(url)
             card = await client.get_agent_card()
@@ -65,55 +105,81 @@ class A2ARegistry:
 
             entry = A2AAgentEntry(
                 name=name,
-                url=url,
+                url=key,
                 description=card.description,
                 version=card.version,
                 skills=[
-                    {"id": s.id, "name": s.name, "description": s.description} for s in card.skills
+                    {"id": s.id, "name": s.name, "description": s.description}
+                    for s in card.skills
                 ],
                 verified=True,
             )
-
-            self._agents[name] = entry
+            self._put(entry)
             return True
 
-        except Exception as e:
-            # Add unverified entry anyway
+        except AmbiguousAgentName:
+            raise
+        except Exception:
             entry = A2AAgentEntry(
                 name=name,
-                url=url,
+                url=key,
                 description=description or "Unverified agent",
                 verified=False,
             )
-            self._agents[name] = entry
+            self._put(entry)
             return False
 
     async def remove(self, name: str) -> bool:
-        """Remove an agent from the registry."""
-        if name in self._agents:
-            del self._agents[name]
+        """Remove the unique agent with this presentational name."""
+        matches = self._entries_named(name)
+        if not matches:
+            # Also accept a URL passed as the selector.
+            key = self._key(name)
+            if key in self._agents:
+                del self._agents[key]
+                return True
+            return False
+        if len(matches) > 1:
+            raise AmbiguousAgentName(
+                f"Agent name {name!r} matches {len(matches)} URLs; "
+                f"remove by URL instead."
+            )
+        del self._agents[self._key(matches[0].url)]
+        return True
+
+    def remove_by_url(self, url: str) -> bool:
+        """Remove an agent by its stable URL identity."""
+        key = self._key(url)
+        if key in self._agents:
+            del self._agents[key]
             return True
         return False
 
     async def discover_from_url(self, url: str) -> Optional[A2AAgentEntry]:
-        """Discover an agent from a URL."""
+        """Discover an agent from a URL.
+
+        The registry key is the URL. The card ``name`` is stored only as a
+        presentational alias and must not collide with another URL's alias.
+        """
+        key = self._key(url)
         try:
             client = A2AClient(url)
             card = await client.get_agent_card()
             await client.close()
 
+            display = (card.name or "").strip() or key
             entry = A2AAgentEntry(
-                name=card.name,
-                url=url,
+                name=display,
+                url=key,
                 description=card.description,
                 version=card.version,
                 skills=[{"id": s.id, "name": s.name} for s in card.skills],
                 verified=True,
             )
+            return self._put(entry)
 
-            self._agents[card.name] = entry
-            return entry
-
+        except AmbiguousAgentName:
+            raise
         except Exception:
             return None
 
@@ -141,12 +207,31 @@ class A2ARegistry:
         return verified + unverified
 
     def get(self, name: str) -> Optional[A2AAgentEntry]:
-        """Get an agent by name."""
-        return self._agents.get(name)
+        """Get an agent by presentational name, or by URL.
+
+        Raises:
+            AmbiguousAgentName: if more than one URL shares the same name.
+        """
+        key = self._key(name)
+        if key in self._agents:
+            return self._agents[key]
+        matches = self._entries_named(name)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            urls = ", ".join(sorted(self._key(e.url) for e in matches))
+            raise AmbiguousAgentName(
+                f"Agent name {name!r} matches multiple URLs ({urls}); "
+                f"route by URL instead of card name."
+            )
+        return matches[0]
+
+    def get_by_url(self, url: str) -> Optional[A2AAgentEntry]:
+        """Get an agent by its stable URL identity."""
+        return self._agents.get(self._key(url))
 
     def get_by_skill(self, skill_name: str) -> List[A2AAgentEntry]:
         """Find agents that have a specific skill."""
-        skill_lower = skill_name.lower()
         matches = []
 
         for entry in self._agents.values():
@@ -165,17 +250,18 @@ class A2ARegistry:
         return list(self._agents.values())
 
     def save(self) -> None:
-        """Save registry to file."""
+        """Save registry to file (URL-keyed; name is presentational)."""
         import json
 
         data = {
-            name: {
-                "url": entry.url,
+            self._key(entry.url): {
+                "name": entry.name,
+                "url": self._key(entry.url),
                 "description": entry.description,
                 "version": entry.version,
                 "skills": entry.skills,
             }
-            for name, entry in self._agents.items()
+            for entry in self._agents.values()
         }
 
         path = Path(self._config_path)
@@ -183,7 +269,11 @@ class A2ARegistry:
         path.write_text(json.dumps(data, indent=2))
 
     def load(self) -> None:
-        """Load registry from file."""
+        """Load registry from file.
+
+        Supports the current URL-keyed format and the older name-keyed format
+        (top-level key was the alias, with ``url`` inside each object).
+        """
         import json
 
         path = Path(self._config_path)
@@ -192,14 +282,26 @@ class A2ARegistry:
 
         try:
             data = json.loads(path.read_text())
-            for name, info in data.items():
-                self._agents[name] = A2AAgentEntry(
+            self._agents.clear()
+            for top_key, info in data.items():
+                if not isinstance(info, dict):
+                    continue
+                url = str(info.get("url") or top_key)
+                name = str(info.get("name") or top_key)
+                entry = A2AAgentEntry(
                     name=name,
-                    url=info["url"],
+                    url=self._key(url),
                     description=info.get("description", ""),
                     version=info.get("version", "1.0"),
                     skills=info.get("skills", []),
                 )
+                # Skip colliding aliases from corrupt files rather than crash load.
+                try:
+                    self._put(entry)
+                except AmbiguousAgentName:
+                    # Prefer the URL identity; drop the colliding presentational alias.
+                    entry.name = self._key(url)
+                    self._agents[self._key(url)] = entry
         except Exception:
             pass
 
@@ -213,7 +315,10 @@ KNOWN_A2A_AGENTS = {
 
 
 async def discover_known_agents() -> Dict[str, A2AAgentEntry]:
-    """Discover known public A2A agents."""
+    """Discover known public A2A agents.
+
+    Returned dict keys are local known-agent aliases, not remote card names.
+    """
     discovered = {}
 
     for name, url in KNOWN_A2A_AGENTS.items():
@@ -223,8 +328,8 @@ async def discover_known_agents() -> Dict[str, A2AAgentEntry]:
             await client.close()
 
             discovered[name] = A2AAgentEntry(
-                name=card.name,
-                url=url,
+                name=name,
+                url=normalize_url(url),
                 description=card.description,
                 skills=[{"id": s.id, "name": s.name} for s in card.skills],
                 verified=True,

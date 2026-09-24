@@ -56,7 +56,7 @@ from .workflows import (
     WorkflowResult,
     WorkflowStep,
 )
-from .registry import A2ARegistry, A2AAgentEntry, discover_known_agents
+from .registry import A2ARegistry, A2AAgentEntry, AmbiguousAgentName, discover_known_agents
 from .presets import A2APresets, WorkflowPreset, get_presets
 from .skills import SkillMapper, get_skill_mapper, RoleMapping
 
@@ -90,6 +90,7 @@ __all__ = [
     # Registry
     "A2ARegistry",
     "A2AAgentEntry",
+    "AmbiguousAgentName",
     "discover_known_agents",
     # Presets
     "A2APresets",
