@@ -141,8 +141,19 @@ class MiscActionsMixin:
             self._stop_stream_animation()
             self._stop_thinking()
         elif self.is_busy:
+            if getattr(self, "_cancel_requested", False):
+                return
             self._cancel_requested = True
-            log.add_info("🛑 Cancel requested...")
+            pure = getattr(self, "_pure_mode", None)
+            if pure is not None and hasattr(pure, "cancel"):
+                pure.cancel()
+            self._stop_stream_animation()
+            self._stop_thinking()
+            clear = getattr(self, "_clear_running_tools", None)
+            if callable(clear):
+                clear(log)
+            self.is_busy = False
+            log.add_info("🛑 Agent operation cancelled")
 
         if provider:
             self._teardown_local_model_runtime(provider, model)

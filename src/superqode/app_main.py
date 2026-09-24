@@ -1004,18 +1004,13 @@ class SuperQodeApp(
             self.action_cancel_agent()
             return
 
-        # Check for BYOK/local operation
-        if hasattr(self, "_pure_mode") and self._pure_mode and self._pure_mode._agent:
-            # Cancel BYOK operation
-            self._cancel_requested = True
-            self._pure_mode.cancel()
-            provider, model = self._active_local_provider_model()
-            if provider:
-                self._teardown_local_model_runtime(provider, model)
-            self._stop_thinking()
-            self._stop_stream_animation()
-            self.is_busy = False
-            log.add_info("🛑 Agent operation cancelled")
+        # BYOK, local, and HarnessSpec runs (PiPy included) share this path.
+        # PiPy has no builtin ``_agent``, so requiring one left Escape logging
+        # "Cancel requested..." while the harness kept running.
+        if self._pure_mode_run_is_active():
+            if getattr(self, "_cancel_requested", False):
+                return
+            self._cancel_connected_run(log)
             return
 
         if self.is_busy:
@@ -1037,6 +1032,49 @@ class SuperQodeApp(
                 self._open_rewind_overlay(log)
             else:
                 log.add_info("💡 Press Esc again to rewind the conversation  •  :exit to quit")
+
+    def _pure_mode_run_is_active(self) -> bool:
+        """True when Escape should stop a PureMode or harness turn."""
+        pure = getattr(self, "_pure_mode", None)
+        if not pure:
+            return False
+        # The builtin agent loop is the historical Escape target, including
+        # when a turn is winding down and ``is_busy`` has already flipped.
+        if getattr(pure, "_agent", None) is not None:
+            return True
+        if not getattr(self, "is_busy", False):
+            return False
+        if getattr(pure, "_runtime", None) is not None:
+            return True
+        if getattr(pure, "_harness_session", None) is not None:
+            return True
+        return bool(getattr(pure, "harness_enabled", False))
+
+    def _clear_running_tools(self, log=None) -> None:
+        target = log
+        if target is None:
+            try:
+                target = self.query_one("#log", ConversationLog)
+            except Exception:
+                return
+        clear = getattr(target, "clear_running_tools", None)
+        if callable(clear):
+            clear()
+
+    def _cancel_connected_run(self, log) -> None:
+        """Abort the live model or harness turn and unlock the composer."""
+        self._cancel_requested = True
+        pure = getattr(self, "_pure_mode", None)
+        if pure is not None:
+            pure.cancel()
+        provider, model = self._active_local_provider_model()
+        if provider:
+            self._teardown_local_model_runtime(provider, model)
+        self._stop_thinking()
+        self._stop_stream_animation()
+        self._clear_running_tools(log)
+        self.is_busy = False
+        log.add_info("🛑 Agent operation cancelled")
 
     def action_focus_input(self):
         """Focus the input box - always available via Ctrl+I or when needed."""

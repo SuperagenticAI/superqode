@@ -158,6 +158,9 @@ def create_bash_tool(
         process = await asyncio.create_subprocess_exec(
             *argv,
             cwd=str(cwd),
+            # The TUI owns the terminal. A command such as ``read`` must not
+            # block on that stdin, or Escape can no longer reach the harness.
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,

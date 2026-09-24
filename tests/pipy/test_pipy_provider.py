@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -407,6 +408,34 @@ async def test_abort_before_the_request():
     events = await collect(
         GatewayStream(FakeGateway()), options=StreamOptions(signal=controller.signal)
     )
+
+    assert events[-1].type == "error"
+    assert events[-1].error.stop_reason == "aborted"
+
+
+async def test_abort_unblocks_a_provider_that_never_sends_a_chunk():
+    controller = AbortController()
+    started = asyncio.Event()
+
+    class Silent(FakeGateway):
+        def stream_completion(self, **kwargs):
+            async def generate():
+                started.set()
+                await asyncio.Event().wait()
+                yield Chunk(content="late")
+
+            return generate()
+
+    async def cancel_once_blocked():
+        await started.wait()
+        controller.abort()
+
+    task = asyncio.ensure_future(cancel_once_blocked())
+    events = await asyncio.wait_for(
+        collect(GatewayStream(Silent()), options=StreamOptions(signal=controller.signal)),
+        timeout=2,
+    )
+    await task
 
     assert events[-1].type == "error"
     assert events[-1].error.stop_reason == "aborted"

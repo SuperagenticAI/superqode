@@ -1,5 +1,6 @@
 """Tests for the minimal v2 HarnessKernel."""
 
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 
@@ -317,6 +318,106 @@ async def test_kernel_stream_emits_delta_events(monkeypatch, tmp_path: Path):
 
     assert [event.type for event in events] == ["delta", "delta", "end"]
     assert "".join(event.data.get("text", "") for event in events) == "hello-streamed"
+
+
+@pytest.mark.asyncio
+async def test_session_cancel_stops_a_blocked_backend(monkeypatch, tmp_path: Path):
+    from superqode.harness.events import HarnessEvent
+
+    class BlockingBackend:
+        def __init__(self) -> None:
+            self.release = asyncio.Event()
+            self.cancel_calls = 0
+
+        async def stream(self, request):
+            yield HarnessEvent(type="delta", data={"text": "start"})
+            await self.release.wait()
+            yield HarnessEvent(type="delta", data={"text": "after"})
+
+        async def cancel(self, session_id: str) -> None:
+            self.cancel_calls += 1
+            self.release.set()
+
+    holder: dict[str, BlockingBackend] = {}
+
+    def fake_create(name):
+        backend = BlockingBackend()
+        holder["backend"] = backend
+        return backend
+
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", fake_create)
+    store = FileHarnessStore(tmp_path / "cancel-store")
+    kernel = await init_harness(get_harness_template("no-tool"), store=store)
+    session = await kernel.session("cancel-session")
+
+    async def consume():
+        seen = []
+        async for event in session.stream(
+            "stop this",
+            provider="test",
+            model="model",
+            working_directory=tmp_path,
+        ):
+            seen.append(event)
+            if len(seen) == 1:
+                asyncio.get_running_loop().create_task(session.cancel())
+        return seen
+
+    events = await asyncio.wait_for(consume(), timeout=2)
+
+    assert holder["backend"].cancel_calls == 1
+    assert [event.data.get("text") for event in events] == ["start"]
+    record = store.get_run(events[0].run_id)
+    assert record is not None
+    assert record.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_pipy_backend_cancel_aborts_the_active_session(tmp_path: Path):
+    from superqode.harness.backends.base import HarnessBackendRequest
+    from superqode.harness.backends.pipy import PiPyHarnessBackend
+    from superqode.harness.events import HarnessEvent
+
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    class Adapter:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def resume(self, ref):
+            return ref
+
+        async def send(self, ref, message):
+            started.set()
+            await released.wait()
+            yield HarnessEvent(type="model_delta", data={"text": "late"})
+
+        async def cancel(self, ref) -> None:
+            self.calls += 1
+            released.set()
+
+    adapter = Adapter()
+    backend = PiPyHarnessBackend(adapter=adapter)
+    request = HarnessBackendRequest(
+        spec=get_harness_template("no-tool"),
+        prompt="review the notes",
+        provider="google",
+        model="gemini",
+        working_directory=tmp_path,
+        session_id="pipy-session",
+    )
+
+    async def drive():
+        return [event async for event in backend.stream(request)]
+
+    task = asyncio.create_task(drive())
+    await started.wait()
+    await backend.cancel(request.session_id)
+    events = await asyncio.wait_for(task, timeout=2)
+
+    assert adapter.calls == 1
+    assert events[0].data["text"] == "late"
 
 
 @pytest.mark.asyncio

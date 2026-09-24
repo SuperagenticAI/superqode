@@ -104,6 +104,7 @@ class PureMode:
         self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
         self._last_stats: dict[str, int | float] = {}
+        self._cancel_requested = False
 
     def _load_env_harness(self) -> None:
         reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
@@ -653,6 +654,7 @@ class PureMode:
         # Never let a provider/runtime without usage metadata display figures
         # left over from the previous turn.
         self._last_stats = {}
+        self._cancel_requested = False
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
@@ -671,6 +673,8 @@ class PureMode:
                     working_directory=self.session.working_directory,
                     runtime=self._harness_spec.runtime.backend,
                 ):
+                    if self._cancel_requested:
+                        break
                     if rich_events or event.type == "systemone.decision":
                         chunk = self._handle_runtime_harness_event(event)
                     elif event.type in {"delta", "model_delta"}:
@@ -697,6 +701,8 @@ class PureMode:
                     self._runtime_seen_tool_calls = set()
                     try:
                         async for event in self._runtime.run_harness_events(prompt):
+                            if self._cancel_requested:
+                                break
                             chunk = self._handle_runtime_harness_event(event)
                             if chunk:
                                 if self.on_stream_chunk:
@@ -706,6 +712,8 @@ class PureMode:
                         self._flush_runtime_tool_delta_buffers(force=True)
                 else:
                     async for chunk in self._runtime.run_streaming(prompt):
+                        if self._cancel_requested:
+                            break
                         if self.on_stream_chunk:
                             self.on_stream_chunk(chunk)
                         yield chunk
@@ -721,6 +729,8 @@ class PureMode:
             self._agent.config.plan_mode = plan_mode
         try:
             async for chunk in self._agent.run_streaming(prompt):
+                if self._cancel_requested:
+                    break
                 if self.on_stream_chunk:
                     self.on_stream_chunk(chunk)
                 yield chunk
@@ -1074,10 +1084,38 @@ class PureMode:
 
     def cancel(self):
         """Cancel the current agent operation."""
+        self._cancel_requested = True
         if self._agent:
             self._agent.cancel()
         elif self._runtime is not None:
             self._runtime.cancel()
+        self._schedule_harness_cancel()
+
+    def _schedule_harness_cancel(self) -> None:
+        """Abort the live HarnessSpec session without blocking the key handler."""
+        session = self._harness_session
+        if session is None:
+            return
+        cancel = getattr(session, "cancel", None)
+        if not callable(cancel):
+            return
+
+        async def _run() -> None:
+            try:
+                result = cancel()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                return
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(_run())
+            return
+        task = loop.create_task(_run())
+        self._runtime_close_tasks.add(task)
+        task.add_done_callback(self._runtime_close_tasks.discard)
 
     def get_status(self) -> Dict[str, Any]:
         """Get current Pure Mode status."""

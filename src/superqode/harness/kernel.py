@@ -7,6 +7,7 @@ larger session/event/sandbox internals are replaced.
 
 from __future__ import annotations
 
+import inspect
 import uuid
 import time
 from collections.abc import AsyncIterator, Callable
@@ -117,6 +118,30 @@ class HarnessSession:
         self._pending_runtime: Any | None = None
         self._pending_run_id: str | None = None
         self._pending_approvals: list[dict[str, Any]] = []
+        self._active_backend: Any | None = None
+        self._cancel_requested = False
+
+    async def cancel(self) -> None:
+        """Stop the run that this session is streaming or executing.
+
+        The TUI calls this from the key handler's task. The run itself is
+        another task, so this must not be awaited on that same task.
+        """
+        self._cancel_requested = True
+        backend = self._active_backend
+        if backend is None:
+            return
+        cancel = getattr(backend, "cancel", None)
+        if not callable(cancel):
+            return
+        try:
+            result = cancel(self.session_id)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            # The stream loop observes the flag and ends the run. A backend
+            # that fails while aborting must not leave Escape with no effect.
+            return
 
     async def prompt(
         self,
@@ -176,6 +201,9 @@ class HarnessSession:
                 ):
                     yield event
             return
+        # A new prompt starts clean. Escape during this run sets the flag again
+        # and must not be cleared once the backend is live.
+        self._cancel_requested = False
         runtime_name = runtime or self.kernel.spec.runtime.backend
         self.kernel.store.open_session(
             self.session_id,
@@ -230,35 +258,53 @@ class HarnessSession:
             runtime=runtime_name,
         )
         backend = create_harness_backend(runtime or self.kernel.spec.runtime.backend)
+        self._active_backend = backend
+        cancelled = False
         try:
-            async for event in backend.stream(request):
-                event_data = dict(event.data)
-                if event.type == "approval_required":
-                    self._capture_pending_approval_state(event_data, run_id=run_id)
-                    event_data.pop("pending_runtime", None)
-                normalized = HarnessEvent(
-                    type=event.type,
-                    data=event_data,
-                    session_id=self.session_id,
-                    run_id=run_id,
-                )
-                self._events.append(normalized)
-                self.kernel.store.append_event(run_id, normalized)
-                self.kernel.emit(normalized)
-                yield normalized
+            if self._cancel_requested:
+                cancelled = True
+            else:
+                async for event in backend.stream(request):
+                    if self._cancel_requested:
+                        cancelled = True
+                        break
+                    event_data = dict(event.data)
+                    if event.type == "approval_required":
+                        self._capture_pending_approval_state(event_data, run_id=run_id)
+                        event_data.pop("pending_runtime", None)
+                    normalized = HarnessEvent(
+                        type=event.type,
+                        data=event_data,
+                        session_id=self.session_id,
+                        run_id=run_id,
+                    )
+                    self._events.append(normalized)
+                    self.kernel.store.append_event(run_id, normalized)
+                    self.kernel.emit(normalized)
+                    yield normalized
         except Exception as exc:
-            self._emit(
-                "run_end",
-                run_id,
-                {"status": "failed", "error": str(exc), "error_type": type(exc).__name__},
-            )
-            self.kernel.store.end_run(
-                run_id,
-                status="failed",
-                metadata={"error": str(exc), "error_type": type(exc).__name__},
-            )
-            raise
-        status = "needs_approval" if self._pending_approvals else "succeeded"
+            if self._cancel_requested:
+                cancelled = True
+            else:
+                self._emit(
+                    "run_end",
+                    run_id,
+                    {"status": "failed", "error": str(exc), "error_type": type(exc).__name__},
+                )
+                self.kernel.store.end_run(
+                    run_id,
+                    status="failed",
+                    metadata={"error": str(exc), "error_type": type(exc).__name__},
+                )
+                raise
+        finally:
+            self._active_backend = None
+        if cancelled or self._cancel_requested:
+            status = "cancelled"
+        elif self._pending_approvals:
+            status = "needs_approval"
+        else:
+            status = "succeeded"
         latency_ms = int((time.monotonic() - started_at) * 1000)
         self._emit(
             "run_end",
@@ -298,6 +344,7 @@ class HarnessSession:
             bundle = load_governance(request.working_directory, harness_spec=self.kernel.spec)
             with governance_scope(bundle):
                 return await self.run(request)
+        self._cancel_requested = False
         runtime_name = request.runtime or self.kernel.spec.runtime.backend
         effective_prompt = build_typed_output_prompt(request.prompt, request.result_schema)
         self.kernel.store.open_session(
@@ -338,6 +385,7 @@ class HarnessSession:
             runtime=runtime_name,
         )
         backend = create_harness_backend(request.runtime or self.kernel.spec.runtime.backend)
+        self._active_backend = backend
         backend_request = HarnessBackendRequest(
             spec=self.kernel.spec,
             prompt=effective_prompt,
@@ -358,17 +406,20 @@ class HarnessSession:
         try:
             backend_result = await backend.run(backend_request)
         except Exception as exc:
-            self._emit(
-                "run_end",
-                run_id,
-                {"status": "failed", "error": str(exc), "error_type": type(exc).__name__},
-            )
-            self.kernel.store.end_run(
-                run_id,
-                status="failed",
-                metadata={"error": str(exc), "error_type": type(exc).__name__},
-            )
+            if not self._cancel_requested:
+                self._emit(
+                    "run_end",
+                    run_id,
+                    {"status": "failed", "error": str(exc), "error_type": type(exc).__name__},
+                )
+                self.kernel.store.end_run(
+                    run_id,
+                    status="failed",
+                    metadata={"error": str(exc), "error_type": type(exc).__name__},
+                )
             raise
+        finally:
+            self._active_backend = None
         latency_ms = int((time.monotonic() - started_at) * 1000)
         response = backend_result.response
         self._enforce_contextual_policy(

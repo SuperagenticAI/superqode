@@ -398,6 +398,14 @@ async def test_bash_spills_large_output_to_a_temp_file(tmp_path):
     assert "5000" in open(spill).read()
 
 
+async def test_bash_does_not_block_on_the_terminal_stdin(tmp_path):
+    """``read`` with no pipe must fail fast. It used to wait on the TUI stdin."""
+    tool = create_tool("bash", tmp_path)
+
+    with pytest.raises(RuntimeError, match="exited with code"):
+        await asyncio.wait_for(tool.execute("c1", {"command": "read line"}, None, None), timeout=2)
+
+
 async def test_bash_aborts(tmp_path):
     tool = create_tool("bash", tmp_path)
     controller = AbortController()

@@ -11,8 +11,11 @@ free of the provider stack.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from typing import Any
 
 from ..messages import (
@@ -214,6 +217,71 @@ class _ToolCallAccumulator:
         return calls
 
 
+async def _iter_until_abort(stream: Any, signal: Any) -> AsyncIterator[Any]:
+    """Yield provider chunks until the stream ends or ``signal`` aborts.
+
+    Checking the signal only after a chunk arrives leaves Escape waiting on a
+    socket that may not send anything. The wait for the next chunk is raced
+    against the signal so a silent provider still stops.
+    """
+    if signal is None:
+        async for chunk in stream:
+            yield chunk
+        return
+
+    iterator = stream.__aiter__()
+    while True:
+        if is_aborted(signal):
+            return
+        next_chunk = asyncio.ensure_future(iterator.__anext__())
+        aborted: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+
+        def _mark_aborted() -> None:
+            if not aborted.done():
+                aborted.set_result(None)
+
+        unsubscribe = signal.add_listener(_mark_aborted)
+        try:
+            if is_aborted(signal):
+                next_chunk.cancel()
+                await _await_cancelled(next_chunk)
+                return
+            done, _pending = await asyncio.wait(
+                {next_chunk, aborted},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if next_chunk not in done:
+                next_chunk.cancel()
+                await _await_cancelled(next_chunk)
+                return
+            try:
+                chunk = next_chunk.result()
+            except StopAsyncIteration:
+                return
+            if is_aborted(signal):
+                return
+            yield chunk
+        finally:
+            unsubscribe()
+            if not aborted.done():
+                aborted.cancel()
+
+
+async def _await_cancelled(task: asyncio.Future[Any]) -> None:
+    with suppress(asyncio.CancelledError, Exception):
+        await task
+
+
+async def _aclose(stream: Any) -> None:
+    closer = getattr(stream, "aclose", None)
+    if closer is None:
+        return
+    with suppress(Exception):
+        result = closer()
+        if inspect.isawaitable(result):
+            await result
+
+
 class GatewayStream:
     """A :class:`~superqode.pipy.stream.StreamFn` backed by SuperQode's gateway.
 
@@ -273,18 +341,17 @@ class GatewayStream:
 
         yield AssistantStartEvent(partial=snapshot([]))
 
+        stream = self._resolve_gateway().stream_completion(
+            messages=_gateway_messages(context.system_prompt, context.messages),
+            model=model.id,
+            provider=model.provider or None,
+            temperature=options.temperature,
+            max_tokens=options.max_tokens,
+            tools=_tool_definitions(context.tools) or None,
+            tool_choice="auto" if context.tools else None,
+        )
         try:
-            stream = self._resolve_gateway().stream_completion(
-                messages=_gateway_messages(context.system_prompt, context.messages),
-                model=model.id,
-                provider=model.provider or None,
-                temperature=options.temperature,
-                max_tokens=options.max_tokens,
-                tools=_tool_definitions(context.tools) or None,
-                tool_choice="auto" if context.tools else None,
-            )
-
-            async for chunk in stream:
+            async for chunk in _iter_until_abort(stream, options.signal):
                 if is_aborted(options.signal):
                     aborted = snapshot(content, "aborted")
                     aborted.error_message = "Operation aborted"
@@ -338,12 +405,26 @@ class GatewayStream:
                 if getattr(chunk, "finish_reason", None):
                     finish_reason = chunk.finish_reason
 
+            if is_aborted(options.signal):
+                aborted = snapshot(content, "aborted")
+                aborted.error_message = "Operation aborted"
+                yield AssistantErrorEvent(reason="aborted", error=aborted)
+                return
+
         except Exception as error:  # noqa: BLE001 - the contract forbids raising
+            if is_aborted(options.signal):
+                aborted = snapshot(content, "aborted")
+                aborted.error_message = "Operation aborted"
+                aborted.usage = usage
+                yield AssistantErrorEvent(reason="aborted", error=aborted)
+                return
             failed = snapshot(content, "error")
             failed.error_message = str(error) or error.__class__.__name__
             failed.usage = usage
             yield AssistantErrorEvent(reason="error", error=failed)
             return
+        finally:
+            await _aclose(stream)
 
         if thinking_index is not None and thinking_buffer:
             yield ThinkingEndEvent(

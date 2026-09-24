@@ -5622,6 +5622,46 @@ def test_retry_refuses_while_busy():
     assert any("still running" in str(item) for item in log.items)
 
 
+def test_smart_cancel_aborts_a_busy_harness_without_builtin_agent():
+    """PiPy has no ``_agent``. Escape must still abort that run, once."""
+
+    class HarnessPure(FakePureMode):
+        def __init__(self):
+            super().__init__()
+            self._agent = None
+            self.harness_enabled = True
+            self._harness_session = object()
+            self.calls = 0
+
+        def cancel(self):
+            self.calls += 1
+            self.cancelled = True
+
+    app = make_app()
+    log = FakeLog()
+    pure = HarnessPure()
+    app._pure_mode = pure
+    app.is_busy = True
+    app._cancel_requested = False
+    app._active_local_provider_model = lambda: (None, None)
+    app._stop_thinking = lambda *args, **kwargs: None
+    app._stop_stream_animation = lambda *args, **kwargs: None
+    app.query_one = lambda *args, **kwargs: log
+
+    app.action_smart_cancel()
+
+    assert pure.calls == 1
+    assert app._cancel_requested is True
+    assert app.is_busy is False
+    assert sum("cancelled" in str(item).lower() for item in log.items) == 1
+
+    app.is_busy = True
+    app.action_smart_cancel()
+
+    assert pure.calls == 1
+    assert sum("cancelled" in str(item).lower() for item in log.items) == 1
+
+
 def test_smart_cancel_resets_local_byok_busy_state():
     app = make_app()
     log = FakeLog()

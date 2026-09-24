@@ -39,6 +39,7 @@ class PiPyHarnessBackend:
 
     def __init__(self, *, adapter: PiPyHarnessProtocolAdapter | None = None) -> None:
         self.adapter = adapter or PiPyHarnessProtocolAdapter()
+        self._active_ref: HarnessSessionRef | None = None
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         events: list[HarnessEvent] = []
@@ -88,15 +89,35 @@ class PiPyHarnessBackend:
         async for event in self._events(request):
             yield event
 
+    async def cancel(self, session_id: str | None = None) -> None:
+        """Abort the coding session that ``stream`` or ``run`` is driving."""
+        ref = self._active_ref
+        if ref is None:
+            return
+        if session_id and session_id not in {ref.session_id, ref.external_session_id}:
+            safe = _safe_session_id(session_id)
+            if ref.session_id != safe:
+                return
+        await self.adapter.cancel(ref)
+
     async def _events(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         ref = await self.adapter.resume(_session_ref(request))
-        async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
-            yield event
+        self._active_ref = ref
+        try:
+            async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
+                yield event
+        finally:
+            if self._active_ref is ref:
+                self._active_ref = None
+
+
+def _safe_session_id(session_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", session_id).strip(".-") or "session"
 
 
 def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
     session_id = request.session_id or "pipy-session"
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", session_id).strip(".-") or "session"
+    safe = _safe_session_id(session_id)
     return HarnessSessionRef(
         session_id=safe,
         harness_id="pipy",

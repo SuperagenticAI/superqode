@@ -2609,6 +2609,14 @@ class ConversationLog(RichLog):
             line.append(f"  +{hidden} more", style=THEME["dim"])
         return line
 
+    def clear_running_tools(self) -> None:
+        """Drop the live "running …" strip after the user stops the turn."""
+        active = getattr(self, "_active_tool_start_times", None)
+        if not active:
+            return
+        active.clear()
+        self._update_active_tool_status()
+
     def _update_active_tool_status(self) -> None:
         try:
             panel = self.app.query_one("#active-tools", Static)

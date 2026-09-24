@@ -972,6 +972,11 @@ class AgentRunMixin:
             # Continue the same thinking phase while streaming starts. Restarting
             # the shared indicator here would show "Thinking" twice in one turn.
             self._start_stream_animation(log)
+            if getattr(self, "_cancel_requested", False):
+                self._stop_stream_animation()
+                self._stop_thinking()
+                self.is_busy = False
+                return
 
             # Use enhanced agent session header (always visible)
             runtime_name = str(getattr(self._pure_mode, "runtime_name", "") or "")
@@ -1007,6 +1012,10 @@ class AgentRunMixin:
                     async for chunk in self._pure_mode.run_streaming(
                         text, plan_mode=plan_mode_for_run
                     ):
+                        if getattr(self, "_cancel_requested", False) or getattr(
+                            self._pure_mode, "_cancel_requested", False
+                        ):
+                            break
                         chunk_count += 1
 
                         # Process chunk
@@ -1159,6 +1168,14 @@ class AgentRunMixin:
 
                 if not full_response:
                     full_response = f"[Error: {error_type}] {error_msg}"
+
+            if getattr(self, "_cancel_requested", False) or getattr(
+                self._pure_mode, "_cancel_requested", False
+            ):
+                self._stop_stream_animation()
+                self._stop_thinking()
+                self.is_busy = False
+                return
 
             # Stop animation
             self._stop_stream_animation()
