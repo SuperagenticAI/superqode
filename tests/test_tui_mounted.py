@@ -601,7 +601,7 @@ async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monke
         await pilot.pause()
 
         assert app._awaiting_harness_selection is False
-        assert app._pure_mode.session.harness_name == "rlm"
+        assert app._pure_mode.session.harness_name == "RLM"
         assert "Harness switched: RLM · from Core" in "\n".join(line.text for line in log.lines)
 
 

@@ -142,13 +142,7 @@ class PiPyCommandMixin:
             return
 
         if sub == "resume":
-            records = session.list_sessions()
-            if not records:
-                log.add_info("No previous PiPy sessions for this directory.")
-                return
-            for index, record in enumerate(records[:20], start=1):
-                log.add_info(f"[{index:2}] {record.path.name}")
-            log.add_info("Reopen one with :pipy tree, or start fresh with :pipy new.")
+            await self._pipy_resume(session, rest, log)
             return
 
         if sub == "name":
@@ -201,6 +195,119 @@ class PiPyCommandMixin:
             return
 
         log.add_error(f":pipy {sub} is declared but not wired.")
+
+    async def _pipy_resume(self, session: Any, rest: str, log) -> None:
+        """List or reopen a prior PiPy session into the live conversation."""
+        records = session.list_sessions()
+        if not records:
+            log.add_info("No previous PiPy sessions for this directory.")
+            return
+
+        choice = (rest or "").strip()
+        if not choice:
+            for index, record in enumerate(records[:20], start=1):
+                name = ""
+                try:
+                    name = str(getattr(record.metadata, "name", "") or "")
+                except Exception:
+                    name = ""
+                label = f"{record.path.name}" + (f"  ({name})" if name else "")
+                log.add_info(f"[{index:2}] {label}")
+            log.add_info("Reopen with :pipy resume <n> or :pipy resume <path>.")
+            log.add_info("Or use :sessions switch after the session is registered.")
+            return
+
+        selected = self._resolve_pipy_resume_target(records, choice)
+        if selected is None:
+            log.add_error(f"PiPy session not found: {choice}")
+            log.add_info("Use :pipy resume to list candidates for this directory.")
+            return
+
+        pure = getattr(self, "_pure_mode", None)
+        if pure is None:
+            log.add_error("No active Pure Mode session.")
+            return
+
+        session_id = f"pipy-{selected.id}"
+        pure._harness_session = None
+        pure._harness_kernel = None
+        pure._harness_session_id = session_id
+        working_directory = Path(
+            str(getattr(getattr(pure, "session", None), "working_directory", "") or Path.cwd())
+        )
+        try:
+            from superqode.harness.pipy_adapter import _record_session_path
+            from superqode.session.harness_bridge import upsert_harness_session_meta
+
+            _record_session_path(session_id, selected.path)
+            title = ""
+            try:
+                title = str(getattr(selected.metadata, "name", "") or "") or selected.path.name
+            except Exception:
+                title = selected.path.name
+            upsert_harness_session_meta(
+                session_id,
+                provider=str(getattr(getattr(pure, "session", None), "provider", "") or ""),
+                model=str(getattr(getattr(pure, "session", None), "model", "") or ""),
+                harness_id="pipy",
+                harness_source="pipy",
+                harness_display="PiPy",
+                title=title,
+                backend_session_path=str(selected.path),
+                working_directory=working_directory,
+            )
+        except Exception as error:  # noqa: BLE001
+            log.add_error(f"Could not register PiPy session: {error}")
+            return
+
+        # Reopen through the adapter so the next prompt continues this file.
+        from superqode.harness.pipy_adapter import PiPyHarnessProtocolAdapter
+        from superqode.harness.protocol import HarnessSessionRef
+
+        adapter = PiPyHarnessProtocolAdapter()
+        await adapter.resume(
+            HarnessSessionRef(
+                session_id=session_id,
+                harness_id="pipy",
+                external_session_id=selected.id,
+                metadata={
+                    "working_directory": str(working_directory),
+                    "session_path": str(selected.path),
+                    "provider": str(getattr(getattr(pure, "session", None), "provider", "") or ""),
+                    "model": str(getattr(getattr(pure, "session", None), "model", "") or ""),
+                },
+            )
+        )
+        from superqode.session.harness_bridge import format_session_label
+        from superqode.agent.session_manager import SessionManager
+
+        meta = SessionManager(".superqode/sessions").get_session_info(session_id)
+        label = format_session_label(meta) if meta else session_id
+        log.add_success(f"Reopened {label}")
+        log.add_info(f"id {session_id} · path {selected.path.name}")
+        log.add_info("Send a message to continue this transcript. It also appears in :sessions.")
+
+    @staticmethod
+    def _resolve_pipy_resume_target(records: list[Any], choice: str) -> Any | None:
+        """Resolve :pipy resume <n|path|id> against listed SessionRecords."""
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(records):
+                return records[index]
+            return None
+
+        lowered = choice.lower()
+        path_choice = Path(choice).expanduser()
+        matches = []
+        for record in records:
+            path = Path(record.path)
+            if path == path_choice or path.name == choice or str(path) == choice:
+                return record
+            if record.id.lower() == lowered or path.name.lower().startswith(lowered):
+                matches.append(record)
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
 
 __all__ = ["PiPyCommandMixin"]

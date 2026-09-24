@@ -111,7 +111,8 @@ These are typed as `:pipy <command>`, aliased `:pi`. `:pipy help` lists them:
 | `:pipy compact` | Summarise older context and keep working |
 | `:pipy tree` | Move to another point in the session tree, summarising the branch left behind |
 | `:pipy fork` | Copy the current branch into a new session, leaving the source untouched |
-| `:pipy resume` | Reopen a previous session for this directory |
+| `:pipy resume` | List prior sessions for this directory |
+| `:pipy resume <n or path>` | Reopen that PiPy session into the live chat and register it in `:sessions` |
 | `:pipy new` | Start a fresh session |
 | `:pipy name` | Name the current session |
 | `:pipy model` | Switch the model for the next turn |

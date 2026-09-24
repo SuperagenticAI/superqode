@@ -56,7 +56,7 @@ superqode harness tune --data examples/tune/factory-route-active.csv \
   --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
 
 # Reviewed examples
-superqode harness tune --spec examples/harnesses/systemone-factory-route.yaml \
+superqode harness tune --spec examples/harnesses/systemone/factory-route.yaml \
   --data reviewed-tickets.csv --input request --label route \
   --reflection-lm openai/gpt-5 --max-evals 120 --max-reflection-cost 2 \
   --output .superqode/tuning/routing-v2 --seed 0 --live --json

@@ -410,8 +410,11 @@ class DialogsMixin:
 
     def _show_sessions(self, log: ConversationLog):
         """Show recent local coding sessions."""
-        manager = self._get_session_manager()
-        sessions = manager.list_all_sessions()
+        from pathlib import Path as _Path
+
+        from superqode.session.harness_bridge import ensure_sessions_listed
+
+        sessions = ensure_sessions_listed(cwd=_Path.cwd())
 
         t = Text()
         t.append("\n  📂 ", style=f"bold {THEME['purple']}")
@@ -424,26 +427,36 @@ class DialogsMixin:
             t.append(" or ", style=THEME["muted"])
             t.append(":connect local", style=THEME["cyan"])
             t.append(" and send a message to create one.\n", style=THEME["muted"])
+            t.append(
+                "  HarnessSpec / PiPy runs for this directory also appear here after the first turn.\n",
+                style=THEME["dim"],
+            )
             self._show_command_output(log, t)
             return
 
-        for session in sessions[:12]:
-            display_id = session.session_id[:8]
-            model = session.model or "unknown"
-            provider = session.provider or "-"
-            harness = session.harness_id or "workbench"
-            route = f"{provider}/{model}"
-            t.append(f"  {display_id:<10}", style=f"bold {THEME['cyan']}")
-            t.append(f"{harness[:17]:<19}", style=THEME["purple"])
-            t.append(f"{route[:29]:<31}", style=THEME["text"])
-            t.append(f"{session.message_count:>3} msgs  ", style=THEME["muted"])
-            t.append(f"{session.updated_at[:19]}\n", style=THEME["dim"])
+        from superqode.session.harness_bridge import (
+            format_session_row_label,
+            group_sessions_by_harness,
+        )
 
-        t.append("\n  Use ", style=THEME["muted"])
-        t.append(":sessions switch <id>", style=THEME["cyan"])
-        t.append(" to restore its harness and history, or ", style=THEME["muted"])
+        recent = sessions[:12]
+        for harness_name, rows in group_sessions_by_harness(recent):
+            t.append(f"  {harness_name}\n", style=f"bold {THEME['purple']}")
+            for session in rows:
+                display_id = session.session_id[:8]
+                label = format_session_row_label(session)
+                t.append(f"    {display_id:<10}", style=f"bold {THEME['cyan']}")
+                t.append(f"{label}\n", style=THEME["text"])
+            t.append("\n")
+
+        t.append("  Use ", style=THEME["muted"])
+        t.append(":sessions switch <id-or-name>", style=THEME["cyan"])
+        t.append(" to restore harness, model, and history, or ", style=THEME["muted"])
         t.append("/fork <optional-new-id>", style=THEME["cyan"])
         t.append(" to branch the active session.\n", style=THEME["muted"])
+        t.append("  Rename with ", style=THEME["muted"])
+        t.append(":sessions rename <id-or-name> <title>", style=THEME["cyan"])
+        t.append(".\n", style=THEME["muted"])
         t.append("  Use ", style=THEME["muted"])
         t.append(":switchboard", style=THEME["cyan"])
         t.append(" for graph, handoff, approvals, and share-tree actions.\n", style=THEME["muted"])

@@ -56,12 +56,23 @@ In the TUI:
 :tree
 :session
 :session rename <name>
-:resume <id>
+:sessions
+:sessions rename <id-or-name> <title>
+:sessions switch
+:sessions switch <id-or-name>
+:sessions switch latest
+:resume latest
+:resume <id-or-name>
 :fork <new-id>
 :export html
 :export markdown
 :export json
 ```
+
+`:sessions` lists BYOK and HarnessSpec sessions for this directory grouped by
+harness, with `model · topic · age` rows. `:sessions switch` restores harness,
+provider/model, cwd, and the same transcript. `:pipy resume <n>` reopens a prior
+PiPy file into the live chat and registers it for `:sessions`.
 
 From the CLI:
 

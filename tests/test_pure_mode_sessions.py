@@ -215,24 +215,34 @@ def test_resume_reuses_resolved_session_id_and_fork_branches_active_session(tmp_
 
 def test_resume_harness_spec_carries_session_id_into_kernel(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
     manager = SessionManager(".superqode/sessions")
     manager.start_session(
-        "kimi-session-1234",
-        provider="moonshot",
-        model="kimi-k3",
-        harness_id="kimi-coding",
-        harness_source="built-in-template",
+        "pipy-session-1234",
+        provider="ollama",
+        model="qwen2.5-coder",
+        harness_id="pipy",
+        harness_source="built-in",
     )
+    # Mark as harness-backed so resume attaches the kernel session id.
+    meta = manager.get_session_info("pipy-session-1234")
+    assert meta is not None
+    meta.harness_session = True
+    meta.harness_display_name = "PiPy"
+    meta.title = "inspect the repository"
+    manager.store._save_metadata(meta)
     manager.add_user_message("inspect the repository")
 
     pure = PureMode()
     pure._session_manager = SessionManager(".superqode/sessions")
-    messages = pure.resume_session("kimi-session")
+    messages = pure.resume_session("pipy-session")
 
     assert messages
-    assert pure.session.harness_name == "kimi-coding"
-    assert pure.get_current_session_id() == "kimi-session-1234"
-    assert pure._harness_session_id == "kimi-session-1234"
+    assert pure.session.harness_name == "PiPy"
+    assert pure.session.provider == "ollama"
+    assert pure.session.model == "qwen2.5-coder"
+    assert pure.get_current_session_id() == "pipy-session-1234"
+    assert pure._harness_session_id == "pipy-session-1234"
 
 
 def test_legacy_session_resumes_with_workbench_harness(tmp_path, monkeypatch):

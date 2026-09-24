@@ -738,6 +738,7 @@ COMMANDS = [
     ":sessions tree",
     ":sessions graph",
     ":sessions switch",
+    ":sessions rename",
     ":sessions info",
     ":sessions history",
     ":sessions children",

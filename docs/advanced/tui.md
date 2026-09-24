@@ -407,11 +407,14 @@ Use session commands when you want to inspect, branch, or hand off work:
 :tree
 :session
 :session rename <name>
+:sessions rename <id-or-name> <title>
 :harness switch <name>
 :harness switch <name> --fork
 :sessions switch
-:sessions switch <id>
-:resume <id>
+:sessions switch <id-or-name>
+:sessions switch latest
+:resume <id-or-name>
+:resume latest
 :fork <new-id>
 :share
 :share create [session] [path]
@@ -465,9 +468,11 @@ that agent's native runtime connector. An ACP name such as `acp:qwen` starts the
 agent's ACP session and queues a bounded replay of recent user and agent
 messages for its first prompt. SuperQode reports the replay count in the switch
 receipt. Agent-native session resumption remains separate. Add `--fork` only
-for HarnessSpec entries. `:sessions switch` opens a picker that labels every
-session with its latest harness. Selecting one restores its harness, model, and
-conversation history.
+for HarnessSpec entries. `:sessions switch` opens a picker grouped by harness. Each group lists rows as `model · topic · age`, with a short id you can type. Resume replays the chat transcript into the conversation log and updates the status bar with harness, model, and session label. Use `:sessions rename <id-or-name> <title>` to set a lasting title, or `:resume latest` to jump to the most recent session.
+Selecting one restores its harness, BYOK provider and model, working directory,
+and the same transcript. Missing credentials or harnesses fail clearly instead
+of opening a blank session. BYOK and PiPy harness sessions remain listed after
+disconnect.
 
 Share artifacts are local/offline `superqode-share-v1` JSON files. They are
 intended for moving a session between machines or teammates without requiring a
@@ -863,7 +868,7 @@ and unavailable clients visibly fall back to the existing permission policy.
 For a standalone evaluation that executes no tools:
 
 ```sh
-uv run superqode harness run examples/harnesses/systemone-tool-gate.yaml -p '{"tool":"bash","arguments":{"command":"pytest"},"grant":["bash"],"task":"run tests"}'
+uv run superqode harness run examples/harnesses/systemone/tool-gate.yaml -p '{"tool":"bash","arguments":{"command":"pytest"},"grant":["bash"],"task":"run tests"}'
 ```
 
 The JSON includes the actual response model, HTTP status, latency, and usage.
@@ -884,7 +889,7 @@ For a custom pack or a configured compatible endpoint:
 
 ```text
 :systemone connect examples/systemone/ticket-triage-pack.yaml
-:systemone connect --spec examples/harnesses/systemone-ticket-triage.yaml
+:systemone connect --spec examples/harnesses/systemone/ticket-triage.yaml
 ```
 
 With the ticket pack, enter `Our production checkout is down. Please help

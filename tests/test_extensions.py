@@ -252,7 +252,7 @@ class ExtraTool(Tool):
 
     pure = PureMode()
 
-    assert pure.session.harness_name == "core"
+    assert pure.session.harness_name == "Core"
     assert [tool.name for tool in pure.tools.list()] == ["read", "write", "edit", "bash", "extra"]
 
     from superqode.plugins import disable_plugin, enable_plugin

@@ -251,7 +251,7 @@ class PureMode:
             self.session.harness_flavor = ""
             self.session.harness_runtime = ""
             return
-        self.session.harness_name = definition.id
+        self.session.harness_name = getattr(definition, "display_name", "") or definition.id
         self.session.harness_path = self._harness_path
         self.session.harness_flavor = definition.spec.flavor.value
         self.session.harness_runtime = definition.runtime
@@ -377,7 +377,10 @@ class PureMode:
             # kernel so switching away and back restores the original history.
             if session_id:
                 self._harness_session_id = session_id
-            self.session.harness_name = self._harness_spec.name
+            definition = self._harness_definition
+            self.session.harness_name = (
+                getattr(definition, "display_name", "") or self._harness_spec.name
+            )
             self.session.harness_path = self._harness_path
             self.session.harness_flavor = self._harness_spec.flavor.value
             self.session.harness_runtime = self._harness_spec.runtime.backend
@@ -385,6 +388,11 @@ class PureMode:
                 self.tool_profile = "none"
                 self.tools = ToolRegistry.empty()
             self._dispose_runtime()
+            # When resuming with an explicit id, register SessionManager meta
+            # immediately so :sessions lists the harness session before the
+            # first post-resume turn. New sessions still dual-write on open.
+            if session_id:
+                self._dual_write_harness_session_meta()
             return True
 
         provider_def = PROVIDERS.get(provider)
@@ -599,6 +607,7 @@ class PureMode:
             self.session.total_tool_calls += result.tool_calls_made
             self.session.total_iterations += result.iterations
             self.session.total_requests += 1
+            self._dual_write_harness_session_meta(preview=(prompt or "")[:120])
             return result.response
 
         if not self._agent:
@@ -677,6 +686,7 @@ class PureMode:
                 if rich_events:
                     self._flush_runtime_tool_delta_buffers(force=True)
             self.session.total_requests += 1
+            self._dual_write_harness_session_meta(preview=(prompt or "")[:120])
             return
 
         if not self._agent:
@@ -971,7 +981,51 @@ class PureMode:
         self._harness_session_id = self._harness_session_id or ""
         self._harness_session = await self._harness_kernel.session(self._harness_session_id or None)
         self._harness_session_id = self._harness_session.session_id
+        self._dual_write_harness_session_meta()
         return self._harness_session
+
+    def _dual_write_harness_session_meta(self, *, preview: str = "") -> None:
+        """Mirror harness sessions into SessionManager so :sessions can list them."""
+        session_id = (self._harness_session_id or "").strip()
+        if not session_id or self._harness_spec is None:
+            return
+        try:
+            from superqode.session.harness_bridge import upsert_harness_session_meta
+
+            definition = self._harness_definition
+            backend_path = ""
+            if self._session_manager is not None:
+                existing = self._session_manager.get_session_info(session_id)
+                if existing is not None:
+                    backend_path = existing.backend_session_path or ""
+            harness_id = (
+                getattr(definition, "id", "") or getattr(self._harness_spec, "name", "") or ""
+            )
+            upsert_harness_session_meta(
+                session_id,
+                provider=self.session.provider,
+                model=self.session.model,
+                harness_id=harness_id,
+                harness_source=getattr(definition, "source", "") or "harness-spec",
+                harness_digest=getattr(definition, "digest", "") or "",
+                harness_display=(
+                    getattr(definition, "display_name", "")
+                    or self.session.harness_name
+                    or harness_id
+                ),
+                # Preview becomes the human topic (first prompt); do not use the
+                # harness id alone as the title.
+                title="",
+                backend_session_path=backend_path,
+                working_directory=self.session.working_directory or Path.cwd(),
+                preview=preview,
+            )
+            if self._session_manager is None:
+                self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+            self._session_manager._current_session_id = session_id
+        except Exception:
+            # Dual-write must never break an active harness turn.
+            return
 
     def get_pending_approvals(self) -> list[dict[str, Any]]:
         """Return pending approval requests from the active harness or runtime."""
@@ -1060,6 +1114,15 @@ class PureMode:
         """List recent sessions."""
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+        try:
+            from superqode.session.harness_bridge import discover_external_sessions
+
+            discover_external_sessions(
+                cwd=self.session.working_directory or Path.cwd(),
+                register=True,
+            )
+        except Exception:
+            pass
         sessions = self._session_manager.list_all_sessions()
         return [
             {
@@ -1075,22 +1138,74 @@ class PureMode:
         ]
 
     def resolve_session_id(self, session_id_or_prefix: str) -> Optional[str]:
-        """Resolve a full session id from an exact id or unique prefix."""
+        """Resolve a full session id from an exact id, unique prefix, or title."""
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
+        choice = (session_id_or_prefix or "").strip()
+        if not choice:
+            return None
+
         sessions = self._session_manager.list_all_sessions()
-        exact = [s.session_id for s in sessions if s.session_id == session_id_or_prefix]
+        exact = [s.session_id for s in sessions if s.session_id == choice]
         if exact:
             return exact[0]
 
-        matches = [s.session_id for s in sessions if s.session_id.startswith(session_id_or_prefix)]
-        return matches[0] if len(matches) == 1 else None
+        prefix_matches = [s.session_id for s in sessions if s.session_id.startswith(choice)]
+        if len(prefix_matches) == 1:
+            return prefix_matches[0]
+
+        lowered = choice.lower()
+        from superqode.session.harness_bridge import format_session_label
+
+        title_matches = []
+        for session in sessions:
+            title = (session.title or "").strip().lower()
+            label = format_session_label(session).lower()
+            display = (session.harness_display_name or "").strip().lower()
+            if lowered == title or lowered in title or lowered in label:
+                title_matches.append(session.session_id)
+            elif lowered == display and len(sessions) == 1:
+                title_matches.append(session.session_id)
+        # De-dupe while preserving order.
+        seen: set[str] = set()
+        unique = []
+        for sid in title_matches:
+            if sid not in seen:
+                seen.add(sid)
+                unique.append(sid)
+        return unique[0] if len(unique) == 1 else None
 
     def resume_session(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
-        """Resume a session by ID."""
+        """Resume a session by ID, title fragment, or unique prefix.
+
+        Restores provider, model, harness, working directory, and the harness /
+        PiPy session id so the next prompt continues the same transcript.
+
+        Returns an empty list when the session exists but has no JSONL history
+        (common for HarnessSpec / PiPy dual-written rows). Returns None only
+        when the id cannot be resolved. Raises SessionResumeError when the
+        session is known but cannot be restored safely (missing harness or
+        provider credentials).
+        """
+        from superqode.session.harness_bridge import (
+            SessionResumeError,
+            discover_external_sessions,
+            format_session_label,
+            missing_provider_credentials,
+        )
+
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+
+        # Surface FileHarnessStore / PiPy sessions that never dual-wrote yet.
+        try:
+            discover_external_sessions(
+                cwd=self.session.working_directory or Path.cwd(),
+                register=True,
+            )
+        except Exception:
+            pass
 
         resolved_session_id = self.resolve_session_id(session_id)
         if not resolved_session_id:
@@ -1100,30 +1215,84 @@ class PureMode:
         if not metadata:
             return None
 
-        # Sessions created before harness metadata existed used the historical
-        # native behavior, now called workbench. Preserve that behavior instead
-        # of silently resuming old conversations under the lean core contract.
+        label = format_session_label(metadata)
         resume_harness = metadata.harness_id or "workbench"
         try:
             self.select_harness(resume_harness)
-        except (FileNotFoundError, ValueError):
-            self.select_harness("workbench")
+        except (FileNotFoundError, ValueError) as exc:
+            # Never silently open a different harness for a stored harness session.
+            if metadata.harness_session or resume_harness not in {"workbench", "core", ""}:
+                raise SessionResumeError(
+                    f"Cannot resume '{label}': harness '{resume_harness}' is not available ({exc}). "
+                    f"Restore or install that harness, then retry :sessions switch {resolved_session_id[:8]}."
+                ) from exc
+            try:
+                self.select_harness("workbench")
+            except (FileNotFoundError, ValueError) as inner:
+                raise SessionResumeError(
+                    f"Cannot resume '{label}': no usable harness ({inner})."
+                ) from inner
+
+        provider = metadata.provider or self.session.provider
+        model = metadata.model or self.session.model
+        if not provider or not model:
+            raise SessionResumeError(
+                f"Cannot resume '{label}': stored provider/model is missing. "
+                "Connect with :connect byok (same provider and model), then retry "
+                f":sessions switch {resolved_session_id[:8]}."
+            )
+
+        missing = missing_provider_credentials(provider)
+        if missing:
+            raise SessionResumeError(
+                f"Cannot resume '{label}': provider '{provider}' needs {missing}. "
+                f"Set the key, then retry :sessions switch {resolved_session_id[:8]}."
+            )
 
         # Start session and get messages
         self._session_manager.start_session(session_id=resolved_session_id)
         messages = self._session_manager.get_messages()
 
-        # Reconnect with same settings
+        working_directory = self.session.working_directory or Path.cwd()
+        if metadata.working_directory:
+            try:
+                working_directory = Path(metadata.working_directory).expanduser().resolve()
+            except OSError:
+                working_directory = Path(metadata.working_directory)
+
+        # HarnessSpec / PiPy: attach the existing kernel session id (and PiPy
+        # transcript path) before connect so reconnect is not a blank session.
+        # select_harness clears _harness_session_id; restore it whenever the
+        # resumed harness routes through the kernel rather than AgentLoop.
+        if self._harness_spec is not None or metadata.harness_session:
+            self._harness_session = None
+            self._harness_kernel = None
+            self._harness_session_id = resolved_session_id
+            if metadata.backend_session_path:
+                try:
+                    from superqode.harness.pipy_adapter import _record_session_path
+
+                    _record_session_path(
+                        resolved_session_id,
+                        Path(metadata.backend_session_path),
+                    )
+                except Exception:
+                    pass
+
+        # Reconnect with same provider + model + harness session id.
         self.connect(
-            provider=metadata.provider,
-            model=metadata.model,
+            provider=provider,
+            model=model,
             system_level=self.session.system_level,
-            working_directory=self.session.working_directory,
+            working_directory=working_directory,
             session_id=resolved_session_id,
         )
 
-        # Return messages for display
-        return [
+        # Return messages for display. Prefer SessionManager JSONL; when thin,
+        # fall back to an external harness / PiPy transcript for TUI replay.
+        from superqode.session.harness_bridge import enrich_resume_messages
+
+        payload = [
             {
                 "role": m.role,
                 "content": m.content,
@@ -1131,6 +1300,18 @@ class PureMode:
             }
             for m in messages
         ]
+        turns, _receipt = enrich_resume_messages(payload, metadata)
+        if turns and not payload:
+            return turns
+        if turns and len(turns) > len(
+            [
+                item
+                for item in payload
+                if str(item.get("role") or "").lower() in {"user", "assistant"}
+            ]
+        ):
+            return turns
+        return payload
 
     def get_current_session_id(self) -> Optional[str]:
         """Get current session ID."""

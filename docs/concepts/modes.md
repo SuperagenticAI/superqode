@@ -621,7 +621,8 @@ HarnessSpec defines the controls applied to work:
 - workflow and optimization settings
 
 Switching a connection does not delete saved sessions or HarnessSpecs. Use
-`:sessions` to resume a session and `:harness` to list or switch harnesses.
+`:sessions` / `:sessions switch` to restore harness, provider/model, and
+transcript for a saved session, and `:harness` to list or switch harnesses.
 
 ## Safety and Diagnostics
 

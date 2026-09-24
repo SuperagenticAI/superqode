@@ -159,6 +159,8 @@ class ColorfulStatusBar(Static):
     # can set "core", which `_disconnect_everything` clears again, so "core" and
     # "" both mean "nothing connected" wherever this is read.
     active_harness: reactive[str] = reactive("")
+    # Short session title/id shown after resume so the active chat is obvious.
+    active_session: reactive[str] = reactive("")
     can_go_back: reactive[bool] = reactive(False)
     interaction_mode: reactive[str] = reactive("build")
     plan_state: reactive[str] = reactive("")
@@ -290,6 +292,16 @@ class ColorfulStatusBar(Static):
                 result.append(
                     self._truncate_status_value(harness, harness_limit),
                     style="bold #a855f7",
+                )
+
+            session_label = (self.active_session or "").strip()
+            if session_label and medium:
+                separator()
+                result.append("sess " if wide else "s ", style="#71717a")
+                session_limit = 22 if wide else 14
+                result.append(
+                    self._truncate_status_value(session_label, session_limit),
+                    style="#e9d5ff",
                 )
 
             # Interaction mode is always visible, on the right cluster.

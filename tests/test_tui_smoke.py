@@ -58,6 +58,12 @@ class FakeLog:
     def add_info(self, text):
         self.items.append(text)
 
+    def add_user(self, text):
+        self.items.append(("user", text))
+
+    def add_assistant(self, text, agent="Assistant"):
+        self.items.append(("assistant", text, agent))
+
     def add_success(self, text):
         self.items.append(text)
 
@@ -2297,7 +2303,7 @@ def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, mo
     assert saved.harness_transitions[-1]["from_harness"] == "core"
     assert saved.harness_transitions[-1]["to_harness"] == "workbench"
     assert saved.harness_transitions[-1]["continuity"] == "context-replay"
-    assert pure.session.harness_name == "workbench"
+    assert pure.session.harness_name == "Workbench"
     assert pure.session.provider == "test"
     assert pure.session.model == "model"
     assert pure.get_current_session_id() == "core-session-1234"
@@ -2848,9 +2854,10 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     assert app._awaiting_session_resume is True
     rendered = render_plain(log.items[-1])
     assert "Switch Sessions" in rendered
-    assert "restores its harness" in rendered
-    assert "workbench" in rendered
-    assert ":sessions switch <id>" in rendered
+    assert "restores harness" in rendered
+    assert "Grouped by harness" in rendered
+    assert "Workbench" in rendered
+    assert ":sessions switch <id-or-name>" in rendered
 
     app.action_navigate_session_resume_down()
     expected_id = app._session_resume_list[app._session_resume_highlighted_index].session_id
@@ -2859,6 +2866,7 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     assert resumed == [expected_id]
     assert app._awaiting_session_resume is False
     assert any("Session resumed" in str(item) for item in log.items)
+    assert any(isinstance(item, tuple) and item[0] == "user" for item in log.items)
 
 
 def test_share_create_import_list_and_revoke(tmp_path, monkeypatch):
@@ -7445,3 +7453,219 @@ def test_a2a_picker_opens_the_connect_screen(monkeypatch):
 
     assert len(pushed) == 1
     assert isinstance(pushed[0], A2AConnectScreen)
+
+
+def test_sessions_rename_persists_title(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+    from superqode.session.harness_bridge import format_session_label
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    manager.start_session("rename-me-01", provider="ollama", model="qwen")
+
+    app = make_app()
+    log = FakeLog()
+    pure = type(
+        "PM",
+        (),
+        {
+            "resolve_session_id": staticmethod(
+                lambda value: "rename-me-01"
+                if "rename" in value or value.startswith("rename")
+                else None
+            ),
+            "get_current_session_id": staticmethod(lambda: "rename-me-01"),
+            "_session_manager": manager,
+        },
+    )()
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
+    monkeypatch.setattr(
+        app,
+        "query_one",
+        lambda *_a, **_k: type("SB", (), {"active_session": ""})(),
+    )
+
+    app._handle_sessions_command("rename rename-me Better title for auth", log)
+    meta = manager.get_session_info("rename-me-01")
+    assert meta is not None
+    assert meta.title == "Better title for auth"
+    assert "Better title for auth" in format_session_label(meta)
+    assert any("Renamed session" in str(item) for item in log.items)
+
+
+def test_sessions_list_groups_by_harness(tmp_path, monkeypatch):
+    from superqode.session.harness_bridge import upsert_harness_session_meta
+
+    monkeypatch.chdir(tmp_path)
+    upsert_harness_session_meta(
+        "pipy-one",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        harness_display="PiPy",
+        title="auth work",
+        working_directory=tmp_path,
+    )
+    upsert_harness_session_meta(
+        "core-one",
+        provider="ollama",
+        model="llama",
+        harness_id="core",
+        harness_display="Core",
+        title="plan work",
+        working_directory=tmp_path,
+    )
+
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_sessions(log)
+    rendered = render_plain(log.items[-1])
+    assert "PiPy" in rendered
+    assert "Core" in rendered
+    assert "auth work" in rendered
+    assert "plan work" in rendered
+    # Row labels under headers should not awkwardly repeat the harness twice.
+    assert "PiPy · qwen · auth work" not in rendered
+
+
+def test_resume_replays_transcript_into_log(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    manager.start_session("replay-01", provider="ollama", model="qwen", harness_id="workbench")
+    manager.add_user_message("hello from saved session")
+    manager.add_assistant_message("hi there, ready to help")
+
+    app = make_app()
+    log = FakeLog()
+    status = type(
+        "SB",
+        (),
+        {
+            "update_byok_status": lambda self, **kwargs: None,
+            "active_harness": "",
+            "active_session": "",
+        },
+    )()
+
+    class FakePureMode:
+        def __init__(self):
+            self.current = ""
+            self._session_manager = manager
+            self.session = type(
+                "S",
+                (),
+                {"provider": "ollama", "model": "qwen"},
+            )()
+
+        def resume_session(self, session_id):
+            self.current = session_id
+            self._session_manager.start_session(session_id=session_id)
+            return [
+                {"role": m.role, "content": m.content} for m in self._session_manager.get_messages()
+            ]
+
+        def get_current_session_id(self):
+            return self.current
+
+        def get_status(self):
+            return {
+                "provider": "ollama",
+                "model": "qwen",
+                "harness": {"name": "Workbench", "id": "workbench"},
+            }
+
+    pure = FakePureMode()
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
+    monkeypatch.setattr(app, "query_one", lambda *_a, **_k: status)
+    monkeypatch.setattr(app, "_refresh_harness_panel", lambda: None)
+    monkeypatch.setattr(
+        app,
+        "_announce_transition",
+        lambda **kwargs: log.add_success(kwargs.get("title", "")),
+    )
+
+    app._handle_resume_session("replay-01", log)
+
+    assert ("user", "hello from saved session") in log.items
+    assert any(
+        isinstance(item, tuple) and item[0] == "assistant" and "ready to help" in item[1]
+        for item in log.items
+    )
+    assert any("Session resumed" in str(item) for item in log.items)
+    assert status.active_session
+
+
+def test_resume_latest_picks_most_recent(tmp_path, monkeypatch):
+    from superqode.session.harness_bridge import upsert_harness_session_meta
+    import time
+
+    monkeypatch.chdir(tmp_path)
+    upsert_harness_session_meta(
+        "older-sess",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        title="older",
+        working_directory=tmp_path,
+    )
+    time.sleep(0.01)
+    upsert_harness_session_meta(
+        "newer-sess",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        title="newer",
+        working_directory=tmp_path,
+    )
+
+    app = make_app()
+    log = FakeLog()
+    resumed = []
+
+    class FakePureMode:
+        def __init__(self):
+            self.current = ""
+            self._session_manager = None
+            self.session = type("S", (), {"provider": "ollama", "model": "qwen"})()
+
+        def resume_session(self, session_id):
+            self.current = session_id
+            resumed.append(session_id)
+            return []
+
+        def get_current_session_id(self):
+            return self.current
+
+        def get_status(self):
+            return {"provider": "ollama", "model": "qwen", "harness": {"name": "PiPy"}}
+
+    pure = FakePureMode()
+    from superqode.agent.session_manager import SessionManager
+
+    pure._session_manager = SessionManager(".superqode/sessions")
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
+    monkeypatch.setattr(
+        app,
+        "query_one",
+        lambda *_a, **_k: type(
+            "SB",
+            (),
+            {
+                "update_byok_status": lambda self, **kwargs: None,
+                "active_harness": "",
+                "active_session": "",
+            },
+        )(),
+    )
+    monkeypatch.setattr(app, "_refresh_harness_panel", lambda: None)
+    monkeypatch.setattr(
+        app,
+        "_announce_transition",
+        lambda **kwargs: log.add_success(kwargs.get("title", "")),
+    )
+
+    app._handle_resume_session("latest", log)
+    assert resumed == ["newer-sess"]

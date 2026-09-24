@@ -102,8 +102,10 @@ Switch directly or create an independent branch:
 ```
 
 Select a harness with the arrow keys and Enter, or press `F` to fork before
-switching. `:sessions switch` restores the harness, model, and conversation
-history attached to a saved session.
+switching. `:sessions switch` restores the harness, BYOK provider and model,
+working directory, and conversation transcript attached to a saved session.
+Sessions are labeled with human names so you can switch by topic, not only by
+opaque id.
 
 You do not need to author a HarnessSpec before using SuperQode. When you are
 ready to own the run contract for the repository, create the default coding

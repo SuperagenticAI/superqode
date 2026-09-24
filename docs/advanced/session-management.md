@@ -91,22 +91,39 @@ Open the session switcher to return to any saved session:
 :sessions switch
 ```
 
-The picker shows the latest harness for every session. Resuming a session
-restores its harness, provider, model, and stored messages. A direct switch is
-also available:
+The picker groups sessions by harness (PiPy, Core, Workbench, Tau, and others).
+Under each header, rows show `model · topic · age` plus a short id you can type.
+Groups are ordered by the most recent activity in that harness. Resuming a
+session restores its harness, BYOK provider and model, working directory, and
+the same harness or PiPy transcript, then replays available chat turns into the
+TUI. The status bar shows harness, provider/model, and the session short label.
+If a required API key or harness is missing, resume fails with a clear message
+instead of opening a blank session.
 
 ```text
-:sessions switch <session-id>
+:sessions rename <id-or-name> <new title>
+:resume latest
+```
+
+`:sessions rename` persists the title into SessionManager metadata so list and
+picker labels pick it up. `:resume latest` (or `:sessions switch` when only one
+session exists) skips the picker.
+
+A direct switch accepts an id, unique prefix, or title fragment:
+
+```text
+:sessions switch <session-id-or-name>
 ```
 
 This is the terminal session-switching workflow. No web or mobile control plane
 is required.
 
-The picker covers sessions stored in SuperQode's normalized JSONL session
-store. Vendor-owned thread stores remain available through their runtime
-commands, including `:codex sessions` and `:claude sessions`. The catalog uses
-`context replay`, `exact resume`, or `fresh session` to state the continuity a
-harness adapter can provide.
+BYOK and HarnessSpec sessions (including PiPy) dual-write into SuperQode's
+session store so they appear in `:sessions` after disconnect. Vendor-owned
+thread stores remain available through their runtime commands, including
+`:codex sessions` and `:claude sessions`. The catalog uses `context replay`,
+`exact resume`, or `fresh session` to state the continuity a harness adapter
+can provide.
 
 ### List Sessions
 
@@ -114,25 +131,27 @@ harness adapter can provide.
 /sessions
 ```
 
-Shows recent sessions with harness metadata:
+Shows recent sessions with human labels:
 
 ```text
 Recent Sessions:
 --------------------------------------------------
-1. abc12345 | workbench  | <openai-model> | 5 msgs
-2. def67890 | code-review | <anthropic-balanced-model> | 12 msgs
+abc12345  Workbench · gpt-4.1 · fix login · 10m ago
+def67890  PiPy · qwen2.5-coder · refactor auth · 2h ago
 --------------------------------------------------
-Use :sessions switch <id> to restore its harness and continue
+Use :sessions switch <id-or-name> to restore harness, model, and history
 ```
 
 ### Resume Session
 
 ```text
-/resume <session_id>
+:resume <session_id_or_name>
+:sessions switch <session_id_or_name>
 ```
 
-Resumes a previous session and restores the same harness, provider, model, and
-conversation history.
+Resumes a previous session and restores the same harness, BYOK provider and
+model, working directory, and conversation transcript. Prefer the human label
+from `:sessions` when ids are hard to remember.
 
 ### Compact Context
 
