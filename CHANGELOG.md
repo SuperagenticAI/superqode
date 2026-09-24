@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.13] - 2026-09-24
+
+### Fixed
+
+- Escape during a harness turn aborts the live run instead of only logging
+  "Cancel requested...". PiPy stops the model call and kills a running shell
+  command. Prime Agent, DeepSeek Harness, and RLM Code receive the same abort.
+  The composer unlocks for every busy harness session.
+- PiPy bash no longer reads the TUI keyboard, so a shell `read` cannot pin the
+  turn open.
+
 ## [2.4.12] - 2026-09-24
 
 ### Improved
