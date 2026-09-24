@@ -196,7 +196,6 @@ class PiPyCommandMixin:
 
         log.add_error(f":pipy {sub} is declared but not wired.")
 
-
     async def _pipy_resume(self, session: Any, rest: str, log) -> None:
         """List or reopen a prior PiPy session into the live conversation."""
         records = session.list_sessions()
@@ -264,6 +263,7 @@ class PiPyCommandMixin:
         # Reopen through the adapter so the next prompt continues this file.
         from superqode.harness.pipy_adapter import PiPyHarnessProtocolAdapter
         from superqode.harness.protocol import HarnessSessionRef
+
         adapter = PiPyHarnessProtocolAdapter()
         await adapter.resume(
             HarnessSessionRef(
@@ -308,7 +308,6 @@ class PiPyCommandMixin:
         if len(matches) == 1:
             return matches[0]
         return None
-
 
 
 __all__ = ["PiPyCommandMixin"]

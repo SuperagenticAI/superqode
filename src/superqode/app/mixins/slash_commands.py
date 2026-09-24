@@ -1521,9 +1521,10 @@ class SlashCommandMixin:
             matches = []
             lowered = selector.lower()
             for session in ensure_sessions_listed(cwd=_Path.cwd()):
-                if session.session_id.lower().startswith(lowered) or lowered in (
-                    session.title or ""
-                ).lower():
+                if (
+                    session.session_id.lower().startswith(lowered)
+                    or lowered in (session.title or "").lower()
+                ):
                     matches.append(session)
             if len(matches) == 1:
                 sid = matches[0].session_id
@@ -1548,9 +1549,9 @@ class SlashCommandMixin:
 
             current = pure_mode.get_current_session_id()
             if current == sid:
-                self.query_one("#status-bar", ColorfulStatusBar).active_session = (
-                    session_short_label(meta)
-                )
+                self.query_one(
+                    "#status-bar", ColorfulStatusBar
+                ).active_session = session_short_label(meta)
         except Exception:
             pass
 
@@ -1656,17 +1657,21 @@ class SlashCommandMixin:
         except Exception:
             meta = None
 
-        turns, receipt = enrich_resume_messages(messages, meta) if meta is not None else (
-            [
-                {
-                    "role": str(item.get("role") or ""),
-                    "content": str(item.get("content") or ""),
-                }
-                for item in (messages or [])
-                if str(item.get("role") or "").lower() in {"user", "assistant"}
-                and str(item.get("content") or "").strip()
-            ],
-            "",
+        turns, receipt = (
+            enrich_resume_messages(messages, meta)
+            if meta is not None
+            else (
+                [
+                    {
+                        "role": str(item.get("role") or ""),
+                        "content": str(item.get("content") or ""),
+                    }
+                    for item in (messages or [])
+                    if str(item.get("role") or "").lower() in {"user", "assistant"}
+                    and str(item.get("content") or "").strip()
+                ],
+                "",
+            )
         )
 
         try:

@@ -237,6 +237,7 @@ def test_pipy_resume_target_resolver_by_index_and_path(tmp_path):
     assert PiPyCommandMixin._resolve_pipy_resume_target(records, "bbb").id == "bbb"
     assert PiPyCommandMixin._resolve_pipy_resume_target(records, "9") is None
 
+
 def test_group_sessions_by_harness_orders_groups_and_rows(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     older = upsert_harness_session_meta(
@@ -321,4 +322,3 @@ def test_enrich_resume_messages_falls_back_to_plain_jsonl(tmp_path):
     assert [item["role"] for item in turns] == ["user", "assistant"]
     assert turns[0]["content"] == "external hello"
     assert "external transcript" in receipt
-

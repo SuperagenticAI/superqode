@@ -2303,7 +2303,7 @@ def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, mo
     assert saved.harness_transitions[-1]["from_harness"] == "core"
     assert saved.harness_transitions[-1]["to_harness"] == "workbench"
     assert saved.harness_transitions[-1]["continuity"] == "context-replay"
-    assert pure.session.harness_name == "workbench"
+    assert pure.session.harness_name == "Workbench"
     assert pure.session.provider == "test"
     assert pure.session.model == "model"
     assert pure.get_current_session_id() == "core-session-1234"
@@ -7454,6 +7454,7 @@ def test_a2a_picker_opens_the_connect_screen(monkeypatch):
     assert len(pushed) == 1
     assert isinstance(pushed[0], A2AConnectScreen)
 
+
 def test_sessions_rename_persists_title(tmp_path, monkeypatch):
     from superqode.agent.session_manager import SessionManager
     from superqode.session.harness_bridge import format_session_label
@@ -7468,7 +7469,11 @@ def test_sessions_rename_persists_title(tmp_path, monkeypatch):
         "PM",
         (),
         {
-            "resolve_session_id": staticmethod(lambda value: "rename-me-01" if "rename" in value or value.startswith("rename") else None),
+            "resolve_session_id": staticmethod(
+                lambda value: "rename-me-01"
+                if "rename" in value or value.startswith("rename")
+                else None
+            ),
             "get_current_session_id": staticmethod(lambda: "rename-me-01"),
             "_session_manager": manager,
         },
@@ -7559,8 +7564,7 @@ def test_resume_replays_transcript_into_log(tmp_path, monkeypatch):
             self.current = session_id
             self._session_manager.start_session(session_id=session_id)
             return [
-                {"role": m.role, "content": m.content}
-                for m in self._session_manager.get_messages()
+                {"role": m.role, "content": m.content} for m in self._session_manager.get_messages()
             ]
 
         def get_current_session_id(self):
@@ -7665,4 +7669,3 @@ def test_resume_latest_picks_most_recent(tmp_path, monkeypatch):
 
     app._handle_resume_session("latest", log)
     assert resumed == ["newer-sess"]
-

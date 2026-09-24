@@ -57,7 +57,6 @@ class SessionMessage:
     tool_result: Optional[str] = None
 
 
-
 def _metadata_from_dict(data: Dict[str, Any]) -> SessionMetadata:
     """Build SessionMetadata while ignoring unknown persisted keys."""
     from dataclasses import fields

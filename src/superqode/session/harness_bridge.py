@@ -108,9 +108,7 @@ def format_session_label(metadata: SessionMetadata) -> str:
 
 def format_session_row_label(metadata: SessionMetadata) -> str:
     """Build ``gpt-4.1 · refactor auth · 2h ago`` for rows under a harness header."""
-    model = model_short_name(metadata.model) if metadata.model else (
-        metadata.provider or "model?"
-    )
+    model = model_short_name(metadata.model) if metadata.model else (metadata.provider or "model?")
     harness = harness_display_name(
         metadata.harness_id,
         explicit=metadata.harness_display_name,
@@ -462,11 +460,7 @@ def discover_external_sessions(
             provider = str(record.metadata.get("provider") or "")
             model = str(record.metadata.get("model") or "")
             harness_id = str(record.harness or "")
-            title = str(
-                record.metadata.get("title")
-                or record.metadata.get("preview")
-                or ""
-            )
+            title = str(record.metadata.get("title") or record.metadata.get("preview") or "")
             if register:
                 meta = upsert_harness_session_meta(
                     sid,

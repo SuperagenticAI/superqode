@@ -251,9 +251,7 @@ class PureMode:
             self.session.harness_flavor = ""
             self.session.harness_runtime = ""
             return
-        self.session.harness_name = (
-            getattr(definition, "display_name", "") or definition.id
-        )
+        self.session.harness_name = getattr(definition, "display_name", "") or definition.id
         self.session.harness_path = self._harness_path
         self.session.harness_flavor = definition.spec.flavor.value
         self.session.harness_runtime = definition.runtime
@@ -381,8 +379,7 @@ class PureMode:
                 self._harness_session_id = session_id
             definition = self._harness_definition
             self.session.harness_name = (
-                getattr(definition, "display_name", "")
-                or self._harness_spec.name
+                getattr(definition, "display_name", "") or self._harness_spec.name
             )
             self.session.harness_path = self._harness_path
             self.session.harness_flavor = self._harness_spec.flavor.value
@@ -1002,9 +999,7 @@ class PureMode:
                 if existing is not None:
                     backend_path = existing.backend_session_path or ""
             harness_id = (
-                getattr(definition, "id", "")
-                or getattr(self._harness_spec, "name", "")
-                or ""
+                getattr(definition, "id", "") or getattr(self._harness_spec, "name", "") or ""
             )
             upsert_harness_session_meta(
                 session_id,
@@ -1156,9 +1151,7 @@ class PureMode:
         if exact:
             return exact[0]
 
-        prefix_matches = [
-            s.session_id for s in sessions if s.session_id.startswith(choice)
-        ]
+        prefix_matches = [s.session_id for s in sessions if s.session_id.startswith(choice)]
         if len(prefix_matches) == 1:
             return prefix_matches[0]
 
@@ -1311,7 +1304,11 @@ class PureMode:
         if turns and not payload:
             return turns
         if turns and len(turns) > len(
-            [item for item in payload if str(item.get("role") or "").lower() in {"user", "assistant"}]
+            [
+                item
+                for item in payload
+                if str(item.get("role") or "").lower() in {"user", "assistant"}
+            ]
         ):
             return turns
         return payload
