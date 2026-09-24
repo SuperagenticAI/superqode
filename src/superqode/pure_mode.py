@@ -1295,8 +1295,11 @@ class PureMode:
             session_id=resolved_session_id,
         )
 
-        # Return messages for display
-        return [
+        # Return messages for display. Prefer SessionManager JSONL; when thin,
+        # fall back to an external harness / PiPy transcript for TUI replay.
+        from superqode.session.harness_bridge import enrich_resume_messages
+
+        payload = [
             {
                 "role": m.role,
                 "content": m.content,
@@ -1304,6 +1307,14 @@ class PureMode:
             }
             for m in messages
         ]
+        turns, _receipt = enrich_resume_messages(payload, metadata)
+        if turns and not payload:
+            return turns
+        if turns and len(turns) > len(
+            [item for item in payload if str(item.get("role") or "").lower() in {"user", "assistant"}]
+        ):
+            return turns
+        return payload
 
     def get_current_session_id(self) -> Optional[str]:
         """Get current session ID."""

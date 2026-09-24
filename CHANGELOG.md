@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+
+- Group `:sessions` and the resume picker by harness, with model · topic · age
+  rows under each header and keyboard navigation that skips header rows.
+- Replay the full restored chat transcript into ConversationLog on
+  `:sessions switch` / `:resume`, including best-effort PiPy external JSONL.
+- Show harness · provider/model · session short label in the status bar after
+  resume.
+- Add `:sessions rename <id-or-name> <title>` and support `:resume latest`
+  (or a single listed session) for low-friction switching.
+
 ### Fixed
 
 - Dual-write BYOK HarnessSpec and PiPy sessions into SessionManager so

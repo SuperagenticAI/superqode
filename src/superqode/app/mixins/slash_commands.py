@@ -1179,7 +1179,10 @@ class SlashCommandMixin:
             if rest:
                 self._handle_resume_session(" ".join(rest), log)
             else:
-                self._show_session_resume_picker(log)
+                self._maybe_auto_resume_or_picker(log)
+            return
+        if subcommand in {"rename", "name", "title"}:
+            self._handle_sessions_rename(" ".join(rest), log)
             return
         if subcommand in {"list", "ls", "recent"}:
             self._show_sessions(log)
@@ -1472,19 +1475,150 @@ class SlashCommandMixin:
         self._render_harness_wizard_step(log)
         return True
 
+    def _maybe_auto_resume_or_picker(self, log: ConversationLog) -> None:
+        """Resume the only recent session, otherwise open the picker."""
+        from pathlib import Path as _Path
+
+        from superqode.session.harness_bridge import ensure_sessions_listed
+
+        sessions = ensure_sessions_listed(cwd=_Path.cwd())
+        if len(sessions) == 1:
+            self._handle_resume_session(sessions[0].session_id, log)
+            return
+        self._show_session_resume_picker(log)
+
+    def _handle_sessions_rename(self, args: str, log: ConversationLog) -> None:
+        """Rename a session: ``:sessions rename <id-or-name> <new title>``."""
+        from pathlib import Path as _Path
+
+        from superqode.session.harness_bridge import (
+            ensure_sessions_listed,
+            format_session_label,
+            rename_session_title,
+        )
+
+        text = (args or "").strip()
+        if not text:
+            log.add_info("Usage: :sessions rename <id-or-name> <new title>")
+            return
+        tokens = text.split(maxsplit=1)
+        if len(tokens) < 2:
+            log.add_info("Usage: :sessions rename <id-or-name> <new title>")
+            return
+        selector, new_title = tokens[0], tokens[1].strip()
+        if not new_title:
+            log.add_info("Usage: :sessions rename <id-or-name> <new title>")
+            return
+
+        pure_mode = self._ensure_pure_mode()
+        sid = ""
+        try:
+            sid = pure_mode.resolve_session_id(selector) or ""
+        except Exception:
+            sid = ""
+        if not sid:
+            # Fall back to prefix/title match across listed sessions.
+            matches = []
+            lowered = selector.lower()
+            for session in ensure_sessions_listed(cwd=_Path.cwd()):
+                if session.session_id.lower().startswith(lowered) or lowered in (
+                    session.title or ""
+                ).lower():
+                    matches.append(session)
+            if len(matches) == 1:
+                sid = matches[0].session_id
+            elif len(matches) > 1:
+                log.add_error(f"Selection is ambiguous: {selector}")
+                return
+        if not sid:
+            log.add_error(f"Session not found: {selector}")
+            return
+        try:
+            meta = rename_session_title(sid, new_title)
+        except LookupError:
+            log.add_error(f"Session not found: {selector}")
+            return
+        except Exception as exc:
+            log.add_error(f"Could not rename session: {exc}")
+            return
+        log.add_success(f"Renamed session {sid[:8]} -> {format_session_label(meta)}")
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+            from superqode.session.harness_bridge import session_short_label
+
+            current = pure_mode.get_current_session_id()
+            if current == sid:
+                self.query_one("#status-bar", ColorfulStatusBar).active_session = (
+                    session_short_label(meta)
+                )
+        except Exception:
+            pass
+
+    def _replay_resumed_transcript(
+        self,
+        log: ConversationLog,
+        turns: list,
+        *,
+        receipt: str = "",
+    ) -> None:
+        """Clear the conversation log and replay restored user/assistant turns."""
+        try:
+            log.clear()
+        except Exception:
+            pass
+        if receipt:
+            try:
+                log.add_info(receipt)
+            except Exception:
+                pass
+        for turn in turns:
+            role = str(turn.get("role") or "").lower()
+            content = str(turn.get("content") or "")
+            if not content:
+                continue
+            try:
+                if role == "user":
+                    log.add_user(content)
+                elif role == "assistant":
+                    log.add_assistant(content)
+            except Exception:
+                # FakeLog / non-TUI surfaces may only support add_info.
+                log.add_info(f"[{role.upper()}] {content[:200]}")
+
     def _handle_resume_session(self, args: str, log: ConversationLog):
         """Resume a previous local provider session."""
+        from pathlib import Path as _Path
+
+        from superqode.session.harness_bridge import (
+            SessionResumeError,
+            enrich_resume_messages,
+            ensure_sessions_listed,
+            format_session_label,
+            session_short_label,
+        )
+
         session_id = args.strip()
         if not session_id:
-            self._show_session_resume_picker(log)
+            self._maybe_auto_resume_or_picker(log)
             return
+        if session_id.lower() in {"latest", "last", "recent"}:
+            sessions = ensure_sessions_listed(cwd=_Path.cwd())
+            if not sessions:
+                self._announce_transition(
+                    title="Session not resumed",
+                    primary="latest",
+                    detail="No sessions found for this directory",
+                    severity="error",
+                    log=log,
+                    guidance="Connect and send a message first.",
+                )
+                return
+            session_id = sessions[0].session_id
 
         pure_mode = self._ensure_pure_mode()
         try:
             messages = pure_mode.resume_session(session_id)
         except Exception as exc:
-            from superqode.session.harness_bridge import SessionResumeError
-
             if isinstance(exc, SessionResumeError):
                 self._announce_transition(
                     title="Session not resumed",
@@ -1512,6 +1646,29 @@ class SlashCommandMixin:
         resolved_id = pure_mode.get_current_session_id() or session_id
         self._awaiting_session_resume = False
         harness_name = ""
+        meta = None
+        try:
+            meta = (
+                pure_mode._session_manager.get_session_info(resolved_id)
+                if pure_mode._session_manager
+                else None
+            )
+        except Exception:
+            meta = None
+
+        turns, receipt = enrich_resume_messages(messages, meta) if meta is not None else (
+            [
+                {
+                    "role": str(item.get("role") or ""),
+                    "content": str(item.get("content") or ""),
+                }
+                for item in (messages or [])
+                if str(item.get("role") or "").lower() in {"user", "assistant"}
+                and str(item.get("content") or "").strip()
+            ],
+            "",
+        )
+
         try:
             status = pure_mode.get_status()
             provider = str(status.get("provider") or "")
@@ -1520,33 +1677,39 @@ class SlashCommandMixin:
             harness_name = str(harness.get("name") or harness.get("id") or "")
             self.current_provider = provider
             self.current_model = model
-            if provider and model:
-                from superqode.app.widgets import ColorfulStatusBar
+            from superqode.app.widgets import ColorfulStatusBar
 
-                self.query_one("#status-bar", ColorfulStatusBar).update_byok_status(
-                    provider=provider,
-                    model=model,
-                )
+            status_bar = self.query_one("#status-bar", ColorfulStatusBar)
+            if provider and model:
+                status_bar.update_byok_status(provider=provider, model=model)
+            if harness_name:
+                status_bar.active_harness = _harness_display_name(harness_name)
+            if meta is not None:
+                status_bar.active_session = session_short_label(meta)
+            else:
+                status_bar.active_session = resolved_id[:8]
             definition = getattr(pure_mode, "_harness_definition", None)
             if definition is not None:
                 os.environ["SUPERQODE_HARNESS"] = str(definition.path or definition.id)
             self._refresh_harness_panel()
-        except (AttributeError, TypeError):
+        except (AttributeError, TypeError, Exception):
             pass
-        from superqode.session.harness_bridge import format_session_label
 
         label = resolved_id[:8]
-        try:
-            meta = pure_mode._session_manager.get_session_info(resolved_id) if pure_mode._session_manager else None
-            if meta is not None:
-                label = format_session_label(meta)
-        except Exception:
-            pass
-        detail_parts = [
-            f"{len(messages)} messages restored"
-            if messages
-            else "harness transcript attached"
-        ]
+        if meta is not None:
+            label = format_session_label(meta)
+
+        # Replay chat bubbles before the resume receipt so the receipt lands at
+        # the bottom of the restored transcript.
+        self._replay_resumed_transcript(log, turns, receipt=receipt)
+
+        detail_parts = []
+        if turns:
+            detail_parts.append(f"{len(turns)} turns restored")
+        elif receipt:
+            detail_parts.append(receipt)
+        else:
+            detail_parts.append("harness transcript attached")
         if harness_name:
             detail_parts.append(_harness_display_name(harness_name))
         session_state = getattr(pure_mode, "session", None)
@@ -1554,6 +1717,20 @@ class SlashCommandMixin:
         model = str(getattr(session_state, "model", "") or "")
         if provider and model:
             detail_parts.append(f"{provider}/{model}")
+        if meta is not None and str(meta.working_directory or "").strip():
+            try:
+                stored = _Path(meta.working_directory).expanduser().resolve()
+                current = _Path.cwd().resolve()
+                if stored != current:
+                    detail_parts.append(f"cwd was {stored}")
+                    try:
+                        log.add_warning(
+                            f"Session cwd differs from current directory: {stored} != {current}"
+                        )
+                    except Exception:
+                        pass
+            except OSError:
+                pass
         self._announce_transition(
             title="Session resumed",
             primary=label,
@@ -1563,10 +1740,6 @@ class SlashCommandMixin:
             guidance="Other sessions remain saved.",
             dedupe_key=f"session-resume:{resolved_id}",
         )
-        for message in messages[-6:]:
-            role = str(message.get("role", "?")).upper()
-            content = str(message.get("content", "")).replace("\n", " ")[:120]
-            log.add_info(f"[{role}] {content}")
 
     def _handle_fork_session(self, args: str, log: ConversationLog):
         """Fork the active local provider session."""

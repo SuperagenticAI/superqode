@@ -91,12 +91,23 @@ Open the session switcher to return to any saved session:
 :sessions switch
 ```
 
-The picker shows a human label for every session in this directory, for example
-`PiPy · gpt-4.1 · refactor auth · 2h ago`, plus a short id you can type.
-Resuming a session restores its harness, BYOK provider and model, working
-directory, and the same harness or PiPy transcript so the next message
-continues that conversation. If a required API key or harness is missing,
-resume fails with a clear message instead of opening a blank session.
+The picker groups sessions by harness (PiPy, Core, Workbench, Tau, and others).
+Under each header, rows show `model · topic · age` plus a short id you can type.
+Groups are ordered by the most recent activity in that harness. Resuming a
+session restores its harness, BYOK provider and model, working directory, and
+the same harness or PiPy transcript, then replays available chat turns into the
+TUI. The status bar shows harness, provider/model, and the session short label.
+If a required API key or harness is missing, resume fails with a clear message
+instead of opening a blank session.
+
+```text
+:sessions rename <id-or-name> <new title>
+:resume latest
+```
+
+`:sessions rename` persists the title into SessionManager metadata so list and
+picker labels pick it up. `:resume latest` (or `:sessions switch` when only one
+session exists) skips the picker.
 
 A direct switch accepts an id, unique prefix, or title fragment:
 

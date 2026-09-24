@@ -1237,7 +1237,12 @@ class PickerNavigationMixin:
         """Show a keyboard-navigable picker for resuming local sessions."""
         from pathlib import Path as _Path
 
-        from superqode.session.harness_bridge import ensure_sessions_listed
+        from superqode.session.harness_bridge import (
+            ensure_sessions_listed,
+            format_session_row_label,
+            group_sessions_by_harness,
+            session_last_user_preview,
+        )
 
         sessions = ensure_sessions_listed(cwd=_Path.cwd())[:12]
 
@@ -1254,8 +1259,12 @@ class PickerNavigationMixin:
         t.append("\n  📂 ", style=f"bold {THEME['purple']}")
         t.append("Switch Sessions\n", style=f"bold {THEME['text']}")
         t.append(
-            "  Resuming restores harness, provider/model, cwd, and the same transcript.\n\n",
+            "  Resuming restores harness, provider/model, cwd, and the same transcript.\n",
             style=THEME["muted"],
+        )
+        t.append(
+            "  Grouped by harness. Headers are not selectable.\n\n",
+            style=THEME["dim"],
         )
 
         if not sessions:
@@ -1272,28 +1281,37 @@ class PickerNavigationMixin:
             self._show_command_output(log, t, clear_log=clear_log)
             return
 
-        from superqode.session.harness_bridge import format_session_label
+        # Flat navigable list stays sessions-only; headers skip highlight/numbers.
+        flat_index = {session.session_id: idx for idx, session in enumerate(sessions)}
+        for harness_name, rows in group_sessions_by_harness(sessions):
+            t.append(f"  {harness_name}\n", style=f"bold {THEME['purple']}")
+            for session in rows:
+                idx = flat_index[session.session_id] + 1
+                highlighted = (idx - 1) == self._session_resume_highlighted_index
+                display_id = session.session_id[:8]
+                label = format_session_row_label(session)
+                if highlighted:
+                    t.append("  ▶ ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
+                    style = f"bold {THEME['success']}"
+                else:
+                    t.append("    ", style="")
+                    t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                    style = THEME["text"]
+                id_style = f"bold {THEME['cyan']}" if not highlighted else style
+                t.append(f"{display_id:<10}", style=id_style)
+                t.append(f"{label}\n", style=style)
+                if highlighted:
+                    preview = session_last_user_preview(session)
+                    if preview:
+                        t.append("         ", style="")
+                        t.append(f"{preview}\n", style=THEME["dim"])
+            t.append("\n")
 
-        for idx, session in enumerate(sessions, 1):
-            highlighted = (idx - 1) == self._session_resume_highlighted_index
-            display_id = session.session_id[:8]
-            label = format_session_label(session)
-            if highlighted:
-                t.append("  ▶ ", style=f"bold {THEME['success']}")
-                t.append(
-                    f"[{idx:2}] ",
-                    style=self._picker_link_style(f"bold {THEME['success']}", idx),
-                )
-                style = f"bold {THEME['success']}"
-            else:
-                t.append("    ", style="")
-                t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
-                style = THEME["text"]
-            id_style = f"bold {THEME['cyan']}" if not highlighted else style
-            t.append(f"{display_id:<10}", style=id_style)
-            t.append(f"{label}\n", style=style)
-
-        t.append("\n  ↑↓ navigate  Enter resume  or type ", style=THEME["muted"])
+        t.append("  ↑↓ navigate  Enter resume  or type ", style=THEME["muted"])
         t.append(":sessions switch <id-or-name>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t, clear_log=clear_log)

@@ -218,6 +218,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":sandbox run", "Run a command through a sandbox backend", category="workflow"),
     SlashCommand(":sessions", "List saved sessions", category="workflow"),
     SlashCommand(":sessions resume", "Pick or resume a saved session", category="workflow"),
+    SlashCommand(":sessions rename", "Rename a saved session title", category="workflow"),
     SlashCommand(":switchboard", "Open session graph cockpit", category="workflow"),
     SlashCommand(":sw", "Alias for session switchboard", category="workflow"),
     SlashCommand(":switchboard graph", "Show durable session tree", category="workflow"),

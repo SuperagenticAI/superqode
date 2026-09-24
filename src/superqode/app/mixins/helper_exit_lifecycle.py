@@ -97,6 +97,7 @@ class HelperExitLifecycleMixin:
             status.active_runtime = ""
             status.active_model = ""
             status.active_harness = ""
+            status.active_session = ""
         except Exception:
             pass
 
@@ -118,6 +119,7 @@ class HelperExitLifecycleMixin:
             # Freshly launched has no harness badge.
             if not is_connected:
                 status.active_harness = ""
+                status.active_session = ""
             self.query_one("#hints", HintsBar).connected = is_connected
         except Exception:
             pass

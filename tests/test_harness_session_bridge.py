@@ -14,10 +14,14 @@ from superqode.pure_mode import PureMode
 from superqode.session.harness_bridge import (
     SessionResumeError,
     discover_external_sessions,
+    enrich_resume_messages,
     ensure_sessions_listed,
     format_session_label,
+    format_session_row_label,
+    group_sessions_by_harness,
     missing_provider_credentials,
     relative_age,
+    rename_session_title,
     topic_from_preview,
     upsert_harness_session_meta,
 )
@@ -232,3 +236,89 @@ def test_pipy_resume_target_resolver_by_index_and_path(tmp_path):
     assert PiPyCommandMixin._resolve_pipy_resume_target(records, str(path_b)).id == "bbb"
     assert PiPyCommandMixin._resolve_pipy_resume_target(records, "bbb").id == "bbb"
     assert PiPyCommandMixin._resolve_pipy_resume_target(records, "9") is None
+
+def test_group_sessions_by_harness_orders_groups_and_rows(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    older = upsert_harness_session_meta(
+        "pipy-old",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        title="old topic",
+    )
+    older.updated_at = "2026-01-01T00:00:00"
+    SessionManager(".superqode/sessions").store._save_metadata(older)
+
+    newer_core = upsert_harness_session_meta(
+        "core-new",
+        provider="ollama",
+        model="llama",
+        harness_id="core",
+        title="core topic",
+    )
+    newer_core.updated_at = "2026-09-01T00:00:00"
+    SessionManager(".superqode/sessions").store._save_metadata(newer_core)
+
+    newer_pipy = upsert_harness_session_meta(
+        "pipy-new",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        title="new topic",
+    )
+    newer_pipy.updated_at = "2026-09-20T00:00:00"
+    SessionManager(".superqode/sessions").store._save_metadata(newer_pipy)
+
+    sessions = SessionManager(".superqode/sessions").list_all_sessions()
+    grouped = group_sessions_by_harness(sessions)
+    assert [name for name, _ in grouped] == ["PiPy", "Core"]
+    pipy_rows = grouped[0][1]
+    assert [row.session_id for row in pipy_rows] == ["pipy-new", "pipy-old"]
+    # Headers are separate from rows; row labels omit the harness name.
+    assert format_session_row_label(pipy_rows[0]).startswith("qwen · new topic ·")
+    assert not format_session_row_label(pipy_rows[0]).startswith("PiPy")
+
+
+def test_rename_session_title_persists(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    upsert_harness_session_meta(
+        "rename-target",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        title="old name",
+    )
+    meta = rename_session_title("rename-target", "Ship the auth fix")
+    assert meta.title == "Ship the auth fix"
+    reloaded = SessionManager(".superqode/sessions").get_session_info("rename-target")
+    assert reloaded is not None
+    assert reloaded.title == "Ship the auth fix"
+    assert "Ship the auth fix" in format_session_label(reloaded)
+
+
+def test_enrich_resume_messages_falls_back_to_plain_jsonl(tmp_path):
+    path = tmp_path / "external.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                '{"role":"user","content":"external hello"}',
+                '{"role":"assistant","content":"external reply"}',
+                '{"role":"tool","content":"skip me"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    meta = upsert_harness_session_meta(
+        "ext-1",
+        provider="ollama",
+        model="qwen",
+        harness_id="pipy",
+        backend_session_path=str(path),
+        storage_dir=tmp_path / "sessions",
+    )
+    turns, receipt = enrich_resume_messages([], meta)
+    assert [item["role"] for item in turns] == ["user", "assistant"]
+    assert turns[0]["content"] == "external hello"
+    assert "external transcript" in receipt
+

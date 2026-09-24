@@ -13,6 +13,7 @@ external transcript id. Listings prefer human labels such as
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -102,15 +103,231 @@ def format_session_label(metadata: SessionMetadata) -> str:
         metadata.harness_id,
         explicit=metadata.harness_display_name,
     )
+    return f"{harness} · {format_session_row_label(metadata)}"
+
+
+def format_session_row_label(metadata: SessionMetadata) -> str:
+    """Build ``gpt-4.1 · refactor auth · 2h ago`` for rows under a harness header."""
     model = model_short_name(metadata.model) if metadata.model else (
         metadata.provider or "model?"
     )
+    harness = harness_display_name(
+        metadata.harness_id,
+        explicit=metadata.harness_display_name,
+    )
     topic = (metadata.title or "").strip()
-    # Avoid repeating harness/model when title already encodes them.
-    if not topic or topic.lower() in {harness.lower(), metadata.harness_id.lower(), metadata.session_id}:
+    if not topic or topic.lower() in {
+        harness.lower(),
+        metadata.harness_id.lower(),
+        metadata.session_id,
+        f"{harness.lower()} session",
+    }:
         topic = "untitled"
     age = relative_age(metadata.updated_at)
-    return f"{harness} · {model} · {topic} · {age}"
+    return f"{model} · {topic} · {age}"
+
+
+def session_short_label(metadata: SessionMetadata, *, max_len: int = 28) -> str:
+    """Compact title or id for the status bar session chip."""
+    title = (metadata.title or "").strip()
+    harness = harness_display_name(
+        metadata.harness_id,
+        explicit=metadata.harness_display_name,
+    )
+    if title and title.lower() not in {
+        harness.lower(),
+        metadata.harness_id.lower(),
+        "untitled",
+        f"{harness.lower()} session",
+    }:
+        text = title
+    else:
+        text = metadata.session_id[:8]
+    if len(text) > max_len:
+        return text[: max_len - 3].rstrip() + "..."
+    return text
+
+
+def group_sessions_by_harness(
+    sessions: Iterable[SessionMetadata],
+) -> list[tuple[str, list[SessionMetadata]]]:
+    """Group sessions under harness headers.
+
+    Within each group, sort by ``updated_at`` newest first. Groups themselves
+    are ordered by the most recent activity in that group.
+    """
+    buckets: dict[str, list[SessionMetadata]] = {}
+    latest: dict[str, str] = {}
+    for item in sessions:
+        key = harness_display_name(
+            item.harness_id,
+            explicit=item.harness_display_name,
+        )
+        buckets.setdefault(key, []).append(item)
+        stamp = str(item.updated_at or "")
+        if stamp >= latest.get(key, ""):
+            latest[key] = stamp
+    for key, rows in buckets.items():
+        rows.sort(key=lambda row: str(row.updated_at or ""), reverse=True)
+    ordered = sorted(
+        buckets.items(),
+        key=lambda pair: latest.get(pair[0], ""),
+        reverse=True,
+    )
+    return ordered
+
+
+def rename_session_title(
+    session_id: str,
+    title: str,
+    *,
+    storage_dir: str | Path = DEFAULT_SESSION_DIR,
+) -> SessionMetadata:
+    """Persist a human title into SessionManager meta for list/picker labels."""
+    sid = (session_id or "").strip()
+    new_title = " ".join(str(title or "").strip().split())
+    if not sid:
+        raise ValueError("session_id is required")
+    if not new_title:
+        raise ValueError("title is required")
+    manager = SessionManager(storage_dir=str(storage_dir))
+    metadata = manager.get_session_info(sid)
+    if metadata is None:
+        raise LookupError(f"Session not found: {sid}")
+    metadata.title = new_title
+    metadata.updated_at = datetime.now().isoformat()
+    manager.store._save_metadata(metadata)
+    manager.store._record_graph(
+        metadata,
+        last_result_preview=new_title[:240],
+        status="idle",
+    )
+    return metadata
+
+
+def session_last_user_preview(
+    metadata: SessionMetadata,
+    *,
+    storage_dir: str | Path = DEFAULT_SESSION_DIR,
+    max_len: int = 72,
+) -> str:
+    """Best-effort one-line preview of the last user turn for picker highlight."""
+    try:
+        messages = SessionManager(storage_dir=str(storage_dir)).store.get_messages(
+            metadata.session_id,
+            limit=40,
+        )
+    except Exception:
+        messages = []
+    for message in reversed(messages):
+        if str(getattr(message, "role", "")).lower() == "user":
+            text = " ".join(str(getattr(message, "content", "") or "").split())
+            if text:
+                return text if len(text) <= max_len else text[: max_len - 3].rstrip() + "..."
+    if metadata.backend_session_path:
+        for item in reversed(load_external_transcript_messages(metadata.backend_session_path)):
+            if item.get("role") == "user":
+                text = " ".join(str(item.get("content") or "").split())
+                if text:
+                    return text if len(text) <= max_len else text[: max_len - 3].rstrip() + "..."
+    topic = (metadata.title or "").strip()
+    if topic and topic.lower() not in {"untitled", metadata.harness_id.lower()}:
+        return topic if len(topic) <= max_len else topic[: max_len - 3].rstrip() + "..."
+    return ""
+
+
+def load_external_transcript_messages(backend_session_path: str | Path) -> list[dict[str, str]]:
+    """Best-effort load of user/assistant turns from an external transcript file."""
+    path = Path(backend_session_path).expanduser()
+    if not path.is_file():
+        return []
+    # PiPy JSONL tree first.
+    try:
+        from superqode.pipy.messages import content_text
+        from superqode.pipy.session.entries import MessageEntry
+        from superqode.pipy.session.jsonl import JsonlSessionStorage
+
+        storage = JsonlSessionStorage.open(path)
+        out: list[dict[str, str]] = []
+        for entry in getattr(storage, "_entries", []):
+            if not isinstance(entry, MessageEntry):
+                continue
+            message = entry.message
+            role = str(getattr(message, "role", "") or "").lower()
+            if role not in {"user", "assistant"}:
+                continue
+            extract = getattr(message, "extract_text", None)
+            if callable(extract):
+                content = str(extract() or "")
+            else:
+                content = str(content_text(getattr(message, "content", "")) or "")
+            content = content.strip()
+            if content:
+                out.append({"role": role, "content": content})
+        if out:
+            return out
+    except Exception:
+        pass
+
+    # Plain SessionManager-style JSONL fallback (role/content lines).
+    out = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            role = str(payload.get("role") or "").lower()
+            if role not in {"user", "assistant"}:
+                continue
+            content = payload.get("content")
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("text"):
+                        parts.append(str(block["text"]))
+                    elif isinstance(block, str):
+                        parts.append(block)
+                content = "".join(parts)
+            text = str(content or "").strip()
+            if text:
+                out.append({"role": role, "content": text})
+    except OSError:
+        return []
+    return out
+
+
+def enrich_resume_messages(
+    messages: list[dict[str, Any]] | None,
+    metadata: SessionMetadata,
+) -> tuple[list[dict[str, str]], str]:
+    """Return display turns plus a short receipt when falling back to external JSONL.
+
+    Returns ``(turns, receipt)`` where ``receipt`` is empty when SessionManager
+    JSONL already had usable history.
+    """
+    turns: list[dict[str, str]] = []
+    for item in messages or []:
+        role = str(item.get("role") or "").lower()
+        if role not in {"user", "assistant"}:
+            continue
+        content = str(item.get("content") or "").strip()
+        if content:
+            turns.append({"role": role, "content": content})
+    if turns:
+        return turns, ""
+    path = str(metadata.backend_session_path or "").strip()
+    if not path:
+        return [], ""
+    external = load_external_transcript_messages(path)
+    if not external:
+        return [], "No chat turns found in SessionManager or external transcript"
+    return external, f"Loaded {len(external)} turns from external transcript"
 
 
 def missing_provider_credentials(provider: str) -> str:
@@ -439,12 +656,19 @@ __all__ = [
     "HARNESS_STORE_ROOTS",
     "SessionResumeError",
     "discover_external_sessions",
+    "enrich_resume_messages",
     "ensure_sessions_listed",
     "format_session_label",
+    "format_session_row_label",
+    "group_sessions_by_harness",
     "harness_display_name",
+    "load_external_transcript_messages",
     "missing_provider_credentials",
     "model_short_name",
     "relative_age",
+    "rename_session_title",
+    "session_last_user_preview",
+    "session_short_label",
     "topic_from_preview",
     "upsert_harness_session_meta",
 ]
