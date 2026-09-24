@@ -7,7 +7,7 @@ superqode<span class=w> </span>harness<span class=w> </span>tune<span class=w> <
 <span class=w>  </span>--batch-size<span class=w> </span><span class=m>5</span><span class=w> </span>--max-evals<span class=w> </span><span class=m>30</span><span class=w> </span>--max-reflection-cost<span class=w> </span><span class=m>0</span>.50
 
 <span class=c1># Reviewed examples</span>
-superqode<span class=w> </span>harness<span class=w> </span>tune<span class=w> </span>--spec<span class=w> </span>examples/harnesses/systemone-factory-route.yaml<span class=w> </span><span class=se>\</span>
+superqode<span class=w> </span>harness<span class=w> </span>tune<span class=w> </span>--spec<span class=w> </span>examples/harnesses/systemone/factory-route.yaml<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--data<span class=w> </span>reviewed-tickets.csv<span class=w> </span>--input<span class=w> </span>request<span class=w> </span>--label<span class=w> </span>route<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--reflection-lm<span class=w> </span>openai/gpt-5<span class=w> </span>--max-evals<span class=w> </span><span class=m>120</span><span class=w> </span>--max-reflection-cost<span class=w> </span><span class=m>2</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--output<span class=w> </span>.superqode/tuning/routing-v2<span class=w> </span>--seed<span class=w> </span><span class=m>0</span><span class=w> </span>--live<span class=w> </span>--json

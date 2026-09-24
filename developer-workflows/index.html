@@ -21,12 +21,18 @@ q:
 </code></pre></div> <p>Vim mode is modal and persistent. It provides Normal, Insert, Command, and Search states for operating SuperQode from the keyboard. See <a href=../advanced/vim-mode/ >Vim-Like Terminal Navigation</a>.</p> <h2 id=sessions-branches-and-export>Sessions, Branches, And Export<a class=headerlink href=#sessions-branches-and-export title="Permanent link">&para;</a></h2> <p>In the TUI:</p> <div class=highlight><pre><span></span><code>:tree
 :session
 :session rename &lt;name&gt;
-:resume &lt;id&gt;
+:sessions
+:sessions rename &lt;id-or-name&gt; &lt;title&gt;
+:sessions switch
+:sessions switch &lt;id-or-name&gt;
+:sessions switch latest
+:resume latest
+:resume &lt;id-or-name&gt;
 :fork &lt;new-id&gt;
 :export html
 :export markdown
 :export json
-</code></pre></div> <p>From the CLI:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>sessions<span class=w> </span>list
+</code></pre></div> <p><code>:sessions</code> lists BYOK and HarnessSpec sessions for this directory grouped by harness, with <code>model · topic · age</code> rows. <code>:sessions switch</code> restores harness, provider/model, cwd, and the same transcript. <code>:pipy resume &lt;n&gt;</code> reopens a prior PiPy file into the live chat and registers it for <code>:sessions</code>.</p> <p>From the CLI:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>sessions<span class=w> </span>list
 superqode<span class=w> </span>sessions<span class=w> </span>tree
 superqode<span class=w> </span>sessions<span class=w> </span>show<span class=w> </span>&lt;session-id&gt;
 superqode<span class=w> </span>sessions<span class=w> </span><span class=nb>export</span><span class=w> </span>&lt;session-id&gt;<span class=w> </span>--format<span class=w> </span>markdown<span class=w> </span>--output<span class=w> </span>session.md
