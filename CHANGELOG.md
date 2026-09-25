@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.14] - 2026-09-25
+
+### Fixed
+
+- A2A registry routes and stores peers by normalized URL instead of Agent Card
+  `name`, so two cards that share a display name cannot collide into the wrong
+  peer. Alias lookups that match more than one URL are rejected. Legacy
+  name-keyed `.superqode/a2a_agents.json` files migrate to URL keys on load
+  (arXiv:2609.27624).
+
 ## [2.4.13] - 2026-09-24
 
 ### Fixed
