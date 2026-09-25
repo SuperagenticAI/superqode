@@ -69,9 +69,7 @@ class A2ARegistry:
     def _require_unique_alias(self, name: str, url: str) -> None:
         """Reject a presentational name already bound to a different URL."""
         key = self._key(url)
-        clashes = [
-            entry for entry in self._entries_named(name) if self._key(entry.url) != key
-        ]
+        clashes = [entry for entry in self._entries_named(name) if self._key(entry.url) != key]
         if clashes:
             urls = ", ".join(sorted({self._key(e.url) for e in clashes} | {key}))
             raise AmbiguousAgentName(
@@ -109,8 +107,7 @@ class A2ARegistry:
                 description=card.description,
                 version=card.version,
                 skills=[
-                    {"id": s.id, "name": s.name, "description": s.description}
-                    for s in card.skills
+                    {"id": s.id, "name": s.name, "description": s.description} for s in card.skills
                 ],
                 verified=True,
             )
@@ -141,8 +138,7 @@ class A2ARegistry:
             return False
         if len(matches) > 1:
             raise AmbiguousAgentName(
-                f"Agent name {name!r} matches {len(matches)} URLs; "
-                f"remove by URL instead."
+                f"Agent name {name!r} matches {len(matches)} URLs; remove by URL instead."
             )
         del self._agents[self._key(matches[0].url)]
         return True

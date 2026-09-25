@@ -85,12 +85,8 @@ async def test_add_uses_local_alias_and_url_identity(monkeypatch):
 
 def test_get_rejects_ambiguous_presentational_name():
     registry = A2ARegistry()
-    registry._agents["http://a.example"] = A2AAgentEntry(
-        name="Dup", url="http://a.example"
-    )
-    registry._agents["http://b.example"] = A2AAgentEntry(
-        name="Dup", url="http://b.example"
-    )
+    registry._agents["http://a.example"] = A2AAgentEntry(name="Dup", url="http://a.example")
+    registry._agents["http://b.example"] = A2AAgentEntry(name="Dup", url="http://b.example")
     with pytest.raises(AmbiguousAgentName):
         registry.get("Dup")
 
@@ -98,9 +94,7 @@ def test_get_rejects_ambiguous_presentational_name():
 def test_save_and_load_round_trip_url_keys(tmp_path: Path):
     path = tmp_path / "a2a_agents.json"
     registry = A2ARegistry(config_path=str(path))
-    registry._put(
-        A2AAgentEntry(name="alpha", url="http://alpha.example", description="a")
-    )
+    registry._put(A2AAgentEntry(name="alpha", url="http://alpha.example", description="a"))
     registry.save()
 
     loaded = A2ARegistry(config_path=str(path))
@@ -113,9 +107,7 @@ def test_save_and_load_round_trip_url_keys(tmp_path: Path):
 
 def test_load_migrates_legacy_name_keyed_file(tmp_path: Path):
     path = tmp_path / "legacy.json"
-    path.write_text(
-        '{\n  "Helper": {"url": "http://trusted.example", "description": "ok"}\n}\n'
-    )
+    path.write_text('{\n  "Helper": {"url": "http://trusted.example", "description": "ok"}\n}\n')
     registry = A2ARegistry(config_path=str(path))
     registry.load()
     entry = registry.get_by_url("http://trusted.example")
