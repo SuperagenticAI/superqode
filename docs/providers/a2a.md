@@ -213,7 +213,7 @@ Each A2A `contextId` maps to one SuperQode Harness Protocol session, so later ta
 
 !!! note "0.3 compatibility covers JSON-RPC, not the legacy REST paths"
 
-    `a2a-sdk` 1.1.2 mounts `/v1/*` REST routes when compatibility is enabled,
+    `a2a-sdk` 1.1.x mounts `/v1/*` REST routes when compatibility is enabled,
     but they reject 0.3 request bodies. The Agent Card therefore advertises 0.3
     under the `JSONRPC` binding only, which is the combination that works.
 

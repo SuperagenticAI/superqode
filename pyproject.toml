@@ -287,17 +287,9 @@ superqode = [
 # google-antigravity 0.1.8 ships protobuf 7.35-generated descriptors, while
 # mem0ai currently requires protobuf <7. Keep uv from selecting a combination
 # that installs successfully but cannot import the Antigravity SDK.
+# a2a-sdk 1.1.5+ supports protobuf 7, so a2a can share an install with
+# antigravity-sdk / vendor-sdks; the a2a conflicts were removed after that bump.
 conflicts = [
-    # a2a-sdk 1.x currently requires protobuf <7, while Antigravity's generated
-    # descriptors require protobuf 7.35+.
-    [
-        { extra = "a2a" },
-        { extra = "antigravity-sdk" },
-    ],
-    [
-        { extra = "a2a" },
-        { extra = "vendor-sdks" },
-    ],
     [
         { extra = "antigravity-sdk" },
         { extra = "mem0" },
