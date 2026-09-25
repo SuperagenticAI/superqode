@@ -1,19 +1,24 @@
 # Monty Python REPL
 
 SuperQode can expose an optional `python_repl` tool backed by
-[pydantic-monty](https://github.com/pydantic/monty). Monty is a small Python
-interpreter written in Rust for running agent-written snippets with tighter
-controls than direct host Python execution.
+[pydantic-monty](https://github.com/pydantic/monty) 1.x. Monty is a small
+Python interpreter written in Rust for running agent-written snippets with
+tighter controls than direct host Python execution. Monty v1 is the supported
+optional extra for this tool and for the RLM research/eval profile.
 
 This is not a model provider. It is a tool the coding agent can use for quick
 calculations, parsing, small transformations, and controlled interpreter-style
-work during a session.
+work during a session. Monty remains a Python subset: no third-party packages
+and no host filesystem access.
 
 ---
 
 ## Install
 
-Monty support is optional:
+Monty support is optional. The supported line is pydantic-monty 1.x
+(`>=1.0.0,<2`). Dump format is not cross-major compatible, so keep workers on
+the same Monty major when restoring RLM checkpoints.
+
 
 ```bash
 uv sync --extra monty
@@ -86,10 +91,11 @@ If a task needs to read or write real project files, use the `read_file`,
 `write_file`, or `edit_file` tools (which run under the permission system), or
 `bash` for shell access.
 
-> **Note:** Monty is experimental and implements a subset of Python. Snippets
-> that need third-party packages (NumPy, requests, ...), the full standard
-> library, or the project's own modules should use `bash` with the project's
-> Python interpreter instead.
+> **Note:** Monty implements a subset of Python. Snippets that need third-party
+> packages (NumPy, requests, ...), the full standard library, or the project's
+> own modules should use `bash` with the project's Python interpreter instead.
+> Prefer `python_repl` for quick, isolated snippets; use Docker or host RLM
+> when you need a real coding environment.
 
 ---
 

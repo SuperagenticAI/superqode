@@ -298,8 +298,8 @@ class MontyKernelBackend:
             path=str(target),
             digest=hashlib.sha256(payload).hexdigest(),
             size=len(payload),
-            # A Monty snapshot, not a pickle. The host stores the bytes and
-            # never interprets them; only Monty loads them back.
+            # An idle Monty session dump, not a pickle. The host stores the
+            # bytes and never interprets them; only Monty loads them back.
             inside_boundary=True,
         )
 
@@ -318,10 +318,32 @@ class MontyKernelBackend:
 
         del module
         session = await asyncio.to_thread(load)
-        await asyncio.to_thread(session.load_snapshot, payload)
+        # ``session.dump()`` between feeds produces an *idle* dump. Monty v1
+        # restores those with ``load_session``; ``load_snapshot`` is only for
+        # mid-feed suspended snapshots and raises on idle dumps.
+        try:
+            await asyncio.to_thread(session.load_session, payload)
+        except Exception as error:  # noqa: BLE001 - surface Monty dump/version errors clearly
+            message = str(error)
+            lower = message.lower()
+            if (
+                "load_session" in lower
+                or "load_snapshot" in lower
+                or "version" in lower
+                or "too old" in lower
+                or "dump" in lower
+            ):
+                raise RuntimeError(
+                    "Failed to restore Monty checkpoint: "
+                    f"{type(error).__name__}: {message}. "
+                    "Idle dumps from session.dump() must be restored with "
+                    "load_session, and dump format is Monty-version-specific "
+                    "(v1 dumps are not loadable on older workers)."
+                ) from error
+            raise
         with self._lock:
             self._sessions[kernel_id] = session
-        return ("<monty snapshot>",)
+        return ("<monty session>",)
 
     async def health(self) -> KernelHealth:
         return KernelHealth(

@@ -80,9 +80,10 @@ mlx = [
     "mlx-vlm>=0.5.0,<0.6.0; python_version < '3.14'",
 ]
 monty = [
-    # The Monty API is pre-1.0 and has changed shape: the pool/checkout/feed_run
-    # form this code uses does not exist in the 0.0.4 the old floor allowed.
-    "pydantic-monty>=0.0.21",
+    # Monty 1.x is the supported research/eval and python_repl extra.
+    # Dump format is not cross-major compatible (v1 dumps will not load on
+    # older workers), so keep the upper bound under 2.
+    "pydantic-monty>=1.0.0,<2",
 ]
 semantic = [
     # AST-based semantic code search client. The default integration stays slim:

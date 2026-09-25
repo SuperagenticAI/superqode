@@ -3,18 +3,19 @@
 Monty (``pydantic-monty``) is an optional, from-scratch Python interpreter that
 runs LLM-generated Python in-process with resource limits and *no* host access
 (filesystem, env, and network are all denied unless explicitly provided). It
-starts in microseconds, so it is the lightest sandbox tier — use it for quick
+starts in microseconds, so it is the lightest sandbox tier - use it for quick
 generated-Python compute, not for shell commands (use ``bash`` for those) or
 full project runs (use a remote sandbox for those).
 
-This wraps the current ``pydantic-monty`` API: ``Monty()`` owns a worker pool,
-``checkout()`` takes a session from it, and ``feed_start()`` runs a snippet.
-Monty is experimental and supports only a subset of Python, so the tool degrades
-gracefully when it is missing or when a snippet uses an unsupported feature.
+This wraps the Monty 1.x API: ``Monty()`` owns a worker pool, ``checkout()``
+takes a session from it, and ``feed_run()`` drives a snippet to completion.
+Monty is the supported optional research/eval and ``python_repl`` runtime. It
+implements a Python subset (no third-party packages, no host filesystem), so the
+tool degrades gracefully when the extra is missing or a snippet uses an
+unsupported feature.
 
-Its API has changed before, and the tests are skipped whenever the optional
-dependency is absent, which is the default. That combination hid a break for a
-whole release cycle, so treat a version bump here as something to run against
+Dump format is not cross-major compatible. Keep the ``monty`` extra pin on the
+1.x line, and treat a major bump as something to run the Monty tests against
 rather than assume.
 """
 
@@ -79,8 +80,10 @@ def run_monty_snippet(
     def _print_callback(_stream: str, text: str) -> None:
         chunks.append(text)
 
+    # Callers keep the JSON schema name ``max_duration_secs``; Monty v1 renamed
+    # the ResourceLimits key to ``max_feed_duration_secs`` (the old key raises).
     limits = module.ResourceLimits(
-        max_duration_secs=float(max_duration_secs),
+        max_feed_duration_secs=float(max_duration_secs),
         max_memory=int(max_memory),
     )
     with module.Monty() as pool:
@@ -114,7 +117,7 @@ class MontyPythonReplTool(Tool):
             "resource-limited Python interpreter with NO access to the host "
             "filesystem, environment, or network. Prefer this over running "
             "`python -c` through bash for quick calculations, data shaping, or "
-            "logic checks — it is safer and isolated. Each call runs fresh. Note: "
+            "logic checks - it is safer and isolated. Each call runs fresh. Note: "
             "Monty supports a subset of Python (no third-party imports)."
         )
 
