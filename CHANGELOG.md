@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Monty v1 support for the optional `monty` extra (research/eval RLM and
+  `python_repl`). Pin `pydantic-monty>=1.0.0,<2`. Idle checkpoint dumps from
+  `session.dump()` restore with `load_session` (not `load_snapshot`). Map the
+  user-facing `max_duration_secs` tool parameter to Monty v1
+  `ResourceLimits.max_feed_duration_secs`. Docs drop "experimental" for Monty
+  and note that dump format is not cross-major compatible.
+
 ## [2.4.15] - 2026-09-25
 
 ### Added

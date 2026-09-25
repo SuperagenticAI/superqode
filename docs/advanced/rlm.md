@@ -371,10 +371,16 @@ runtime:
     sandbox: monty
 ```
 
-Monty is a from-scratch Python interpreter with no subprocess, no real
-filesystem and no third-party imports. That makes it the wrong place to do
-coding work and the right place for the other half of the RLM pattern, so this
-is the research and evaluation profile.
+Monty (pydantic-monty 1.x) is a from-scratch Python interpreter with no
+subprocess, no real filesystem and no third-party imports. That makes it the
+wrong place to do coding work and the right place for the other half of the RLM
+pattern, so this is the research and evaluation profile. Use Docker (or host)
+RLM when the agent must edit a repository and run tests. Sandbox backends such
+as E2B or Modal are for vendor ACP agents and are out of scope for this
+profile.
+
+Hub preset: `rlm-monty` (for example `:harness switch rlm-monty` or
+`superqode harness run rlm-monty "..."`).
 
 It needs the optional dependency:
 
@@ -384,16 +390,19 @@ uv pip install 'superqode[monty]'
 
 What works: persistent Python state, `context` with reads, search and chunking,
 `llm_query` and `llm_query_batched`, and `workspace.read`. What refuses, by
-name and with the reason: `shell.run`, `workspace.write` and `workspace.edit`.
-Completion gates refuse too, rather than quietly running on the host, because a
-gate that escaped the profile would verify the wrong machine. An agent that
-cannot run tests must not be able to imply it verified anything.
+name and with the reason: `shell.run`, `workspace.write`, `workspace.edit`, and
+`rlm.run`. Completion gates refuse too, rather than quietly running on the
+host, because a gate that escaped the profile would verify the wrong machine.
+An agent that cannot run tests must not be able to imply it verified anything.
 
 Recursion is not part of this profile. `rlm.run` needs processes, and Monty has
 none, so it is absent rather than half-wired.
 
-Checkpoints are Monty snapshots rather than pickles, so restoring one never
-involves the host deserializing anything.
+Checkpoints are idle Monty session dumps from `session.dump()`, restored with
+`load_session`, not pickles. Restoring one never involves the host
+deserializing anything. Dump format is Monty-version-specific: a v1 dump is not
+loadable on older workers, so keep checkpoint producers and consumers on the
+same Monty major.
 
 One portability note: Monty does not dispatch `len()` to a user class. Use
 `context.size()`, `response.size()` and `chunk.size()`, which work identically

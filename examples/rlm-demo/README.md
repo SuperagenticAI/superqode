@@ -13,9 +13,11 @@ python -m unittest discover -s tests -v
 
 ## Analyze with Monty
 
-The optional Monty profile provides persistent Python, repository context, and
-focused model calls without exposing a shell, writable filesystem, third-party
-imports, or recursive child processes. Install the optional dependency:
+The optional Monty profile (pydantic-monty 1.x) provides persistent Python,
+repository context, and focused model calls without exposing a shell, writable
+filesystem, third-party imports, or recursive child processes. It is the
+supported research/eval RLM profile; use the Docker harness below for coding
+work that needs writes and tests. Install the optional dependency:
 
 ```bash
 uv tool install 'superqode[monty]'

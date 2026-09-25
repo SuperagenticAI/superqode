@@ -87,3 +87,46 @@ async def test_python_repl_empty_code_rejected(tool_context):
     result = await MontyPythonReplTool().execute({"code": "   "}, tool_context)
     assert not result.success
     assert "required" in result.error.lower()
+
+
+@requires_monty
+@pytest.mark.asyncio
+async def test_python_repl_maps_max_duration_secs_to_feed_limit(tool_context):
+    """User-facing max_duration_secs must map to Monty v1 max_feed_duration_secs."""
+    from superqode.tools import monty_tool as mt
+
+    captured = {}
+    real_limits = mt._load_monty().ResourceLimits
+
+    def capture_limits(**kwargs):
+        captured.update(kwargs)
+        return real_limits(**kwargs)
+
+    class FakeModule:
+        ResourceLimits = staticmethod(capture_limits)
+        Monty = mt._load_monty().Monty
+        __version__ = mt.monty_version()
+
+    # Drive the helper directly so we assert the ResourceLimits kwargs.
+    output = mt.run_monty_snippet(
+        FakeModule,
+        "1 + 1",
+        max_duration_secs=1.5,
+        max_memory=16 * 1024 * 1024,
+    )
+    assert "2" in output
+    assert "max_feed_duration_secs" in captured
+    assert captured["max_feed_duration_secs"] == 1.5
+    assert "max_duration_secs" not in captured
+    assert captured["max_memory"] == 16 * 1024 * 1024
+
+
+@requires_monty
+@pytest.mark.asyncio
+async def test_python_repl_accepts_max_duration_secs_parameter(tool_context):
+    result = await MontyPythonReplTool().execute(
+        {"code": "2 * 21", "max_duration_secs": 1.0},
+        tool_context,
+    )
+    assert result.success, result.error
+    assert "42" in result.output

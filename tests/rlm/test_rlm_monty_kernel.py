@@ -156,3 +156,27 @@ async def test_the_profile_reports_what_it_is(backend):
     assert health.alive is True
     assert health.backend == "monty"
     assert "no shell, no writes" in health.detail
+
+
+async def test_checkpoint_restore_round_trip_preserves_bindings(backend, tmp_path):
+    """Idle dumps from session.dump() must restore via load_session into a fresh kernel."""
+    await backend.execute("root", "carried = 99")
+    reference = await backend.checkpoint("root")
+    assert reference.ok is True
+
+    fresh = MontyKernelBackend(
+        backend.cwd,
+        config=RLMSandboxConfig.from_config({"sandbox": "monty"}),
+        session_id="restore",
+        state_dir=tmp_path / "state-restore",
+        executor=backend.executor,
+        context=backend.context,
+    )
+    try:
+        restored = await fresh.restore("root", reference)
+        assert restored == ("<monty session>",)
+        result = await fresh.execute("root", "carried")
+        assert result.error is None
+        assert result.value_repr == "99"
+    finally:
+        await fresh.close()
