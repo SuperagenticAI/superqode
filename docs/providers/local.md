@@ -1046,6 +1046,33 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
 ---
 
+## Optional local connection options
+
+In `superqode.yaml` under `providers.<id>`:
+
+```yaml
+providers:
+  vllm:
+    base_url: http://localhost:8000/v1
+    tool_choice_mode: omit   # omit | send (default send preserves current behavior)
+    reviewer_model: qwen2.5-coder:7b  # same endpoint, optional different model id
+```
+
+- `tool_choice_mode: omit` skips sending `tool_choice` for partial OpenAI-compatible
+  servers (useful for some vLLM setups). `send` is the default.
+- `reviewer_model` prefers that model id for the local optimizer's reviewer role.
+  SuperQode AUTO permission mode remains rule / System One based; this field does
+  not enable a separate Fx-style LLM permission reviewer yet.
+
+## fx custom connections vs SuperQode engines
+
+Two different local paths exist:
+
+1. **SuperQode-native engines** on this page (`:connect ollama|lmstudio|mlx|…`, `superqode local …`).
+2. **Fx ACP** where Fx itself uses custom OpenAI Chat Completions connections in `~/.fx/settings.json` (fx >= 0.0.11). SuperQode attaches with `:connect fx` and does not write Fx settings.
+
+See the comparison matrix in [fx](fx.md#superqode-engines-vs-fx-custom-connections).
+
 ## Next Steps
 
 - [BYOK Providers](byok.md) - Cloud alternatives

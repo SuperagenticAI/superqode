@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+
+- Document Fx custom OpenAI Chat Completions connections (fx >= 0.0.11) alongside
+  SuperQode-native local engines. Clarify that SuperQode attaches over ACP and
+  does not write `~/.fx/settings.json` or inject models into Fx's loop.
+- Add a short SuperQode engines vs Fx custom connections matrix in
+  [docs/providers/fx.md](docs/providers/fx.md).
+- Optional local-session resume guard: refuse silent resume when a local
+  OpenAI-compatible endpoint base URL or auth-slot fingerprint changed.
+- Optional per-provider `reviewer_model` and `tool_choice_mode` (`omit`|`send`)
+  for openai-compatible / local routes (defaults preserve prior behavior).
+- `agents doctor fx` reports read-only hints when `~/.fx/settings.json` defines
+  custom `providers` entries.
+
 ## [2.4.14] - 2026-09-25
 
 ### Fixed
