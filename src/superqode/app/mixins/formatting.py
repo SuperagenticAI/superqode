@@ -898,6 +898,9 @@ class FormattingMixin:
                     f"set one of {', '.join(result['missing_env_vars'])}\n",
                     style=THEME["warning"],
                 )
+            if result.get("fx_custom_providers_hint"):
+                t.append("    fx:      ", style=THEME["muted"])
+                t.append(f"{result['fx_custom_providers_hint']}\n", style=THEME["cyan"])
             if not installed and result.get("install_command"):
                 t.append("    install: ", style=THEME["muted"])
                 t.append(f"{result['install_command']}\n", style=THEME["cyan"])

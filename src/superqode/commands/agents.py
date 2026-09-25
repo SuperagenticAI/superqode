@@ -98,6 +98,8 @@ def agents_doctor(agent, live, timeout, json_output):
             click.echo(f"  command: {result['command']}")
         if result.get("missing_env_vars"):
             click.echo(f"  env: set one of {', '.join(result['missing_env_vars'])}")
+        if result.get("fx_custom_providers_hint"):
+            click.echo(f"  fx: {result['fx_custom_providers_hint']}")
         if not result["installed"] and result.get("install_command"):
             click.echo(f"  install: {result['install_command']}")
         live_result = result.get("live")
