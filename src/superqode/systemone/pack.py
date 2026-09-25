@@ -63,6 +63,23 @@ class DecisionPolicy(BaseModel):
         return self
 
 
+class ContextPrunePolicy(BaseModel):
+    """Thresholds for query-aware tool-output pruning.
+
+    ``keep_below`` is a confident-false cutoff. A noul inside or above that
+    value keeps the original bytes. Code owns the comparison.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    keep_below: float = Field(default=0.4, ge=0.0, le=1.0)
+    min_reduction: float = Field(default=0.25, ge=0.0, le=1.0)
+    max_candidates: int = Field(default=24, ge=1, le=64)
+    stub_head_chars: int = Field(default=300, ge=40, le=2000)
+    max_state_chars: int = Field(default=24000, ge=1000, le=32000)
+    min_output_chars: int = Field(default=240, ge=1)
+
+
 class QuestionPack(BaseModel):
     """One versioned pack: questions plus optional compose thresholds."""
 
@@ -76,6 +93,7 @@ class QuestionPack(BaseModel):
     state_schema: dict[str, Any] | None = None
     input_key: str = ""
     decision_policy: DecisionPolicy = Field(default_factory=DecisionPolicy)
+    context_policy: ContextPrunePolicy | None = None
 
     @field_validator("state_schema")
     @classmethod
@@ -101,6 +119,10 @@ class QuestionPack(BaseModel):
 
     def content_hash(self) -> str:
         payload = self.model_dump(mode="json")
+        # Optional and unset on packs that predate context pruning. Dropping
+        # the null keeps those pack hashes stable.
+        if payload.get("context_policy") is None:
+            payload.pop("context_policy", None)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         digest = "sha256:" + hashlib.sha256(blob).hexdigest()
         return digest

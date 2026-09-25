@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.15] - 2026-09-25
+
+### Added
+
+- Opt-in Jev context prune at the compaction boundary
+  (`SUPERQODE_JEV_CONTEXT=shadow|enforce`). Shadow records which old tool
+  outputs the latest request still needs and leaves the prompt unchanged.
+  Enforce stubs an output only when Jev is confidently finished with it, the
+  cut is at least 25%, and the result fits the window. The model reads the
+  saved output back with `read_context_chunk`, which appears only after a
+  stub. Unset leaves the existing compaction path unchanged.
+- Opt-in conditional `AGENTS.md` sections (`SUPERQODE_CONDITIONAL_INSTRUCTIONS=1`).
+  A `<!-- sq:when -->` block reloads into the pinned system prompt before
+  each model call, including the first turn, when a path, tool, or task
+  matches. Unset keeps every instruction file in the prompt as written.
+
 ## [2.4.14] - 2026-09-25
 
 ### Fixed

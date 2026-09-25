@@ -1297,6 +1297,55 @@ class AgentLoop:
         # history is valid before the first model send.
         return repair_dangling_tool_calls(restored)
 
+    def _refresh_opt_in_instructions(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
+        """Pin matching AGENTS.md sections before a model call.
+
+        Unset ``SUPERQODE_CONDITIONAL_INSTRUCTIONS`` returns the same list.
+        """
+        try:
+            from .instructions import conditional_instructions_enabled, refresh_pinned_instructions
+
+            if not conditional_instructions_enabled():
+                return messages
+            return refresh_pinned_instructions(messages, self.config.working_directory)
+        except Exception:
+            return messages
+
+    def _ensure_context_chunk_tool(self) -> None:
+        """Expose read_context_chunk only after an enforce stub stored an original."""
+        tools = getattr(self, "tools", None)
+        if tools is None or not hasattr(tools, "get") or not hasattr(tools, "register"):
+            return
+        if tools.get("read_context_chunk") is not None:
+            return
+        from ..tools.context_tools import ReadContextChunkTool
+
+        tools.register(ReadContextChunkTool())
+
+    def _include_context_chunk_tool(self, tool_defs: List[ToolDefinition]) -> List[ToolDefinition]:
+        """Keep the chunk reader visible after a router has frozen the catalogue."""
+        if any(item.name == "read_context_chunk" for item in tool_defs):
+            return tool_defs
+        tools = getattr(self, "tools", None)
+        tool = (
+            tools.get("read_context_chunk") if tools is not None and hasattr(tools, "get") else None
+        )
+        if tool is None:
+            return tool_defs
+        return [
+            *tool_defs,
+            ToolDefinition(
+                name=tool.name,
+                description=tool.description,
+                parameters=tool.parameters,
+            ),
+        ]
+
+    def _context_chunk(self, chunk_id: str) -> Optional[str]:
+        from ..systemone.context_prune import context_original
+
+        return context_original(self, chunk_id)
+
     def _create_tool_context(self) -> ToolContext:
         """Create context for tool execution."""
         return ToolContext(
@@ -1309,6 +1358,7 @@ class AgentLoop:
             peer_manager=self._get_peer_manager(),
             permission_manager=self.permission_manager,
             context_status=self._context_status,
+            context_chunk=self._context_chunk,
             systemone=self.config.systemone,
             systemone_client=self._systemone_client,
             harness_store=self.config.harness_store,
@@ -1917,10 +1967,13 @@ class AgentLoop:
         Strategy:
         1. Derive an adaptive threshold (window - reserve) and kept-recent token
            budget from the model's real context window; bail if under threshold.
-        2. Try LLM-backed structured compaction (9-section template). Replace the
+        2. When ``SUPERQODE_JEV_CONTEXT`` is shadow or enforce, score old tool
+           outputs. Shadow records the decision. Enforce stubs only when that
+           cut fits the window; otherwise the summary path below still runs.
+        3. Try LLM-backed structured compaction (9-section template). Replace the
            head of history with the summary; keep the system prompt and a
            token-budgeted tail of recent turns intact.
-        3. If compaction fails, fall back to mechanical prune-from-front.
+        4. If compaction fails, fall back to mechanical prune-from-front.
         """
         if not self._compaction_active():
             return messages
@@ -1953,13 +2006,69 @@ class AgentLoop:
         if pre.denied:
             return messages
 
+        jev_event: Dict = {}
+        from ..systemone.context_prune import context_mode
+
+        if context_mode() != "off":
+            try:
+                from ..systemone.context_prune import apply_context_prune
+
+                pruned_by_jev, jev_event = await apply_context_prune(
+                    self,
+                    messages,
+                    keep_recent=keep_recent,
+                    threshold=threshold,
+                )
+            except Exception:
+                pruned_by_jev, jev_event = messages, {}
+        if jev_event.get("applied"):
+            messages = pruned_by_jev
+            msg_dicts = [
+                {
+                    "role": m.role,
+                    "content": _content_for_counting(m.content),
+                    "tool_calls": m.tool_calls,
+                    "tool_result": m.content if m.role == "tool" else None,
+                }
+                for m in messages
+            ]
+            token_count = self.context_manager.count_tokens(msg_dicts)
+            if token_count <= threshold:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        "JEV context enforce: stubbed "
+                        f"{jev_event.get('stub_count', 0)} old tool outputs "
+                        f"({token_count}/{window} tokens)."
+                    )
+                await self.hooks.fire(
+                    AFTER_COMPACT,
+                    lifecycle_ctx,
+                    token_count,
+                    messages,
+                    "context_prune",
+                )
+                return messages
+        elif jev_event.get("status") == "success" and jev_event.get("mode") == "shadow":
+            if self.on_thinking:
+                await self.on_thinking(
+                    "JEV context shadow: "
+                    f"{jev_event.get('stub_count', 0)} old tool outputs would be stubbed."
+                )
+
         # Stage 1 (free): stub out stale tool outputs older than the protected
         # recent tail. The conversation skeleton (who did what, in what order)
         # survives; only old tool payloads are dropped. No LLM call needed, and
         # when this alone gets us back under threshold we skip summarization -
         # the cheaper outcome for local models.
-        pruned_messages, pruned_chars = self._prune_stale_tool_outputs(
-            messages, msg_dicts, keep_recent
+        # A successful enforce decision already chose which outputs to keep.
+        # Blind stubbing here would drop a log Jev said the next turn still needs.
+        skip_blind_prune = (
+            jev_event.get("mode") == "enforce" and jev_event.get("status") == "success"
+        )
+        pruned_messages, pruned_chars = (
+            (messages, 0)
+            if skip_blind_prune
+            else self._prune_stale_tool_outputs(messages, msg_dicts, keep_recent)
         )
         if pruned_chars > 0:
             messages = pruned_messages
@@ -2459,12 +2568,14 @@ class AgentLoop:
                 await self.on_thinking(
                     f"Steering: picked up {len(drained)} queued user message(s)."
                 )
+            messages = self._refresh_opt_in_instructions(messages)
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
             tool_defs = [] if fast_chat else self._get_tool_definitions()
             if routed_tool_plan is not None:
                 tool_defs = self.tool_router.apply(tool_defs, routed_tool_plan)
+            tool_defs = self._include_context_chunk_tool(tool_defs)
 
             # Emit iteration log
             if self.on_thinking:
@@ -2959,10 +3070,12 @@ class AgentLoop:
                 await self.on_thinking(
                     f"Steering: picked up {len(drained)} queued user message(s)."
                 )
+            messages = self._refresh_opt_in_instructions(messages)
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
             tool_defs = [] if fast_chat else self._get_tool_definitions()
+            tool_defs = self._include_context_chunk_tool(tool_defs)
 
             # Emit iteration log
             if self.on_thinking:

@@ -85,4 +85,72 @@ class GetContextRemainingTool(Tool):
         )
 
 
-__all__ = ["GetContextRemainingTool"]
+class ReadContextChunkTool(Tool):
+    """Return a tool output that context prune kept outside the prompt."""
+
+    read_only = True
+
+    @property
+    def name(self) -> str:
+        return "read_context_chunk"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Read the original text of a tool output that was stubbed to save "
+            "context. Pass the chunk_id from the stub. This reads only that "
+            "saved output. It does not read files."
+        )
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "chunk_id": {
+                    "type": "string",
+                    "description": "Id from the stub, such as tool-call-1.",
+                }
+            },
+            "required": ["chunk_id"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        chunk_id = str(args.get("chunk_id") or "").strip()
+        if not chunk_id:
+            return ToolResult(success=False, output="", error="chunk_id is required.")
+        lookup = getattr(ctx, "context_chunk", None)
+        if lookup is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error="No retained context chunks are available in this run.",
+            )
+        try:
+            text = lookup(chunk_id)
+        except Exception as exc:
+            return ToolResult(success=False, output="", error=f"Context chunk lookup failed: {exc}")
+        if not isinstance(text, str):
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"No retained output for chunk {chunk_id}.",
+            )
+        limit = int(getattr(ctx, "max_output_bytes", None) or 100_000)
+        if limit > 0 and len(text) > limit:
+            shown = text[:limit]
+            return ToolResult(
+                success=True,
+                output=(
+                    f"{shown}\n[chunk {chunk_id}: showing {limit:,} of {len(text):,} characters]"
+                ),
+                metadata={"chunk_id": chunk_id, "chars": len(text), "truncated": True},
+            )
+        return ToolResult(
+            success=True,
+            output=text,
+            metadata={"chunk_id": chunk_id, "chars": len(text), "truncated": False},
+        )
+
+
+__all__ = ["GetContextRemainingTool", "ReadContextChunkTool"]

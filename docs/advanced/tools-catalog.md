@@ -114,6 +114,7 @@ evidence storage, and supported backends.
 | Tool | Use |
 |---|---|
 | `get_context_remaining` | Report the context window, current usage, and remaining budget so the model can plan its remaining work deliberately. |
+| `read_context_chunk` | Read a tool output that Jev context enforce stubbed out of the prompt. Appears only after a stub, and only reads that saved output. |
 | `tool_search` | Discover and activate deferred tools ("fetch a web page" → activates `web_fetch`). Present whenever anything is deferred. |
 | `request_permissions` | The model asks *you* for a session-scoped escalation with a justification; approval upgrades the named tools from ask-each-time to allowed. Hard denies are never overridable. See [Policies & Safety](policies.md). |
 | `skill`, `read_skill`, `create_skill` | Project skills from `.agents/skills/*.md`. |

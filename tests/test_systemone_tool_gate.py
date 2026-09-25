@@ -23,7 +23,7 @@ def _load_trace(path: Path) -> dict:
 
 def test_builtin_packs_load():
     ids = builtin_pack_ids()
-    assert ids == ("factory_route", "rubric", "tool_gate")
+    assert ids == ("context_prune", "factory_route", "rubric", "tool_gate")
     for pack_id in ids:
         pack = load_pack(pack_id)
         assert pack.id == pack_id

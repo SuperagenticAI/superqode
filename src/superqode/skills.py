@@ -245,6 +245,21 @@ def load_project_instructions(root: str | Path = ".") -> str:
             label = path.relative_to(base)
         except ValueError:
             label = path
+
+        try:
+            from .agent.instructions import (
+                conditional_instructions_enabled,
+                split_instruction_text,
+            )
+
+            if conditional_instructions_enabled():
+                content = split_instruction_text(content, source=str(label)).unconditional
+        except Exception:
+            pass
+
+        if not content:
+            continue
+
         parts.append(f"## Instructions from {label}\n\n{content}")
 
     return "\n\n".join(parts)

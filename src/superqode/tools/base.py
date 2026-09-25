@@ -70,6 +70,8 @@ class ToolContext:
     # Live context-budget reporter for get_context_remaining. Returns a dict
     # with window/used/compaction_threshold. Set by the agent loop.
     context_status: Optional[Callable[[], Dict[str, Any]]] = None
+    # Retained tool output for read_context_chunk. Set by the agent loop.
+    context_chunk: Optional[Callable[[str], Optional[str]]] = None
     # Harness run context, populated when tools execute inside HarnessKernel.
     systemone: Optional[Any] = None
     systemone_client: Optional[Any] = None

@@ -15,6 +15,10 @@ def _isolate_systemone_env(monkeypatch):
     opt-in gate. Tests that want that env set it themselves.
     """
     monkeypatch.delenv("SUPERQODE_SYSTEMONE", raising=False)
+    monkeypatch.delenv("SUPERQODE_CONDITIONAL_INSTRUCTIONS", raising=False)
+    monkeypatch.delenv("SUPERQODE_JEV_CONTEXT", raising=False)
+    monkeypatch.delenv("SUPERQODE_JEV_CONTEXT_CLIENT", raising=False)
+    monkeypatch.delenv("SUPERQODE_JEV_CONTEXT_TIMEOUT_MS", raising=False)
 
 
 @pytest.fixture(autouse=True)

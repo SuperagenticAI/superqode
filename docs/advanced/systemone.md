@@ -29,6 +29,7 @@ model-selected commands.
 | Workflow | Entry point | Result |
 | --- | --- | --- |
 | Check coding tools | Core/BYOK plus `:systemone live` | Allow, deny, or request approval |
+| Prune old tool output | `SUPERQODE_JEV_CONTEXT=shadow` | Record keep-or-stub decisions. The prompt stays as it is |
 | Code with Jev observing decisions | `--harness systemone` | Shadow tool gates and tool discovery |
 | Evaluate a decision pack | `harness run` or `:systemone connect` | Typed decision output |
 | Compare decisions with labels | `harness eval` with a `decision` evaluator | Scorecard and per-task evidence |
@@ -141,6 +142,60 @@ supported harnesses, environment variables, SDK and service usage, benchmark
 results, and operational boundaries. The
 [command reference](../cli-reference/optimize-commands.md#benchmark-snapshot-21-september-2026)
 contains the full reproduction procedure.
+
+### Query-aware context prune
+
+When a session approaches the model window, SuperQode can ask Jev which old
+tool outputs the latest request still needs. The decision uses the
+`context_prune` pack. Tool bodies are omitted from the request. A short note
+records the tool name and the output size. User and assistant text stay
+verbatim.
+
+```sh
+export TYPESAFE_API_KEY="..."
+export SUPERQODE_JEV_CONTEXT=shadow
+export SUPERQODE_JEV_CONTEXT_CLIENT=live
+superqode
+```
+
+`shadow` writes the decision and does not change the prompt. `enforce` replaces
+an old tool output with a short head plus a chunk id only when three conditions
+hold: Jev's keep probability is below `0.4`, the character cut is at least
+25%, and the stubbed transcript fits the window. The original output stays on
+the loop, keyed by that chunk id. The model reads it back with
+`read_context_chunk`, which is added to the tool list only after a stub is
+stored. Uncertainty, a client error, a small cut, or a transcript that is still
+over the window keeps today's prune-then-summary path.
+
+This does not switch the coding model. `factory_route` remains a recommendation.
+Traces land under `SUPERQODE_SYSTEMONE_TRACE_DIR/context-prune/` when that
+directory is set. Each trace records the pack hash, both probabilities, the
+chunk ids, the fallback reason, and a cache recommendation computed in code
+from token counts.
+
+Conditional sections in `AGENTS.md` stay in the normal project-instructions
+block until you opt in:
+
+```sh
+export SUPERQODE_CONDITIONAL_INSTRUCTIONS=1
+```
+
+With that set, a marked section is removed from the always-on prompt and
+reloaded into the pinned system prompt before each model call, including the
+first turn, when a path, tool, or task matches. Unmarked files are unchanged
+either way.
+
+```markdown
+Always run the tests you touch.
+
+<!-- sq:when paths="billing/**" tools="bash" tasks="deploy" -->
+Billing changes require a dry-run deploy note in the pull request.
+<!-- /sq:when -->
+```
+
+A section is included when any declared condition matches a path, tool name, or
+the latest user message. The block is replaced in place, so compaction cannot
+drop it and later turns do not duplicate it.
 
 ## Run a pack
 

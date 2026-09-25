@@ -51,6 +51,10 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_TOOL_ROUTING_THRESHOLD` | float from `0` to `1` | `0.30` | Minimum Jev Noul probability for a non-core tool to remain visible. |
 | `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | positive integer | `1500` | Deadline for the once-per-turn Jev routing decision. |
 | `SUPERQODE_TOOL_ROUTING_ALWAYS_KEEP` | names (`,`-sep) | unset | Add tool names to the built-in workspace-tool safety floor. |
+| `SUPERQODE_CONDITIONAL_INSTRUCTIONS` | `1`/`on` | unset | Reload `<!-- sq:when -->` sections from `AGENTS.md` into the pinned system prompt when a path, tool, or task matches. Unset keeps every instruction file in the prompt as written. |
+| `SUPERQODE_JEV_CONTEXT` | `off`/`shadow`/`enforce` | `off` | At the compaction boundary, ask Jev whether old tool outputs are still needed. Unset leaves compaction on the existing prune-then-summary path. `shadow` records the decision and leaves the prompt unchanged. `enforce` stubs an output only when Jev is confidently finished with it, the cut is at least 25%, and the result fits the window. |
+| `SUPERQODE_JEV_CONTEXT_CLIENT` | `stub`/`replay`/`live` | `stub`, or the active `SUPERQODE_SYSTEMONE` client | Decision client for context prune. `live` requires `TYPESAFE_API_KEY` and does not by itself enable the tool gate. |
+| `SUPERQODE_JEV_CONTEXT_TIMEOUT_MS` | positive integer | System One timeout, else `5000` | Deadline for one context-prune decision. A timeout leaves the prompt unchanged. |
 | `SUPERQODE_GATEWAY_UPSTREAM` | absolute HTTP(S) URL | unset | Default upstream for `superqode serve optimize`; equivalent to `--upstream`. |
 
 ## Providers & models

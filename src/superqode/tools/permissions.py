@@ -59,6 +59,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     # Read operations
     "read_file": ToolGroup.READ,
     "read": ToolGroup.READ,
+    "read_context_chunk": ToolGroup.READ,
     "list_directory": ToolGroup.READ,
     "grep": ToolGroup.READ,
     "glob": ToolGroup.READ,
