@@ -1287,6 +1287,15 @@ class PureMode:
                 f"Set the key, then retry :sessions switch {resolved_session_id[:8]}."
             )
 
+        try:
+            from superqode.session.endpoint_fingerprint import check_resume_endpoint
+
+            check_resume_endpoint(metadata, provider=provider)
+        except SessionResumeError:
+            raise
+        except Exception:
+            pass
+
         # Start session and get messages
         self._session_manager.start_session(session_id=resolved_session_id)
         messages = self._session_manager.get_messages()
