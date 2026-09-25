@@ -38,7 +38,7 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "2.4.15"
+__version__ = "2.4.16"
 
 # Stable, lightweight public extension surface.  Importing this package does
 # not discover or execute third-party extensions; discovery happens only when
