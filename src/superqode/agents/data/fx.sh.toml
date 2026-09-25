@@ -15,7 +15,7 @@ author_url = "https://github.com/vercel-labs"
 publisher_name = "Vercel Labs"
 publisher_url = "https://github.com/vercel-labs/fx"
 type = "coding"
-description = "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Models are billed as Vercel AI Gateway credits."
+description = "Vercel Labs' experimental native coding agent. SuperQode starts its ACP server with fx acp. Gateway models use Vercel AI Gateway credits; Fx custom connections are configured in Fx settings."
 tags = ["open-source", "subscription", "acp", "experimental"]
 catalog_tier = "featured"
 run_command."*" = "fx acp"
@@ -32,7 +32,10 @@ fx acp
 ```
 
 Status is experimental. fx owns the loop, tools, permissions, skills, MCP,
-and sessions. Every model request goes through Vercel AI Gateway.
+and sessions. Gateway routes use Vercel AI Gateway. Separately, fx (>= 0.0.11)
+can use custom OpenAI Chat Completions connections that you configure in
+`~/.fx/settings.json`. SuperQode does not write that file or inject models
+into Fx's loop.
 
 ## Install
 
@@ -58,17 +61,24 @@ does not copy the token.
 
 ## Models
 
-fx resolves models against the Vercel AI Gateway catalog. The compiled
-default is `zai/glm-5.2-fast`. There is no local-model path.
+fx resolves Gateway models against the Vercel AI Gateway catalog. For local
+or other OpenAI-compatible servers, configure Fx custom connections in
+`~/.fx/settings.json`, select with `fx provider <name>` or `FX_PROVIDER`,
+and verify with `fx status --json` (`provider_endpoint`). See
+https://fx.sh/docs/configure-fx/custom-model-connections
+
+For SuperQode-native local engines (Ollama, LM Studio, MLX, …), use
+`:connect ollama` / `superqode local …` instead of expecting SuperQode to
+push models into Fx.
 
 ## API key
 
-`fx setup` or `AI_GATEWAY_API_KEY` is fx's own key path. SuperQode's
+`fx setup` or `AI_GATEWAY_API_KEY` is fx's own Gateway key path. SuperQode's
 Subscriptions row strips `AI_GATEWAY_API_KEY` so a leftover key cannot
 divert the session onto metered Gateway billing. Spend that key with
 `:connect fx-key` (Open harnesses). It injects the variable into the
-`fx acp` child only. fx does not accept a SuperQode BYOK provider or a
-local model.
+`fx acp` child only. SuperQode does not open a BYOK or local model picker
+for fx.
 '''
 
 [actions."*".install]

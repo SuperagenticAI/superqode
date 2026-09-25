@@ -43,6 +43,11 @@ class SessionMetadata:
     harness_display_name: str = ""
     # Absolute cwd the session belonged to (for resume scoping).
     working_directory: str = ""
+    # Non-secret local endpoint binding for resume safety (OpenAI-compatible /
+    # local providers). Rotating a key value in the same env slot is fine.
+    endpoint_base_url: str = ""
+    endpoint_auth_slot: str = ""
+    endpoint_fingerprint: str = ""
 
 
 @dataclass
@@ -145,6 +150,9 @@ class SessionStore:
                     "backend_session_path": metadata.backend_session_path,
                     "harness_display_name": metadata.harness_display_name,
                     "working_directory": metadata.working_directory,
+                    "endpoint_base_url": metadata.endpoint_base_url,
+                    "endpoint_auth_slot": metadata.endpoint_auth_slot,
+                    "endpoint_fingerprint": metadata.endpoint_fingerprint,
                 },
                 indent=2,
             )
@@ -195,6 +203,10 @@ class SessionStore:
         harness_digest: str = "",
         tool_contract_version: str = "",
         continuity: str = "context-replay",
+        endpoint_base_url: str = "",
+        endpoint_auth_slot: str = "",
+        endpoint_fingerprint: str = "",
+        bind_local_endpoint: bool = False,
     ) -> SessionMetadata:
         """Update the executor attached to a durable conversation session.
 
@@ -232,6 +244,17 @@ class SessionStore:
         metadata.harness_source = harness_source or metadata.harness_source
         metadata.harness_digest = harness_digest or metadata.harness_digest
         metadata.tool_contract_version = tool_contract_version or metadata.tool_contract_version
+        if endpoint_fingerprint or endpoint_base_url or endpoint_auth_slot:
+            metadata.endpoint_base_url = endpoint_base_url or metadata.endpoint_base_url
+            metadata.endpoint_auth_slot = endpoint_auth_slot or metadata.endpoint_auth_slot
+            metadata.endpoint_fingerprint = endpoint_fingerprint or metadata.endpoint_fingerprint
+        elif bind_local_endpoint:
+            try:
+                from superqode.session.endpoint_fingerprint import bind_endpoint_fields
+
+                bind_endpoint_fields(metadata, provider=next_provider)
+            except Exception:
+                pass
         metadata.updated_at = datetime.now().isoformat()
         self._save_metadata(metadata)
         self._record_graph(metadata, kind="session")
@@ -453,6 +476,7 @@ class SessionManager:
                 harness_digest=harness_digest,
                 tool_contract_version=tool_contract_version,
                 continuity=continuity,
+                bind_local_endpoint=True,
             )
             return session_id
 
@@ -469,6 +493,20 @@ class SessionManager:
             harness_digest=harness_digest,
             tool_contract_version=tool_contract_version,
         )
+        try:
+            self.store.update_execution_binding(
+                new_id,
+                provider=provider,
+                model=model,
+                harness_id=harness_id,
+                harness_source=harness_source,
+                harness_digest=harness_digest,
+                tool_contract_version=tool_contract_version,
+                continuity="new-session",
+                bind_local_endpoint=True,
+            )
+        except Exception:
+            pass
         self._current_session_id = new_id
         return new_id
 

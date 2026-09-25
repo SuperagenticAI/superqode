@@ -139,6 +139,9 @@ session.
 Uses fx with `AI_GATEWAY_API_KEY` from the environment or `fx setup`. The
 key is injected into the child ACP process only. This is the Open harnesses
 row, not the Vercel login, and not a SuperQode BYOK or local model picker.
+Fx custom OpenAI Chat Completions connections (fx >= 0.0.11) are configured in
+`~/.fx/settings.json` by the user; SuperQode does not write that file. See
+[fx](../providers/fx.md).
 
 ```text
 :connect fx-key
@@ -176,7 +179,7 @@ Direct shortcuts:
 - `:connect fast-agent` - pick a key or local model, then attach fast-agent over ACP with it (Open harnesses)
 - `:connect pi` - pick a key or local model, then attach Pi over ACP with it (Open harnesses)
 - `:connect fx` - Vercel fx on a Vercel login over ACP (AI Gateway credits)
-- `:connect fx-key` - fx with `AI_GATEWAY_API_KEY` (Open harnesses; not a local model)
+- `:connect fx-key` - fx with `AI_GATEWAY_API_KEY` (Open harnesses; no SuperQode local picker)
 - `:fx` / `:fx status` - TUI readiness for install and Vercel login
 - `:fx login` - consent-gated `fx login`
 - `:fx connect` - same as `:connect fx`

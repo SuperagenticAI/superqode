@@ -289,15 +289,16 @@ from that row yet.
 | Letta Code | Apache-2.0 | `:connect letta` | Setup card |
 | Warp Agent | AGPL-3.0 | `:connect warp` | Setup card |
 | Kimi Code | MIT | `:connect kimi-code-key` | Attaches on an exported `MOONSHOT_API_KEY` or `KIMI_API_KEY`, otherwise asks for a model |
-| fx | Apache-2.0 | `:connect fx-key` | Attaches on `AI_GATEWAY_API_KEY` (or `fx setup`). No local model or SuperQode BYOK picker |
+| fx | Apache-2.0 | `:connect fx-key` | Attaches on `AI_GATEWAY_API_KEY` (or `fx setup`). No SuperQode BYOK/local picker; Fx custom connections are configured in Fx (`~/.fx/settings.json`), not by SuperQode |
 
 Eleven rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
 SuperQode-hosted adapter and then run the model you choose. OpenCode, Grok
 Build, Qwen Code, Kimi Code, fast-agent, Pi, Prime Agent, and fx keep their
 own loop: the model step only decides which credentials they are handed, and
 SuperQode passes those to the agent process alone rather than exporting them
-into your shell. fx skips the model picker entirely and injects
-`AI_GATEWAY_API_KEY` into the child. Prime is reached over its Python RPC
+into your shell. fx skips SuperQode's model picker and, on the Open key path,
+injects `AI_GATEWAY_API_KEY` into the child. Fx custom connections are configured
+in Fx settings, not by SuperQode. Prime is reached over its Python RPC
 backend rather than ACP, so a local pick is registered in Prime's own
 `models.json` instead of being passed as an environment variable.
 

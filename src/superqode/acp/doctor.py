@@ -133,6 +133,22 @@ async def acp_doctor(
             "live": None,
         }
 
+        short = str(agent.get("short_name", "") or "").lower()
+        if short == "fx" or identity.lower() in {"fx", "fx.sh"}:
+            try:
+                from superqode.providers.fx.settings import (
+                    describe_fx_custom_providers,
+                    read_fx_custom_providers,
+                )
+
+                fx_info = read_fx_custom_providers()
+                result["fx_settings"] = fx_info
+                hint = describe_fx_custom_providers()
+                if hint:
+                    result["fx_custom_providers_hint"] = hint
+            except Exception as exc:  # noqa: BLE001 - doctor must stay best-effort
+                result["fx_settings"] = {"ok": False, "error": str(exc)}
+
         if live:
             if not command:
                 result["live"] = {"started": False, "error": "No run command configured"}
