@@ -16,6 +16,10 @@ class ProviderConfig:
     custom_models_allowed: bool = True
     # New: Provider type for custom providers
     type: Optional[str] = None  # "openai-compatible" for custom endpoints
+    # openai-compatible / vLLM-class: omit|send tool_choice (default = send / current)
+    tool_choice_mode: Optional[Literal["omit", "send"]] = None
+    # Optional model id on the same endpoint for auto permission reviews
+    reviewer_model: Optional[str] = None
 
 
 @dataclass

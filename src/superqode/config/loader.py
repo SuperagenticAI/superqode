@@ -79,12 +79,23 @@ def load_config_from_file(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 def parse_provider_config(data: Dict[str, Any]) -> ProviderConfig:
     """Parse provider configuration."""
+    tool_choice_mode = data.get("tool_choice_mode")
+    if tool_choice_mode is not None:
+        tool_choice_mode = str(tool_choice_mode).strip().lower() or None
+        if tool_choice_mode not in {None, "omit", "send"}:
+            tool_choice_mode = None
+    reviewer_model = data.get("reviewer_model")
+    if reviewer_model is not None:
+        reviewer_model = str(reviewer_model).strip() or None
     return ProviderConfig(
         api_key_env=data.get("api_key_env", data.get("api_key", "")),
         description=data.get("description", ""),
         base_url=data.get("base_url", data.get("endpoint")),
         recommended_models=data.get("recommended_models", data.get("models", [])),
         custom_models_allowed=data.get("custom_models_allowed", True),
+        type=data.get("type"),
+        tool_choice_mode=tool_choice_mode,
+        reviewer_model=reviewer_model,
     )
 
 
@@ -618,13 +629,20 @@ def save_config(config: Config, config_path: Optional[Path] = None) -> None:
     if config.providers:
         config_dict["providers"] = {}
         for provider_name, provider_config in config.providers.items():
-            config_dict["providers"][provider_name] = {
+            entry = {
                 "api_key_env": provider_config.api_key_env,
                 "description": provider_config.description,
                 "base_url": provider_config.base_url,
                 "recommended_models": provider_config.recommended_models,
                 "custom_models_allowed": provider_config.custom_models_allowed,
             }
+            if provider_config.type:
+                entry["type"] = provider_config.type
+            if provider_config.tool_choice_mode:
+                entry["tool_choice_mode"] = provider_config.tool_choice_mode
+            if provider_config.reviewer_model:
+                entry["reviewer_model"] = provider_config.reviewer_model
+            config_dict["providers"][provider_name] = entry
 
     # Add other sections
     if config.agents:

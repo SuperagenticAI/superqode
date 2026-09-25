@@ -94,6 +94,22 @@ def recommend_roles(
             reverse=True,
         )
         best = ranked[0]
+        reason = _role_reason(best, normalized, repo_profile)
+        if normalized in {"reviewer", "critic", "tester"}:
+            preferred = _configured_reviewer_model(best.endpoint)
+            if preferred:
+                match = next(
+                    (item for item in ranked if item.model == preferred),
+                    None,
+                )
+                if match is not None:
+                    best = match
+                    reason = f"Configured reviewer_model {preferred}"
+                else:
+                    notes.append(
+                        f"{normalized}: reviewer_model={preferred!r} not among probed "
+                        "models; using best probe result."
+                    )
         score = round(_role_score(best, normalized, repo_profile), 1)
         recommendations.append(
             RoleRecommendation(
@@ -101,7 +117,7 @@ def recommend_roles(
                 model=best.model,
                 endpoint=best.endpoint,
                 score=score,
-                reason=_role_reason(best, normalized, repo_profile),
+                reason=reason,
             )
         )
         if best.agentic_score is not None and best.agentic_score < 75:

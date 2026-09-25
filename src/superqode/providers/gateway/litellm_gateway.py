@@ -886,6 +886,20 @@ class LiteLLMGateway(GatewayInterface):
                 best_ctx = ctx
         return best_ctx
 
+    def _apply_configured_tool_choice(
+        self,
+        provider: str,
+        request_data: Dict[str, Any],
+        tool_choice: Optional[str] = None,
+    ) -> None:
+        """Honor per-provider tool_choice_mode from superqode.yaml."""
+        try:
+            from superqode.providers.connection_options import apply_tool_choice_mode
+
+            apply_tool_choice_mode(provider, request_data, tool_choice=tool_choice)
+        except Exception:
+            pass
+
     def _apply_local_request_shaping(
         self,
         provider: str,
@@ -1300,6 +1314,7 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice("mlx", request_data, tool_choice=tool_choice)
 
         # MLX doesn't honor reasoning/structured-output natively; strip
         # so the markers don't leak into the wire payload.
@@ -1473,6 +1488,7 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice("lmstudio", request_data, tool_choice=tool_choice)
 
         headers = {
             "Content-Type": "application/json",
@@ -1747,6 +1763,7 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice("ds4", request_data, tool_choice=tool_choice)
 
         headers = {
             "Content-Type": "application/json",
@@ -2190,6 +2207,7 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice("mlx", request_data, tool_choice=tool_choice)
 
         # Same local-model shaping (temp clamp) as the non-streaming path.
         self._apply_local_request_shaping("mlx", model, request_data, bool(tools))
@@ -2379,6 +2397,7 @@ class LiteLLMGateway(GatewayInterface):
             request_kwargs["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_kwargs["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice(provider, request_kwargs, tool_choice=tool_choice)
 
         # Provider-neutral reasoning effort + structured output. Pulled
         # from kwargs so callers can pass them through transparently;
@@ -2652,6 +2671,7 @@ class LiteLLMGateway(GatewayInterface):
             request_kwargs["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_kwargs["tool_choice"] = tool_choice
+        self._apply_configured_tool_choice(provider, request_kwargs, tool_choice=tool_choice)
 
         # Explicitly pass API keys for providers that need them
         # Some LiteLLM versions require explicit api_key parameter.
