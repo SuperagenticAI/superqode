@@ -67,7 +67,9 @@ ENTERPRISE_AGENT_IDS = frozenset(
 # Registry ids do not always match the command users type. These aliases also
 # keep existing SuperQode commands stable as upstream manifests evolve.
 REGISTRY_SHORT_NAMES: dict[str, str] = {
+    "agoragentic-acp": "agoragentic",
     "amp-acp": "amp",
+    "antigravity-acp": "antigravity",
     "claude-acp": "claude",
     "codebuddy-code": "codebuddy",
     "codex-acp": "codex",
@@ -78,22 +80,27 @@ REGISTRY_SHORT_NAMES: dict[str, str] = {
     "github-copilot-cli": "copilot",
     "glm-acp-agent": "glm",
     "grok-build": "grok",
+    "minimax-code": "minimax",
     "minion-code": "minion",
     "pi-acp": "pi",
     "qwen-code": "qwen",
 }
 
 REGISTRY_IDENTITIES: dict[str, str] = {
+    "agoragentic-acp": "agoragentic.com",
     "amp-acp": "ampcode.com",
+    "antigravity-acp": "antigravity.google",
     "auggie": "augmentcode.com",
     "claude-acp": "claude.com",
     "cline": "cline.bot",
     "codebuddy-code": "codebuddy.tencent.com",
     "codex-acp": "codex.openai.com",
     "cortex-code": "cortex.snowflake.com",
+    "corust-agent": "corust.ai",
     "cursor": "cursor.com",
     "deepagents": "deepagents.langchain.com",
     "devin": "devin.ai",
+    "dimcode": "dimcode.dev",
     "dirac": "dirac.run",
     "factory-droid": "factory.ai",
     "fast-agent": "fastagent.ai",
@@ -104,9 +111,12 @@ REGISTRY_IDENTITIES: dict[str, str] = {
     "grok-build": "x.ai",
     "harn": "harnlang.com",
     "junie": "junie.jetbrains.com",
+    "kimchi": "kimchi.dev",
     "kimi": "kimi.moonshot.cn",
     "kilo": "kilo.ai",
     "mistral-vibe": "mistral-vibe.mistral.ai",
+    "minimax-code": "agent.minimax.io",
+    "nova": "compassap.ai",
     "opencode": "opencode.ai",
     "pi-acp": "pi.dev",
     "poolside": "poolside.ai",
@@ -122,11 +132,13 @@ REGISTRY_IDENTITIES: dict[str, str] = {
 # downloaded paths that are meaningful to registry clients, so SuperQode keeps
 # stable PATH-based equivalents for terminal users.
 REGISTRY_RUN_COMMANDS: dict[str, str] = {
+    "antigravity-acp": "agy_acp_server.par",
     "auggie": "auggie --acp",
     "claude-acp": "claude-agent-acp",
     "cline": "cline --acp",
     "codex-acp": "codex-acp",
     "cortex-code": "cortex acp serve",
+    "corust-agent": "corust-agent-acp",
     "cursor": "cursor-agent acp",
     "devin": "devin acp",
     "factory-droid": "droid exec --output-format acp-daemon",
@@ -137,6 +149,7 @@ REGISTRY_RUN_COMMANDS: dict[str, str] = {
     "grok-build": "grok agent stdio",
     "harn": "harn serve acp",
     "junie": "junie --acp=true",
+    "kimchi": "kimchi --mode acp",
     "kilo": "kilo acp",
     "kimi": "kimi acp",
     "mistral-vibe": "vibe-acp",
@@ -150,6 +163,7 @@ REGISTRY_RUN_COMMANDS: dict[str, str] = {
 
 _cached_agents: list[dict[str, Any]] | None = None
 _cache_time: datetime | None = None
+_cached_catalog: list[dict[str, Any]] | None = None
 
 
 def _now() -> datetime:
@@ -185,7 +199,7 @@ def _load_cache(*, allow_stale: bool) -> list[dict[str, Any]] | None:
 
 def _save_cache(agents: list[dict[str, Any]]) -> None:
     """Persist a successful registry response."""
-    global _cached_agents, _cache_time
+    global _cached_agents, _cache_time, _cached_catalog
 
     cached_at = _now()
     try:
@@ -202,6 +216,7 @@ def _save_cache(agents: list[dict[str, Any]]) -> None:
         logger.warning("Failed to save ACP registry cache: %s", exc)
     _cached_agents = agents
     _cache_time = cached_at
+    _cached_catalog = None
 
 
 async def fetch_registry_from_cdn() -> list[dict[str, Any]] | None:
@@ -275,6 +290,45 @@ def _schedule_background_refresh() -> None:
         _refresh_task = None
 
 
+def get_cached_acp_registry_agents() -> list[dict[str, Any]]:
+    """Return registry records immediately, scheduling refresh when stale.
+
+    This synchronous read is for render and completion paths. It never waits
+    for network I/O, but it still exposes the last successful official
+    registry refresh instead of silently falling back to the bundled list.
+    """
+    if _cached_agents is not None and _cache_time is not None:
+        if _now() - _cache_time < CACHE_TTL:
+            return _cached_agents
+    cached = _load_cache(allow_stale=False)
+    if cached:
+        return cached
+    stale = _load_cache(allow_stale=True)
+    _schedule_background_refresh()
+    return stale or _bundled_fallback()
+
+
+def get_cached_acp_catalog() -> list[dict[str, Any]]:
+    """Return the merged official and bundled catalog for synchronous UI use.
+
+    Official records contribute newly published agents and current metadata;
+    bundled records retain SuperQode-only integrations. Short names provide a
+    stable de-duplication key across both sources.
+    """
+    global _cached_catalog
+    if _cached_catalog is not None:
+        return _cached_catalog
+
+    merged: dict[str, dict[str, Any]] = {}
+    for record in [*get_cached_acp_registry_agents(), *_bundled_fallback()]:
+        converted = convert_registry_agent(record)
+        key = str(converted.get("short_name") or converted.get("identity") or "").casefold()
+        if key:
+            merged.setdefault(key, converted)
+    _cached_catalog = list(merged.values())
+    return _cached_catalog
+
+
 async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str, Any]]:
     """Return the official, cached, or bundled ACP catalog.
 
@@ -292,18 +346,7 @@ async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str,
         stale = _load_cache(allow_stale=True)
         return stale or _bundled_fallback()
 
-    if _cached_agents is not None and _cache_time is not None:
-        if _now() - _cache_time < CACHE_TTL:
-            return _cached_agents
-    cached = _load_cache(allow_stale=False)
-    if cached:
-        return cached
-
-    # Past the TTL: return the stale copy immediately and refresh in the
-    # background, so the network is never on the path the caller waits for.
-    stale = _load_cache(allow_stale=True)
-    _schedule_background_refresh()
-    return stale or _bundled_fallback()
+    return get_cached_acp_registry_agents()
 
 
 async def get_agent_info(agent_id: str) -> dict[str, Any] | None:
@@ -319,9 +362,10 @@ async def get_agent_info(agent_id: str) -> dict[str, Any] | None:
 
 def clear_cache() -> None:
     """Clear the in-memory and on-disk registry cache."""
-    global _cached_agents, _cache_time
+    global _cached_agents, _cache_time, _cached_catalog
     _cached_agents = None
     _cache_time = None
+    _cached_catalog = None
     try:
         CACHE_FILE.unlink(missing_ok=True)
     except OSError as exc:
@@ -476,6 +520,8 @@ __all__ = [
     "convert_to_agentdef",
     "fetch_registry_from_cdn",
     "get_acp_registry_agents",
+    "get_cached_acp_catalog",
+    "get_cached_acp_registry_agents",
     "get_agent_info",
     "registry_catalog_tier",
     "registry_short_name",

@@ -1,0 +1,28 @@
+identity = "kimchi.dev"
+name = "Kimchi"
+short_name = "kimchi"
+url = "https://kimchi.dev"
+protocol = "acp"
+author_name = "Kimchi"
+author_url = "https://kimchi.dev"
+publisher_name = "Kimchi"
+publisher_url = "https://kimchi.dev"
+type = "coding"
+description = "Open-source coding agent powered by multi-model orchestration."
+tags = ["official-acp", "open-source", "multi-model"]
+catalog_tier = "all"
+run_command."*" = "kimchi --mode acp"
+
+help = '''
+# Kimchi
+
+Install a platform binary from Kimchi's official releases, then run:
+
+```bash
+kimchi --mode acp
+```
+'''
+
+[actions."*".install]
+command = ""
+description = "Download Kimchi from its official releases"

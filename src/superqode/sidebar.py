@@ -501,6 +501,8 @@ class FilePreview(Container):
         Binding("escape", "close_preview", "Close", show=False),
         Binding("q", "close_preview", "Close", show=False),
         Binding("e", "edit_file", "Edit", show=False),
+        Binding("o", "open_in_chat", "Open in chat", show=False),
+        Binding("r", "reload_file", "Reload", show=False),
     ]
 
     current_file: reactive[Optional[Path]] = reactive(None)
@@ -519,7 +521,7 @@ class FilePreview(Container):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._content_cache: dict[Path, str] = {}
+        self._preview_generation = 0
 
     def compose(self) -> ComposeResult:
         """Compose the preview layout."""
@@ -534,16 +536,30 @@ class FilePreview(Container):
         yield Static(self._render_hints(), id="preview-hints")
 
     def watch_current_file(self, path: Optional[Path]) -> None:
-        """Update display when file changes."""
-        try:
-            self.query_one("#preview-header", Static).update(self._render_header())
-            self.query_one("#preview-syntax", Static).update(self._render_content())
-            self.query_one("#preview-hints", Static).update(self._render_hints())
-            # Scroll to top when new file selected
-            scroll = self.query_one("#preview-content", FilePreviewScroll)
-            scroll.scroll_home(animate=False)
-        except Exception:
-            pass
+        """Read previews off the UI thread; stale selections cannot replace new ones."""
+        self._preview_generation += 1
+        if not self.is_mounted:
+            return
+        self.query_one("#preview-header", Static).update(self._render_header())
+        self.query_one("#preview-hints", Static).update(self._render_hints())
+        self.query_one("#preview-content", FilePreviewScroll).scroll_home(animate=False)
+        if path is None:
+            self.query_one("#preview-syntax", Static).update(self._render_empty())
+        else:
+            self.query_one("#preview-syntax", Static).update("Loading preview…")
+            self._load_preview(path, self._preview_generation)
+
+    @work(thread=True, exclusive=True, group="file-preview")
+    def _load_preview(self, path: Path, generation: int) -> None:
+        from textual.worker import get_current_worker
+
+        content = self._render_file_content(path)
+        if not get_current_worker().is_cancelled:
+            self.app.call_from_thread(self._show_preview, generation, content)
+
+    def _show_preview(self, generation: int, content: Text | Syntax) -> None:
+        if self.is_mounted and generation == self._preview_generation:
+            self.query_one("#preview-syntax", Static).update(content)
 
     def _render_header(self) -> Text:
         """Render the header with file info."""
@@ -583,6 +599,8 @@ class FilePreview(Container):
             t.append(" edit  ", style="#a1a1aa")
             t.append("o", style="bold #06b6d4")
             t.append(" open in chat  ", style="#a1a1aa")
+            t.append("r", style="bold #06b6d4")
+            t.append(" reload  ", style="#a1a1aa")
             t.append("q", style="bold #f59e0b")
             t.append(" close", style="#a1a1aa")
         else:
@@ -617,26 +635,21 @@ class FilePreview(Container):
 
     def _render_file_content(self, path: Path) -> Text | Syntax:
         """Render file content with syntax highlighting."""
-        # Check if binary
-        if self._is_binary(path):
-            t = Text()
-            t.append("\n  🔒 ", style="bold #f59e0b")
-            t.append("Binary file\n\n", style="#f59e0b")
-            t.append(f"  Size: {self._format_size(path.stat().st_size)}\n", style="#a1a1aa")
-            t.append("  Cannot display binary content\n", style="#71717a")
-            return t
-
-        # Read content
         try:
-            if path in self._content_cache:
-                text = self._content_cache[path]
-            else:
-                text = path.read_text(encoding="utf-8", errors="replace")
-                # Cache small files
-                if len(text) < 100000:
-                    self._content_cache[path] = text
+            if not path.is_file():
+                return Text("File is no longer available", style="#f59e0b")
+            if self._is_binary(path):
+                return Text("Binary file — cannot display content", style="#f59e0b")
+            # Bound both I/O and Rich layout work, including single-line minified files.
+            with path.open("rb") as stream:
+                data = stream.read(65537)
+            text = data[:65536].decode("utf-8", errors="replace")
+            lines = text.splitlines(keepends=True)
+            truncated = len(data) > 65536 or len(lines) > 400
+            text = "".join(lines[:400])
+            if truncated:
+                text += "\n\n… Preview limited to 400 lines / 64 KB. Press e to edit."
 
-            # Syntax highlight - show ALL content (scrollable)
             language = detect_language(path)
             syntax = Syntax(
                 text,
@@ -675,7 +688,17 @@ class FilePreview(Container):
 
     def set_file(self, path: Path) -> None:
         """Set the file to preview."""
-        self.current_file = path
+        if self.current_file == path:
+            self.watch_current_file(path)
+        else:
+            self.current_file = path
+
+    def action_reload_file(self) -> None:
+        self.watch_current_file(self.current_file)
+
+    def action_open_in_chat(self) -> None:
+        if self.current_file is not None:
+            self.post_message(ColorfulDirectoryTree.FileOpenRequested(self.current_file))
 
     def clear(self) -> None:
         """Clear the preview."""
@@ -688,7 +711,7 @@ class FilePreview(Container):
             self.post_message(self.PreviewClosed())
 
     def action_edit_file(self) -> None:
-        """Open the file in the default editor."""
+        """Open the file in the focused editor."""
         if self.current_file is not None:
             self.post_message(self.EditRequested(self.current_file))
 
@@ -853,32 +876,20 @@ class EnhancedSidebar(Container):
 
     @on(FilePreview.EditRequested)
     def on_edit_requested(self, event: FilePreview.EditRequested) -> None:
-        """Handle edit request - open file in default editor."""
+        """Edit without leaving the conversation or launching a competing terminal."""
         event.stop()
-        import subprocess
-        import os
-        import platform
+        from superqode.widgets.file_editor import FileEditorScreen
 
-        path = event.path
+        def closed(saved: bool | None) -> None:
+            preview = self.query_one("#file-preview", FilePreview)
+            if saved:
+                preview.set_file(event.path)
+                refresh = getattr(self, "refresh_git_status", None)
+                if refresh:
+                    refresh()
+            preview.query_one("#preview-content").focus()
 
-        # Try to open in default editor
-        try:
-            system = platform.system()
-            if system == "Darwin":  # macOS
-                subprocess.Popen(["open", str(path)])
-            elif system == "Windows":
-                os.startfile(str(path))
-            else:  # Linux
-                # Try common editors
-                editor = os.environ.get("EDITOR", "xdg-open")
-                subprocess.Popen([editor, str(path)])
-        except Exception:
-            # Fallback: try $EDITOR or vim/nano
-            editor = os.environ.get("EDITOR", "nano")
-            try:
-                subprocess.Popen([editor, str(path)])
-            except Exception:
-                pass
+        self.app.push_screen(FileEditorScreen(event.path), closed)
 
     def action_focus_tree(self) -> None:
         """Focus the file tree."""
@@ -2786,6 +2797,8 @@ class CollapsibleSidebar(Container):
                     self.query_one("#git-changes", GitChangesPanel).refresh_changes()
                 except Exception:
                     pass
+            elif view == "code":
+                self.query_one("#preview-content", FilePreviewScroll).focus()
             elif view == "search":
                 # Focus the search input
                 try:
@@ -2983,28 +2996,20 @@ class CollapsibleSidebar(Container):
 
     @on(FilePreview.EditRequested)
     def on_edit_requested(self, event: FilePreview.EditRequested) -> None:
-        """Handle edit request - open file in default editor."""
+        """Edit without leaving the conversation or launching a competing terminal."""
         event.stop()
-        import os
-        import platform
+        from superqode.widgets.file_editor import FileEditorScreen
 
-        path = event.path
+        def closed(saved: bool | None) -> None:
+            preview = self.query_one("#file-preview", FilePreview)
+            if saved:
+                preview.set_file(event.path)
+                refresh = getattr(self, "refresh_git_status", None)
+                if refresh:
+                    refresh()
+            preview.query_one("#preview-content").focus()
 
-        try:
-            system = platform.system()
-            if system == "Darwin":
-                subprocess.Popen(["open", str(path)])
-            elif system == "Windows":
-                os.startfile(str(path))
-            else:
-                editor = os.environ.get("EDITOR", "xdg-open")
-                subprocess.Popen([editor, str(path)])
-        except Exception:
-            editor = os.environ.get("EDITOR", "nano")
-            try:
-                subprocess.Popen([editor, str(path)])
-            except Exception:
-                pass
+        self.app.push_screen(FileEditorScreen(event.path), closed)
 
     @on(FilePreview.PreviewClosed)
     def on_preview_closed(self, event: FilePreview.PreviewClosed) -> None:

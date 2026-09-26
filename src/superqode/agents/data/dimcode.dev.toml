@@ -1,0 +1,29 @@
+identity = "dimcode.dev"
+name = "DimCode"
+short_name = "dimcode"
+url = "https://dimcode.dev/docs/acp.html"
+protocol = "acp"
+author_name = "ArcShips"
+author_url = "https://dimcode.dev"
+publisher_name = "ArcShips"
+publisher_url = "https://dimcode.dev"
+type = "coding"
+description = "Multi-model coding agent with native ACP support."
+tags = ["official-acp", "multi-model"]
+catalog_tier = "all"
+run_command."*" = "dimcode acp"
+
+help = '''
+# DimCode
+
+Install the official npm package and start its ACP server:
+
+```bash
+npm install -g dimcode
+dimcode acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g dimcode"
+description = "Install DimCode"

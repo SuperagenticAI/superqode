@@ -192,11 +192,10 @@ def acp_picker_items(*, include_registry: bool = False) -> list[HarnessPickerIte
     intentionally curated and ends with a visible Browse All row.
     """
     from superqode.acp.session_store import recent_agent_identities
-    from superqode.agents.acp_registry import get_all_registry_agents
     from superqode.commands.acp import check_agent_installed
-    from superqode.providers.acp_registry import registry_catalog_tier
+    from superqode.providers.acp_registry import get_cached_acp_catalog, registry_catalog_tier
 
-    agents = [_acp_agent_mapping(dict(agent)) for agent in get_all_registry_agents().values()]
+    agents = get_cached_acp_catalog()
     recent_order = {
         identity.casefold(): index for index, identity in enumerate(recent_agent_identities())
     }

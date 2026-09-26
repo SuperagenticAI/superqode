@@ -25,10 +25,7 @@ class EventHandlerMixin:
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
             current_width = getattr(sidebar, "_width", 80)
-            new_width = current_width + event.delta_x
-            new_width = max(30, min(150, new_width))
-            sidebar.styles.width = new_width
-            sidebar._width = new_width
+            self._set_sidebar_width(current_width + event.delta_x)
         except Exception:
             pass
 

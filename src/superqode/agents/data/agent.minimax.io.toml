@@ -1,0 +1,28 @@
+identity = "agent.minimax.io"
+name = "MiniMax Code"
+short_name = "minimax"
+url = "https://agent.minimax.io"
+protocol = "acp"
+author_name = "MiniMax"
+author_url = "https://www.minimax.io"
+publisher_name = "MiniMax"
+publisher_url = "https://www.minimax.io"
+type = "coding"
+description = "MiniMax's coding agent with native Agent Client Protocol support."
+tags = ["official-acp", "minimax"]
+catalog_tier = "all"
+run_command."*" = "npx -y @minimax-ai/code acp"
+
+help = '''
+# MiniMax Code
+
+Run the official ACP distribution through npm:
+
+```bash
+npx -y @minimax-ai/code acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g @minimax-ai/code"
+description = "Install MiniMax Code"

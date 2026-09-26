@@ -1,0 +1,28 @@
+identity = "compassap.ai"
+name = "Nova"
+short_name = "nova"
+url = "https://www.compassap.ai/portfolio/nova.html"
+protocol = "acp"
+author_name = "Compass AI"
+author_url = "https://www.compassap.ai"
+publisher_name = "Compass AI"
+publisher_url = "https://www.compassap.ai"
+type = "coding"
+description = "Compass AI's software engineering agent with native ACP support."
+tags = ["official-acp", "coding"]
+catalog_tier = "all"
+run_command."*" = "npx -y @compass-ai/nova acp"
+
+help = '''
+# Nova
+
+Run the official ACP distribution through npm:
+
+```bash
+npx -y @compass-ai/nova acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g @compass-ai/nova"
+description = "Install Nova"

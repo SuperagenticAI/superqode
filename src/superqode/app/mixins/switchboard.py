@@ -170,15 +170,15 @@ class SwitchboardMixin:
             return
         target = tokens[0]
         try:
-            record = self._switchboard().switch(target)
+            record = self._switchboard().info(target)
         except Exception as exc:
             log.add_error(f"Could not switch session: {exc}")
             return
-        log.add_success(f"Active switchboard session -> {record['session_id']}")
         try:
-            self._handle_resume_session(record["session_id"], log)
-        except Exception:
-            pass
+            if self._handle_resume_session(record["session_id"], log):
+                self._switchboard().switch(record["session_id"])
+        except Exception as exc:
+            log.add_error(f"Could not switch session: {exc}")
 
     def _switchboard_info(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""

@@ -89,6 +89,21 @@ def test_registry_includes_official_acp_agents_page_entries():
         assert official["identity"] in agents
 
 
+def test_bundled_catalog_covers_current_official_registry_additions():
+    """Keep a useful offline catalog between live registry refreshes."""
+    names = {agent["short_name"] for agent in get_all_registry_agents().values()}
+
+    assert {
+        "agoragentic",
+        "antigravity",
+        "corust",
+        "dimcode",
+        "kimchi",
+        "minimax",
+        "nova",
+    } <= names
+
+
 def test_registry_removed_stale_moltbot_alias():
     agents = get_all_registry_agents()
 

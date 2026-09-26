@@ -1016,3 +1016,5 @@ TUI_COMMAND_ALIASES = [
 ]
 
 COMMANDS.extend(command for command in TUI_COMMAND_ALIASES if command not in COMMANDS)
+# Keep completion scans and rendered rows stable when command groups overlap.
+COMMANDS[:] = dict.fromkeys(COMMANDS)

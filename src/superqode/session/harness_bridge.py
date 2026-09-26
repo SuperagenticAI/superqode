@@ -359,6 +359,7 @@ def upsert_harness_session_meta(
     model: str = "",
     harness_id: str = "",
     harness_source: str = "harness-spec",
+    harness_path: str | None = None,
     harness_digest: str = "",
     harness_display: str = "",
     title: str = "",
@@ -421,6 +422,10 @@ def upsert_harness_session_meta(
 
     if backend_session_path:
         metadata.backend_session_path = str(backend_session_path)
+    if harness_path is not None:
+        metadata.harness_path = (
+            str(Path(harness_path).expanduser().resolve()) if harness_path else ""
+        )
     wd = str(working_directory or metadata.working_directory or Path.cwd()).strip()
     if wd:
         try:
@@ -445,22 +450,48 @@ def discover_external_sessions(
     cwd: str | Path | None = None,
     storage_dir: str | Path = DEFAULT_SESSION_DIR,
     register: bool = True,
+    only_session_id: str = "",
+    include_known: bool = False,
 ) -> list[SessionMetadata]:
-    """Find FileHarnessStore and PiPy sessions for this cwd and optionally register them."""
+    """Find external sessions and optionally register one or more of them.
+
+    Listing callers should use ``register=False``. Registration is intentionally
+    targetable so choosing one old backend session cannot flood SessionManager
+    with every historical run for the repository.
+    """
     working = Path(cwd or Path.cwd()).expanduser().resolve()
     manager = SessionManager(storage_dir=str(storage_dir))
     known = {item.session_id for item in manager.list_all_sessions()}
     discovered: list[SessionMetadata] = []
 
     for root in _harness_store_roots(working, storage_dir):
+        run_details = _file_harness_run_details(root)
         for record in _list_file_harness_sessions(root):
             sid = str(record.session_id)
-            if not sid or sid in known:
+            if not sid or (only_session_id and sid != only_session_id):
                 continue
-            provider = str(record.metadata.get("provider") or "")
-            model = str(record.metadata.get("model") or "")
+            refresh_known = register and only_session_id == sid
+            if sid in known and not include_known and not refresh_known:
+                continue
+            run = run_details.get(sid, {})
+            provider = str(record.metadata.get("provider") or run.get("provider") or "")
+            model = str(record.metadata.get("model") or run.get("model") or "")
             harness_id = str(record.harness or "")
-            title = str(record.metadata.get("title") or record.metadata.get("preview") or "")
+            title = str(
+                record.metadata.get("title")
+                or record.metadata.get("preview")
+                or run.get("title")
+                or ""
+            )
+            message_count = int(
+                record.metadata.get("message_count") or run.get("message_count") or 0
+            )
+            backend_path = str(record.metadata.get("session_path") or "")
+            # Opening a harness can create a record before any conversation.
+            # Empty records are not useful resume targets and previously made
+            # test/connect probes dominate the picker.
+            if not title and message_count == 0 and not backend_path:
+                continue
             if register:
                 meta = upsert_harness_session_meta(
                     sid,
@@ -470,15 +501,16 @@ def discover_external_sessions(
                     harness_source="harness-store",
                     harness_display=harness_display_name(harness_id),
                     title=title or f"{harness_display_name(harness_id)} session",
-                    backend_session_path=str(record.metadata.get("session_path") or ""),
+                    backend_session_path=backend_path,
                     working_directory=working,
                     storage_dir=storage_dir,
-                    message_count=int(record.metadata.get("message_count") or 0),
+                    message_count=message_count,
                 )
                 if record.updated_at:
                     try:
+                        meta.created_at = _ts_iso(record.created_at)
                         meta.updated_at = datetime.fromtimestamp(
-                            float(record.updated_at)
+                            float(run.get("updated_at") or record.updated_at)
                         ).isoformat()
                         manager.store._save_metadata(meta)
                     except (OSError, ValueError, TypeError):
@@ -489,7 +521,7 @@ def discover_external_sessions(
                     SessionMetadata(
                         session_id=sid,
                         created_at=_ts_iso(record.created_at),
-                        updated_at=_ts_iso(record.updated_at),
+                        updated_at=_ts_iso(run.get("updated_at") or record.updated_at),
                         provider=provider,
                         model=model,
                         harness_id=harness_id,
@@ -497,7 +529,8 @@ def discover_external_sessions(
                         harness_display_name=harness_display_name(harness_id),
                         title=title or f"{harness_display_name(harness_id)} session",
                         harness_session=True,
-                        backend_session_path=str(record.metadata.get("session_path") or ""),
+                        message_count=message_count,
+                        backend_session_path=backend_path,
                         working_directory=str(working),
                     )
                 )
@@ -505,34 +538,47 @@ def discover_external_sessions(
 
     for record in _list_pipy_sessions(working):
         sid = f"pipy-{record.id}"
-        title = ""
-        try:
-            title = str(getattr(record.metadata, "name", "") or "")
-        except Exception:
-            title = ""
-        if not title:
-            title = "PiPy session"
+        if only_session_id and sid != only_session_id:
+            continue
+        details = _pipy_session_details(record)
+        title = details["title"] or "PiPy session"
         if sid in known:
-            if register and record.path.is_file():
+            if register and record.path.is_file() and only_session_id == sid:
                 existing = manager.get_session_info(sid)
-                if existing and existing.backend_session_path != str(record.path):
-                    upsert_harness_session_meta(
-                        sid,
-                        provider=existing.provider if existing else "",
-                        model=existing.model if existing else "",
-                        harness_id="pipy",
-                        harness_source="pipy",
-                        harness_display="PiPy",
-                        title=existing.title if existing and existing.title else title,
-                        backend_session_path=str(record.path),
-                        working_directory=working,
-                        storage_dir=storage_dir,
-                        message_count=existing.message_count if existing else 0,
+                meta = upsert_harness_session_meta(
+                    sid,
+                    provider=details["provider"] or (existing.provider if existing else ""),
+                    model=details["model"] or (existing.model if existing else ""),
+                    harness_id="pipy",
+                    harness_source="pipy",
+                    harness_display="PiPy",
+                    title=details["title"] or (existing.title if existing else "") or title,
+                    backend_session_path=str(record.path),
+                    working_directory=working,
+                    storage_dir=storage_dir,
+                    message_count=max(
+                        int(details["message_count"]),
+                        existing.message_count if existing else 0,
+                    ),
+                )
+                meta.created_at = str(details["created_at"])
+                meta.updated_at = str(details["updated_at"])
+                manager.store._save_metadata(meta)
+                discovered.append(meta)
+                _index_pipy_path(sid, record.path, working)
+            elif include_known:
+                discovered.append(
+                    _merge_external_metadata(
+                        manager.get_session_info(sid),
+                        _pipy_metadata(sid, record, working, details),
                     )
+                )
             continue
         if register:
             meta = upsert_harness_session_meta(
                 sid,
+                provider=str(details["provider"]),
+                model=str(details["model"]),
                 harness_id="pipy",
                 harness_source="pipy",
                 harness_display="PiPy",
@@ -540,23 +586,14 @@ def discover_external_sessions(
                 backend_session_path=str(record.path),
                 working_directory=working,
                 storage_dir=storage_dir,
+                message_count=int(details["message_count"]),
             )
+            meta.created_at = str(details["created_at"])
+            meta.updated_at = str(details["updated_at"])
+            manager.store._save_metadata(meta)
             discovered.append(meta)
         else:
-            discovered.append(
-                SessionMetadata(
-                    session_id=sid,
-                    created_at=str(getattr(record, "created_at", "") or datetime.now().isoformat()),
-                    updated_at=str(getattr(record, "created_at", "") or datetime.now().isoformat()),
-                    harness_id="pipy",
-                    harness_source="pipy",
-                    harness_display_name="PiPy",
-                    title=title,
-                    harness_session=True,
-                    backend_session_path=str(record.path),
-                    working_directory=str(working),
-                )
-            )
+            discovered.append(_pipy_metadata(sid, record, working, details))
         known.add(sid)
         if register and record.path.is_file():
             _index_pipy_path(sid, record.path, working)
@@ -570,10 +607,23 @@ def ensure_sessions_listed(
     cwd: str | Path | None = None,
     storage_dir: str | Path = DEFAULT_SESSION_DIR,
 ) -> list[SessionMetadata]:
-    """Return SessionManager sessions, discovering harness/PiPy entries first."""
+    """Return stored and external sessions without mutating the session store."""
     working = Path(cwd or Path.cwd()).expanduser().resolve()
-    discover_external_sessions(cwd=working, storage_dir=storage_dir, register=True)
     sessions = SessionManager(storage_dir=str(storage_dir)).list_all_sessions()
+    external = discover_external_sessions(
+        cwd=working,
+        storage_dir=storage_dir,
+        register=False,
+        include_known=True,
+    )
+    merged = {item.session_id: item for item in sessions}
+    for item in external:
+        merged[item.session_id] = _merge_external_metadata(merged.get(item.session_id), item)
+    external_ids = {item.session_id for item in external}
+    sessions = [
+        item for item in merged.values() if not _orphaned_import_placeholder(item, external_ids)
+    ]
+    sessions.sort(key=lambda item: item.updated_at, reverse=True)
     # Prefer rows that belong to this cwd when working_directory was recorded.
     scoped: list[SessionMetadata] = []
     unscoped: list[SessionMetadata] = []
@@ -597,6 +647,132 @@ def _ts_iso(value: Any) -> str:
         return datetime.fromtimestamp(float(value)).isoformat()
     except (TypeError, ValueError, OSError):
         return datetime.now().isoformat()
+
+
+def _normalise_iso(value: Any, *, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return fallback or datetime.now().isoformat()
+    try:
+        stamp = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if stamp.tzinfo is not None:
+            stamp = stamp.astimezone().replace(tzinfo=None)
+        return stamp.isoformat()
+    except ValueError:
+        return fallback or text
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text") or block.get("content")
+            if isinstance(text, str):
+                parts.append(text)
+    return " ".join(parts)
+
+
+def _pipy_session_details(record: Any) -> dict[str, Any]:
+    """Read enough of a PiPy transcript to produce an honest picker row."""
+    metadata = getattr(getattr(record, "metadata", None), "metadata", {}) or {}
+    provider = str(metadata.get("provider") or "")
+    model = str(metadata.get("model") or "")
+    title = str(metadata.get("name") or metadata.get("title") or metadata.get("preview") or "")
+    message_count = 0
+    path = Path(record.path)
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    payload = json.loads(line)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if payload.get("type") != "message":
+                    continue
+                message = payload.get("message") or {}
+                if not isinstance(message, dict):
+                    continue
+                role = str(message.get("role") or "").lower()
+                if role in {"user", "assistant"}:
+                    message_count += 1
+                if role == "user" and not title:
+                    title = topic_from_preview(_message_text(message.get("content")))
+                if role == "assistant":
+                    provider = provider or str(message.get("provider") or "")
+                    model = model or str(message.get("model") or "")
+    except OSError:
+        pass
+    created_at = _normalise_iso(getattr(record, "created_at", ""))
+    try:
+        updated_at = datetime.fromtimestamp(path.stat().st_mtime).isoformat()
+    except OSError:
+        updated_at = created_at
+    return {
+        "provider": provider,
+        "model": model,
+        "title": title,
+        "message_count": message_count,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
+def _pipy_metadata(
+    session_id: str,
+    record: Any,
+    working: Path,
+    details: dict[str, Any],
+) -> SessionMetadata:
+    return SessionMetadata(
+        session_id=session_id,
+        created_at=str(details["created_at"]),
+        updated_at=str(details["updated_at"]),
+        provider=str(details["provider"]),
+        model=str(details["model"]),
+        message_count=int(details["message_count"]),
+        harness_id="pipy",
+        harness_source="pipy",
+        harness_display_name="PiPy",
+        title=str(details["title"] or "PiPy session"),
+        harness_session=True,
+        backend_session_path=str(record.path),
+        working_directory=str(working),
+    )
+
+
+def _merge_external_metadata(
+    stored: SessionMetadata | None,
+    external: SessionMetadata,
+) -> SessionMetadata:
+    """Overlay incomplete auto-imported rows with authoritative backend data."""
+    if stored is None:
+        return external
+    generic_titles = {
+        "",
+        "untitled",
+        f"{harness_display_name(stored.harness_id).lower()} session",
+    }
+    stored.provider = external.provider or stored.provider
+    stored.model = external.model or stored.model
+    stored.harness_id = external.harness_id or stored.harness_id
+    stored.harness_source = external.harness_source or stored.harness_source
+    stored.harness_display_name = external.harness_display_name or stored.harness_display_name
+    if stored.title.strip().lower() in generic_titles and external.title:
+        stored.title = external.title
+    stored.message_count = max(stored.message_count, external.message_count)
+    stored.backend_session_path = external.backend_session_path or stored.backend_session_path
+    stored.working_directory = external.working_directory or stored.working_directory
+    if external.created_at:
+        stored.created_at = external.created_at
+    if external.updated_at:
+        stored.updated_at = external.updated_at
+    return stored
 
 
 def _harness_store_roots(cwd: Path, storage_dir: str | Path) -> list[Path]:
@@ -625,6 +801,57 @@ def _list_file_harness_sessions(root: Path) -> list[Any]:
         return FileHarnessStore(root).list_sessions()
     except Exception:
         return []
+
+
+def _file_harness_run_details(root: Path) -> dict[str, dict[str, Any]]:
+    """Summarise stored runs once so session rows have useful topics."""
+    try:
+        from superqode.harness.store import FileHarnessStore
+
+        runs = FileHarnessStore(root).list_runs()
+    except Exception:
+        return {}
+    details: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        item = details.setdefault(
+            str(run.session_id),
+            {
+                "provider": str(run.provider or ""),
+                "model": str(run.model or ""),
+                "title": topic_from_preview(run.prompt_preview),
+                "message_count": 0,
+                "updated_at": 0.0,
+            },
+        )
+        item["message_count"] = int(item["message_count"]) + 2
+        updated = float(run.ended_at or run.started_at or 0.0)
+        if updated >= float(item["updated_at"]):
+            item["provider"] = str(run.provider or item["provider"])
+            item["model"] = str(run.model or item["model"])
+            item["title"] = topic_from_preview(run.prompt_preview) or item["title"]
+            item["updated_at"] = updated
+    return details
+
+
+def _orphaned_import_placeholder(
+    metadata: SessionMetadata,
+    external_ids: set[str],
+) -> bool:
+    """Hide obsolete indexes created for empty external harness sessions."""
+    if metadata.session_id in external_ids or metadata.harness_source != "harness-store":
+        return False
+    title = (metadata.title or "").strip().lower()
+    generic = title in {
+        "",
+        "untitled",
+        f"{harness_display_name(metadata.harness_id).lower()} session",
+    }
+    return bool(
+        metadata.harness_session
+        and generic
+        and metadata.message_count == 0
+        and not metadata.backend_session_path
+    )
 
 
 def _list_pipy_sessions(cwd: Path) -> list[Any]:

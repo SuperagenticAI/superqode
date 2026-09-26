@@ -905,3 +905,47 @@ Jev tool checks. A chat answer that uses no tools will not invoke the gate.
 
 See [general decision harnesses](../advanced/systemone.md) for pack schemas,
 confidence policy, compatible endpoints, and CLI examples.
+
+## Resume and edit without leaving your session
+
+Use `:resume latest` to restore the most recent session, or `:sessions` to choose
+one. Newly saved custom harness sessions retain their spec path as well as their
+harness name. Keep that spec available when returning to the project. Resume
+reports missing credentials, working directories, and referenced transcripts;
+finish or cancel an active turn before switching sessions.
+
+The session picker discovers external harness and PiPy history without importing
+every historical record into the project store. It reads the original model,
+topic, and activity time from the backend record; only the session you resume is
+registered for future use.
+
+Select a file in the sidebar to preview it. With the preview focused:
+
+| Key | Action |
+| --- | --- |
+| `e` | Open the in-app editor |
+| `r` | Reload the preview from disk |
+| `o` | Show the file in the conversation |
+| `q` or `Esc` | Return to Files |
+
+In the editor, `Ctrl+S` saves and `Esc` returns to the conversation. With unsaved
+changes, the first `Esc` warns and a second `Esc` discards the draft. If an agent
+or another editor changes the file on disk, saving stops and retains your draft.
+Copy your draft before closing and reopening to resolve the conflict.
+
+Previews show up to 400 lines or 64 KB. The editor supports UTF-8 text files up
+to 1 MB; use an external editor for larger files or other encodings.
+
+## Agent catalog and command completion
+
+`:connect acp all` and the expanded harness picker combine SuperQode's offline
+agent catalog with the cached official ACP Registry. A registry refresh runs in
+the background, so opening the picker or typing a completion never waits for
+the network. Newly published ACP agents become searchable after refresh, while
+vendor and community integrations that are bundled only with SuperQode remain
+available. Use `:connect acp refresh` to request an immediate update.
+
+Typing `:` or `/` exposes every declared TUI command. Contextual completion
+adds agents, providers, models, files, skills, recipes, MCP servers, and runtime
+values without hiding management subcommands such as `:attach clear` or
+`:runtime doctor`.

@@ -192,7 +192,10 @@ class CompletionMixin:
                 combined.append(candidate)
             return combined
         if lowered.startswith(":connect acp "):
-            return self._acp_candidates_after_prefix(value)
+            return self._merge_completion_candidates(
+                self._acp_candidates_after_prefix(value),
+                self._static_command_candidates(value),
+            )
         context_specs = [
             (":mcp connect ", self._mcp_server_completion_candidates),
             (":mcp disconnect ", self._mcp_server_completion_candidates),
@@ -219,10 +222,16 @@ class CompletionMixin:
         ]
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
-                return self._candidate_after_prefix(value, prefix, provider())
+                return self._merge_completion_candidates(
+                    self._candidate_after_prefix(value, prefix, provider()),
+                    self._static_command_candidates(value),
+                )
 
         if lowered.startswith(":attach "):
-            return self._path_candidates_after_prefix(value, ":attach ")
+            return self._merge_completion_candidates(
+                self._static_command_candidates(value),
+                self._path_candidates_after_prefix(value, ":attach "),
+            )
         if lowered.startswith(":prompt "):
             return self._path_candidates_after_prefix(value, ":prompt ", files_only=True)
         if lowered.startswith(":model switch "):
@@ -231,10 +240,24 @@ class CompletionMixin:
         return self._static_command_candidates(value)
 
     @staticmethod
+    def _merge_completion_candidates(
+        *groups: list[PromptCompletionCandidate],
+    ) -> list[PromptCompletionCandidate]:
+        """Merge contextual and declared command matches without duplicate rows."""
+        merged: list[PromptCompletionCandidate] = []
+        seen: set[str] = set()
+        for group in groups:
+            for candidate in group:
+                if candidate.value in seen:
+                    continue
+                seen.add(candidate.value)
+                merged.append(candidate)
+        return merged
+
+    @staticmethod
     def _acp_completion_candidates() -> list[PromptCompletionCandidate]:
-        """Return registry controls and bundled ACP agent names."""
-        from superqode.agents.acp_registry import get_all_registry_agents
-        from superqode.providers.acp_registry import registry_catalog_tier
+        """Return registry controls and every cached or bundled ACP agent."""
+        from superqode.providers.acp_registry import get_cached_acp_catalog
 
         candidates = [
             PromptCompletionCandidate(
@@ -257,12 +280,12 @@ class CompletionMixin:
             ),
         ]
         seen: set[str] = set()
-        for agent in get_all_registry_agents().values():
+        for agent in get_cached_acp_catalog():
             short_name = str(agent["short_name"])
             if short_name in seen:
                 continue
             seen.add(short_name)
-            tier = registry_catalog_tier("", short_name)
+            tier = str(agent.get("catalog_tier") or "all")
             candidates.append(
                 PromptCompletionCandidate(
                     value=short_name,

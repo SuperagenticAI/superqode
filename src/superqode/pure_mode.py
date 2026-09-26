@@ -500,6 +500,12 @@ class PureMode:
             self._agent.on_tool_result = self.on_tool_result
             self._agent.on_thinking = self.on_thinking
             self._session_manager = self._agent._session_manager
+        if self._session_manager and self.get_current_session_id():
+            metadata = self._session_manager.get_session_info(self.get_current_session_id())
+            if metadata is not None:
+                metadata.working_directory = str(self.session.working_directory.resolve())
+                metadata.harness_path = self._harness_path
+                self._session_manager.store._save_metadata(metadata)
 
         return True
 
@@ -1017,6 +1023,7 @@ class PureMode:
                 model=self.session.model,
                 harness_id=harness_id,
                 harness_source=getattr(definition, "source", "") or "harness-spec",
+                harness_path=self._harness_path,
                 harness_digest=getattr(definition, "digest", "") or "",
                 harness_display=(
                     getattr(definition, "display_name", "")
@@ -1153,15 +1160,13 @@ class PureMode:
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
         try:
-            from superqode.session.harness_bridge import discover_external_sessions
+            from superqode.session.harness_bridge import ensure_sessions_listed
 
-            discover_external_sessions(
+            sessions = ensure_sessions_listed(
                 cwd=self.session.working_directory or Path.cwd(),
-                register=True,
             )
         except Exception:
-            pass
-        sessions = self._session_manager.list_all_sessions()
+            sessions = self._session_manager.list_all_sessions()
         return [
             {
                 "session_id": s.session_id,
@@ -1180,11 +1185,19 @@ class PureMode:
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
+        sessions = self._session_manager.list_all_sessions()
+        return self._resolve_session_candidates(session_id_or_prefix, sessions)
+
+    @staticmethod
+    def _resolve_session_candidates(
+        session_id_or_prefix: str,
+        sessions: List[Any],
+    ) -> Optional[str]:
+        """Resolve an id against stored or read-only discovered metadata."""
         choice = (session_id_or_prefix or "").strip()
         if not choice:
             return None
 
-        sessions = self._session_manager.list_all_sessions()
         exact = [s.session_id for s in sessions if s.session_id == choice]
         if exact:
             return exact[0]
@@ -1236,41 +1249,43 @@ class PureMode:
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
-        # Surface FileHarnessStore / PiPy sessions that never dual-wrote yet.
+        # Discover without writing hundreds of historical backend rows. Once a
+        # target is resolved, materialise only that row for durable resume.
+        external_sessions = []
         try:
-            discover_external_sessions(
+            external_sessions = discover_external_sessions(
                 cwd=self.session.working_directory or Path.cwd(),
-                register=True,
+                register=False,
+                include_known=True,
             )
         except Exception:
             pass
 
         resolved_session_id = self.resolve_session_id(session_id)
         if not resolved_session_id:
+            resolved_session_id = self._resolve_session_candidates(
+                session_id,
+                external_sessions,
+            )
+        if not resolved_session_id:
             return None
+
+        if any(item.session_id == resolved_session_id for item in external_sessions):
+            try:
+                discover_external_sessions(
+                    cwd=self.session.working_directory or Path.cwd(),
+                    register=True,
+                    only_session_id=resolved_session_id,
+                    include_known=True,
+                )
+            except Exception:
+                pass
 
         metadata = self._session_manager.get_session_info(resolved_session_id)
         if not metadata:
             return None
 
         label = format_session_label(metadata)
-        resume_harness = metadata.harness_id or "workbench"
-        try:
-            self.select_harness(resume_harness)
-        except (FileNotFoundError, ValueError) as exc:
-            # Never silently open a different harness for a stored harness session.
-            if metadata.harness_session or resume_harness not in {"workbench", "core", ""}:
-                raise SessionResumeError(
-                    f"Cannot resume '{label}': harness '{resume_harness}' is not available ({exc}). "
-                    f"Restore or install that harness, then retry :sessions switch {resolved_session_id[:8]}."
-                ) from exc
-            try:
-                self.select_harness("workbench")
-            except (FileNotFoundError, ValueError) as inner:
-                raise SessionResumeError(
-                    f"Cannot resume '{label}': no usable harness ({inner})."
-                ) from inner
-
         provider = metadata.provider or self.session.provider
         model = metadata.model or self.session.model
         if not provider or not model:
@@ -1287,16 +1302,40 @@ class PureMode:
                 f"Set the key, then retry :sessions switch {resolved_session_id[:8]}."
             )
 
-        # Start session and get messages
+        working_directory = (
+            Path(metadata.working_directory).expanduser().resolve()
+            if metadata.working_directory
+            else (self.session.working_directory or Path.cwd())
+        )
+        if not working_directory.is_dir():
+            raise SessionResumeError(
+                f"Cannot resume '{label}': working directory is unavailable: {working_directory}."
+            )
+        if metadata.backend_session_path and not Path(metadata.backend_session_path).is_file():
+            raise SessionResumeError(
+                f"Cannot resume '{label}': transcript is unavailable: {metadata.backend_session_path}."
+            )
+
+        # Validate prerequisites before select_harness disposes the active runtime.
+        resume_harness = metadata.harness_path or metadata.harness_id or "workbench"
+        try:
+            self.select_harness(resume_harness)
+        except (FileNotFoundError, ValueError) as exc:
+            # Never silently open a different harness for a stored harness session.
+            if metadata.harness_session or resume_harness not in {"workbench", "core", ""}:
+                raise SessionResumeError(
+                    f"Cannot resume '{label}': harness '{resume_harness}' is not available ({exc}). "
+                    f"Restore or install that harness, then retry :sessions switch {resolved_session_id[:8]}."
+                ) from exc
+            try:
+                self.select_harness("workbench")
+            except (FileNotFoundError, ValueError) as inner:
+                raise SessionResumeError(
+                    f"Cannot resume '{label}': no usable harness ({inner})."
+                ) from inner
+
         self._session_manager.start_session(session_id=resolved_session_id)
         messages = self._session_manager.get_messages()
-
-        working_directory = self.session.working_directory or Path.cwd()
-        if metadata.working_directory:
-            try:
-                working_directory = Path(metadata.working_directory).expanduser().resolve()
-            except OSError:
-                working_directory = Path(metadata.working_directory)
 
         # HarnessSpec / PiPy: attach the existing kernel session id (and PiPy
         # transcript path) before connect so reconnect is not a blank session.

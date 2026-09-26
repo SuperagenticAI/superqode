@@ -1564,7 +1564,8 @@ class SlashCommandMixin:
     ) -> None:
         """Clear the conversation log and replay restored user/assistant turns."""
         try:
-            log.clear()
+            reset = getattr(log, "reset_conversation", log.clear)
+            reset()
         except Exception:
             pass
         if receipt:
@@ -1586,8 +1587,13 @@ class SlashCommandMixin:
                 # FakeLog / non-TUI surfaces may only support add_info.
                 log.add_info(f"[{role.upper()}] {content[:200]}")
 
-    def _handle_resume_session(self, args: str, log: ConversationLog):
-        """Resume a previous local provider session."""
+    def _handle_resume_session(self, args: str, log: ConversationLog) -> bool:
+        """Resume a saved session; report success only after restoration."""
+        if getattr(self, "is_busy", False):
+            log.add_error(
+                "Wait for the active turn to finish or cancel it before switching sessions."
+            )
+            return False
         from pathlib import Path as _Path
 
         from superqode.session.harness_bridge import (
@@ -1601,7 +1607,7 @@ class SlashCommandMixin:
         session_id = args.strip()
         if not session_id:
             self._maybe_auto_resume_or_picker(log)
-            return
+            return False
         if session_id.lower() in {"latest", "last", "recent"}:
             sessions = ensure_sessions_listed(cwd=_Path.cwd())
             if not sessions:
@@ -1613,10 +1619,19 @@ class SlashCommandMixin:
                     log=log,
                     guidance="Connect and send a message first.",
                 )
-                return
+                return False
             session_id = sessions[0].session_id
 
         pure_mode = self._ensure_pure_mode()
+        # Fresh launches have no connection callbacks yet. Install these before
+        # resume creates the runtime, just as the normal connect flow does.
+        pure_mode.on_tool_call = lambda name, arguments: self._call_ui(
+            self._show_pure_tool_call, name, arguments, log
+        )
+        pure_mode.on_tool_result = lambda name, result: self._call_ui(
+            self._show_pure_tool_result, name, result, log
+        )
+        self._install_pure_permission_bridge(pure_mode, log)
         try:
             messages = pure_mode.resume_session(session_id)
         except Exception as exc:
@@ -1629,8 +1644,16 @@ class SlashCommandMixin:
                     log=log,
                     guidance="Fix the missing credential or harness, then retry.",
                 )
-                return
-            raise
+                return False
+            self._announce_transition(
+                title="Session not resumed",
+                primary=session_id,
+                detail=str(exc),
+                severity="error",
+                log=log,
+                guidance="Use :sessions to choose a saved session.",
+            )
+            return False
         # None means unresolved. An empty list is a valid harness / PiPy resume
         # where history lives outside SessionManager JSONL.
         if messages is None:
@@ -1642,10 +1665,23 @@ class SlashCommandMixin:
                 log=log,
                 guidance="Use :sessions to review names and ids for this directory.",
             )
-            return
+            return False
 
         resolved_id = pure_mode.get_current_session_id() or session_id
         self._awaiting_session_resume = False
+        self._reset_connect_selection_states()
+        from superqode.providers.registry import PROVIDERS, ProviderCategory
+
+        provider_definition = PROVIDERS.get(pure_mode.session.provider)
+        execution_mode = (
+            "local"
+            if provider_definition and provider_definition.category == ProviderCategory.LOCAL
+            else "byok"
+        )
+        get_session().execution_mode = execution_mode
+        self.current_mode = execution_mode
+        self.current_agent = ""
+        self._chat_mode = False
         harness_name = ""
         meta = None
         try:
@@ -1682,7 +1718,15 @@ class SlashCommandMixin:
             harness_name = str(harness.get("name") or harness.get("id") or "")
             self.current_provider = provider
             self.current_model = model
-            from superqode.app.widgets import ColorfulStatusBar
+            from superqode.app.widgets import ColorfulStatusBar, HintsBar, ModeBadge
+
+            badge = self.query_one("#mode-badge", ModeBadge)
+            badge.mode = execution_mode
+            badge.execution_mode = execution_mode
+            badge.agent = ""
+            badge.provider = provider
+            badge.model = model
+            self.query_one("#hints", HintsBar).connected = True
 
             status_bar = self.query_one("#status-bar", ColorfulStatusBar)
             if provider and model:
@@ -1745,6 +1789,7 @@ class SlashCommandMixin:
             guidance="Other sessions remain saved.",
             dedupe_key=f"session-resume:{resolved_id}",
         )
+        return True
 
     def _handle_fork_session(self, args: str, log: ConversationLog):
         """Fork the active local provider session."""

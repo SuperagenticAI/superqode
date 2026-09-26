@@ -10,6 +10,7 @@ def _reset(monkeypatch, tmp_path):
     monkeypatch.setattr(acp_registry, "CACHE_FILE", tmp_path / "registry.json")
     monkeypatch.setattr(acp_registry, "_cached_agents", None)
     monkeypatch.setattr(acp_registry, "_cache_time", None)
+    monkeypatch.setattr(acp_registry, "_cached_catalog", None)
 
 
 def test_registry_refresh_writes_cache(monkeypatch, tmp_path):
@@ -57,3 +58,28 @@ def test_normal_registry_read_does_not_access_network(monkeypatch, tmp_path):
 
     assert result
     assert all(record.get("source") == "bundled" for record in result)
+
+
+def test_synchronous_ui_catalog_merges_live_and_bundled_agents(monkeypatch, tmp_path):
+    _reset(monkeypatch, tmp_path)
+    acp_registry.CACHE_FILE.write_text(
+        json.dumps(
+            {
+                "cached_at": "2099-01-01T00:00:00+00:00",
+                "agents": [
+                    {
+                        "id": "future-lab-agent",
+                        "name": "Future Lab Agent",
+                        "description": "Published after this SuperQode release",
+                    }
+                ],
+            }
+        )
+    )
+
+    catalog = acp_registry.get_cached_acp_catalog()
+    names = {agent["short_name"] for agent in catalog}
+
+    assert "future-lab-agent" in names
+    assert "codex" in names
+    assert "gemini" in names

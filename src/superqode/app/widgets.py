@@ -2092,6 +2092,19 @@ class ConversationLog(RichLog):
                 self._rendered_response_text += flushed
                 self.write(self._render_answer_block(block))
 
+    def reset_conversation(self) -> None:
+        """Switch transcripts without leaking copy, search, or tool history."""
+        self.clear()
+        self._messages.clear()
+        self._last_response = ""
+        self._last_error = ""
+        self._search_highlight_query = ""
+        self._thinking_lines.clear()
+        self._tool_calls.clear()
+        self._session_tool_calls.clear()
+        self.clear_running_tools()
+        self.reset_response_stream()
+
     def reset_response_stream(self, agent: str = "Assistant") -> None:
         """Reset per-response streaming buffers before a new streamed answer."""
         self._streaming_response = ""
@@ -2114,13 +2127,15 @@ class ConversationLog(RichLog):
             return 0
         safe = 0
         search_from = 0
+        fence_count = 0
         while True:
             idx = buffer.find("\n\n", search_from)
             if idx == -1:
                 break
             boundary = idx + 2
             # Only flush when every code fence opened so far has been closed.
-            if buffer.count("```", 0, boundary) % 2 == 0:
+            fence_count += buffer.count("```", search_from, boundary)
+            if fence_count % 2 == 0:
                 safe = boundary
             search_from = boundary
         return safe

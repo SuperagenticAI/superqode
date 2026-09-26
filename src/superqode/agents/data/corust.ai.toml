@@ -1,0 +1,25 @@
+identity = "corust.ai"
+name = "Corust Agent"
+short_name = "corust"
+url = "https://corust.ai"
+protocol = "acp"
+author_name = "Corust AI"
+author_url = "https://corust.ai"
+publisher_name = "Corust AI"
+publisher_url = "https://corust.ai"
+type = "coding"
+description = "Rust-focused coding partner distributed as a native ACP agent."
+tags = ["official-acp", "open-source", "rust"]
+catalog_tier = "all"
+run_command."*" = "corust-agent-acp"
+
+help = '''
+# Corust Agent
+
+Download the platform-specific `corust-agent-acp` binary from the official
+Corust release page.
+'''
+
+[actions."*".install]
+command = ""
+description = "Download Corust Agent from its official releases"

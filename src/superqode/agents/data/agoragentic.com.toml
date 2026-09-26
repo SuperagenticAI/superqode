@@ -1,0 +1,28 @@
+identity = "agoragentic.com"
+name = "Agoragentic"
+short_name = "agoragentic"
+url = "https://agoragentic.com"
+protocol = "acp"
+author_name = "ACRE / Agoragentic"
+author_url = "https://agoragentic.com"
+publisher_name = "Agent Client Protocol Registry"
+publisher_url = "https://github.com/agentclientprotocol/registry"
+type = "coding"
+description = "Agent marketplace with ACP access to a broad catalog of specialized AI capabilities."
+tags = ["official-acp", "marketplace"]
+catalog_tier = "all"
+run_command."*" = "npx -y agoragentic-mcp --acp"
+
+help = '''
+# Agoragentic
+
+Run the official ACP distribution through npm:
+
+```bash
+npx -y agoragentic-mcp --acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g agoragentic-mcp"
+description = "Install the Agoragentic ACP package"

@@ -1913,6 +1913,49 @@ def test_tui_completion_covers_every_dispatched_colon_command():
     assert dispatched - completed_roots == set()
 
 
+def test_every_declared_tui_command_is_available_in_both_completion_surfaces():
+    from superqode.app.constants import COMMANDS
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+    app = make_app()
+    overlay = {candidate.command for candidate in DEFAULT_COMMANDS}
+    colon_commands = {command for command in COMMANDS if command.startswith(":")}
+    slash_commands = {command for command in COMMANDS if command.startswith("/")}
+    prompt_colon = {candidate.value for candidate in app._prompt_completion_candidates_for(":")}
+    prompt_slash = {candidate.value for candidate in app._prompt_completion_candidates_for("/")}
+
+    assert len(COMMANDS) == len(set(COMMANDS))
+    assert set(COMMANDS) <= overlay
+    assert colon_commands <= prompt_colon
+    assert slash_commands <= prompt_slash
+
+    # Each nested command must also remain visible after its parent and a
+    # space, where contextual value providers take over from root matching.
+    candidates_by_parent = {}
+    missing_nested = []
+    for command in COMMANDS:
+        if " " not in command:
+            continue
+        parent = command.rsplit(" ", 1)[0] + " "
+        candidates_by_parent.setdefault(
+            parent,
+            {candidate.value for candidate in app._prompt_completion_candidates_for(parent)},
+        )
+        if command not in candidates_by_parent[parent]:
+            missing_nested.append(command)
+    assert missing_nested == []
+
+
+def test_contextual_completion_keeps_declared_management_commands():
+    app = make_app()
+
+    attach = {candidate.value for candidate in app._prompt_completion_candidates_for(":attach ")}
+    runtime = {candidate.value for candidate in app._prompt_completion_candidates_for(":runtime ")}
+
+    assert {":attach list", ":attach remove", ":attach clear"} <= attach
+    assert {":runtime setup", ":runtime doctor", ":runtime list"} <= runtime
+
+
 def test_prompt_completion_keeps_all_commands_and_live_agent_shortcuts():
     app = make_app()
     app._discovered_acp_agents = {
@@ -2836,9 +2879,13 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     class FakePureMode:
         def __init__(self):
             self.current = ""
+            self.session = SimpleNamespace(provider="", model="")
 
         def resume_session(self, session_id):
             self.current = session_id
+            metadata = manager.get_session_info(session_id)
+            self.session.provider = metadata.provider
+            self.session.model = metadata.model
             resumed.append(session_id)
             return [{"role": "user", "content": "hello from saved session"}]
 
@@ -7510,9 +7557,9 @@ def test_sessions_rename_persists_title(tmp_path, monkeypatch):
         (),
         {
             "resolve_session_id": staticmethod(
-                lambda value: "rename-me-01"
-                if "rename" in value or value.startswith("rename")
-                else None
+                lambda value: (
+                    "rename-me-01" if "rename" in value or value.startswith("rename") else None
+                )
             ),
             "get_current_session_id": staticmethod(lambda: "rename-me-01"),
             "_session_manager": manager,

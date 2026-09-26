@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
@@ -31,6 +32,9 @@ class SessionMetadata:
     title: str = ""
     harness_id: str = ""
     harness_source: str = ""
+    # Explicit spec location; a custom harness name alone cannot be resolved
+    # after restarting outside the directory containing the spec.
+    harness_path: str = ""
     harness_digest: str = ""
     tool_contract_version: str = ""
     harness_transitions: List[Dict[str, Any]] = field(default_factory=list)
@@ -124,31 +128,24 @@ class SessionStore:
     def _save_metadata(self, metadata: SessionMetadata):
         """Save session metadata."""
         meta_path = self.base_dir / f"{metadata.session_id}.meta.json"
-        meta_path.write_text(
-            json.dumps(
-                {
-                    "session_id": metadata.session_id,
-                    "created_at": metadata.created_at,
-                    "updated_at": metadata.updated_at,
-                    "provider": metadata.provider,
-                    "model": metadata.model,
-                    "message_count": metadata.message_count,
-                    "total_tokens": metadata.total_tokens,
-                    "parent_session_id": metadata.parent_session_id,
-                    "title": metadata.title,
-                    "harness_id": metadata.harness_id,
-                    "harness_source": metadata.harness_source,
-                    "harness_digest": metadata.harness_digest,
-                    "tool_contract_version": metadata.tool_contract_version,
-                    "harness_transitions": list(metadata.harness_transitions),
-                    "harness_session": bool(metadata.harness_session),
-                    "backend_session_path": metadata.backend_session_path,
-                    "harness_display_name": metadata.harness_display_name,
-                    "working_directory": metadata.working_directory,
-                },
-                indent=2,
-            )
-        )
+        # A killed process must not leave a truncated, unreadable resume record.
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self.base_dir,
+                prefix=f".{metadata.session_id}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                temp_path = Path(stream.name)
+                json.dump(asdict(metadata), stream, indent=2)
+                stream.flush()
+            os.replace(temp_path, meta_path)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
 
     def _record_graph(self, metadata: SessionMetadata, **updates: Any) -> None:
         """Best-effort update of the durable switchboard graph."""

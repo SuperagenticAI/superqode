@@ -402,12 +402,14 @@ definitions.
 
 | Agent | Identifier | Agent | Identifier |
 | --- | --- | --- | --- |
+| Agoragentic | `agoragentic` | Google Antigravity | `antigravity` |
 | AgentPool | `agentpool` | Amp | `amp` |
 | Auggie (Augment Code) | `auggie` | AutoDev Xiuper | `autodev` |
 | Blackbox AI | `blackbox` | Bub | `bub` |
 | cagent | `cagent` | Claude Code | `claude` |
 | Cline | `cline` | Code Assistant | `codeassistant` |
 | CodeBuddy Code | `codebuddy` | Codex | `codex` |
+| Corust Agent | `corust` | DimCode | `dimcode` |
 | GitHub Copilot | `copilot` | Cortex Code | `cortex` |
 | crow-cli | `crow` | Cursor | `cursor` |
 | DeepAgents | `deepagents` | Deep Agents Code | `deepagents-code` |
@@ -418,15 +420,16 @@ definitions.
 | Goose | `goose` | Grok Build | `grok` |
 | Harn | `harn` | Hermes Agent | `hermes` |
 | JetBrains Junie | `junie` | Kilo | `kilo` |
+| Kimchi | `kimchi` | MiniMax Code | `minimax` |
 | Kimi Code | `kimi` | Kiro CLI | `kiro` |
 | LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
 | Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
-| OpenCode | `opencode` | OpenHands | `openhands` |
-| Pi | `pi` | Poolside | `poolside` |
-| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
-| Qwen Code | `qwen` | siGit Code | `sigit` |
-| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
-| VT Code | `vtcode` |  |  |
+| Nova | `nova` | OpenCode | `opencode` |
+| OpenHands | `openhands` | Pi | `pi` |
+| Poolside | `poolside` | Prime Agent | `prime-agent` |
+| Qoder CLI | `qoder` | Qwen Code | `qwen` |
+| siGit Code | `sigit` | Stakpak | `stakpak` |
+| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
 
 
 Inspect installation and authentication requirements:

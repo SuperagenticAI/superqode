@@ -1,0 +1,25 @@
+identity = "antigravity.google"
+name = "Google Antigravity"
+short_name = "antigravity"
+url = "https://antigravity.google/docs/ide/extensions"
+protocol = "acp"
+author_name = "Google LLC"
+author_url = "https://antigravity.google"
+publisher_name = "Google LLC"
+publisher_url = "https://antigravity.google"
+type = "coding"
+description = "Google's AI coding agent, exposed through its official ACP server."
+tags = ["official-acp", "google", "proprietary"]
+catalog_tier = "featured"
+run_command."*" = "agy_acp_server.par"
+
+help = '''
+# Google Antigravity
+
+Install the Antigravity ACP extension from Google's documentation. The
+official registry supplies platform-specific ACP server binaries.
+'''
+
+[actions."*".install]
+command = ""
+description = "Install the Antigravity ACP extension from the official documentation"

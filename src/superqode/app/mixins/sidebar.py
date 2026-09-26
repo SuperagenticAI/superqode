@@ -19,9 +19,17 @@ class SidebarMixin:
         """Initialize sidebar resize handling."""
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            sidebar._width = 80  # Initial width
+            self._set_sidebar_width(80)
         except Exception:
             pass
+
+    def _set_sidebar_width(self, requested: int, terminal_width: int | None = None) -> None:
+        """Keep space for the prompt and transcript when the terminal narrows."""
+        sidebar = self.query_one("#sidebar", CollapsibleSidebar)
+        maximum = max(30, min(150, (terminal_width or self.size.width) - 41))
+        width = max(30, min(maximum, requested))
+        sidebar.styles.width = width
+        sidebar._width = width
 
     def _update_sidebar_agent_panel(self, **kwargs):
         """Update the agent panel in sidebar with current agent info."""
@@ -134,17 +142,13 @@ class SidebarMixin:
         """Shrink sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         current_width = getattr(sidebar, "_width", 80)
-        new_width = max(30, current_width - 10)
-        sidebar.styles.width = new_width
-        sidebar._width = new_width
+        self._set_sidebar_width(current_width - 10)
 
     def action_expand_sidebar(self):
         """Expand sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         current_width = getattr(sidebar, "_width", 80)
-        new_width = min(150, current_width + 10)
-        sidebar.styles.width = new_width
-        sidebar._width = new_width
+        self._set_sidebar_width(current_width + 10)
 
     def action_sidebar_files(self):
         """Switch sidebar to files view."""

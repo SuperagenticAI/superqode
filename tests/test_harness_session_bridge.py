@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -107,6 +108,140 @@ def test_discover_registers_file_harness_store_sessions(tmp_path, monkeypatch):
     assert match.harness_id == "pipy"
     assert match.provider == "ollama"
     assert "stored topic" in match.title
+
+
+def test_session_listing_does_not_register_external_history(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = FileHarnessStore(tmp_path / ".superqode/sessions")
+    store.open_session(
+        "harness-read-only",
+        pipy_template(),
+        metadata={"provider": "ollama", "model": "qwen", "title": "read only"},
+    )
+
+    listed = ensure_sessions_listed(cwd=tmp_path)
+
+    assert any(item.session_id == "harness-read-only" for item in listed)
+    assert not (tmp_path / ".superqode/sessions/harness-read-only.meta.json").exists()
+
+
+def test_file_harness_listing_uses_run_topic_and_hides_empty_sessions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = FileHarnessStore(tmp_path / ".superqode/sessions")
+    store.open_session("harness-empty", pipy_template(), metadata={"provider": "ollama"})
+    store.open_session("harness-active", pipy_template(), metadata={"provider": "ollama"})
+    run = store.start_run(
+        session_id="harness-active",
+        spec=pipy_template(),
+        provider="ollama",
+        model="qwen",
+        runtime="pipy",
+        prompt="repair the resume picker",
+    )
+    store.end_run(run.run_id, status="succeeded")
+
+    listed = ensure_sessions_listed(cwd=tmp_path)
+    ids = {item.session_id for item in listed}
+    active = next(item for item in listed if item.session_id == "harness-active")
+
+    assert "harness-empty" not in ids
+    assert active.title == "repair the resume picker"
+    assert active.model == "qwen"
+
+
+def test_pipy_discovery_reads_labels_and_preserves_source_time(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    transcript = tmp_path / "old-pipy.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                '{"type":"session","id":"abc","timestamp":"2026-01-02T03:04:05Z"}',
+                '{"type":"message","message":{"role":"user","content":[{"type":"text","text":"fix login redirects"}]}}',
+                '{"type":"message","message":{"role":"assistant","provider":"ollama","model":"qwen3-coder","content":[{"type":"text","text":"done"}]}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    old_timestamp = 1_767_326_645
+    transcript.touch()
+    import os
+
+    os.utime(transcript, (old_timestamp, old_timestamp))
+    record = SimpleNamespace(
+        id="abc",
+        path=transcript,
+        created_at="2026-01-02T03:04:05Z",
+        metadata=SimpleNamespace(metadata={}),
+    )
+    monkeypatch.setattr(
+        "superqode.session.harness_bridge._list_pipy_sessions",
+        lambda cwd: [record],
+    )
+
+    listed = ensure_sessions_listed(cwd=tmp_path)
+    row = next(item for item in listed if item.session_id == "pipy-abc")
+
+    assert row.provider == "ollama"
+    assert row.model == "qwen3-coder"
+    assert row.title == "fix login redirects"
+    assert row.created_at.startswith("2026-01-02T03:04:05")
+    assert row.updated_at.startswith("2026-01-02")
+    assert not (tmp_path / ".superqode/sessions/pipy-abc.meta.json").exists()
+
+
+def test_targeted_pipy_registration_repairs_placeholder_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("pipy-abc", harness_id="pipy")
+    placeholder = manager.get_session_info("pipy-abc")
+    placeholder.title = "PiPy session"
+    manager.store._save_metadata(placeholder)
+    other = tmp_path / "other.jsonl"
+    other.write_text('{"type":"session"}\n', encoding="utf-8")
+    target = tmp_path / "target.jsonl"
+    target.write_text(
+        "\n".join(
+            [
+                '{"type":"session"}',
+                '{"type":"message","message":{"role":"user","content":"repair picker"}}',
+                '{"type":"message","message":{"role":"assistant","provider":"ollama","model":"qwen","content":"ok"}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    records = [
+        SimpleNamespace(
+            id="abc",
+            path=target,
+            created_at="2026-02-01T00:00:00Z",
+            metadata=SimpleNamespace(metadata={}),
+        ),
+        SimpleNamespace(
+            id="other",
+            path=other,
+            created_at="2026-02-02T00:00:00Z",
+            metadata=SimpleNamespace(metadata={}),
+        ),
+    ]
+    monkeypatch.setattr(
+        "superqode.session.harness_bridge._list_pipy_sessions",
+        lambda cwd: records,
+    )
+
+    discover_external_sessions(
+        cwd=tmp_path,
+        register=True,
+        only_session_id="pipy-abc",
+        include_known=True,
+    )
+
+    repaired = manager.get_session_info("pipy-abc")
+    assert repaired.provider == "ollama"
+    assert repaired.model == "qwen"
+    assert repaired.title == "repair picker"
+    assert not (tmp_path / ".superqode/sessions/pipy-other.meta.json").exists()
 
 
 @pytest.mark.asyncio
