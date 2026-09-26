@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.17] - 2026-09-26
+
+### Added
+
+- Add an in-app file editor and richer sidebar, preview, and streaming behavior
+  to keep common development work inside the TUI.
+- Add bundled definitions for seven more ACP agents and combine them with the
+  current official ACP registry in the live harness picker.
+
+### Improved
+
+- Complete slash-command autocomplete coverage and merge live harness context
+  into suggestions for smoother command discovery.
+- Preserve repository, install, setup, and open-source metadata when generating
+  the public Harness Hub while keeping its checked-in catalog deterministic.
+
+### Fixed
+
+- Restore session titles, harnesses, models, timestamps, working directories,
+  and transcripts without importing duplicate sessions or showing placeholder
+  `Untitled`, `unknown`, or current-time metadata.
+- Exclude user-local agent definitions and transient installed/recent badges
+  from the published Harness Hub snapshot.
+
 ## [2.4.16] - 2026-09-25
 
 ### Changed
