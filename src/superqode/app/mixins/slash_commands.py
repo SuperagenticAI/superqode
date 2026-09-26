@@ -2129,6 +2129,7 @@ class SlashCommandMixin:
                 self._chat_mode = False
                 self._refresh_prompt_mode_label()
                 return
+            self._begin_conversation_transcript(log)
             log.add_user(text)
             self._last_user_message = text
             self._update_terminal_title(text)
@@ -2137,6 +2138,7 @@ class SlashCommandMixin:
             self._chat_worker(text, log)
             return
 
+        self._begin_conversation_transcript(log)
         text, inline_mcp_refs = self._extract_mcp_refs_from_text(text)
         staged_mcp_refs = [
             ref for ref in getattr(self, "_attached_refs", []) if ref.startswith("mcp://")

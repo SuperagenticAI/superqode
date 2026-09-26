@@ -71,6 +71,17 @@ class ClickableCommandMixin:
         self._sync_navigation_controls()
         return moved
 
+    def _navigate_back_from_keyboard(self, prompt_value: str = "") -> bool:
+        """Run the visible Back action from Left Arrow when it is unambiguous.
+
+        Left remains ordinary cursor navigation while the prompt contains text.
+        With an empty prompt and a visible history destination it behaves like
+        the status bar's ``← Back`` control.
+        """
+        if str(prompt_value or "").strip() or not self._history.can_go_back:
+            return False
+        return self._navigate_back()
+
     def _sync_navigation_controls(self) -> None:
         """Show the back control exactly while there is somewhere to go."""
         try:

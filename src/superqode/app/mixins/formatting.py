@@ -220,6 +220,9 @@ class FormattingMixin:
         line.append("  ·  ".join(parts), style=THEME["muted"])
         line.append("\n", style="")
         log.write(line)
+        # Completion metrics are written after the answer. Let the TUI settle,
+        # then return a multi-screen reply to its heading for top-down reading.
+        log._schedule_completed_response_reveal()
 
     def _format_todo_list(self, todos: list) -> list:
         """Format a TODO list with emojis and nice display."""

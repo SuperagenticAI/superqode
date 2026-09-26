@@ -1547,6 +1547,14 @@ class ConnectMixin:
             self._connecting_profile_id = getattr(profile, "id", "") or ""
             self._connect_acp_cmd(profile.acp_agent or "", log)
         elif conn == "byok":
+            # Subscription-plan entries reuse the direct-provider engine, but
+            # that transport detail must not relabel their auth/billing as BYOK.
+            from superqode.providers.connection_profiles import CONNECT_MENU_PLAN
+
+            self._next_direct_auth_mode = (
+                "subscription" if getattr(profile, "menu", "") == CONNECT_MENU_PLAN else "byok"
+            )
+            self._direct_connection_profile_id = str(getattr(profile, "id", "") or "")
             # An acp-attach session keeps this picker: the selection is diverted
             # to the agent in _connect_byok_mode rather than at the menu.
             provider = getattr(profile, "byok_provider", None)
@@ -2265,6 +2273,7 @@ class ConnectMixin:
                     context_window=self._resolve_context_window(
                         summary.get("provider", ""), summary.get("model", "")
                     ),
+                    auth_mode=str(getattr(self, "_active_connection_auth_mode", "") or "byok"),
                 )
         except Exception:
             pass
@@ -2387,6 +2396,7 @@ class ConnectMixin:
             runtime_name,
             {"auth": "managed by runtime", "model": "runtime default", "commands": ()},
         )
+        self._workspace_intro_visible = True
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
         t.append("Connected: ", style=f"bold {THEME['text']}")
@@ -2727,7 +2737,7 @@ class ConnectMixin:
         _catalog_refresh_attempted: bool = False,
         session_id: str | None = None,
     ):
-        """Connect to BYOK mode with specified provider/model.
+        """Connect through the direct-model engine with a provider/model.
 
         Args:
             provider: Provider ID (e.g., "ollama", "anthropic")
@@ -2978,7 +2988,9 @@ class ConnectMixin:
 
         # Update state
         session = get_session()
-        # Determine execution mode: "local" for local providers, "byok" for cloud
+        # Execution controls request routing. Auth mode controls the visible and
+        # persisted identity: subscription plans may use this engine without
+        # becoming BYOK sessions.
         is_local = provider_def and provider_def.category == ProviderCategory.LOCAL
         # Check if session already has execution_mode set (from role)
         if hasattr(session, "execution_mode") and session.execution_mode == "local":
@@ -2988,7 +3000,17 @@ class ConnectMixin:
         else:
             exec_mode = "byok"
 
+        requested_auth = str(getattr(self, "_direct_auth_mode", "") or "").lower()
+        auth_mode = (
+            "local"
+            if exec_mode == "local"
+            else "subscription"
+            if requested_auth == "subscription"
+            else "byok"
+        )
+
         session.execution_mode = exec_mode
+        self._active_connection_auth_mode = auth_mode
 
         self.current_mode = exec_mode
         self.current_agent = ""
@@ -3004,26 +3026,30 @@ class ConnectMixin:
 
         # Update badge
         badge = self.query_one("#mode-badge", ModeBadge)
-        badge.mode = exec_mode
+        badge.mode = auth_mode
         badge.agent = ""
         badge.model = model
         badge.provider = provider
-        badge.execution_mode = exec_mode
+        badge.execution_mode = auth_mode
 
         # Clear screen and show fresh workspace
-        mode_label = "LOCAL" if exec_mode == "local" else "BYOK"
+        mode_label = {
+            "local": "LOCAL",
+            "subscription": "SUBSCRIPTION",
+            "byok": "BYOK",
+        }[auth_mode]
         self._clear_for_workspace(log, f"{mode_label} • {provider_name}")
 
         try:
             status_bar = self.query_one("#status-bar", ColorfulStatusBar)
-            status_bar.update_byok_status(provider, model)
+            status_bar.update_byok_status(provider, model, auth_mode=auth_mode)
         except Exception:
             pass
 
         local_host = self._local_provider_host(provider) if is_local else ""
         self._show_connection_summary(
             log,
-            mode=exec_mode,
+            mode=auth_mode,
             provider=provider,
             provider_name=provider_name,
             model=model,
@@ -3031,7 +3057,8 @@ class ConnectMixin:
         )
         finish = getattr(self, "_finish_successful_model_connect", None)
         if callable(finish):
-            finish(provider, model, exec_mode, log)
+            finish(provider, model, auth_mode, log)
+        self._direct_auth_mode = ""
 
         if is_local:
             self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
@@ -3057,13 +3084,23 @@ class ConnectMixin:
     ) -> None:
         t = Text()
         local = mode == "local"
-        title = "Local Model Selected" if local else "Provider Connected"
+        subscription = mode == "subscription"
+        title = (
+            "Local Model Selected"
+            if local
+            else "Subscription Connected"
+            if subscription
+            else "Provider Connected"
+        )
         icon = "✓"
         color = THEME["success"]
         t.append(f"\n  {icon} ", style=f"bold {color}")
         t.append(f"{title}\n\n", style=f"bold {THEME['text']}")
         t.append("    Method   ", style=THEME["muted"])
-        t.append("Local" if local else "BYOK", style=THEME["text"])
+        t.append(
+            "Local" if local else "Subscription" if subscription else "BYOK",
+            style=THEME["text"],
+        )
         t.append("\n")
         t.append("    Provider ", style=THEME["muted"])
         t.append(provider_name or provider, style=THEME["text"])
@@ -3098,7 +3135,7 @@ class ConnectMixin:
         self._announce_transition(
             title=title,
             primary=f"{provider_name or provider} · {model}",
-            detail="Local" if local else "BYOK",
+            detail="Local" if local else "Subscription" if subscription else "BYOK",
             severity="information" if local else "success",
             log=log,
             persist=False,
@@ -3126,6 +3163,8 @@ class ConnectMixin:
 
     def _connect_byok_cmd(self, args: str, log: ConversationLog):
         """Handle :connect byok command - Interactive provider/model picker."""
+        self._direct_auth_mode = str(getattr(self, "_next_direct_auth_mode", "") or "byok").lower()
+        self._next_direct_auth_mode = ""
         args = args.strip()
 
         # ":connect byok all" reveals the collapsed models.dev long tail.
@@ -3302,6 +3341,11 @@ class ConnectMixin:
             if acp_agent:
                 self._connect_acp_cmd(acp_agent, log)
                 return
+        elif auth_mode == "subscription" and provider and model:
+            self._direct_auth_mode = "subscription"
+            self._direct_connection_profile_id = profile_id
+            self._connect_byok_mode(provider, model, log)
+            return
         elif profile_id:
             from superqode.providers.connection_profiles import get_connection_profile
 
@@ -4111,10 +4155,14 @@ class ConnectMixin:
                 or "core"
             )
             self._save_connection_config(
-                category="models",
+                category="plan" if mode == "subscription" else "models",
                 auth_mode=mode,
                 harness_id=harness_id,
-                profile_id="",
+                profile_id=(
+                    str(getattr(self, "_direct_connection_profile_id", "") or "")
+                    if mode == "subscription"
+                    else ""
+                ),
                 acp_agent="",
                 openness="",
                 provider=provider,
@@ -4122,6 +4170,7 @@ class ConnectMixin:
                 transport="",
                 after_auth="",
             )
+            self._direct_connection_profile_id = ""
             return
 
         from superqode.providers.harness_catalog import get_entry

@@ -14,6 +14,19 @@ def _reset_default():
 
 def test_apply_theme_syncs_palette_onto_constants_live():
     _reset_default()
+
+
+def test_diff_and_patch_colors_follow_selected_theme_live():
+    from superqode.widgets.diff_indicator import COLORS
+    from superqode.widgets.response_changes import SQ_COLORS
+
+    _reset_default()
+    assert theme_bridge.apply_theme("tokyonight") is True
+    assert COLORS["addition"] == THEME["diff_add"]
+    assert COLORS["deletion"] == THEME["diff_remove"]
+    assert SQ_COLORS["primary_light"] == THEME["purple"]
+    assert SQ_COLORS["border_subtle"] == THEME["border"]
+    _reset_default()
     default_purple = THEME["purple"]
 
     assert theme_bridge.apply_theme("tokyonight") is True

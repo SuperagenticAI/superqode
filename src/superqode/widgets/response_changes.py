@@ -7,25 +7,41 @@ with hints to view in sidebar for full diff exploration.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from typing import List, Dict, Optional
 from rich.text import Text
 from rich.console import Group
 
+from superqode.app.constants import THEME
 from superqode.widgets.diff_indicator import render_diff_indicator_with_text, COLORS
 
 
-# SuperQode colors
-SQ_COLORS = {
-    "success": "#22c55e",
-    "info": "#06b6d4",
-    "text_primary": "#fafafa",
-    "text_secondary": "#e4e4e7",
-    "text_muted": "#a1a1aa",
-    "text_dim": "#a1a1aa",
-    "text_ghost": "#71717a",
-    "border_subtle": "#1a1a1a",
-    "primary_light": "#a855f7",
-}
+class _LiveResponseColors(Mapping[str, str]):
+    """Legacy color names resolved through the currently selected palette."""
+
+    _theme_keys = {
+        "success": "success",
+        "info": "cyan",
+        "text_primary": "text",
+        "text_secondary": "text",
+        "text_muted": "muted",
+        "text_dim": "dim",
+        "text_ghost": "dim",
+        "border_subtle": "border",
+        "primary_light": "purple",
+    }
+
+    def __getitem__(self, key: str) -> str:
+        return THEME[self._theme_keys[key]]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._theme_keys)
+
+    def __len__(self) -> int:
+        return len(self._theme_keys)
+
+
+SQ_COLORS: Mapping[str, str] = _LiveResponseColors()
 
 
 def render_file_changes_section(

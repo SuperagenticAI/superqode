@@ -487,26 +487,34 @@ class CompletionMixin:
         start = max(0, min(selected_index - page_size // 2, total - page_size))
         end = min(total, start + page_size)
         text = Text()
-        text.append("  completions", style=f"bold {THEME['cyan']}")
+        text.append("  ◆ COMMANDS", style=f"bold {THEME['purple']}")
         if total > page_size:
             text.append(f"  {start + 1}–{end} of {total}", style=THEME["muted"])
         text.append("   ↑↓ choose   Tab/Enter accept   Esc close\n", style=THEME["dim"])
         for index in range(start, end):
             candidate = self._prompt_completion_candidates[index]
             selected = index == self._prompt_completion_index
-            marker = ">" if selected else " "
-            label_style = f"bold {THEME['text']}" if selected else THEME["cyan"]
+            marker = "›" if selected else " "
+            label_style = f"bold {THEME['pink']}" if selected else THEME["purple"]
             desc_style = THEME["text"] if selected else THEME["muted"]
-            text.append(f"  {marker} ", style=THEME["success"] if selected else THEME["dim"])
+            text.append(f"  {marker} ", style=THEME["pink"] if selected else THEME["dim"])
             text.append(f"{candidate.label:<28}", style=label_style)
             if candidate.kind:
                 text.append(
-                    f"{candidate.kind:<10}", style=THEME["purple"] if selected else THEME["dim"]
+                    f"{candidate.kind:<10}",
+                    style=f"bold {THEME['orange']}" if selected else THEME["dim"],
                 )
             if candidate.description:
                 text.append(candidate.description[:80], style=desc_style)
             text.append("\n")
         panel.update(text)
+        # Unlike static CSS, these resolve from the live palette selected by
+        # ``:theme`` every time the completion menu is rendered.
+        # Keep the menu visually continuous with the terminal canvas. Accent
+        # text and the border carry the selected theme without introducing a
+        # grey or tinted card behind the command list.
+        panel.styles.background = "#000000"
+        panel.styles.border = ("solid", THEME["purple"])
         panel.add_class("visible")
 
     def _move_prompt_completion(self, delta: int) -> None:

@@ -43,6 +43,9 @@ def _palette_to_theme(colors: "ds.ColorPalette") -> dict[str, str]:
         "success": colors.success,
         "error": colors.error,
         "warning": colors.warning,
+        "code_bg": colors.code_bg,
+        "diff_add": colors.diff_add,
+        "diff_remove": colors.diff_remove,
         "text": colors.text_secondary,
         # Each rung shifts up one: "muted" carries real prose and needs body-text
         # contrast, which ``text_dim`` does not reach (4.35:1 on the default

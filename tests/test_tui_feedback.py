@@ -152,6 +152,34 @@ async def test_model_ready_reports_without_asking_for_a_keypress():
         assert "Big Pickle" in "\n".join(line.text for line in log.lines)
 
 
+@pytest.mark.asyncio
+async def test_success_notification_is_a_centered_colored_card():
+    """Connection feedback should look intentional, not like corner chrome."""
+    from textual.widgets._toast import Toast
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24), notifications=True) as pilot:
+        app.notify(
+            "OpenAI · gpt-5.6\nReady for your next prompt",
+            title="Model ready",
+            severity="information",
+            timeout=5,
+            markup=False,
+        )
+        await pilot.pause()
+
+        toast = app.query_one(Toast)
+        title_style = toast.get_component_rich_style("toast--title")
+
+        assert 30 <= toast.region.width < 58
+        assert abs(toast.region.x - (80 - toast.region.width) // 2) <= 1
+        assert toast.styles.background.hex == "#120B1A"
+        assert title_style.color is not None
+        assert title_style.color.name == "#f472b6"
+        assert toast.styles.border_left[1].hex == "#A855F7"
+        assert toast.styles.border_right[1].hex == "#F97316"
+
+
 def test_information_transition_can_request_a_short_popup() -> None:
     log = _Log()
     app = _FeedbackApp(log)

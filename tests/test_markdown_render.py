@@ -7,6 +7,7 @@ from superqode.rendering.markdown import (
     normalize_agent_markdown,
     render_agent_markdown,
 )
+from superqode.app import theme_bridge
 
 
 def _render_text(markdown: str) -> str:
@@ -47,6 +48,16 @@ def test_non_markdown_code_fence_stays_code():
     assert "python" in out
     assert "╭" in out
     assert "print" in out
+
+
+def test_agent_code_theme_tracks_selected_tui_theme():
+    theme_bridge.apply_theme("nord")
+    try:
+        rendered = render_agent_markdown("```python\nprint('hi')\n```")
+        assert rendered.code_theme == "nord"
+        assert "print" in _render_text("```python\nprint('hi')\n```")
+    finally:
+        theme_bridge.apply_theme("superqode")
 
 
 def test_blank_lines_are_collapsed():

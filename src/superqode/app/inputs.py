@@ -209,6 +209,13 @@ class SelectionAwareInput(TextArea):
                 event.prevent_default()
                 return
 
+        if event.key == "left":
+            go_back = getattr(app, "_navigate_back_from_keyboard", None)
+            if callable(go_back) and go_back(self.value):
+                event.stop()
+                event.prevent_default()
+                return
+
         if event.key in {"escape", "ctrl+["} and (
             getattr(app, "_awaiting_harness_selection", False)
             or getattr(app, "_awaiting_harness_confirmation", False)

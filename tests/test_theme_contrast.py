@@ -151,7 +151,7 @@ class TestPaletteHygiene:
             token: value
             for token, value in THEME.items()
             if value.startswith("#")
-            and token not in {"bg", "surface", "surface2", "border", "border_active"}
+            and token not in {"bg", "surface", "surface2", "border", "border_active", "code_bg"}
             and token != "user_prompt_bg"
             and contrast_ratio(value, THEME["bg"]) < LARGE_TEXT_MINIMUM
         }

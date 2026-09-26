@@ -15,6 +15,15 @@ from rich.text import Text
 _MARKDOWN_TABLE_RE = re.compile(
     r"(?m)^\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$"
 )
+
+
+def _live_theme() -> dict[str, str]:
+    """Load the mutable TUI palette lazily to avoid an app/widget import cycle."""
+    from superqode.app.constants import THEME
+
+    return THEME
+
+
 _FENCED_MARKDOWN_RE = re.compile(
     r"```(?:md|markdown)\s*\n(?P<body>.*?)\n```",
     flags=re.IGNORECASE | re.DOTALL,
@@ -28,7 +37,8 @@ class AgentHeading(Heading):
         text = self.text.copy()
         text.justify = "left"
         level = int(self.tag[1:]) if self.tag[1:].isdigit() else 2
-        color = "#c084fc" if level <= 2 else "#a78bfa"
+        theme = _live_theme()
+        color = theme["purple"] if level <= 2 else theme["pink"]
         prefix = "▌ " if level <= 2 else "• "
         yield Text(prefix, style=f"bold {color}") + Text(text.plain, style=f"bold {color}")
 
@@ -59,6 +69,7 @@ class AgentCodeBlock(CodeBlock):
     }
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        theme = _live_theme()
         code = str(self.text).rstrip()
         lang = self.lexer_name or "text"
         icon = self.LANG_ICONS.get(lang.lower(), "📄")
@@ -68,12 +79,12 @@ class AgentCodeBlock(CodeBlock):
             theme=self.theme,
             word_wrap=True,
             padding=(0, 1),
-            background_color="#050505",
+            background_color=theme.get("code_bg", theme["bg"]),
         )
         yield Panel(
             syntax,
-            title=f"[bold #22c55e]{icon} {lang}[/]",
-            border_style="#22c55e",
+            title=f"[bold {theme['purple']}]{icon} {lang}[/]",
+            border_style=theme["purple"],
             padding=(0, 0),
         )
 
@@ -116,10 +127,22 @@ def normalize_agent_markdown(text: str) -> str:
 
 def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
     """Return a Rich renderable for polished agent markdown."""
+    from superqode.app.theme_bridge import active_theme_name
+
+    theme = _live_theme()
+    code_themes = {
+        "superqode": "monokai",
+        "tokyonight": "github-dark",
+        "dracula": "dracula",
+        "nord": "nord",
+        "monokai": "monokai",
+        "gruvbox": "gruvbox-dark",
+        "high-contrast": "github-dark",
+    }
     return AgentMarkdown(
         normalize_agent_markdown(text),
-        code_theme=kwargs.pop("code_theme", "monokai"),
-        style=kwargs.pop("style", "#e5e7eb"),
+        code_theme=kwargs.pop("code_theme", code_themes.get(active_theme_name(), "monokai")),
+        style=kwargs.pop("style", theme["text"]),
         hyperlinks=kwargs.pop("hyperlinks", False),
         **kwargs,
     )

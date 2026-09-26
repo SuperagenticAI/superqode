@@ -129,6 +129,9 @@ class FeedbackMixin:
         changed: bool = False,
     ) -> bool:
         """Announce that a model selection is active and ready for input."""
+        # Picker/result content is setup UI. The next real prompt replaces it
+        # with the conversation while the status bar retains this model.
+        self._workspace_intro_visible = True
         detail_parts = [f"{source} via ACP"]
         if free:
             detail_parts.append("Free model")

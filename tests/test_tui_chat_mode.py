@@ -42,6 +42,9 @@ class _StubLog:
     def write_final_response(self, t, agent="Assistant", **k):
         self.buf.append(f"[final:{agent}]{t}")
 
+    def _schedule_completed_response_reveal(self):
+        pass
+
     @property
     def text(self):
         return "\n".join(self.buf)

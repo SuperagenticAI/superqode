@@ -702,6 +702,18 @@ class SuperQodeApp(
                 self.set_timer(0.05, self._ensure_input_focus)
                 return
 
+        # When focus is outside the prompt, Left Arrow still mirrors the
+        # visible browser-style Back control. Prompt focus handles this itself
+        # so text cursor movement continues to work whenever text is present.
+        if event.key == "left":
+            try:
+                prompt_value = self.query_one("#prompt-input", SelectionAwareInput).value
+            except Exception:  # noqa: BLE001 - keyboard navigation must remain safe
+                prompt_value = ""
+            if self._navigate_back_from_keyboard(prompt_value):
+                event.stop()
+                return
+
         # Modal navigation also works when focus is in the sidebar or another
         # non-prompt widget. The prompt widget handles and stops the same event
         # before it bubbles here when it owns focus.

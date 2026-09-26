@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.18] - 2026-09-26
+
+### Improved
+
+- Polish the TUI transcript with distinct user and agent turns, remove repeated
+  connection chrome after the first prompt, and reveal long completed answers
+  from their beginning instead of leaving readers at the response tail.
+- Restyle notifications and command autocomplete with the SuperQode brand
+  palette, a true-black completion surface, complete command discovery, and
+  Left Arrow navigation matching the visible Back control.
+- Apply the selected `:theme` palette to new agent code blocks, tool activity,
+  apply-patch previews, and addition/deletion indicators.
+
+### Fixed
+
+- Preserve subscription identity in the TUI instead of presenting connected
+  plan sessions as BYOK, including reconnect and status-bar state.
+
 ## [2.4.17] - 2026-09-26
 
 ### Added

@@ -33,6 +33,9 @@ class _StubLog:
     def scroll_home(self, *a, **k):
         pass
 
+    def _schedule_completed_response_reveal(self):
+        pass
+
     @property
     def text(self) -> str:
         return "\n".join(self.buf)

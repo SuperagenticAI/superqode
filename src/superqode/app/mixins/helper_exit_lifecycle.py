@@ -27,6 +27,10 @@ class HelperExitLifecycleMixin:
             context: Optional context string (e.g., "DEV.FULLSTACK", "OPENCODE")
         """
         log.clear()
+        # Connection/setup content is useful until the first real prompt. Once
+        # work starts, the persistent status bar carries the active model and
+        # the transcript should become conversation-only.
+        self._workspace_intro_visible = True
 
         # Show minimal ready message
         t = Text()
@@ -43,6 +47,14 @@ class HelperExitLifecycleMixin:
             t.append("  ✨ Ready - What would you like to build?\n", style=THEME["muted"])
         t.append("\n")
         log.write(t)
+
+    def _begin_conversation_transcript(self, log: ConversationLog) -> None:
+        """Replace temporary connection/setup content with the first turn."""
+        if not getattr(self, "_workspace_intro_visible", False):
+            return
+        log.clear()
+        log.auto_scroll = True
+        self._workspace_intro_visible = False
 
     def _cleanup_terminals(self, terminals: dict):
         """Clean up any running terminal processes."""
@@ -88,6 +100,9 @@ class HelperExitLifecycleMixin:
         # connection, which is the behavior being removed here.
         for variable in ("SUPERQODE_RUNTIME", "SUPERQODE_HARNESS"):
             os.environ.pop(variable, None)
+        self._active_connection_auth_mode = ""
+        self._direct_auth_mode = ""
+        self._direct_connection_profile_id = ""
 
         try:
             from superqode.app.widgets import ColorfulStatusBar
@@ -124,11 +139,12 @@ class HelperExitLifecycleMixin:
         except Exception:
             pass
 
-        # Announced as a modal so it is never missed below the fold.
+        # Keep this acknowledgement compact. The cleared status bar already
+        # communicates the fresh state; repeating that as a third toast line
+        # turns a routine action into a large banner on narrow terminals.
         self._announce_transition(
             title="Disconnected",
             primary="Model and harness detached",
-            detail="SuperQode is back to a freshly launched state",
             severity="information",
             log=log,
             persist=True,

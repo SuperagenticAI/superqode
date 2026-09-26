@@ -13,6 +13,7 @@ import asyncio
 import os
 import shlex
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -350,6 +351,31 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
 
         assert app._byok_highlighted_provider_index == 6
         assert log.scroll_y <= selected_y < log.scroll_y + visible_height
+
+
+async def test_command_completion_uses_brand_palette():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 32)) as pilot:
+        from superqode.app.constants import THEME
+
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        panel = app.query_one("#prompt-completions", Static)
+        prompt.focus()
+        prompt.load_text(":")
+        await pilot.pause()
+
+        rendered = panel.render()
+        from rich.style import Style
+        from textual.color import Color
+
+        colors = {Style.parse(str(span.style)).color.get_truecolor() for span in rendered.spans}
+        assert app._prompt_completion_visible
+        assert "◆ COMMANDS" in rendered.plain
+        assert "›" in rendered.plain
+        assert Style.parse(THEME["purple"]).color.get_truecolor() in colors
+        assert Style.parse(THEME["pink"]).color.get_truecolor() in colors
+        assert Style.parse(THEME["orange"]).color.get_truecolor() in colors
+        assert panel.styles.background == Color.parse("#000000")
 
 
 async def test_harness_command_opens_complete_integration_switcher():
@@ -921,6 +947,86 @@ async def test_plain_write_panel_visible_after_byok_navigation(monkeypatch):
         )
         visible_height = log.scrollable_content_region.height
         assert log.scroll_y <= panel_y < log.scroll_y + visible_height
+
+
+async def test_first_prompt_replaces_connection_landing_but_keeps_status():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        status = app.query_one("#status-bar", ColorfulStatusBar)
+        sent = []
+
+        app._pure_mode = SimpleNamespace(
+            session=SimpleNamespace(connected=True),
+            _harness_spec=None,
+        )
+        app._send_to_pure_mode = lambda text, target: sent.append((text, target))
+        status.update_byok_status("openai", "gpt-5.6", auth_mode="subscription")
+        app._clear_for_workspace(log, "SUBSCRIPTION • OpenAI")
+        log.add_info("Provider Connected · OpenAI · gpt-5.6")
+        await pilot.pause()
+
+        app._handle_message("Which model am I using now?", log)
+        await pilot.pause()
+
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "Ready as" not in rendered
+        assert "Provider Connected" not in rendered
+        assert "› YOU" in rendered
+        assert "Which model am I using now?" in rendered
+        assert sent == [("Which model am I using now?", log)]
+        assert status.byok_provider == "openai"
+        assert status.byok_model == "gpt-5.6"
+        assert status.connection_auth == "subscription"
+
+
+async def test_long_completed_response_returns_to_its_heading():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        log.reset_response_stream("test-model")
+        response = "\n\n".join(
+            f"Paragraph {index}: " + "read this response from the beginning " * 4
+            for index in range(24)
+        )
+
+        # Streaming follows the growing tail while generation is active.
+        log.add_response_chunk(response)
+        assert log.auto_scroll
+
+        log.write_final_response(response, agent="test-model")
+        await pilot.pause()
+        await pilot.pause()
+
+        heading_y = next(
+            index for index, line in enumerate(log.lines) if "AGENT · test-model" in line.text
+        )
+        visible_height = log.scrollable_content_region.height
+        assert log.max_scroll_y > 0
+        assert log.scroll_y <= heading_y < log.scroll_y + visible_height
+        assert log.scroll_y < log.max_scroll_y
+        assert not log.auto_scroll
+
+        # A later turn resumes normal tail-following instead of leaving the
+        # transcript permanently pinned to the previous response.
+        log.add_user("Continue")
+        assert log.auto_scroll
+
+
+async def test_short_completed_response_stays_in_follow_mode():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        log.reset_response_stream("test-model")
+        log.auto_scroll = True
+        log.write_final_response("A concise answer.", agent="test-model")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert log.auto_scroll
+        assert not getattr(log, "_feedback_anchor_active", False)
 
 
 async def test_quit_command_quits_from_harness_wizard(monkeypatch):
@@ -2134,6 +2240,31 @@ async def test_back_from_the_protocols_listing_still_reaches_the_connect_root():
 
         # One more back leaves the protocols listing for the screen above it.
         app._navigate_back()
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_ROOT
+
+
+async def test_left_arrow_matches_back_button_only_with_empty_prompt():
+    from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS, CONNECT_MENU_ROOT
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        app._show_connect_type_picker(log)
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+
+        prompt.focus()
+        prompt.load_text("draft")
+        prompt.cursor_position = len(prompt.value)
+        await pilot.press("left")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+        assert prompt.cursor_position == len("draf")
+
+        prompt.load_text("")
+        await pilot.press("left")
         await pilot.pause()
         assert app._connect_menu == CONNECT_MENU_ROOT
 

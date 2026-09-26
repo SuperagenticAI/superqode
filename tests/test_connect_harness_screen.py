@@ -1301,6 +1301,30 @@ def test_choosing_a_plan_connects_that_provider():
     SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("plan-grok"), FakeLog())
     assert stub.grok == [""]
 
+    stub = PlanStub()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("plan-zai"), FakeLog())
+    assert stub.byok == ["zai"]
+    assert stub._next_direct_auth_mode == "subscription"
+    assert stub._direct_connection_profile_id == "plan-zai"
+
+
+def test_direct_plan_connection_persists_as_subscription(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from superqode.app.mixins.connect import ConnectMixin
+
+    class Stub(ConnectMixin):
+        current_harness = "core"
+        _key_harness_session = None
+        _direct_connection_profile_id = "plan-zai"
+
+    stub = Stub()
+    stub._finish_successful_model_connect("zai", "glm-4.6", "subscription", FakeLog())
+
+    saved = stub._load_connection_config()
+    assert saved["category"] == "plan"
+    assert saved["auth_mode"] == "subscription"
+    assert saved["profile_id"] == "plan-zai"
+
 
 def test_the_subscription_row_opens_the_subscription_menu():
     assert dispatch("plan").menus == [CONNECT_MENU_PLAN]

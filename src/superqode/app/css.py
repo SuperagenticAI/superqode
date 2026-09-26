@@ -14,25 +14,55 @@ Screen > .screen--selection {
 /* Consequential state changes. Textual owns lifecycle and stacking. */
 ToastRack {
     dock: top;
-    align: right top;
-    margin-top: 3;
-    padding: 0 1;
+    /* Keep transient feedback close to the user's focal line instead of
+       tucking it into a terminal corner. */
+    align: center top;
+    margin-top: 1;
+    padding: 0 2;
 }
 ToastHolder {
-    align-horizontal: right;
+    align-horizontal: center;
 }
 Toast {
-    width: 60;
-    max-width: 90%;
-    min-width: 28;
-    padding: 1 2;
-    background: #111116;
+    width: auto;
+    max-width: 76%;
+    min-width: 30;
+    height: auto;
+    margin-top: 1;
+    padding: 0 1;
+    background: #121018;
     color: #f4f4f5;
-    border: round #3f3f46;
+    border: round #52525b;
 }
-Toast.-information { border-left: thick #22c55e; }
-Toast.-warning { border-left: thick #f59e0b; }
-Toast.-error { border-left: thick #ef4444; }
+Toast .toast--title {
+    text-style: bold;
+    color: #fafafa;
+}
+/* Textual calls successful app notifications "information". Use the same
+   purple -> pink -> orange identity as the SuperQode logo for routine product
+   confirmations such as Model ready, Connected, and Disconnected. */
+Toast.-information {
+    background: #000000;
+    color: #f5e9ff;
+    border: round #7c3aed;
+    border-left: thick #a855f7;
+    border-right: thick #f97316;
+}
+Toast.-information .toast--title { color: #f472b6; }
+Toast.-warning {
+    background: #1c1506;
+    color: #fef3c7;
+    border: round #92400e;
+    border-left: thick #f59e0b;
+}
+Toast.-warning .toast--title { color: #fcd34d; }
+Toast.-error {
+    background: #210b0b;
+    color: #fee2e2;
+    border: round #991b1b;
+    border-left: thick #ef4444;
+}
+Toast.-error .toast--title { color: #fca5a5; }
 
 #main-grid { height: 100%; layout: horizontal; }
 
@@ -190,8 +220,8 @@ ConversationLog {
     max-height: 10;
     margin: 0 2;
     padding: 0;
-    background: #09090b;
-    border: solid #3f3f46;
+    background: #120b1a;
+    border: solid #7c3aed;
     color: #f4f4f5;
     overflow: hidden;
 }

@@ -149,6 +149,9 @@ class ColorfulStatusBar(Static):
     byok_model: reactive[str] = reactive("")
     byok_tokens: reactive[int] = reactive(0)
     byok_cost: reactive[float] = reactive(0.0)
+    # Authentication/billing identity is separate from the provider transport.
+    # Some subscription plans use the direct-model engine without being BYOK.
+    connection_auth: reactive[str] = reactive("")
     context_used: reactive[int] = reactive(0)
     context_window: reactive[int] = reactive(0)
     # Active runtime + model (e.g. self-contained runtimes like codex-sdk). Shown
@@ -240,6 +243,19 @@ class ColorfulStatusBar(Static):
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
             result.append("● ", style="#22c55e")
+            auth_mode = (self.connection_auth or "byok").strip().lower()
+            auth_label = {
+                "subscription": "SUBSCRIPTION" if medium else "SUB",
+                "local": "LOCAL",
+                "byok": "BYOK",
+            }.get(auth_mode, auth_mode.upper())
+            auth_color = {
+                "subscription": "#c084fc",
+                "local": "#06b6d4",
+                "byok": "#f59e0b",
+            }.get(auth_mode, "#a1a1aa")
+            if auth_label:
+                result.append(f"{auth_label} ", style=f"bold {auth_color}")
             result.append(
                 self._truncate_status_value(self.byok_provider, provider_limit),
                 style="bold #10b981",
@@ -607,14 +623,16 @@ class ColorfulStatusBar(Static):
         tokens: int = 0,
         cost: float = 0.0,
         context_window: int = 0,
+        auth_mode: str = "",
     ):
-        """Update BYOK status display."""
+        """Update direct-model status, including its user-facing auth source."""
         self.byok_provider = provider
         self.byok_model = model
         self.byok_tokens = tokens
         self.byok_cost = cost
         self.context_used = tokens if context_window > 0 else 0
         self.context_window = context_window
+        self.connection_auth = auth_mode
 
     def update_context_usage(self, used: int = 0, size: int = 0) -> None:
         """Update the persistent context meter from an exact runtime payload."""
@@ -1013,6 +1031,10 @@ class ModeBadge(Static):
                 t.append(" ⚡ ", style=f"bold {THEME['success']}")
                 t.append("BYOK", style=f"bold {THEME['success']} reverse")
                 t.append(" • ", style=THEME["muted"])
+            elif self.execution_mode == "subscription":
+                t.append(" ◆ ", style=f"bold {THEME['purple']}")
+                t.append("SUBSCRIPTION", style=f"bold {THEME['purple']} reverse")
+                t.append(" • ", style=THEME["muted"])
 
             t.append(f"{icon} ", style=f"bold {color}")
             t.append(self.agent.upper(), style=f"bold {color}")
@@ -1048,6 +1070,10 @@ class ModeBadge(Static):
             elif self.execution_mode == "byok":
                 t.append(" ⚡ ", style=f"bold {THEME['success']}")
                 t.append("BYOK", style=f"bold {THEME['success']} reverse")
+                t.append(" • ", style=THEME["muted"])
+            elif self.execution_mode == "subscription":
+                t.append(" ◆ ", style=f"bold {THEME['purple']}")
+                t.append("SUBSCRIPTION", style=f"bold {THEME['purple']} reverse")
                 t.append(" • ", style=THEME["muted"])
 
             t.append(f"{emoji} ", style=f"bold {color}")
@@ -1387,6 +1413,9 @@ class ConversationLog(RichLog):
         self._answer_header_shown: bool = False
         self._active_response_agent: str = "Assistant"
         self._rendered_response_text: str = ""
+        self._response_start_y: int | None = None
+        self._response_end_y: int | None = None
+        self._pending_response_reveal_token: object | None = None
         # Characters of `_streaming_response` already rendered as finished
         # markdown during progressive streaming (block-wise live rendering).
         self._streamed_offset: int = 0
@@ -1490,20 +1519,21 @@ class ConversationLog(RichLog):
 
     def add_user(self, text: str):
         self._messages.append(("user", text, ""))
-        # One compact transcript row: the purple rail clearly marks user input
-        # without a separate header or a full-width box competing with answers.
+        # A stable two-level turn shape is easier to scan than an inline
+        # ``You <prompt>`` prefix once the transcript contains tools and status
+        # output. Keep it minimal: identity line, then a purple input rail.
         lines = (str(text).strip() or "(empty)").splitlines() or ["(empty)"]
         question = Text()
+        question.append("  › ", style=f"bold {THEME['purple']}")
+        question.append("YOU", style=f"bold {THEME['purple']}")
+        question.append("\n")
         for index, line in enumerate(lines):
-            question.append("▌ ", style=THEME["purple"])
-            question.append("You  " if index == 0 else "     ", style=f"bold {THEME['purple']}")
-            question.append(
-                f" {line} ",
-                style=f"{THEME['text']} on {THEME['user_prompt_bg']}",
-            )
+            question.append("    ")
+            question.append("│ ", style=f"bold {THEME['purple']}")
+            question.append(line, style=THEME["text"])
             if index < len(lines) - 1:
                 question.append("\n")
-        self.write(Padding(question, (1, 0, 0, 2)))
+        self.write(Padding(question, (1, 0, 1, 0)))
 
     def add_agent(self, text: str, agent: str = "Agent"):
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
@@ -1835,7 +1865,7 @@ class ConversationLog(RichLog):
         approval_mode: str = "ask",
     ):
         """
-        Start a new agent output session with header.
+        Start a new agent output session without repeating connection chrome.
 
         Args:
             agent_name: Name of the agent (e.g., "OpenCode", "Claude")
@@ -1850,6 +1880,9 @@ class ConversationLog(RichLog):
         self._answer_header_shown = False
         self._active_response_agent = agent_name or "Assistant"
         self._rendered_response_text = ""
+        self._response_start_y = None
+        self._response_end_y = None
+        self._pending_response_reveal_token = None
         self._streaming_thinking = ""
         self._thinking_lines = []
         self._tool_calls = []
@@ -1866,75 +1899,33 @@ class ConversationLog(RichLog):
         except Exception:
             pass
 
-        # Mode badges
-        mode_badges = {
-            "acp": ("🔌", "ACP", THEME["success"]),
-            "byok": ("🔑", "BYOK", THEME["cyan"]),
-            "local": ("💻", "Local", THEME["warning"]),
-            "managed": ("☁", "MANAGED", THEME["cyan"]),
-        }
-        mode_icon, mode_label, mode_color = mode_badges.get(
-            mode.lower(), ("●", mode.upper(), THEME["muted"])
-        )
-
-        # Approval mode
-        approval_badges = {
-            "auto": ("🟢", "AUTO", THEME["success"]),
-            "ask": ("🟡", "ASK", THEME["warning"]),
-            "deny": ("🔴", "DENY", THEME["error"]),
-            "hosted": ("◉", "HOSTED", THEME["purple"]),
-        }
-        app_icon, app_label, app_color = approval_badges.get(
-            approval_mode, ("🟡", "ASK", THEME["warning"])
-        )
-
-        # Build header
-        header = Text()
-        agent_color = AGENT_COLORS.get(agent_name.lower(), THEME["purple"])
-        agent_icon = AGENT_ICONS.get(agent_name.lower(), "🤖")
-        header.append("\n  ", style="")
-        header.append(f"{agent_icon} ", style=f"bold {agent_color}")
-        header.append(agent_name, style=f"bold {THEME['text']}")
-        header.append(" running", style=THEME["muted"])
-        header.append("  •  ", style=THEME["dim"])
-        header.append(model_name or "auto", style=f"bold {THEME['cyan']}")
-        header.append("  •  ", style=THEME["dim"])
-        header.append(f"{mode_icon} ", style=mode_color)
-        header.append(mode_label, style=f"bold {mode_color}")
-        header.append("  •  ", style=THEME["dim"])
-        header.append(f"{app_icon} ", style=app_color)
-        header.append(app_label, style=f"bold {app_color}")
-        header.append("\n")
-
-        self.write(header)
+        # Model, transport, and approval state already live in the persistent
+        # status/prompt chrome. Repeating them here on every turn pushes the
+        # actual answer down and makes connection setup appear not to have
+        # disappeared. The live thinking indicator communicates that work has
+        # started; the transcript begins with the answer/tool activity itself.
 
     def _write_answer_header(self, agent: str = "Assistant") -> None:
-        """Render a stable, prominent divider before assistant content.
-
-        The answer is the one thing that must be easy to find, so it gets a
-        full-width rule with a bright marker while SuperQode's own chrome
-        (tokens, "Done", context usage) is rendered dim. The rule uses the
-        subtle ``dim`` tone; the ``✦ {agent}`` marker uses the agent's accent
-        colour so the eye lands on where the response begins.
-        """
+        """Render the stable pink ``AGENT · model`` turn identity."""
         if self._answer_header_shown:
             return
         self._answer_header_shown = True
-        marker = AGENT_COLORS.get(str(agent).lower(), THEME["success"])
+        self._response_start_y = len(self.lines)
+        marker = THEME["pink"]
         label = str(agent) or "Agent"
-        rule = "─" * 8
         header = Text()
         header.append("\n  ")
-        header.append(f"{rule}  ", style=THEME["dim"])
-        header.append("✦ Answer", style=f"bold {marker}")
+        header.append("◆ ", style=f"bold {marker}")
+        header.append("AGENT", style=f"bold {marker}")
         header.append(" · ", style=THEME["dim"])
-        header.append(label, style=f"bold {marker}")
-        header.append(f"  {rule}", style=THEME["dim"])
+        header.append(label, style=f"bold {THEME['text']}")
+        header.append("  ", style="")
+        header.append("─" * 12, style=THEME["border_active"])
         header.append("\n", style="")
         self.write(header)
 
     def _render_answer_block(self, block: str):
-        """Render one assistant markdown block indented as the answer body.
+        """Render one assistant markdown block in its own answer column.
 
         A small left indent groups the response into a single visual column,
         set apart from the flush-left status/chrome lines. Left padding is
@@ -1945,7 +1936,7 @@ class ConversationLog(RichLog):
 
         decision = render_systemone_json(block, THEME)
         return Padding(
-            decision if decision is not None else render_agent_markdown(block), (0, 0, 0, 2)
+            decision if decision is not None else render_agent_markdown(block), (0, 0, 0, 4)
         )
 
     def add_thinking(self, text: str, category: str = "general"):
@@ -2113,6 +2104,9 @@ class ConversationLog(RichLog):
         self._answer_header_shown = False
         self._active_response_agent = agent or "Assistant"
         self._rendered_response_text = ""
+        self._response_start_y = None
+        self._response_end_y = None
+        self._pending_response_reveal_token = None
 
     @staticmethod
     def _stable_markdown_split(buffer: str) -> int:
@@ -2189,8 +2183,47 @@ class ConversationLog(RichLog):
                 self._rendered_response_text = text
         else:
             self.write(Text(f"  ✕ {text}\n", style=THEME["error"], overflow="fold"))
+        if success and self._response_start_y is not None:
+            self._response_end_y = len(self.lines)
         if trailing_newline:
             self.write(Text("\n"))
+        if success:
+            self._schedule_completed_response_reveal()
+
+    def _schedule_completed_response_reveal(self) -> None:
+        """Show a long completed answer from its header instead of its tail.
+
+        Streaming follows the newest tokens while work is in progress. Once the
+        answer is complete, that same behavior leaves a multi-screen response
+        at the bottom and forces the user to hunt for its beginning. Re-anchor
+        only when the rendered answer cannot fit in the visible transcript.
+
+        This widget exists only in the Textual application, so CLI rendering is
+        deliberately unaffected.
+        """
+        if not self.is_mounted or self._response_start_y is None:
+            return
+        token = object()
+        self._pending_response_reveal_token = token
+
+        def reveal() -> None:
+            if getattr(self, "_pending_response_reveal_token", None) is not token:
+                return
+            self._pending_response_reveal_token = None
+            start_y = self._response_start_y
+            end_y = self._response_end_y
+            if start_y is None or end_y is None:
+                return
+            visible_height = max(1, int(self.scrollable_content_region.height or 0))
+            if end_y - start_y < visible_height:
+                return
+            self.auto_scroll = False
+            # Reuse the established anchor lifecycle: the next transcript write
+            # (normally the next user turn) restores follow-at-bottom behavior.
+            self._feedback_anchor_active = True
+            self.scroll_to(y=start_y, animate=False)
+
+        self.call_after_refresh(reveal)
 
     def add_tool_call(
         self,
@@ -2887,6 +2920,10 @@ class ConversationLog(RichLog):
         if decision_response:
             self._writing_feedback = False
             self.reveal_decision_response(response_start_y)
+        elif success:
+            # The summary is part of the completed turn. Re-evaluate after it
+            # is laid out so its write cannot leave a long answer tail-pinned.
+            self._schedule_completed_response_reveal()
 
     def reveal_decision_response(self, fallback_y: int = 0) -> None:
         """Reveal the latest Jev card after completion chrome has been written."""

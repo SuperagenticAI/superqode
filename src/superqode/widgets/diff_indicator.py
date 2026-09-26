@@ -7,18 +7,37 @@ Shows colored bars/indicators representing additions/deletions ratio.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from typing import Optional
 from rich.text import Text
 
+from superqode.app.constants import THEME
 
-# SuperQode colors
-COLORS = {
-    "addition": "#22c55e",
-    "deletion": "#ef4444",
-    "neutral": "#71717a",
-    "text_dim": "#a1a1aa",
-    "text_muted": "#a1a1aa",
-}
+
+class _LiveDiffColors(Mapping[str, str]):
+    """Compatibility mapping whose values follow the active TUI theme."""
+
+    _theme_keys = {
+        "addition": "diff_add",
+        "deletion": "diff_remove",
+        "neutral": "dim",
+        "text_dim": "dim",
+        "text_muted": "muted",
+    }
+
+    def __getitem__(self, key: str) -> str:
+        theme_key = self._theme_keys[key]
+        fallback = "success" if key == "addition" else "error" if key == "deletion" else "dim"
+        return THEME.get(theme_key, THEME[fallback])
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._theme_keys)
+
+    def __len__(self) -> int:
+        return len(self._theme_keys)
+
+
+COLORS: Mapping[str, str] = _LiveDiffColors()
 
 
 def render_diff_indicator(

@@ -1438,6 +1438,24 @@ def test_home_mode_badge_does_not_repeat_product_identity():
     assert "SUPERQODE" not in plain
 
 
+def test_subscription_identity_is_distinct_from_byok_in_tui_chrome():
+    from superqode.app.widgets import ColorfulStatusBar, ModeBadge
+
+    badge = ModeBadge()
+    badge.role = "developer"
+    badge.execution_mode = "subscription"
+    badge_text = badge.render().plain
+
+    status = ColorfulStatusBar()
+    status.update_byok_status("zai", "glm-4.6", auth_mode="subscription")
+    status_text = status._render_for_width(100).plain
+
+    assert "SUBSCRIPTION" in badge_text
+    assert "BYOK" not in badge_text
+    assert "SUBSCRIPTION zai/glm-4.6" in status_text
+    assert "BYOK" not in status_text
+
+
 def test_work_command_renders_last_run_trace():
     app = make_app()
     log = FakeLog()
@@ -4627,15 +4645,15 @@ def test_conversation_log_clearly_separates_question_and_answer():
     log.write_final_response("Chat skips repo context.\n\nBuild uses tools.", agent="ollama/qwen")
 
     rendered = "\n".join(render_plain(item) for item in writes)
-    assert "▌ You" in rendered
+    assert "› YOU" in rendered
     assert "How does chat mode differ from build mode?" in rendered
-    assert "✦" in rendered  # prominent answer marker
+    assert "◆ AGENT" in rendered  # prominent answer marker
     assert "ollama/qwen" in rendered
     assert rendered.count("Chat skips repo context.") == 1
     assert "Build uses tools." in rendered
 
 
-def test_user_turn_uses_compact_transcript_style():
+def test_user_turn_uses_scannable_header_and_rail():
     log = ConversationLog()
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
@@ -4644,11 +4662,30 @@ def test_user_turn_uses_compact_transcript_style():
 
     assert len(writes) == 1
     rendered = render_plain(writes[0])
-    assert "▌ You" in rendered
+    assert "› YOU" in rendered
     assert "╭" not in rendered
     assert "╰" not in rendered
-    assert "  ▌ You   First line" in rendered
-    assert "  ▌       Second line" in rendered
+    assert "    │ First line" in rendered
+    assert "    │ Second line" in rendered
+
+
+def test_first_prompt_replaces_temporary_connection_content():
+    app = make_app()
+    log = FakeLog()
+    log.items.extend(["Ready as SUBSCRIPTION", "Connection details"])
+    app._workspace_intro_visible = True
+
+    app._begin_conversation_transcript(log)
+
+    assert log.items == []
+    assert log.auto_scroll is True
+    assert app._workspace_intro_visible is False
+
+    # Only the landing content is transient. Later prompts preserve the
+    # conversation already on screen.
+    log.items.append(("user", "first prompt"))
+    app._begin_conversation_transcript(log)
+    assert log.items == [("user", "first prompt")]
 
 
 def test_add_meta_renders_dim_chrome_line():
@@ -4680,7 +4717,7 @@ def test_final_outcome_displays_streamed_token_count():
     )
 
     rendered = "\n".join(render_plain(item) for item in writes)
-    assert "✦ Answer · BYOK ollama/qwen" in rendered
+    assert "◆ AGENT · BYOK ollama/qwen" in rendered
     assert rendered.index("The answer.") < rendered.index("Done")
     assert rendered.index("Done") < rendered.index("1,540 toks")
     assert "1,540 toks" in rendered
@@ -4697,10 +4734,10 @@ def test_answer_body_is_indented_under_marker():
 
     rendered = [render_plain(item) for item in writes]
     joined = "\n".join(rendered)
-    assert "✦ Answer · qwen" in joined  # prominent, explicit answer marker
+    assert "◆ AGENT · qwen" in joined  # prominent, explicit answer marker
     # Body block is left-padded (indented) relative to the flush-left header.
     body = next(r for r in rendered if "The result is 42." in r)
-    assert body.startswith("  ")
+    assert body.startswith("    ")
 
 
 def test_final_response_does_not_duplicate_fully_streamed_answer():
@@ -4714,7 +4751,7 @@ def test_final_response_does_not_duplicate_fully_streamed_answer():
 
     rendered = "\n".join(render_plain(item) for item in writes)
     assert rendered.count("Already shown.") == 1
-    assert rendered.count("✦") == 1  # answer header renders exactly once
+    assert rendered.count("◆ AGENT") == 1  # answer header renders exactly once
 
 
 def test_streaming_renders_completed_paragraphs_live():
@@ -7361,7 +7398,7 @@ def test_agent_session_label_names_what_actually_runs():
     assert app._agent_session_label("openai") == "BYOK openai"
 
 
-def test_managed_agent_session_badges_name_hosted_ownership():
+def test_agent_session_does_not_repeat_status_bar_connection_chrome():
     log = ConversationLog()
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
@@ -7373,10 +7410,7 @@ def test_managed_agent_session_badges_name_hosted_ownership():
         "hosted",
     )
 
-    rendered = "\n".join(render_plain(item) for item in writes)
-    assert "MANAGED" in rendered
-    assert "HOSTED" in rendered
-    assert "ASK" not in rendered
+    assert writes == []
 
 
 def test_connect_uhp_with_a_url_opens_the_connect_screen(monkeypatch):
