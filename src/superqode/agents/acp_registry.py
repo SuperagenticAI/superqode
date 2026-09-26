@@ -378,9 +378,11 @@ def _agent_metadata_from_toml(agent: dict[str, Any]) -> AgentMetadata | None:
     }
 
 
-def _read_toml_registry() -> dict[str, AgentMetadata]:
+def _read_toml_registry(*, include_user: bool = True) -> dict[str, AgentMetadata]:
     registry: dict[str, AgentMetadata] = {}
-    search_paths = [Path(__file__).parent / "data", Path.home() / ".superqode" / "agents"]
+    search_paths = [Path(__file__).parent / "data"]
+    if include_user:
+        search_paths.append(Path.home() / ".superqode" / "agents")
     for search_path in search_paths:
         if not search_path.exists():
             continue
@@ -397,7 +399,7 @@ def _read_toml_registry() -> dict[str, AgentMetadata]:
     return registry
 
 
-def get_all_registry_agents() -> dict[str, AgentMetadata]:
+def get_all_registry_agents(*, include_user: bool = True) -> dict[str, AgentMetadata]:
     """Get all agents from the registry.
 
     Returns:
@@ -405,7 +407,7 @@ def get_all_registry_agents() -> dict[str, AgentMetadata]:
     """
     merged = _official_agent_metadata()
     merged.update(ACP_AGENTS_REGISTRY)
-    toml_agents = _read_toml_registry()
+    toml_agents = _read_toml_registry(include_user=include_user)
     merged.update(toml_agents)
     return merged
 

@@ -184,7 +184,9 @@ def _acp_item(
     )
 
 
-def acp_picker_items(*, include_registry: bool = False) -> list[HarnessPickerItem]:
+def acp_picker_items(
+    *, include_registry: bool = False, include_live_registry: bool = True
+) -> list[HarnessPickerItem]:
     """Return installed, recent, and featured ACP agents for the unified picker.
 
     ``include_registry`` expands to the complete bundled registry for command
@@ -193,9 +195,13 @@ def acp_picker_items(*, include_registry: bool = False) -> list[HarnessPickerIte
     """
     from superqode.acp.session_store import recent_agent_identities
     from superqode.commands.acp import check_agent_installed
-    from superqode.providers.acp_registry import get_cached_acp_catalog, registry_catalog_tier
+    from superqode.providers.acp_registry import (
+        get_bundled_acp_catalog,
+        get_cached_acp_catalog,
+        registry_catalog_tier,
+    )
 
-    agents = get_cached_acp_catalog()
+    agents = get_cached_acp_catalog() if include_live_registry else get_bundled_acp_catalog()
     recent_order = {
         identity.casefold(): index for index, identity in enumerate(recent_agent_identities())
     }
@@ -300,6 +306,7 @@ def harness_picker_items(
     *,
     include_all: bool = True,
     expand_protocol_catalog: bool = False,
+    include_live_registry: bool = True,
     native_entries=None,
 ) -> list[HarnessPickerItem]:
     """Build the complete, section-ordered interactive picker inventory."""
@@ -337,11 +344,16 @@ def harness_picker_items(
         profile = harness_connection_profile(profile_id)
         if profile is not None:
             vendors.append(_vendor_item(profile))
-    all_acp_items = acp_picker_items(include_registry=True)
+    all_acp_items = acp_picker_items(
+        include_registry=True, include_live_registry=include_live_registry
+    )
     acp_items = (
         all_acp_items
         if expand_protocol_catalog
-        else [*acp_picker_items(), _acp_browser_item(len(all_acp_items))]
+        else [
+            *acp_picker_items(include_live_registry=include_live_registry),
+            _acp_browser_item(len(all_acp_items)),
+        ]
     )
     return [*managed, *vendors, *acp_items, *optional, *presets, *projects]
 

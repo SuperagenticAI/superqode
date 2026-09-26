@@ -108,3 +108,63 @@ def test_catalog_merge_unions_bundled_open_source_tags(monkeypatch, tmp_path):
     assert bub["name"] == "Bub From Registry"
     assert "open-source" in bub["tags"]
     assert bub["run_command"]["*"] == "bub acp serve"
+
+
+def test_catalog_merge_keeps_repository_and_setup_guidance(monkeypatch, tmp_path):
+    _reset(monkeypatch, tmp_path)
+    acp_registry.CACHE_FILE.write_text(
+        json.dumps(
+            {
+                "cached_at": "2099-01-01T00:00:00+00:00",
+                "agents": [
+                    {
+                        "id": "harn",
+                        "name": "Harn From Registry",
+                        "description": "Official row without a distribution",
+                    },
+                    {
+                        "id": "bub",
+                        "name": "Bub From Registry",
+                        "description": "Official row without repository metadata",
+                    },
+                ],
+            }
+        )
+    )
+
+    catalog = acp_registry.get_cached_acp_catalog()
+    harn = next(agent for agent in catalog if agent["short_name"] == "harn")
+    bub = next(agent for agent in catalog if agent["short_name"] == "bub")
+
+    assert bub["repository"] == "https://github.com/bubbuild/bub"
+    assert "Install Harn" in harn["installation_instructions"]
+
+
+def test_bundled_catalog_excludes_user_agent_definitions(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    agents = home / ".superqode" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "personal.example.toml").write_text(
+        '''
+identity = "personal.example"
+name = "Personal Agent"
+short_name = "personal-agent"
+protocol = "acp"
+type = "coding"
+url = "https://personal.example"
+author_name = "User"
+author_url = "https://personal.example"
+publisher_name = "User"
+publisher_url = "https://personal.example"
+description = "User-local agent"
+tags = []
+run_command."*" = "personal-agent"
+help = "Personal"
+''',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("pathlib.Path.home", lambda: home)
+
+    names = {agent["short_name"] for agent in acp_registry.get_bundled_acp_catalog()}
+
+    assert "personal-agent" not in names
