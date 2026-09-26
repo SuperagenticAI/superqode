@@ -84,6 +84,7 @@ def test_synchronous_ui_catalog_merges_live_and_bundled_agents(monkeypatch, tmp_
     assert "codex" in names
     assert "gemini" in names
 
+
 def test_catalog_merge_unions_bundled_open_source_tags(monkeypatch, tmp_path):
     """Official-first merge must still keep bundled openness tags and run commands."""
     _reset(monkeypatch, tmp_path)
@@ -145,7 +146,7 @@ def test_bundled_catalog_excludes_user_agent_definitions(monkeypatch, tmp_path):
     agents = home / ".superqode" / "agents"
     agents.mkdir(parents=True)
     (agents / "personal.example.toml").write_text(
-        '''
+        """
 identity = "personal.example"
 name = "Personal Agent"
 short_name = "personal-agent"
@@ -160,7 +161,7 @@ description = "User-local agent"
 tags = []
 run_command."*" = "personal-agent"
 help = "Personal"
-''',
+""",
         encoding="utf-8",
     )
     monkeypatch.setattr("pathlib.Path.home", lambda: home)

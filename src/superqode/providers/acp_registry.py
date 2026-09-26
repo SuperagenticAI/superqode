@@ -255,9 +255,7 @@ def _bundled_fallback(*, include_user: bool = True) -> list[dict[str, Any]]:
                 "_superqode": {
                     "identity": metadata["identity"],
                     "short_name": metadata["short_name"],
-                    "repository": (
-                        metadata["url"] if "github.com" in metadata["url"] else ""
-                    ),
+                    "repository": (metadata["url"] if "github.com" in metadata["url"] else ""),
                     "run_command": metadata["run_command"],
                     "installation_command": metadata["installation_command"],
                     "installation_instructions": metadata["installation_instructions"],
@@ -367,9 +365,7 @@ def get_cached_acp_catalog() -> list[dict[str, Any]]:
 
 def get_bundled_acp_catalog() -> list[dict[str, Any]]:
     """Return the deterministic catalog shipped with this SuperQode release."""
-    return [
-        convert_registry_agent(record) for record in _bundled_fallback(include_user=False)
-    ]
+    return [convert_registry_agent(record) for record in _bundled_fallback(include_user=False)]
 
 
 async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str, Any]]:
