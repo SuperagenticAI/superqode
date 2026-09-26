@@ -83,3 +83,28 @@ def test_synchronous_ui_catalog_merges_live_and_bundled_agents(monkeypatch, tmp_
     assert "future-lab-agent" in names
     assert "codex" in names
     assert "gemini" in names
+
+def test_catalog_merge_unions_bundled_open_source_tags(monkeypatch, tmp_path):
+    """Official-first merge must still keep bundled openness tags and run commands."""
+    _reset(monkeypatch, tmp_path)
+    acp_registry.CACHE_FILE.write_text(
+        json.dumps(
+            {
+                "cached_at": "2099-01-01T00:00:00+00:00",
+                "agents": [
+                    {
+                        "id": "bub",
+                        "name": "Bub From Registry",
+                        "description": "Official row without openness tags",
+                    }
+                ],
+            }
+        )
+    )
+
+    catalog = acp_registry.get_cached_acp_catalog()
+    bub = next(agent for agent in catalog if agent.get("short_name") == "bub")
+
+    assert bub["name"] == "Bub From Registry"
+    assert "open-source" in bub["tags"]
+    assert bub["run_command"]["*"] == "bub acp serve"

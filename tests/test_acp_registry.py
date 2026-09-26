@@ -197,3 +197,38 @@ def test_open_source_tags_survive_the_toml_to_metadata_conversion():
     agent = get_registry_agent_by_short_name("deepagents-code")
 
     assert "open-source" in agent["tags"]
+
+def test_convert_registry_agent_preserves_open_source_tags():
+    """Hub openness reads ``open-source`` from converted catalog tags."""
+    converted = convert_registry_agent(
+        {
+            "id": "bub",
+            "name": "Bub",
+            "description": "AI coding agent",
+            "tags": ["community"],
+            "_superqode": {
+                "identity": "bub.dev",
+                "short_name": "bub",
+                "run_command": "bub acp serve",
+                "tags": ["open-source", "coding", "acp"],
+            },
+        }
+    )
+
+    assert "open-source" in converted["tags"]
+    assert "community" in converted["tags"]
+    assert "official-acp" in converted["tags"]
+    assert converted["run_command"]["*"] == "bub acp serve"
+
+
+def test_bundled_bub_keeps_open_source_tag_through_catalog_conversion():
+    """Regression: catalog conversion must not drop TOML openness tags."""
+    from superqode.providers.acp_registry import _bundled_fallback
+
+    bub_record = next(
+        record for record in _bundled_fallback() if record.get("id") == "bub"
+    )
+    converted = convert_registry_agent(bub_record)
+
+    assert "open-source" in bub_record["_superqode"]["tags"]
+    assert "open-source" in converted["tags"]

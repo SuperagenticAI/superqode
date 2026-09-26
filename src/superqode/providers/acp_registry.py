@@ -258,6 +258,7 @@ def _bundled_fallback() -> list[dict[str, Any]]:
                     "run_command": metadata["run_command"],
                     "installation_command": metadata["installation_command"],
                     "installation_instructions": metadata["installation_instructions"],
+                    "tags": list(metadata.get("tags") or []),
                 },
             }
         )
@@ -323,8 +324,27 @@ def get_cached_acp_catalog() -> list[dict[str, Any]]:
     for record in [*get_cached_acp_registry_agents(), *_bundled_fallback()]:
         converted = convert_registry_agent(record)
         key = str(converted.get("short_name") or converted.get("identity") or "").casefold()
-        if key:
-            merged.setdefault(key, converted)
+        if not key:
+            continue
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = converted
+            continue
+        # Official rows win the slot; bundled TOML still enriches tags and any
+        # missing run command so Hub openness and local launchers stay honest.
+        existing["tags"] = sorted(
+            set(existing.get("tags") or []) | set(converted.get("tags") or [])
+        )
+        existing_command = ""
+        run_command = existing.get("run_command")
+        if isinstance(run_command, dict):
+            existing_command = str(run_command.get("*") or "")
+        bundled_command = ""
+        converted_command = converted.get("run_command")
+        if isinstance(converted_command, dict):
+            bundled_command = str(converted_command.get("*") or "")
+        if not existing_command and bundled_command:
+            existing["run_command"] = converted["run_command"]
     _cached_catalog = list(merged.values())
     return _cached_catalog
 
@@ -457,7 +477,19 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
             "Run `superqode agents refresh` to update registry metadata."
         )
 
-    tags = ["official-acp", "registry", tier]
+    # Preserve openness-related tags from the live registry and bundled TOML
+    # (for example ``open-source``) instead of replacing them with catalog tiers.
+    source_tags: list[Any] = []
+    for candidate in (registry_agent.get("tags"), bundled.get("tags")):
+        if isinstance(candidate, (list, tuple)):
+            source_tags.extend(candidate)
+    tags = sorted(
+        {
+            str(tag).strip()
+            for tag in ["official-acp", "registry", tier, *source_tags]
+            if str(tag).strip()
+        }
+    )
     return {
         "identity": identity,
         "name": name,
