@@ -471,3 +471,31 @@ def test_published_snapshot_lists_every_hub_record():
     assert published_openness == current_openness
     assert published["count"] == current["count"]
     assert published["schema_version"] == current["schema_version"]
+
+
+def test_public_hub_uses_deterministic_bundled_acp_catalog(monkeypatch):
+    def unexpected():
+        raise AssertionError("public Hub generation must not read the live ACP cache")
+
+    monkeypatch.setattr(
+        "superqode.providers.acp_registry.get_cached_acp_catalog",
+        unexpected,
+    )
+
+    records = build_hub_index(public=True)["items"]
+
+    assert records
+    assert all("installed" not in record["source"] for record in records)
+    assert all("recent" not in record["source"] for record in records)
+
+
+def test_public_hub_preserves_agent_repository_and_setup_metadata():
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+
+    assert by_id["acp:codex"]["repository"] == "https://github.com/openai/codex"
+    assert by_id["acp:bub"]["repository"] == "https://github.com/bubbuild/bub"
+    assert "Install Harn" in by_id["acp:harn"]["setup"]
+    assert all(
+        item["repository"] != "https://github.com/agentclientprotocol/registry"
+        for item in by_id.values()
+    )

@@ -1210,7 +1210,14 @@ def _openness_from_acp_tags(item: HarnessPickerItem) -> HubOpenness | None:
         return None
     if "open-source" not in {str(tag).strip().casefold() for tag in tags}:
         return None
-    url = str(item.target.get("publisher_url") or item.target.get("url") or "")
+    url = str(
+        item.target.get("repository")
+        or item.target.get("publisher_url")
+        or item.target.get("url")
+        or ""
+    )
+    if url == "https://github.com/agentclientprotocol/registry":
+        url = ""
     return HubOpenness("open", "", url if "github.com" in url else "")
 
 
@@ -1382,6 +1389,7 @@ def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
         short_name = str(target.get("short_name") or item.id.removeprefix("acp:"))
         install = str(target.get("actions", {}).get("*", {}).get("install", {}).get("command", ""))
         homepage = str(target.get("url") or "")
+        repository = str(target.get("repository") or "")
         publisher = str(target.get("publisher_url") or "")
         setup_step = (
             HubSetupStep(f"Install {target.get('name') or short_name}", command=install)
@@ -1393,7 +1401,14 @@ def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
         )
         return {
             "homepage": homepage,
-            "repository": publisher if "github.com" in publisher else "",
+            "repository": (
+                repository
+                if "github.com" in repository
+                else publisher
+                if "github.com" in publisher
+                and publisher != "https://github.com/agentclientprotocol/registry"
+                else ""
+            ),
             "docs_url": homepage or f"{DOCS_BASE}providers/acp/",
             "install_command": install or item.issue,
             "setup_steps": (setup_step,),
@@ -1695,6 +1710,7 @@ def build_hub_index(
             root,
             include_all=include_all,
             expand_protocol_catalog=include_all,
+            include_live_registry=not public,
         )
     )
     if public:
@@ -1708,6 +1724,7 @@ def build_hub_index(
     if public:
         for record in records:
             record["readiness"] = _publication_readiness(record)
+            record["source"] = _publication_source(record)
     return {
         "schema_version": HUB_SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1736,6 +1753,17 @@ def _publication_readiness(record: dict[str, Any]) -> str:
     if readiness not in {"ready", "setup-required", "discover"}:
         return readiness
     return "ready" if record.get("integration_level") in {"native", "preset"} else "setup-required"
+
+
+def _publication_source(record: dict[str, Any]) -> str:
+    """Remove machine-local installed/recent badges from published ACP rows."""
+    source = str(record.get("source") or "")
+    if not source.startswith("acp:") or not ({"installed", "recent"} & set(source[4:].split("+"))):
+        return source
+    from superqode.providers.acp_registry import registry_catalog_tier
+
+    short_name = str(record.get("id") or "").removeprefix("acp:")
+    return f"acp:{registry_catalog_tier('', short_name)}"
 
 
 def filter_hub_records(

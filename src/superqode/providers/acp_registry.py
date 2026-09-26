@@ -238,12 +238,12 @@ async def fetch_registry_from_cdn() -> list[dict[str, Any]] | None:
         return None
 
 
-def _bundled_fallback() -> list[dict[str, Any]]:
+def _bundled_fallback(*, include_user: bool = True) -> list[dict[str, Any]]:
     """Convert the bundled SuperQode catalog into registry-shaped records."""
     from superqode.agents.acp_registry import get_all_registry_agents
 
     records: list[dict[str, Any]] = []
-    for metadata in get_all_registry_agents().values():
+    for metadata in get_all_registry_agents(include_user=include_user).values():
         records.append(
             {
                 "id": metadata["short_name"],
@@ -255,9 +255,11 @@ def _bundled_fallback() -> list[dict[str, Any]]:
                 "_superqode": {
                     "identity": metadata["identity"],
                     "short_name": metadata["short_name"],
+                    "repository": (metadata["url"] if "github.com" in metadata["url"] else ""),
                     "run_command": metadata["run_command"],
                     "installation_command": metadata["installation_command"],
                     "installation_instructions": metadata["installation_instructions"],
+                    "tags": list(metadata.get("tags") or []),
                 },
             }
         )
@@ -323,10 +325,47 @@ def get_cached_acp_catalog() -> list[dict[str, Any]]:
     for record in [*get_cached_acp_registry_agents(), *_bundled_fallback()]:
         converted = convert_registry_agent(record)
         key = str(converted.get("short_name") or converted.get("identity") or "").casefold()
-        if key:
-            merged.setdefault(key, converted)
+        if not key:
+            continue
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = converted
+            continue
+        # Official rows win the slot; bundled TOML still enriches tags and any
+        # missing run command so Hub openness and local launchers stay honest.
+        existing["tags"] = sorted(
+            set(existing.get("tags") or []) | set(converted.get("tags") or [])
+        )
+        existing_command = ""
+        run_command = existing.get("run_command")
+        if isinstance(run_command, dict):
+            existing_command = str(run_command.get("*") or "")
+        bundled_command = ""
+        converted_command = converted.get("run_command")
+        if isinstance(converted_command, dict):
+            bundled_command = str(converted_command.get("*") or "")
+        if not existing_command and bundled_command:
+            existing["run_command"] = converted["run_command"]
+        existing_install = str(
+            existing.get("actions", {}).get("*", {}).get("install", {}).get("command", "")
+        )
+        bundled_install = str(
+            converted.get("actions", {}).get("*", {}).get("install", {}).get("command", "")
+        )
+        if not existing_install and bundled_install:
+            existing["actions"] = converted["actions"]
+        bundled_instructions = str(converted.get("installation_instructions") or "")
+        if bundled_instructions:
+            existing["installation_instructions"] = bundled_instructions
+        if not existing.get("repository") and converted.get("repository"):
+            existing["repository"] = converted["repository"]
     _cached_catalog = list(merged.values())
     return _cached_catalog
+
+
+def get_bundled_acp_catalog() -> list[dict[str, Any]]:
+    """Return the deterministic catalog shipped with this SuperQode release."""
+    return [convert_registry_agent(record) for record in _bundled_fallback(include_user=False)]
 
 
 async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str, Any]]:
@@ -450,6 +489,7 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
     )
     name = str(registry_agent.get("name") or short_name)
     description = str(registry_agent.get("description") or "ACP-compatible coding agent.")
+    repository = str(registry_agent.get("repository") or bundled.get("repository") or "")
     instructions = str(bundled.get("installation_instructions") or "")
     if not instructions:
         instructions = (
@@ -457,7 +497,19 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
             "Run `superqode agents refresh` to update registry metadata."
         )
 
-    tags = ["official-acp", "registry", tier]
+    # Preserve openness-related tags from the live registry and bundled TOML
+    # (for example ``open-source``) instead of replacing them with catalog tiers.
+    source_tags: list[Any] = []
+    for candidate in (registry_agent.get("tags"), bundled.get("tags")):
+        if isinstance(candidate, (list, tuple)):
+            source_tags.extend(candidate)
+    tags = sorted(
+        {
+            str(tag).strip()
+            for tag in ["official-acp", "registry", tier, *source_tags]
+            if str(tag).strip()
+        }
+    )
     return {
         "identity": identity,
         "name": name,
@@ -468,6 +520,7 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
         "author_url": url,
         "publisher_name": "Agent Client Protocol Registry",
         "publisher_url": "https://github.com/agentclientprotocol/registry",
+        "repository": repository,
         "type": "coding",
         "description": description,
         "tags": tags,
@@ -477,6 +530,7 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
         "registry_version": str(registry_agent.get("version") or ""),
         "registry_source": source,
         "help": f"# {name}\n\n{description}\n\n## Installation\n\n{instructions}",
+        "installation_instructions": instructions,
         "run_command": {"*": command},
         "actions": {
             "*": {
@@ -522,6 +576,7 @@ __all__ = [
     "get_acp_registry_agents",
     "get_cached_acp_catalog",
     "get_cached_acp_registry_agents",
+    "get_bundled_acp_catalog",
     "get_agent_info",
     "registry_catalog_tier",
     "registry_short_name",
