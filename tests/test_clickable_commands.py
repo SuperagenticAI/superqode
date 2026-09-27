@@ -455,8 +455,8 @@ def test_the_back_button_appears_only_with_somewhere_to_go():
 
     bar.can_go_back = True
     rendered = bar._render_for_width(120)
-    assert "⌫ Back" in rendered.plain
-    assert _hit(bar, rendered, "[⌫ Back ↑]") == "back"
+    assert "← Back" in rendered.plain
+    assert _hit(bar, rendered, "[← Back ↑]") == "back"
 
 
 def test_clicking_back_walks_the_history():
@@ -633,7 +633,7 @@ def test_status_bar_buttons_are_not_hyperlinks():
     assert "superqode://" not in " ".join(str(span.style) for span in rendered.spans)
     prefix = rendered.plain[: rendered.plain.index("[🔌 Connect ↑]")]
     assert bar.action_at(cell_len(prefix) + 1) == "connect"
-    back = rendered.plain[: rendered.plain.index("[⌫ Back ↑]")]
+    back = rendered.plain[: rendered.plain.index("[← Back ↑]")]
     assert bar.action_at(cell_len(back) + 1) == "back"
     hub = rendered.plain[: rendered.plain.index("[⚓ Hub ↑]")]
     assert bar.action_at(cell_len(hub) + 1) == "hub"

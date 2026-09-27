@@ -20,8 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Backspace mirrors the visible Back control only with an empty prompt, so
-  it still deletes prompt text otherwise; sidebar default width is 34.
+- Key B and Left Arrow navigate back when the prompt is empty, while Backspace
+  strictly edits prompt text and never triggers TUI back navigation; sidebar
+  default width is 34.
 - Local dependency install ordering shows copy/recheck before manual/cancel.
 
 ## [2.4.19] - 2026-09-27

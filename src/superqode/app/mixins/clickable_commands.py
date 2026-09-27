@@ -77,11 +77,11 @@ class ClickableCommandMixin:
         return moved
 
     def _navigate_back_from_keyboard(self, prompt_value: str = "") -> bool:
-        """Run the visible Back action from Backspace/Left when unambiguous.
+        """Run the visible Back action from key B or Left Arrow when unambiguous.
 
         Both keys retain their ordinary editing behaviour while the prompt
         contains text. With an empty prompt and a visible history destination,
-        either key behaves like the status bar's ``⌫ Back`` control.
+        either key behaves like the status bar's ``← Back`` control.
         """
         if str(prompt_value or "").strip() or not self._history.can_go_back:
             return False

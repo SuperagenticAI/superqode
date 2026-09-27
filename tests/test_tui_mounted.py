@@ -2476,8 +2476,8 @@ async def test_left_arrow_matches_back_button_only_with_empty_prompt():
         assert app._connect_menu == CONNECT_MENU_ROOT
 
 
-async def test_backspace_matches_back_button_only_with_empty_prompt():
-    """Backspace navigates only when it has no prompt text to delete."""
+async def test_b_key_matches_back_button_only_with_empty_prompt_and_backspace_never_navigates():
+    """Key B navigates only when prompt is empty; backspace never triggers back navigation."""
     from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS, CONNECT_MENU_ROOT
 
     app = SuperQodeApp()
@@ -2491,13 +2491,27 @@ async def test_backspace_matches_back_button_only_with_empty_prompt():
         prompt.focus()
         prompt.load_text("draft")
         prompt.cursor_position = len(prompt.value)
+        await pilot.press("b")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+        assert prompt.value == "draftb"
+
+        # Backspace edits prompt text and never navigates back
+        prompt.load_text("")
         await pilot.press("backspace")
         await pilot.pause()
         assert app._connect_menu == CONNECT_MENU_PROTOCOLS
-        assert prompt.value == "draf"
 
-        prompt.load_text("")
-        await pilot.press("backspace")
+        # B navigates back when prompt is empty (both lower and uppercase)
+        await pilot.press("b")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_ROOT
+
+        # Test uppercase B as well
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+        await pilot.press("B")
         await pilot.pause()
         assert app._connect_menu == CONNECT_MENU_ROOT
 

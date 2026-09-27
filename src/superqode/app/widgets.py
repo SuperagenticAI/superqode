@@ -453,7 +453,7 @@ class ColorfulStatusBar(Static):
         control_hits: list[tuple[int, int, str]] = []
         chrome = 5  # "[label ↑]"
         if self.can_go_back:
-            for label in ("⌫ Back", "⌫"):
+            for label in ("← Back", "←"):
                 if room >= cell_len(label) + chrome:
                     self._append_button(
                         controls,

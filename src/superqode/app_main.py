@@ -759,10 +759,11 @@ class SuperQodeApp(
                 self.set_timer(0.05, self._ensure_input_focus)
                 return
 
-        # When focus is outside the prompt, Backspace and Left Arrow still
+        # When focus is outside the prompt, key B and Left Arrow still
         # mirror the visible browser-style Back control. Prompt focus handles
-        # these itself so editing continues normally whenever text is present.
-        if event.key in {"backspace", "left"}:
+        # these itself so text cursor movement continues to work whenever text is present.
+        token = (getattr(event, "character", None) or event.key or "").lower()
+        if token in {"b", "left"} or event.key in {"b", "B", "left"}:
             try:
                 prompt_value = self.query_one("#prompt-input", SelectionAwareInput).value
             except Exception:  # noqa: BLE001 - keyboard navigation must remain safe
