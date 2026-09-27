@@ -1255,89 +1255,77 @@ class PickerNavigationMixin:
                 )
 
     def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
-        """Show a keyboard-navigable picker for resuming local sessions."""
+        """Open the searchable session browser (replaces the capped transcript picker)."""
+        del clear_log  # Browser is a dedicated screen; transcript clear is unused.
+        self._open_session_browser(log)
+
+    def _open_session_browser(self, log: ConversationLog, *, query: str = "") -> None:
+        """Push the dedicated session browser screen."""
         from pathlib import Path as _Path
 
-        from superqode.session.harness_bridge import (
-            ensure_sessions_listed,
-            format_session_row_label,
-            group_sessions_by_harness,
-            session_last_user_preview,
-        )
+        from superqode.app.project_ui_state import get_last_session_id
+        from superqode.session.harness_bridge import ensure_sessions_listed
+        from superqode.widgets.session_browser import SessionBrowserScreen
 
-        sessions = ensure_sessions_listed(cwd=_Path.cwd())[:12]
-
-        self._awaiting_session_resume = bool(sessions)
-        self._session_resume_list = sessions
-        if not hasattr(self, "_session_resume_highlighted_index"):
-            self._session_resume_highlighted_index = 0
-        self._session_resume_highlighted_index = min(
-            max(0, getattr(self, "_session_resume_highlighted_index", 0)),
-            max(0, len(sessions) - 1),
-        )
-
-        t = Text()
-        t.append("\n  📂 ", style=f"bold {THEME['purple']}")
-        t.append("Switch Sessions\n", style=f"bold {THEME['text']}")
-        t.append(
-            "  Resuming restores harness, provider/model, cwd, and the same transcript.\n",
-            style=THEME["muted"],
-        )
-        t.append(
-            "  Grouped by harness. Headers are not selectable.\n\n",
-            style=THEME["dim"],
-        )
+        cwd = _Path.cwd()
+        sessions = ensure_sessions_listed(cwd=cwd)
+        # Clear legacy transcript-picker state so arrow keys do not fight the modal.
+        self._awaiting_session_resume = False
+        self._session_resume_list = []
 
         if not sessions:
+            from rich.text import Text
+
+            t = Text()
+            t.append("\n  📂 ", style=f"bold {THEME['purple']}")
+            t.append("Session Browser\n\n", style=f"bold {THEME['text']}")
             t.append("  No sessions found yet.\n", style=THEME["muted"])
             t.append("  Start a conversation with ", style=THEME["muted"])
             t.append(":connect byok", style=THEME["cyan"])
             t.append(" or ", style=THEME["muted"])
             t.append(":connect local", style=THEME["cyan"])
             t.append(".\n", style=THEME["muted"])
-            t.append(
-                "  Existing HarnessSpec / PiPy runs for this directory are listed automatically when present.\n",
-                style=THEME["dim"],
-            )
-            self._show_command_output(log, t, clear_log=clear_log)
+            self._show_command_output(log, t)
             return
 
-        # Flat navigable list stays sessions-only; headers skip highlight/numbers.
-        flat_index = {session.session_id: idx for idx, session in enumerate(sessions)}
-        for harness_name, rows in group_sessions_by_harness(sessions):
-            t.append(f"  {harness_name}\n", style=f"bold {THEME['purple']}")
-            for session in rows:
-                idx = flat_index[session.session_id] + 1
-                highlighted = (idx - 1) == self._session_resume_highlighted_index
-                display_id = session.session_id[:8]
-                label = format_session_row_label(session)
-                if highlighted:
-                    t.append("  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"[{idx:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
-                    )
-                    style = f"bold {THEME['success']}"
-                else:
-                    t.append("    ", style="")
-                    t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
-                    style = THEME["text"]
-                id_style = f"bold {THEME['cyan']}" if not highlighted else style
-                t.append(f"{display_id:<10}", style=id_style)
-                t.append(f"{label}\n", style=style)
-                if highlighted:
-                    preview = session_last_user_preview(session)
-                    if preview:
-                        t.append("         ", style="")
-                        t.append(f"{preview}\n", style=THEME["dim"])
-            t.append("\n")
+        registered_ids = set()
+        store_root = cwd / ".superqode" / "sessions"
+        try:
+            registered_ids = {
+                path.name[: -len(".meta.json")] for path in store_root.glob("*.meta.json")
+            }
+        except OSError:
+            registered_ids = set()
 
-        t.append("  ↑↓ navigate  Enter resume  or type ", style=THEME["muted"])
-        t.append(":sessions switch <id-or-name>", style=THEME["cyan"])
-        t.append("\n", style=THEME["muted"])
-        self._show_command_output(log, t, clear_log=clear_log)
-        self._scroll_to_highlighted_item(log, self._session_resume_highlighted_index, len(sessions))
-        self.set_timer(0.05, self._ensure_input_focus)
+        current_id = ""
+        try:
+            pure = self._ensure_pure_mode()
+            current_id = str(pure.get_current_session_id() or "")
+        except Exception:
+            current_id = ""
+
+        self.push_screen(
+            SessionBrowserScreen(
+                sessions,
+                cwd=cwd,
+                current_id=current_id,
+                last_session_id=get_last_session_id(cwd)
+                or (sessions[0].session_id if sessions else ""),
+                query=query,
+                registered_ids=registered_ids,
+            ),
+            callback=lambda result: self._handle_session_browser_result(result, log),
+        )
+
+    def _handle_session_browser_result(self, result, log: ConversationLog) -> None:
+        """Resume or continue from the session browser without sending a prompt."""
+        self._ensure_input_focus()
+        if result is None:
+            return
+        action = str(getattr(result, "action", "") or "")
+        session_id = str(getattr(result, "session_id", "") or "").strip()
+        if action in {"resume", "continue_last"} and session_id:
+            self._handle_resume_session(session_id, log)
 
     def action_navigate_session_resume_up(self) -> None:
         """Navigate to previous resumable session."""

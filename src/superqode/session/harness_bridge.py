@@ -14,6 +14,7 @@ external transcript id. Listings prefer human labels such as
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -872,13 +873,189 @@ def _index_pipy_path(session_id: str, session_path: Path, working_directory: Pat
         return
 
 
+@dataclass(frozen=True)
+class SessionAvailability:
+    """Read-only resume readiness for the session browser."""
+
+    status: str  # ok | missing_harness | bad_credentials | external_only
+    detail: str = ""
+    recovery: str = ""
+
+    @property
+    def label(self) -> str:
+        return {
+            "ok": "ok",
+            "missing_harness": "missing harness",
+            "bad_credentials": "bad credentials",
+            "external_only": "external-only",
+        }.get(self.status, self.status)
+
+
+def probe_session_availability(
+    metadata: SessionMetadata,
+    *,
+    cwd: str | Path | None = None,
+    storage_dir: str | Path = DEFAULT_SESSION_DIR,
+    registered_ids: set[str] | None = None,
+) -> SessionAvailability:
+    """Classify whether a listed session can be resumed safely.
+
+    Read-only: does not register external sessions or touch the active runtime.
+    """
+    working = Path(cwd or Path.cwd()).expanduser().resolve()
+    sid = str(metadata.session_id or "").strip()
+    store_root = Path(storage_dir)
+    if not store_root.is_absolute():
+        store_root = working / store_root
+    meta_path = store_root / f"{sid}.meta.json"
+    registered = registered_ids
+    if registered is None:
+        registered = {sid} if meta_path.is_file() else set()
+    if sid and sid not in registered:
+        return SessionAvailability(
+            status="external_only",
+            detail="Discovered from an external harness transcript",
+            recovery=f":sessions switch {sid[:8]} registers it on resume",
+        )
+
+    missing = missing_provider_credentials(metadata.provider)
+    if missing:
+        return SessionAvailability(
+            status="bad_credentials",
+            detail=f"Provider '{metadata.provider}' needs {missing}",
+            recovery=f"Set {missing}, then retry :sessions switch {sid[:8]}",
+        )
+
+    resume_harness = (metadata.harness_path or metadata.harness_id or "").strip()
+    if resume_harness and resume_harness.lower() not in {"workbench", "core"}:
+        try:
+            from superqode.harness import resolve_harness
+
+            resolve_harness(resume_harness, root=working)
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            return SessionAvailability(
+                status="missing_harness",
+                detail=f"Harness '{resume_harness}' is not available ({exc})",
+                recovery=(
+                    f"Restore or install that harness, then retry :sessions switch {sid[:8]}"
+                ),
+            )
+
+    if metadata.backend_session_path and not Path(metadata.backend_session_path).is_file():
+        return SessionAvailability(
+            status="external_only",
+            detail=f"Transcript unavailable: {metadata.backend_session_path}",
+            recovery="Restore the external transcript, then retry resume",
+        )
+
+    return SessionAvailability(status="ok", detail="Ready to resume")
+
+
+def session_search_blob(metadata: SessionMetadata) -> str:
+    """Concatenated fields used for fuzzy / substring session search."""
+    harness = harness_display_name(
+        metadata.harness_id,
+        explicit=metadata.harness_display_name,
+    )
+    return " ".join(
+        part
+        for part in (
+            metadata.session_id,
+            metadata.title,
+            harness,
+            metadata.harness_id,
+            metadata.model,
+            model_short_name(metadata.model),
+            metadata.provider,
+            metadata.working_directory,
+        )
+        if part
+    )
+
+
+def filter_sessions(
+    sessions: Iterable[SessionMetadata],
+    query: str,
+    *,
+    limit: int | None = None,
+) -> list[SessionMetadata]:
+    """Filter sessions by title, harness, model, or id.
+
+    Empty query returns the input order unchanged. Uses substring matching
+    first, then FuzzySearch so behaviour stays consistent with slash completion.
+    """
+    items = list(sessions)
+    text = (query or "").strip()
+    if not text:
+        return items[:limit] if limit is not None else items
+
+    lowered = text.lower()
+    substring_hits = [item for item in items if lowered in session_search_blob(item).lower()]
+    if substring_hits:
+        return substring_hits[:limit] if limit is not None else substring_hits
+
+    try:
+        from superqode.utils.fuzzy import FuzzySearch
+
+        fuzzy = FuzzySearch()
+        pairs = [(session_search_blob(item), item) for item in items]
+        scored = fuzzy.search_with_data(
+            text,
+            pairs,
+            max_results=limit or max(50, len(items)),
+            threshold=0.0,
+        )
+        return [data for _match, data in scored]
+    except Exception:
+        return substring_hits
+
+
+def session_list_preview(metadata: SessionMetadata, *, max_len: int = 64) -> str:
+    """Cheap one-line preview that avoids loading transcript files."""
+    title = (metadata.title or "").strip()
+    harness = harness_display_name(
+        metadata.harness_id,
+        explicit=metadata.harness_display_name,
+    )
+    if title and title.lower() not in {
+        "",
+        "untitled",
+        harness.lower(),
+        metadata.harness_id.lower(),
+        f"{harness.lower()} session",
+    }:
+        text = title
+    else:
+        text = f"{model_short_name(metadata.model)} · {relative_age(metadata.updated_at)}"
+    if len(text) > max_len:
+        return text[: max_len - 3].rstrip() + "..."
+    return text
+
+
+def paginate_sessions(
+    sessions: Iterable[SessionMetadata],
+    *,
+    page: int = 0,
+    page_size: int = 40,
+) -> tuple[list[SessionMetadata], int, int]:
+    """Return ``(page_rows, page_index, total_pages)`` for a stable page size."""
+    items = list(sessions)
+    size = max(1, int(page_size))
+    total_pages = max(1, (len(items) + size - 1) // size) if items else 1
+    index = max(0, min(int(page), total_pages - 1))
+    start = index * size
+    return items[start : start + size], index, total_pages
+
+
 __all__ = [
     "DEFAULT_SESSION_DIR",
     "HARNESS_STORE_ROOTS",
+    "SessionAvailability",
     "SessionResumeError",
     "discover_external_sessions",
     "enrich_resume_messages",
     "ensure_sessions_listed",
+    "filter_sessions",
     "format_session_label",
     "format_session_row_label",
     "group_sessions_by_harness",
@@ -886,9 +1063,13 @@ __all__ = [
     "load_external_transcript_messages",
     "missing_provider_credentials",
     "model_short_name",
+    "paginate_sessions",
+    "probe_session_availability",
     "relative_age",
     "rename_session_title",
     "session_last_user_preview",
+    "session_list_preview",
+    "session_search_blob",
     "session_short_label",
     "topic_from_preview",
     "upsert_harness_session_meta",

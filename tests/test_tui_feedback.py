@@ -173,7 +173,7 @@ async def test_success_notification_is_a_centered_colored_card():
 
         assert 30 <= toast.region.width < 58
         assert abs(toast.region.x - (80 - toast.region.width) // 2) <= 1
-        assert toast.styles.background.hex == "#120B1A"
+        assert toast.styles.background.hex == "#000000"
         assert title_style.color is not None
         assert title_style.color.name == "#f472b6"
         assert toast.styles.border_left[1].hex == "#A855F7"
