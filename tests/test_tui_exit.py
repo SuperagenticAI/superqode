@@ -68,8 +68,12 @@ def test_digit_inside_command_is_not_buffered_as_model_selection():
         def __init__(self, app):
             self.app = app
 
+        def _is_newline_key(self, event):
+            return False
+
     class _KeyEvent:
         key = "4"
+        aliases = ["4"]
 
         def stop(self):
             raise AssertionError("command digit must not be consumed")

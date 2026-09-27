@@ -284,6 +284,8 @@ def test_no_command_ever_asks_when_idle(command):
         assert app.commands == []
     elif command.startswith("plan-"):
         assert app.commands == [f":plan {command.removeprefix('plan-')}"]
+    elif command == "resume-latest":
+        assert app.commands == [":resume latest"]
     else:
         assert app.commands == [f":{command}"]
 

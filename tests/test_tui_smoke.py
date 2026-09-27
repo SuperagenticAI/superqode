@@ -2946,6 +2946,7 @@ def test_session_tree_renders_forks(tmp_path, monkeypatch):
 
 def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch):
     from superqode.agent.session_manager import SessionManager
+    from superqode.widgets.session_browser import SessionBrowserResult, SessionBrowserScreen
 
     monkeypatch.chdir(tmp_path)
     manager = SessionManager(storage_dir=".superqode/sessions")
@@ -2955,6 +2956,7 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     app = make_app()
     log = FakeLog()
     resumed = []
+    pushed = []
 
     class FakePureMode:
         def __init__(self):
@@ -2975,23 +2977,25 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     pure = FakePureMode()
     monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
     monkeypatch.setattr(app, "query_one", lambda *_args, **_kwargs: log)
+    monkeypatch.setattr(
+        app,
+        "push_screen",
+        lambda screen, callback=None, **_kwargs: pushed.append((screen, callback)),
+    )
 
     app._handle_command(":sessions resume", log)
 
-    assert app._awaiting_session_resume is True
-    rendered = render_plain(log.items[-1])
-    assert "Switch Sessions" in rendered
-    assert "restores harness" in rendered
-    assert "Grouped by harness" in rendered
-    assert "Workbench" in rendered
-    assert ":sessions switch <id-or-name>" in rendered
+    assert app._awaiting_session_resume is False
+    assert len(pushed) == 1
+    screen, callback = pushed[0]
+    assert isinstance(screen, SessionBrowserScreen)
+    ids = {item.session_id for item in screen.all_sessions}
+    assert {"first-session", "second-session"} <= ids
 
-    app.action_navigate_session_resume_down()
-    expected_id = app._session_resume_list[app._session_resume_highlighted_index].session_id
-    app.action_select_highlighted_session_resume()
+    expected_id = "second-session"
+    callback(SessionBrowserResult(action="resume", session_id=expected_id))
 
     assert resumed == [expected_id]
-    assert app._awaiting_session_resume is False
     assert any("Session resumed" in str(item) for item in log.items)
     assert any(isinstance(item, tuple) and item[0] == "user" for item in log.items)
 
@@ -7789,7 +7793,12 @@ def test_sessions_rename_persists_title(tmp_path, monkeypatch):
 
 
 def test_sessions_list_groups_by_harness(tmp_path, monkeypatch):
-    from superqode.session.harness_bridge import upsert_harness_session_meta
+    from superqode.session.harness_bridge import (
+        format_session_row_label,
+        group_sessions_by_harness,
+        upsert_harness_session_meta,
+    )
+    from superqode.widgets.session_browser import SessionBrowserScreen
 
     monkeypatch.chdir(tmp_path)
     upsert_harness_session_meta(
@@ -7813,15 +7822,31 @@ def test_sessions_list_groups_by_harness(tmp_path, monkeypatch):
 
     app = make_app()
     log = FakeLog()
+    pushed = []
     app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    monkeypatch.setattr(
+        app,
+        "push_screen",
+        lambda screen, callback=None, **_kwargs: pushed.append((screen, callback)),
+    )
     app._show_sessions(log)
-    rendered = render_plain(log.items[-1])
-    assert "PiPy" in rendered
-    assert "Core" in rendered
-    assert "auth work" in rendered
-    assert "plan work" in rendered
+
+    assert len(pushed) == 1
+    screen, _callback = pushed[0]
+    assert isinstance(screen, SessionBrowserScreen)
+    by_id = {item.session_id: item for item in screen.all_sessions}
+    assert "pipy-one" in by_id and "core-one" in by_id
+    assert by_id["pipy-one"].harness_display_name == "PiPy"
+    assert by_id["core-one"].harness_display_name == "Core"
+    assert by_id["pipy-one"].title == "auth work"
+    assert by_id["core-one"].title == "plan work"
+
+    grouped = group_sessions_by_harness(list(screen.all_sessions))
+    names = [name for name, _rows in grouped]
+    assert "PiPy" in names and "Core" in names
     # Row labels under headers should not awkwardly repeat the harness twice.
-    assert "PiPy · qwen · auth work" not in rendered
+    pipy_rows = next(rows for name, rows in grouped if name == "PiPy")
+    assert "PiPy · qwen · auth work" not in format_session_row_label(pipy_rows[0])
 
 
 def test_resume_replays_transcript_into_log(tmp_path, monkeypatch):

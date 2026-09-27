@@ -1025,6 +1025,12 @@ def test_install_cancel_clears_key_session():
 
     class Stub(ConnectMixin, CommandImplMixin):
         def __init__(self):
+            from types import SimpleNamespace
+
+            self._prompts = SimpleNamespace(
+                is_active=lambda _name: False,
+                pop=lambda: None,
+            )
             self._key_harness_session = KeyHarnessSession(
                 entry_id="tau",
                 openness="open",
