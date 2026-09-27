@@ -62,27 +62,58 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
-async def test_composer_hides_while_agent_is_working_and_restores_when_idle():
+async def test_composer_stays_visible_but_disabled_while_agent_is_working():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         composer = app.query_one("#prompt-area")
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
 
         app._start_thinking()
         await pilot.pause()
-        assert composer.has_class("hidden")
+        assert not composer.has_class("hidden")
+        assert composer.has_class("working")
+        assert prompt.disabled
 
         app._stop_thinking()
         await pilot.pause()
         assert not composer.has_class("hidden")
+        assert not composer.has_class("working")
+        assert not prompt.disabled
 
-        # Directly setting is_busy (e.g. during agent loop or tool runs) also hides/restores
+        # Direct is_busy changes use the same visible, disabled lifecycle.
         app.is_busy = True
         await pilot.pause()
-        assert composer.has_class("hidden")
+        assert composer.has_class("working")
+        assert prompt.disabled
 
         app.is_busy = False
         await pilot.pause()
-        assert not composer.has_class("hidden")
+        assert not composer.has_class("working")
+        assert not prompt.disabled
+
+
+async def test_busy_composer_reenables_only_for_required_agent_input():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        composer = app.query_one("#prompt-area")
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+
+        app.is_busy = True
+        await pilot.pause()
+        assert prompt.disabled
+
+        app._show_permission_prompt("bash", {"command": "pytest -q"}, log)
+        await pilot.pause()
+        assert not prompt.disabled
+        assert composer.has_class("action-required")
+        assert not composer.has_class("working")
+
+        app._permission_pending = False
+        app._reset_input_placeholder()
+        await pilot.pause()
+        assert prompt.disabled
+        assert composer.has_class("working")
 
 
 async def test_install_progress_is_visible_until_cleared():
@@ -608,7 +639,10 @@ async def test_prompt_placeholder_points_at_the_first_command(monkeypatch):
         prompt = app.query_one(SelectionAwareInput)
         await pilot.pause()
 
-        assert str(prompt.placeholder) == "Get started with :connect, or click the buttons below"
+        assert (
+            str(prompt.placeholder)
+            == "Get started with :connect · Browse with mouse · Run shell commands with >"
+        )
 
 
 async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monkeypatch):
@@ -1016,6 +1050,32 @@ async def test_long_completed_response_returns_to_its_heading():
         # transcript permanently pinned to the previous response.
         log.add_user("Continue")
         assert log.auto_scroll
+
+
+async def test_long_markdown_code_response_reveals_from_its_heading():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        log.reset_response_stream("code-model")
+        source = "\n".join(f"value_{index} = compute({index})" for index in range(60))
+        response = f"Implementation:\n\n```python\n{source}\n```"
+
+        log.add_response_chunk(response)
+        log.write_final_response(response, agent="code-model")
+        # Real completion paths append timing/change chrome after the answer.
+        log.write("  Done · 2.1s · 3 tools\n")
+        log._schedule_completed_response_reveal()
+        await pilot.pause()
+        await pilot.pause()
+
+        heading_y = next(
+            index for index, line in enumerate(log.lines) if "AGENT · code-model" in line.text
+        )
+        visible_height = log.scrollable_content_region.height
+        assert log.scroll_y <= heading_y < log.scroll_y + visible_height
+        assert log.scroll_y < log.max_scroll_y
+        assert not log.auto_scroll
 
 
 async def test_short_completed_response_stays_in_follow_mode():
@@ -2517,6 +2577,33 @@ async def test_b_key_matches_back_button_only_with_empty_prompt_and_backspace_ne
         await pilot.press("B")
         await pilot.pause()
         assert app._connect_menu == CONNECT_MENU_ROOT
+
+
+async def test_conversation_becomes_navigation_root_and_busy_back_is_blocked():
+    from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        status = app.query_one("#status-bar", ColorfulStatusBar)
+        app._show_connect_type_picker(log)
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+        assert app._history.can_go_back
+        assert status.can_go_back
+
+        app.is_busy = True
+        await pilot.pause()
+        assert not status.can_go_back
+        assert not app._navigate_back()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+
+        app.is_busy = False
+        app._begin_conversation_transcript(log)
+        await pilot.pause()
+        assert not app._history.can_go_back
+        assert not status.can_go_back
+        assert not app._navigate_back()
 
 
 def _modal_body(app) -> str:

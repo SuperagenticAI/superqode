@@ -72,6 +72,11 @@ class ClickableCommandMixin:
         self._sync_navigation_controls()
 
     def _navigate_back(self) -> bool:
+        # Leaving the shared transcript while output is arriving destroys the
+        # user's reading position, so Back is a picker-only action during work.
+        if getattr(self, "is_busy", False):
+            self._sync_navigation_controls()
+            return False
         moved = self._history.back()
         self._sync_navigation_controls()
         return moved
@@ -92,7 +97,9 @@ class ClickableCommandMixin:
         try:
             from superqode.app.widgets import ColorfulStatusBar
 
-            self.query_one("#status-bar", ColorfulStatusBar).can_go_back = self._history.can_go_back
+            self.query_one("#status-bar", ColorfulStatusBar).can_go_back = bool(
+                self._history.can_go_back and not getattr(self, "is_busy", False)
+            )
         except Exception:  # noqa: BLE001 - chrome must never break a render
             pass
 

@@ -3217,8 +3217,18 @@ class SlashCommandMixin:
         """Handle :copy command - copy last response, error, prompt, or transcript."""
         target = (args or "").strip().lower()
         last_error = log.get_last_error()
+        raw_targets = {"command", "cmd", "tool", "output", "out", "code"}
 
-        if target in ("error", "err"):
+        if target in ("command", "cmd"):
+            content_to_copy = log.get_last_command()
+            content_type = "command"
+        elif target in ("tool", "output", "out"):
+            content_to_copy = log.get_last_tool_output()
+            content_type = "output"
+        elif target in ("code", "block", "snippet"):
+            content_to_copy = log.get_last_code_block()
+            content_type = "code"
+        elif target in ("error", "err"):
             content_to_copy = last_error
             content_type = "error"
         elif target in ("response", "answer", "last"):
@@ -3246,7 +3256,12 @@ class SlashCommandMixin:
 
         from superqode.rendering.markdown import markdown_to_plain_text
 
-        clean_response = markdown_to_plain_text(content_to_copy)
+        # Commands/output/code paste raw — markdown stripping would mangle
+        # flags, quoting, and code indentation.
+        if content_type in raw_targets:
+            clean_response = content_to_copy
+        else:
+            clean_response = markdown_to_plain_text(content_to_copy)
 
         # Save to file first (always useful)
         output_file = Path.home() / ".superqode" / f"last_{content_type}.txt"
@@ -3257,6 +3272,9 @@ class SlashCommandMixin:
             "error": "Error",
             "prompt": "Prompt",
             "transcript": "Transcript",
+            "command": "Command",
+            "output": "Tool output",
+            "code": "Code block",
         }.get(content_type, "Response")
         if self._copy_text_to_clipboard(clean_response):
             log.add_success(f"✅ {content_label} copied to clipboard!")
@@ -3529,6 +3547,20 @@ class SlashCommandMixin:
         if target in ("error", "err"):
             content = last_error
             content_type = "Error"
+        elif target in ("command", "cmd"):
+            # Raw command — mouse-drag anywhere in here copies exactly,
+            # including flags/quoting the transcript row may wrap.
+            content = log.get_last_command()
+            content_type = "Command"
+        elif target in ("tool", "output", "out"):
+            # Full raw tool output — the transcript only renders a summary /
+            # 8-line tail, so this is the only place the complete output is
+            # mouse-selectable.
+            content = log.get_last_tool_output()
+            content_type = "Tool output"
+        elif target in ("code", "block", "snippet"):
+            content = log.get_last_code_block()
+            content_type = "Code block"
         elif target in ("response", "answer", "last"):
             content = self._last_response or log.get_last_response()
             content_type = "Response"

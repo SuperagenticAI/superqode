@@ -41,7 +41,6 @@ from superqode.app.suggester import CommandSuggester
 from superqode.app.widgets import (
     ColorfulStatusBar,
     TopScanningLine,
-    BottomScanningLine,
     StreamingThinkingIndicator,
     ModeBadge,
     HintsBar,
@@ -222,7 +221,6 @@ class SuperQodeApp(
         Binding("pagedown", "scroll_log_page_down", "Scroll Down", show=False),
         Binding("ctrl+home", "scroll_log_home", "Top", show=False),
         Binding("ctrl+end", "scroll_log_end", "Bottom", show=False),
-        Binding("ctrl+x", "cancel_agent", "Cancel Agent", show=False),
         Binding("ctrl+g", "stash_draft", "Stash draft", show=False),
         Binding("ctrl+d", "toggle_thinking", "Hide Logs", show=False),
         # Number keys for model selection (1-9)
@@ -461,15 +459,11 @@ class SuperQodeApp(
                 yield Static("", id="plan-review-panel")
                 yield Static("", id="todo-panel")
 
-                # Compact active tool strip. This is separate from the existing
-                # thinking bars/animations, which remain unchanged.
+                # Compact active tool strip, separate from the thinking indicator.
                 yield Static("", id="active-tools")
 
                 # Thinking indicator with changing text at bottom (shown when agent is thinking)
                 yield StreamingThinkingIndicator(id="streaming-thinking")
-
-                # Scanning line animation at BOTTOM (shown when agent is thinking)
-                yield BottomScanningLine(id="thinking-wave-bottom")
 
         yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
 

@@ -7,9 +7,13 @@ from __future__ import annotations
 import json
 import math
 import random
+from functools import lru_cache
 from time import monotonic
 from typing import Any
 
+from pygments import lex
+from pygments.lexers import get_lexer_by_name
+from pygments.token import Token
 from textual.widgets import Static, RichLog
 from textual.reactive import reactive
 from textual import events
@@ -107,6 +111,37 @@ def _diff_stats_from_text(diff_text: str) -> tuple[int, int]:
         1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---")
     )
     return additions, deletions
+
+
+@lru_cache(maxsize=256)
+def _syntax_fragments(code: str, language: str) -> tuple[tuple[str, object], ...]:
+    """Tokenize short tool previews once; styles are applied from the live theme."""
+    try:
+        lexer = get_lexer_by_name(language, stripnl=False)
+        fragments = tuple((value, token) for token, value in lex(code, lexer) if value)
+    except Exception:
+        fragments = ((code, Token.Text),)
+    # Pygments adds a final newline for snippets; tool rows are single-line.
+    if fragments and fragments[-1][0].endswith("\n"):
+        value, token = fragments[-1]
+        value = value[:-1]
+        fragments = fragments[:-1] + (((value, token),) if value else ())
+    return fragments
+
+
+def _tool_preview_language(tool_name: str, arguments: dict[str, Any]) -> str:
+    """Choose syntax for a tool preview without guessing or parsing the payload."""
+    lower = tool_name.lower()
+    shell_markers = ("bash", "shell", "terminal", "exec", "command", "run")
+    if (
+        "python" in lower
+        or arguments.get("code")
+        and not any(marker in lower for marker in shell_markers)
+    ):
+        return "python"
+    if any(marker in lower for marker in shell_markers):
+        return "bash"
+    return ""
 
 
 def _format_duration(seconds: float | None) -> str:
@@ -797,7 +832,12 @@ class TopScanningLine(Static):
     COLOR_DRIFT_SPEED = 0.04
 
     def on_mount(self):
-        self.auto_refresh = 1 / 12
+        self.auto_refresh = 1 / 12 if self.is_active else None
+
+    def watch_is_active(self, active: bool) -> None:
+        if self.is_mounted:
+            self.auto_refresh = 1 / 12 if active else None
+        self.refresh()
 
     def render(self) -> Text:
         if not self.is_active:
@@ -846,7 +886,12 @@ class BottomScanningLine(Static):
     SWEEP_CYCLES_PER_SECOND = 0.2
 
     def on_mount(self):
-        self.auto_refresh = 1 / 12
+        self.auto_refresh = 1 / 12 if self.is_active else None
+
+    def watch_is_active(self, active: bool) -> None:
+        if self.is_mounted:
+            self.auto_refresh = 1 / 12 if active else None
+        self.refresh()
 
     def render(self) -> Text:
         if not self.is_active:
@@ -919,7 +964,12 @@ class StreamingThinkingIndicator(Static):
     ]
 
     def on_mount(self):
-        self.auto_refresh = 1 / 2
+        self.auto_refresh = 1 / 2 if self.is_active else None
+
+    def watch_is_active(self, active: bool) -> None:
+        if self.is_mounted:
+            self.auto_refresh = 1 / 2 if active else None
+        self.refresh()
 
     def begin(self) -> None:
         """Begin a fresh phase, without restarting one already in progress."""
@@ -974,6 +1024,7 @@ class StreamingThinkingIndicator(Static):
 
         result.append(f"  {spinner} ", style=f"bold {color}")
         result.append(phrase, style=f"bold {color}")
+        result.append(f"  {elapsed:.0f}s", style="#71717a")
 
         # When the agent loop has a concrete live status (e.g. "📄 Read foo.py…"
         # or "Working… (step 2)") show it as a secondary detail beside the
@@ -1241,11 +1292,15 @@ class ConversationLog(RichLog):
 
     Text Selection:
     - Drag with the mouse to select — selection is copied to the clipboard
-      automatically (no command needed).
-    - :copy command to copy the last response/error/transcript.
+      automatically (no command needed). Works on responses, commands,
+      outputs, and errors alike — styled rows still select as plain text.
+    - :copy command | output | code | response | error | transcript — exact
+      raw text to the clipboard (no truncation, no markdown mangling).
+    - :select <same targets> — open the full raw text in a selectable view
+      (use for long outputs: the transcript only renders a summary/tail,
+      so mouse-drag can't reach the full text there).
     - Shift+drag for the terminal's native selection (fallback for terminals
       where clipboard access is blocked).
-    - :select to open a plain selectable view.
     """
 
     DEFAULT_CSS = """
@@ -1859,6 +1914,37 @@ class ConversationLog(RichLog):
             return ""
         return self._messages[-1][1]
 
+    def get_last_command(self) -> str:
+        """Raw shell command from the most recent tool run (exact paste)."""
+        if getattr(self, "_last_command", ""):
+            return self._last_command
+        for call in reversed(getattr(self, "_session_tool_calls", [])):
+            if call.get("command"):
+                return str(call["command"])
+            args = call.get("arguments") or {}
+            if isinstance(args, dict) and args.get("command"):
+                return str(args["command"])
+        return ""
+
+    def get_last_tool_output(self) -> str:
+        """Raw output of the most recent tool run (exact paste)."""
+        if getattr(self, "_last_tool_output", ""):
+            return self._last_tool_output
+        for call in reversed(getattr(self, "_session_tool_calls", [])):
+            if call.get("output"):
+                return str(call["output"])
+        return ""
+
+    def get_last_code_block(self) -> str:
+        """First fenced code block from the last agent response (paste-ready)."""
+        import re
+
+        text = self._last_response or ""
+        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return ""
+
     def get_all_text(self) -> str:
         """Get all messages as plain text for export."""
         lines = []
@@ -1875,6 +1961,18 @@ class ConversationLog(RichLog):
                 lines.append(f"Success: {text}")
             elif role == "info":
                 lines.append(f"Info: {text}")
+        # Transcript paste must include what ran — otherwise copied logs
+        # show answers without the commands that produced them.
+        for call in getattr(self, "_session_tool_calls", []):
+            name = self._format_tool_name(str(call.get("name") or "tool")).title()
+            args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+            detail = self._format_tool_detail(
+                str(call.get("name") or "tool"), args, max_length=1000
+            )
+            status = str(call.get("status") or "unknown")
+            lines.append(f"Tool [{status}] {name}: {detail}".rstrip())
+            if call.get("output"):
+                lines.append(str(call["output"]))
         return "\n\n".join(lines)
 
     def format_session_timeline(self) -> str:
@@ -2337,19 +2435,25 @@ class ConversationLog(RichLog):
             return
         token = object()
         self._pending_response_reveal_token = token
+        attempts = 0
 
         def reveal() -> None:
+            nonlocal attempts
             if getattr(self, "_pending_response_reveal_token", None) is not token:
                 return
-            self._pending_response_reveal_token = None
             if self._viewport_mode == "user_locked":
+                self._pending_response_reveal_token = None
                 return
             start_y = self._response_start_y
-            end_y = self._response_end_y
+            # Completion notes and final Markdown layout can land after the
+            # response write captured its initial end line.
+            end_y = max(self._response_end_y or 0, len(self.lines))
             if start_y is None or end_y is None:
+                self._pending_response_reveal_token = None
                 return
             visible_height = max(1, int(self.scrollable_content_region.height or 0))
             if end_y - start_y < visible_height:
+                self._pending_response_reveal_token = None
                 return
             self.auto_scroll = False
             # Reuse the established anchor lifecycle: the next transcript write
@@ -2357,6 +2461,13 @@ class ConversationLog(RichLog):
             self._feedback_anchor_active = True
             self._viewport_mode = "completion_anchored"
             self.scroll_to(y=start_y, animate=False)
+            attempts += 1
+            if attempts >= 2:
+                self._pending_response_reveal_token = None
+            else:
+                # One cheap settling pass catches terminal resize / Markdown
+                # reflow without changing the renderer or its hot path.
+                self.set_timer(0.05, reveal)
 
         self.call_after_refresh(reveal)
 
@@ -2398,6 +2509,7 @@ class ConversationLog(RichLog):
             "command_line",
             "shellCommand",
             "script",
+            "code",
             "input",
             "argv",
             "args",
@@ -2410,6 +2522,7 @@ class ConversationLog(RichLog):
         ):
             if not display_args.get(key) and metadata.get(key):
                 display_args[key] = metadata[key]
+        preview_language = _tool_preview_language(tool_name, display_args)
         command_tool = any(
             marker in tool_name.lower()
             for marker in ("bash", "shell", "terminal", "exec", "command", "run")
@@ -2419,6 +2532,10 @@ class ConversationLog(RichLog):
             for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script")
         ):
             command = command or extract_tool_command(display_args)
+        elif preview_language == "python":
+            command = (
+                command or str(display_args.get("code") or display_args.get("input") or "").strip()
+            )
 
         # Keep the pinned plan/todo panel in sync whenever a todo tool runs.
         if "todo" in tool_name.lower():
@@ -2499,6 +2616,12 @@ class ConversationLog(RichLog):
                     if callable(recorder):
                         recorder([file_path])
 
+        if status == "running":
+            # Live state already shows in the #active-tools strip and the
+            # throbber; writing a transcript row here too doubles every
+            # command (running + success). Commit only terminal states.
+            return
+
         # Status icons and colors
         status_map = {
             "pending": ("○", THEME["muted"]),
@@ -2544,13 +2667,16 @@ class ConversationLog(RichLog):
         )
         if detail:
             line.append("  ", style=THEME["dim"])
-            detail_style = THEME["muted"]
-            # Make file targets clickable (OSC-8) so supporting terminals can
-            # open them in the user's editor/viewer.
-            link = self._file_link_for(file_path or display_args)
-            if link:
-                detail_style = f"{THEME['muted']} link {link}"
-            line.append(detail, style=detail_style)
+            if preview_language:
+                self._append_highlighted_code(line, detail, preview_language)
+            else:
+                detail_style = THEME["muted"]
+                # Make file targets clickable (OSC-8) so supporting terminals can
+                # open them in the user's editor/viewer.
+                link = self._file_link_for(file_path or display_args)
+                if link:
+                    detail_style = f"{THEME['muted']} link {link}"
+                line.append(detail, style=detail_style)
 
         meta_parts: list[tuple[str, str]] = []
         duration_label = _format_duration(duration)
@@ -2621,6 +2747,12 @@ class ConversationLog(RichLog):
                     "metadata": metadata,
                 }
             )
+            # Copy-paste state: keep the raw (unstyled, untruncated) values
+            # so :copy command / :copy output paste exactly what ran.
+            if command:
+                self._last_command = command
+            if output:
+                self._last_tool_output = output
 
     @staticmethod
     def _file_link_for(source: Any) -> str:
@@ -2785,11 +2917,18 @@ class ConversationLog(RichLog):
                 line.append("  •  ", style=THEME["dim"])
             name = str(active.get("name") or "tool")
             args = active.get("arguments") if isinstance(active.get("arguments"), dict) else {}
-            detail = self._format_tool_detail(name, args, max_length=42)
+            # Full command, one place only (throbber is verb-only). No
+            # truncation games here — this is the single live record.
+            detail = self._format_tool_detail(name, args, max_length=180)
             label = self._format_tool_name(name).title()
             line.append(label, style=f"bold {THEME['text']}")
             if detail:
-                line.append(f" {detail}", style=THEME["muted"])
+                line.append(" ")
+                language = _tool_preview_language(name, args)
+                if language:
+                    self._append_highlighted_code(line, detail, language)
+                else:
+                    line.append(detail, style=THEME["muted"])
             duration = monotonic() - float(active.get("started_at") or monotonic())
             if duration >= 1:
                 line.append(f" {_format_duration(duration)}", style=THEME["dim"])
@@ -2881,7 +3020,9 @@ class ConversationLog(RichLog):
 
         body.append("\n")
         body.append(":work verbose", style=f"bold {THEME['cyan']}")
-        body.append(" for full tool output", style=THEME["muted"])
+        body.append(" for full tool output  •  ", style=THEME["muted"])
+        body.append(":select output", style=f"bold {THEME['cyan']}")
+        body.append(" to mouse-select & copy it", style=THEME["muted"])
         return Panel(
             body,
             title=f"[bold {THEME['error']}]Tool failed: {self._format_tool_name(tool_name).title()}[/]",
@@ -2925,6 +3066,10 @@ class ConversationLog(RichLog):
     ) -> str:
         """Return the important target for a tool row without noisy JSON."""
         lower = tool_name.lower()
+        if "python" in lower:
+            code = arguments.get("code") or arguments.get("input") or arguments.get("command")
+            if code:
+                return _clip_single_line(str(code), max_length)
         command_tool = any(
             marker in lower for marker in ("bash", "shell", "terminal", "exec", "command", "run")
         )
@@ -2966,6 +3111,30 @@ class ConversationLog(RichLog):
         if compact.startswith(prefix) and compact.endswith(")"):
             compact = compact[len(prefix) : -1]
         return _clip_single_line(compact, max_length)
+
+    @staticmethod
+    def _append_highlighted_code(line: Text, code: str, language: str) -> None:
+        """Append cached Bash/Python tokens using the active SuperQode palette."""
+        for value, token in _syntax_fragments(code, language):
+            if token in Token.Comment:
+                style = f"italic {THEME['muted']}"
+            elif token in Token.Keyword:
+                style = f"bold {THEME['purple']}"
+            elif token in Token.Name.Function or token in Token.Name.Builtin:
+                style = f"bold {THEME['cyan']}"
+            elif token in Token.Literal.String:
+                style = THEME["green"]
+            elif token in Token.Literal.Number:
+                style = THEME["gold"]
+            elif token in Token.Operator or token in Token.Punctuation:
+                style = THEME["pink"]
+            elif token in Token.Generic.Prompt:
+                style = f"bold {THEME['pink']}"
+            elif token in Token.Error:
+                style = THEME["error"]
+            else:
+                style = THEME["text"]
+            line.append(value, style=style)
 
     def end_agent_session(
         self,

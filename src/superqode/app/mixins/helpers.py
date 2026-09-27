@@ -402,17 +402,45 @@ class HelpersMixin(
         )
 
     def watch_is_busy(self, old: bool, new: bool) -> None:
-        """Hide the prompt box while the agent is busy; restore and focus when idle."""
-        try:
-            prompt_area = self.query_one("#prompt-area")
-            prompt_area.set_class(new, "hidden")
-            if not new:
-                self.set_timer(0.05, self._focus_input_on_ready)
-        except Exception:
-            pass
+        """Keep a stable composer frame while preventing accidental new input."""
+        interactive = bool(
+            getattr(self, "_permission_pending", False)
+            or getattr(self, "_awaiting_agent_question", False)
+        )
+        self._set_composer_working_state(new, interactive=interactive)
+        self._sync_navigation_controls()
+        if not new:
+            self.set_timer(0.05, self._focus_input_on_ready)
         if old and not new and getattr(self, "_typeahead_queue", []):
             # Small delay lets the completion render settle before the next turn.
             self.set_timer(0.2, self._drain_message_queue)
+
+    def _set_composer_working_state(self, working: bool, *, interactive: bool = False) -> None:
+        """Show the composer as disabled work chrome, or enable it for a decision."""
+        try:
+            prompt_area = self.query_one("#prompt-area")
+            prompt_area.remove_class("hidden")
+            prompt_area.set_class(working and not interactive, "working")
+            prompt_area.set_class(working and interactive, "action-required")
+        except Exception:
+            pass
+        try:
+            prompt = self.query_one("#prompt-input", SelectionAwareInput)
+            prompt.disabled = working and not interactive
+            if interactive:
+                prompt.focus()
+        except Exception:
+            pass
+        try:
+            input_box = self.query_one("#input-box")
+            if working and not interactive:
+                input_box.border_title = "Agent working · Esc to cancel"
+            elif working and interactive:
+                input_box.border_title = "Action required"
+            else:
+                self._refresh_prompt_mode_label()
+        except Exception:
+            pass
 
     @staticmethod
     def _env_flag(name: str) -> bool:
@@ -1228,6 +1256,7 @@ class HelpersMixin(
             )
 
             try:
+                self._set_composer_working_state(True, interactive=True)
                 input_widget = self.query_one("#prompt-input", SelectionAwareInput)
                 input_widget.placeholder = "Answer the agent question..."
                 input_widget.focus()
@@ -1327,6 +1356,10 @@ class HelpersMixin(
             input_widget.placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
         except Exception:
             pass
+        # The agent normally keeps working after a decision. Return to the
+        # disabled work state instead of leaving the composer accidentally live.
+        if getattr(self, "is_busy", False):
+            self._set_composer_working_state(True)
 
     def _set_input_placeholder(self, text: str) -> None:
         """Best-effort prompt hint for inline decisions."""

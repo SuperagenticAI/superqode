@@ -274,10 +274,7 @@ def render_welcome(
             state_text.append("\n")
         items.append(place(state_text))
 
-    # No next step and no key list here. The prompt placeholder names the
-    # first command, and the bar directly under it carries the same commands
-    # as clickable controls, so repeating them on the home screen was noise
-    # between the product and the box the user types into.
+    # The prompt placeholder and its clickable bar already expose commands.
     # Keep the workspace optional, but do not bury it behind a command the
     # user has to discover. This link opens the existing lightweight sidebar;
     # it does not add a second IDE-like canvas.

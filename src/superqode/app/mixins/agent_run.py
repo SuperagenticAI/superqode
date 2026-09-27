@@ -17,7 +17,6 @@ from superqode.app.constants import (
 )
 from superqode.app.widgets import (
     TopScanningLine,
-    BottomScanningLine,
     StreamingThinkingIndicator,
     ConversationLog,
     ColorfulStatusBar,
@@ -142,13 +141,7 @@ class AgentRunMixin:
         # IMPORTANT: Enable auto-scroll so user sees agent's work in real-time
         log.auto_scroll = True
 
-        # Hide prompt area while agent is working so it doesn't take space
-        try:
-            prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("hidden")
-            prompt_area.remove_class("working")
-        except Exception:
-            pass
+        self._set_composer_working_state(True)
 
         # Show streaming thinking indicator with changing text
         try:
@@ -158,7 +151,7 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show scanning line animation at TOP
+        # Show single scanning line (TOP only — brand wave kept, bottom dup removed)
         try:
             thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
             thinking_wave.is_active = True
@@ -166,27 +159,13 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show scanning line animation at BOTTOM
-        try:
-            thinking_wave_bottom = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            thinking_wave_bottom.is_active = True
-            thinking_wave_bottom.add_class("visible")
-        except Exception:
-            pass
+        # Bottom wave intentionally left off (was duplicate chrome)
 
     def _stop_stream_animation(self):
         """Stop the streaming animation."""
         self.is_busy = False
 
-        # Restore prompt area when agent finishes
-        try:
-            prompt_area = self.query_one("#prompt-area")
-            prompt_area.remove_class("hidden")
-            prompt_area.remove_class("working")
-            # Re-focus the input
-            self.query_one("#prompt-input", SelectionAwareInput).focus()
-        except Exception:
-            pass
+        self._set_composer_working_state(False)
 
         # Hide streaming thinking indicator
         try:
@@ -201,14 +180,6 @@ class AgentRunMixin:
             thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
             thinking_wave.is_active = False
             thinking_wave.remove_class("visible")
-        except Exception:
-            pass
-
-        # Hide scanning line animation at BOTTOM
-        try:
-            thinking_wave_bottom = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            thinking_wave_bottom.is_active = False
-            thinking_wave_bottom.remove_class("visible")
         except Exception:
             pass
 
@@ -240,21 +211,9 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show scanning line animation at BOTTOM
-        try:
-            thinking_wave_bottom = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            thinking_wave_bottom.is_active = True
-            thinking_wave_bottom.add_class("visible")
-        except Exception:
-            pass
+        # Bottom wave intentionally off (was duplicate chrome); TOP kept as brand.
 
-        # Hide prompt area while agent is working so it doesn't take space
-        try:
-            prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("hidden")
-            prompt_area.remove_class("working")
-        except Exception:
-            pass
+        self._set_composer_working_state(True)
 
     def _stop_thinking(self, show_done: bool = False):
         """Stop the thinking animation.
@@ -287,22 +246,7 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Hide scanning line animation at BOTTOM
-        try:
-            thinking_wave_bottom = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            thinking_wave_bottom.is_active = False
-            thinking_wave_bottom.remove_class("visible")
-        except Exception:
-            pass
-
-        # Restore prompt area when agent finishes
-        try:
-            prompt_area = self.query_one("#prompt-area")
-            prompt_area.remove_class("hidden")
-            prompt_area.remove_class("working")
-            self.query_one("#prompt-input", SelectionAwareInput).focus()
-        except Exception:
-            pass
+        self._set_composer_working_state(False)
 
         # Only show done message if requested (not during streaming)
         if show_done:
@@ -1111,11 +1055,14 @@ class AgentRunMixin:
                     ),
                 )
 
-                # Show detailed error info
+                # Collapsed error card: cause + actions up front, traceback only
+                # behind :verbose / verbose thinking (keeps brand, kills wall).
                 import traceback
 
                 full_traceback = traceback.format_exc()
-                log.add_info(f"Full error:\n{full_traceback}")
+                log.add_error(f"{error_type}: {error_msg}  —  Retry ⏎ / :retry · :connect · :copy")
+                if getattr(self, "thinking_verbosity", "normal") == "verbose":
+                    log.add_info(f"Full error:\n{full_traceback}")
 
                 # Provider-specific troubleshooting
                 if "ollama" in provider.lower():
@@ -2324,6 +2271,9 @@ class AgentRunMixin:
                 "",  # output
                 raw_input,  # Pass arguments so format_tool_call_compact can display them properly
             )
+            # Transcript keeps only the terminal row; keep the throbber's
+            # live detail (current file/command + elapsed) in sync.
+            self._call_ui(self._tool_running_status, title, raw_input)
 
         async def on_tool_update(update: dict) -> None:
             """Handle tool updates, keeping normal streaming output compact.
@@ -4215,9 +4165,22 @@ class AgentRunMixin:
         t.append(" to see full reasoning & tool detail\n", style=THEME["muted"])
         log.write(t)
 
+    def _tool_running_status(self, name: str, args: Optional[dict]) -> None:
+        """Mirror the in-progress action into the throbber (all modes).
+
+        Single-source rule: the full command/target lives ONLY in the
+        #active-tools strip (and later the transcript row). The throbber
+        keeps just the branded verb so the command never echoes twice.
+        """
+        verb, _target = self._calm_verb_target(name, args)
+        icons = getattr(self, "_CALM_VERB_ICONS", {}) or {}
+        icon = icons.get(verb, "⚡")
+        label = verb.capitalize()
+        self._set_thinking_status(f"{icon} {label}…")
+
     def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
         """Update the live throbber with the in-progress action."""
-        verb, target = self._calm_verb_target(name, args)
+        verb, _target = self._calm_verb_target(name, args)
         if any(
             marker in name.lower()
             for marker in ("bash", "shell", "terminal", "exec", "run", "command")
@@ -4226,8 +4189,8 @@ class AgentRunMixin:
         icons = getattr(self, "_CALM_VERB_ICONS", {})
         icon = icons.get(verb, "⚡")
         label = verb.capitalize()
-        status = f"{icon} {label}: {target}…" if target else f"{icon} {label}…"
-        self._set_thinking_status(status)
+        # Verb only here — full command/target renders once in #active-tools.
+        self._set_thinking_status(f"{icon} {label}…")
         self._maybe_show_thinking_hint(log)
 
     def _calm_tool_done(

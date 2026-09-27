@@ -1918,6 +1918,7 @@ class DialogsMixin:
             )
         )
         try:
+            self._set_composer_working_state(True, interactive=True)
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             input_widget.placeholder = "Approve tool? y / n / a"
             input_widget.focus()

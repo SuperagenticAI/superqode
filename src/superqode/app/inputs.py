@@ -21,7 +21,9 @@ class SelectionAwareInput(TextArea):
     MIN_PROMPT_HEIGHT = 3
     MAX_PROMPT_HEIGHT = 8
     NEWLINE_KEYS = frozenset({"shift+enter", "alt+enter", "ctrl+j", "newline"})
-    DEFAULT_PLACEHOLDER = "Get started with :connect, or click the buttons below"
+    DEFAULT_PLACEHOLDER = (
+        "Get started with :connect · Browse with mouse · Run shell commands with >"
+    )
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
     # are surprising here: Ctrl+A is line-start and Ctrl+U only deletes to the

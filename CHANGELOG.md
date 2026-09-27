@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Clean focused prompt lifecycle: when an agent is working (streaming or thinking),
-  the prompt box hides completely (`display: none`) to give maximum screen space
-  to the transcript and tool outputs, returning and auto-focusing as soon as the
-  turn finishes (pass, fail, or cancel).
+- Live Bash and Python tool previews use SuperQode-themed syntax colors while
+  keeping the exact command/code available for copying.
+- Stable prompt lifecycle: while an agent works, the composer remains visible
+  with branded working state but is disabled to prevent accidental input; it
+  re-enables for required approvals/questions and when the turn finishes.
 - Refined input styling: rounded borders with subtle zinc idle frame and signature
   purple focus accent.
 - Session file markers: successful edit/write tool calls mark files in the
@@ -24,8 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   local-server setup cards support Up/Down + Enter at app level and full
   row-click selection.
 
+### Changed
+
+- Cache tool-preview and fenced-code lexer lookup, keep large code blocks
+  unwrapped, stop inactive animation refresh timers, and remove the duplicate
+  bottom scanning wave to preserve TUI responsiveness during long runs.
+
 ### Fixed
 
+- Starting a conversation now makes it the navigation root, and Back is hidden
+  while work is active, preventing stale setup history from replacing the live
+  or completed transcript.
+- Long completed Markdown/code responses re-anchor at their agent heading after
+  completion chrome and final layout settle, without changing render behavior.
 - Key B and Left Arrow navigate back when the prompt is empty, while Backspace
   strictly edits prompt text and never triggers TUI back navigation; sidebar
   default width is 34.

@@ -433,9 +433,7 @@ def test_welcome_uses_unified_harness_positioning():
     text = render_plain(welcome)
 
     assert "THE HARNESS LAYER FOR CODING AGENTS" in text
-    # No command list here. The prompt placeholder names the first command and
-    # the bar under it carries them as controls, so the home screen is the
-    # product, not a menu.
+    # Commands live beside the prompt; the home screen stays product-focused.
     for command in (":connect", ":help", ":harness", ":work", ":init"):
         assert command not in text, f"{command} belongs to the prompt area"
     assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
@@ -1064,7 +1062,7 @@ def test_prompt_default_placeholder_points_at_the_first_command():
     """Nothing works before :connect, so the empty prompt says so."""
     assert (
         SelectionAwareInput.DEFAULT_PLACEHOLDER
-        == "Get started with :connect, or click the buttons below"
+        == "Get started with :connect · Browse with mouse · Run shell commands with >"
     )
 
 
@@ -5117,17 +5115,55 @@ def test_tool_running_rows_show_command_in_all_modes():
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
 
+    # Running state lives in the live strip, not the transcript: one tool
+    # run commits exactly one transcript row, on completion.
     log.tool_output_mode = "normal"
     log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
-    assert "uv run pytest" in render_plain(writes[-1])
+    assert writes == []
+    assert "uv run pytest" in render_plain(log._active_tools_renderable())
 
     log.add_tool_call("bash", status="success", arguments={"command": "uv run pytest"}, output="ok")
-    assert len(writes) == 2
+    assert len(writes) == 1
     assert "Run" in render_plain(writes[-1])
 
     log.tool_output_mode = "verbose"
     log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
-    assert "Run" in render_plain(writes[-1])
+    assert len(writes) == 1
+    assert "uv run pytest" in render_plain(log._active_tools_renderable())
+
+
+def test_running_python_and_bash_previews_use_cached_syntax_colors():
+    from pygments.token import Token
+
+    from superqode.app.widgets import _syntax_fragments
+
+    _syntax_fragments.cache_clear()
+    python_tokens = _syntax_fragments("for item in range(3): print(item)", "python")
+    _syntax_fragments("for item in range(3): print(item)", "python")
+
+    assert any(token in Token.Keyword for _value, token in python_tokens)
+    assert _syntax_fragments.cache_info().hits == 1
+
+    log = ConversationLog()
+    log.write = lambda *_args, **_kwargs: None
+    log.add_tool_call(
+        "python_repl",
+        status="running",
+        arguments={"code": "for item in range(3): print(item)"},
+    )
+    python_preview = log._active_tools_renderable()
+    assert "for item in range" in python_preview.plain
+    assert len({str(span.style) for span in python_preview.spans}) >= 3
+
+    log.clear_running_tools()
+    log.add_tool_call(
+        "bash",
+        status="running",
+        arguments={"command": "pytest -q tests/test_tui_smoke.py"},
+    )
+    bash_preview = log._active_tools_renderable()
+    assert "pytest -q" in bash_preview.plain
+    assert len({str(span.style) for span in bash_preview.spans}) >= 3
 
 
 def test_tool_command_is_copyable_and_metadata_command_is_visible():
@@ -5137,12 +5173,13 @@ def test_tool_command_is_copyable_and_metadata_command_is_visible():
     command = ("pytest " + "tests/test_module.py::test_case " * 6).strip()
 
     log.add_tool_call("bash", status="running", arguments={"command": command})
-    assert command in render_plain(writes[-1])
+    assert writes == []
+    assert command[:40] in render_plain(log._active_tools_renderable())
 
     log.add_tool_call("bash", status="success", metadata={"command": command})
     assert command in render_plain(writes[-1])
 
-    log.add_tool_call("bash", status="running")
+    log.add_tool_call("bash", status="success")
     assert "command not supplied by agent" in render_plain(writes[-1])
 
 
@@ -5154,7 +5191,7 @@ def test_active_tool_status_tracks_running_tools_with_log_rows():
     log.tool_output_mode = "normal"
 
     log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
-    assert "uv run pytest" in render_plain(writes[-1])
+    assert writes == []
     active = render_plain(log._active_tools_renderable())
     assert "running" in active
     assert "Run" in active
@@ -7276,7 +7313,9 @@ def test_calm_shell_tool_writes_copyable_command_rows():
 
     stub = _Stub()
     SuperQodeApp._calm_tool_running(stub, "bash", {"command": command}, log)
-    assert command in render_plain(writes[-1])
+    # Running state stays live-only; the transcript commits on completion.
+    assert writes == []
+    assert command[:40] in render_plain(log._active_tools_renderable())
 
     SuperQodeApp._calm_tool_done(stub, "bash", {"command": command}, log)
     assert command in render_plain(writes[-1])

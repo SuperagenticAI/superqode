@@ -50,6 +50,13 @@ class HelperExitLifecycleMixin:
 
     def _begin_conversation_transcript(self, log: ConversationLog) -> None:
         """Replace temporary connection/setup content with the first turn."""
+        # A live conversation is the new navigation root. Stale connection
+        # picker history must never replace its transcript via Back.
+        try:
+            self._history.clear()
+            self._sync_navigation_controls()
+        except Exception:
+            pass
         if not getattr(self, "_workspace_intro_visible", False):
             return
         log.clear()

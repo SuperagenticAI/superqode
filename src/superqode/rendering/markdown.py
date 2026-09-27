@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from rich.console import Console, ConsoleOptions, RenderResult
@@ -28,6 +29,18 @@ _FENCED_MARKDOWN_RE = re.compile(
     r"```(?:md|markdown)\s*\n(?P<body>.*?)\n```",
     flags=re.IGNORECASE | re.DOTALL,
 )
+
+
+@lru_cache(maxsize=64)
+def _validated_lexer_name(name: str) -> str:
+    """Return a Pygments lexer name, cached for the streaming hot path."""
+    try:
+        from pygments.lexers import get_lexer_by_name
+
+        get_lexer_by_name(name)
+    except Exception:
+        return "text"
+    return name
 
 
 class AgentHeading(Heading):
@@ -121,47 +134,26 @@ class AgentCodeBlock(CodeBlock):
         theme = _live_theme()
         code = str(self.text).rstrip()
         lang = (self.lexer_name or "text").strip() or "text"
-        lexer = self.NORMALIZE_LEXER.get(lang.lower(), lang)
+        lexer = _validated_lexer_name(self.NORMALIZE_LEXER.get(lang.lower(), lang))
         icon = self.LANG_ICONS.get(lexer.lower(), self.LANG_ICONS.get(lang.lower(), "📄"))
-        # Validate lexer against Pygments; fall back to plain text instead of crashing.
-        try:
-            from pygments.lexers import get_lexer_by_name
-
-            get_lexer_by_name(lexer)
-        except Exception:
-            try:
-                lexer = Syntax.guess_lexer(code, default="text")
-            except Exception:
-                lexer = "text"
-        # Strip shell/REPL prompts so `$ ls` / `>>> print()` highlight cleanly.
+        # Strip copied prompts so the source itself receives syntax colors.
         if lexer == "bash":
             code = re.sub(r"(?m)^\s*\$\s?", "", code)
         elif lexer in ("python", "pycon"):
             code = re.sub(r"(?m)^\s*>>>\s?", "", code)
             code = re.sub(r"(?m)^\s*\.\.\.\s?", "", code)
-        lines = code.splitlines()
-        line_count = len(lines)
-        show_line_numbers = line_count >= 3
-        try:
-            syntax = Syntax(
-                code,
-                lexer,
-                theme=self.theme,
-                word_wrap=False,
-                line_numbers=show_line_numbers,
-                padding=(0, 1),
-                background_color=theme.get("code_bg", theme["bg"]),
-            )
-        except Exception:
-            syntax = Syntax(
-                code,
-                "text",
-                theme=self.theme,
-                word_wrap=False,
-                line_numbers=show_line_numbers,
-                padding=(0, 1),
-                background_color=theme.get("code_bg", theme["bg"]),
-            )
+        line_count = code.count("\n") + 1 if code else 0
+        syntax = Syntax(
+            code,
+            lexer,
+            theme=self.theme,
+            # Wrapping a large code fence multiplies layout and render work.
+            # Keep code horizontally stable and let the transcript clip it.
+            word_wrap=False,
+            line_numbers=line_count >= 3,
+            padding=(0, 1),
+            background_color=theme.get("code_bg", theme["bg"]),
+        )
         title_suffix = (
             f" [dim]({line_count} line{'s' if line_count != 1 else ''})[/]"
             if line_count > 1
