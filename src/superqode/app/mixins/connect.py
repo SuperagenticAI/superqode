@@ -1462,6 +1462,13 @@ class ConnectMixin:
         flow so a later Core switch does not inherit KEY_MODELS / persist.
         """
         self._reset_connect_selection_states()
+        if profile.connector != "harness-wizard":
+            cancel = getattr(self, "_cancel_harness_wizard", None)
+            if callable(cancel):
+                try:
+                    cancel()
+                except Exception:
+                    pass
         self._open_connect_screen(log)
         conn = profile.connector
         if conn not in {"byok", "local", "key-harness"}:
@@ -2750,6 +2757,12 @@ class ConnectMixin:
 
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        cancel = getattr(self, "_cancel_harness_wizard", None)
+        if callable(cancel):
+            try:
+                cancel()
+            except Exception:
+                pass
         if self._redirect_harness_only_provider(provider, log):
             return
         self._clear_acp_extra_env()

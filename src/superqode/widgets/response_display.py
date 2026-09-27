@@ -32,6 +32,39 @@ from textual.widgets import Static
 from textual.containers import Container, Vertical, Horizontal
 from textual import events
 
+import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
+
+
+def _t(key: str, fallback: str) -> str:
+    """Read a color from the live THEME (synced by theme_bridge.apply_theme)."""
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get(key, fallback)
+    except Exception:
+        return fallback
+
+
+def _code_theme() -> str:
+    """Pygments style matching the active TUI theme."""
+    try:
+        from superqode.app.theme_bridge import active_theme_name
+    except Exception:
+        return "superqode"
+    return {
+        "superqode": "superqode",
+        "tokyonight": "github-dark",
+        "dracula": "dracula",
+        "nord": "nord",
+        "monokai": "monokai",
+        "gruvbox": "gruvbox-dark",
+        "high-contrast": "github-dark",
+    }.get(active_theme_name(), "superqode")
+
+
+def _code_bg() -> str:
+    return _t("code_bg", _t("bg", "#0f0a1a"))
+
 
 class ResponseState(Enum):
     """State of response rendering."""
@@ -174,13 +207,13 @@ class CodeBlockWidget(Static):
     CodeBlockWidget {
         height: auto;
         margin: 1 0;
-        border: solid #27272a;
-        background: #0a0a0a;
+        border: solid #a855f7;
+        background: #0f0a1a;
     }
 
     CodeBlockWidget .code-header {
         height: 1;
-        background: #1a1a1a;
+        background: #0f0a1a;
         padding: 0 1;
     }
 
@@ -200,20 +233,20 @@ class CodeBlockWidget(Static):
         icon = LANG_ICONS.get(self.block.language.lower(), "📄")
 
         header = Text()
-        header.append(f" {icon} ", style="#22c55e")
-        header.append(self.block.language.upper(), style="bold #22c55e")
+        header.append(f" {icon} ", style=_t("orange", "#f97316"))
+        header.append(self.block.language.upper(), style=f"bold {_t('pink', '#ec4899')}")
 
         if self.block.filename:
-            header.append(f"  {self.block.filename}", style="#6b7280")
+            header.append(f"  {self.block.filename}", style=_t("purple", "#a855f7"))
 
-        # Syntax highlighted code
+        # Syntax highlighted code (theme-matched style)
         syntax = Syntax(
             self.block.code,
             self.block.language,
-            theme="monokai",
+            theme=_code_theme(),
             line_numbers=True,
             word_wrap=True,
-            background_color="#000000",
+            background_color=_code_bg(),
             start_line=self.block.start_line,
         )
 
@@ -221,7 +254,7 @@ class CodeBlockWidget(Static):
             syntax,
             title=header,
             title_align="left",
-            border_style="#27272a",
+            border_style=_t("purple", "#a855f7"),
             box=ROUNDED,
             padding=(0, 0),
         )
@@ -357,18 +390,18 @@ class ResponseDisplay(Container):
         code_block_idx = 0
 
         for header_level, header_text in parsed.headers:
-            # Header styling based on level
+            # Header styling based on level (theme accents)
             styles = {
-                1: ("bold #e4e4e7", "═" * 40),
-                2: ("bold #a1a1aa", "─" * 30),
-                3: ("bold #a1a1aa", ""),
+                1: (f"bold {_t('purple', '#a855f7')}", "═" * 40),
+                2: (f"bold {_t('pink', '#ec4899')}", "─" * 30),
+                3: (f"bold {_t('orange', '#f97316')}", ""),
             }
             style, underline = styles.get(header_level, ("", ""))
 
             header = Text()
             header.append("\n" + header_text + "\n", style=style)
             if underline:
-                header.append(underline + "\n", style="#27272a")
+                header.append(underline + "\n", style=_t("purple", "#a855f7"))
 
             elements.append(header)
 
@@ -378,13 +411,19 @@ class ResponseDisplay(Container):
             import textwrap
 
             wrapped = textwrap.fill(para, width=80)
-            elements.append(Text(wrapped + "\n\n", style="#e4e4e7"))
+            elements.append(Text(wrapped + "\n\n", style=_t("text", "#e4e4e7")))
 
         # Bullet lists
         for bullet_list in parsed.bullet_lists:
             list_text = Text()
             for i, item in enumerate(bullet_list):
-                colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#22c55e"]
+                colors = [
+                    _t("purple", "#a855f7"),
+                    _t("magenta", "#d946ef"),
+                    _t("pink", "#ec4899"),
+                    _t("orange", "#f97316"),
+                    _t("cyan", "#06b6d4"),
+                ]
                 color = colors[i % len(colors)]
                 list_text.append("  ◆ ", style=f"bold {color}")
                 list_text.append(item + "\n", style="#e4e4e7")
@@ -397,11 +436,11 @@ class ResponseDisplay(Container):
 
         # If no structured content, render as plain text
         if not elements and self._text:
-            elements.append(Text(self._text, style="#e4e4e7"))
+            elements.append(Text(self._text, style=_t("text", "#e4e4e7")))
 
         # Streaming cursor
         if self.state == ResponseState.STREAMING:
-            cursor = Text("▌", style="bold #fbbf24")
+            cursor = Text("▌", style=f"bold {_t('pink', '#ec4899')}")
             elements.append(cursor)
 
         return elements
@@ -413,20 +452,20 @@ class ResponseDisplay(Container):
         syntax = Syntax(
             block.code,
             block.language,
-            theme="monokai",
+            theme=_code_theme(),
             line_numbers=len(block.code.splitlines()) > 5,
-            background_color="#000000",
+            background_color=_code_bg(),
         )
 
         title = Text()
-        title.append(f" {icon} ", style="#22c55e")
-        title.append(block.language.upper(), style="bold #22c55e")
+        title.append(f" {icon} ", style=_t("orange", "#f97316"))
+        title.append(block.language.upper(), style=f"bold {_t('pink', '#ec4899')}")
 
         return Panel(
             syntax,
             title=title,
             title_align="left",
-            border_style="#22c55e",
+            border_style=_t("purple", "#a855f7"),
             box=ROUNDED,
             padding=(0, 1),
         )
@@ -436,14 +475,14 @@ class ResponseDisplay(Container):
         text = Text()
 
         if self.state == ResponseState.COMPLETE:
-            text.append("✓ ", style="#22c55e")
-            text.append(f"{self.duration:.1f}s", style="#6b7280")
+            text.append("✓ ", style=_t("success", "#22c55e"))
+            text.append(f"{self.duration:.1f}s", style=_t("dim", "#71717a"))
 
             if self._token_count:
-                text.append(f"  │  {self._token_count} tokens", style="#6b7280")
+                text.append(f"  │  {self._token_count} tokens", style=_t("dim", "#71717a"))
 
         elif self.state == ResponseState.ERROR:
-            text.append("✗ Error", style="#ef4444")
+            text.append("✗ Error", style=_t("error", "#ef4444"))
 
         return text
 

@@ -86,6 +86,12 @@ class HelperExitLifecycleMixin:
         would otherwise inherit.
         """
         self._clear_sidebar_session_files()
+        cancel = getattr(self, "_cancel_harness_wizard", None)
+        if callable(cancel):
+            try:
+                cancel()
+            except Exception:
+                pass
         pure = getattr(self, "_pure_mode", None)
         if pure is not None:
             try:
@@ -162,6 +168,12 @@ class HelperExitLifecycleMixin:
         )
 
     def _go_home(self, log: ConversationLog):
+        cancel = getattr(self, "_cancel_harness_wizard", None)
+        if callable(cancel):
+            try:
+                cancel()
+            except Exception:
+                pass
         # First, cancel any running agent process
         if self._agent_process is not None:
             self._cancel_requested = True

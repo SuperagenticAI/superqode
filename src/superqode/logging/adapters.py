@@ -35,20 +35,20 @@ class BYOKAdapter:
 
     def on_tool_result(self, name: str, result: Any) -> None:
         """Handle tool result - emit to unified logger."""
-        from superqode.tools.base import ToolResult
+        from superqode.logging.unified_log import tool_result_parts
 
         span_id = self._span_ids.pop(name, None)
+        output, success, diff_add, diff_del = tool_result_parts(result)
 
-        if isinstance(result, ToolResult):
-            success = result.success
-            output = str(result.output) if result.output else ""
-            if not success and result.error:
-                output = str(result.error)
-        else:
-            success = True
-            output = str(result) if result else ""
-
-        self.logger.tool_result(name, output, success, source="byok", span_id=span_id)
+        self.logger.tool_result(
+            name,
+            output,
+            success,
+            source="byok",
+            span_id=span_id,
+            diff_add=diff_add,
+            diff_del=diff_del,
+        )
 
     async def on_thinking_async(self, text: str) -> None:
         """Handle thinking text - emit to unified logger."""
@@ -89,17 +89,17 @@ class LocalAdapter:
 
     def on_tool_result(self, name: str, result: Any) -> None:
         """Handle tool result."""
-        from superqode.tools.base import ToolResult
+        from superqode.logging.unified_log import tool_result_parts
 
-        if isinstance(result, ToolResult):
-            self.logger.tool_result(
-                name,
-                str(result.output) if result.output else "",
-                result.success,
-                source="local",
-            )
-        else:
-            self.logger.tool_result(name, str(result), True, source="local")
+        output, success, diff_add, diff_del = tool_result_parts(result)
+        self.logger.tool_result(
+            name,
+            output,
+            success,
+            source="local",
+            diff_add=diff_add,
+            diff_del=diff_del,
+        )
 
     async def on_thinking_async(self, text: str) -> None:
         """Handle thinking text."""
@@ -168,27 +168,43 @@ class ACPAdapter:
         title = tool_call.get("title", "tool")
         raw_input = tool_call.get("rawInput", {})
         tool_call_id = tool_call.get("toolCallId", "")
+        extra = {k: tool_call[k] for k in ("locations", "kind", "content") if tool_call.get(k)}
 
-        span_id = self.logger.tool_call(title, raw_input, source="acp")
+        span_id = self.logger.tool_call(title, raw_input, source="acp", extra=extra or None)
         if tool_call_id:
             self._span_ids[tool_call_id] = span_id
 
     async def on_tool_update(self, update: dict) -> None:
         """Handle ACP tool update."""
+        from superqode.logging.unified_log import acp_diff_stats
+
         status = update.get("status", "")
         tool_call_id = update.get("toolCallId", "")
         output = update.get("rawOutput") or update.get("output") or update.get("result")
 
         span_id = self._span_ids.get(tool_call_id)
         title = update.get("title", "tool")
+        diff_add, diff_del = acp_diff_stats(update)
 
         if status in ("completed", "done", "success"):
             self.logger.tool_result(
-                title, str(output) if output else "", True, source="acp", span_id=span_id
+                title,
+                str(output) if output else "",
+                True,
+                source="acp",
+                span_id=span_id,
+                diff_add=diff_add,
+                diff_del=diff_del,
             )
         elif status in ("error", "failed"):
             self.logger.tool_result(
-                title, str(output) if output else "failed", False, source="acp", span_id=span_id
+                title,
+                str(output) if output else "failed",
+                False,
+                source="acp",
+                span_id=span_id,
+                diff_add=diff_add,
+                diff_del=diff_del,
             )
 
     def on_session_complete(self) -> str:

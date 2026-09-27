@@ -26,17 +26,56 @@ from time import monotonic
 # THEME & COLORS (SuperQode style)
 # ============================================================================
 
-STREAM_COLORS = {
+_STREAM_COLOR_DEFAULTS = {
     "message": "#a855f7",  # Purple - agent messages
     "thought": "#ec4899",  # Pink - thinking
     "tool": "#f97316",  # Orange - tool calls
-    "plan": "#06b6d4",  # Cyan - plan updates
-    "success": "#22c55e",  # Green - completed
-    "error": "#ef4444",  # Red - errors
-    "warning": "#f59e0b",  # Amber - warnings
+    "plan": "#d946ef",  # Magenta - plan updates
+    "success": "#f97316",  # Orange - completed
+    "error": "#fb7185",  # Rose - errors
+    "warning": "#f97316",  # Orange - warnings
     "pending": "#a1a1aa",  # Gray - pending
-    "progress": "#3b82f6",  # Blue - in progress
+    "progress": "#ec4899",  # Pink - in progress
 }
+
+# Semantic role -> live THEME key (synced by theme_bridge.apply_theme).
+# Status roles (success/error/warning/pending) intentionally follow the
+# active theme's semantics so nord/monokai/etc. render natively.
+_STREAM_COLOR_THEME_KEYS = {
+    "message": "purple",
+    "thought": "pink",
+    "tool": "orange",
+    "plan": "magenta",
+    "success": "success",
+    "error": "error",
+    "warning": "warning",
+    "pending": "muted",
+    "progress": "cyan",
+}
+
+
+class _LiveStreamColors(dict):
+    """Dict that resolves each color from the live THEME on every access."""
+
+    def __getitem__(self, key):
+        try:
+            from superqode.app.constants import THEME as _LIVE
+
+            theme_key = _STREAM_COLOR_THEME_KEYS.get(key)
+            if theme_key and theme_key in _LIVE:
+                return _LIVE[theme_key]
+        except Exception:
+            pass
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+STREAM_COLORS = _LiveStreamColors(_STREAM_COLOR_DEFAULTS)
 
 STREAM_ICONS = {
     "message": "💬",

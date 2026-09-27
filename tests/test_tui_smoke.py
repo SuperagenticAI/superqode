@@ -2583,14 +2583,20 @@ def test_tui_harness_wizard_yes_on_output_step_loads_default_path(tmp_path, monk
 
     app._handle_harness_wizard_input("yes", log)
 
-    assert (tmp_path / "harness.yaml").exists()
-    assert not (tmp_path / "yes").exists()
+    # The output step only sets the path; "yes" is a filename here and the
+    # wizard advances to the load confirmation instead of finishing.
+    assert app._awaiting_harness_wizard is True
+    assert "Load this harness now" in render_plain(log.items[-1])
+
+    app._handle_harness_wizard_input("", log)
+
+    assert (tmp_path / "yes").exists()
     assert app._awaiting_harness_wizard is False
     assert app._harness_wizard_state is None
     assert app._pure_mode is not None
     status = app._pure_mode.get_status()["harness"]
     assert status["enabled"] is True
-    assert status["path"].endswith("harness.yaml")
+    assert status["path"].endswith("yes")
 
 
 def test_tui_harness_wizard_defaults_use_next_available_output(tmp_path, monkeypatch):

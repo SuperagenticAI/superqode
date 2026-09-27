@@ -505,22 +505,22 @@ class SlashCompleteItem(Widget):
     }
 
     SlashCompleteItem:hover {
-        background: #1a3a5a;
+        background: #2a1a3a;
     }
 
     SlashCompleteItem.selected {
-        background: #00ffff;
+        background: #a855f7;
     }
 
     SlashCompleteItem .command {
-        color: #ffff00;
+        color: #ec4899;
         text-style: bold;
         min-width: 24;
         width: 24;
     }
 
     SlashCompleteItem.selected .command {
-        color: #000000;
+        color: #ffffff;
         text-style: bold;
     }
 
@@ -529,19 +529,19 @@ class SlashCompleteItem(Widget):
     }
 
     SlashCompleteItem.selected .description {
-        color: #000000;
+        color: #ffffff;
         text-style: bold;
     }
 
     SlashCompleteItem .shortcut {
         dock: right;
-        color: #00ff00;
+        color: #fbbf24;
         text-style: bold;
         min-width: 10;
     }
 
     SlashCompleteItem.selected .shortcut {
-        color: #004400;
+        color: #ffffff;
     }
     """
 
@@ -564,8 +564,37 @@ class SlashCompleteItem(Widget):
         if self.command.shortcut:
             yield Static(self.command.shortcut, classes="shortcut")
 
+    def on_mount(self) -> None:
+        """Apply live colors after composed child widgets are available."""
+        self.refresh_theme_colors()
+
+    def refresh_theme_colors(self) -> None:
+        """Re-resolve brand colors from the live THEME palette.
+
+        Widget CSS is static, so a ``:theme`` switch would otherwise leave
+        this overlay on the old palette until restart. Called on mount,
+        on selection change, and by the app after a theme switch.
+        """
+        try:
+            from superqode.app.constants import THEME
+
+            selected = bool(self.selected)
+            self.styles.background = THEME.get("purple", "#a855f7") if selected else "#0a0a0a"
+            for child in self.query(Static):
+                classes = child.classes
+                if "command" in classes:
+                    child.styles.color = "#ffffff" if selected else THEME.get("pink", "#ec4899")
+                elif "description" in classes:
+                    child.styles.color = "#ffffff"
+                elif "shortcut" in classes:
+                    child.styles.color = "#ffffff" if selected else THEME.get("gold", "#fbbf24")
+        except Exception:
+            pass
+
     def watch_selected(self, selected: bool) -> None:
         self.set_class(selected, "selected")
+        if self.is_mounted:
+            self.refresh_theme_colors()
 
     def on_click(self) -> None:
         self.post_message(self.Click(self))
@@ -586,7 +615,7 @@ class SlashComplete(Widget):
         max-height: 16;
         margin: 0 2 4 2;
         background: #000000;
-        border: double #00ffff;
+        border: double #a855f7;
         display: none;
     }
 
@@ -596,14 +625,14 @@ class SlashComplete(Widget):
 
     SlashComplete #slash-header {
         height: 2;
-        background: #001a33;
-        color: #00ffff;
+        background: #1a0f2e;
+        color: #ec4899;
         padding: 0 1;
         text-style: bold;
     }
 
     SlashComplete #slash-title {
-        color: #00ffff;
+        color: #ec4899;
         text-style: bold;
     }
 
@@ -619,19 +648,19 @@ class SlashComplete(Widget):
 
     SlashComplete .no-results {
         padding: 1;
-        color: #ffff00;
+        color: #fbbf24;
         text-style: bold;
         text-align: center;
-        background: #1a1a00;
+        background: #2a1f0a;
     }
 
     SlashComplete #slash-footer {
         height: 1;
         background: #1a1a1a;
-        color: #00ff00;
+        color: #f97316;
         padding: 0 1;
         text-align: center;
-        border-top: solid #333333;
+        border-top: solid #a855f7;
     }
     """
 
@@ -673,12 +702,38 @@ class SlashComplete(Widget):
     def on_mount(self) -> None:
         """Initialize on mount."""
         self._update_filtered_commands()
+        self.refresh_theme_colors()
+
+    def refresh_theme_colors(self) -> None:
+        """Re-resolve container chrome from the live THEME palette.
+
+        Called on mount, on every show (so it is always current), and by
+        the app after a ``:theme`` switch.
+        """
+        try:
+            from superqode.app.constants import THEME
+
+            purple = THEME.get("purple", "#a855f7")
+            self.styles.border = ("double", purple)
+            header = self.query_one("#slash-header", Vertical)
+            header.styles.color = THEME.get("pink", "#ec4899")
+            self.query_one("#slash-title", Static).styles.color = THEME.get("pink", "#ec4899")
+            self.query_one("#slash-hint", Static).styles.color = THEME.get("muted", "#888888")
+            footer = self.query_one("#slash-footer", Static)
+            footer.styles.color = THEME.get("orange", "#f97316")
+            footer.styles.border_top = ("solid", purple)
+            for item in self.query("SlashCompleteItem"):
+                if isinstance(item, SlashCompleteItem):
+                    item.refresh_theme_colors()
+        except Exception:
+            pass
 
     def show(self, initial_query: str = "/") -> None:
         """Show slash completion overlay."""
         self.selected_index = 0
         self.is_visible = True
         self.add_class("visible")
+        self.refresh_theme_colors()
         # Force update if query is the same (watcher won't trigger on same value)
         if self.search_query == initial_query:
             self._update_filtered_commands()

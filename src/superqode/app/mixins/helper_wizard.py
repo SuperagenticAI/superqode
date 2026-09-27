@@ -11,8 +11,28 @@ from superqode.app.constants import (
 class HelperWizardMixin:
     """Harness wizard flow state and prompts."""
 
+    def _cancel_harness_wizard(self, log=None, *, announce: bool = False) -> bool:
+        """Invalidate wizard work and return whether a wizard was active."""
+        was_active = bool(
+            getattr(self, "_awaiting_harness_wizard", False)
+            or getattr(self, "_harness_wizard_finishing", False)
+        )
+        # Workers cannot safely be interrupted during a file write. A generation
+        # token prevents an obsolete completion from repainting or loading itself.
+        self._harness_wizard_generation = getattr(self, "_harness_wizard_generation", 0) + 1
+        self._awaiting_harness_wizard = False
+        self._harness_wizard_finishing = False
+        self._harness_wizard_state = None
+        if was_active and announce and log is not None:
+            try:
+                log.add_info("Harness wizard cancelled.")
+            except Exception:
+                pass
+        return was_active
+
     def _start_harness_wizard_flow(self, log) -> None:
         """Start the step-by-step HarnessSpec wizard in the TUI."""
+        self._cancel_harness_wizard()
         self._awaiting_harness_wizard = True
         self._harness_wizard_state = {
             "step": "name",
@@ -78,28 +98,81 @@ class HelperWizardMixin:
             self._render_harness_wizard_step(log)
             return
 
-        try:
-            from superqode.harness import (
-                WizardAnswers,
-                build_wizard_spec,
-                explain_harness,
-                render_explanation,
-                save_harness_spec,
-            )
-
-            answers = WizardAnswers(**answers_kwargs)
-            spec = build_wizard_spec(answers)
-            path = save_harness_spec(spec, output)
-            (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
-            (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            log.add_error(f"Could not create harness: {exc}")
-            self._awaiting_harness_wizard = False
-            self._harness_wizard_state = None
-            return
-
+        # Building + saving + loading touches the filesystem and the harness
+        # machinery; do it in a worker so the TUI never freezes on Enter.
+        # Snapshot + clear state first so typed input is normal chat again.
         self._awaiting_harness_wizard = False
+        self._harness_wizard_finishing = True
         self._harness_wizard_state = None
+        generation = getattr(self, "_harness_wizard_generation", 0)
+        log.add_info(f"Creating harness at {output}…")
+        runner = getattr(self, "run_worker", None)
+        if callable(runner):
+            try:
+                import asyncio as _asyncio_check
+
+                _asyncio_check.get_running_loop()
+            except RuntimeError:
+                runner = None
+        if callable(runner):
+            try:
+                runner(
+                    self._finish_harness_wizard_worker(
+                        answers_kwargs, output, load_after_write, log, generation
+                    )
+                )
+                return
+            except Exception:
+                pass
+        try:
+            result = self._run_harness_wizard_finish(answers_kwargs, output, load_after_write, None)
+        except Exception as exc:  # noqa: BLE001 - synchronous fallback must surface failures
+            self._harness_wizard_finishing = False
+            log.add_error(f"Could not create harness: {exc}")
+            return
+        if result is not None and generation == getattr(self, "_harness_wizard_generation", 0):
+            self._harness_wizard_finishing = False
+            self._show_harness_wizard_result(log, *result)
+
+    async def _finish_harness_wizard_worker(
+        self, answers_kwargs, output, load_after_write, log, generation
+    ) -> None:
+        import asyncio as _asyncio
+
+        try:
+            result = await _asyncio.to_thread(
+                self._run_harness_wizard_finish, answers_kwargs, output, load_after_write, None
+            )
+        except Exception as exc:  # noqa: BLE001 - worker failures still surface
+            if generation == getattr(self, "_harness_wizard_generation", 0):
+                self._harness_wizard_finishing = False
+                log.add_error(f"Could not create harness: {exc}")
+            return
+        if result is None:
+            return
+        if generation != getattr(self, "_harness_wizard_generation", 0):
+            return
+        self._harness_wizard_finishing = False
+        spec, path, answers, load = result
+        self._show_harness_wizard_result(log, spec, path, answers, load)
+
+    def _run_harness_wizard_finish(self, answers_kwargs, output, load_after_write, log):
+        """Blocking build step. Returns (spec, path, answers, load) or None."""
+        from superqode.harness import (
+            WizardAnswers,
+            build_wizard_spec,
+            save_harness_spec,
+        )
+
+        answers = WizardAnswers(**answers_kwargs)
+        spec = build_wizard_spec(answers)
+        path = save_harness_spec(spec, output)
+        (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+        (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+        return spec, path, answers, load_after_write
+
+    def _show_harness_wizard_result(self, log, spec, path, answers, load_after_write) -> None:
+        from superqode.harness import explain_harness, render_explanation
 
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['purple']}")

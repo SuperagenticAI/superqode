@@ -52,7 +52,8 @@ class LogConfig:
     max_tool_output_chars: int = 2000
     max_thinking_chars: int = 500
     syntax_highlight: bool = True
-    code_theme: str = "github-dark"
+    # None follows the active TUI theme; callers may still pin a Pygments theme.
+    code_theme: str | None = None
 
     @classmethod
     def minimal(cls) -> LogConfig:
@@ -109,6 +110,63 @@ class LogConfig:
             return cls.normal()
 
 
+def tool_result_parts(result: Any) -> tuple[str, bool, int, int]:
+    """Split a tool result into (output, success, diff_add, diff_del).
+
+    Shared by the BYOK/Local adapters and the TUI manager callbacks so
+    native-harness paths (including subscription models served through the
+    BYOK gateway) all forward diff stats identically.
+    """
+    from superqode.tools.base import ToolResult
+
+    if isinstance(result, ToolResult):
+        output = str(result.output) if result.output else ""
+        if not result.success and result.error:
+            output = str(result.error)
+        try:
+            diff_add = int(result.metadata.get("additions", 0) or 0)
+            diff_del = int(result.metadata.get("deletions", 0) or 0)
+        except (TypeError, ValueError, AttributeError):
+            diff_add, diff_del = 0, 0
+        return (output, result.success, diff_add, diff_del)
+    return (str(result) if result else "", True, 0, 0)
+
+
+def acp_diff_stats(update: dict) -> tuple[int, int]:
+    """Count (additions, deletions) from an ACP tool update's diff content.
+
+    Compares oldText/newText per diff block with difflib; skips oversized
+    payloads (>200KB) to keep the log path cheap. Returns (0, 0) when no
+    diff content is present.
+    """
+    import difflib
+
+    try:
+        content = update.get("content") or []
+        total_add = 0
+        total_del = 0
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "diff":
+                continue
+            old = block.get("oldText") or ""
+            new = block.get("newText") or ""
+            if len(old) + len(new) > 200_000:
+                continue
+            diff_lines = difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="")
+            # The first two emitted lines are file headers. Skipping by position
+            # preserves real source lines beginning with "+++" or "---".
+            next(diff_lines, None)
+            next(diff_lines, None)
+            for line in diff_lines:
+                if line.startswith("+"):
+                    total_add += 1
+                elif line.startswith("-"):
+                    total_del += 1
+        return (total_add, total_del)
+    except Exception:
+        return (0, 0)
+
+
 @dataclass
 class LogEntry:
     """
@@ -138,7 +196,8 @@ class LogEntry:
     @property
     def tool_args(self) -> dict:
         """Get tool arguments from data."""
-        return self.data.get("args", {})
+        args = self.data.get("args", {})
+        return args if isinstance(args, dict) else {}
 
     @property
     def tool_result_text(self) -> str:
@@ -151,15 +210,48 @@ class LogEntry:
         return self.data.get("ok", True)
 
     @property
+    def diff_stats(self) -> tuple[int, int] | None:
+        """Return (additions, deletions) if the entry carries diff stats."""
+        try:
+            add = int(self.data.get("diff_add", 0) or 0)
+            dele = int(self.data.get("diff_del", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        if add <= 0 and dele <= 0:
+            return None
+        return (add, dele)
+
+    @property
     def file_path(self) -> str:
-        """Extract file path from tool args."""
+        """Extract file path from tool args (supports native + ACP key names)."""
         args = self.tool_args
-        return args.get("path", args.get("file_path", args.get("filePath", "")))
+        for key in ("path", "file_path", "filePath", "file", "filename", "target_file", "filepath"):
+            val = args.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+        uri = args.get("uri", "")
+        if isinstance(uri, str) and uri.strip():
+            return uri[7:] if uri.startswith("file://") else uri
+        # ACP agents report edited files via locations instead of rawInput
+        try:
+            locations = self.data.get("locations") or []
+            if locations and isinstance(locations[0], dict):
+                loc_path = locations[0].get("path", "")
+                if isinstance(loc_path, str) and loc_path.strip():
+                    return loc_path
+        except (AttributeError, IndexError, TypeError):
+            pass
+        return ""
 
     @property
     def command(self) -> str:
-        """Extract command from tool args."""
-        return self.tool_args.get("command", "")
+        """Extract command from tool args (supports native + ACP key names)."""
+        args = self.tool_args
+        for key in ("command", "cmd", "script", "bash_command", "shell_command"):
+            val = args.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+        return ""
 
     @classmethod
     def thinking(
@@ -183,13 +275,17 @@ class LogEntry:
         args: dict,
         source: LogSource = "byok",
         span_id: Optional[str] = None,
+        extra: Optional[dict] = None,
     ) -> LogEntry:
         """Create a tool call log entry."""
+        data: dict[str, Any] = {"tool_name": name, "args": args}
+        if extra:
+            data.update(extra)
         return cls(
             kind="tool_call",
             source=source,
             text=f"Calling {name}",
-            data={"tool_name": name, "args": args},
+            data=data,
             span_id=span_id or str(uuid.uuid4())[:8],
         )
 
@@ -201,14 +297,20 @@ class LogEntry:
         success: bool = True,
         source: LogSource = "byok",
         span_id: Optional[str] = None,
+        diff_add: int = 0,
+        diff_del: int = 0,
     ) -> LogEntry:
         """Create a tool result log entry."""
         result_text = str(result) if result else ""
+        data: dict[str, Any] = {"tool_name": name, "result": result_text, "ok": success}
+        if diff_add > 0 or diff_del > 0:
+            data["diff_add"] = diff_add
+            data["diff_del"] = diff_del
         return cls(
             kind="tool_result",
             source=source,
             text=f"{name} {'completed' if success else 'failed'}",
-            data={"tool_name": name, "result": result_text, "ok": success},
+            data=data,
             span_id=span_id,
         )
 
@@ -359,9 +461,10 @@ class UnifiedLogger:
         args: dict,
         source: LogSource = "byok",
         span_id: Optional[str] = None,
+        extra: Optional[dict[str, Any]] = None,
     ) -> str:
         """Log a tool call. Returns span_id for correlation."""
-        entry = LogEntry.tool_call(name, args, source, span_id)
+        entry = LogEntry.tool_call(name, args, source, span_id, extra)
         self.log(entry)
         return entry.span_id or ""
 
@@ -372,9 +475,11 @@ class UnifiedLogger:
         success: bool = True,
         source: LogSource = "byok",
         span_id: Optional[str] = None,
+        diff_add: int = 0,
+        diff_del: int = 0,
     ) -> None:
         """Log a tool result."""
-        self.log(LogEntry.tool_result(name, result, success, source, span_id))
+        self.log(LogEntry.tool_result(name, result, success, source, span_id, diff_add, diff_del))
 
     def response_chunk(
         self, text: str, source: LogSource = "byok", agent: str = "Assistant"

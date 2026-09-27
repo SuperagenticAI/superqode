@@ -103,20 +103,20 @@ class TUILoggerManager:
             adapter._span_ids[name] = entry.span_id or ""
 
         def on_tool_result(name: str, result: Any) -> None:
-            from superqode.tools.base import ToolResult
+            from superqode.logging.unified_log import tool_result_parts
 
             span_id = adapter._span_ids.pop(name, None)
+            output, success, diff_add, diff_del = tool_result_parts(result)
 
-            if isinstance(result, ToolResult):
-                success = result.success
-                output = str(result.output) if result.output else ""
-                if not success and result.error:
-                    output = str(result.error)
-            else:
-                success = True
-                output = str(result) if result else ""
-
-            entry = LogEntry.tool_result(name, output, success, source="byok", span_id=span_id)
+            entry = LogEntry.tool_result(
+                name,
+                output,
+                success,
+                source="byok",
+                span_id=span_id,
+                diff_add=diff_add,
+                diff_del=diff_del,
+            )
             self._safe_emit(entry)
 
         async def on_thinking(text: str) -> None:
@@ -145,18 +145,18 @@ class TUILoggerManager:
             self._safe_emit(entry)
 
         def on_tool_result(name: str, result: Any) -> None:
-            from superqode.tools.base import ToolResult
+            from superqode.logging.unified_log import tool_result_parts
 
-            if isinstance(result, ToolResult):
-                success = result.success
-                output = str(result.output) if result.output else ""
-                if not success and result.error:
-                    output = str(result.error)
-            else:
-                success = True
-                output = str(result) if result else ""
+            output, success, diff_add, diff_del = tool_result_parts(result)
 
-            entry = LogEntry.tool_result(name, output, success, source="local")
+            entry = LogEntry.tool_result(
+                name,
+                output,
+                success,
+                source="local",
+                diff_add=diff_add,
+                diff_del=diff_del,
+            )
             self._safe_emit(entry)
 
         async def on_thinking(text: str) -> None:
@@ -243,27 +243,50 @@ class TUILoggerManager:
             raw_input = tool_call.get("rawInput", {})
             tool_call_id = tool_call.get("toolCallId", "")
 
-            entry = LogEntry.tool_call(title, raw_input, source="acp")
+            entry = LogEntry.tool_call(
+                title,
+                raw_input,
+                source="acp",
+                extra={
+                    k: tool_call[k] for k in ("locations", "kind", "content") if tool_call.get(k)
+                }
+                or None,
+            )
             if tool_call_id:
                 adapter._span_ids[tool_call_id] = entry.span_id or ""
             self._safe_emit(entry)
 
         async def on_tool_update(update: dict) -> None:
+            from superqode.logging.unified_log import acp_diff_stats
+
             status = update.get("status", "")
             tool_call_id = update.get("toolCallId", "")
             output = update.get("rawOutput") or update.get("output") or update.get("result")
             title = update.get("title", "tool")
 
             span_id = adapter._span_ids.get(tool_call_id)
+            diff_add, diff_del = acp_diff_stats(update)
 
             if status in ("completed", "done", "success"):
                 entry = LogEntry.tool_result(
-                    title, str(output) if output else "", True, source="acp", span_id=span_id
+                    title,
+                    str(output) if output else "",
+                    True,
+                    source="acp",
+                    span_id=span_id,
+                    diff_add=diff_add,
+                    diff_del=diff_del,
                 )
                 self._safe_emit(entry)
             elif status in ("error", "failed"):
                 entry = LogEntry.tool_result(
-                    title, str(output) if output else "failed", False, source="acp", span_id=span_id
+                    title,
+                    str(output) if output else "failed",
+                    False,
+                    source="acp",
+                    span_id=span_id,
+                    diff_add=diff_add,
+                    diff_del=diff_del,
                 )
                 self._safe_emit(entry)
 
@@ -279,18 +302,30 @@ class TUILoggerManager:
         entry = LogEntry.thinking(text, source=self.source, category=category)
         self._safe_emit(entry)
 
-    def log_tool_call(self, name: str, args: dict) -> str:
+    def log_tool_call(self, name: str, args: dict, extra: Optional[dict] = None) -> str:
         """Log a tool call. Returns span_id."""
-        entry = LogEntry.tool_call(name, args, source=self.source)
+        entry = LogEntry.tool_call(name, args, source=self.source, extra=extra)
         self._safe_emit(entry)
         return entry.span_id or ""
 
     def log_tool_result(
-        self, name: str, result: Any, success: bool = True, span_id: Optional[str] = None
+        self,
+        name: str,
+        result: Any,
+        success: bool = True,
+        span_id: Optional[str] = None,
+        diff_add: int = 0,
+        diff_del: int = 0,
     ) -> None:
         """Log a tool result."""
         entry = LogEntry.tool_result(
-            name, str(result), success, source=self.source, span_id=span_id
+            name,
+            str(result),
+            success,
+            source=self.source,
+            span_id=span_id,
+            diff_add=diff_add,
+            diff_del=diff_del,
         )
         self._safe_emit(entry)
 

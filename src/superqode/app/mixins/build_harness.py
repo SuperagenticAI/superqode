@@ -69,7 +69,42 @@ class BuildHarnessMixin:
 
     def _harness_import_picker(self, log: ConversationLog) -> None:
         """Offer to turn existing repository agent config into a HarnessSpec."""
+        # File discovery (rglob over .cursor/rules etc.) can block the UI
+        # thread on large repos, so scan in a worker with progress output.
+        log.add_info("Scanning for importable agent config…")
+        runner = getattr(self, "run_worker", None)
+        if callable(runner):
+            try:
+                import asyncio as _asyncio_check
+
+                _asyncio_check.get_running_loop()
+            except RuntimeError:
+                runner = None
+        if callable(runner):
+            try:
+                runner(self._harness_import_scan(log))
+                return
+            except Exception:
+                pass
         found = discover_importable()
+        self._show_import_scan_result(log, found)
+
+    async def _blocking_discover_importable(self):
+        """Run filesystem discovery off the UI thread."""
+        import asyncio as _asyncio
+
+        try:
+            return await _asyncio.to_thread(discover_importable)
+        except Exception:
+            return discover_importable()
+
+    async def _harness_import_scan(self, log: ConversationLog) -> None:
+        """Worker: discover importables then render the picker."""
+        found = await self._blocking_discover_importable()
+        self._show_import_scan_result(log, found)
+
+    def _show_import_scan_result(self, log: ConversationLog, found) -> None:
+        """Render the empty-state or the picker for scan results."""
         if not found:
             t = Text()
             t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
@@ -143,7 +178,43 @@ class BuildHarnessMixin:
             return
         path, label, kind = found[index]
         self._awaiting_harness_import = False
+        log.add_info(f"Importing {label}…")
 
+        async def _work() -> None:
+            import asyncio as _asyncio
+
+            try:
+                spec, note = await _asyncio.to_thread(self._build_spec_from_import, path, kind)
+                output = HARNESS_OUTPUT_DIR / f"{spec.name}.yaml"
+                from superqode.harness.loader import save_harness_spec
+
+                if output.exists():
+                    log.add_error(
+                        f"Refusing to overwrite existing harness: {output}. "
+                        "Rename it or choose a different harness name first."
+                    )
+                    return
+                written = await _asyncio.to_thread(save_harness_spec, spec, output)
+            except Exception as exc:  # noqa: BLE001 - surface import failures in the TUI
+                log.add_error(f"Could not import {label}: {exc}")
+                return
+            self._show_import_success(log, spec, note, written)
+
+        runner = getattr(self, "run_worker", None)
+        if callable(runner):
+            try:
+                import asyncio as _asyncio_check
+
+                _asyncio_check.get_running_loop()
+            except RuntimeError:
+                runner = None
+        if callable(runner):
+            try:
+                runner(_work())
+                return
+            except Exception:
+                pass
+        # No worker (unit tests): run synchronously.
         try:
             spec, note = self._build_spec_from_import(path, kind)
             output = HARNESS_OUTPUT_DIR / f"{spec.name}.yaml"
@@ -159,6 +230,9 @@ class BuildHarnessMixin:
         except Exception as exc:  # noqa: BLE001 - surface import failures in the TUI
             log.add_error(f"Could not import {label}: {exc}")
             return
+        self._show_import_success(log, spec, note, written)
+
+    def _show_import_success(self, log: ConversationLog, spec, note: str, written) -> None:
 
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")

@@ -12,6 +12,8 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 
+import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
+
 
 _MARKDOWN_TABLE_RE = re.compile(
     r"(?m)^\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$"
@@ -206,11 +208,22 @@ def normalize_agent_markdown(text: str) -> str:
 
 def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
     """Return a Rich renderable for polished agent markdown."""
+    theme = _live_theme()
+    return AgentMarkdown(
+        normalize_agent_markdown(text),
+        code_theme=kwargs.pop("code_theme", active_code_theme()),
+        style=kwargs.pop("style", theme["text"]),
+        hyperlinks=kwargs.pop("hyperlinks", False),
+        **kwargs,
+    )
+
+
+def active_code_theme() -> str:
+    """Return the Pygments theme matching the active TUI theme."""
     from superqode.app.theme_bridge import active_theme_name
 
-    theme = _live_theme()
     code_themes = {
-        "superqode": "monokai",
+        "superqode": "superqode",
         "tokyonight": "github-dark",
         "dracula": "dracula",
         "nord": "nord",
@@ -218,13 +231,7 @@ def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
         "gruvbox": "gruvbox-dark",
         "high-contrast": "github-dark",
     }
-    return AgentMarkdown(
-        normalize_agent_markdown(text),
-        code_theme=kwargs.pop("code_theme", code_themes.get(active_theme_name(), "monokai")),
-        style=kwargs.pop("style", theme["text"]),
-        hyperlinks=kwargs.pop("hyperlinks", False),
-        **kwargs,
-    )
+    return code_themes.get(active_theme_name(), "monokai")
 
 
 def markdown_to_plain_text(text: str) -> str:

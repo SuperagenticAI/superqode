@@ -19,34 +19,54 @@ from rich.box import ROUNDED
 
 from superqode.logging.unified_log import LogConfig, LogEntry, LogVerbosity
 
+import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
 
-class Theme:
-    """Unified theme colors."""
 
-    # Primary
-    purple = "#a855f7"
-    magenta = "#d946ef"
-    pink = "#ec4899"
-    cyan = "#06b6d4"
-    green = "#22c55e"
-    orange = "#f97316"
-    gold = "#fbbf24"
-    blue = "#3b82f6"
+class _ThemeColors:
+    """Fallback defaults for the live theme accessor."""
 
-    # Status
-    success = "#22c55e"
-    error = "#ef4444"
-    warning = "#f59e0b"
-    info = "#06b6d4"
+    _DEFAULTS = {
+        "purple": "#a855f7",
+        "magenta": "#d946ef",
+        "pink": "#ec4899",
+        "cyan": "#06b6d4",
+        "green": "#22c55e",
+        "orange": "#f97316",
+        "gold": "#fbbf24",
+        "blue": "#3b82f6",
+        "success": "#22c55e",
+        "error": "#ef4444",
+        "warning": "#f59e0b",
+        "info": "#06b6d4",
+        "text": "#e4e4e7",
+        "muted": "#a1a1aa",
+        "dim": "#71717a",
+        "bg": "#0a0a0a",
+        "bg_surface": "#111111",
+    }
 
-    # Text
-    text = "#e4e4e7"
-    muted = "#a1a1aa"
-    dim = "#71717a"
+    @classmethod
+    def resolve(cls, name: str) -> str:
+        try:
+            from superqode.app.constants import THEME as _LIVE
 
-    # Background
-    bg = "#0a0a0a"
-    bg_surface = "#111111"
+            if name in _LIVE:
+                return _LIVE[name]
+        except Exception:
+            pass
+        return cls._DEFAULTS.get(name, "#e4e4e7")
+
+
+class _ThemeAccessor:
+    """Allows Theme.purple style access backed by the live theme."""
+
+    def __getattr__(self, name: str) -> str:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return _ThemeColors.resolve(name)
+
+
+Theme = _ThemeAccessor()  # type: ignore[no-redef]
 
 
 # Thought category icons
@@ -80,10 +100,10 @@ TOOL_ICONS = {
 
 # Status indicators
 STATUS_ICONS = {
-    "pending": ("○", Theme.muted),
-    "running": ("◐", Theme.purple),
-    "success": ("✦", Theme.success),
-    "error": ("✕", Theme.error),
+    "pending": ("○", "muted"),
+    "running": ("◐", "purple"),
+    "success": ("✦", "success"),
+    "error": ("✕", "error"),
 }
 
 # Language detection for syntax highlighting
@@ -182,6 +202,14 @@ class UnifiedLogFormatter:
     def __init__(self, config: Optional[LogConfig] = None):
         self.config = config or LogConfig.normal()
 
+    def _code_theme(self) -> str:
+        """Resolve the syntax palette at render time so :theme is immediate."""
+        if self.config.code_theme:
+            return self.config.code_theme
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+
     def format(self, entry: LogEntry) -> Optional[RenderableType]:
         """Format a log entry into a Rich renderable."""
         handlers = {
@@ -243,13 +271,13 @@ class UnifiedLogFormatter:
         elif self.config.verbosity == LogVerbosity.NORMAL:
             cleaned_text = truncate(cleaned_text, self.config.max_thinking_chars)
 
-        # Category-based styling for more engaging display
+        # Category-based styling follows the active theme.
         category_styles = {
-            "planning": (Theme.cyan, "Planning: "),
-            "analyzing": (Theme.blue, "Analyzing: "),
+            "planning": (Theme.purple, "Planning: "),
+            "analyzing": (Theme.cyan, "Analyzing: "),
             "debugging": (Theme.warning, "Debugging: "),
-            "testing": (Theme.green, "Testing: "),
-            "verifying": (Theme.green, "Verifying: "),
+            "testing": (Theme.success, "Testing: "),
+            "verifying": (Theme.success, "Verifying: "),
             "searching": (Theme.purple, ""),
             "reading": (Theme.purple, ""),
             "writing": (Theme.magenta, ""),
@@ -301,8 +329,12 @@ class UnifiedLogFormatter:
                 action_style = style
                 break
 
+        fell_back_to_name = False
         if not action_text:
-            action_text = f"◐ {name}"
+            # Fallback: the name itself (ACP titles are often the command).
+            # Truncate so a command-as-title doesn't flood the log.
+            action_text = f"◐ {truncate(name, 60)}"
+            fell_back_to_name = True
 
         line = Text()
         line.append(f"  {action_text}", style=f"bold {action_style}")
@@ -317,10 +349,14 @@ class UnifiedLogFormatter:
                 display_path = "..." + display_path[-47:]
             line.append(f" {display_path}", style=Theme.muted)
         elif command:
-            cmd_display = truncate(
-                command, 50 if self.config.verbosity == LogVerbosity.NORMAL else 100
-            )
-            line.append(f"  $ {cmd_display}", style=Theme.muted)
+            # Skip when the fallback header already shows this command
+            if fell_back_to_name and (name == command or name.startswith(command[:30])):
+                pass
+            else:
+                cmd_display = truncate(
+                    command, 50 if self.config.verbosity == LogVerbosity.NORMAL else 100
+                )
+                line.append(f"  $ {cmd_display}", style=Theme.muted)
         elif self.config.show_tool_args and args:
             # Show most relevant arg
             relevant_arg = None
@@ -353,12 +389,37 @@ class UnifiedLogFormatter:
                 break
 
         status = "success" if success else "error"
-        status_icon, status_color = STATUS_ICONS.get(status, ("●", Theme.muted))
+        status_icon, status_color_name = STATUS_ICONS.get(status, ("●", "muted"))
+        status_color = getattr(Theme, status_color_name)
+
+        # ACP titles are often the full command — truncate so the header
+        # stays one line instead of duplicating the call line + output.
+        display_name = name if len(name) <= 60 else truncate(name, 60)
+
+        # Strip a command echo prefix: shell/ACP results sometimes repeat the
+        # command as the first line, which duplicates the call line above.
+        command = entry.command
+        if command and len(command) > 10 and result.startswith(command):
+            result = result[len(command) :].lstrip("\n ")
+        elif len(name) > 20 and result.startswith(name):
+            result = result[len(name) :].lstrip("\n ")
 
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(f"{tool_icon} ", style=Theme.dim)
-        line.append(name, style=Theme.text)
+        line.append(display_name, style=Theme.text)
+
+        # One-line diff summary for file mutations (cheap stats only, no diff text)
+        diff = entry.diff_stats
+        if diff and self.config.verbosity != LogVerbosity.MINIMAL:
+            add, dele = diff
+            line.append("  ± ", style=Theme.dim)
+            if add:
+                line.append(f"+{add}", style=f"bold {Theme.success}")
+            if add and dele:
+                line.append(" ", style="")
+            if dele:
+                line.append(f"−{dele}", style=f"bold {Theme.error}")
 
         # Add result based on verbosity
         if self.config.verbosity == LogVerbosity.MINIMAL:
@@ -380,7 +441,7 @@ class UnifiedLogFormatter:
                     code_result = Syntax(
                         result_display,
                         lang,
-                        theme=self.config.code_theme,
+                        theme=self._code_theme(),
                         word_wrap=True,
                         line_numbers=False,
                     )
@@ -415,7 +476,7 @@ class UnifiedLogFormatter:
         if "```" in text:
             return Markdown(
                 text,
-                code_theme=self.config.code_theme,
+                code_theme=self._code_theme(),
                 inline_code_lexer="python",
             )
 
@@ -433,7 +494,7 @@ class UnifiedLogFormatter:
             return Syntax(
                 code,
                 language,
-                theme=self.config.code_theme,
+                theme=self._code_theme(),
                 word_wrap=True,
                 line_numbers=True,
             )
@@ -442,7 +503,7 @@ class UnifiedLogFormatter:
 
     def _format_info(self, entry: LogEntry) -> RenderableType:
         """Format info message."""
-        return Text(f"  ℹ️ {entry.text}", style=Theme.cyan)
+        return Text(f"  ℹ️ {entry.text}", style=Theme.pink)
 
     def _format_warning(self, entry: LogEntry) -> RenderableType:
         """Format warning message."""
@@ -472,7 +533,7 @@ class UnifiedLogFormatter:
         agent = entry.agent or "Assistant"
 
         content = (
-            Markdown(text, code_theme=self.config.code_theme)
+            Markdown(text, code_theme=self._code_theme())
             if "```" in text
             else Text(text, style=Theme.text, overflow="fold")
         )

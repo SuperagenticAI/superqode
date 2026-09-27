@@ -4012,6 +4012,13 @@ class CommandImplMixin:
         subargs = parts[1].strip() if len(parts) > 1 else ""
         if not sub:
             sub = "status"
+        if sub != "wizard":
+            cancel = getattr(self, "_cancel_harness_wizard", None)
+            if callable(cancel):
+                try:
+                    cancel()
+                except Exception:
+                    pass
 
         try:
             from superqode.harness import (

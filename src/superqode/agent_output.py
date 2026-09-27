@@ -31,12 +31,14 @@ from rich.console import Group
 from rich.box import ROUNDED, HEAVY, DOUBLE
 from rich.table import Table
 
+import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
+
 
 # ============================================================================
 # THEME - Vibrant SuperQode Colors
 # ============================================================================
 
-COLORS = {
+_COLOR_DEFAULTS = {
     # Primary gradient
     "purple": "#a855f7",
     "magenta": "#d946ef",
@@ -69,11 +71,79 @@ COLORS = {
     "border_active": "#a855f7",
 }
 
-# Rainbow gradient for special effects
-RAINBOW = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"]
+# Static key -> live THEME key. Status roles (success/error/warning/info)
+# follow the active theme so agent output matches :theme.
+_COLOR_THEME_KEYS = {
+    "purple": "purple",
+    "magenta": "magenta",
+    "pink": "pink",
+    "rose": "rose",
+    "orange": "orange",
+    "gold": "gold",
+    "cyan": "cyan",
+    "teal": "teal",
+    "green": "green",
+    "blue": "blue",
+    "success": "success",
+    "error": "error",
+    "warning": "warning",
+    "info": "cyan",
+    "bg_dark": "bg",
+    "bg_surface": "surface",
+    "bg_elevated": "surface2",
+    "bg_thinking": "surface",
+    "bg_response": "surface",
+    "text": "text",
+    "text_muted": "muted",
+    "text_dim": "dim",
+    "border": "border",
+    "border_active": "border_active",
+}
 
-# Gradient for response header
-RESPONSE_GRADIENT = ["#a855f7", "#c026d3", "#d946ef", "#ec4899", "#f43f5e"]
+
+class _LiveColors(dict):
+    """Dict that resolves each color from the live THEME on every access."""
+
+    def __getitem__(self, key):
+        try:
+            from superqode.app.constants import THEME as _LIVE
+
+            theme_key = _COLOR_THEME_KEYS.get(key)
+            if theme_key and theme_key in _LIVE:
+                return _LIVE[theme_key]
+        except Exception:
+            pass
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+COLORS = _LiveColors(_COLOR_DEFAULTS)
+
+
+# Gradient helpers follow the live theme: header/footer rules blend the
+# theme's accent roles instead of hardcoding brand hexes.
+def _theme_gradient() -> list:
+    return [COLORS["purple"], COLORS["magenta"], COLORS["pink"], COLORS["orange"], COLORS["rose"]]
+
+
+class _LiveGradient(list):
+    def __len__(self):
+        return len(_theme_gradient())
+
+    def __getitem__(self, index):
+        return _theme_gradient()[index]
+
+    def __iter__(self):
+        return iter(_theme_gradient())
+
+
+RAINBOW = _LiveGradient()
+RESPONSE_GRADIENT = _LiveGradient()
 
 
 # ============================================================================
@@ -253,7 +323,7 @@ def render_thinking_line(line: ThinkingLine, index: int) -> Text:
     color = COLORS["text_dim"] if index % 2 == 0 else COLORS["text_muted"]
 
     # Icon
-    result.append(f"  {line.icon} ", style=COLORS["cyan"])
+    result.append(f"  {line.icon} ", style=COLORS["pink"])
 
     # Text (truncate if too long)
     text = line.text[:100] + "..." if len(line.text) > 100 else line.text
@@ -286,7 +356,7 @@ def render_thinking_section(lines: List[ThinkingLine], collapsed: bool = False) 
 
     return Panel(
         content,
-        title=f"[bold {COLORS['cyan']}]💭 Thinking ({len(lines)} steps)[/]",
+        title=f"[bold {COLORS['pink']}]💭 Thinking ({len(lines)} steps)[/]",
         subtitle="[dim]Ctrl+T to toggle[/]",
         border_style=COLORS["border"],
         box=ROUNDED,
@@ -294,16 +364,42 @@ def render_thinking_section(lines: List[ThinkingLine], collapsed: bool = False) 
     )
 
 
+def _code_theme_name() -> str:
+    """Pygments style matching the active TUI theme."""
+    try:
+        from superqode.app.theme_bridge import active_theme_name
+    except Exception:
+        return "superqode"
+    return {
+        "superqode": "superqode",
+        "tokyonight": "github-dark",
+        "dracula": "dracula",
+        "nord": "nord",
+        "monokai": "monokai",
+        "gruvbox": "gruvbox-dark",
+        "high-contrast": "github-dark",
+    }.get(active_theme_name(), "superqode")
+
+
+def _code_background() -> str:
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+    except Exception:
+        return "#0f0a1a"
+
+
 def render_code_block(block: CodeBlock) -> Panel:
     """Render a beautiful code block with syntax highlighting."""
-    # Create syntax highlighted code
+    # Syntax style and background follow the active theme.
     syntax = Syntax(
         block.code,
         block.language,
-        theme="monokai",
+        theme=_code_theme_name(),
         line_numbers=True,
         word_wrap=True,
-        background_color="#000000",
+        background_color=_code_background(),
     )
 
     # Language badge
@@ -326,14 +422,14 @@ def render_code_block(block: CodeBlock) -> Panel:
     }
     icon = lang_icons.get(block.language.lower(), "📄")
 
-    title = f"[bold {COLORS['green']}]{icon} {block.language.upper()}[/]"
+    title = f"[bold {COLORS['orange']}]{icon} {block.language.upper()}[/]"
     if block.filename:
         title += f" [dim]({block.filename})[/]"
 
     return Panel(
         syntax,
         title=title,
-        border_style=COLORS["green"],
+        border_style=COLORS["purple"],
         box=ROUNDED,
         padding=(0, 1),
     )
@@ -352,10 +448,10 @@ def render_response_header(agent_name: str = "Agent") -> Text:
     result.append("\n")
 
     # Agent name with sparkles
-    result.append("  🤖 ", style=COLORS["gold"])
+    result.append("  🤖 ", style=COLORS["orange"])
     result.append(agent_name.upper(), style=f"bold {COLORS['purple']}")
     result.append(" Response ", style=f"bold {COLORS['magenta']}")
-    result.append("🤖\n", style=COLORS["gold"])
+    result.append("🤖\n", style=COLORS["pink"])
 
     # Another gradient line
     for i, char in enumerate(line_chars):
@@ -402,13 +498,13 @@ def render_bullet_point(text: str, index: int, width: int = 80) -> Text:
 
     result = Text()
 
-    # Rotating colors for bullets
+    # Rotating colors for bullets (brand only)
     bullet_colors = [
         COLORS["purple"],
         COLORS["pink"],
-        COLORS["cyan"],
-        COLORS["green"],
+        COLORS["magenta"],
         COLORS["orange"],
+        COLORS["rose"],
     ]
     color = bullet_colors[index % len(bullet_colors)]
 
@@ -443,7 +539,7 @@ def render_response_footer(duration: float = 0) -> Text:
     result.append("\n")
 
     # Stats
-    result.append("  🎯 ", style=COLORS["green"])
+    result.append("  🎯 ", style=COLORS["orange"])
     result.append("Response complete", style=COLORS["text_muted"])
 
     if duration > 0:
@@ -702,7 +798,7 @@ def create_simple_response_panel(text: str, agent_name: str = "Agent") -> Panel:
     content = Text()
 
     # Add sparkle decoration
-    content.append("✨ ", style=COLORS["gold"])
+    content.append("✨ ", style=COLORS["pink"])
 
     # Format the text nicely
     lines = text.strip().split("\n")

@@ -552,6 +552,15 @@ class HelpersMixin(
             self.screen.refresh(layout=True)
         except Exception:  # noqa: BLE001
             pass
+        # Widget CSS is static, so overlays with brand chrome (slash
+        # autocomplete) re-resolve their colors from the new palette.
+        try:
+            for widget in self.query("SlashComplete"):
+                refresh = getattr(widget, "refresh_theme_colors", None)
+                if callable(refresh):
+                    refresh()
+        except Exception:  # noqa: BLE001
+            pass
         self._theme_repainted_welcome = repainted
         return True
 

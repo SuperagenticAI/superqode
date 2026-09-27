@@ -1444,11 +1444,8 @@ class SlashCommandMixin:
                 answers["workflow_preset"] = choice
                 self._harness_wizard_next(state, "output")
             elif step == "output":
-                load_answer = self._parse_yes_no(raw) if raw else None
-                if load_answer is not None:
-                    state["load"] = load_answer
-                    self._finish_harness_wizard_flow(log)
-                    return True
+                # This step only sets the output path. Yes/no belongs to the
+                # next (load) step, so never finish from here.
                 if raw:
                     state["output"] = raw
                 self._harness_wizard_next(state, "load")

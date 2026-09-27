@@ -44,10 +44,10 @@ class SmartPrompt(Widget):
     SmartPrompt #prompt-prefix {
         height: 3;
         width: auto;
-        color: #00ffff;
+        color: #ec4899;
         text-style: bold;
         padding: 0 1 0 0;
-        background: #001a33;
+        background: #1a0f2e;
         content-align: center middle;
     }
 
@@ -55,14 +55,14 @@ class SmartPrompt(Widget):
         height: auto;
         min-height: 3;
         background: #1a1a1a;
-        border: double #00ffff;
+        border: double #a855f7;
         padding: 0 1;
         color: #ffffff;
     }
 
     SmartPrompt #prompt-input:focus {
-        border: double #00ff00;
-        background: #0a1a0a;
+        border: double #f97316;
+        background: #1a0f2e;
     }
 
     SmartPrompt #suggestions-row {
@@ -78,13 +78,13 @@ class SmartPrompt(Widget):
     }
 
     SmartPrompt .suggestion {
-        color: #00ff00;
+        color: #fbbf24;
         padding: 0 1;
         background: #1a1a1a;
     }
 
     SmartPrompt .suggestion.selected {
-        color: #00ffff;
+        color: #ec4899;
         text-style: bold;
     }
     """
