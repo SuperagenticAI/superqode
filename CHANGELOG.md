@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.20] - 2026-09-27
+
 ### Added
 
+- Searchable paginated Session Browser for `:sessions` / `:resume`, with
+  Continue last, availability/preview probes, and per-project UI state.
 - A shared session resume descriptor classifies stored conversations as exact
   resume, context replay, or unavailable and exposes recovery guidance in the
   Session Browser.
