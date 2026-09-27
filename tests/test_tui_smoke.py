@@ -4488,6 +4488,51 @@ def test_plan_approve_and_reject_aliases():
     assert any("Plan cleared" in str(item) for item in log.items)
 
 
+def test_plan_click_commands_dispatch_to_plan_subcommands():
+    app = make_app()
+    log = FakeLog()
+    dispatched = []
+    app._clicked_command_log = lambda: log
+    app._handle_command = lambda command, target: dispatched.append((command, target))
+
+    app._dispatch_clicked_command("plan-approve")
+    app._dispatch_clicked_command("plan-edit")
+    app._dispatch_clicked_command("plan-reject")
+
+    assert dispatched == [
+        (":plan approve", log),
+        (":plan edit", log),
+        (":plan reject", log),
+    ]
+
+
+def test_approved_plan_is_preserved_in_execution_prompt():
+    app = make_app()
+    log = FakeLog()
+    sent = []
+    app._pure_mode = SimpleNamespace(
+        session=SimpleNamespace(connected=True),
+        _harness_spec=None,
+    )
+    app._pending_plan_request = "fix the parser"
+    app._pending_plan_content = "1. Inspect parser.py\n2. Add regression tests"
+    app._pending_plan_status = "approved"
+    app._approved_plan_for_next_run = app._pending_plan_content
+    app._force_execute_once = True
+    app._send_to_pure_mode = lambda prompt, target: sent.append((prompt, target))
+
+    app._handle_message("fix the parser", log)
+
+    assert app._pending_plan_status == "executing"
+    assert log.items[0] == ("user", "fix the parser")
+    assert len(sent) == 1
+    execution_prompt, target = sent[0]
+    assert target is log
+    assert "ORIGINAL REQUEST\nfix the parser" in execution_prompt
+    assert "APPROVED PLAN\n1. Inspect parser.py" in execution_prompt
+    assert "Add regression tests" in execution_prompt
+
+
 def test_plan_mode_permission_bridge_denies_runtime_approvals():
     app = make_app()
     log = FakeLog()

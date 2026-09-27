@@ -1018,7 +1018,8 @@ class FormattingMixin:
 
     def _render_plan_review(self, log: ConversationLog) -> None:
         pending = getattr(self, "_pending_plan_request", "").strip()
-        if not pending and not self._plan_manager.tasks:
+        plan_content = str(getattr(self, "_pending_plan_content", "") or "").strip()
+        if not pending and not plan_content and not self._plan_manager.tasks:
             mode = "ON" if getattr(self, "_plan_mode_enabled", False) else "OFF"
             log.add_info(f"Plan mode: {mode}")
             log.add_info(
@@ -1077,11 +1078,28 @@ class FormattingMixin:
                 )
             t.append("\n", style="")
 
-        t.append("\n  Actions: ", style=THEME["muted"])
-        t.append(":plan approve", style=THEME["cyan"])
-        t.append("  ", style=THEME["dim"])
-        t.append(":plan edit", style=THEME["cyan"])
-        t.append("  ", style=THEME["dim"])
-        t.append(":plan reject", style=THEME["cyan"])
-        t.append("\n", style="")
         log.write(t)
+        if plan_content:
+            from superqode.rendering.markdown import render_agent_markdown
+
+            label = Text("  Approved plan artifact\n", style=f"bold {THEME['pink']}")
+            log.write(label)
+            log.write(render_agent_markdown(plan_content))
+
+        from superqode.app.mixins.clickable_commands import command_link
+
+        actions = Text("\n  Actions  ", style=THEME["muted"])
+        for index, (label, command, color) in enumerate(
+            (
+                (":plan approve ↗", "plan-approve", THEME["success"]),
+                (":plan edit ↗", "plan-edit", THEME["cyan"]),
+                (":plan reject ↗", "plan-reject", THEME["error"]),
+            )
+        ):
+            if index:
+                actions.append("  ", style=THEME["dim"])
+            actions.append("[", style=THEME["dim"])
+            actions.append(label, style=f"bold {color} {command_link(command)}")
+            actions.append("]", style=THEME["dim"])
+        actions.append("   Alt+A · Alt+E · Alt+R\n", style=THEME["muted"])
+        log.write(actions)

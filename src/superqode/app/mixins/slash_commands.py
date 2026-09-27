@@ -2172,6 +2172,10 @@ class SlashCommandMixin:
         # Enable auto-scroll when user sends a message so they see agent's work
         log.auto_scroll = True
 
+        execute_approved_plan = bool(
+            getattr(self, "_force_execute_once", False)
+            and getattr(self, "_approved_plan_for_next_run", "").strip()
+        )
         plan_requested = getattr(self, "_force_plan_once", False) or (
             getattr(self, "_plan_mode_enabled", False)
             and not getattr(self, "_force_execute_once", False)
@@ -2187,6 +2191,11 @@ class SlashCommandMixin:
         log.add_user(text)
         self._last_user_message = text
         self._update_terminal_title(text)
+
+        if execute_approved_plan:
+            self._pending_plan_status = "executing"
+            self._refresh_plan_status_badge()
+            text = self._approved_plan_execution_prompt(text, self._approved_plan_for_next_run)
 
         # Store file context for the message
         self._current_file_context = file_context
@@ -3931,6 +3940,7 @@ class SlashCommandMixin:
             replacement = arg_text[4:].strip() if arg_lower.startswith("edit ") else ""
             if replacement:
                 self._pending_plan_request = replacement
+                self._pending_plan_content = ""
                 self._pending_plan_status = "pending"
                 self._refresh_plan_status_badge()
                 log.add_success(
@@ -3959,6 +3969,9 @@ class SlashCommandMixin:
                 log.add_info("Agent is already running. Wait for it to finish, then use :plan run.")
                 return
             self._force_execute_once = True
+            self._approved_plan_for_next_run = str(
+                getattr(self, "_pending_plan_content", "") or ""
+            ).strip()
             self._pending_plan_status = "approved"
             self._refresh_plan_status_badge()
             log.add_info("Executing the last planned request with tools enabled...")
@@ -3968,6 +3981,8 @@ class SlashCommandMixin:
         if arg_lower in ("clear", "reset", "reject", "cancel"):
             self._plan_manager.clear()
             self._pending_plan_request = ""
+            self._pending_plan_content = ""
+            self._approved_plan_for_next_run = ""
             self._pending_plan_status = "rejected" if arg_lower in ("reject", "cancel") else ""
             self._force_plan_once = False
             self._force_execute_once = False
@@ -3988,6 +4003,7 @@ class SlashCommandMixin:
                 return
             self._force_plan_once = True
             self._pending_plan_request = arg_text
+            self._pending_plan_content = ""
             self._pending_plan_status = "pending"
             self._refresh_plan_status_badge()
             log.add_info("Planning only. No native tools will be executed.")

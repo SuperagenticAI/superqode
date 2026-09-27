@@ -12,6 +12,7 @@ from typing import Any
 
 from textual.widgets import Static, RichLog
 from textual.reactive import reactive
+from textual import events
 from rich.cells import cell_len
 from rich.text import Text
 
@@ -399,6 +400,7 @@ class ColorfulStatusBar(Static):
                     "pending": "#f59e0b",
                     "active": "#06b6d4",
                     "approved": "#22c55e",
+                    "executing": "#22c55e",
                 }.get(state, "#a855f7")
                 if right.plain:
                     right_separator()
@@ -1210,6 +1212,30 @@ class SelectableTextArea(Static):
         return t
 
 
+class NewOutputIndicator(Static):
+    """Clickable transcript-follow control shown while the viewport is locked."""
+
+    def set_unread(self, count: int) -> None:
+        count = max(0, int(count))
+        if count:
+            unit = "line" if count == 1 else "lines"
+            self.update(f"↓ {count} new {unit}  ·  Ctrl+End to follow")
+            self.add_class("visible")
+        else:
+            self.update("")
+            self.remove_class("visible")
+
+    def on_click(self, event: events.Click) -> None:
+        """Return to the live tail without moving focus away from the composer."""
+        try:
+            log = self.app.query_one("#log", ConversationLog)
+        except Exception:
+            return
+        event.stop()
+        event.prevent_default()
+        log.resume_follow()
+
+
 class ConversationLog(RichLog):
     """Chat log with styled messages and rich formatting.
 
@@ -1416,6 +1442,11 @@ class ConversationLog(RichLog):
         self._response_start_y: int | None = None
         self._response_end_y: int | None = None
         self._pending_response_reveal_token: object | None = None
+        # Viewport state is independent from RichLog.auto_scroll. Pickers and
+        # one-shot reveal cards also toggle auto_scroll, while this state tracks
+        # the user's lasting intent during streamed output.
+        self._viewport_mode: str = "following"
+        self._unread_output_lines: int = 0
         # Characters of `_streaming_response` already rendered as finished
         # markdown during progressive streaming (block-wise live rendering).
         self._streamed_offset: int = 0
@@ -1518,6 +1549,9 @@ class ConversationLog(RichLog):
         self._update_console_width()
 
     def add_user(self, text: str):
+        # A submitted prompt starts a new turn, so deliberately return to the
+        # live transcript tail even if the previous answer was being reviewed.
+        self.resume_follow()
         self._messages.append(("user", text, ""))
         # A stable two-level turn shape is easier to scan than an inline
         # ``You <prompt>`` prefix once the transcript contains tools and status
@@ -1558,11 +1592,21 @@ class ConversationLog(RichLog):
         # A tall feedback card is deliberately anchored at its heading. Resume
         # normal transcript following when the *next* piece of output arrives,
         # rather than immediately jumping this card to its bottom edge.
-        if getattr(self, "_feedback_anchor_active", False) and not getattr(
-            self, "_writing_feedback", False
+        if (
+            getattr(self, "_feedback_anchor_active", False)
+            and not getattr(self, "_writing_feedback", False)
+            and self._viewport_mode == "completion_anchored"
         ):
             self._feedback_anchor_active = False
-            self.auto_scroll = True
+            self._set_viewport_mode("following")
+
+        user_locked = self._viewport_mode == "user_locked"
+        if user_locked:
+            # Callers historically toggle auto_scroll for their own temporary
+            # layouts. A manual reading lock must take precedence over all of
+            # those writes until the user explicitly follows again.
+            self.auto_scroll = False
+        lines_before = len(self.lines)
 
         # Ensure console width is updated before writing
         self._update_console_width()
@@ -1576,7 +1620,85 @@ class ConversationLog(RichLog):
                     arg.overflow = "fold"
             processed_args.append(arg)
 
-        return super().write(*processed_args, **kwargs)
+        result = super().write(*processed_args, **kwargs)
+        if user_locked:
+            self.auto_scroll = False
+            self._unread_output_lines += max(1, len(self.lines) - lines_before)
+            self._sync_unread_indicator()
+        return result
+
+    @property
+    def viewport_mode(self) -> str:
+        """Current transcript-follow policy (useful to status UI and tests)."""
+        return self._viewport_mode
+
+    @property
+    def unread_output_lines(self) -> int:
+        return self._unread_output_lines
+
+    def validate_auto_scroll(self, value: bool) -> bool:
+        """Make the explicit user lock authoritative over legacy assignments."""
+        if value and getattr(self, "_viewport_mode", "following") == "user_locked":
+            return False
+        return value
+
+    def _set_viewport_mode(self, mode: str) -> None:
+        self._viewport_mode = mode
+        self.auto_scroll = mode == "following"
+        if mode == "following":
+            self._feedback_anchor_active = False
+            self._unread_output_lines = 0
+        self._sync_unread_indicator()
+
+    def _sync_unread_indicator(self) -> None:
+        if not self.is_mounted:
+            return
+        try:
+            indicator = self.app.query_one("#new-output-indicator", NewOutputIndicator)
+        except Exception:
+            return
+        count = self._unread_output_lines if self._viewport_mode == "user_locked" else 0
+        indicator.set_unread(count)
+
+    def lock_viewport(self) -> None:
+        """Freeze the viewport because the user chose to inspect older output."""
+        self._pending_response_reveal_token = None
+        self._feedback_anchor_active = False
+        self._viewport_mode = "user_locked"
+        self.auto_scroll = False
+        self._sync_unread_indicator()
+
+    def resume_follow(self) -> None:
+        """Return to the transcript tail and clear the unread-output counter."""
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("following")
+        try:
+            self.scroll_end(animate=False)
+        except Exception:
+            pass
+
+    def resume_follow_if_at_end(self) -> None:
+        """Resume after downward navigation reaches the live transcript tail."""
+        if self.scroll_y >= self.max_scroll_y:
+            self.resume_follow()
+
+    def _on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        super()._on_mouse_scroll_up(event)
+        self.lock_viewport()
+
+    def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        super()._on_mouse_scroll_down(event)
+        self.lock_viewport()
+        try:
+            self.call_after_refresh(self._settle_mouse_scroll_down)
+        except Exception:
+            pass
+
+    def _settle_mouse_scroll_down(self) -> None:
+        if self.scroll_y >= self.max_scroll_y:
+            self.resume_follow()
+        elif self._viewport_mode == "user_locked":
+            self.auto_scroll = False
 
     def write_feedback(self, content: Text):
         """Write feedback (errors, guidance panels) and make sure it is seen.
@@ -1596,6 +1718,10 @@ class ConversationLog(RichLog):
         clamps to the max scroll, so a short block near the end behaves exactly
         like ``scroll_end`` while a tall block stays readable top-down.
         """
+        if self._viewport_mode == "user_locked":
+            self.write(content, scroll_end=False)
+            return
+
         start_y = len(self.lines)
         first_line = next((line.strip() for line in content.plain.splitlines() if line.strip()), "")
         marker_start = next(
@@ -1609,6 +1735,7 @@ class ConversationLog(RichLog):
         finally:
             self._writing_feedback = False
         self._feedback_anchor_active = True
+        self._viewport_mode = "completion_anchored"
 
         def reveal() -> None:
             if not self._feedback_anchor_active:
@@ -1687,9 +1814,11 @@ class ConversationLog(RichLog):
         icon = "◈" if heartbeat else "│"
         self._messages.append(("shell", text, ""))
         self._feedback_anchor_active = False
-        self.auto_scroll = True
+        if self._viewport_mode != "user_locked":
+            self._set_viewport_mode("following")
         self.write(Text(f"  {icon} {text}", style=THEME["dim"]))
-        self.scroll_end(animate=False)
+        if self._viewport_mode == "following":
+            self.scroll_end(animate=False)
 
     def add_warning(self, text: str):
         self._messages.append(("warning", text, ""))
@@ -1965,8 +2094,9 @@ class ConversationLog(RichLog):
         self._last_thinking_key = key
         self._last_thinking_at = now
 
-        # Ensure auto-scroll is ON
-        self.auto_scroll = True
+        # Follow live work unless the user is inspecting older transcript.
+        if self._viewport_mode != "user_locked":
+            self.auto_scroll = True
 
         # Store for later copy
         self._thinking_lines.append(text)
@@ -2060,7 +2190,8 @@ class ConversationLog(RichLog):
             return
 
         self._streaming_response += text
-        self.auto_scroll = True
+        if self._viewport_mode != "user_locked":
+            self.auto_scroll = True
         self._write_answer_header(getattr(self, "_active_response_agent", "Assistant"))
 
         # The animated TUI indicator already shows live generation state.
@@ -2095,6 +2226,7 @@ class ConversationLog(RichLog):
         self._session_tool_calls.clear()
         self.clear_running_tools()
         self.reset_response_stream()
+        self._set_viewport_mode("following")
 
     def reset_response_stream(self, agent: str = "Assistant") -> None:
         """Reset per-response streaming buffers before a new streamed answer."""
@@ -2210,6 +2342,8 @@ class ConversationLog(RichLog):
             if getattr(self, "_pending_response_reveal_token", None) is not token:
                 return
             self._pending_response_reveal_token = None
+            if self._viewport_mode == "user_locked":
+                return
             start_y = self._response_start_y
             end_y = self._response_end_y
             if start_y is None or end_y is None:
@@ -2221,6 +2355,7 @@ class ConversationLog(RichLog):
             # Reuse the established anchor lifecycle: the next transcript write
             # (normally the next user turn) restores follow-at-bottom behavior.
             self._feedback_anchor_active = True
+            self._viewport_mode = "completion_anchored"
             self.scroll_to(y=start_y, animate=False)
 
         self.call_after_refresh(reveal)
@@ -2927,8 +3062,11 @@ class ConversationLog(RichLog):
 
     def reveal_decision_response(self, fallback_y: int = 0) -> None:
         """Reveal the latest Jev card after completion chrome has been written."""
+        if self._viewport_mode == "user_locked":
+            return
         self.auto_scroll = False
         self._feedback_anchor_active = True
+        self._viewport_mode = "completion_anchored"
 
         def reveal() -> None:
             if not self._feedback_anchor_active:

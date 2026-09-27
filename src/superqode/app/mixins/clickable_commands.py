@@ -28,6 +28,9 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "home",
         "hub",
         "memory",
+        "plan-approve",
+        "plan-edit",
+        "plan-reject",
         "skills",
         "systemone",
     }
@@ -166,6 +169,9 @@ class ClickableCommandMixin:
 
     def _dispatch_clicked_command(self, command: str) -> None:
         log = self._clicked_command_log()
+        if command.startswith("plan-"):
+            self._handle_command(f":plan {command.removeprefix('plan-')}", log)
+            return
         self._handle_command(f":{command}", log)
 
     def _confirm_clicked_command(self, command: str) -> None:

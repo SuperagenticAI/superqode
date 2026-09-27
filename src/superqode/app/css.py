@@ -169,6 +169,21 @@ ConversationLog {
     padding: 0;
     margin: 0;
 }
+#new-output-indicator {
+    display: none;
+    dock: bottom;
+    layer: overlay;
+    width: auto;
+    min-width: 32;
+    height: 1;
+    margin: 0 2 1 0;
+    padding: 0 1;
+    background: #18111f;
+    color: #f472b6;
+    text-style: bold;
+    content-align: center middle;
+}
+#new-output-indicator.visible { display: block; }
 
 /* Prompt area stays at the top and remains usable during agent work. */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
@@ -251,6 +266,20 @@ ConversationLog {
     color: #a1a1aa;
 }
 #queued-input.visible {
+    display: block;
+}
+
+#plan-review-panel {
+    display: none;
+    height: auto;
+    max-height: 9;
+    margin: 0 2;
+    padding: 0 1;
+    border-left: thick #ec4899;
+    background: #100b16;
+    color: #e4e4e7;
+}
+#plan-review-panel.visible {
     display: block;
 }
 

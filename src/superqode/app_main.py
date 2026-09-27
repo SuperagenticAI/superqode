@@ -46,6 +46,7 @@ from superqode.app.widgets import (
     ModeBadge,
     HintsBar,
     ConversationLog,
+    NewOutputIndicator,
 )
 from superqode.widgets.command_palette import CommandPalette
 from superqode.app.theme_bridge import (
@@ -360,6 +361,8 @@ class SuperQodeApp(
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
     _pending_plan_request: str = ""  # Last planned request available for approval/execution
     _pending_plan_status: str = ""  # pending / approved / rejected
+    _pending_plan_content: str = ""  # Exact model-authored plan awaiting review
+    _approved_plan_for_next_run: str = ""  # One-shot execution context after approval
 
     def __init__(self):
         super().__init__()
@@ -453,8 +456,10 @@ class SuperQodeApp(
                         min_width=1,
                         max_width=None,
                     )
+                    yield NewOutputIndicator("", id="new-output-indicator")
 
                 # Pinned, auto-updating plan/todo checklist (from todo_write).
+                yield Static("", id="plan-review-panel")
                 yield Static("", id="todo-panel")
 
                 # Compact active tool strip. This is separate from the existing
@@ -648,29 +653,51 @@ class SuperQodeApp(
         """Scroll the conversation log up while keeping input focused."""
         log = self._conversation_log()
         if log is not None:
-            log.auto_scroll = False
+            lock = getattr(log, "lock_viewport", None)
+            if callable(lock):
+                lock()
+            else:
+                log.auto_scroll = False
             log.scroll_page_up(animate=False)
 
     def action_scroll_log_page_down(self) -> None:
         """Scroll the conversation log down while keeping input focused."""
         log = self._conversation_log()
         if log is not None:
-            log.auto_scroll = False
+            lock = getattr(log, "lock_viewport", None)
+            if callable(lock):
+                lock()
+            else:
+                log.auto_scroll = False
             log.scroll_page_down(animate=False)
+            settle = getattr(log, "resume_follow_if_at_end", None)
+            if callable(settle):
+                try:
+                    log.call_after_refresh(settle)
+                except Exception:
+                    settle()
 
     def action_scroll_log_home(self) -> None:
         """Scroll the conversation log to the top."""
         log = self._conversation_log()
         if log is not None:
-            log.auto_scroll = False
+            lock = getattr(log, "lock_viewport", None)
+            if callable(lock):
+                lock()
+            else:
+                log.auto_scroll = False
             log.scroll_home(animate=False)
 
     def action_scroll_log_end(self) -> None:
         """Scroll the conversation log to the bottom and resume follow mode."""
         log = self._conversation_log()
         if log is not None:
-            log.scroll_end(animate=False)
-            log.auto_scroll = True
+            resume = getattr(log, "resume_follow", None)
+            if callable(resume):
+                resume()
+            else:
+                log.scroll_end(animate=False)
+                log.auto_scroll = True
 
     def _typed_picker_digits(self) -> str:
         """Return the digits waiting in the prompt, if that is all it holds.
@@ -701,6 +728,18 @@ class SuperQodeApp(
                 self._handle_permission_input(mapping[event.key])
                 self.set_timer(0.05, self._ensure_input_focus)
                 return
+
+        # Plan decisions use Alt shortcuts so ordinary composer typing remains
+        # untouched. They are active only after a model-authored plan exists.
+        if (
+            event.key in ("alt+a", "alt+e", "alt+r")
+            and getattr(self, "_pending_plan_status", "") == "pending"
+            and bool(getattr(self, "_pending_plan_content", "").strip())
+        ):
+            event.stop()
+            action = {"alt+a": "approve", "alt+e": "edit", "alt+r": "reject"}[event.key]
+            self._handle_plan(action, self.query_one("#log", ConversationLog))
+            return
 
         # When focus is outside the prompt, Left Arrow still mirrors the
         # visible browser-style Back control. Prompt focus handles this itself

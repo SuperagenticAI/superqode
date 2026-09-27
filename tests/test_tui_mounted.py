@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from textual import events
 from textual.widgets import Static
 
 from superqode.app_main import SuperQodeApp, SelectionAwareInput
@@ -1027,6 +1028,141 @@ async def test_short_completed_response_stays_in_follow_mode():
 
         assert log.auto_scroll
         assert not getattr(log, "_feedback_anchor_active", False)
+
+
+async def test_streaming_respects_manual_scroll_lock_and_reports_unread_output():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        indicator = app.query_one("#new-output-indicator")
+        log.clear()
+        for index in range(40):
+            log.write(f"Earlier transcript line {index}")
+        await pilot.pause()
+        log.scroll_end(animate=False)
+
+        app.action_scroll_log_page_up()
+        await pilot.pause()
+        locked_y = log.scroll_y
+        assert log.viewport_mode == "user_locked"
+        assert not log.auto_scroll
+
+        log.reset_response_stream("test-model")
+        log.add_response_chunk("A new streamed paragraph.\n\n")
+        await pilot.pause()
+
+        assert log.viewport_mode == "user_locked"
+        assert not log.auto_scroll
+        assert log.scroll_y == locked_y
+        assert log.unread_output_lines > 0
+        assert indicator.has_class("visible")
+        assert "new line" in str(indicator.render())
+
+        app.action_scroll_log_end()
+        await pilot.pause()
+
+        assert log.viewport_mode == "following"
+        assert log.auto_scroll
+        assert log.unread_output_lines == 0
+        assert not indicator.has_class("visible")
+
+
+async def test_new_prompt_resumes_follow_mode_after_manual_lock():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)):
+        log = app.query_one("#log", ConversationLog)
+        log.lock_viewport()
+        log.write("unread output")
+
+        log.add_user("Continue")
+
+        assert log.viewport_mode == "following"
+        assert log.auto_scroll
+        assert log.unread_output_lines == 0
+
+
+async def test_mouse_wheel_locks_streaming_viewport():
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        for index in range(40):
+            log.write(f"Transcript line {index}")
+        await pilot.pause()
+        log.scroll_end(animate=False)
+        await pilot.pause()
+        bottom_y = log.scroll_y
+
+        log.post_message(
+            events.MouseScrollUp(
+                log,
+                x=1,
+                y=1,
+                delta_x=0,
+                delta_y=-1,
+                button=0,
+                shift=False,
+                meta=False,
+                ctrl=False,
+            )
+        )
+        await pilot.pause()
+
+        assert log.viewport_mode == "user_locked"
+        assert not log.auto_scroll
+        assert log.scroll_y < bottom_y
+
+
+async def test_completed_plan_opens_branded_interactive_review_panel(monkeypatch):
+    app = SuperQodeApp()
+    ran = []
+    monkeypatch.setattr(
+        SuperQodeApp, "_run_clicked_command", lambda self, command: ran.append(command)
+    )
+    async with app.run_test(size=(100, 30)) as pilot:
+        app._pending_plan_request = "Improve parser recovery"
+        app._active_plan_mode_for_current_message = True
+        assert app._capture_plan_artifact(
+            "## Goal\nImprove recovery.\n\n## Verification\nRun parser tests."
+        )
+        await pilot.pause()
+
+        panel = app.query_one("#plan-review-panel", Static)
+        rendered = panel.render()
+        plain = str(rendered)
+        assert panel.has_class("visible")
+        assert "PLAN READY FOR REVIEW" in plain
+        assert "Improve parser recovery" in plain
+        assert app.query_one("#input-box").border_title == "Plan · review before build"
+        links = {str(span.style) for span in rendered.spans if span.style is not None}
+        assert any("superqode://cmd/plan-approve" in style for style in links)
+        assert any("superqode://cmd/plan-edit" in style for style in links)
+        assert any("superqode://cmd/plan-reject" in style for style in links)
+
+        approve_column = plain.splitlines()[2].index("Approve") + 1
+        await pilot.click(
+            offset=(panel.content_region.x + approve_column, panel.content_region.y + 2)
+        )
+        await pilot.pause()
+
+        assert ran == ["plan-approve"]
+
+
+async def test_plan_review_alt_shortcuts_are_scoped_to_ready_plan(monkeypatch):
+    app = SuperQodeApp()
+    handled = []
+    monkeypatch.setattr(
+        SuperQodeApp,
+        "_handle_plan",
+        lambda self, action, log: handled.append(action),
+    )
+    async with app.run_test(size=(90, 28)) as pilot:
+        app._pending_plan_request = "Refactor renderer"
+        app._pending_plan_content = "1. Inspect\n2. Refactor\n3. Test"
+        app._pending_plan_status = "pending"
+        await pilot.press("alt+a", "alt+e", "alt+r")
+
+        assert handled == ["approve", "edit", "reject"]
 
 
 async def test_quit_command_quits_from_harness_wizard(monkeypatch):

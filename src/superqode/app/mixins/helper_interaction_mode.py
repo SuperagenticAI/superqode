@@ -39,6 +39,16 @@ class HelperInteractionModeMixin:
         except Exception:  # noqa: BLE001
             pass
         try:
+            input_box = self.query_one("#input-box")
+            title = {"chat": "Chat", "plan": "Plan · review before build"}.get(status_mode, "Task")
+            vim_enabled = bool(getattr(self, "_vim_experience_enabled", False))
+            if vim_enabled:
+                vim_state = str(getattr(self, "_vim_input_mode", "normal") or "normal")
+                title = f"{title} · {vim_state.upper()}"
+            input_box.border_title = title
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             if input_widget.placeholder not in {
                 "Approve tool? y / n / a",
