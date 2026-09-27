@@ -53,7 +53,7 @@ These are proposed acceptance targets, not measured product guarantees.
    SessionManager, FileHarnessStore, and PiPy rows; `PureMode` uses a staged
    handoff, and ACP adapter resume is strict exact-or-fail. Remaining work is to
    surface ACP's SQLite rows in the same browser descriptor and verify actual
-   backend process restarts—not only stored-text replay—in end-to-end tests.
+   backend process restarts, not only stored-text replay, in end-to-end tests.
 2. **A searchable workspace session panel.** Partially done: `:sessions` /
    `:resume` open a dedicated Session Browser (search, pagination, availability,
    preview, rename, Continue last) instead of the capped transcript picker.
