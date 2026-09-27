@@ -409,58 +409,8 @@ class DialogsMixin:
         self._show_command_output(log, t)
 
     def _show_sessions(self, log: ConversationLog):
-        """Show recent local coding sessions."""
-        from pathlib import Path as _Path
-
-        from superqode.session.harness_bridge import ensure_sessions_listed
-
-        sessions = ensure_sessions_listed(cwd=_Path.cwd())
-
-        t = Text()
-        t.append("\n  📂 ", style=f"bold {THEME['purple']}")
-        t.append("Recent Sessions\n\n", style=f"bold {THEME['purple']}")
-
-        if not sessions:
-            t.append("  No sessions found yet.\n", style=THEME["muted"])
-            t.append("  Connect with ", style=THEME["muted"])
-            t.append(":connect byok", style=THEME["cyan"])
-            t.append(" or ", style=THEME["muted"])
-            t.append(":connect local", style=THEME["cyan"])
-            t.append(" and send a message to create one.\n", style=THEME["muted"])
-            t.append(
-                "  HarnessSpec / PiPy runs for this directory also appear here after the first turn.\n",
-                style=THEME["dim"],
-            )
-            self._show_command_output(log, t)
-            return
-
-        from superqode.session.harness_bridge import (
-            format_session_row_label,
-            group_sessions_by_harness,
-        )
-
-        recent = sessions[:12]
-        for harness_name, rows in group_sessions_by_harness(recent):
-            t.append(f"  {harness_name}\n", style=f"bold {THEME['purple']}")
-            for session in rows:
-                display_id = session.session_id[:8]
-                label = format_session_row_label(session)
-                t.append(f"    {display_id:<10}", style=f"bold {THEME['cyan']}")
-                t.append(f"{label}\n", style=THEME["text"])
-            t.append("\n")
-
-        t.append("  Use ", style=THEME["muted"])
-        t.append(":sessions switch <id-or-name>", style=THEME["cyan"])
-        t.append(" to restore harness, model, and history, or ", style=THEME["muted"])
-        t.append("/fork <optional-new-id>", style=THEME["cyan"])
-        t.append(" to branch the active session.\n", style=THEME["muted"])
-        t.append("  Rename with ", style=THEME["muted"])
-        t.append(":sessions rename <id-or-name> <title>", style=THEME["cyan"])
-        t.append(".\n", style=THEME["muted"])
-        t.append("  Use ", style=THEME["muted"])
-        t.append(":switchboard", style=THEME["cyan"])
-        t.append(" for graph, handoff, approvals, and share-tree actions.\n", style=THEME["muted"])
-        self._show_command_output(log, t)
+        """Open the searchable session browser for this project."""
+        self._open_session_browser(log)
 
     def _show_session_tree(self, log: ConversationLog):
         """Show saved sessions grouped by parent/fork relationship."""

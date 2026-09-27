@@ -21,6 +21,7 @@ available.
 | File editing | Edit launched a platform default application; terminal editors could compete with the TUI. | Add a focused in-app editor with save/discard handling, conflict detection, atomic saves, permission and CRLF preservation. |
 | Sidebar sizing | Fixed limits could leave little room for the main conversation. | Share terminal-aware limits between drag, keyboard, startup, and terminal resize. |
 | Streaming | Every paragraph boundary recounted all earlier code fences. | Count each span once per boundary scan. |
+| Session browser | Resume picker capped at ~12 transcript rows. | Dedicated searchable, paginated Session Browser with availability, Continue last, and per-project UI state. |
 
 The editor accepts UTF-8 text files up to 1 MB. Binary, invalid UTF-8, and larger
 files remain outside its editing scope. A modal keeps the conversation mounted
@@ -53,12 +54,13 @@ These are proposed acceptance targets, not measured product guarantees.
    a replacement runtime fully before disposing the old one, including rollback
    after runtime initialization failure. Verify by restarting actual backend
    processes and continuing conversations, not only replaying stored text.
-2. **A searchable workspace session panel.** The current resume picker displays
-   at most 12 entries in the transcript. Provide searchable, paginated history
-   with project, title, harness, model, age, and a preview. Offer an explicit
-   “Continue last session” action at startup. Keep missing harnesses and expired
-   credentials visible with actionable recovery. Persist selected session and
-   sidebar layout per project without silently sending prompts.
+2. **A searchable workspace session panel.** Partially done: `:sessions` /
+   `:resume` open a dedicated Session Browser (search, pagination, availability,
+   preview, rename, Continue last) instead of the capped transcript picker.
+   Welcome exposes Continue last session. Selected session and sidebar width
+   persist per project in `.superqode/ui-state.json`. Remaining follow-ups:
+   richer project column grouping across multi-root workspaces, and tighter
+   coupling to a shared resume descriptor (item 1).
 3. **Incremental transcript rendering.** Resume still replays all turns
    synchronously, and streaming still scans the pending tail as chunks arrive.
    Add an indexed transcript model, bounded visible history, load-earlier

@@ -31,6 +31,8 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "plan-approve",
         "plan-edit",
         "plan-reject",
+        "resume-latest",
+        "sessions",
         "skills",
         "systemone",
         "workspace-files",
@@ -184,6 +186,12 @@ class ClickableCommandMixin:
         if command == "workspace-close":
             if getattr(self, "sidebar_visible", False):
                 self.action_toggle_sidebar()
+            return
+        if command == "resume-latest":
+            self._handle_command(":resume latest", log)
+            return
+        if command == "sessions":
+            self._handle_command(":sessions", log)
             return
         if command.startswith("plan-"):
             self._handle_command(f":plan {command.removeprefix('plan-')}", log)

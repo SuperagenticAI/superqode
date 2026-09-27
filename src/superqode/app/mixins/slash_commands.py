@@ -1670,6 +1670,12 @@ class SlashCommandMixin:
         resolved_id = pure_mode.get_current_session_id() or session_id
         self._awaiting_session_resume = False
         self._reset_connect_selection_states()
+        try:
+            from superqode.app.project_ui_state import set_last_session_id
+
+            set_last_session_id(resolved_id)
+        except Exception:
+            pass
         from superqode.providers.registry import PROVIDERS, ProviderCategory
 
         provider_definition = PROVIDERS.get(pure_mode.session.provider)

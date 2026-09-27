@@ -468,7 +468,7 @@ that agent's native runtime connector. An ACP name such as `acp:qwen` starts the
 agent's ACP session and queues a bounded replay of recent user and agent
 messages for its first prompt. SuperQode reports the replay count in the switch
 receipt. Agent-native session resumption remains separate. Add `--fork` only
-for HarnessSpec entries. `:sessions switch` opens a picker grouped by harness. Each group lists rows as `model · topic · age`, with a short id you can type. Resume replays the chat transcript into the conversation log and updates the status bar with harness, model, and session label. Use `:sessions rename <id-or-name> <title>` to set a lasting title, or `:resume latest` to jump to the most recent session.
+for HarnessSpec entries. `:sessions` and `:sessions switch` open the searchable Session Browser (title, harness, model, age, availability, preview). Resume replays the chat transcript into the conversation log and updates the status bar with harness, model, and session label. Use `:sessions rename <id-or-name> <title>` or rename inside the browser, or `:resume latest` / Continue last session to jump to the most recent session.
 Selecting one restores its harness, BYOK provider and model, working directory,
 and the same transcript. Missing credentials or harnesses fail clearly instead
 of opening a blank session. BYOK and PiPy harness sessions remain listed after
@@ -908,16 +908,22 @@ confidence policy, compatible endpoints, and CLI examples.
 
 ## Resume and edit without leaving your session
 
-Use `:resume latest` to restore the most recent session, or `:sessions` to choose
-one. Newly saved custom harness sessions retain their spec path as well as their
+Use `:resume latest` (or the welcome **Continue last session** action) to restore
+the most recent session without sending a prompt. Use `:sessions` or `:resume`
+with no id to open the searchable Session Browser: filter by title, harness,
+model, or id; page through large stores; inspect availability (ok, missing
+harness, bad credentials, external-only); rename; and resume the selection.
+
+Newly saved custom harness sessions retain their spec path as well as their
 harness name. Keep that spec available when returning to the project. Resume
 reports missing credentials, working directories, and referenced transcripts;
 finish or cancel an active turn before switching sessions.
 
-The session picker discovers external harness and PiPy history without importing
-every historical record into the project store. It reads the original model,
-topic, and activity time from the backend record; only the session you resume is
-registered for future use.
+The browser discovers external harness and PiPy history without importing every
+historical record into the project store. It reads the original model, topic,
+and activity time from the backend record; only the session you resume is
+registered for future use. Selected session id and sidebar width are persisted
+per project under `.superqode/ui-state.json`.
 
 Select a file in the sidebar to preview it. With the preview focused:
 

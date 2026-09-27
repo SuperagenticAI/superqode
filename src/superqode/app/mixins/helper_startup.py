@@ -687,6 +687,25 @@ class HelperStartupMixin:
         except Exception:
             pass
 
+        has_sessions = False
+        last_session_label = ""
+        try:
+            from superqode.agent.session_manager import SessionManager
+            from superqode.app.project_ui_state import get_last_session_id
+            from superqode.session.harness_bridge import session_short_label
+
+            sessions = SessionManager().list_all_sessions()
+            has_sessions = bool(sessions)
+            last_id = get_last_session_id() or (sessions[0].session_id if sessions else "")
+            if last_id and sessions:
+                meta = next(
+                    (item for item in sessions if item.session_id == last_id),
+                    sessions[0],
+                )
+                last_session_label = session_short_label(meta)
+        except Exception:
+            pass
+
         return WelcomeState(
             repository=repository or team_name,
             harness=harness_name,
@@ -694,6 +713,8 @@ class HelperStartupMixin:
             runtime=runtime,
             mode=mode,
             approval=str(getattr(self, "approval_mode", "ask") or "ask"),
+            has_sessions=has_sessions,
+            last_session_label=last_session_label,
         )
 
     def _rerender_welcome(self) -> None:

@@ -25,6 +25,8 @@ class WelcomeState:
     runtime: str = ""
     mode: str = "build"
     approval: str = "ask"
+    has_sessions: bool = False
+    last_session_label: str = ""
 
     @property
     def connected(self) -> bool:
@@ -99,10 +101,17 @@ def _truncate_middle(value: str, limit: int) -> str:
 def _next_steps(state: WelcomeState) -> List[tuple[str, str, str]]:
     """Return the next step matching the user's recorded progress."""
     if not state.connected:
-        return [
-            (":connect", "choose who runs the coding loop", THEME["cyan"]),
-            (":help", "see every command", THEME["cyan"]),
-        ]
+        steps = []
+        if state.has_sessions:
+            steps.append((":resume latest", "continue last session", THEME["pink"]))
+            steps.append((":sessions", "browse saved sessions", THEME["cyan"]))
+        steps.extend(
+            [
+                (":connect", "choose who runs the coding loop", THEME["cyan"]),
+                (":help", "see every command", THEME["cyan"]),
+            ]
+        )
+        return steps
 
     try:
         from superqode.app.progress import load_progress
@@ -176,6 +185,17 @@ def render_welcome(
         items.append(next_text)
 
         footer = Text()
+        if state.has_sessions:
+            footer.append(
+                ":resume latest",
+                style=f"bold {THEME['pink']} {command_link('resume-latest')}",
+            )
+            footer.append(" continue last  •  ", style=THEME["muted"])
+            footer.append(
+                ":sessions",
+                style=f"bold {THEME['cyan']} {command_link('sessions')}",
+            )
+            footer.append(" browse  •  ", style=THEME["muted"])
         footer.append(":hub", style=f"bold {THEME['cyan']}")
         footer.append(" harnesses  •  ", style=THEME["muted"])
         footer.append(":explore", style=f"bold {THEME['cyan']}")
@@ -288,6 +308,18 @@ def render_welcome(
         items.append(place(drive_text))
 
     workspace_text = Text(justify=align)
+    if state.has_sessions:
+        label = state.last_session_label or "last session"
+        workspace_text.append(
+            "Continue last session",
+            style=f"bold {THEME['pink']} {command_link('resume-latest')}",
+        )
+        workspace_text.append(f"  ·  {label}  ·  ", style=THEME["muted"])
+        workspace_text.append(
+            ":sessions",
+            style=f"bold {THEME['cyan']} {command_link('sessions')}",
+        )
+        workspace_text.append(" browse\n", style=THEME["muted"])
     workspace_text.append(
         "Files & changes ↗",
         style=f"bold {THEME['pink']} {command_link('workspace-files')}",

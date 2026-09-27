@@ -18,8 +18,10 @@ class SidebarMixin:
     def _init_sidebar_resize(self):
         """Initialize sidebar resize handling."""
         try:
+            from superqode.app.project_ui_state import get_sidebar_width
+
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            self._set_sidebar_width(34)
+            self._set_sidebar_width(get_sidebar_width(default=34))
         except Exception:
             pass
 
@@ -30,6 +32,12 @@ class SidebarMixin:
         width = max(30, min(maximum, requested))
         sidebar.styles.width = width
         sidebar._width = width
+        try:
+            from superqode.app.project_ui_state import set_sidebar_width
+
+            set_sidebar_width(width)
+        except Exception:
+            pass
 
     def _update_sidebar_agent_panel(self, **kwargs):
         """Update the agent panel in sidebar with current agent info."""
