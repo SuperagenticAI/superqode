@@ -38,16 +38,21 @@ def test_markdown_fence_with_table_is_unwrapped():
     assert "A" in out and "B" in out and "1" in out and "2" in out
 
 
-def test_non_markdown_code_fence_stays_code():
-    text = "```python\nprint('hi')\n```"
-
-    normalized = normalize_agent_markdown(text)
+def test_multiline_python_code_block_renders_with_line_numbers_and_count():
+    text = "```python\ndef add(a, b):\n    return a + b\n\nresult = add(1, 2)\n```"
     out = _render_text(text)
 
-    assert normalized == text
     assert "python" in out
-    assert "╭" in out
-    assert "print" in out
+    assert "lines" in out
+    assert "def add" in out
+
+
+def test_bash_code_block_renders_with_icon():
+    text = "```bash\necho 'hello world'\n```"
+    out = _render_text(text)
+
+    assert "bash" in out
+    assert "echo" in out
 
 
 def test_agent_code_theme_tracks_selected_tui_theme():

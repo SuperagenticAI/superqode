@@ -438,7 +438,6 @@ class SuperQodeApp(
                             # No restrict parameter - allow all characters including colon
                         )
                     yield Static("", id="prompt-completions")
-                    yield Static("", id="run-input-hint")
                     yield Static("", id="queued-input")
                     yield HintsBar(id="hints")
 

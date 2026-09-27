@@ -65,12 +65,6 @@ class CommandImplMixin:
             return
         panel.update(f"◈ {title} · {phase} · {elapsed:.0f}s\n{command}")
         panel.add_class("visible")
-        try:
-            hint = self.query_one("#run-input-hint", Static)
-            hint.update("Installing · Esc cancels" if phase == "Installing" else "")
-            hint.set_class(phase == "Installing", "visible")
-        except Exception:
-            pass
 
     def _copy_setup_command(self, command: str, log) -> bool:
         """Copy the exact displayed setup command with an explicit result."""

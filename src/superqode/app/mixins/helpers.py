@@ -402,15 +402,12 @@ class HelpersMixin(
         )
 
     def watch_is_busy(self, old: bool, new: bool) -> None:
-        """When the agent becomes idle, drain any queued type-ahead messages."""
+        """Hide the prompt box while the agent is busy; restore and focus when idle."""
         try:
-            from textual.widgets import Static
-
-            hint = self.query_one("#run-input-hint", Static)
-            hint.update(
-                "Enter queues next · :steer <text> changes this run · Esc stops" if new else ""
-            )
-            hint.set_class(new, "visible")
+            prompt_area = self.query_one("#prompt-area")
+            prompt_area.set_class(new, "hidden")
+            if not new:
+                self.set_timer(0.05, self._focus_input_on_ready)
         except Exception:
             pass
         if old and not new and getattr(self, "_typeahead_queue", []):

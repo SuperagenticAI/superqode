@@ -185,10 +185,9 @@ ConversationLog {
 }
 #new-output-indicator.visible { display: block; }
 
-/* Prompt area stays at the top and remains usable during agent work. */
+/* Prompt area - hidden when agent is working to give full space to transcript */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
 #prompt-area.hidden { display: none; }
-#prompt-area.working #input-box { border: solid #a855f7; }
 #mode-badge { display: none; }
 #input-box {
     height: auto;
@@ -196,16 +195,15 @@ ConversationLog {
     max-height: 10;
     width: 100%;
     background: #000000;
-    border: heavy #d4d4d8;
+    border: round #3f3f46;
     border-title-color: #fafafa;
     border-subtitle-color: #71717a;
     margin: 1 2 0 2;
     padding: 0 1;
     overflow: hidden;
 }
-/* Same black as the surrounding prompt area: the white border carries focus,
-   so a lighter fill only reads as grey against it. */
-#input-box:focus-within { border: heavy #ffffff; background: #000000; }
+/* Focus glow: SuperQode purple border */
+#input-box:focus-within { border: round #a855f7; background: #000000; }
 /* One column wider than the "<>" glyph, left aligned, so the trailing gap is
    the gutter rather than a rounding artifact of centring. */
 #prompt-symbol {
@@ -243,8 +241,6 @@ ConversationLog {
 #prompt-completions.visible {
     display: block;
 }
-#run-input-hint { display: none; height: 1; margin: 0 2; color: #c4b5fd; }
-#run-input-hint.visible { display: block; }
 #hints { text-align: center; color: #71717a; height: 1; margin-top: 0; padding: 0; }
 
 #active-tools {

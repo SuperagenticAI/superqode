@@ -142,10 +142,11 @@ class AgentRunMixin:
         # IMPORTANT: Enable auto-scroll so user sees agent's work in real-time
         log.auto_scroll = True
 
-        # Keep the composer available for live steering or the next message.
+        # Hide prompt area while agent is working so it doesn't take space
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("working")
+            prompt_area.add_class("hidden")
+            prompt_area.remove_class("working")
         except Exception:
             pass
 
@@ -177,9 +178,10 @@ class AgentRunMixin:
         """Stop the streaming animation."""
         self.is_busy = False
 
-        # Restore the idle composer styling.
+        # Restore prompt area when agent finishes
         try:
             prompt_area = self.query_one("#prompt-area")
+            prompt_area.remove_class("hidden")
             prompt_area.remove_class("working")
             # Re-focus the input
             self.query_one("#prompt-input", SelectionAwareInput).focus()
@@ -246,10 +248,11 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Keep the composer available while the run is active.
+        # Hide prompt area while agent is working so it doesn't take space
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.add_class("working")
+            prompt_area.add_class("hidden")
+            prompt_area.remove_class("working")
         except Exception:
             pass
 
@@ -292,9 +295,10 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Restore the idle composer styling.
+        # Restore prompt area when agent finishes
         try:
             prompt_area = self.query_one("#prompt-area")
+            prompt_area.remove_class("hidden")
             prompt_area.remove_class("working")
             self.query_one("#prompt-input", SelectionAwareInput).focus()
         except Exception:

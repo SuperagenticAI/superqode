@@ -62,24 +62,27 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
-async def test_composer_stays_available_while_agent_is_working():
+async def test_composer_hides_while_agent_is_working_and_restores_when_idle():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         composer = app.query_one("#prompt-area")
-        hint = app.query_one("#run-input-hint", Static)
 
         app._start_thinking()
         await pilot.pause()
-        assert composer.display
-        assert composer.has_class("working")
-        assert hint.has_class("visible")
-        assert "steer" in str(hint.render())
+        assert composer.has_class("hidden")
 
         app._stop_thinking()
         await pilot.pause()
-        assert composer.display
-        assert not composer.has_class("working")
-        assert not hint.has_class("visible")
+        assert not composer.has_class("hidden")
+
+        # Directly setting is_busy (e.g. during agent loop or tool runs) also hides/restores
+        app.is_busy = True
+        await pilot.pause()
+        assert composer.has_class("hidden")
+
+        app.is_busy = False
+        await pilot.pause()
+        assert not composer.has_class("hidden")
 
 
 async def test_install_progress_is_visible_until_cleared():

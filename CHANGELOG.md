@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Clean focused prompt lifecycle: when an agent is working (streaming or thinking),
+  the prompt box hides completely (`display: none`) to give maximum screen space
+  to the transcript and tool outputs, returning and auto-focusing as soon as the
+  turn finishes (pass, fail, or cancel).
+- Refined input styling: rounded borders with subtle zinc idle frame and signature
+  purple focus accent.
 - Session file markers: successful edit/write tool calls mark files in the
   sidebar file tree (`●` / `●n`) with a session count in the title, without
   stealing the current sidebar view; `:disconnect` clears the markers.

@@ -43,47 +43,133 @@ class AgentHeading(Heading):
         yield Text(prefix, style=f"bold {color}") + Text(text.plain, style=f"bold {color}")
 
 
+class AgentCodespan(Text):
+    """Inline code with subtle purple tint."""
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        theme = _live_theme()
+        text = self.copy()
+        text.stylize(f"bold {theme['purple']} on {theme.get('code_bg', theme['bg'])}")
+        yield text
+
+
 class AgentCodeBlock(CodeBlock):
     """Code fences rendered as compact SuperQode-style panels."""
 
     LANG_ICONS = {
         "python": "🐍",
         "py": "🐍",
+        "python3": "🐍",
+        "py3": "🐍",
+        "bash": "⚡",
+        "sh": "⚡",
+        "shell": "⚡",
+        "zsh": "⚡",
+        "console": "⚡",
+        "terminal": "⚡",
+        "shell-session": "⚡",
         "javascript": "📜",
         "js": "📜",
         "typescript": "💠",
         "ts": "💠",
-        "bash": "🖥",
-        "sh": "🖥",
-        "shell": "🖥",
+        "jsx": "💠",
+        "tsx": "💠",
         "json": "📋",
         "yaml": "📝",
         "yml": "📝",
+        "toml": "⚙️",
         "html": "🌐",
         "css": "🎨",
         "sql": "🗄",
         "go": "🐹",
+        "golang": "🐹",
         "rust": "🦀",
+        "rs": "🦀",
         "java": "☕",
         "ruby": "💎",
+        "dockerfile": "🐳",
+        "docker": "🐳",
+        "diff": "±",
+        "markdown": "📖",
+        "md": "📖",
+    }
+
+    NORMALIZE_LEXER = {
+        "py": "python",
+        "python3": "python",
+        "py3": "python",
+        "pycon": "pycon",
+        "sh": "bash",
+        "shell": "bash",
+        "zsh": "bash",
+        "console": "bash",
+        "shell-session": "bash",
+        "shellsession": "bash",
+        "terminal": "bash",
+        "js": "javascript",
+        "ts": "typescript",
+        "jsx": "jsx",
+        "tsx": "tsx",
+        "yml": "yaml",
+        "rs": "rust",
+        "golang": "go",
+        "docker": "dockerfile",
+        "md": "markdown",
     }
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         theme = _live_theme()
         code = str(self.text).rstrip()
-        lang = self.lexer_name or "text"
-        icon = self.LANG_ICONS.get(lang.lower(), "📄")
-        syntax = Syntax(
-            code,
-            lang,
-            theme=self.theme,
-            word_wrap=True,
-            padding=(0, 1),
-            background_color=theme.get("code_bg", theme["bg"]),
+        lang = (self.lexer_name or "text").strip() or "text"
+        lexer = self.NORMALIZE_LEXER.get(lang.lower(), lang)
+        icon = self.LANG_ICONS.get(lexer.lower(), self.LANG_ICONS.get(lang.lower(), "📄"))
+        # Validate lexer against Pygments; fall back to plain text instead of crashing.
+        try:
+            from pygments.lexers import get_lexer_by_name
+
+            get_lexer_by_name(lexer)
+        except Exception:
+            try:
+                lexer = Syntax.guess_lexer(code, default="text")
+            except Exception:
+                lexer = "text"
+        # Strip shell/REPL prompts so `$ ls` / `>>> print()` highlight cleanly.
+        if lexer == "bash":
+            code = re.sub(r"(?m)^\s*\$\s?", "", code)
+        elif lexer in ("python", "pycon"):
+            code = re.sub(r"(?m)^\s*>>>\s?", "", code)
+            code = re.sub(r"(?m)^\s*\.\.\.\s?", "", code)
+        lines = code.splitlines()
+        line_count = len(lines)
+        show_line_numbers = line_count >= 3
+        try:
+            syntax = Syntax(
+                code,
+                lexer,
+                theme=self.theme,
+                word_wrap=False,
+                line_numbers=show_line_numbers,
+                padding=(0, 1),
+                background_color=theme.get("code_bg", theme["bg"]),
+            )
+        except Exception:
+            syntax = Syntax(
+                code,
+                "text",
+                theme=self.theme,
+                word_wrap=False,
+                line_numbers=show_line_numbers,
+                padding=(0, 1),
+                background_color=theme.get("code_bg", theme["bg"]),
+            )
+        title_suffix = (
+            f" [dim]({line_count} line{'s' if line_count != 1 else ''})[/]"
+            if line_count > 1
+            else ""
         )
         yield Panel(
             syntax,
-            title=f"[bold {theme['purple']}]{icon} {lang}[/]",
+            title=f"[bold {theme['purple']}]{icon} {lang}[/]{title_suffix}",
             border_style=theme["purple"],
             padding=(0, 0),
         )
@@ -97,6 +183,7 @@ class AgentMarkdown(Markdown):
         "heading_open": AgentHeading,
         "fence": AgentCodeBlock,
         "code_block": AgentCodeBlock,
+        "codespan_open": AgentCodespan,
     }
 
 
