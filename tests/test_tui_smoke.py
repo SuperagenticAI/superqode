@@ -454,6 +454,8 @@ def test_welcome_uses_unified_harness_positioning():
     assert "Ctrl+C" not in text
     # What remains is the product and one line telling you how to drive it.
     assert "Browse it like a browser" in text
+    assert "with your mouse  ·  or drive it like a pro with : and :vim on" in text
+    assert "Files & changes ↗" in text
     assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
@@ -466,6 +468,29 @@ def test_welcome_uses_unified_harness_positioning():
     assert lines[headline_index + 1] == ""
     assert lines[capabilities_index + 1] == ""
     assert lines[lifecycle_index + 1] == ""
+
+
+def test_home_workspace_action_is_clickable_and_opens_existing_sidebar():
+    welcome = render_welcome([], width=100, state=WelcomeState(repository="/work/repository"))
+    console = Console(width=100, force_terminal=False)
+    links = {
+        segment.style.link
+        for segment in console.render(welcome)
+        if segment.style is not None and segment.style.link
+    }
+    assert "superqode://cmd/workspace-files" in links
+
+    app = make_app()
+    opened = []
+    app._clicked_command_log = lambda: FakeLog()
+    app.action_sidebar_files = lambda: opened.append(True)
+    app._dispatch_clicked_command("workspace-files")
+    assert opened == [True]
+
+    app.sidebar_visible = True
+    app.action_toggle_sidebar = lambda: opened.append(False)
+    app._dispatch_clicked_command("workspace-close")
+    assert opened == [True, False]
 
 
 def test_welcome_shows_workspace_state_with_a_single_next_step():
@@ -687,7 +712,10 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
     assert 'open -a "LM Studio"' in text
     assert "lms server start --port 1234" in text
     assert "npx lmstudio install-cli" in text
-    assert pinned
+    assert not pinned
+    assert app._prompts.is_active("local_server_setup")
+    assert "Copy setup command" in text
+    assert "I completed setup — check again" in text
 
 
 def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypatch):
@@ -728,7 +756,9 @@ def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypa
     assert "lms server start --port 1234" in text
     assert "Need SuperQode to run that command? Press Enter" not in text
     assert "npx lmstudio install-cli" not in text
-    assert pinned
+    assert not pinned
+    assert app._prompts.is_active("local_server_setup")
+    assert "Copy setup command" in text
 
 
 def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
@@ -766,10 +796,12 @@ def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
     assert handled is True
     assert app._awaiting_local_server_start == "lmstudio"
     assert "LM Studio is open and the lms CLI is available" in text
-    assert "Need SuperQode to run that command? Press Enter" in text
+    assert "Start with SuperQode" in text
     assert "lms server start --port 1234" in text
     assert 'open -a "LM Studio"' not in text
-    assert pinned
+    assert not pinned
+    assert app._prompts.is_active("local_server_setup")
+    assert "click a row" in text
 
 
 def test_startable_local_server_prompt_is_manual_first(monkeypatch):
@@ -809,10 +841,10 @@ def test_startable_local_server_prompt_is_manual_first(monkeypatch):
     assert "https://docs.ollama.com/context-length" in text
     assert ":local serve ollama" in text
     assert "Edit the model, port, or context if your setup needs it." in text
-    assert "Need SuperQode to start a managed server? Press Enter" in text
+    assert "Start with SuperQode" in text
     assert "to start it now" not in text
-    assert pinned
-    assert "Start ollama yourself" in pinned[-1][0]
+    assert not pinned
+    assert app._prompts.is_active("local_server_setup")
 
 
 def test_ds4_managed_start_prompt_explains_actions_and_stop_command(monkeypatch):
@@ -924,10 +956,6 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
     )
 
     app = SuperQodeApp.__new__(SuperQodeApp)
-    pinned = []
-    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
-        (placeholder, kwargs)
-    )
     log = FakeLog()
 
     handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "mlx", log))
@@ -936,14 +964,17 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
     assert handled is True
     assert app._awaiting_local_dep_install == "mlx"
     assert app._awaiting_local_provider is False
-    assert "SuperQode is running from: SuperQode dev checkout" in text
-    assert "This will modify: the SuperQode checkout at /tmp/superqode" in text
-    assert "Exact command:" in text
+    assert app._prompts.is_active("local_dependency_install")
+    assert "Setup required" in text
+    assert "MLX local models" in text
+    assert "SuperQode dev checkout" in text
+    assert "the SuperQode checkout at /tmp/superqode" in text
+    assert "Exact command" in text
     assert "uv pip install --python /tmp/superqode/.venv/bin/python" in text
-    assert "Press Enter to run that exact command" in text
-    assert "Copy the command above into another terminal" in text
-    assert "restart SuperQode and run :connect local again" in text
-    assert pinned
+    assert "Install MLX now" in text
+    assert "Copy install command" in text
+    assert "I installed it — check again" in text
+    assert "click a row" in text
 
 
 def test_runtime_missing_message_includes_environment_context(monkeypatch):
@@ -2320,9 +2351,11 @@ def test_harness_picker_offers_in_tui_python_extra_install():
     assert pending["resume_command"] == "switch tau"
     assert "[tau]" in pending["command"]
     rendered = render_plain(log.items[-1])
-    assert "Install Python integration" in rendered
-    assert "Enter install and continue" in rendered
-    assert f">{pending['command']}" in rendered
+    assert "Setup required" in rendered
+    assert "Install and continue" in rendered
+    assert "Copy install command" in rendered
+    assert pending["command"] in rendered
+    assert app._prompts.is_active("harness_install")
 
 
 def test_harness_install_confirmation_runs_worker():

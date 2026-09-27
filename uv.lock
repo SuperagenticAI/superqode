@@ -23131,7 +23131,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "2.4.18"
+version = "2.4.19"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },

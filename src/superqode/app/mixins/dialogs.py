@@ -2220,7 +2220,9 @@ class DialogsMixin:
         """Show the final response with proper formatting and word wrapping."""
         # Store the response for :copy command
         self._last_response = response_text
-        self._capture_plan_artifact(response_text)
+        capture_plan = getattr(self, "_capture_plan_artifact", None)
+        if callable(capture_plan):
+            capture_plan(response_text)
 
         # Dim chrome: a single subtle rule + quiet completion note, so the
         # answer that follows is what stands out (not the separator).
@@ -2240,7 +2242,9 @@ class DialogsMixin:
         footer.append("\n", style="")
         log.write(footer)
         log._schedule_completed_response_reveal()
-        self._mark_approved_plan_executed()
+        mark_plan_executed = getattr(self, "_mark_approved_plan_executed", None)
+        if callable(mark_plan_executed):
+            mark_plan_executed()
 
     # Keep old method name for compatibility
     def _show_beautiful_response(
@@ -2261,7 +2265,9 @@ class DialogsMixin:
         # Store the response for :copy command
         log._last_response = response_text
         self._last_response = response_text
-        self._capture_plan_artifact(response_text)
+        capture_plan = getattr(self, "_capture_plan_artifact", None)
+        if callable(capture_plan):
+            capture_plan(response_text)
 
         duration = summary.get("duration", 0)
         tool_count = summary.get("tool_count", 0)
@@ -2367,7 +2373,9 @@ class DialogsMixin:
             log.reveal_decision_response()
         else:
             log._schedule_completed_response_reveal()
-        self._mark_approved_plan_executed()
+        mark_plan_executed = getattr(self, "_mark_approved_plan_executed", None)
+        if callable(mark_plan_executed):
+            mark_plan_executed()
 
     #: Suggested commands, in the order they become useful. Only unused ones
     #: are offered.

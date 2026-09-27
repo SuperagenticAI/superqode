@@ -19,7 +19,7 @@ class SidebarMixin:
         """Initialize sidebar resize handling."""
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            self._set_sidebar_width(80)
+            self._set_sidebar_width(34)
         except Exception:
             pass
 
@@ -89,19 +89,14 @@ class SidebarMixin:
             pass
 
     def _navigate_to_sidebar_changes(self, files_modified: list):
-        """Navigate sidebar to Changes tab and highlight modified files."""
+        """Record session edits and refresh Changes without stealing the current view."""
         try:
             # Find the sidebar
             sidebar = self.query_one("CollapsibleSidebar", raise_on_error=False)
             if not sidebar:
                 return
 
-            # Find the tabs widget
-            tabs = sidebar.query_one("SidebarTabs", raise_on_error=False)
-            if tabs:
-                # Switch to changes tab
-                tabs.active_tab = "changes"
-                tabs.post_message(tabs.TabChanged("changes"))
+            sidebar.mark_session_modified(files_modified)
 
             # Find the GitChangesPanel and refresh it
             changes_panel = sidebar.query_one("GitChangesPanel", raise_on_error=False)
@@ -124,6 +119,19 @@ class SidebarMixin:
             # Silently fail - sidebar might not be available
             pass
 
+    def _record_sidebar_session_files(self, files: list[str]) -> None:
+        """Update live session markers without navigating the sidebar."""
+        try:
+            self.query_one("#sidebar", CollapsibleSidebar).mark_session_modified(files)
+        except Exception:
+            pass
+
+    def _clear_sidebar_session_files(self) -> None:
+        try:
+            self.query_one("#sidebar", CollapsibleSidebar).clear_session_modified()
+        except Exception:
+            pass
+
     def action_toggle_sidebar(self):
         self.sidebar_visible = not self.sidebar_visible
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -141,13 +149,13 @@ class SidebarMixin:
     def action_shrink_sidebar(self):
         """Shrink sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-        current_width = getattr(sidebar, "_width", 80)
+        current_width = getattr(sidebar, "_width", 34)
         self._set_sidebar_width(current_width - 10)
 
     def action_expand_sidebar(self):
         """Expand sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-        current_width = getattr(sidebar, "_width", 80)
+        current_width = getattr(sidebar, "_width", 34)
         self._set_sidebar_width(current_width + 10)
 
     def action_sidebar_files(self):

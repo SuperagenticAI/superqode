@@ -373,6 +373,45 @@ class ColorfulDirectoryTree(DirectoryTree):
             self.path = path
             super().__init__()
 
+    def __init__(self, path: Path | str, *args, **kwargs):
+        self.root_path = Path(path).resolve()
+        self._session_modified_files: set[Path] = set()
+        super().__init__(path, *args, **kwargs)
+
+    def set_session_modified_files(self, paths) -> None:
+        """Mark files changed by the active SuperQode session."""
+        resolved: set[Path] = set()
+        for value in paths or ():
+            try:
+                path = Path(str(value)).expanduser()
+                if not path.is_absolute():
+                    path = self.root_path / path
+                path = path.resolve()
+                path.relative_to(self.root_path)
+            except (OSError, ValueError):
+                continue
+            resolved.add(path)
+        self._session_modified_files = resolved
+        self.refresh()
+
+    def _session_change_count(self, path: Path) -> int:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return 0
+        if resolved in self._session_modified_files:
+            return 1
+        if not path.is_dir():
+            return 0
+        count = 0
+        for changed in self._session_modified_files:
+            try:
+                changed.relative_to(resolved)
+            except ValueError:
+                continue
+            count += 1
+        return count
+
     def render_label(self, node: TreeNode, base_style, style) -> Text:
         """Render a label with file type icon."""
         path = node.data.path if node.data else None
@@ -388,11 +427,16 @@ class ColorfulDirectoryTree(DirectoryTree):
             icon, color = get_folder_icon(path.name, is_open)
             label.append(f"{icon} ", style=f"bold {color}")
             label.append(path.name, style=f"{color}")
+            changed_count = self._session_change_count(path)
+            if changed_count:
+                label.append(f"  ●{changed_count}", style="bold #ec4899")
         else:
             # File with icon
             icon, color = get_file_icon(path)
             label.append(f"{icon} ", style=color)
             label.append(path.name, style="white")
+            if self._session_change_count(path):
+                label.append("  ●", style="bold #ec4899")
 
         return label
 
@@ -2679,6 +2723,7 @@ class CollapsibleSidebar(Container):
         super().__init__(name=name, id=id, classes=classes)
         self.root_path = Path(path).resolve()
         self._current_file: Optional[Path] = None
+        self._session_modified_files: set[Path] = set()
 
     def compose(self) -> ComposeResult:
         """Compose the sidebar layout with all panels."""
@@ -2743,16 +2788,64 @@ class CollapsibleSidebar(Container):
 
     def _render_title(self) -> Text:
         """Render the sidebar title."""
+        from superqode.app.mixins.clickable_commands import command_link
+
         t = Text()
         t.append("\n", style="")
         t.append("📁 ", style="bold #ec4899")
-        t.append(self.root_path.name or "Project", style="bold #a855f7")
-        t.append("  ", style="")
-        t.append("Ctrl+B", style="#71717a")
-        t.append(" close  ", style="#3f3f46")
-        t.append("Ctrl+F", style="#71717a")
-        t.append(" search", style="#3f3f46")
+        project = self.root_path.name or "Project"
+        if len(project) > 13:
+            project = project[:12].rstrip() + "…"
+        t.append(project, style="bold #a855f7")
+        if self._session_modified_files:
+            count = len(self._session_modified_files)
+            t.append(f"  ●{count}", style="bold #ec4899")
+        t.append("  [", style="#3f3f46")
+        t.append(
+            "× Close ↗",
+            style=f"bold #f472b6 {command_link('workspace-close')}",
+        )
+        t.append("]", style="#3f3f46")
         return t
+
+    def mark_session_modified(self, files: List[str]) -> None:
+        """Accumulate session edits and refresh tree/preview without changing tabs."""
+        for value in files or ():
+            try:
+                path = Path(str(value)).expanduser()
+                if not path.is_absolute():
+                    path = self.root_path / path
+                path = path.resolve()
+                path.relative_to(self.root_path)
+            except (OSError, ValueError):
+                continue
+            self._session_modified_files.add(path)
+
+        try:
+            self.query_one("#file-tree", ColorfulDirectoryTree).set_session_modified_files(
+                self._session_modified_files
+            )
+            self.query_one(".sidebar-title", Static).update(self._render_title())
+        except Exception:
+            pass
+
+        # If the user is already watching a file the agent changed, refresh it
+        # in place. Never steal focus or replace a pinned preview with another.
+        if self._current_file is not None:
+            try:
+                current = self._current_file.resolve()
+                if current in self._session_modified_files:
+                    self.query_one("#file-preview", FilePreview).set_file(current)
+            except (OSError, ValueError):
+                pass
+
+    def clear_session_modified(self) -> None:
+        self._session_modified_files.clear()
+        try:
+            self.query_one("#file-tree", ColorfulDirectoryTree).set_session_modified_files(())
+            self.query_one(".sidebar-title", Static).update(self._render_title())
+        except Exception:
+            pass
 
     def watch_current_view(self, view: str) -> None:
         """Switch between all sidebar views."""

@@ -230,7 +230,11 @@ class SelectionAwareInput(TextArea):
                 event.prevent_default()
                 return
 
-        if event.key == "left":
+        # Backspace is the familiar browser-style Back key on a keyboard and
+        # is easier to reach than Left Arrow. It only navigates with a truly
+        # empty prompt, so normal deletion is never intercepted. Keep Left as
+        # a compatible shortcut for users already accustomed to it.
+        if event.key in {"backspace", "left"}:
             go_back = getattr(app, "_navigate_back_from_keyboard", None)
             if callable(go_back) and go_back(self.value):
                 event.stop()

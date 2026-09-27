@@ -1750,6 +1750,7 @@ class SlashCommandMixin:
 
         # Replay chat bubbles before the resume receipt so the receipt lands at
         # the bottom of the restored transcript.
+        self._clear_sidebar_session_files()
         self._replay_resumed_transcript(log, turns, receipt=receipt)
 
         detail_parts = []
@@ -3168,40 +3169,13 @@ class SlashCommandMixin:
                         log.add_info(f"Connecting to {agent_data['name']}...")
                         self._connect_agent(agent_data["short_name"])
                         return True
-                    else:
-                        # Show install message
-                        from superqode.agents.registry import get_agent_installation_info
-
-                        install_info = get_agent_installation_info(agent_data)
-                        install_cmd = install_info.get("command", "")
-
-                        t = Text()
-                        t.append(f"\n  ⚠️  ", style=THEME["warning"])
-                        t.append(
-                            f"{agent_data['name']} is not installed.\n\n",
-                            style=f"bold {THEME['text']}",
-                        )
-
-                        if install_cmd:
-                            t.append(f"  Install with:\n", style=THEME["muted"])
-                            t.append(f"    ", style=THEME["dim"])
-                            t.append(f"{install_cmd}\n", style=THEME["cyan"])
-                            t.append(f"\n  Or use: ", style=THEME["dim"])
-                            t.append(
-                                f":acp install {agent_data['short_name']}\n", style=THEME["cyan"]
-                            )
-                        else:
-                            t.append(
-                                f"  Installation instructions not available.\n",
-                                style=THEME["muted"],
-                            )
-                            t.append(f"  Try: ", style=THEME["dim"])
-                            t.append(
-                                f":acp install {agent_data['short_name']}\n", style=THEME["cyan"]
-                            )
-
-                        log.write(t)
+                    if self._show_agent_install_picker(agent_data, log):
                         return True
+                    log.add_error(
+                        f"No installation command is registered for {agent_data['name']}. "
+                        f"Open :hub and inspect {agent_data['short_name']} for vendor guidance."
+                    )
+                    return True
                 else:
                     log.add_error(
                         f"Invalid selection. Choose a number between 1 and {len(self._acp_agent_list)}"

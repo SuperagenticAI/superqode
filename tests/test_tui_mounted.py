@@ -1165,6 +1165,53 @@ async def test_plan_review_alt_shortcuts_are_scoped_to_ready_plan(monkeypatch):
         assert handled == ["approve", "edit", "reject"]
 
 
+async def test_successful_edit_tool_marks_file_in_sidebar_session(tmp_path, monkeypatch):
+    from superqode.sidebar import CollapsibleSidebar, ColorfulDirectoryTree
+
+    monkeypatch.chdir(tmp_path)
+    changed = tmp_path / "changed.py"
+    changed.write_text("updated\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(110, 30)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        sidebar = app.query_one("#sidebar", CollapsibleSidebar)
+
+        log.add_tool_call("edit_file", status="success", file_path="changed.py")
+        await pilot.pause()
+
+        tree = sidebar.query_one("#file-tree", ColorfulDirectoryTree)
+        assert changed.resolve() in sidebar._session_modified_files
+        assert changed.resolve() in tree._session_modified_files
+        assert "●1" in str(sidebar.query_one(".sidebar-title", Static).render())
+        file_node = SimpleNamespace(
+            data=SimpleNamespace(path=changed), label=changed.name, is_expanded=False
+        )
+        folder_node = SimpleNamespace(
+            data=SimpleNamespace(path=tmp_path), label=tmp_path.name, is_expanded=True
+        )
+        assert tree.render_label(file_node, None, None).plain.endswith("●")
+        assert tree.render_label(folder_node, None, None).plain.endswith("●1")
+
+        app.action_sidebar_files()
+        await pilot.pause()
+        assert app.sidebar_visible
+        assert sidebar.current_view == "files"
+        assert sidebar._width == 34
+        title_widget = sidebar.query_one(".sidebar-title", Static)
+        title = title_widget.render()
+        assert "× Close ↗" in str(title)
+        assert any("superqode://cmd/workspace-close" in str(span.style) for span in title.spans)
+        close_column = title.plain.splitlines()[1].index("Close") + 1
+        await pilot.click(
+            offset=(
+                title_widget.content_region.x + close_column,
+                title_widget.content_region.y + 1,
+            )
+        )
+        await pilot.pause()
+        assert not app.sidebar_visible
+
+
 async def test_quit_command_quits_from_harness_wizard(monkeypatch):
     """Typing :quit mid-wizard must reach the quit handler, not become an answer."""
     app = SuperQodeApp()
@@ -1193,6 +1240,8 @@ async def test_disconnect_tears_down_runtime_and_harness(monkeypatch):
     ``:home`` deliberately keeps ``_pure_mode`` warm, so a cosmetic-only reset
     left BYOK/local/SDK sessions connected while the badge claimed otherwise.
     """
+    from superqode.sidebar import CollapsibleSidebar
+
     calls = []
 
     class _FakePureMode:
@@ -1219,6 +1268,8 @@ async def test_disconnect_tears_down_runtime_and_harness(monkeypatch):
         bar.active_runtime = "codex-sdk"
         bar.active_model = "gpt-5.5"
         bar.active_harness = "review-harness"
+        sidebar = app.query_one("#sidebar", CollapsibleSidebar)
+        sidebar.mark_session_modified(["src/session-change.py"])
         await pilot.pause()
 
         app._disconnect_everything(log)
@@ -1237,6 +1288,7 @@ async def test_disconnect_tears_down_runtime_and_harness(monkeypatch):
         assert bar.active_harness == ""
         assert app.current_model == ""
         assert app.current_provider == ""
+        assert sidebar._session_modified_files == set()
 
 
 async def test_home_keeps_the_warm_runtime_session_and_shows_it():
@@ -2424,6 +2476,32 @@ async def test_left_arrow_matches_back_button_only_with_empty_prompt():
         assert app._connect_menu == CONNECT_MENU_ROOT
 
 
+async def test_backspace_matches_back_button_only_with_empty_prompt():
+    """Backspace navigates only when it has no prompt text to delete."""
+    from superqode.providers.connection_profiles import CONNECT_MENU_PROTOCOLS, CONNECT_MENU_ROOT
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        app._show_connect_type_picker(log)
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_PROTOCOLS)
+        await pilot.pause()
+
+        prompt.focus()
+        prompt.load_text("draft")
+        prompt.cursor_position = len(prompt.value)
+        await pilot.press("backspace")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_PROTOCOLS
+        assert prompt.value == "draf"
+
+        prompt.load_text("")
+        await pilot.press("backspace")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_ROOT
+
+
 def _modal_body(app) -> str:
     """Read the text out of the open outcome modal."""
     from textual.widgets import Static
@@ -2810,13 +2888,14 @@ async def test_npm_agent_is_manual_only(monkeypatch):
         assert "npm install -g @kilocode/cli" in rendered
         assert "External agent installers are manual-only" in rendered
         assert [option[0] for option in app._prompts.active.options()] == [
-            "manual",
-            "cancel",
             "copy",
             "recheck",
+            "manual",
+            "cancel",
         ]
 
-        # Enter chooses the manual path; it must only display guidance.
+        # The manual path must only display guidance.
+        await pilot.press("down", "down")
         await pilot.press("enter")
         await _settle(pilot)
         rendered = "\n".join(line.text for line in log.lines)
@@ -2845,10 +2924,10 @@ async def test_pipe_to_shell_agent_is_never_offered_for_install(monkeypatch):
         assert "does not run those for you" in rendered
         # Copy and recheck do not run the vendor installer either.
         assert [option[0] for option in app._prompts.active.options()] == [
-            "manual",
-            "cancel",
             "copy",
             "recheck",
+            "manual",
+            "cancel",
         ]
 
 
@@ -3066,6 +3145,181 @@ async def test_clicking_anywhere_on_a_picker_row_selects_it(monkeypatch):
         await pilot.pause()
 
         assert app._awaiting_local_provider is False, "the click did not select the row"
+
+
+async def test_codex_models_picker_supports_arrows_enter_and_mouse(monkeypatch):
+    """Both :codex models interaction paths must operate on the visible row."""
+    import re
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+    selected: list[str] = []
+    async with app.run_test(size=(120, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._codex_models = [
+            {"id": "gpt-first", "name": "First", "efforts": ["medium"]},
+            {"id": "gpt-second", "name": "Second", "efforts": ["high"]},
+        ]
+        monkeypatch.setattr(
+            app,
+            "_apply_codex_model_override",
+            lambda model, _log: selected.append(model),
+        )
+
+        app._show_codex_model_picker(log, refetch=False)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert selected == ["gpt-second"]
+
+        app._codex_highlighted_model_index = 0
+        app._show_codex_model_picker(log, refetch=False)
+        await pilot.pause()
+        rows = [
+            (index, "".join(segment.text for segment in strip).rstrip())
+            for index, strip in enumerate(log.lines)
+            if re.match(r"^\s*[●○]\s*\[\s*\d+\s*\]", "".join(s.text for s in strip))
+        ]
+        assert len(rows) == 2
+        line_index, row_text = rows[0]
+        y = log.region.y + line_index - int(log.scroll_offset.y)
+        x = log.region.x + min(len(row_text) - 2, log.region.width - 2)
+        await pilot.click(offset=(x, y))
+        await pilot.pause()
+        assert selected == ["gpt-second", "gpt-first"]
+
+
+async def test_local_dependency_card_supports_arrow_and_enter(monkeypatch):
+    """MLX setup uses the shared picker interaction instead of an Enter/n prompt."""
+    import re
+    from types import SimpleNamespace
+
+    app = SuperQodeApp()
+    choices: list[str] = []
+    async with app.run_test(size=(110, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_local_dependency_install_picker(
+            "mlx",
+            log,
+            env=SimpleNamespace(
+                label="test environment",
+                python="/test/python",
+                target="test environment",
+            ),
+            command="uv pip install mlx-lm",
+        )
+        monkeypatch.setattr(
+            app,
+            "_apply_local_dependency_install_choice",
+            lambda choice, *, pending: choices.append(choice),
+        )
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert choices == ["copy"]
+        assert not app._prompts.is_active("local_dependency_install")
+
+        app._show_local_dependency_install_picker(
+            "mlx",
+            log,
+            env=SimpleNamespace(
+                label="test environment",
+                python="/test/python",
+                target="test environment",
+            ),
+            command="uv pip install mlx-lm",
+        )
+        await pilot.pause()
+        rows = [
+            (index, "".join(segment.text for segment in strip).rstrip())
+            for index, strip in enumerate(log.lines)
+            if re.match(r"^\s*[●○]\s*\[\s*\d+\s*\]", "".join(s.text for s in strip))
+        ]
+        line_index, row_text = rows[-1]
+        y = log.region.y + line_index - int(log.scroll_offset.y)
+        x = log.region.x + min(len(row_text) - 2, log.region.width - 2)
+        await pilot.click(offset=(x, y))
+        await pilot.pause()
+        assert choices == ["copy", "cancel"]
+
+
+async def test_mlx_install_uses_visible_shared_progress_and_continues(monkeypatch):
+    """MLX installation should behave like SDK installs, including verification."""
+    import subprocess
+
+    import superqode.local.servers as servers
+
+    app = SuperQodeApp()
+    ran: list[tuple[str, str]] = []
+    phases: list[str] = []
+    continued: list[str] = []
+
+    async def fake_install(title, command, log):
+        ran.append((title, command))
+        return subprocess.CompletedProcess(command, 0, "installed", "")
+
+    async def fake_continue(engine, log):
+        continued.append(engine)
+
+    async with app.run_test(size=(100, 35)):
+        log = app.query_one("#log", ConversationLog)
+        monkeypatch.setattr(app, "_run_install_with_progress", fake_install)
+        monkeypatch.setattr(app, "_show_local_provider_models", fake_continue)
+        monkeypatch.setattr(
+            app,
+            "_show_install_progress",
+            lambda title, command, phase, *args: phases.append(phase),
+        )
+        monkeypatch.setattr(servers, "_mlx_importable", lambda python: True)
+        monkeypatch.setattr(
+            servers,
+            "mlx_install_command",
+            lambda python=None: f"uv pip install --python {python} mlx-lm",
+        )
+
+        await app._install_local_dep_then_continue("mlx", log)
+
+    assert ran and ran[0][0] == "MLX support"
+    assert "mlx-lm" in ran[0][1]
+    assert phases == ["Ready"]
+    assert continued == ["mlx"]
+
+
+async def test_local_server_setup_card_starts_with_keyboard(monkeypatch):
+    """Stopped Ollama/LM Studio/DS4 screens use the same interactive card."""
+    from rich.text import Text
+
+    app = SuperQodeApp()
+    starts: list[tuple[str, str]] = []
+    async with app.run_test(size=(110, 38)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        monkeypatch.setattr(
+            app,
+            "_handle_local_server_start_input",
+            lambda value, target_log: (
+                starts.append((str(app._awaiting_local_server_start), value)) or True
+            ),
+        )
+        detail = Text("\n    Ollama is installed but stopped.\n")
+        app._show_local_server_setup_card(
+            "ollama",
+            log,
+            content=detail,
+            command="ollama serve",
+            can_start=True,
+            title="Start Ollama",
+        )
+        await pilot.pause()
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "Start with SuperQode" in rendered
+        assert "Copy setup command" in rendered
+        assert "click a row" in rendered
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert starts == [("ollama", "")]
 
 
 async def test_a_click_off_a_picker_row_selects_nothing(monkeypatch):

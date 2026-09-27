@@ -2921,7 +2921,6 @@ class LocalModelsMixin:
                     style=THEME["muted"],
                 )
                 if readiness.startable:
-                    self._awaiting_local_server_start = engine
                     self._awaiting_local_model = False
                     t.append(
                         "  LM Studio is open and the lms CLI is available.\n",
@@ -2934,11 +2933,6 @@ class LocalModelsMixin:
                     t.append("      ", style="")
                     t.append("lms server start --port 1234", style=THEME["cyan"])
                     t.append("\n", style="")
-                    t.append("  Need SuperQode to run that command? Press ", style=THEME["muted"])
-                    t.append("Enter", style=f"bold {THEME['success']}")
-                    t.append("   ·   ", style=THEME["dim"])
-                    t.append("'n'", style=THEME["warning"])
-                    t.append(" to skip\n", style=THEME["muted"])
                 else:
                     t.append(
                         "  First open LM Studio, load a chat model, then start the Local Server.\n",
@@ -2962,22 +2956,20 @@ class LocalModelsMixin:
                 t.append("\n  Then run ", style=THEME["muted"])
                 t.append(":connect local", style=f"bold {THEME['cyan']}")
                 t.append(" again.\n", style=THEME["muted"])
-                log.write(t)
                 self._awaiting_local_model = False
                 self._awaiting_local_provider = False
-                if readiness.startable:
-                    self._pin_local_prompt_to_input(
-                        "LM Studio is open: press Enter to run lms server start, or n to skip",
-                        log,
-                        notify="LM Studio is open. Press Enter if you want SuperQode to start the server.",
-                    )
-                else:
-                    self._pin_local_prompt_to_input(
-                        "Open LM Studio, start Local Server, then run :connect local",
-                        log,
-                        notify="Open LM Studio and start its Local Server first.",
-                    )
-                return True
+                return self._show_local_server_setup_card(
+                    engine,
+                    log,
+                    content=t,
+                    command=(
+                        "lms server start --port 1234"
+                        if readiness.startable
+                        else 'open -a "LM Studio"'
+                    ),
+                    can_start=readiness.startable,
+                    title="Start LM Studio local server",
+                )
 
             if startable:
                 self._awaiting_local_server_start = engine
@@ -3029,17 +3021,15 @@ class LocalModelsMixin:
                     )
                     t.append("    Stop the managed server with: ", style=THEME["muted"])
                     t.append(":local stop ds4\n", style=f"bold {THEME['success']}")
-                    t.append("  Try the experimental managed start? Press ", style=THEME["muted"])
+                    t.append(
+                        "  Experimental managed start is available below.\n",
+                        style=THEME["warning"],
+                    )
                 else:
                     t.append(
-                        "  Need SuperQode to start a managed server? Press ",
+                        "  A managed start is available below.\n",
                         style=THEME["muted"],
                     )
-                t.append("Enter", style=f"bold {THEME['success']}")
-                t.append(f" to launch it on port {default_port}", style=THEME["muted"])
-                t.append("   ·   ", style=THEME["dim"])
-                t.append("'n'", style=THEME["warning"])
-                t.append(" to skip\n", style=THEME["muted"])
                 t.append("    Managed custom start: type ", style=THEME["muted"])
                 t.append("port=8090 ctx=8192", style=THEME["cyan"])
                 if ctx_note:
@@ -3050,13 +3040,14 @@ class LocalModelsMixin:
                         "    Tip: add model=<key> to load a model at that context.\n",
                         style=THEME["dim"],
                     )
-                log.write(t)
-                self._pin_local_prompt_to_input(
-                    f"Start {engine} yourself, or press Enter for SuperQode managed start",
+                return self._show_local_server_setup_card(
+                    engine,
                     log,
-                    notify=f"{name} is stopped. Start it yourself, or press Enter for help.",
+                    content=t,
+                    command=native_command,
+                    can_start=True,
+                    title=f"Start {name}",
                 )
-                return True
 
             # Needs a model id (mlx / llama.cpp): show the typed command instead.
             native_command = self._native_local_server_command(engine, model="<model-id>")
@@ -3081,14 +3072,16 @@ class LocalModelsMixin:
                 "    Re-run :connect local after the server is answering.\n",
                 style=THEME["dim"],
             )
-            log.write(t)
             self._awaiting_local_model = False
             self._awaiting_local_provider = False
-            self._pin_local_prompt_to_input(
-                f"Start {engine} with a model first, then run :connect local",
+            return self._show_local_server_setup_card(
+                engine,
                 log,
+                content=t,
+                command=native_command,
+                can_start=False,
+                title=f"Start {name} with a model",
             )
-            return True
 
         # missing
         # MLX is a single pip dependency we can install for the user (with
@@ -3101,48 +3094,17 @@ class LocalModelsMixin:
             from superqode.local.servers import mlx_install_command
             from superqode.providers.env_introspect import environment_info
 
-            self._awaiting_local_dep_install = "mlx"
             self._awaiting_local_model = False
             # The dependency prompt owns the next input. Leaving the provider
             # picker active makes SelectionAwareInput consume Enter as another
             # provider selection before this prompt can handle it.
             self._awaiting_local_provider = False
-            env = environment_info()
-            command = mlx_install_command(sys.executable)
-            t.append("\n  🔴 ", style=THEME["error"])
-            t.append(
-                "MLX (mlx-lm) is not installed in this environment\n", style=f"bold {THEME['text']}"
-            )
-            t.append("    SuperQode is running from: ", style=THEME["muted"])
-            t.append(env.label, style=f"bold {THEME['text']}")
-            t.append(f" ({env.python})\n", style=THEME["dim"])
-            t.append("    This will modify: ", style=THEME["muted"])
-            t.append(f"{env.target}\n", style=THEME["dim"])
-            t.append("    Exact command:\n", style=THEME["muted"])
-            t.append("      ", style="")
-            t.append(command, style=THEME["cyan"])
-            t.append("\n", style="")
-            t.append("  ▶ Press ", style=THEME["muted"])
-            t.append("Enter", style=f"bold {THEME['success']}")
-            t.append(" to run that exact command", style=THEME["muted"])
-            t.append("   ·   ", style=THEME["dim"])
-            t.append("'n'", style=THEME["warning"])
-            t.append(" to skip\n", style=THEME["muted"])
-            t.append(
-                "    Prefer to install it yourself? Copy the command above into another terminal,\n",
-                style=THEME["muted"],
-            )
-            t.append(
-                "    then restart SuperQode and run :connect local again.\n",
-                style=THEME["dim"],
-            )
-            log.write(t)
-            self._pin_local_prompt_to_input(
-                "Install MLX: Enter runs the shown command, n skips",
+            return self._show_local_dependency_install_picker(
+                "mlx",
                 log,
-                notify="MLX support is missing. Review the shown command, then press Enter to install or n to skip.",
+                env=environment_info(),
+                command=mlx_install_command(sys.executable),
             )
-            return True
 
         t.append("\n  🔴 ", style=THEME["error"])
         t.append(f"{name} is not installed\n\n", style=f"bold {THEME['text']}")
@@ -3157,8 +3119,152 @@ class LocalModelsMixin:
             )
         t.append("\n  Once installed, start it with: ", style=THEME["muted"])
         t.append(f"{readiness.start_hint}\n", style=f"bold {THEME['success']}")
-        log.write(t)
-        return False
+        install_command = self._local_install_primary_step(
+            engine, readiness.install_guide, readiness.start_hint
+        )
+        return self._show_local_server_setup_card(
+            engine,
+            log,
+            content=t,
+            command=install_command,
+            can_start=False,
+            title=f"Install {name}",
+        )
+
+    @staticmethod
+    def _local_install_primary_step(engine: str, guide: list[str], fallback: str) -> str:
+        """Pick the actionable command/URL from a prose local-engine guide."""
+        import sys
+
+        preferred = {
+            "ollama": (
+                "brew install ollama"
+                if sys.platform == "darwin"
+                else "curl -fsSL https://ollama.com/install.sh | sh"
+            ),
+            "lmstudio": "https://lmstudio.ai/",
+            "ds4": "superqode local serve ds4 --build",
+            "llama.cpp": "brew install llama.cpp",
+        }.get(engine)
+        if preferred:
+            return preferred
+        command_tokens = ("brew ", "uv ", "curl ", "npx ", "superqode ", "ollama ")
+        for raw in guide:
+            line = raw.strip()
+            for token in command_tokens:
+                offset = line.find(token)
+                if offset >= 0:
+                    return line[offset:].split("   #", 1)[0].strip()
+        return fallback
+
+    def _show_local_server_setup_card(
+        self,
+        engine: str,
+        log: ConversationLog,
+        *,
+        content: Text,
+        command: str,
+        can_start: bool,
+        title: str,
+        reset_highlight: bool = True,
+    ) -> bool:
+        """Present every local-engine setup state as one interactive card."""
+        from superqode.app.prompt_stack import PromptSpec
+
+        options = []
+        if can_start:
+            options.append(("start", "Start with SuperQode", "launch and verify the local server"))
+        options.extend(
+            [
+                ("copy", "Copy setup command", "run the exact command yourself"),
+                ("recheck", "I completed setup — check again", "probe the server and continue"),
+                ("back", "Choose another provider", "return to local model providers"),
+            ]
+        )
+        pending = {
+            "engine": engine,
+            "command": command,
+            "can_start": can_start,
+            "title": title,
+            "content": content,
+            "options": tuple(options),
+        }
+        self._awaiting_local_server_start = engine if can_start else None
+        self._awaiting_local_model = False
+        self._awaiting_local_provider = False
+        prompts = getattr(self, "_prompts", None)
+        if prompts is None:
+            from superqode.app.prompt_stack import PromptStack
+
+            prompts = PromptStack()
+            self._prompts = prompts
+        if reset_highlight and not prompts.is_active("local_server_setup"):
+            prompts.push(
+                PromptSpec(
+                    name="local_server_setup",
+                    kind="picker",
+                    options=lambda: list(options),
+                    on_select=lambda option: self._apply_local_server_setup_choice(
+                        option[0], pending=pending, log=log
+                    ),
+                    on_cancel=lambda: self._apply_local_server_setup_choice(
+                        "back", pending=pending, log=log
+                    ),
+                    render=lambda: self._show_local_server_setup_card(
+                        engine,
+                        log,
+                        content=content,
+                        command=command,
+                        can_start=can_start,
+                        title=title,
+                        reset_highlight=False,
+                    ),
+                    data=pending,
+                )
+            )
+
+        rendered = Text()
+        rendered.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        rendered.append("Setup required", style=f"bold {THEME['text']}")
+        rendered.append(f"   {title}\n", style=THEME["muted"])
+        rendered.append(content)
+        rendered.append("\n    Primary command\n      ", style=THEME["muted"])
+        rendered.append(f"{command}\n\n", style=THEME["cyan"])
+        rendered.append(self._setup_option_lines(options))
+        log.auto_scroll = False
+        log.clear()
+        log.write(rendered)
+        log.auto_scroll = True
+        try:
+            self.set_timer(0.05, self._ensure_input_focus)
+        except Exception:
+            pass
+        return True
+
+    def _apply_local_server_setup_choice(self, choice: str, *, pending: dict, log) -> None:
+        """Apply a local server setup choice from mouse, arrows, or numbers."""
+        engine = str(pending.get("engine") or "")
+        self._awaiting_local_server_start = None
+        self._reset_input_placeholder()
+        if choice == "start" and pending.get("can_start"):
+            self._awaiting_local_server_start = engine
+            self._handle_local_server_start_input("", log)
+            return
+        if choice == "copy":
+            self._show_local_server_setup_card(
+                engine,
+                log,
+                content=pending["content"],
+                command=str(pending.get("command") or ""),
+                can_start=bool(pending.get("can_start")),
+                title=str(pending.get("title") or "Local model setup"),
+            )
+            self._copy_setup_command(str(pending.get("command") or ""), log)
+            return
+        if choice == "recheck":
+            self.run_worker(self._show_local_provider_models(engine, log))
+            return
+        self._show_local_provider_picker(log)
 
     def _handle_local_server_start_input(self, text: str, log: ConversationLog) -> bool:
         """Handle the inline start prompt for a stopped local server.
@@ -3201,6 +3307,129 @@ class LocalModelsMixin:
         self.run_worker(self._start_local_server_then_list(engine, opts, log))
         return True
 
+    _LOCAL_DEPENDENCY_INSTALL_OPTIONS = (
+        ("install", "Install MLX now", "SuperQode runs the exact command shown above"),
+        ("copy", "Copy install command", "copy it for another terminal"),
+        ("recheck", "I installed it — check again", "verify MLX and continue to models"),
+        ("cancel", "Choose another provider", "return to local model providers"),
+    )
+
+    def _show_local_dependency_install_picker(
+        self,
+        engine: str,
+        log: ConversationLog,
+        *,
+        env=None,
+        command: str = "",
+        reset_highlight: bool = True,
+    ) -> bool:
+        """Show missing local support as the same navigable setup card as SDK extras."""
+        from superqode.app.prompt_stack import PromptSpec
+        from superqode.local.servers import mlx_install_command
+        from superqode.providers.env_introspect import environment_info
+
+        env = env or environment_info()
+        command = command or mlx_install_command()
+        pending = {
+            "engine": engine,
+            "command": command,
+            "env_label": str(env.label),
+            "env_python": str(env.python),
+            "env_target": str(env.target),
+        }
+        self._awaiting_local_dep_install = engine
+        prompts = getattr(self, "_prompts", None)
+        if prompts is None:
+            from superqode.app.prompt_stack import PromptStack
+
+            prompts = PromptStack()
+            self._prompts = prompts
+        if reset_highlight and not prompts.is_active("local_dependency_install"):
+            prompts.push(
+                PromptSpec(
+                    name="local_dependency_install",
+                    kind="picker",
+                    options=lambda: list(self._LOCAL_DEPENDENCY_INSTALL_OPTIONS),
+                    on_select=lambda option: self._apply_local_dependency_install_choice(
+                        option[0], pending=pending
+                    ),
+                    on_cancel=lambda: self._apply_local_dependency_install_choice(
+                        "cancel", pending=pending
+                    ),
+                    render=self._rerender_local_dependency_install_picker,
+                    data=pending,
+                )
+            )
+
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Setup required", style=f"bold {THEME['text']}")
+        t.append("   MLX local models\n\n", style=THEME["muted"])
+        t.append(
+            "    mlx-lm is not installed in SuperQode's active environment\n",
+            style=THEME["warning"],
+        )
+        t.append("    Running from  ", style=THEME["muted"])
+        t.append(f"{pending['env_label']}\n", style=THEME["text"])
+        t.append("    Python        ", style=THEME["muted"])
+        t.append(f"{pending['env_python']}\n", style=THEME["dim"])
+        t.append("    Install into  ", style=THEME["muted"])
+        t.append(f"{pending['env_target']}\n\n", style=THEME["dim"])
+        t.append("    Exact command\n      ", style=THEME["muted"])
+        t.append(f"{command}\n\n", style=THEME["cyan"])
+
+        t.append(self._setup_option_lines(self._LOCAL_DEPENDENCY_INSTALL_OPTIONS))
+        log.auto_scroll = False
+        log.clear()
+        log.write(t)
+        log.auto_scroll = True
+        try:
+            self.set_timer(0.05, self._ensure_input_focus)
+        except Exception:
+            pass
+        return True
+
+    def _rerender_local_dependency_install_picker(self) -> None:
+        spec = self._prompts.active
+        if spec is None or spec.name != "local_dependency_install":
+            return
+        data = dict(spec.data)
+        from types import SimpleNamespace
+
+        env = SimpleNamespace(
+            label=data.get("env_label", "SuperQode environment"),
+            python=data.get("env_python", ""),
+            target=data.get("env_target", "SuperQode environment"),
+        )
+        self._show_local_dependency_install_picker(
+            str(data.get("engine") or "mlx"),
+            self.query_one("#log", ConversationLog),
+            env=env,
+            command=str(data.get("command") or ""),
+            reset_highlight=False,
+        )
+
+    def _apply_local_dependency_install_choice(self, choice: str, *, pending: dict) -> None:
+        """Apply a mouse, keyboard, or number choice from the local setup card."""
+        engine = str(pending.get("engine") or "mlx")
+        command = str(pending.get("command") or "")
+        log = self.query_one("#log", ConversationLog)
+        self._awaiting_local_dep_install = None
+        self._reset_input_placeholder()
+        if choice == "install":
+            self.run_worker(self._install_local_dep_then_continue(engine, log))
+            return
+        if choice == "copy":
+            copied = self._copy_setup_command(command, log)
+            self._show_local_dependency_install_picker(engine, log, command=command)
+            if copied:
+                log.add_success("Install command copied")
+            return
+        if choice == "recheck":
+            self.run_worker(self._show_local_provider_models(engine, log))
+            return
+        self._show_local_provider_picker(log)
+
     def _handle_local_dep_install_input(self, text: str, log: ConversationLog) -> bool:
         """Handle the inline 'install mlx-lm?' prompt. Enter=install, n=skip."""
         engine = getattr(self, "_awaiting_local_dep_install", None)
@@ -3209,6 +3438,8 @@ class LocalModelsMixin:
 
         low = text.strip().lower()
         if low in ("n", "no", "skip", "cancel", "q"):
+            if self._prompts.is_active("local_dependency_install"):
+                self._prompts.pop()
             self._awaiting_local_dep_install = None
             self._reset_input_placeholder()
             t = Text()
@@ -3232,38 +3463,71 @@ class LocalModelsMixin:
             return True  # keep the prompt active
 
         self._awaiting_local_dep_install = None
+        if self._prompts.is_active("local_dependency_install"):
+            self._prompts.pop()
         self._reset_input_placeholder()
         self.run_worker(self._install_local_dep_then_continue(engine, log))
         return True
 
     async def _install_local_dep_then_continue(self, engine: str, log: ConversationLog):
-        """Install a missing engine dependency (mlx-lm), then re-list models."""
-        import asyncio
+        """Install MLX with the shared visible, cancellable installer."""
+        import subprocess
+        import sys
 
-        from superqode.local.servers import install_mlx
+        from superqode.app.mixins.commands_impl import InstallCancelled
+        from superqode.local.servers import _mlx_importable, mlx_install_command
 
-        t0 = Text()
-        t0.append("\n  ⏳ ", style=THEME["warning"])
-        t0.append("Installing mlx-lm", style=f"bold {THEME['text']}")
-        t0.append(" — this downloads a few packages, please wait...\n", style=THEME["muted"])
-        log.write(t0)
-
+        command = mlx_install_command(sys.executable)
+        log.add_info("Installing MLX support into SuperQode's current environment…")
         self.is_busy = True
         try:
-            ok, message = await asyncio.to_thread(install_mlx)
-        except Exception as exc:  # noqa: BLE001
-            log.add_error(f"Install failed: {exc}")
+            completed = await self._run_install_with_progress("MLX support", command, log)
+        except InstallCancelled:
+            log.add_info("MLX installation cancelled. Nothing else was started.")
+            self._show_install_recovery(
+                "MLX support",
+                command,
+                log,
+                lambda: self.run_worker(self._install_local_dep_then_continue(engine, log)),
+            )
+            return
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.add_error(f"MLX installation failed: {exc}")
+            self._show_install_recovery(
+                "MLX support",
+                command,
+                log,
+                lambda: self.run_worker(self._install_local_dep_then_continue(engine, log)),
+            )
             return
         finally:
             self.is_busy = False
 
-        if not ok:
-            log.add_error(f"Could not install mlx-lm: {message}")
-            from superqode.local.servers import mlx_install_command
-
-            log.add_system(f"Install manually: {mlx_install_command()}")
+        if completed.returncode != 0:
+            self._show_install_progress("MLX support", command, "Failed")
+            log.add_error(f"MLX installation exited with {completed.returncode}.")
+            self._show_install_recovery(
+                "MLX support",
+                command,
+                log,
+                lambda: self.run_worker(self._install_local_dep_then_continue(engine, log)),
+            )
+            return
+        if not _mlx_importable(sys.executable):
+            self._show_install_progress("MLX support", command, "Verification failed")
+            log.add_error(
+                f"mlx-lm installed but is still not importable from {sys.executable}. "
+                "Review the installer output or copy the command to retry."
+            )
+            self._show_install_recovery(
+                "MLX support",
+                command,
+                log,
+                lambda: self.run_worker(self._install_local_dep_then_continue(engine, log)),
+            )
             return
 
+        self._show_install_progress("MLX support", command, "Ready")
         t = Text()
         t.append("  ✓ ", style=f"bold {THEME['success']}")
         t.append("mlx-lm installed", style=f"bold {THEME['text']}")

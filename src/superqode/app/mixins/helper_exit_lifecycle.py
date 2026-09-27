@@ -78,6 +78,7 @@ class HelperExitLifecycleMixin:
         down, detach the harness, and clear the environment the next connection
         would otherwise inherit.
         """
+        self._clear_sidebar_session_files()
         pure = getattr(self, "_pure_mode", None)
         if pure is not None:
             try:

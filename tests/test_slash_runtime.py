@@ -185,6 +185,27 @@ def test_codex_model_picker_selection_accepts_number_and_exact_id(monkeypatch):
     assert selected == ["gpt-5.4-mini", "gpt-5.5"]
 
 
+def test_codex_models_opens_interactive_picker_and_model_list_stays_plain(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    app = SuperQodeApp()
+    opened: list[str] = []
+    monkeypatch.setattr(app, "_show_codex_model_picker", lambda log: opened.append("picker"))
+    monkeypatch.setattr(
+        app,
+        "_codex_models_cmd",
+        lambda log, *, include_hidden=False: opened.append(
+            "plain-hidden" if include_hidden else "plain"
+        ),
+    )
+
+    app._codex_cmd("models", _Log())
+    app._codex_cmd("model-list", _Log())
+    app._codex_cmd("models --hidden", _Log())
+
+    assert opened == ["picker", "plain", "plain-hidden"]
+
+
 def test_codex_model_picker_requires_exact_id_for_ambiguous_matches(monkeypatch):
     from superqode.app_main import SuperQodeApp
 

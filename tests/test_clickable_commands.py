@@ -31,6 +31,8 @@ class App(ClickableCommandMixin):
     def __init__(self, *, busy: bool = False) -> None:
         self.is_busy = busy
         self.commands: list[str] = []
+        self.sidebar_actions: list[str] = []
+        self.sidebar_visible = False
         self.log = FakeLog()
         self._prompts = PromptStack()
 
@@ -39,6 +41,12 @@ class App(ClickableCommandMixin):
 
     def _handle_command(self, command, log):
         self.commands.append(command)
+
+    def action_sidebar_files(self):
+        self.sidebar_actions.append("files")
+
+    def action_toggle_sidebar(self):
+        self.sidebar_actions.append("close")
 
 
 def test_link_targets_carry_the_command():
@@ -268,9 +276,14 @@ def test_no_command_ever_asks_when_idle(command):
     app._run_clicked_command(command)
 
     assert app._prompts.active is None, f":{command} asked while idle"
-    if command == "back":
+    if command in {"back", "workspace-close"}:
         # Navigation, handled by the history rather than the command dispatch.
         assert app.commands == []
+    elif command == "workspace-files":
+        assert app.sidebar_actions == ["files"]
+        assert app.commands == []
+    elif command.startswith("plan-"):
+        assert app.commands == [f":plan {command.removeprefix('plan-')}"]
     else:
         assert app.commands == [f":{command}"]
 
@@ -442,8 +455,8 @@ def test_the_back_button_appears_only_with_somewhere_to_go():
 
     bar.can_go_back = True
     rendered = bar._render_for_width(120)
-    assert "← Back" in rendered.plain
-    assert _hit(bar, rendered, "[← Back ↑]") == "back"
+    assert "⌫ Back" in rendered.plain
+    assert _hit(bar, rendered, "[⌫ Back ↑]") == "back"
 
 
 def test_clicking_back_walks_the_history():
@@ -620,7 +633,7 @@ def test_status_bar_buttons_are_not_hyperlinks():
     assert "superqode://" not in " ".join(str(span.style) for span in rendered.spans)
     prefix = rendered.plain[: rendered.plain.index("[🔌 Connect ↑]")]
     assert bar.action_at(cell_len(prefix) + 1) == "connect"
-    back = rendered.plain[: rendered.plain.index("[← Back ↑]")]
+    back = rendered.plain[: rendered.plain.index("[⌫ Back ↑]")]
     assert bar.action_at(cell_len(back) + 1) == "back"
     hub = rendered.plain[: rendered.plain.index("[⚓ Hub ↑]")]
     assert bar.action_at(cell_len(hub) + 1) == "hub"

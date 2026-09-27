@@ -68,7 +68,7 @@ Toast.-error .toast--title { color: #fca5a5; }
 
 /* Sidebar - hidden by default */
 #sidebar {
-    width: 80;
+    width: 34;
     background: #000000;
     border-right: tall #1a1a1a;
     display: none;

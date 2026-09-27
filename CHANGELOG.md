@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session file markers: successful edit/write tool calls mark files in the
+  sidebar file tree (`●` / `●n`) with a session count in the title, without
+  stealing the current sidebar view; `:disconnect` clears the markers.
+- Workspace discovery: welcome screen links Files & changes / Ctrl+B to the
+  lightweight sidebar, and the sidebar close control is clickable.
+- Keyboard-operable picker cards: Codex model, local dependency, and stopped
+  local-server setup cards support Up/Down + Enter at app level and full
+  row-click selection.
+
+### Fixed
+
+- Backspace mirrors the visible Back control only with an empty prompt, so
+  it still deletes prompt text otherwise; sidebar default width is 34.
+- Local dependency install ordering shows copy/recheck before manual/cancel.
+
+## [2.4.19] - 2026-09-27
+
+### Added
+
+- Multiline composer input: Shift+Enter, Alt+Enter, and Ctrl+J insert a
+  newline (replacing the active selection) without changing Enter-to-submit,
+  and the shortcut is documented in the `:help` keyboard table.
+- Persistent plan review panel: a completed planning turn stays visible as a
+  decision card (goal plus READY FOR REVIEW / APPROVED / EXECUTING state)
+  with clickable Approve / Edit / Reject actions and Alt+A · Alt+E · Alt+R
+  hints; the approved plan artifact renders in the `:plan review` output.
+- Clickable transcript follow control: scrolling up locks the viewport and
+  shows a "new lines · Ctrl+End to follow" indicator that returns to the
+  live tail on click; submitting a prompt or starting a new turn resumes
+  follow automatically.
+- Plan execution contract: `:plan approve` (or `:plan run`) binds the next
+  run to the exact reviewed plan text as implementation context, and the
+  approved plan is preserved until execution completes.
+- Mode-aware composer titles: the input border shows Chat, Plan · review
+  before build, or Task, including the Vim NORMAL/INSERT state when the
+  Vim experience is enabled.
+
+### Fixed
+
+- Keep the manual transcript reading lock authoritative over temporary
+  auto-scroll writes from pickers, streaming, status, and reveal cards, and
+  skip completion-reveal jumps while the user is inspecting older output.
+
 ## [2.4.18] - 2026-09-26
 
 ### Improved

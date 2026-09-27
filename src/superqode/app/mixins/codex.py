@@ -372,6 +372,12 @@ class CodexMixin:
         if status_expr in {"status", "doctor", "status --probe", "status probe", "status models"}:
             self._codex_status(log, probe=status_expr not in {"status", "doctor"})
             return
+        if sub == "models" and not rest:
+            # The plural command is what users naturally discover first. Make
+            # it the same interactive, mouse-friendly picker as :codex model;
+            # model-list remains available for scripts/plain transcript output.
+            self._show_codex_model_picker(log)
+            return
         if sub in {"models", "model-list"}:
             self._codex_models_cmd(log, include_hidden="--hidden" in rest.split())
             return
@@ -547,13 +553,12 @@ class CodexMixin:
         *,
         highlighted: bool,
     ) -> None:
-        pointer = "> " if highlighted else "  "
         number_style = self._picker_link_style(
             f"bold {THEME['success'] if highlighted else THEME['cyan']}", number
         )
         primary_style = f"bold {THEME['success'] if highlighted else THEME['text']}"
         text.append("  ")
-        text.append(pointer, style=f"bold {THEME['success']}" if highlighted else THEME["dim"])
+        self._append_picker_dot(text, number, highlighted=highlighted)
         text.append(f"[{number}]", style=number_style)
         text.append(" ")
         text.append(primary, style=primary_style)
@@ -562,7 +567,7 @@ class CodexMixin:
         if desc:
             text.append(f"\n       {desc}", style=THEME["dim"])
         if highlighted:
-            text.append("  selected", style=f"bold {THEME['success']}")
+            self._append_picker_arrow(text, number)
         text.append("\n")
 
     def _show_codex_model_picker(
@@ -599,7 +604,9 @@ class CodexMixin:
         current_runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
         current = getattr(current_runtime, "model", None) or ""
         text = Text()
-        text.append("\n  Codex model\n\n", style=f"bold {THEME['cyan']}")
+        text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        text.append("Select Codex model", style=f"bold {THEME['text']}")
+        text.append(f"   {len(models)} models\n\n", style=THEME["muted"])
         if current:
             text.append("  Current override: ", style=THEME["muted"])
             text.append(current, style=f"bold {THEME['text']}")
@@ -626,12 +633,15 @@ class CodexMixin:
                 highlighted=idx == self._codex_highlighted_model_index,
             )
 
-        text.append(
-            "\n  Use Up/Down + Enter, click a number, or type a model id.\n", style=THEME["muted"]
-        )
-        text.append("  Esc cancels. ", style=THEME["muted"])
-        text.append(":codex models", style=THEME["cyan"])
-        text.append(" shows a plain list.\n", style=THEME["muted"])
+        text.append("\n  💡 ", style=THEME["muted"])
+        text.append("↑↓", style=THEME["cyan"])
+        text.append(" navigate  ", style=THEME["dim"])
+        text.append("Enter", style=THEME["cyan"])
+        text.append(" select  •  click a row  •  type a number or model id\n", style=THEME["dim"])
+        text.append("     Esc", style=THEME["cyan"])
+        text.append(" goes back  •  ", style=THEME["dim"])
+        text.append(":codex model-list", style=THEME["cyan"])
+        text.append(" prints the catalog\n", style=THEME["dim"])
         self._show_command_output(log, text, clear_log=clear_log)
 
     def _show_codex_effort_picker(self, log, *, clear_log: bool = True) -> None:

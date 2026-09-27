@@ -453,7 +453,7 @@ class ColorfulStatusBar(Static):
         control_hits: list[tuple[int, int, str]] = []
         chrome = 5  # "[label ↑]"
         if self.can_go_back:
-            for label in ("← Back", "←"):
+            for label in ("⌫ Back", "⌫"):
                 if room >= cell_len(label) + chrome:
                     self._append_button(
                         controls,
@@ -2490,8 +2490,14 @@ class ConversationLog(RichLog):
 
             # Add to set if it's a write/edit operation
             tool_lower = tool_name.lower()
-            if any(op in tool_lower for op in ("write", "edit", "create", "append", "patch")):
+            if any(
+                op in tool_lower for op in ("write", "edit", "create", "append", "patch", "delete")
+            ):
                 self._files_modified.add(file_path)
+                if status == "success" and self.is_mounted:
+                    recorder = getattr(self.app, "_record_sidebar_session_files", None)
+                    if callable(recorder):
+                        recorder([file_path])
 
         # Status icons and colors
         status_map = {

@@ -9,6 +9,7 @@ from rich.console import Group
 from rich.text import Text
 
 from superqode.app.constants import ASCII_LOGO, GRADIENT, THEME
+from superqode.app.mixins.clickable_commands import command_link
 
 if TYPE_CHECKING:
     from superqode.app.models import AgentInfo
@@ -162,8 +163,15 @@ def render_welcome(
         next_text = Text()
         next_text.append("Next  ", style=f"bold {THEME['text']}")
         next_text.append(command, style=f"bold {color}")
-        if width is None or width >= 48:
+        if width is None or width >= 100:
             next_text.append(f"  {description}", style=THEME["muted"])
+        next_text.append("  •  ", style=THEME["muted"])
+        next_text.append(
+            "Files & changes ↗",
+            style=f"bold {THEME['pink']} {command_link('workspace-files')}",
+        )
+        next_text.append("  ", style=THEME["muted"])
+        next_text.append("Ctrl+B", style=f"bold {THEME['cyan']} {command_link('workspace-files')}")
         next_text.append("\n")
         items.append(next_text)
 
@@ -270,17 +278,27 @@ def render_welcome(
     # first command, and the bar directly under it carries the same commands
     # as clickable controls, so repeating them on the home screen was noise
     # between the product and the box the user types into.
+    # Keep the workspace optional, but do not bury it behind a command the
+    # user has to discover. This link opens the existing lightweight sidebar;
+    # it does not add a second IDE-like canvas.
+    drive_text = Text(justify=align)
     if not narrow:
-        # Neither input style is discoverable on its own: mouse users do not
-        # try clicking a terminal, and Vim users do not expect one to answer j/k.
-        drive_text = Text(justify=align)
         drive_text.append("Browse it like a browser", style=f"bold {THEME['cyan']}")
-        drive_text.append(" with your mouse", style=THEME["dim"])
-        drive_text.append("  ·  or drive it like a pro with ", style=THEME["muted"])
+        drive_text.append(" with your mouse  ·  or drive it like a pro with ", style=THEME["dim"])
         drive_text.append(":", style=f"bold {THEME['success']}")
         drive_text.append(" and ", style=THEME["muted"])
         drive_text.append(":vim on", style=f"bold {THEME['success']}")
         items.append(place(drive_text))
+
+    workspace_text = Text(justify=align)
+    workspace_text.append(
+        "Files & changes ↗",
+        style=f"bold {THEME['pink']} {command_link('workspace-files')}",
+    )
+    workspace_text.append("  ·  ", style=THEME["muted"])
+    workspace_text.append("Ctrl+B", style=f"bold {THEME['cyan']} {command_link('workspace-files')}")
+    workspace_text.append("  ·  optional workspace", style=THEME["muted"])
+    items.append(place(workspace_text))
 
     return Group(*items)
 

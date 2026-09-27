@@ -53,6 +53,37 @@ class PickerNavigationMixin:
         """
         target.append(" ↗", style=self._picker_link_style(f"bold {THEME['purple']}", number))
 
+    def _setup_option_lines(self, options) -> Text:
+        """Render consistent branded rows for every setup/install prompt."""
+        rows = Text()
+        highlighted = self._prompts.index
+        for index, option in enumerate(options):
+            num = index + 1
+            selected = index == highlighted
+            label = str(option[1])
+            description = str(option[2]) if len(option) > 2 else ""
+            rows.append("  ")
+            self._append_picker_dot(rows, num, highlighted=selected)
+            number_style = f"bold {THEME['success']}" if selected else THEME["dim"]
+            rows.append(f"[{num}] ", style=self._picker_link_style(number_style, num))
+            rows.append(
+                label,
+                style=f"bold {THEME['success'] if selected else THEME['text']}",
+            )
+            if selected:
+                self._append_picker_arrow(rows, num)
+            rows.append("\n")
+            if description:
+                rows.append(f"        {description}\n", style=THEME["muted"])
+        rows.append("\n  💡 ", style=THEME["muted"])
+        rows.append("↑↓", style=THEME["cyan"])
+        rows.append(" navigate  ", style=THEME["dim"])
+        rows.append("Enter", style=THEME["cyan"])
+        rows.append(" select  •  click a row  •  or type a number  •  ", style=THEME["dim"])
+        rows.append("Esc", style=THEME["cyan"])
+        rows.append(" back\n", style=THEME["dim"])
+        return rows
+
     @staticmethod
     def _picker_content_width(log: object) -> int:
         """Columns a picker row actually gets.
@@ -312,7 +343,12 @@ class PickerNavigationMixin:
         keeps the whole row clickable without painting link styling across the
         prose, which terminals underline and recolour.
         """
-        if not any(getattr(self, flag, False) for flag in self._PICKER_AWAITING_FLAGS):
+        prompts = getattr(self, "_prompts", None)
+        active_prompt = getattr(prompts, "active", None) if prompts is not None else None
+        prompt_picker_active = active_prompt is not None and active_prompt.kind == "picker"
+        if not prompt_picker_active and not any(
+            getattr(self, flag, False) for flag in self._PICKER_AWAITING_FLAGS
+        ):
             return False
         try:
             log = self.query_one("#log", ConversationLog)
@@ -603,10 +639,10 @@ class PickerNavigationMixin:
         name = str(agent_data.get("name") or short_name)
 
         options: list[tuple[str, str, str]] = [
-            ("manual", "I will install it myself", "show the vendor command and go back"),
-            ("cancel", "Cancel", "return to the connection screen"),
             ("copy", "Copy install command", "copy the exact vendor command"),
             ("recheck", "I installed it — check again", "verify and connect this agent"),
+            ("manual", "I will install it myself", "show vendor guidance and leave setup"),
+            ("cancel", "Choose another connection", "return without installing"),
         ]
 
         if reset_highlight and not self._prompts.is_active("agent_install"):
@@ -626,11 +662,13 @@ class PickerNavigationMixin:
                 )
             )
 
-        highlighted = self._prompts.index
         t = Text()
         t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
-        t.append(f"{name} is not installed\n\n", style=f"bold {THEME['text']}")
-        t.append(f"    {install.raw}\n\n", style=THEME["cyan"])
+        t.append("Setup required", style=f"bold {THEME['text']}")
+        t.append(f"   {name}\n\n", style=THEME["muted"])
+        t.append(f"    {name} is not installed or not available on PATH\n", style=THEME["warning"])
+        t.append("    Vendor command\n      ", style=THEME["muted"])
+        t.append(f"{install.raw}\n\n", style=THEME["cyan"])
         if install.reason:
             t.append(f"    {install.reason}\n\n", style=THEME["warning"])
         elif install.runnable:
@@ -640,25 +678,7 @@ class PickerNavigationMixin:
                 style=THEME["warning"],
             )
 
-        for index, (_key, label, description) in enumerate(options):
-            num = index + 1
-            if index == highlighted:
-                t.append("  ▶ ", style=f"bold {THEME['success']}")
-                t.append(
-                    f"[{num}] ", style=self._picker_link_style(f"bold {THEME['success']}", num)
-                )
-                t.append(label, style=f"bold {THEME['success']}")
-            else:
-                t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
-                t.append(label, style=f"bold {THEME['text']}")
-            t.append("\n", style="")
-            t.append(f"        {description}\n", style=THEME["muted"])
-
-        t.append("\n  💡 ", style=THEME["muted"])
-        t.append("↑↓", style=THEME["cyan"])
-        t.append(" navigate  ", style=THEME["dim"])
-        t.append("Enter", style=THEME["cyan"])
-        t.append(" select  •  or type a number\n", style=THEME["dim"])
+        t.append(self._setup_option_lines(options))
 
         log.auto_scroll = False
         log.clear()
@@ -901,7 +921,12 @@ class PickerNavigationMixin:
 
         t = Text()
         t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
-        t.append(f"{runtime_name} is not installed\n\n", style=f"bold {THEME['text']}")
+        t.append("Setup required", style=f"bold {THEME['text']}")
+        t.append(f"   {runtime_name}\n\n", style=THEME["muted"])
+        t.append(
+            f"    {runtime_name} is not installed in SuperQode's active environment\n",
+            style=THEME["warning"],
+        )
         t.append("    It needs the ", style=THEME["muted"])
         t.append(f"superqode[{extra}]", style=f"bold {THEME['cyan']}")
         t.append(" extra.\n\n", style=THEME["muted"])
@@ -910,14 +935,7 @@ class PickerNavigationMixin:
         t.append("    Install into  ", style=THEME["muted"])
         t.append(f"{env.target}\n\n", style=THEME["text"])
         t.append(f"    {command}\n\n", style=THEME["cyan"])
-        t.append(self._dependency_install_option_lines())
-        t.append("  💡 ", style=THEME["muted"])
-        t.append("↑↓", style=THEME["cyan"])
-        t.append(" navigate  ", style=THEME["dim"])
-        t.append("Enter", style=THEME["cyan"])
-        t.append(" select  •  or type a number, e.g. ", style=THEME["dim"])
-        t.append("2", style=THEME["cyan"])
-        t.append("\n", style="")
+        t.append(self._setup_option_lines(self._DEPENDENCY_INSTALL_OPTIONS))
 
         log.auto_scroll = False
         if clear_log:
@@ -937,14 +955,17 @@ class PickerNavigationMixin:
         t = Text()
         for index, (_key, label, description) in enumerate(options):
             num = index + 1
+            is_highlighted = index == highlighted
+            t.append("  ")
+            self._append_picker_dot(t, num, highlighted=is_highlighted)
             if index == highlighted:
-                t.append("  ▶ ", style=f"bold {THEME['success']}")
                 t.append(
                     f"[{num}] ", style=self._picker_link_style(f"bold {THEME['success']}", num)
                 )
                 t.append(label, style=f"bold {THEME['success']}")
+                self._append_picker_arrow(t, num)
             else:
-                t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
+                t.append(f"[{num}] ", style=self._picker_link_style(THEME["dim"], num))
                 t.append(label, style=f"bold {THEME['text']}")
             t.append("\n", style="")
             t.append(f"        {description}\n", style=THEME["muted"])

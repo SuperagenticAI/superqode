@@ -118,14 +118,11 @@ class CommandImplMixin:
                 )
             )
         text = Text()
-        text.append(
-            f"\n  ◈ {title} installation needs attention\n\n", style=f"bold {THEME['purple']}"
-        )
+        text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        text.append("Installation needs attention", style=f"bold {THEME['text']}")
+        text.append(f"   {title}\n\n", style=THEME["muted"])
         text.append(f"    {command}\n\n", style=THEME["cyan"])
-        for index, option in enumerate(prompts.active.options(), 1):
-            marker = "▶" if prompts.index == index - 1 else " "
-            text.append(f"  {marker} [{index}] {option[1]}\n", style=THEME["text"])
-        text.append("\n  ↑↓ navigate · Enter select · Esc back\n", style=THEME["muted"])
+        text.append(self._setup_option_lines(list(prompts.active.options())))
         log.write(text)
         self._ensure_input_focus()
 
@@ -213,14 +210,15 @@ class CommandImplMixin:
                 )
             )
         text = Text()
-        text.append(f"\n  ◈ {name} is needed for {purpose}\n\n", style=f"bold {THEME['purple']}")
+        text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        text.append("Setup required", style=f"bold {THEME['text']}")
+        text.append(f"   {name}\n\n", style=THEME["muted"])
+        text.append(f"    Needed for {purpose}\n", style=THEME["warning"])
+        text.append("    Exact command\n", style=THEME["muted"])
         text.append(f"    {command}\n\n", style=THEME["cyan"])
         if alternative:
             text.append(f"  {alternative}\n\n", style=THEME["muted"])
-        for index, option in enumerate(self._prompts.active.options(), 1):
-            marker = "▶" if self._prompts.index == index - 1 else " "
-            text.append(f"  {marker} [{index}] {option[1]}\n", style=THEME["text"])
-        text.append("\n  ↑↓ navigate · Enter select · Esc back\n", style=THEME["muted"])
+        text.append(self._setup_option_lines(list(self._prompts.active.options())))
         log.clear()
         log.write(text)
         self._ensure_input_focus()
@@ -5034,6 +5032,9 @@ class CommandImplMixin:
                 )
                 return
             if not entry.available:
+                agent_data = entry.target if isinstance(entry.target, dict) else {}
+                if agent_data and self._show_agent_install_picker(agent_data, log):
+                    return
                 self._announce_transition(
                     title="Agent not installed",
                     primary=entry.display_name,
@@ -5075,13 +5076,15 @@ class CommandImplMixin:
         resume_command: str,
     ) -> None:
         """Offer an in-TUI install for a controlled SuperQode Python extra."""
+        from superqode.app.prompt_stack import PromptSpec
         from superqode.providers.env_introspect import environment_info, extra_install_command
 
         command = extra_install_command(extra)
         env = environment_info()
         self._awaiting_harness_selection = False
         self._awaiting_harness_confirmation = False
-        self._awaiting_harness_install = {
+        pending = {
+            "entry": entry,
             "id": str(getattr(entry, "id", "") or ""),
             "display_name": str(
                 getattr(entry, "display_name", "") or getattr(entry, "id", "") or "Harness"
@@ -5090,35 +5093,80 @@ class CommandImplMixin:
             "command": command,
             "resume_command": resume_command,
         }
-        text = Text()
-        text.append("\n  Install Python integration\n\n", style=f"bold {THEME['purple']}")
-        text.append(
-            f"  {self._awaiting_harness_install['display_name']} needs the ",
-            style=THEME["text"],
+        self._awaiting_harness_install = pending
+        options = (
+            ("install", "Install and continue", "SuperQode runs the exact command shown"),
+            ("copy", "Copy install command", "run it yourself in another terminal"),
+            ("recheck", "I installed it — check again", "verify and continue the switch"),
+            ("cancel", "Choose another harness", "return without installing"),
         )
-        text.append(f"superqode[{extra}]", style=f"bold {THEME['cyan']}")
-        text.append(" extra.\n\n", style=THEME["text"])
-        text.append("  Running from  ", style=THEME["muted"])
+        if not self._prompts.is_active("harness_install"):
+            self._prompts.push(
+                PromptSpec(
+                    name="harness_install",
+                    kind="picker",
+                    options=lambda: list(options),
+                    on_select=lambda option: self._apply_harness_install_choice(
+                        option[0], pending=pending, log=log
+                    ),
+                    on_cancel=lambda: self._apply_harness_install_choice(
+                        "cancel", pending=pending, log=log
+                    ),
+                    render=lambda: self._show_harness_install_prompt(
+                        entry,
+                        log,
+                        extra=extra,
+                        resume_command=resume_command,
+                    ),
+                    data=pending,
+                )
+            )
+        text = Text()
+        text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        text.append("Setup required", style=f"bold {THEME['text']}")
+        text.append(f"   {pending['display_name']}\n\n", style=THEME["muted"])
+        text.append(
+            "    Python integration is not installed in SuperQode's active environment\n",
+            style=THEME["warning"],
+        )
+        text.append("    Required      ", style=THEME["muted"])
+        text.append(f"superqode[{extra}]\n", style=f"bold {THEME['cyan']}")
+        text.append("    Running from  ", style=THEME["muted"])
         text.append(f"{env.label}\n", style=THEME["text"])
-        text.append("  Python        ", style=THEME["muted"])
+        text.append("    Python        ", style=THEME["muted"])
         text.append(f"{env.python}\n", style=THEME["text"])
-        text.append("  Install into  ", style=THEME["muted"])
+        text.append("    Install into  ", style=THEME["muted"])
         text.append(f"{env.target}\n\n", style=THEME["text"])
-        text.append(f"  {command}\n\n", style=THEME["cyan"])
-        text.append("  Enter", style=f"bold {THEME['cyan']}")
-        text.append(" install and continue  ", style=THEME["dim"])
-        text.append("c", style=f"bold {THEME['cyan']}")
-        text.append(" copy command  ", style=THEME["dim"])
-        text.append("r", style=f"bold {THEME['cyan']}")
-        text.append(" check again  ", style=THEME["dim"])
-        text.append("n", style=f"bold {THEME['cyan']}")
-        text.append(" cancel\n", style=THEME["dim"])
-        text.append("  You can also run it through the shell executor with ", style=THEME["muted"])
-        text.append(f">{command}\n", style=THEME["cyan"])
+        text.append("    Exact command\n      ", style=THEME["muted"])
+        text.append(f"{command}\n\n", style=THEME["cyan"])
+        text.append(self._setup_option_lines(options))
         log.clear()
         log.write(text)
         log.scroll_home(animate=False)
         self.set_timer(0.05, self._ensure_input_focus)
+
+    def _apply_harness_install_choice(self, choice: str, *, pending: dict, log) -> None:
+        """Apply a unified harness setup-card choice."""
+        self._awaiting_harness_install = None
+        if choice == "install":
+            self.run_worker(self._install_harness_extra_then_continue(pending, log))
+            return
+        if choice == "copy":
+            entry = pending.get("entry")
+            if entry is not None:
+                self._show_harness_install_prompt(
+                    entry,
+                    log,
+                    extra=str(pending.get("extra") or ""),
+                    resume_command=str(pending.get("resume_command") or "switch"),
+                )
+            self._copy_setup_command(str(pending.get("command") or ""), log)
+            return
+        if choice == "recheck":
+            self._harness_cmd(str(pending.get("resume_command") or "switch"), log)
+            return
+        self._clear_key_harness_session()
+        log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
 
     def _handle_harness_install_input(self, text: str, log) -> bool:
         """Resolve the inline Python-extra installation prompt."""
@@ -5127,14 +5175,20 @@ class CommandImplMixin:
             return False
         choice = text.strip().lower()
         if choice in {"n", "no", "cancel", "skip", "q"}:
+            if self._prompts.is_active("harness_install"):
+                self._prompts.pop()
             self._awaiting_harness_install = None
             self._clear_key_harness_session()
             log.add_info("Harness installation cancelled. Run :harness to choose another entry.")
             return True
         if choice in {"c", "copy"}:
+            if self._prompts.is_active("harness_install"):
+                self._prompts.pop()
             self._copy_setup_command(str(pending.get("command") or ""), log)
             return True
         if choice in {"r", "recheck", "check"}:
+            if self._prompts.is_active("harness_install"):
+                self._prompts.pop()
             # Re-run the selected harness switch; its own readiness probe is
             # authoritative and will reopen setup if the extra is still absent.
             self._awaiting_harness_install = None
@@ -5144,6 +5198,8 @@ class CommandImplMixin:
             log.add_error("Press Enter to install the shown Python extra, or type n to cancel.")
             return True
         self._awaiting_harness_install = None
+        if self._prompts.is_active("harness_install"):
+            self._prompts.pop()
         self.run_worker(self._install_harness_extra_then_continue(pending, log))
         return True
 

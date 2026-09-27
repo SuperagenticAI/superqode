@@ -24,7 +24,7 @@ class EventHandlerMixin:
         """Handle sidebar resize via divider drag."""
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            current_width = getattr(sidebar, "_width", 80)
+            current_width = getattr(sidebar, "_width", 34)
             self._set_sidebar_width(current_width + event.delta_x)
         except Exception:
             pass

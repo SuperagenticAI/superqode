@@ -601,7 +601,7 @@ class SuperQodeApp(
         """Re-flow the welcome screen when only it is shown and the size changes."""
         try:
             sidebar = self.query_one("#sidebar")
-            self._set_sidebar_width(getattr(sidebar, "_width", 80), event.size.width)
+            self._set_sidebar_width(getattr(sidebar, "_width", 34), event.size.width)
         except Exception:
             pass  # Resize may arrive before compose finishes.
         if not getattr(self, "_welcome_active", False):
@@ -741,10 +741,28 @@ class SuperQodeApp(
             self._handle_plan(action, self.query_one("#log", ConversationLog))
             return
 
-        # When focus is outside the prompt, Left Arrow still mirrors the
-        # visible browser-style Back control. Prompt focus handles this itself
-        # so text cursor movement continues to work whenever text is present.
-        if event.key == "left":
+        # Registry-driven setup cards must remain keyboard-operable even when
+        # a prior mouse click or screen transition left focus outside the
+        # composer. SelectionAwareInput owns these keys while focused; this is
+        # the app-level fallback for every other widget.
+        prompts = getattr(self, "_prompts", None)
+        active_prompt = getattr(prompts, "active", None) if prompts is not None else None
+        if active_prompt is not None and active_prompt.kind == "picker":
+            if event.key in {"up", "down"} and prompts.navigate(-1 if event.key == "up" else 1):
+                event.stop()
+                event.prevent_default()
+                self.set_timer(0.05, self._ensure_input_focus)
+                return
+            if event.key == "enter" and prompts.select():
+                event.stop()
+                event.prevent_default()
+                self.set_timer(0.05, self._ensure_input_focus)
+                return
+
+        # When focus is outside the prompt, Backspace and Left Arrow still
+        # mirror the visible browser-style Back control. Prompt focus handles
+        # these itself so editing continues normally whenever text is present.
+        if event.key in {"backspace", "left"}:
             try:
                 prompt_value = self.query_one("#prompt-input", SelectionAwareInput).value
             except Exception:  # noqa: BLE001 - keyboard navigation must remain safe

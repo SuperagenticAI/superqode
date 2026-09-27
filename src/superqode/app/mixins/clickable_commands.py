@@ -33,6 +33,8 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "plan-reject",
         "skills",
         "systemone",
+        "workspace-files",
+        "workspace-close",
     }
 )
 
@@ -75,11 +77,11 @@ class ClickableCommandMixin:
         return moved
 
     def _navigate_back_from_keyboard(self, prompt_value: str = "") -> bool:
-        """Run the visible Back action from Left Arrow when it is unambiguous.
+        """Run the visible Back action from Backspace/Left when unambiguous.
 
-        Left remains ordinary cursor navigation while the prompt contains text.
-        With an empty prompt and a visible history destination it behaves like
-        the status bar's ``← Back`` control.
+        Both keys retain their ordinary editing behaviour while the prompt
+        contains text. With an empty prompt and a visible history destination,
+        either key behaves like the status bar's ``⌫ Back`` control.
         """
         if str(prompt_value or "").strip() or not self._history.can_go_back:
             return False
@@ -169,6 +171,13 @@ class ClickableCommandMixin:
 
     def _dispatch_clicked_command(self, command: str) -> None:
         log = self._clicked_command_log()
+        if command == "workspace-files":
+            self.action_sidebar_files()
+            return
+        if command == "workspace-close":
+            if getattr(self, "sidebar_visible", False):
+                self.action_toggle_sidebar()
+            return
         if command.startswith("plan-"):
             self._handle_command(f":plan {command.removeprefix('plan-')}", log)
             return
