@@ -233,7 +233,6 @@ class BuildHarnessMixin:
         self._show_import_success(log, spec, note, written)
 
     def _show_import_success(self, log: ConversationLog, spec, note: str, written) -> None:
-
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
         t.append(f"Imported {label}\n\n", style=f"bold {THEME['text']}")
