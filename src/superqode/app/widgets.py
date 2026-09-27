@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import tempfile
 from functools import lru_cache
 from time import monotonic
 from typing import Any
@@ -41,6 +42,15 @@ from .constants import (
     AGENT_COLORS,
     AGENT_ICONS,
 )
+
+
+_SHELL_TOOL_MARKERS = ("bash", "shell", "terminal", "exec", "command", "run")
+_IN_MEMORY_TOOL_OUTPUT_LIMIT = 64 * 1024
+_HISTORICAL_TOOL_OUTPUT_LIMIT = 16 * 1024
+
+
+def _is_shell_tool(tool_name: str) -> bool:
+    return any(marker in str(tool_name).lower() for marker in _SHELL_TOOL_MARKERS)
 
 
 def summarize_tool_output(tool_name: str, status: str, output: str, mode: str = "normal") -> str:
@@ -132,14 +142,9 @@ def _syntax_fragments(code: str, language: str) -> tuple[tuple[str, object], ...
 def _tool_preview_language(tool_name: str, arguments: dict[str, Any]) -> str:
     """Choose syntax for a tool preview without guessing or parsing the payload."""
     lower = tool_name.lower()
-    shell_markers = ("bash", "shell", "terminal", "exec", "command", "run")
-    if (
-        "python" in lower
-        or arguments.get("code")
-        and not any(marker in lower for marker in shell_markers)
-    ):
+    if "python" in lower or arguments.get("code") and not _is_shell_tool(lower):
         return "python"
-    if any(marker in lower for marker in shell_markers):
+    if _is_shell_tool(lower):
         return "bash"
     return ""
 
@@ -879,16 +884,17 @@ class TopScanningLine(Static):
 
 
 class BottomScanningLine(Static):
-    """Bottom scanning line - radar sweep animation."""
+    """Branded bottom radar sweep shown only while the agent is working."""
 
     is_active = reactive(False)
     needs_approval = reactive(False)
     SWEEP_CYCLES_PER_SECOND = 0.2
 
-    def on_mount(self):
+    def on_mount(self) -> None:
         self.auto_refresh = 1 / 12 if self.is_active else None
 
     def watch_is_active(self, active: bool) -> None:
+        # No idle timer: the animation costs nothing between agent turns.
         if self.is_mounted:
             self.auto_refresh = 1 / 12 if active else None
         self.refresh()
@@ -1266,11 +1272,14 @@ class SelectableTextArea(Static):
 class NewOutputIndicator(Static):
     """Clickable transcript-follow control shown while the viewport is locked."""
 
-    def set_unread(self, count: int) -> None:
+    def set_unread(self, count: int, *, anchored: bool = False) -> None:
         count = max(0, int(count))
         if count:
             unit = "line" if count == 1 else "lines"
             self.update(f"↓ {count} new {unit}  ·  Ctrl+End to follow")
+            self.add_class("visible")
+        elif anchored:
+            self.update("↓ Latest  ·  Ctrl+End")
             self.add_class("visible")
         else:
             self.update("")
@@ -1489,6 +1498,8 @@ class ConversationLog(RichLog):
         # Session-wide record of completed tool runs (never reset per turn) so
         # :timeline / :tools reflect the whole conversation, not just this turn.
         self._session_tool_calls: list[dict] = []
+        self._last_tool_output: str = ""
+        self._last_tool_output_spool = None
         self._streaming_response: str = ""
         self._streaming_notice_shown: bool = False
         self._answer_header_shown: bool = False
@@ -1692,8 +1703,11 @@ class ConversationLog(RichLog):
         return self._unread_output_lines
 
     def validate_auto_scroll(self, value: bool) -> bool:
-        """Make the explicit user lock authoritative over legacy assignments."""
-        if value and getattr(self, "_viewport_mode", "following") == "user_locked":
+        """Keep explicit reading positions authoritative over legacy assignments."""
+        if value and getattr(self, "_viewport_mode", "following") in {
+            "user_locked",
+            "completion_anchored",
+        }:
             return False
         return value
 
@@ -1713,7 +1727,7 @@ class ConversationLog(RichLog):
         except Exception:
             return
         count = self._unread_output_lines if self._viewport_mode == "user_locked" else 0
-        indicator.set_unread(count)
+        indicator.set_unread(count, anchored=self._viewport_mode == "completion_anchored")
 
     def lock_viewport(self) -> None:
         """Freeze the viewport because the user chose to inspect older output."""
@@ -1928,12 +1942,59 @@ class ConversationLog(RichLog):
 
     def get_last_tool_output(self) -> str:
         """Raw output of the most recent tool run (exact paste)."""
+        spool = getattr(self, "_last_tool_output_spool", None)
+        if spool is not None:
+            try:
+                spool.seek(0)
+                return spool.read()
+            except (OSError, ValueError):
+                pass
         if getattr(self, "_last_tool_output", ""):
             return self._last_tool_output
         for call in reversed(getattr(self, "_session_tool_calls", [])):
             if call.get("output"):
                 return str(call["output"])
         return ""
+
+    def _store_last_tool_output(self, output: str) -> None:
+        """Keep the latest output exact, spilling large values out of RAM."""
+        self._close_last_tool_output_spool()
+        output = str(output)
+        if len(output) <= _IN_MEMORY_TOOL_OUTPUT_LIMIT:
+            self._last_tool_output = output
+            return
+        spool = tempfile.SpooledTemporaryFile(
+            max_size=_IN_MEMORY_TOOL_OUTPUT_LIMIT,
+            mode="w+t",
+            encoding="utf-8",
+            newline="",
+        )
+        spool.write(output)
+        spool.seek(0)
+        self._last_tool_output = ""
+        self._last_tool_output_spool = spool
+
+    def _close_last_tool_output_spool(self) -> None:
+        spool = getattr(self, "_last_tool_output_spool", None)
+        if spool is not None:
+            try:
+                spool.close()
+            except OSError:
+                pass
+        self._last_tool_output_spool = None
+
+    def on_unmount(self) -> None:
+        """Release any disk-backed output as soon as the transcript unmounts."""
+        self._close_last_tool_output_spool()
+
+    @staticmethod
+    def _historical_tool_output(output: str) -> str:
+        """Bound run history while the exact latest output remains copyable."""
+        output = str(output or "")
+        if len(output) <= _HISTORICAL_TOOL_OUTPUT_LIMIT:
+            return output
+        omitted = len(output) - _HISTORICAL_TOOL_OUTPUT_LIMIT
+        return f"{output[:_HISTORICAL_TOOL_OUTPUT_LIMIT]}\n… {omitted:,} characters omitted"
 
     def get_last_code_block(self) -> str:
         """First fenced code block from the last agent response (paste-ready)."""
@@ -2322,6 +2383,8 @@ class ConversationLog(RichLog):
         self._thinking_lines.clear()
         self._tool_calls.clear()
         self._session_tool_calls.clear()
+        self._close_last_tool_output_spool()
+        self._last_tool_output = ""
         self.clear_running_tools()
         self.reset_response_stream()
         self._set_viewport_mode("following")
@@ -2460,6 +2523,7 @@ class ConversationLog(RichLog):
             # (normally the next user turn) restores follow-at-bottom behavior.
             self._feedback_anchor_active = True
             self._viewport_mode = "completion_anchored"
+            self._sync_unread_indicator()
             self.scroll_to(y=start_y, animate=False)
             attempts += 1
             if attempts >= 2:
@@ -2523,10 +2587,7 @@ class ConversationLog(RichLog):
             if not display_args.get(key) and metadata.get(key):
                 display_args[key] = metadata[key]
         preview_language = _tool_preview_language(tool_name, display_args)
-        command_tool = any(
-            marker in tool_name.lower()
-            for marker in ("bash", "shell", "terminal", "exec", "command", "run")
-        )
+        command_tool = _is_shell_tool(tool_name)
         if command_tool or any(
             display_args.get(key)
             for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script")
@@ -2554,7 +2615,7 @@ class ConversationLog(RichLog):
                 "path": file_path,
                 "command": command,
                 "arguments": display_args,
-                "output": output,
+                "output": self._historical_tool_output(output),
                 "diff_text": diff_text,
                 "duration": duration,
                 "additions": additions,
@@ -2739,7 +2800,7 @@ class ConversationLog(RichLog):
                     "path": file_path,
                     "command": command,
                     "arguments": display_args,
-                    "output": output,
+                    "output": self._historical_tool_output(output),
                     "diff_text": diff_text,
                     "duration": duration,
                     "additions": additions,
@@ -2752,7 +2813,7 @@ class ConversationLog(RichLog):
             if command:
                 self._last_command = command
             if output:
-                self._last_tool_output = output
+                self._store_last_tool_output(output)
 
     @staticmethod
     def _file_link_for(source: Any) -> str:
@@ -3070,9 +3131,7 @@ class ConversationLog(RichLog):
             code = arguments.get("code") or arguments.get("input") or arguments.get("command")
             if code:
                 return _clip_single_line(str(code), max_length)
-        command_tool = any(
-            marker in lower for marker in ("bash", "shell", "terminal", "exec", "command", "run")
-        )
+        command_tool = _is_shell_tool(lower)
         if command_tool or any(
             arguments.get(key)
             for key in ("command", "cmd", "commandLine", "command_line", "shellCommand", "script")

@@ -17,6 +17,7 @@ from superqode.app.constants import (
 )
 from superqode.app.widgets import (
     TopScanningLine,
+    BottomScanningLine,
     StreamingThinkingIndicator,
     ConversationLog,
     ColorfulStatusBar,
@@ -151,7 +152,7 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show single scanning line (TOP only — brand wave kept, bottom dup removed)
+        # Show the branded top scanning line.
         try:
             thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
             thinking_wave.is_active = True
@@ -159,7 +160,12 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Bottom wave intentionally left off (was duplicate chrome)
+        try:
+            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
+            bottom_wave.is_active = True
+            bottom_wave.add_class("visible")
+        except Exception:
+            pass
 
     def _stop_stream_animation(self):
         """Stop the streaming animation."""
@@ -172,6 +178,13 @@ class AgentRunMixin:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.end()
             thinking_indicator.remove_class("visible")
+        except Exception:
+            pass
+
+        try:
+            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
+            bottom_wave.is_active = False
+            bottom_wave.remove_class("visible")
         except Exception:
             pass
 
@@ -211,7 +224,12 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Bottom wave intentionally off (was duplicate chrome); TOP kept as brand.
+        try:
+            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
+            bottom_wave.is_active = True
+            bottom_wave.add_class("visible")
+        except Exception:
+            pass
 
         self._set_composer_working_state(True)
 
@@ -243,6 +261,13 @@ class AgentRunMixin:
             thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
             thinking_wave.is_active = False
             thinking_wave.remove_class("visible")
+        except Exception:
+            pass
+
+        try:
+            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
+            bottom_wave.is_active = False
+            bottom_wave.remove_class("visible")
         except Exception:
             pass
 

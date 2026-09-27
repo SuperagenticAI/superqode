@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.19] - 2026-09-27
+
 ### Added
 
 - Live Bash and Python tool previews use SuperQode-themed syntax colors while
@@ -24,29 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keyboard-operable picker cards: Codex model, local dependency, and stopped
   local-server setup cards support Up/Down + Enter at app level and full
   row-click selection.
-
-### Changed
-
-- Cache tool-preview and fenced-code lexer lookup, keep large code blocks
-  unwrapped, stop inactive animation refresh timers, and remove the duplicate
-  bottom scanning wave to preserve TUI responsiveness during long runs.
-
-### Fixed
-
-- Starting a conversation now makes it the navigation root, and Back is hidden
-  while work is active, preventing stale setup history from replacing the live
-  or completed transcript.
-- Long completed Markdown/code responses re-anchor at their agent heading after
-  completion chrome and final layout settle, without changing render behavior.
-- Key B and Left Arrow navigate back when the prompt is empty, while Backspace
-  strictly edits prompt text and never triggers TUI back navigation; sidebar
-  default width is 34.
-- Local dependency install ordering shows copy/recheck before manual/cancel.
-
-## [2.4.19] - 2026-09-27
-
-### Added
-
 - Multiline composer input: Shift+Enter, Alt+Enter, and Ctrl+J insert a
   newline (replacing the active selection) without changing Enter-to-submit,
   and the shortcut is documented in the `:help` keyboard table.
@@ -65,8 +44,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before build, or Task, including the Vim NORMAL/INSERT state when the
   Vim experience is enabled.
 
+### Changed
+
+- Cache tool-preview and fenced-code lexer lookup, keep large code blocks
+  unwrapped, and stop inactive animation refresh timers. Both branded working
+  bars remain available without consuming refresh cycles while idle.
+- Bound historical tool output in memory and spill oversized latest output to
+  a temporary disk-backed buffer, preserving exact `:copy output` behavior.
+- Close autocomplete while the composer is disabled and show a clickable
+  `↓ Latest` control when a completed response is positioned at its beginning.
+
 ### Fixed
 
+- Starting a conversation now makes it the navigation root, and Back is hidden
+  while work is active, preventing stale setup history from replacing the live
+  or completed transcript.
+- Long completed Markdown/code responses re-anchor at their agent heading after
+  completion chrome and final layout settle, without changing render behavior.
+- Key B and Left Arrow navigate back when the prompt is empty, while Backspace
+  strictly edits prompt text and never triggers TUI back navigation; sidebar
+  default width is 34.
+- Local dependency install ordering shows copy/recheck before manual/cancel.
 - Keep the manual transcript reading lock authoritative over temporary
   auto-scroll writes from pickers, streaming, status, and reveal cards, and
   skip completion-reveal jumps while the user is inspecting older output.

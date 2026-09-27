@@ -41,6 +41,7 @@ from superqode.app.suggester import CommandSuggester
 from superqode.app.widgets import (
     ColorfulStatusBar,
     TopScanningLine,
+    BottomScanningLine,
     StreamingThinkingIndicator,
     ModeBadge,
     HintsBar,
@@ -464,6 +465,9 @@ class SuperQodeApp(
 
                 # Thinking indicator with changing text at bottom (shown when agent is thinking)
                 yield StreamingThinkingIndicator(id="streaming-thinking")
+
+                # Branded bottom sweep: active only while the agent is working.
+                yield BottomScanningLine(id="thinking-wave-bottom")
 
         yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
 

@@ -21,7 +21,7 @@ from textual import events
 from textual.widgets import Static
 
 from superqode.app_main import SuperQodeApp, SelectionAwareInput
-from superqode.app.widgets import ColorfulStatusBar, ConversationLog
+from superqode.app.widgets import BottomScanningLine, ColorfulStatusBar, ConversationLog
 
 
 @pytest.fixture(autouse=True)
@@ -67,18 +67,30 @@ async def test_composer_stays_visible_but_disabled_while_agent_is_working():
     async with app.run_test(size=(100, 40)) as pilot:
         composer = app.query_one("#prompt-area")
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        completions = app.query_one("#prompt-completions")
+        bottom_wave = app.query_one("#thinking-wave-bottom", BottomScanningLine)
+        app._prompt_completion_visible = True
+        completions.add_class("visible")
 
         app._start_thinking()
         await pilot.pause()
         assert not composer.has_class("hidden")
         assert composer.has_class("working")
         assert prompt.disabled
+        assert not app._prompt_completion_visible
+        assert not completions.has_class("visible")
+        assert bottom_wave.is_active
+        assert bottom_wave.has_class("visible")
+        assert bottom_wave.auto_refresh is not None
 
         app._stop_thinking()
         await pilot.pause()
         assert not composer.has_class("hidden")
         assert not composer.has_class("working")
         assert not prompt.disabled
+        assert not bottom_wave.is_active
+        assert not bottom_wave.has_class("visible")
+        assert bottom_wave.auto_refresh is None
 
         # Direct is_busy changes use the same visible, disabled lifecycle.
         app.is_busy = True
@@ -114,6 +126,53 @@ async def test_busy_composer_reenables_only_for_required_agent_input():
         await pilot.pause()
         assert prompt.disabled
         assert composer.has_class("working")
+
+
+async def test_full_agent_ui_lifecycle_stays_fast_and_readable():
+    """Work, tool approval and response reveal share one stable TUI lifecycle."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        indicator = app.query_one("#new-output-indicator")
+        log.clear()
+        log.reset_response_stream("lifecycle-model")
+
+        app._start_thinking()
+        log.add_tool_call(
+            "python_repl",
+            status="running",
+            arguments={"code": "for item in range(3): print(item)"},
+        )
+        await pilot.pause()
+        assert prompt.disabled
+        assert "for item in range" in log._active_tools_renderable().plain
+
+        app._show_permission_prompt("bash", {"command": "pytest -q"}, log)
+        await pilot.pause()
+        assert not prompt.disabled
+        assert app._handle_permission_input("y")
+        await pilot.pause()
+        assert prompt.disabled
+
+        log.add_tool_call(
+            "python_repl",
+            status="success",
+            arguments={"code": "for item in range(3): print(item)"},
+            output="0\n1\n2",
+        )
+        response = "\n\n".join(f"Result {index}: verified" for index in range(40))
+        log.write_final_response(response, agent="lifecycle-model")
+        app._stop_thinking()
+        await pilot.pause()
+        await pilot.pause()
+
+        heading_y = next(
+            index for index, line in enumerate(log.lines) if "AGENT · lifecycle-model" in line.text
+        )
+        assert not prompt.disabled
+        assert log.scroll_y <= heading_y < log.scroll_y + log.scrollable_content_region.height
+        assert indicator.has_class("visible")
 
 
 async def test_install_progress_is_visible_until_cleared():
@@ -1056,6 +1115,7 @@ async def test_long_markdown_code_response_reveals_from_its_heading():
     app = SuperQodeApp()
     async with app.run_test(size=(80, 24)) as pilot:
         log = app.query_one("#log", ConversationLog)
+        indicator = app.query_one("#new-output-indicator")
         log.clear()
         log.reset_response_stream("code-model")
         source = "\n".join(f"value_{index} = compute({index})" for index in range(60))
@@ -1076,6 +1136,14 @@ async def test_long_markdown_code_response_reveals_from_its_heading():
         assert log.scroll_y <= heading_y < log.scroll_y + visible_height
         assert log.scroll_y < log.max_scroll_y
         assert not log.auto_scroll
+        assert indicator.has_class("visible")
+        assert "Latest" in str(indicator.render())
+
+        await pilot.click("#new-output-indicator")
+        await pilot.pause()
+        assert log.viewport_mode == "following"
+        assert log.auto_scroll
+        assert not indicator.has_class("visible")
 
 
 async def test_short_completed_response_stays_in_follow_mode():

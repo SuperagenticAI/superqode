@@ -5166,6 +5166,32 @@ def test_running_python_and_bash_previews_use_cached_syntax_colors():
     assert len({str(span.style) for span in bash_preview.spans}) >= 3
 
 
+def test_large_tool_output_spills_to_disk_but_remains_exactly_copyable():
+    from superqode.app.widgets import _HISTORICAL_TOOL_OUTPUT_LIMIT
+
+    log = ConversationLog()
+    log.write = lambda *_args, **_kwargs: None
+    output = "0123456789abcdef" * 20_000
+
+    log.add_tool_call(
+        "bash",
+        status="success",
+        arguments={"command": "generate-large-output"},
+        output=output,
+    )
+
+    assert log.get_last_tool_output() == output
+    assert log._last_tool_output == ""
+    assert log._last_tool_output_spool is not None
+    assert len(log._session_tool_calls[-1]["output"]) < _HISTORICAL_TOOL_OUTPUT_LIMIT + 100
+    assert "characters omitted" in log._session_tool_calls[-1]["output"]
+
+    spool = log._last_tool_output_spool
+    log.reset_conversation()
+    assert spool.closed
+    assert log.get_last_tool_output() == ""
+
+
 def test_tool_command_is_copyable_and_metadata_command_is_visible():
     log = ConversationLog()
     writes = []

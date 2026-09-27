@@ -419,7 +419,6 @@ class HelpersMixin(
         """Show the composer as disabled work chrome, or enable it for a decision."""
         try:
             prompt_area = self.query_one("#prompt-area")
-            prompt_area.remove_class("hidden")
             prompt_area.set_class(working and not interactive, "working")
             prompt_area.set_class(working and interactive, "action-required")
         except Exception:
@@ -427,6 +426,10 @@ class HelpersMixin(
         try:
             prompt = self.query_one("#prompt-input", SelectionAwareInput)
             prompt.disabled = working and not interactive
+            if working and not interactive:
+                hide_completions = getattr(self, "_hide_prompt_completion_panel", None)
+                if callable(hide_completions):
+                    hide_completions()
             if interactive:
                 prompt.focus()
         except Exception:

@@ -141,6 +141,9 @@ CollapsibleSidebar CollapsibleTitle:hover {
 #thinking-wave { height: 1; width: 100%; margin: 0; padding: 0; display: none; }
 #thinking-wave.visible { display: block; }
 
+#thinking-wave-bottom { height: 1; width: 100%; margin: 0; padding: 0; display: none; }
+#thinking-wave-bottom.visible { display: block; }
+
 /* Conversation - main response area (expandable) - FULL WIDTH */
 #conversation {
     height: 1fr;
@@ -185,7 +188,6 @@ ConversationLog {
    is disabled in Python, so this is honest status chrome rather than a field
    that looks editable but silently ignores input. */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
-#prompt-area.hidden { display: none; }
 #prompt-area.working { opacity: 0.78; }
 #prompt-area.working #input-box { border: round #7c3aed; background: #09060d; }
 #prompt-area.working #prompt-symbol { color: #a855f7; }
