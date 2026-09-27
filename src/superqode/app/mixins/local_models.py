@@ -1275,7 +1275,7 @@ class LocalModelsMixin:
         if not local_providers:
             t.append("  ⚠️  No local providers configured\n", style=THEME["warning"])
             t.append(
-                "  Local providers include: ds4, ollama, lmstudio, mlx, vllm, etc.\n",
+                "  Local providers include: ollama, lmstudio, llamacpp, sglang, vllm, mlx, etc.\n",
                 style=THEME["dim"],
             )
             if clear_log:
@@ -1283,18 +1283,9 @@ class LocalModelsMixin:
             log.write(t)
             return
 
-        # Sort providers: prioritize main local coding flows first.
-        priority_order = ["ds4", "ollama", "mlx", "lmstudio", "vllm", "sglang"]
-
-        def sort_key(item):
-            provider_id, _ = item
-            if provider_id in priority_order:
-                return (0, priority_order.index(provider_id))
-            return (1, provider_id)
-
         # Show local providers with highlighting
         highlighted_idx = getattr(self, "_local_highlighted_provider_index", 0)
-        local_providers_list = sorted(local_providers.items(), key=sort_key)
+        local_providers_list = list(local_providers.items())
 
         # Debug: Ensure all providers are included
         if not local_providers_list:
@@ -1324,7 +1315,7 @@ class LocalModelsMixin:
             status_icon = provider_emojis.get(provider_id, "🟢")
             labels = ["local"]
             if provider_id == "ds4":
-                labels.extend(["recommended", "tools", "1M ctx"])
+                labels.extend(["tools", "1M ctx"])
             elif provider_id in ("ollama", "mlx", "lmstudio"):
                 labels.extend(["popular", "tools"])
             elif provider_id in ("vllm", "sglang", "tgi"):
@@ -1354,7 +1345,7 @@ class LocalModelsMixin:
         t.append(". Direct connect: ", style=THEME["muted"])
         t.append(f":connect local <provider>/<model>\n", style=THEME["cyan"])
         t.append(f"  Example: ", style=THEME["dim"])
-        t.append(f":connect local ds4/deepseek-v4-flash\n", style=THEME["cyan"])
+        t.append(f":connect local ollama/qwen3:8b\n", style=THEME["cyan"])
 
         if clear_log:
             log.clear()
@@ -2180,7 +2171,7 @@ class LocalModelsMixin:
                 self.run_worker(self._local_serve(subargs, log))
             else:
                 log.add_info(
-                    "Usage: :local serve <ollama|lmstudio|mlx|ds4|llama.cpp> [--model X] [--port N] [--ctx N] [--host H]"
+                    "Usage: :local serve <ollama|lmstudio|llama.cpp|mlx|ds4> [--model X] [--port N] [--ctx N] [--host H]"
                 )
                 log.add_system(
                     "e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090"
@@ -2198,7 +2189,7 @@ class LocalModelsMixin:
             if subargs:
                 self.run_worker(self._local_stop(subargs.strip(), log))
             else:
-                log.add_info("Usage: :local stop <ollama|lmstudio|mlx|ds4|llama.cpp>")
+                log.add_info("Usage: :local stop <ollama|lmstudio|llama.cpp|mlx|ds4>")
         else:
             try:
                 tokens = shlex.split(args or "")

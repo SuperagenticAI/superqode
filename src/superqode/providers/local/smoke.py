@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from superqode.providers.local.base import LocalProviderClient, LocalModel, ToolTestResult
 from superqode.providers.registry import PROVIDERS, ProviderCategory
+from superqode.providers.local_order import local_provider_sort_key
 
 
 LOCAL_CLIENTS: dict[str, Callable[[], LocalProviderClient]] = {}
@@ -41,13 +42,14 @@ def _load_local_clients() -> dict[str, Callable[[], LocalProviderClient]]:
 
 def supported_local_smoke_providers() -> list[str]:
     """Return local providers with smoke-test client support."""
-    return sorted(_load_local_clients())
+    return sorted(_load_local_clients(), key=local_provider_sort_key)
 
 
 def all_local_provider_ids() -> list[str]:
     """Return all registry local/self-hosted provider IDs."""
     return sorted(
-        pid for pid, provider in PROVIDERS.items() if provider.category == ProviderCategory.LOCAL
+        (pid for pid, provider in PROVIDERS.items() if provider.category == ProviderCategory.LOCAL),
+        key=local_provider_sort_key,
     )
 
 

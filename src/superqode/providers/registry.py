@@ -938,5 +938,11 @@ def get_free_providers() -> Dict[str, ProviderDef]:
 
 
 def get_local_providers() -> Dict[str, ProviderDef]:
-    """Get local/self-hosted providers."""
-    return {k: v for k, v in PROVIDERS.items() if v.category == ProviderCategory.LOCAL}
+    """Get local/self-hosted providers in the shared display order."""
+    from .local_order import local_provider_sort_key
+
+    return {
+        k: PROVIDERS[k]
+        for k in sorted(PROVIDERS, key=local_provider_sort_key)
+        if PROVIDERS[k].category == ProviderCategory.LOCAL
+    }

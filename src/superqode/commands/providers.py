@@ -21,6 +21,7 @@ from ..providers.registry import (
     ProviderTier,
 )
 from ..providers.models import get_models_for_provider
+from ..providers.local_order import local_provider_sort_key
 from ..providers.gateway import LiteLLMGateway
 from ..providers.local.mlx import get_mlx_client
 from ..providers.model_specs import (
@@ -270,9 +271,15 @@ def list_providers(category: Optional[str], tier: Optional[str], configured: boo
     table.add_column("Status", style="white")
     table.add_column("Env Var", style="dim")
 
-    # Sort by category then tier
+    # Local providers share the TUI order; other categories retain tier ordering.
     sorted_providers = sorted(
-        filtered.items(), key=lambda x: (x[1].category.value, x[1].tier.value, x[0])
+        filtered.items(),
+        key=lambda x: (
+            x[1].category.value,
+            local_provider_sort_key(x[0])
+            if x[1].category == ProviderCategory.LOCAL
+            else (x[1].tier.value, x[0]),
+        ),
     )
 
     for provider_id, provider_def in sorted_providers:

@@ -177,11 +177,17 @@ It checks that the server is reachable, a chat model (not an embedding model) is
 
 | Provider | Best For | Setup Complexity |
 |----------|----------|------------------|
-| **DwarfStar (DS4)** | Laguna S 2.1, DeepSeek V4 Flash, coding agents | Medium |
 | **Ollama** | Easy setup, many models | Easy |
 | **LM Studio** | GUI interface, beginners | Easy |
-| **MLX** | General Apple Silicon model serving | Medium |
+| **llama.cpp** | GGUF models, CPU and GPU inference | Medium |
+| **SGLang** | Structured generation, high-throughput serving | Advanced |
 | **vLLM** | Production, high throughput | Advanced |
+| **MLX** | General Apple Silicon model serving | Medium |
+| **DwarfStar (DS4)** | Laguna S 2.1, DeepSeek V4 Flash, coding agents | Medium |
+
+The TUI and CLI list the six primary providers in this order: Ollama, LM Studio,
+llama.cpp, SGLang, vLLM, and MLX. Remaining providers follow them. Commands that
+manage server processes list only the engines they currently support.
 
 Before adapting an existing project, run a migration dry-run:
 

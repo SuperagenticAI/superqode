@@ -404,7 +404,7 @@ def _local_client_for(engine: str):
 
 
 @local.command("serve")
-@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "llama.cpp", "mlx", "ds4"]))
 @click.option(
     "--model",
     "-m",
@@ -924,7 +924,7 @@ def local_search(query, hub, gguf, mlx, json_output):
 
 
 @local.command("warm")
-@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "llama.cpp", "mlx", "ds4"]))
 @click.option(
     "--model", "-m", default=None, help="Model id to preload (default: first served model)"
 )
@@ -1324,7 +1324,7 @@ def local_init(
 
 
 @local.command("stop")
-@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "llama.cpp", "mlx", "ds4"]))
 def local_stop(engine):
     """Stop a server SuperQode started (adopted servers are left untouched)."""
     from superqode.local.servers import get_manager

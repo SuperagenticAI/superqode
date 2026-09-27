@@ -47,6 +47,8 @@ from typing import Callable, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from superqode.providers.local_order import local_provider_sort_key
+
 from .laguna import (
     LAGUNA_DS4_REF,
     LAGUNA_MODEL_ID,
@@ -476,7 +478,7 @@ class ServerManager:
         }
 
     def list_all(self) -> List[dict]:
-        return [self.status(engine) for engine in SPECS]
+        return [self.status(engine) for engine in sorted(SPECS, key=local_provider_sort_key)]
 
     def precheck(
         self, engine: str, host: Optional[str] = None, port: Optional[int] = None

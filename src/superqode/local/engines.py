@@ -17,6 +17,8 @@ from typing import Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from superqode.providers.local_order import local_provider_sort_key
+
 PROBE_TIMEOUT = 1.5
 
 
@@ -187,7 +189,7 @@ def detect_engines(
         "sglang": detect_python_engine("sglang", "sglang", 30000),
         "ds4": detect_ds4(),
     }
-    return engines
+    return dict(sorted(engines.items(), key=lambda item: local_provider_sort_key(item[0])))
 
 
 __all__ = ["EngineStatus", "detect_engines", "PROBE_TIMEOUT"]

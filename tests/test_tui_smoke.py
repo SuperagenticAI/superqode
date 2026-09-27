@@ -1083,7 +1083,10 @@ def test_connect_local_picker_lists_ds4():
     assert ":local optimize" in text
     assert "DwarfStar 4" in text
     assert "ds4" in text
-    assert "recommended" in text
+    assert "recommended" not in text
+    provider_ids = [provider_id for provider_id, _ in app._local_provider_list]
+    assert provider_ids[:6] == ["ollama", "lmstudio", "llamacpp", "sglang", "vllm", "mlx"]
+    assert provider_ids.index("ds4") >= 6
     assert "Start and supervise local model servers in their own terminal" in text
     assert "managed startup is a convenience fallback" in text
 
