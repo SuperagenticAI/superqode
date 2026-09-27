@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A shared session resume descriptor classifies stored conversations as exact
+  resume, context replay, or unavailable and exposes recovery guidance in the
+  Session Browser.
+
+### Changed
+
+- Session discovery and per-page resume probes now run away from the Textual
+  event loop, with an immediate loading screen for large session stores.
+- Session switching stages a replacement runtime and commits it only after a
+  successful resume; strict ACP resume no longer silently creates a new session.
+
+### Fixed
+
+- Repair stale Continue last pointers, exclude sessions explicitly owned by a
+  different project, preserve preferred sidebar width across terminal clamps,
+  and write per-project UI state atomically and only after intentional resizing.
+
 ## [2.4.19] - 2026-09-27
 
 ### Added

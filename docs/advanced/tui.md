@@ -912,12 +912,21 @@ Use `:resume latest` (or the welcome **Continue last session** action) to restor
 the most recent session without sending a prompt. Use `:sessions` or `:resume`
 with no id to open the searchable Session Browser: filter by title, harness,
 model, or id; page through large stores; inspect availability (ok, missing
-harness, bad credentials, external-only); rename; and resume the selection.
+harness, bad credentials, external-only, missing transcript) and continuity
+(exact resume, context replay, cannot resume); rename; and resume the selection.
+Discovery and availability probes run in background workers, so large stores do
+not freeze input while the browser opens.
 
 Newly saved custom harness sessions retain their spec path as well as their
 harness name. Keep that spec available when returning to the project. Resume
 reports missing credentials, working directories, and referenced transcripts;
 finish or cancel an active turn before switching sessions.
+
+Local runtime switching is transactional: SuperQode prepares the replacement,
+then swaps it into the TUI only after resume succeeds. A failed replacement is
+closed while the current runtime remains active. ACP protocol-adapter resume is
+strict exact-or-fail and does not silently replace a failed resume with a blank
+session.
 
 The browser discovers external harness and PiPy history without importing every
 historical record into the project store. It reads the original model, topic,

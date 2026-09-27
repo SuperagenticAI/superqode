@@ -7,9 +7,10 @@ the capped transcript resume picker. Listing stays read-only via
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from rich.text import Text
 from textual import on
@@ -22,11 +23,12 @@ from textual.widgets.option_list import Option
 
 from superqode.agent.session_manager import SessionMetadata
 from superqode.session.harness_bridge import (
+    SessionResumeDescriptor,
+    describe_session_resume,
     filter_sessions,
     harness_display_name,
     model_short_name,
     paginate_sessions,
-    probe_session_availability,
     relative_age,
     rename_session_title,
     session_last_user_preview,
@@ -43,6 +45,14 @@ class SessionBrowserResult:
 
     action: str  # resume | continue_last | cancel
     session_id: str = ""
+
+
+@dataclass(frozen=True)
+class SessionBrowserLoadResult:
+    """Sessions and durable ids discovered away from the Textual event loop."""
+
+    sessions: list[SessionMetadata]
+    registered_ids: set[str]
 
 
 class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
@@ -210,7 +220,7 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
 
     def __init__(
         self,
-        sessions: Iterable[SessionMetadata],
+        sessions: Iterable[SessionMetadata] | None = None,
         *,
         cwd: str | Path | None = None,
         current_id: str = "",
@@ -219,22 +229,26 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         page_size: int = PAGE_SIZE,
         registered_ids: set[str] | None = None,
         storage_dir: str | Path = ".superqode/sessions",
+        loader: Callable[[], SessionBrowserLoadResult] | None = None,
     ) -> None:
         super().__init__()
         self.cwd = Path(cwd or Path.cwd()).expanduser().resolve()
         self.storage_dir = storage_dir
-        self.all_sessions = list(sessions)
+        self.all_sessions = list(sessions or [])
         self.current_id = (current_id or "").strip()
         self.last_session_id = (last_session_id or "").strip()
         self.search_query = (query or "").strip()
         self.page_size = max(1, int(page_size))
         self.page = 0
         self.registered_ids = registered_ids
+        self.loader = loader
+        self._loading = loader is not None
         self.filtered: list[SessionMetadata] = list(self.all_sessions)
         self.page_rows: list[SessionMetadata] = []
         self.total_pages = 1
         self._renaming = False
-        self._availability_cache: dict[str, object] = {}
+        self._descriptor_cache: dict[str, SessionResumeDescriptor] = {}
+        self._probe_generation = 0
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -272,9 +286,14 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
             yield Footer()
 
     def on_mount(self) -> None:
-        self._apply_filter(keep_position=False)
         if self.size.width < 90:
             self.add_class("narrow")
+        if self._loading:
+            self._show_loading()
+            self.run_worker(self._load_sessions(), exclusive=False)
+        else:
+            self._normalise_last_session()
+            self._apply_filter(keep_position=False)
         try:
             self.query_one("#sb-list", OptionList).focus()
         except Exception:
@@ -286,20 +305,93 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         else:
             self.remove_class("narrow")
 
-    def _availability(self, metadata: SessionMetadata):
-        cached = self._availability_cache.get(metadata.session_id)
-        if cached is not None:
-            return cached
-        result = probe_session_availability(
-            metadata,
-            cwd=self.cwd,
-            storage_dir=self.storage_dir,
-            registered_ids=self.registered_ids,
+    def _show_loading(self) -> None:
+        option_list = self.query_one("#sb-list", OptionList)
+        option_list.clear_options()
+        option_list.add_option(Option("Discovering sessions…", id="sb-loading", disabled=True))
+        self.query_one("#sb-detail", Static).update(
+            Text("Reading project sessions without blocking the TUI…", style="#a78bfa")
         )
-        self._availability_cache[metadata.session_id] = result
-        return result
+        self.query_one("#sb-page-label", Static).update("Loading…")
+        for selector in ("#sb-resume", "#sb-continue", "#sb-prev", "#sb-next"):
+            self.query_one(selector, Button).disabled = True
+
+    async def _load_sessions(self) -> None:
+        try:
+            result = await asyncio.to_thread(self.loader) if self.loader is not None else None
+        except Exception as exc:
+            self._loading = False
+            self.query_one("#sb-page-label", Static).update("Could not load sessions")
+            self.query_one("#sb-detail", Static).update(
+                Text(f"Session discovery failed: {exc}", style="#f97316")
+            )
+            return
+        if result is None:
+            return
+        self.all_sessions = list(result.sessions)
+        self.registered_ids = set(result.registered_ids)
+        self._loading = False
+        self._normalise_last_session()
+        self._apply_filter(keep_position=False)
+
+    def _normalise_last_session(self) -> None:
+        ids = {item.session_id for item in self.all_sessions}
+        if self.last_session_id not in ids:
+            self.last_session_id = self.all_sessions[0].session_id if self.all_sessions else ""
+
+    def _descriptor(self, metadata: SessionMetadata) -> SessionResumeDescriptor | None:
+        return self._descriptor_cache.get(metadata.session_id)
+
+    def _schedule_page_descriptors(self) -> None:
+        candidates = list(self.page_rows)
+        last = next(
+            (row for row in self.all_sessions if row.session_id == self.last_session_id),
+            None,
+        )
+        if last is not None and all(row.session_id != last.session_id for row in candidates):
+            candidates.append(last)
+        missing = [row for row in candidates if row.session_id not in self._descriptor_cache]
+        if not missing:
+            return
+        self._probe_generation += 1
+        generation = self._probe_generation
+        self.run_worker(self._load_page_descriptors(missing, generation), exclusive=False)
+
+    async def _load_page_descriptors(
+        self,
+        rows: list[SessionMetadata],
+        generation: int,
+    ) -> None:
+        def probe_rows() -> list[SessionResumeDescriptor]:
+            return [
+                describe_session_resume(
+                    row,
+                    cwd=self.cwd,
+                    storage_dir=self.storage_dir,
+                    registered_ids=self.registered_ids,
+                )
+                for row in rows
+            ]
+
+        descriptors = await asyncio.to_thread(probe_rows)
+        if generation != self._probe_generation:
+            return
+        self._descriptor_cache.update(
+            {descriptor.metadata.session_id: descriptor for descriptor in descriptors}
+        )
+        selected = self._selected_id()
+        self._rebuild_list(prefer_id=selected)
+        self._update_continue_button()
+
+    def _update_continue_button(self) -> None:
+        descriptor = self._descriptor_cache.get(self.last_session_id)
+        self.query_one("#sb-continue", Button).disabled = (
+            not self.last_session_id or descriptor is None or not descriptor.resumable
+        )
 
     def _apply_filter(self, *, keep_position: bool = True) -> None:
+        if self._loading:
+            return
         previous_id = self._selected_id() if keep_position else ""
         self.filtered = filter_sessions(self.all_sessions, self.search_query)
         self.page_rows, self.page, self.total_pages = paginate_sessions(
@@ -309,8 +401,7 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         )
         self._rebuild_list(prefer_id=previous_id or self.current_id or self.last_session_id)
         self._update_page_label()
-        continue_btn = self.query_one("#sb-continue", Button)
-        continue_btn.disabled = not bool(self.last_session_id or self.all_sessions)
+        self._update_continue_button()
 
     def _update_page_label(self) -> None:
         total = len(self.filtered)
@@ -325,13 +416,15 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         self.query_one("#sb-next", Button).disabled = self.page >= self.total_pages - 1
 
     def _option_label(self, metadata: SessionMetadata) -> Text:
-        availability = self._availability(metadata)
-        status = availability.status
+        descriptor = self._descriptor(metadata)
+        status = descriptor.availability.status if descriptor is not None else "checking"
         mark_color = {
             "ok": "#22c55e",
             "missing_harness": "#f59e0b",
             "bad_credentials": "#f97316",
             "external_only": "#a78bfa",
+            "missing_transcript": "#f97316",
+            "checking": "#71717a",
         }.get(status, "#a1a1aa")
         title = session_list_preview(metadata, max_len=42)
         harness = harness_display_name(
@@ -350,7 +443,8 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         text.append("\n    ", style="")
         text.append(f"{harness}", style="#c4b5fd")
         text.append(f" · {model} · {age} · ", style="#71717a")
-        text.append(availability.label, style=mark_color)
+        state_label = descriptor.continuity_label if descriptor is not None else "checking…"
+        text.append(state_label, style=mark_color)
         text.append(f" · {metadata.session_id[:8]}", style="#52525b")
         return text
 
@@ -383,7 +477,11 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         if index == 0:
             option_list.scroll_to(y=0, animate=False)
         self._update_detail(self.page_rows[index])
-        self.query_one("#sb-resume", Button).disabled = False
+        selected_descriptor = self._descriptor(self.page_rows[index])
+        self.query_one("#sb-resume", Button).disabled = (
+            selected_descriptor is None or not selected_descriptor.resumable
+        )
+        self._schedule_page_descriptors()
 
     def _selected_id(self) -> str:
         try:
@@ -400,7 +498,8 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         return next((item for item in self.page_rows if item.session_id == selected_id), None)
 
     def _update_detail(self, metadata: SessionMetadata) -> None:
-        availability = self._availability(metadata)
+        descriptor = self._descriptor(metadata)
+        availability = descriptor.availability if descriptor is not None else None
         harness = harness_display_name(
             metadata.harness_id,
             explicit=metadata.harness_display_name,
@@ -415,17 +514,21 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
             ("Harness", harness),
             ("Model", model),
             ("Age", relative_age(metadata.updated_at)),
-            ("Availability", availability.label),
+            ("Availability", availability.label if availability is not None else "checking…"),
+            (
+                "Continuity",
+                descriptor.continuity_label if descriptor is not None else "checking…",
+            ),
             ("Messages", str(metadata.message_count)),
             ("Project", metadata.working_directory or str(self.cwd)),
         )
         for label, value in rows:
             text.append(f"{label:<14}", style="#71717a")
             text.append(f"{value}\n", style="#e4e4e7")
-        if availability.detail:
+        if availability is not None and availability.detail:
             text.append("\nStatus\n", style="bold #a78bfa")
             text.append(f"{availability.detail}\n", style="#e9d5ff")
-        if availability.recovery and availability.status != "ok":
+        if availability is not None and availability.recovery and availability.status != "ok":
             text.append("\nRecovery\n", style="bold #f59e0b")
             text.append(f"{availability.recovery}\n", style="#fbbf24")
         preview = session_list_preview(metadata, max_len=120)
@@ -438,7 +541,7 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
             pass
         text.append("\nPreview\n", style="bold #c4b5fd")
         text.append(f"{preview or 'No preview available'}\n", style="#d4d4d8")
-        if availability.status == "ok":
+        if descriptor is not None and descriptor.resumable:
             text.append(
                 "\nEnter or Resume restores this session without sending a prompt.\n",
                 style="#86efac",
@@ -461,6 +564,9 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         session = self._selected_session()
         if session is None:
             return
+        descriptor = self._descriptor(session)
+        if descriptor is None or not descriptor.resumable:
+            return
         self.dismiss(SessionBrowserResult(action="resume", session_id=session.session_id))
 
     def action_continue_last(self) -> None:
@@ -468,6 +574,9 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         if not target and self.all_sessions:
             target = self.all_sessions[0].session_id
         if not target:
+            return
+        descriptor = self._descriptor_cache.get(target)
+        if descriptor is None or not descriptor.resumable:
             return
         self.dismiss(SessionBrowserResult(action="continue_last", session_id=target))
 
@@ -519,7 +628,7 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
             if item.session_id == updated.session_id:
                 self.all_sessions[index] = updated
                 break
-        self._availability_cache.pop(updated.session_id, None)
+        self._descriptor_cache.pop(updated.session_id, None)
         self._exit_rename()
         self._apply_filter(keep_position=True)
 
@@ -546,6 +655,10 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
         session = next((item for item in self.page_rows if item.session_id == session_id), None)
         if session is not None:
             self._update_detail(session)
+            descriptor = self._descriptor(session)
+            self.query_one("#sb-resume", Button).disabled = (
+                descriptor is None or not descriptor.resumable
+            )
 
     @on(OptionList.OptionSelected, "#sb-list")
     def _on_selected(self, _event: OptionList.OptionSelected) -> None:
@@ -570,4 +683,9 @@ class SessionBrowserScreen(ModalScreen[SessionBrowserResult | None]):
             self.action_rename()
 
 
-__all__ = ["PAGE_SIZE", "SessionBrowserResult", "SessionBrowserScreen"]
+__all__ = [
+    "PAGE_SIZE",
+    "SessionBrowserLoadResult",
+    "SessionBrowserResult",
+    "SessionBrowserScreen",
+]

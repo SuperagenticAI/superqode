@@ -639,8 +639,9 @@ def ensure_sessions_listed(
             # Different cwd: keep out of the default list for this project.
         except OSError:
             unscoped.append(item)
-    # Legacy rows without working_directory stay visible (project-local store).
-    return scoped + unscoped if scoped else sessions
+    # Legacy rows without working_directory stay visible (project-local store),
+    # but never fall back to rows explicitly owned by a different project.
+    return scoped + unscoped
 
 
 def _ts_iso(value: Any) -> str:
@@ -877,7 +878,7 @@ def _index_pipy_path(session_id: str, session_path: Path, working_directory: Pat
 class SessionAvailability:
     """Read-only resume readiness for the session browser."""
 
-    status: str  # ok | missing_harness | bad_credentials | external_only
+    status: str  # ok | missing_harness | bad_credentials | external_only | missing_transcript
     detail: str = ""
     recovery: str = ""
 
@@ -888,7 +889,31 @@ class SessionAvailability:
             "missing_harness": "missing harness",
             "bad_credentials": "bad credentials",
             "external_only": "external-only",
+            "missing_transcript": "missing transcript",
         }.get(self.status, self.status)
+
+
+@dataclass(frozen=True)
+class SessionResumeDescriptor:
+    """One preflight contract shared by session browsing and runtime resume."""
+
+    metadata: SessionMetadata
+    availability: SessionAvailability
+    continuity: str  # exact | replay | unavailable
+    harness_reference: str
+    working_directory: Path
+
+    @property
+    def resumable(self) -> bool:
+        return self.continuity != "unavailable"
+
+    @property
+    def continuity_label(self) -> str:
+        return {
+            "exact": "exact resume",
+            "replay": "context replay",
+            "unavailable": "cannot resume",
+        }.get(self.continuity, self.continuity)
 
 
 def probe_session_availability(
@@ -943,12 +968,51 @@ def probe_session_availability(
 
     if metadata.backend_session_path and not Path(metadata.backend_session_path).is_file():
         return SessionAvailability(
-            status="external_only",
+            status="missing_transcript",
             detail=f"Transcript unavailable: {metadata.backend_session_path}",
             recovery="Restore the external transcript, then retry resume",
         )
 
     return SessionAvailability(status="ok", detail="Ready to resume")
+
+
+def describe_session_resume(
+    metadata: SessionMetadata,
+    *,
+    cwd: str | Path | None = None,
+    storage_dir: str | Path = DEFAULT_SESSION_DIR,
+    registered_ids: set[str] | None = None,
+) -> SessionResumeDescriptor:
+    """Build a read-only resume descriptor without disturbing the active runtime."""
+    working = Path(metadata.working_directory or cwd or Path.cwd()).expanduser().resolve()
+    availability = probe_session_availability(
+        metadata,
+        cwd=cwd or working,
+        storage_dir=storage_dir,
+        registered_ids=registered_ids,
+    )
+    unavailable = availability.status in {
+        "missing_harness",
+        "bad_credentials",
+        "missing_transcript",
+    }
+    continuity = "unavailable" if unavailable else "replay"
+    if not unavailable:
+        transitions = list(metadata.harness_transitions or [])
+        recorded = str(transitions[-1].get("continuity") or "") if transitions else ""
+        if metadata.harness_session or recorded in {
+            "exact-resume",
+            "harness-resume",
+            "serializable-checkpoint",
+        }:
+            continuity = "exact"
+    return SessionResumeDescriptor(
+        metadata=metadata,
+        availability=availability,
+        continuity=continuity,
+        harness_reference=(metadata.harness_path or metadata.harness_id or "workbench"),
+        working_directory=working,
+    )
 
 
 def session_search_blob(metadata: SessionMetadata) -> str:
@@ -1051,8 +1115,10 @@ __all__ = [
     "DEFAULT_SESSION_DIR",
     "HARNESS_STORE_ROOTS",
     "SessionAvailability",
+    "SessionResumeDescriptor",
     "SessionResumeError",
     "discover_external_sessions",
+    "describe_session_resume",
     "enrich_resume_messages",
     "ensure_sessions_listed",
     "filter_sessions",

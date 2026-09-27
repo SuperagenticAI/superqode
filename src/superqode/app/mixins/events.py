@@ -29,6 +29,10 @@ class EventHandlerMixin:
         except Exception:
             pass
 
+    def on_resizable_divider_resize_end(self, _event) -> None:
+        """Write the chosen width once after dragging, not on every mouse move."""
+        self._persist_sidebar_width()
+
     @on(CommandPalette.CommandSelected)
     def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
         """Route command palette selections through the existing command dispatcher."""

@@ -8,7 +8,9 @@ without sending a prompt.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 
@@ -35,7 +37,23 @@ def save_ui_state(updates: dict[str, Any], *, cwd: str | Path | None = None) -> 
     current = load_ui_state(cwd)
     current.update({key: value for key, value in updates.items() if value is not None})
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temp_path = Path(stream.name)
+            stream.write(json.dumps(current, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
     return current
 
 

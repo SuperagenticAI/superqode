@@ -520,6 +520,7 @@ class ACPHarnessProtocolAdapter(BaseHarnessAdapter):
             command=str(request.metadata.get("command") or self.command),
             model=request.model or None,
             resume_session_id=resume_session_id,
+            require_resume=bool(resume_session_id),
             on_message=on_message,
             on_thinking=on_thinking,
             on_tool_call=on_tool_call,

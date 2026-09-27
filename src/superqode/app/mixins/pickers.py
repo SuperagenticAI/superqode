@@ -1265,37 +1265,26 @@ class PickerNavigationMixin:
 
         from superqode.app.project_ui_state import get_last_session_id
         from superqode.session.harness_bridge import ensure_sessions_listed
-        from superqode.widgets.session_browser import SessionBrowserScreen
+        from superqode.widgets.session_browser import (
+            SessionBrowserLoadResult,
+            SessionBrowserScreen,
+        )
 
         cwd = _Path.cwd()
-        sessions = ensure_sessions_listed(cwd=cwd)
         # Clear legacy transcript-picker state so arrow keys do not fight the modal.
         self._awaiting_session_resume = False
         self._session_resume_list = []
 
-        if not sessions:
-            from rich.text import Text
-
-            t = Text()
-            t.append("\n  📂 ", style=f"bold {THEME['purple']}")
-            t.append("Session Browser\n\n", style=f"bold {THEME['text']}")
-            t.append("  No sessions found yet.\n", style=THEME["muted"])
-            t.append("  Start a conversation with ", style=THEME["muted"])
-            t.append(":connect byok", style=THEME["cyan"])
-            t.append(" or ", style=THEME["muted"])
-            t.append(":connect local", style=THEME["cyan"])
-            t.append(".\n", style=THEME["muted"])
-            self._show_command_output(log, t)
-            return
-
-        registered_ids = set()
-        store_root = cwd / ".superqode" / "sessions"
-        try:
-            registered_ids = {
-                path.name[: -len(".meta.json")] for path in store_root.glob("*.meta.json")
-            }
-        except OSError:
-            registered_ids = set()
+        def load_sessions() -> SessionBrowserLoadResult:
+            sessions = ensure_sessions_listed(cwd=cwd)
+            store_root = cwd / ".superqode" / "sessions"
+            try:
+                registered_ids = {
+                    path.name[: -len(".meta.json")] for path in store_root.glob("*.meta.json")
+                }
+            except OSError:
+                registered_ids = set()
+            return SessionBrowserLoadResult(sessions, registered_ids)
 
         current_id = ""
         try:
@@ -1306,13 +1295,11 @@ class PickerNavigationMixin:
 
         self.push_screen(
             SessionBrowserScreen(
-                sessions,
                 cwd=cwd,
                 current_id=current_id,
-                last_session_id=get_last_session_id(cwd)
-                or (sessions[0].session_id if sessions else ""),
+                last_session_id=get_last_session_id(cwd),
                 query=query,
-                registered_ids=registered_ids,
+                loader=load_sessions,
             ),
             callback=lambda result: self._handle_session_browser_result(result, log),
         )

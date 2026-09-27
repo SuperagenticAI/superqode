@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+import threading
 
 import pytest
 from textual.app import App, ComposeResult
@@ -18,12 +19,18 @@ from superqode.app.project_ui_state import (
 )
 from superqode.session.harness_bridge import (
     SessionAvailability,
+    describe_session_resume,
+    ensure_sessions_listed,
     filter_sessions,
     paginate_sessions,
     probe_session_availability,
     session_list_preview,
 )
-from superqode.widgets.session_browser import SessionBrowserResult, SessionBrowserScreen
+from superqode.widgets.session_browser import (
+    SessionBrowserLoadResult,
+    SessionBrowserResult,
+    SessionBrowserScreen,
+)
 
 
 def _meta(
@@ -109,6 +116,36 @@ def test_probe_availability_ok_missing_harness_and_credentials(tmp_path, monkeyp
     )
 
 
+def test_resume_descriptor_distinguishes_exact_replay_and_unavailable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    transcript = tmp_path / "external.jsonl"
+    transcript.write_text("{}\n", encoding="utf-8")
+    exact = _meta(
+        "exact-one",
+        harness_session=True,
+        provider="ollama",
+        backend_session_path=str(transcript),
+    )
+    replay = _meta("replay-one", provider="ollama")
+    missing = _meta(
+        "missing-one",
+        harness_session=True,
+        provider="ollama",
+        backend_session_path=str(tmp_path / "missing.jsonl"),
+    )
+    registered = {"exact-one", "replay-one", "missing-one"}
+
+    assert describe_session_resume(exact, cwd=tmp_path, registered_ids=registered).continuity == (
+        "exact"
+    )
+    assert describe_session_resume(replay, cwd=tmp_path, registered_ids=registered).continuity == (
+        "replay"
+    )
+    unavailable = describe_session_resume(missing, cwd=tmp_path, registered_ids=registered)
+    assert unavailable.continuity == "unavailable"
+    assert unavailable.availability.status == "missing_transcript"
+
+
 def test_project_ui_state_roundtrip(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     set_last_session_id("abc12345")
@@ -116,6 +153,21 @@ def test_project_ui_state_roundtrip(tmp_path, monkeypatch):
     assert get_last_session_id() == "abc12345"
     assert get_sidebar_width() == 48
     assert (tmp_path / ".superqode" / "ui-state.json").is_file()
+
+
+def test_session_listing_does_not_fall_back_to_another_project(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=str(tmp_path / ".superqode" / "sessions"))
+    metadata = manager.store.create_session(
+        "foreign-session",
+        provider="ollama",
+        model="qwen",
+        harness_id="core",
+    )
+    metadata.working_directory = str(tmp_path / "another-project")
+    manager.store._save_metadata(metadata)
+
+    assert ensure_sessions_listed(cwd=tmp_path) == []
 
 
 def test_session_list_preview_prefers_title():
@@ -146,7 +198,13 @@ class _BrowserApp(App):
 async def test_session_browser_search_paginate_and_resume(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     sessions = [_meta(f"sess{i:04d}", title=f"Topic {i}", minutes_ago=i) for i in range(90)]
-    sessions[3] = _meta("sess0003", title="unique auth fix", harness_id="pipy", model="qwen3")
+    sessions[3] = _meta(
+        "sess0003",
+        title="unique auth fix",
+        harness_id="pipy",
+        model="qwen3",
+        provider="ollama",
+    )
     app = _BrowserApp(
         sessions,
         cwd=tmp_path,
@@ -176,7 +234,10 @@ async def test_session_browser_search_paginate_and_resume(tmp_path, monkeypatch)
 @pytest.mark.asyncio
 async def test_session_browser_continue_last(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    sessions = [_meta("last1111", title="Most recent"), _meta("old2222", title="Older")]
+    sessions = [
+        _meta("last1111", title="Most recent", provider="ollama"),
+        _meta("old2222", title="Older", provider="ollama"),
+    ]
     app = _BrowserApp(
         sessions,
         cwd=tmp_path,
@@ -188,6 +249,38 @@ async def test_session_browser_continue_last(tmp_path, monkeypatch):
         assert await pilot.click("#sb-continue")
         await pilot.pause()
         assert app.result == SessionBrowserResult(action="continue_last", session_id="last1111")
+
+
+@pytest.mark.asyncio
+async def test_session_browser_loads_in_background_and_repairs_stale_last(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sessions = [
+        _meta("new1111", title="Newest", provider="ollama"),
+        _meta("old2222", title="Older", provider="ollama"),
+    ]
+    calls = []
+    release = threading.Event()
+
+    def loader() -> SessionBrowserLoadResult:
+        calls.append("loaded")
+        release.wait(timeout=1)
+        return SessionBrowserLoadResult(sessions, {item.session_id for item in sessions})
+
+    app = _BrowserApp([], cwd=tmp_path, last_session_id="deleted999", loader=loader)
+    async with app.run_test(size=(100, 34)) as pilot:
+        screen = app.screen
+        assert isinstance(screen, SessionBrowserScreen)
+        assert screen._loading
+        release.set()
+        for _ in range(10):
+            await pilot.pause(0.05)
+            if not screen._loading and screen._descriptor_cache:
+                break
+        assert calls == ["loaded"]
+        assert screen.last_session_id == "new1111"
+        assert await pilot.click("#sb-continue")
+        await pilot.pause()
+        assert app.result == SessionBrowserResult(action="continue_last", session_id="new1111")
 
 
 @pytest.mark.asyncio

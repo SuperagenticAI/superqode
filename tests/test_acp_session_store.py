@@ -369,3 +369,46 @@ async def test_supports_resume_reflects_agent_capabilities(tmp_path):
     assert client.supports_resume() is True
     client._agent_capabilities = {"loadSession": False}
     assert client.supports_resume() is False
+
+
+@pytest.mark.asyncio
+async def test_strict_acp_resume_never_falls_back_to_new_session(tmp_path, monkeypatch):
+    notices = []
+
+    async def on_thinking(message):
+        notices.append(message)
+
+    client = ACPClient(
+        project_root=tmp_path,
+        command="(unused)",
+        resume_session_id="saved-session",
+        require_resume=True,
+        on_thinking=on_thinking,
+    )
+    client._agent_capabilities = {"loadSession": True}
+    new_session = AsyncMock()
+
+    async def fail_resume(_session_id):
+        raise RuntimeError("agent rejected the session")
+
+    monkeypatch.setattr(client, "_load_session", fail_resume)
+    monkeypatch.setattr(client, "_new_session", new_session)
+
+    assert await client._restore_or_create_session() is False
+    new_session.assert_not_awaited()
+    assert "current session retained" in notices[-1]
+
+
+@pytest.mark.asyncio
+async def test_non_strict_acp_resume_preserves_legacy_fallback(tmp_path, monkeypatch):
+    client = ACPClient(
+        project_root=tmp_path,
+        command="(unused)",
+        resume_session_id="saved-session",
+    )
+    client._agent_capabilities = {"loadSession": False}
+    new_session = AsyncMock(return_value={"sessionId": "fresh-session"})
+    monkeypatch.setattr(client, "_new_session", new_session)
+
+    assert await client._restore_or_create_session() is True
+    new_session.assert_awaited_once()

@@ -62,6 +62,26 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
+async def test_terminal_resize_clamps_without_losing_preferred_sidebar_width(tmp_path, monkeypatch):
+    from superqode.app.project_ui_state import get_sidebar_width, set_sidebar_width
+    from superqode.sidebar import CollapsibleSidebar
+
+    monkeypatch.chdir(tmp_path)
+    set_sidebar_width(60)
+    app = SuperQodeApp()
+    async with app.run_test(size=(70, 30)) as pilot:
+        await pilot.pause()
+        sidebar = app.query_one("#sidebar", CollapsibleSidebar)
+        assert sidebar._width == 30
+        assert app._preferred_sidebar_width == 60
+        assert get_sidebar_width() == 60
+
+        await pilot.resize_terminal(120, 30)
+        await pilot.pause()
+        assert sidebar._width == 60
+        assert get_sidebar_width() == 60
+
+
 async def test_composer_stays_visible_but_disabled_while_agent_is_working():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:

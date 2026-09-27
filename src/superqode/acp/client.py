@@ -193,8 +193,10 @@ class ACPClient:
     agent_identity: Optional[str] = None
     # If set, the client tries to resume this session id (gated on the
     # agent's ``loadSession`` capability) instead of creating a fresh one
-    # on startup. Falls back to ``session/new`` if resume fails.
+    # on startup. Falls back to ``session/new`` if resume fails unless
+    # ``require_resume`` requests an exact-or-fail transactional handoff.
     resume_session_id: Optional[str] = None
+    require_resume: bool = False
 
     # Internal state
     _process: Optional[asyncio.subprocess.Process] = field(default=None, repr=False)
@@ -325,21 +327,8 @@ class ACPClient:
             # Initialize the protocol
             await self._initialize()
 
-            # Resume the requested session if possible, else create new.
-            # We only try resume when the caller asked for it AND the
-            # agent advertised loadSession capability — otherwise we'd
-            # send a method the agent doesn't implement and get an error.
-            resumed = False
-            if self.resume_session_id and self._agent_capabilities.get("loadSession"):
-                try:
-                    await self._load_session(self.resume_session_id)
-                    resumed = True
-                except Exception as e:
-                    if self.on_thinking:
-                        await self.on_thinking(f"[resume failed, falling back to new session] {e}")
-
-            if not resumed:
-                await self._new_session()
+            if not await self._restore_or_create_session():
+                return False
 
             return True
 
@@ -574,6 +563,35 @@ class ACPClient:
         attempt and fail.
         """
         return bool(self._agent_capabilities.get("loadSession"))
+
+    async def _restore_or_create_session(self) -> bool:
+        """Apply the explicit ACP resume contract after initialization."""
+        resumed = False
+        if self.resume_session_id:
+            if not self.supports_resume():
+                if self.require_resume:
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            "[resume unavailable] agent does not support loadSession"
+                        )
+                    return False
+            else:
+                try:
+                    await self._load_session(self.resume_session_id)
+                    resumed = True
+                except Exception as exc:
+                    if self.on_thinking:
+                        message = (
+                            "resume failed; current session retained"
+                            if self.require_resume
+                            else "resume failed, falling back to new session"
+                        )
+                        await self.on_thinking(f"[{message}] {exc}")
+                    if self.require_resume:
+                        return False
+        if not resumed:
+            await self._new_session()
+        return True
 
     def get_agent_capabilities(self) -> Dict[str, Any]:
         """Return a copy of the agent capabilities reported at initialize."""

@@ -2989,7 +2989,9 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
     assert len(pushed) == 1
     screen, callback = pushed[0]
     assert isinstance(screen, SessionBrowserScreen)
-    ids = {item.session_id for item in screen.all_sessions}
+    assert screen.loader is not None
+    loaded = screen.loader()
+    ids = {item.session_id for item in loaded.sessions}
     assert {"first-session", "second-session"} <= ids
 
     expected_id = "second-session"
@@ -7834,14 +7836,16 @@ def test_sessions_list_groups_by_harness(tmp_path, monkeypatch):
     assert len(pushed) == 1
     screen, _callback = pushed[0]
     assert isinstance(screen, SessionBrowserScreen)
-    by_id = {item.session_id: item for item in screen.all_sessions}
+    assert screen.loader is not None
+    loaded = screen.loader()
+    by_id = {item.session_id: item for item in loaded.sessions}
     assert "pipy-one" in by_id and "core-one" in by_id
     assert by_id["pipy-one"].harness_display_name == "PiPy"
     assert by_id["core-one"].harness_display_name == "Core"
     assert by_id["pipy-one"].title == "auth work"
     assert by_id["core-one"].title == "plan work"
 
-    grouped = group_sessions_by_harness(list(screen.all_sessions))
+    grouped = group_sessions_by_harness(list(loaded.sessions))
     names = [name for name, _rows in grouped]
     assert "PiPy" in names and "Core" in names
     # Row labels under headers should not awkwardly repeat the harness twice.
@@ -7916,6 +7920,119 @@ def test_resume_replays_transcript_into_log(tmp_path, monkeypatch):
     )
     assert any("Session resumed" in str(item) for item in log.items)
     assert status.active_session
+
+
+def test_failed_transactional_resume_keeps_current_runtime(tmp_path, monkeypatch):
+    import superqode.pure_mode as pure_module
+
+    monkeypatch.chdir(tmp_path)
+
+    class CandidatePureMode:
+        instances = []
+
+        def __init__(self, runtime=None):
+            self.runtime_name = runtime or "builtin"
+            self.session = type(
+                "S",
+                (),
+                {
+                    "system_level": "minimal",
+                    "provider": "ollama",
+                    "model": "qwen",
+                },
+            )()
+            self.disconnected = False
+            self.instances.append(self)
+
+        def resume_session(self, _session_id):
+            if len(self.instances) > 1:
+                raise RuntimeError("replacement provider failed")
+            return []
+
+        def disconnect(self):
+            self.disconnected = True
+
+    current = CandidatePureMode()
+    app = make_app()
+    app._pure_mode = current
+    log = FakeLog()
+    notices = []
+    monkeypatch.setattr(pure_module, "PureMode", CandidatePureMode)
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: current)
+    monkeypatch.setattr(app, "_install_pure_permission_bridge", lambda *_args: None)
+    monkeypatch.setattr(app, "_announce_transition", lambda **kwargs: notices.append(kwargs))
+
+    assert app._handle_resume_session("next-session", log) is False
+    assert app._pure_mode is current
+    assert current.disconnected is False
+    assert len(CandidatePureMode.instances) == 2
+    assert CandidatePureMode.instances[1].disconnected is True
+    assert notices[-1]["guidance"] == "Use :sessions to choose a saved session."
+
+
+def test_successful_transactional_resume_swaps_then_closes_previous(tmp_path, monkeypatch):
+    import superqode.pure_mode as pure_module
+
+    monkeypatch.chdir(tmp_path)
+
+    class CandidatePureMode:
+        instances = []
+
+        def __init__(self, runtime=None):
+            self.runtime_name = runtime or "builtin"
+            self.session = type(
+                "S",
+                (),
+                {
+                    "system_level": "minimal",
+                    "provider": "ollama",
+                    "model": "qwen",
+                },
+            )()
+            self._session_manager = None
+            self.current = ""
+            self.disconnected = False
+            self.instances.append(self)
+
+        def resume_session(self, session_id):
+            self.current = session_id
+            return []
+
+        def get_current_session_id(self):
+            return self.current
+
+        def get_status(self):
+            return {
+                "provider": "ollama",
+                "model": "qwen",
+                "harness": {"name": "Workbench", "id": "workbench"},
+            }
+
+        def disconnect(self):
+            self.disconnected = True
+
+    current = CandidatePureMode()
+    app = make_app()
+    app._pure_mode = current
+    log = FakeLog()
+    monkeypatch.setattr(pure_module, "PureMode", CandidatePureMode)
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: current)
+    monkeypatch.setattr(app, "_install_pure_permission_bridge", lambda *_args: None)
+    monkeypatch.setattr(app, "_reset_connect_selection_states", lambda: None)
+    monkeypatch.setattr(app, "_clear_sidebar_session_files", lambda: None)
+    monkeypatch.setattr(app, "_replay_resumed_transcript", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app, "_refresh_harness_panel", lambda: None)
+    monkeypatch.setattr(
+        app, "query_one", lambda *_args, **_kwargs: (_ for _ in ()).throw(LookupError())
+    )
+    monkeypatch.setattr(app, "_announce_transition", lambda **_kwargs: None)
+
+    assert app._handle_resume_session("next-session", log) is True
+    replacement = CandidatePureMode.instances[1]
+    assert app._pure_mode is replacement
+    assert replacement.current == "next-session"
+    assert replacement.disconnected is False
+    assert current.disconnected is True
 
 
 def test_resume_latest_picks_most_recent(tmp_path, monkeypatch):

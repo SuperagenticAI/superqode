@@ -21,20 +21,37 @@ class SidebarMixin:
             from superqode.app.project_ui_state import get_sidebar_width
 
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            self._set_sidebar_width(get_sidebar_width(default=34))
+            preferred = get_sidebar_width(default=34)
+            self._preferred_sidebar_width = preferred
+            self._set_sidebar_width(preferred)
         except Exception:
             pass
 
-    def _set_sidebar_width(self, requested: int, terminal_width: int | None = None) -> None:
+    def _set_sidebar_width(
+        self,
+        requested: int,
+        terminal_width: int | None = None,
+        *,
+        persist: bool = False,
+    ) -> None:
         """Keep space for the prompt and transcript when the terminal narrows."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         maximum = max(30, min(150, (terminal_width or self.size.width) - 41))
         width = max(30, min(maximum, requested))
         sidebar.styles.width = width
         sidebar._width = width
+        if persist:
+            self._persist_sidebar_width(width)
+
+    def _persist_sidebar_width(self, width: int | None = None) -> None:
+        """Persist an intentional resize, never a temporary terminal clamp."""
         try:
             from superqode.app.project_ui_state import set_sidebar_width
 
+            if width is None:
+                sidebar = self.query_one("#sidebar", CollapsibleSidebar)
+                width = getattr(sidebar, "_width", 34)
+            self._preferred_sidebar_width = width
             set_sidebar_width(width)
         except Exception:
             pass
@@ -158,13 +175,13 @@ class SidebarMixin:
         """Shrink sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         current_width = getattr(sidebar, "_width", 34)
-        self._set_sidebar_width(current_width - 10)
+        self._set_sidebar_width(current_width - 10, persist=True)
 
     def action_expand_sidebar(self):
         """Expand sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         current_width = getattr(sidebar, "_width", 34)
-        self._set_sidebar_width(current_width + 10)
+        self._set_sidebar_width(current_width + 10, persist=True)
 
     def action_sidebar_files(self):
         """Switch sidebar to files view."""

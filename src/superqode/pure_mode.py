@@ -104,6 +104,7 @@ class PureMode:
         self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
         self._last_stats: dict[str, int | float] = {}
+        self._last_resume_descriptor = None
         self._cancel_requested = False
 
     def _load_env_harness(self) -> None:
@@ -1239,8 +1240,10 @@ class PureMode:
         session is known but cannot be restored safely (missing harness or
         provider credentials).
         """
+        self._last_resume_descriptor = None
         from superqode.session.harness_bridge import (
             SessionResumeError,
+            describe_session_resume,
             discover_external_sessions,
             format_session_label,
             missing_provider_credentials,
@@ -1269,6 +1272,25 @@ class PureMode:
             )
         if not resolved_session_id:
             return None
+
+        listed_metadata = next(
+            (item for item in external_sessions if item.session_id == resolved_session_id),
+            None,
+        ) or self._session_manager.get_session_info(resolved_session_id)
+        if listed_metadata is not None:
+            registered_ids = {item.session_id for item in self._session_manager.list_all_sessions()}
+            descriptor = describe_session_resume(
+                listed_metadata,
+                cwd=self.session.working_directory or Path.cwd(),
+                registered_ids=registered_ids,
+            )
+            self._last_resume_descriptor = descriptor
+            if not descriptor.resumable:
+                label = format_session_label(listed_metadata)
+                detail = descriptor.availability.detail or "Resume preflight failed"
+                recovery = descriptor.availability.recovery
+                suffix = f" {recovery}." if recovery else ""
+                raise SessionResumeError(f"Cannot resume '{label}': {detail}.{suffix}")
 
         if any(item.session_id == resolved_session_id for item in external_sessions):
             try:

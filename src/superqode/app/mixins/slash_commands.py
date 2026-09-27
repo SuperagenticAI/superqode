@@ -1623,6 +1623,25 @@ class SlashCommandMixin:
             session_id = sessions[0].session_id
 
         pure_mode = self._ensure_pure_mode()
+        previous_pure_mode = pure_mode
+        staged_pure_mode = None
+        try:
+            from superqode.pure_mode import PureMode
+
+            if isinstance(pure_mode, PureMode):
+                staged_pure_mode = PureMode(runtime=pure_mode.runtime_name)
+                staged_pure_mode.session.system_level = pure_mode.session.system_level
+                pure_mode = staged_pure_mode
+        except Exception as exc:
+            self._announce_transition(
+                title="Session not resumed",
+                primary=session_id,
+                detail=f"Could not prepare a replacement runtime: {exc}",
+                severity="error",
+                log=log,
+                guidance="The current session is still connected.",
+            )
+            return False
         # Fresh launches have no connection callbacks yet. Install these before
         # resume creates the runtime, just as the normal connect flow does.
         pure_mode.on_tool_call = lambda name, arguments: self._call_ui(
@@ -1635,6 +1654,11 @@ class SlashCommandMixin:
         try:
             messages = pure_mode.resume_session(session_id)
         except Exception as exc:
+            if staged_pure_mode is not None:
+                try:
+                    staged_pure_mode.disconnect()
+                except Exception:
+                    pass
             if isinstance(exc, SessionResumeError):
                 self._announce_transition(
                     title="Session not resumed",
@@ -1657,6 +1681,11 @@ class SlashCommandMixin:
         # None means unresolved. An empty list is a valid harness / PiPy resume
         # where history lives outside SessionManager JSONL.
         if messages is None:
+            if staged_pure_mode is not None:
+                try:
+                    staged_pure_mode.disconnect()
+                except Exception:
+                    pass
             self._announce_transition(
                 title="Session not resumed",
                 primary=session_id,
@@ -1666,6 +1695,16 @@ class SlashCommandMixin:
                 guidance="Use :sessions to review names and ids for this directory.",
             )
             return False
+
+        # Commit only after the replacement has passed preflight and connected.
+        # A failed candidate never mutates or disconnects the active runtime.
+        if staged_pure_mode is not None:
+            self._pure_mode = staged_pure_mode
+            if previous_pure_mode is not staged_pure_mode:
+                try:
+                    previous_pure_mode.disconnect()
+                except Exception:
+                    pass
 
         resolved_id = pure_mode.get_current_session_id() or session_id
         self._awaiting_session_resume = False
@@ -1768,6 +1807,9 @@ class SlashCommandMixin:
             detail_parts.append("harness transcript attached")
         if harness_name:
             detail_parts.append(_harness_display_name(harness_name))
+        resume_descriptor = getattr(pure_mode, "_last_resume_descriptor", None)
+        if resume_descriptor is not None:
+            detail_parts.append(resume_descriptor.continuity_label)
         session_state = getattr(pure_mode, "session", None)
         provider = str(getattr(session_state, "provider", "") or "")
         model = str(getattr(session_state, "model", "") or "")

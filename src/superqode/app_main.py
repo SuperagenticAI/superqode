@@ -598,7 +598,12 @@ class SuperQodeApp(
         """Re-flow the welcome screen when only it is shown and the size changes."""
         try:
             sidebar = self.query_one("#sidebar")
-            self._set_sidebar_width(getattr(sidebar, "_width", 34), event.size.width)
+            preferred = getattr(
+                self,
+                "_preferred_sidebar_width",
+                getattr(sidebar, "_width", 34),
+            )
+            self._set_sidebar_width(preferred, event.size.width)
         except Exception:
             pass  # Resize may arrive before compose finishes.
         if not getattr(self, "_welcome_active", False):

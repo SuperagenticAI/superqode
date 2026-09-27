@@ -22,6 +22,9 @@ available.
 | Sidebar sizing | Fixed limits could leave little room for the main conversation. | Share terminal-aware limits between drag, keyboard, startup, and terminal resize. |
 | Streaming | Every paragraph boundary recounted all earlier code fences. | Count each span once per boundary scan. |
 | Session browser | Resume picker capped at ~12 transcript rows. | Dedicated searchable, paginated Session Browser with availability, Continue last, and per-project UI state. |
+| Resume contract | Browser and runtime checks described continuity differently. | Use one descriptor for SessionManager, FileHarnessStore, and PiPy rows: exact resume, context replay, or unavailable with recovery guidance. ACP adapter resume is exact-or-fail. |
+| Runtime handoff | Resume mutated the active `PureMode` before replacement setup completed. | Stage a replacement runtime, commit only after successful resume, then close the previous runtime. Failed candidates leave the active session intact. |
+| Browser latency | Session discovery and harness probes ran on the Textual event loop. | Open immediately with a loading state; discover sessions and probe only the visible page on background workers. |
 
 The editor accepts UTF-8 text files up to 1 MB. Binary, invalid UTF-8, and larger
 files remain outside its editing scope. A modal keeps the conversation mounted
@@ -46,21 +49,18 @@ latency, rendering speed, idle CPU, or performance against another product.
 
 These are proposed acceptance targets, not measured product guarantees.
 
-1. **One resume service across runtimes.** SessionManager, FileHarnessStore,
-   PiPy, and ACP have different persistence and restoration paths. Introduce a
-   common resume descriptor containing project, harness reference, runtime,
-   backend session ID, transcript location, and capabilities. Return a typed
-   result distinguishing native resume, context replay, and unavailable. Prepare
-   a replacement runtime fully before disposing the old one, including rollback
-   after runtime initialization failure. Verify by restarting actual backend
-   processes and continuing conversations, not only replaying stored text.
+1. **Finish the cross-runtime resume service.** The shared descriptor now covers
+   SessionManager, FileHarnessStore, and PiPy rows; `PureMode` uses a staged
+   handoff, and ACP adapter resume is strict exact-or-fail. Remaining work is to
+   surface ACP's SQLite rows in the same browser descriptor and verify actual
+   backend process restarts—not only stored-text replay—in end-to-end tests.
 2. **A searchable workspace session panel.** Partially done: `:sessions` /
    `:resume` open a dedicated Session Browser (search, pagination, availability,
    preview, rename, Continue last) instead of the capped transcript picker.
    Welcome exposes Continue last session. Selected session and sidebar width
-   persist per project in `.superqode/ui-state.json`. Remaining follow-ups:
-   richer project column grouping across multi-root workspaces, and tighter
-   coupling to a shared resume descriptor (item 1).
+   persist per project in `.superqode/ui-state.json`. Discovery and visible-page
+   probes now run off the UI thread. Remaining follow-up: richer project column
+   grouping across multi-root workspaces and ACP SQLite rows.
 3. **Incremental transcript rendering.** Resume still replays all turns
    synchronously, and streaming still scans the pending tail as chunks arrive.
    Add an indexed transcript model, bounded visible history, load-earlier
