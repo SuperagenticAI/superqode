@@ -996,6 +996,37 @@ def test_prompt_height_wraps_and_caps_long_text():
     assert SelectionAwareInput._height_for_text("x" * 400, 40) == 8
     assert SelectionAwareInput._height_for_text("x" * 1000, 40) == 8
     assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 3
+    assert SelectionAwareInput._height_for_text("1\n2\n3\n4\n5", 40) == 5
+    assert SelectionAwareInput._height_for_text("\n".join(str(i) for i in range(12)), 40) == 8
+
+
+@pytest.mark.parametrize("key", ["shift+enter", "alt+enter", "ctrl+j", "newline"])
+def test_prompt_multiline_shortcuts_insert_newline(key):
+    from textual.events import Key
+
+    widget = SelectionAwareInput()
+    widget.text = "line1"
+    widget.move_cursor((0, 5))
+
+    event = Key(key, key)
+    widget.on_key(event)
+    assert event._stop_propagation
+    assert widget.text == "line1\n"
+    assert widget.cursor_position == 6
+
+
+def test_prompt_newline_replaces_selected_text():
+    from textual.events import Key
+
+    widget = SelectionAwareInput()
+    widget.text = "before selected after"
+    selection_type = type(widget.selection)
+    widget.selection = selection_type((0, 7), (0, 15))
+
+    widget.on_key(Key("ctrl+j", None))
+
+    assert widget.text == "before \n after"
+    assert widget.cursor_position == len("before \n")
 
 
 def test_prompt_default_placeholder_points_at_the_first_command():

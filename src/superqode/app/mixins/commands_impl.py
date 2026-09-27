@@ -889,6 +889,7 @@ class CommandImplMixin:
             ("@", "reference a file by path"),
             (">", "run a shell command"),
             ("Tab", "accept the current completion"),
+            ("Shift+Enter", "insert a newline (Alt+Enter / Ctrl+J also work)"),
             ("Ctrl+P", "edit your last message again"),
             ("Ctrl+E", "open an external editor"),
         ):

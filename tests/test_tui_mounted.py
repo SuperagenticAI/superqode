@@ -1425,6 +1425,25 @@ async def test_keys_reference_covers_every_advertised_binding():
         for key in advertised:
             assert key in rendered, f"{key} is advertised but missing from :keys"
         assert "ctrl+f" in advertised  # the new search binding is discoverable
+        assert "Shift+Enter" in rendered
+        assert "Ctrl+J" in rendered
+
+
+@pytest.mark.parametrize("shortcut", ["shift+enter", "alt+enter", "ctrl+j"])
+async def test_multiline_shortcuts_use_the_mounted_prompt_event_path(shortcut):
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 30)) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.focus()
+        prompt.load_text("firstsecond")
+        prompt.cursor_position = len("first")
+
+        await pilot.press(shortcut)
+        await pilot.pause()
+
+        assert prompt.value == "first\nsecond"
+        assert prompt.cursor_position == len("first\n")
+        assert int(prompt.styles.height.value) == SelectionAwareInput.MIN_PROMPT_HEIGHT
 
 
 async def test_edit_last_message_loads_it_back_into_the_prompt():

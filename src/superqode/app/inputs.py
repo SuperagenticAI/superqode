@@ -20,6 +20,7 @@ class SelectionAwareInput(TextArea):
     # Start tall enough to invite longer prompts; grow up to the max, then scroll.
     MIN_PROMPT_HEIGHT = 3
     MAX_PROMPT_HEIGHT = 8
+    NEWLINE_KEYS = frozenset({"shift+enter", "alt+enter", "ctrl+j", "newline"})
     DEFAULT_PLACEHOLDER = "Get started with :connect, or click the buttons below"
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
@@ -148,8 +149,28 @@ class SelectionAwareInput(TextArea):
             # Users should type in the input for model selection
         )
 
+    def _insert_newline(self, event: events.Key) -> None:
+        """Replace the active selection (or cursor) with a newline."""
+        event.stop()
+        event.prevent_default()
+        start, end = sorted(self.selection)
+        self.replace("\n", start, end, maintain_selection_offset=False)
+        self._resize_to_content()
+
+    @classmethod
+    def _is_newline_key(cls, event: events.Key) -> bool:
+        """Recognize portable and enhanced-terminal multiline shortcuts."""
+        return bool(cls.NEWLINE_KEYS.intersection(event.aliases))
+
     def on_key(self, event: events.Key) -> None:
         """Intercept key events for selection navigation and number selection."""
+        # Ctrl+J is available in traditional terminals. Shift/Alt+Enter work in
+        # terminals that report modified Enter keys (and in Textual's enhanced
+        # keyboard protocol) without changing ordinary Enter-to-submit.
+        if self._is_newline_key(event):
+            self._insert_newline(event)
+            return
+
         app = self.app
 
         if event.key == "escape" and getattr(app, "_install_in_progress", False):
