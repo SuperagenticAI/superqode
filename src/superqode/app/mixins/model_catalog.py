@@ -2206,6 +2206,11 @@ class ModelCatalogMixin:
             # choices: selecting one routes through the explicit start
             # confirmation before the TUI starts and connects to llama-server.
             if provider_id == "llamacpp":
+                from superqode.local.install import runtime_installed
+
+                if not await asyncio.to_thread(runtime_installed, "llama.cpp"):
+                    self._show_local_runtime_install("llama.cpp", log)
+                    return
                 from superqode.local.servers import discover_gguf_models
                 from superqode.local.laguna import (
                     LAGUNA_CONTEXT_WINDOW,
@@ -2229,35 +2234,23 @@ class ModelCatalogMixin:
                     self._awaiting_local_model = True
                     self._awaiting_local_provider = False
                     self._local_highlighted_model_index = 0
-                    for idx, item in enumerate(gguf, 1):
-                        laguna = is_laguna_model(item["path"])
-                        marker = "  ▶ " if idx == 1 else "    "
-                        style = f"bold {THEME['success']}" if idx == 1 else f"bold {THEME['text']}"
-                        t.append(marker, style=f"bold {THEME['success']}")
-                        t.append(
-                            f"[{idx:2}] ",
-                            style=self._picker_link_style(THEME["dim"], idx),
+                    from superqode.providers.local.base import LocalModel
+
+                    self._local_cached_models = [
+                        LocalModel(
+                            id=item["path"],
+                            name="Poolside Laguna S 2.1"
+                            if is_laguna_model(item["path"])
+                            else item["id"],
+                            context_window=LAGUNA_CONTEXT_WINDOW
+                            if is_laguna_model(item["path"])
+                            else 0,
                         )
-                        t.append(
-                            "Poolside Laguna S 2.1" if laguna else item["id"],
-                            style=style,
-                        )
-                        if laguna:
-                            t.append("  recommended", style=THEME["success"])
-                        if idx == 1:
-                            t.append("  ← SELECTED", style=f"bold {THEME['success']}")
-                        t.append("\n", style="")
-                        t.append(f"       {item['path']}\n", style=THEME["muted"])
-                        if laguna:
-                            t.append(
-                                f"       Q4_K_M • {LAGUNA_CONTEXT_WINDOW:,} ctx • "
-                                "reasoning + tools\n",
-                                style=THEME["dim"],
-                            )
-                        t.append("\n", style="")
+                        for item in gguf
+                    ]
+                    t = self._local_model_picker_text(provider_id, self._local_cached_models)
                     t.append(
-                        "  Press Enter or type a number. SuperQode will confirm before launching.\n",
-                        style=THEME["muted"],
+                        "  Cached GGUF files · confirm before launching.\n", style=THEME["dim"]
                     )
                     render_screen(t)
                     self.set_timer(0.05, self._ensure_input_focus)
@@ -2316,24 +2309,7 @@ class ModelCatalogMixin:
         self._awaiting_local_provider = False
         if not hasattr(self, "_local_highlighted_model_index"):
             self._local_highlighted_model_index = 0
-        highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
-
-        t = Text()
-        t.append(f"\n  🟢 {name}", style=f"bold {THEME['success']}")
-        t.append(f"  {base_url}\n", style=THEME["dim"])
-        t.append(f"  {len(models)} model(s) served\n\n", style=THEME["dim"])
-        for idx, model_id in enumerate(models, 1):
-            is_hl = (idx - 1) == highlighted_idx
-            marker = "  ▶ " if is_hl else "    "
-            style = f"bold {THEME['success']}" if is_hl else f"bold {THEME['text']}"
-            t.append(marker, style=f"bold {THEME['success']}")
-            t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
-            t.append(model_id, style=style)
-            if is_hl:
-                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
-            t.append("\n", style="")
-        t.append("\n  💡 ", style=THEME["muted"])
-        t.append("Select a model number or name to connect\n", style=THEME["text"])
+        t = self._local_model_picker_text(provider_id, models)
         render_screen(t)
         self.set_timer(0.05, self._ensure_input_focus)
 

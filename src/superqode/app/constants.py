@@ -778,6 +778,7 @@ COMMANDS = [
     ":local doctor",
     ":local guardrails",
     ":local setup",
+    ":local install",
     ":local init",
     ":local build",
     ":local packs",

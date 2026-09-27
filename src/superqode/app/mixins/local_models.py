@@ -82,12 +82,15 @@ class LocalModelsMixin:
         """Scroll the local-model picker so the highlighted multi-line row is visible."""
         try:
             log.auto_scroll = False
+            if self._scroll_to_rendered_selected_block(log):
+                return
             visible_height = max(6, int(getattr(getattr(log, "size", None), "height", 18) or 18))
             header_lines = 5
             # Local model rows render as: title, id, details, optional capabilities,
             # blank line. Use a conservative row height so row 6+ scrolls into view.
-            lines_per_item = 5
-            highlighted_y = header_lines + highlighted_idx * lines_per_item
+            lines_per_item = getattr(self, "_local_model_row_lines", 5)
+            page_start = getattr(self, "_local_model_page_start", 0)
+            highlighted_y = header_lines + (highlighted_idx - page_start) * lines_per_item
             target_y = max(0, highlighted_y - max(2, visible_height // 2))
             log.scroll_to(y=target_y, animate=False)
         except Exception:
@@ -1228,124 +1231,64 @@ class LocalModelsMixin:
         # serve them. Use `superqode models download` then connect to that
         # runtime. (Filtered above via the registry no longer listing it.)
 
-        t = Text()
-        t.append(f"  ◈ ", style=f"bold {THEME['purple']}")
-        t.append("Local Providers\n", style=f"bold {THEME['text']}")
-        t.append(
-            "  Select a local/self-hosted runtime. No API key required.\n\n", style=THEME["muted"]
-        )
-        t.append("  Local Model Lab\n", style=f"bold {THEME['text']}")
-        t.append("  Start with ", style=THEME["muted"])
-        t.append(":chat on", style=f"bold {THEME['cyan']}")
-        t.append(
-            " to sanity-check a Local/BYOK model with no repo context or tools.\n",
-            style=THEME["muted"],
-        )
-        t.append("  Switch to ", style=THEME["muted"])
-        t.append(":build", style=f"bold {THEME['cyan']}")
-        t.append(" when you want the repo-aware coding harness and tools.\n", style=THEME["muted"])
-        t.append("  Use ", style=THEME["muted"])
-        t.append(":plan on", style=f"bold {THEME['cyan']}")
-        t.append(
-            " to reason first before any edits or native tool execution.\n", style=THEME["muted"]
-        )
-        t.append("  Toggle modes anytime with ", style=THEME["muted"])
-        t.append(":mode", style=f"bold {THEME['cyan']}")
-        t.append(" (Chat / Build / Plan).\n", style=THEME["muted"])
-        t.append("  Explore: ", style=THEME["dim"])
-        t.append(":local doctor", style=THEME["cyan"])
-        t.append(" · ", style=THEME["dim"])
-        t.append(":local setup", style=THEME["cyan"])
-        t.append(" · ", style=THEME["dim"])
-        t.append(":local build", style=THEME["cyan"])
-        t.append(" · ", style=THEME["dim"])
-        t.append(":local optimize", style=THEME["cyan"])
-        t.append(" · ", style=THEME["dim"])
-        t.append(":local labs", style=THEME["cyan"])
-        t.append("\n\n", style="")
-        t.append(
-            "  Start and supervise local model servers in their own terminal when possible.\n",
-            style=f"bold {THEME['text']}",
-        )
-        t.append(
-            "  SuperQode connects to your server; managed startup is a convenience fallback.\n\n",
-            style=THEME["muted"],
-        )
+        from superqode.providers.local_order import LOCAL_PROVIDER_ORDER
 
-        if not local_providers:
-            t.append("  ⚠️  No local providers configured\n", style=THEME["warning"])
-            t.append(
-                "  Local providers include: ollama, lmstudio, llamacpp, sglang, vllm, mlx, etc.\n",
-                style=THEME["dim"],
-            )
-            if clear_log:
-                log.clear()
-            log.write(t)
-            return
-
-        # Show local providers with highlighting
-        highlighted_idx = getattr(self, "_local_highlighted_provider_index", 0)
         local_providers_list = list(local_providers.items())
-
-        # Debug: Ensure all providers are included
-        if not local_providers_list:
-            t.append("  ⚠️  No local providers found in registry\n", style=THEME["warning"])
-            if clear_log:
-                log.clear()
-            log.write(t)
-            return
-
-        provider_count = len(local_providers_list)
-        t.append(f"  Available ({provider_count})\n", style=f"bold {THEME['text']}")
-
-        # Provider-specific emojis
-        provider_emojis = {
-            "ds4": "◆",
-            "ollama": "🐼",  # Panda
-            "lmstudio": "🎨",  # Paint palette (GUI application)
-            "mlx": "🍏",  # Green Apple (Apple Silicon)
-            "vllm": "🚀",  # Rocket (high performance)
-            "sglang": "🪝",  # Hook
-            "tgi": "📚",  # Books
-            "huggingface": "🤗",  # HuggingFace signature emoji
-            "openai-compatible": "🔌",  # Plug (generic connection)
+        highlighted_idx = getattr(self, "_local_highlighted_provider_index", 0)
+        names = {
+            "ollama": "Ollama",
+            "lmstudio": "LM Studio",
+            "llamacpp": "llama.cpp",
+            "sglang": "SGLang",
+            "vllm": "vLLM",
+            "mlx": "MLX",
+            "ds4": "DwarfStar",
+            "openai-compatible": "Custom endpoint",
+            "tgi": "TGI",
         }
+        descriptions = {
+            "ollama": "Simple setup · broad model library",
+            "lmstudio": "Desktop or headless · GGUF and MLX",
+            "llamacpp": "GGUF models · CPU and GPU",
+            "sglang": "Structured generation · experimental",
+            "vllm": "High-throughput serving · experimental",
+            "mlx": "Native Apple Silicon",
+            "ds4": "DeepSeek V4 and Laguna",
+            "openai-compatible": "Connect an existing compatible server",
+            "tgi": "Hugging Face inference server",
+        }
+        t = Text()
+        t.append("  CONNECT", style=f"bold {THEME['purple']}")
+        t.append("  /  ", style=THEME["dim"])
+        t.append("LOCAL\n", style=f"bold {THEME['pink']}")
+        t.append("  Choose a runtime\n", style=f"bold {THEME['purple']}")
+        t.append("  Select a provider to browse models or set it up.\n\n", style=THEME["muted"])
 
+        if not local_providers_list:
+            t.append("  No local runtimes available for this harness.\n", style=THEME["warning"])
+            t.append("  Use :connect to choose another harness.\n", style=THEME["muted"])
+        other_heading = False
         for idx, (provider_id, provider_def) in enumerate(local_providers_list, 1):
-            status_icon = provider_emojis.get(provider_id, "🟢")
-            labels = ["local"]
-            if provider_id == "ds4":
-                labels.extend(["tools", "1M ctx"])
-            elif provider_id in ("ollama", "mlx", "lmstudio"):
-                labels.extend(["popular", "tools"])
-            elif provider_id in ("vllm", "sglang", "tgi"):
-                labels.extend(["server", "advanced"])
-
-            is_highlighted = (idx - 1) == highlighted_idx
-            marker = "▶ " if is_highlighted else "  "
-            name_style = f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['cyan']}"
-            num_style = (
-                self._picker_link_style(f"bold {THEME['success']}", idx)
-                if is_highlighted
-                else self._picker_link_style(THEME["dim"], idx)
-            )
-            t.append(f"  {marker}", style=f"bold {THEME['success']}")
-            t.append(f"[{idx}] ", style=num_style)
-            t.append(f"{status_icon} ", style=THEME["success"])
-            t.append(f"{provider_def.name}", style=name_style)
-            if provider_id in ("vllm", "sglang"):
-                t.append(" [EXPERIMENTAL]", style=f"bold {THEME['warning']}")
-            t.append(f" ({provider_id})", style=THEME["muted"])
-            t.append("  ", style=THEME["dim"])
-            t.append(" • ".join(labels), style=THEME["dim"])
-            t.append("\n", style="")
-
-        t.append("\n  Type a number or use ", style=THEME["muted"])
-        t.append("↑↓ Enter", style=f"bold {THEME['cyan']}")
-        t.append(". Direct connect: ", style=THEME["muted"])
-        t.append(f":connect local <provider>/<model>\n", style=THEME["cyan"])
-        t.append(f"  Example: ", style=THEME["dim"])
-        t.append(f":connect local ollama/qwen3:8b\n", style=THEME["cyan"])
+            if provider_id not in LOCAL_PROVIDER_ORDER and not other_heading:
+                t.append("\n  OTHER PROVIDERS\n", style=THEME["purple"])
+                other_heading = True
+            selected = idx - 1 == highlighted_idx
+            style = f"bold {THEME['pink']}" if selected else THEME["cyan"]
+            t.append("  ▶ " if selected else "    ", style=style)
+            t.append(f"[{idx}] ", style=self._picker_link_style(style, idx))
+            t.append(names.get(provider_id, provider_def.name), style=style)
+            t.append("\n")
+            if selected:
+                t.append(
+                    f"        {descriptions.get(provider_id, 'Local inference server')}\n",
+                    style=THEME["muted"],
+                )
+        t.append("\n  ↑↓ Browse   Enter Select   Number Jump\n", style=THEME["muted"])
+        t.append("  :connect Back   :local setup Help\n", style=THEME["dim"])
+        t.append("  After connecting, use :build to start coding.\n", style=THEME["dim"])
+        t.highlight_words(["↑↓", ":connect", ":local setup", ":build"], THEME["cyan"])
+        t.highlight_words(["Enter"], f"bold {THEME['pink']}")
+        t.highlight_words(["Number"], THEME["orange"])
 
         if clear_log:
             log.clear()
@@ -1402,7 +1345,6 @@ class LocalModelsMixin:
             SGLangClient,
             MLXClient,
             TGIClient,
-            estimate_tool_support,
         )
 
         provider_def = PROVIDERS.get(provider_id)
@@ -1518,6 +1460,28 @@ class LocalModelsMixin:
         # Create client and check availability
         client = client_class()
         server_running = await client.is_available()
+
+        if provider_id in ("sglang", "vllm") and not server_running:
+            from superqode.local.install import next_steps, runtime_installed
+
+            if not await asyncio.to_thread(runtime_installed, provider_id):
+                self._show_local_runtime_install(provider_id, log)
+                return
+            steps = next_steps(provider_id)
+            content = Text(
+                "\n  Runtime installed. Start it with your model and matching tool parser.\n"
+            )
+            for step in steps:
+                content.append(f"  {step}\n", style=THEME["cyan"])
+            self._show_local_server_setup_card(
+                provider_id,
+                log,
+                content=content,
+                command=steps[0],
+                can_start=False,
+                title=f"Start {provider_def.name}",
+            )
+            return
 
         # DwarfStar normally has a legacy default model, so its generic stopped
         # state offers an immediate start. When the shared Laguna GGUF exists,
@@ -1639,141 +1603,42 @@ class LocalModelsMixin:
         )
 
         if models:
-            idx = 1
-            model_list = []
-            highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
-
-            for model in models:
-                is_highlighted = (idx - 1) == highlighted_idx
-
-                if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"[{idx:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
-                    )
-                else:
-                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
-
-                # Running status
-                if model.running:
-                    t.append("● ", style=THEME["success"])
-                else:
-                    t.append("○ ", style=THEME["dim"])
-
-                name_style = (
-                    f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
-                )
-                t.append(f"{model.name}", style=name_style)
-                if provider_id == "ds4" or "deepseek" in model.id.lower():
-                    t.append("  recommended", style=THEME["success"])
-                if is_highlighted:
-                    t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
-                t.append(f"\n", style="")
-                t.append(f"       ", style="")
-                id_style = f"bold {THEME['success']}" if is_highlighted else THEME["muted"]
-                t.append(f"{model.id}\n", style=id_style)
-
-                # Model details
-                details = []
-                if model.size_display != "unknown":
-                    details.append(model.size_display)
-                if model.quantization != "unknown":
-                    details.append(model.quantization)
-                if model.context_window > 0:
-                    details.append(f"{model.context_window:,} ctx")
-
-                if details:
-                    t.append(f"       ", style="")
-                    t.append(" • ".join(details), style=THEME["dim"])
-                    t.append("\n", style="")
-
-                tool_level = estimate_tool_support(model)
-                label_parts = []
-                if tool_level == "excellent":
-                    label_parts.append(("excellent tools", THEME["success"]))
-                elif tool_level == "good":
-                    label_parts.append(("good tools", THEME["cyan"]))
-                elif tool_level == "none":
-                    label_parts.append(("no tools", THEME["dim"]))
-
-                if model.supports_vision:
-                    label_parts.append(("vision", THEME["cyan"]))
-
-                if label_parts:
-                    t.append(f"       ", style="")
-                    for part_idx, (label, style) in enumerate(label_parts):
-                        if part_idx:
-                            t.append(" • ", style=THEME["dim"])
-                        t.append(label, style=style)
-                    t.append("\n", style="")
-
-                t.append("\n", style="")
-                model_list.append(model.id)
-                idx += 1
+            model_list = [model.id for model in models]
+            t = self._local_model_picker_text(provider_id, models)
         else:
-            t.append(f"  ○ No models found\n\n", style=THEME["muted"])
-            if provider_id == "ollama":
-                t.append(f"  💡 Pull a model with:\n", style=THEME["muted"])
-                t.append(f"    ollama pull qwen3.6:35b-a3b\n", style=THEME["cyan"])
-                t.append(f"    # or browse trusted labs with :local labs\n", style=THEME["dim"])
-            elif provider_id == "mlx":
-                t.append(
-                    f"  💡 MLX only lists models reported by a running server.\n",
-                    style=THEME["muted"],
-                )
-                t.append(
-                    f"     Start MLX with the model you want, then reconnect:\n",
-                    style=THEME["muted"],
-                )
-                t.append(
-                    f"    mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit\n",
-                    style=THEME["cyan"],
-                )
-                t.append(
-                    f"    # Edit the model id/port/context for your setup.\n",
-                    style=THEME["dim"],
-                )
-                if not server_running:
-                    t.append(
-                        f"\n  ⚠️  MLX server is not running. Start it first!\n",
-                        style=THEME["warning"],
-                    )
-            elif provider_id == "lmstudio":
-                t.append(f"  💡 LM Studio requires:\n", style=THEME["muted"])
-                t.append(f"    1. Start LM Studio application\n", style=THEME["cyan"])
-                t.append(f"    2. Download and load a model\n", style=THEME["cyan"])
-                t.append(f"    3. Start the local server (Local Server tab)\n", style=THEME["cyan"])
-                t.append("       or: lms server start --port 1234\n", style=THEME["cyan"])
-                if not server_running:
-                    t.append(
-                        f"\n  ⚠️  LM Studio server is not running. Start the server in LM Studio first!\n",
-                        style=THEME["warning"],
-                    )
-            elif provider_id in ("vllm", "sglang", "tgi"):
-                command = self._advanced_local_server_command(provider_id)
-                docs_url = self._local_server_docs_url(provider_id)
-                t.append(
-                    "  💡 Start and supervise this server in a separate terminal:\n",
-                    style=THEME["muted"],
-                )
-                t.append(f"    {command}\n", style=THEME["cyan"])
-                t.append(
-                    "    Replace <model-id-or-path> and tune GPU/context settings for your machine.\n",
-                    style=THEME["dim"],
-                )
-                t.append("    Vendor guide: ", style=THEME["muted"])
-                t.append(f"{docs_url}\n", style=THEME["cyan"])
-                t.append(
-                    "    Stop it from that terminal with Ctrl+C, then reconnect here when restarted.\n",
-                    style=THEME["dim"],
-                )
-            model_list = []
+            from superqode.local.install import next_steps, normalize_engine
 
-        if not model_list:
-            t.append(f"\n  💡 ", style=THEME["muted"])
-            t.append(f":connect {provider_id} <model>", style=THEME["success"])
-            t.append(" to connect\n", style=THEME["muted"])
+            engine = normalize_engine(provider_id)
+            command = {
+                "ollama": "ollama pull <model-name>",
+                "lmstudio": "lms get <model-name>",
+                "mlx": "superqode local serve mlx --model <local-model-path>",
+                "ds4": "superqode local serve ds4",
+            }.get(provider_id)
+            if command is None:
+                try:
+                    command = next_steps(engine)[0]
+                except (KeyError, ValueError):
+                    command = self._advanced_local_server_command(provider_id)
+            content = Text("\n  No chat models available yet.\n", style=THEME["text"])
+            content.append(
+                "  Download or load a coding model, then choose Check again.\n",
+                style=THEME["muted"],
+            )
+            content.append("  Find a model: :local search <name>\n", style=THEME["cyan"])
+            if provider_id == "lmstudio":
+                content.append("  Load it with: lms load <model-key>\n", style=THEME["cyan"])
+            self._local_model_list = []
+            self._local_cached_models = []
+            self._show_local_server_setup_card(
+                engine,
+                log,
+                content=content,
+                command=command,
+                can_start=False,
+                title=f"{provider_def.name} · Add a model",
+            )
+            return
 
         log.clear()
         log.auto_scroll = False
@@ -1792,6 +1657,94 @@ class LocalModelsMixin:
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
 
+    def _local_model_picker_text(self, provider_id: str, models: list) -> Text:
+        """Render the same compact page on discovery and keyboard navigation."""
+        from superqode.providers.local.base import LocalModel
+        from superqode.providers.local import estimate_tool_support
+        from superqode.providers.registry import PROVIDERS
+
+        provider = PROVIDERS.get(provider_id)
+        name = provider.name if provider else provider_id
+        highlighted = min(
+            max(0, getattr(self, "_local_highlighted_model_index", 0)), len(models) - 1
+        )
+        self._local_highlighted_model_index = highlighted
+        # Bound the page to the terminal height; preserve global numeric indices.
+        try:
+            height = self.size.height or 24
+            width = max(24, (self.size.width or 80) - 12)
+        except Exception:
+            height, width = 24, 68
+        page_size = max(1, min(8, (height - 12) // 2))
+        start = (highlighted // page_size) * page_size
+        self._local_model_page_start = start
+        self._local_model_row_lines = 2
+        end = min(len(models), start + page_size)
+        t = Text()
+        t.append("  CONNECT", style=f"bold {THEME['purple']}")
+        t.append("  /  ", style=THEME["dim"])
+        t.append("LOCAL", style=f"bold {THEME['pink']}")
+        t.append("  /  ", style=THEME["dim"])
+        t.append(f"{name}\n", style=THEME["cyan"])
+        t.append("  Choose a model\n", style=f"bold {THEME['purple']}")
+        t.append(f"  {start + 1}–{end}", style=THEME["orange"])
+        t.append(f" of {len(models)} models\n\n", style=THEME["muted"])
+        for index in range(start, end):
+            model = models[index]
+            if isinstance(model, str):
+                model = LocalModel(id=model, name=model.split("/")[-1])
+            selected = index == highlighted
+            style = f"bold {THEME['pink']}" if selected else THEME["cyan"]
+            t.append("  ▶ " if selected else "    ", style=style)
+            t.append(f"[{index + 1}] ", style=self._picker_link_style(style, index + 1))
+            title = Text(model.name or model.id, style=style)
+            title.truncate(max(12, width - 14), overflow="ellipsis")
+            t.append(title)
+            t.append(
+                "  loaded\n" if model.running else "  available\n",
+                style=THEME["success"] if model.running else THEME["purple"],
+            )
+            details = []
+            if model.quantization and model.quantization != "unknown":
+                details.append(model.quantization)
+            if model.size_display != "unknown":
+                details.append(model.size_display)
+            if model.context_window:
+                details.append(f"{model.context_window:,} ctx")
+            level = estimate_tool_support(model)
+            details.append(
+                "Tools likely"
+                if level in {"excellent", "good"}
+                else "No tool support"
+                if level == "none"
+                else "Tools unknown"
+            )
+            if model.supports_vision:
+                details.append("Vision")
+            detail = Text(" · ".join(details), style=THEME["muted"])
+            if model.quantization and model.quantization != "unknown":
+                detail.highlight_words([model.quantization], THEME["orange"])
+            if model.context_window:
+                detail.highlight_words([f"{model.context_window:,} ctx"], THEME["purple"])
+            detail.highlight_words(["Tools likely"], THEME["cyan"])
+            detail.highlight_words(["Vision"], THEME["pink"])
+            detail.truncate(width, overflow="ellipsis")
+            t.append("        ")
+            t.append(detail)
+            t.append("\n")
+        selected_model = models[highlighted]
+        model_id = selected_model if isinstance(selected_model, str) else selected_model.id
+        t.append("\n  ")
+        identity = Text(model_id, style=THEME["purple"])
+        identity.truncate(width, overflow="ellipsis")
+        t.append(identity)
+        t.append("\n  ↑↓ Browse   Enter Connect   Number Jump\n", style=THEME["muted"])
+        t.append("  :connect local Back   :local setup Help\n", style=THEME["dim"])
+        t.highlight_words(["↑↓", ":connect local", ":local setup"], THEME["cyan"])
+        t.highlight_words(["Enter"], f"bold {THEME['pink']}")
+        t.highlight_words(["Number"], THEME["orange"])
+        return t
+
     def _redraw_local_provider_models(self, log: ConversationLog):
         """Redraw the local provider models list with updated highlighting.
 
@@ -1799,7 +1752,6 @@ class LocalModelsMixin:
         display without re-fetching models from the provider.
         """
         from superqode.providers.registry import PROVIDERS
-        from superqode.providers.local import estimate_tool_support
 
         provider_id = getattr(self, "_local_selected_provider", None)
         models = getattr(self, "_local_cached_models", [])
@@ -1860,90 +1812,7 @@ class LocalModelsMixin:
         if not provider_def:
             return
 
-        t = Text()
-        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
-        t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-        t.append(f"  {len(models)} model(s) available\n", style=THEME["dim"])
-        t.append(f"  💡 ", style=THEME["muted"])
-        t.append("Type number to select • Scroll with mouse to see more\n\n", style=THEME["muted"])
-
-        highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
-
-        for idx, model in enumerate(models, 1):
-            # Entries can be rich LocalModel objects or plain id strings (e.g.
-            # from OpenAI-compatible endpoints / the HF cache list). Coerce so
-            # attribute access below never explodes on a str.
-            if isinstance(model, str):
-                from superqode.providers.local.base import LocalModel
-
-                model = LocalModel(id=model, name=model.split("/")[-1] or model)
-
-            is_highlighted = (idx - 1) == highlighted_idx
-
-            if is_highlighted:
-                t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                t.append(
-                    f"[{idx:2}] ",
-                    style=self._picker_link_style(f"bold {THEME['success']}", idx),
-                )
-            else:
-                t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
-
-            # Running status
-            if model.running:
-                t.append("● ", style=THEME["success"])
-            else:
-                t.append("○ ", style=THEME["dim"])
-
-            name_style = f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
-            t.append(f"{model.name}", style=name_style)
-            if is_highlighted:
-                t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
-            t.append(f"\n", style="")
-            t.append(f"       ", style="")
-            id_style = f"bold {THEME['success']}" if is_highlighted else THEME["muted"]
-            t.append(f"{model.id}\n", style=id_style)
-
-            # Model details
-            details = []
-            if model.size_display != "unknown":
-                details.append(model.size_display)
-            if model.quantization != "unknown":
-                details.append(model.quantization)
-            if model.context_window > 0:
-                details.append(f"{model.context_window:,} ctx")
-
-            if details:
-                t.append(f"       ", style="")
-                t.append(" • ".join(details), style=THEME["dim"])
-                t.append("\n", style="")
-
-            # Tool support
-            tool_level = estimate_tool_support(model)
-            if tool_level == "excellent":
-                t.append(f"       ", style="")
-                t.append("🔧🔧 Excellent tool support", style=THEME["success"])
-                t.append("\n", style="")
-            elif tool_level == "good":
-                t.append(f"       ", style="")
-                t.append("🔧 Good tool support", style=THEME["cyan"])
-                t.append("\n", style="")
-            elif tool_level == "none":
-                t.append(f"       ", style="")
-                t.append("No tool support", style=THEME["dim"])
-                t.append("\n", style="")
-
-            if model.supports_vision:
-                t.append(f"       ", style="")
-                t.append("👁️ Vision support", style=THEME["cyan"])
-                t.append("\n", style="")
-
-            t.append("\n", style="")
-
-        if not model_list:
-            t.append(f"\n  💡 ", style=THEME["muted"])
-            t.append(f":connect {provider_id} <model>", style=THEME["success"])
-            t.append(" to connect\n", style=THEME["muted"])
+        t = self._local_model_picker_text(provider_id, models)
 
         log.clear()
         log.auto_scroll = False
@@ -2099,6 +1968,8 @@ class LocalModelsMixin:
             self.run_worker(self._local_init(subargs, log))
         elif sub == "setup":
             self.run_worker(self._local_setup(subargs, log))
+        elif sub == "install":
+            self._show_local_runtime_install(subargs.strip(), log)
         elif sub == "smoke":
             self.run_worker(self._local_smoke(subargs, log))
         elif sub == "labs":
@@ -2907,14 +2778,16 @@ class LocalModelsMixin:
             )
 
             if engine == "lmstudio":
+                if not readiness.cli_available:
+                    return self._show_local_runtime_install("lmstudio", log)
                 t.append(
-                    "  LM Studio's CLI only works reliably after the LM Studio app/backend is open.\n",
+                    "  Use the desktop app or let SuperQode start LM Studio's headless daemon.\n",
                     style=THEME["muted"],
                 )
                 if readiness.startable:
                     self._awaiting_local_model = False
                     t.append(
-                        "  LM Studio is open and the lms CLI is available.\n",
+                        "  The lms CLI is available; SuperQode can start the backend.\n",
                         style=THEME["success"],
                     )
                     t.append(
@@ -3097,6 +2970,11 @@ class LocalModelsMixin:
                 command=mlx_install_command(sys.executable),
             )
 
+        from superqode.local.install import ENGINES
+
+        if engine in ENGINES:
+            return self._show_local_runtime_install(engine, log)
+
         t.append("\n  🔴 ", style=THEME["error"])
         t.append(f"{name} is not installed\n\n", style=f"bold {THEME['text']}")
         for line in readiness.install_guide:
@@ -3158,11 +3036,20 @@ class LocalModelsMixin:
         can_start: bool,
         title: str,
         reset_highlight: bool = True,
+        installation=None,
     ) -> bool:
         """Present every local-engine setup state as one interactive card."""
         from superqode.app.prompt_stack import PromptSpec
 
         options = []
+        if installation is not None and installation.steps:
+            options.append(
+                (
+                    "install",
+                    f"Install {installation.title}",
+                    "run the displayed command, then check setup again",
+                )
+            )
         if can_start:
             options.append(("start", "Start with SuperQode", "launch and verify the local server"))
         options.extend(
@@ -3179,6 +3066,7 @@ class LocalModelsMixin:
             "title": title,
             "content": content,
             "options": tuple(options),
+            "installation": installation,
         }
         self._awaiting_local_server_start = engine if can_start else None
         self._awaiting_local_model = False
@@ -3209,6 +3097,7 @@ class LocalModelsMixin:
                         can_start=can_start,
                         title=title,
                         reset_highlight=False,
+                        installation=installation,
                     ),
                     data=pending,
                 )
@@ -3237,6 +3126,9 @@ class LocalModelsMixin:
         engine = str(pending.get("engine") or "")
         self._awaiting_local_server_start = None
         self._reset_input_placeholder()
+        if choice == "install" and pending.get("installation"):
+            self.run_worker(self._install_runtime_then_continue(pending["installation"], log))
+            return
         if choice == "start" and pending.get("can_start"):
             self._awaiting_local_server_start = engine
             self._handle_local_server_start_input("", log)
@@ -3249,13 +3141,78 @@ class LocalModelsMixin:
                 command=str(pending.get("command") or ""),
                 can_start=bool(pending.get("can_start")),
                 title=str(pending.get("title") or "Local model setup"),
+                installation=pending.get("installation"),
             )
             self._copy_setup_command(str(pending.get("command") or ""), log)
             return
         if choice == "recheck":
-            self.run_worker(self._show_local_provider_models(engine, log))
+            provider = "llamacpp" if engine == "llama.cpp" else engine
+            self.run_worker(self._show_local_provider_models(provider, log))
             return
         self._show_local_provider_picker(log)
+
+    def _show_local_runtime_install(self, engine: str, log) -> bool:
+        from superqode.local.install import install_plan, next_steps
+
+        try:
+            plan = install_plan(engine)
+        except ValueError as exc:
+            log.add_error(str(exc))
+            return False
+        content = Text()
+        content.append(f"\n  {plan.guidance}\n", style=THEME["text"])
+        content.append(f"  Guide: {plan.docs_url}\n", style=THEME["cyan"])
+        content.append("\n  After installation:\n", style=THEME["muted"])
+        for step in next_steps(plan.engine):
+            content.append(f"    {step}\n", style=THEME["cyan"])
+        return self._show_local_server_setup_card(
+            plan.engine,
+            log,
+            content=content,
+            command=plan.command or plan.docs_url,
+            can_start=False,
+            title=f"Install {plan.title}",
+            installation=plan,
+        )
+
+    async def _install_runtime_then_continue(self, plan, log) -> None:
+        import asyncio
+        import shlex
+        import subprocess
+
+        from superqode.app.mixins.commands_impl import InstallCancelled
+        from superqode.local.install import runtime_installed
+
+        self.is_busy = True
+        try:
+            # The setup card displays this immutable plan before selection.
+            if not await asyncio.to_thread(runtime_installed, plan.engine):
+                for step in plan.steps:
+                    result = await self._run_install_with_progress(
+                        plan.title, shlex.join(step), log
+                    )
+                    if result.returncode:
+                        raise RuntimeError(
+                            f"Installer exited with {result.returncode}; review the output above."
+                        )
+                if not await asyncio.to_thread(runtime_installed, plan.engine):
+                    raise RuntimeError(
+                        "Installer finished but the runtime is unavailable. Check the installer output and PATH."
+                    )
+        except (InstallCancelled, OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            log.add_error(f"{plan.title} setup did not complete: {exc}")
+            self._show_install_recovery(
+                plan.title,
+                plan.command,
+                log,
+                lambda: self.run_worker(self._install_runtime_then_continue(plan, log)),
+            )
+            return
+        finally:
+            self.is_busy = False
+        log.add_success(f"{plan.title} is installed. Checking the next setup step…")
+        provider = "llamacpp" if plan.engine == "llama.cpp" else plan.engine
+        await self._show_local_provider_models(provider, log)
 
     def _handle_local_server_start_input(self, text: str, log: ConversationLog) -> bool:
         """Handle the inline start prompt for a stopped local server.

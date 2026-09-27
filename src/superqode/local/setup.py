@@ -120,6 +120,16 @@ def render_local_setup_guide(guide: LocalSetupGuide, *, tui_first: bool = False)
         "",
         "1. Pick a model",
     ]
+    from .install import ENGINES, normalize_engine
+
+    engine_id = normalize_engine(rec.engine or "")
+    if engine_id in ENGINES:
+        lines[5:5] = [
+            "Runtime missing? Install it first (model weights are separate):",
+            f"   TUI  : :local install {engine_id}",
+            f"   CLI  : superqode local install {engine_id}",
+            "",
+        ]
     if guide.query:
         lines.append(f"   TUI  : :local search {guide.query}")
         lines.append(f"   CLI  : superqode local search {guide.query}")
@@ -163,6 +173,17 @@ def render_local_setup_guide(guide: LocalSetupGuide, *, tui_first: bool = False)
         lines.append(f"   TUI  : {tui_serve}")
     lines.append(
         "   Manual guides stay valid too: Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, or SGLang."
+    )
+    provider_id = {"llama.cpp": "llamacpp", "mlx-lm": "mlx"}.get(rec.engine, rec.engine)
+    lines.extend(
+        [
+            "",
+            "   Start coding immediately with a running model:",
+            "   CLI  : superqode",
+            f"   TUI  : :connect local {provider_id or '<provider>'}",
+            "          :build",
+            "   The remaining steps are optional harness customization.",
+        ]
     )
 
     lines.extend(["", "4. Choose context for this repo"])

@@ -22,6 +22,16 @@ Local providers offer:
 
 ## Quick Start: Zero To Local Coding
 
+If your runtime is missing, install it from the TUI with `:local install ollama`
+(or `lmstudio`, `llama.cpp`, `sglang`, `vllm`, `mlx`). The CLI equivalent is
+`superqode local install ollama`. SuperQode shows the installation command and
+asks before running it; model weights are acquired separately. Platform-specific
+installers that require a terminal are shown with a recheck action.
+
+Already have a running model? Open `superqode`, choose it with `:connect local`,
+then enter `:build` to start coding. A custom harness and live smoke test are
+optional; the guided harness workflow below is available when you want one.
+
 SuperQode bundles a guided path from "I want local coding" to a harness you can inspect, run, and improve on your repo. You pay once in hardware, not forever in token bills. Local is slower than frontier labs and quality depends on your model and machine, so SuperQode focuses on measurement, control, and ownership of the harness.
 
 Run one command from inside your repository:

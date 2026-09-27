@@ -446,6 +446,33 @@ async def test_connect_picker_keyboard_navigation_keeps_selection_visible():
         assert log.scroll_y <= selected_y < log.scroll_y + visible_height
 
 
+@pytest.mark.parametrize("terminal_size", [(80, 24), (50, 20)])
+async def test_local_model_pages_keep_selection_visible(terminal_size):
+    from superqode.providers.local.base import LocalModel
+
+    app = SuperQodeApp()
+    async with app.run_test(size=terminal_size) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        models = [LocalModel(id=f"model-{i}", name=f"Coding model {i}") for i in range(20)]
+        app._local_selected_provider = "ollama"
+        app._local_cached_models = models
+        app._local_model_list = [model.id for model in models]
+        app._awaiting_local_model = True
+        app._awaiting_local_provider = False
+        app._local_highlighted_model_index = 0
+        app._redraw_local_provider_models(log)
+        await pilot.pause()
+        for _ in range(9):
+            app.action_navigate_local_model_down()
+            await pilot.pause()
+        assert app._local_highlighted_model_index == 9
+        assert app._local_model_list[9] == "model-9"
+        selected_y = next(i for i, line in enumerate(log.lines) if "▶" in line.text)
+        assert "[10]" in log.lines[selected_y].text
+        assert log.scroll_y <= selected_y < log.scroll_y + log.scrollable_content_region.height
+        assert len([line for line in log.lines if "available" in line.text]) <= 8
+
+
 async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
     """The provider picker uses the same multiline RichLog navigation path."""
     app = SuperQodeApp()

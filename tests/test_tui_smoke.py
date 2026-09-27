@@ -706,10 +706,9 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
 
     assert handled is True
     assert getattr(app, "_awaiting_local_server_start", None) is None
-    assert "First open LM Studio" in text
-    assert 'open -a "LM Studio"' in text
-    assert "lms server start --port 1234" in text
-    assert "npx lmstudio install-cli" in text
+    assert "headless LM Studio daemon and lms CLI" in text
+    assert "superqode local serve lmstudio" in text
+    assert "lmstudio.ai/install.sh" in text
     assert not pinned
     assert app._prompts.is_active("local_server_setup")
     assert "Copy setup command" in text
@@ -793,7 +792,7 @@ def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
 
     assert handled is True
     assert app._awaiting_local_server_start == "lmstudio"
-    assert "LM Studio is open and the lms CLI is available" in text
+    assert "The lms CLI is available; SuperQode can start the backend" in text
     assert "Start with SuperQode" in text
     assert "lms server start --port 1234" in text
     assert 'open -a "LM Studio"' not in text
@@ -1073,22 +1072,17 @@ def test_connect_local_picker_lists_ds4():
     app._show_local_provider_picker(log)
 
     text = render_plain(log.items[-1])
-    assert "Local Model Lab" in text
-    assert ":chat on" in text
-    assert "no repo context or tools" in text
+    assert "CONNECT  /  LOCAL" in text
+    assert "Choose a runtime" in text
     assert ":build" in text
-    assert "repo-aware coding harness" in text
-    assert ":plan on" in text
-    assert ":local doctor" in text
-    assert ":local optimize" in text
-    assert "DwarfStar 4" in text
-    assert "ds4" in text
+    assert "OTHER PROVIDERS" in text
+    assert "DwarfStar" in text
     assert "recommended" not in text
     provider_ids = [provider_id for provider_id, _ in app._local_provider_list]
     assert provider_ids[:6] == ["ollama", "lmstudio", "llamacpp", "sglang", "vllm", "mlx"]
     assert provider_ids.index("ds4") >= 6
-    assert "Start and supervise local model servers in their own terminal" in text
-    assert "managed startup is a convenience fallback" in text
+    assert "Number Jump" in text
+    assert len(text.splitlines()) <= 23
 
 
 def test_advanced_local_server_guidance_matches_vendor_cli_shapes():
@@ -6148,7 +6142,7 @@ def test_local_picker_labels_gemma4_as_tool_capable():
 
     text = render_plain(log.items[-1])
     assert "Gemma 4 31B" in text
-    assert "Good tool support" in text
+    assert "Tools likely" in text
     assert "Gemma 2 9B" in text
     assert "No tool support" in text
     gemma_base_section = text.split("Gemma Base", 1)[1]

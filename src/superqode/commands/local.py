@@ -13,6 +13,63 @@ def local():
     """Local Agentic Coding: tune SuperQode for the machine in front of you."""
 
 
+@local.command("install")
+@click.argument(
+    "engine", type=click.Choice(["ollama", "lmstudio", "llama.cpp", "sglang", "vllm", "mlx"])
+)
+@click.option("--dry-run", is_flag=True, help="Show the installation plan without running it")
+@click.option(
+    "--json", "json_output", is_flag=True, help="Print the plan as JSON without installing"
+)
+@click.option("-y", "--yes", is_flag=True, help="Run the displayed installation without prompting")
+def local_install(engine, dry_run, json_output, yes):
+    """Install a local runtime, then show how to start coding (no model downloads)."""
+    import subprocess
+
+    from superqode.local.install import install_plan, next_steps, runtime_installed
+
+    plan = install_plan(engine)
+    if json_output:
+        click.echo(json.dumps(plan.to_dict(), indent=2))
+        return
+    click.echo(f"{plan.title} setup\n{plan.guidance}\nGuide: {plan.docs_url}")
+    if plan.command:
+        click.echo(f"\nInstall command:\n  {plan.command}")
+    if not dry_run:
+        if runtime_installed(engine):
+            click.echo("\nRuntime is already installed.")
+        elif not plan.steps:
+            raise click.ClickException(
+                "Complete the platform-specific installation above, then run this command again."
+            )
+        else:
+            if not yes:
+                click.confirm(
+                    "Install this runtime now? Model weights are not included.",
+                    default=False,
+                    abort=True,
+                )
+            for step in plan.steps:
+                try:
+                    result = subprocess.run(step, check=False)
+                except OSError as exc:
+                    raise click.ClickException(
+                        f"Could not start installer: {exc}. Retry: superqode local install {engine}"
+                    ) from exc
+                if result.returncode:
+                    raise click.ClickException(
+                        f"Installer exited with {result.returncode}. Review its output and retry: superqode local install {engine}"
+                    )
+            if not runtime_installed(engine):
+                raise click.ClickException(
+                    "Installation finished but the runtime is not available. Check the installer output and PATH, then retry."
+                )
+            click.echo(f"\n{plan.title} installed.")
+    click.echo("\nNext steps (replace the placeholders with your model):")
+    for step in next_steps(engine):
+        click.echo(f"  {step}")
+
+
 @local.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emit the full report as JSON")
 @click.option(

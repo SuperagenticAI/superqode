@@ -10,6 +10,11 @@ import superqode.local.bench as bench
 from superqode.app_main import SuperQodeApp
 
 
+@pytest.fixture(autouse=True)
+def runtime_available(monkeypatch):
+    monkeypatch.setattr("superqode.local.install.runtime_installed", lambda engine: True)
+
+
 class _Log:
     def __init__(self):
         self.msgs = []
@@ -60,6 +65,16 @@ def test_llamacpp_no_server_no_gguf_shows_stable_guidance_no_flash(monkeypatch):
     assert ":connect" in log.text
 
 
+def test_llamacpp_missing_runtime_offers_install_before_models(monkeypatch):
+    monkeypatch.setattr(bench, "list_endpoint_models", lambda *a, **k: [])
+    monkeypatch.setattr("superqode.local.install.runtime_installed", lambda engine: False)
+    app = _app()
+    calls = []
+    app._show_local_runtime_install = lambda engine, log: calls.append(engine)
+    asyncio.run(app._show_openai_compatible_models("llamacpp", _Log()))
+    assert calls == ["llama.cpp"]
+
+
 def test_llamacpp_no_server_lists_cached_gguf_as_launchable_choices(monkeypatch):
     import superqode.local.servers as servers
 
@@ -81,7 +96,7 @@ def test_llamacpp_no_server_lists_cached_gguf_as_launchable_choices(monkeypatch)
     asyncio.run(SuperQodeApp._show_openai_compatible_models(app, "llamacpp", log))
     assert app._local_model_list == ["/cache/gemma.gguf", "/cache/qwen2.5-0.5b.gguf"]
     assert app._awaiting_local_model is True
-    assert "Select one to start llama.cpp" in log.text
+    assert "Cached GGUF files" in log.text
     assert "qwen2.5-0.5b.gguf" in log.text
     assert pinned == []
 

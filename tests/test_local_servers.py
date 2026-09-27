@@ -322,6 +322,7 @@ def test_start_launches_and_waits_for_readiness(manager, monkeypatch, tmp_path):
 
 
 def test_start_lmstudio_runs_cli_and_captures_output(manager, monkeypatch):
+    monkeypatch.setattr(manager, "app_running", lambda e: True)
     monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
     monkeypatch.setattr(manager, "is_installed", lambda e: True)
     calls = []
@@ -361,6 +362,25 @@ def test_start_lmstudio_surfaces_cli_failure(manager, monkeypatch):
 
     with pytest.raises(ServerError, match="LM Studio backend is not ready"):
         manager.start("lmstudio", wait=True, timeout=1)
+
+
+def test_start_lmstudio_starts_daemon_without_gui(manager, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    monkeypatch.setattr(manager, "is_installed", lambda e: True)
+    monkeypatch.setattr(manager, "app_running", lambda e: False)
+    monkeypatch.setattr(servers, "runtime_executable", lambda name: name)
+    calls = []
+    monkeypatch.setattr(
+        servers.subprocess,
+        "run",
+        lambda argv, **kw: (
+            calls.append(argv) or SimpleNamespace(returncode=0, stdout="ready", stderr="")
+        ),
+    )
+    manager.start("lmstudio", wait=False)
+    assert calls == [["lms", "daemon", "up"], ["lms", "server", "start", "--port", "1234"]]
 
 
 def test_start_times_out_when_never_ready(manager, monkeypatch):
@@ -583,7 +603,7 @@ def test_precheck_lmstudio_app_only_is_not_startable(manager, monkeypatch):
     assert "Open LM Studio" in r.start_hint
 
 
-def test_precheck_lmstudio_cli_but_app_closed_is_not_startable(manager, monkeypatch):
+def test_precheck_lmstudio_cli_can_start_headless(manager, monkeypatch):
     monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
     monkeypatch.setattr(servers.shutil, "which", lambda name: "/usr/local/bin/lms")
     monkeypatch.setattr(manager, "app_running", lambda e: False)
@@ -594,7 +614,7 @@ def test_precheck_lmstudio_cli_but_app_closed_is_not_startable(manager, monkeypa
     assert r.installed and not r.running
     assert r.cli_available is True
     assert r.app_running is False
-    assert r.startable is False
+    assert r.startable is True
 
 
 def test_lmstudio_app_running_detects_process(manager, monkeypatch):

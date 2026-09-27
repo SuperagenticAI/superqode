@@ -16,6 +16,7 @@ superqode local COMMAND [OPTIONS]
 | Command | Purpose |
 | --- | --- |
 | `setup` | TUI-first guide for model download, serving, context, harness, and smoke |
+| `install` | Install a missing runtime with platform-specific guidance and next steps |
 | `init` | Generate a starter harness for this repo (doctor + smoke + write) |
 | `doctor` | Detect hardware/engines/models and recommend a local stack |
 | `build` | Guided local harness builder without live model calls |
@@ -38,6 +39,39 @@ superqode local COMMAND [OPTIONS]
 ---
 
 ## Getting Started
+
+### `local install`
+
+Install runtime dependencies separately from model weights:
+
+```bash
+superqode local install ollama
+superqode local install lmstudio
+superqode local install llama.cpp --dry-run
+superqode local install sglang --json
+```
+
+The six primary runtimes are supported: `ollama`, `lmstudio`, `llama.cpp`,
+`sglang`, `vllm`, and `mlx`. The command displays the exact installation plan
+before asking to run it. `--yes` skips that question; `--dry-run` and `--json`
+never install anything. An already installed runtime is left in place.
+
+In the TUI, use `:local install <engine>` or select a missing provider through
+`:connect local`. Available automatic installs show progress, cancellation,
+and retry actions, then return to provider setup. The copied command is also
+available for use in another terminal.
+
+Ollama and llama.cpp use Homebrew where available. LM Studio uses its official
+headless installer on macOS/Linux; the desktop app is optional. MLX installs
+into SuperQode's Python environment on Apple Silicon. On Linux with `uv` and
+`nvidia-smi`, SGLang and vLLM install into separate environments under
+`~/.superqode/runtimes/`. Driver compatibility must match the vendor requirements.
+Other platforms and accelerators receive vendor installation guidance. Linux
+Ollama installation that may request sudo stays in the user's terminal.
+
+Installation does not download model weights or run inference. Next steps show
+how to acquire/select a model, start the server, connect, and enter `:build`.
+SGLang/vLLM server launch remains manual, with model and tool-parser placeholders.
 
 ### `local setup`
 

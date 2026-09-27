@@ -48,6 +48,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from superqode.providers.local_order import local_provider_sort_key
+from superqode.local.install import runtime_executable
 
 from .laguna import (
     LAGUNA_DS4_REF,
@@ -143,10 +144,10 @@ INSTALL_GUIDES: Dict[str, List[str]] = {
         "Pull a model with: ollama pull qwen3:8b",
     ],
     "lmstudio": [
-        "Install LM Studio (GUI) and its CLI:",
-        "  1. Download the app: https://lmstudio.ai/",
-        "  2. Install the CLI:  npx lmstudio install-cli   (or from the app)",
-        "  3. Download a model inside the app (e.g. search 'qwen3-coder')",
+        "Install LM Studio's headless daemon and CLI (desktop app optional):",
+        "  superqode local install lmstudio",
+        "  Or use the desktop app: https://lmstudio.ai/",
+        "  Download a model with lms get <model-name>, or use an existing model.",
     ],
     "mlx": [
         "MLX runs on Apple Silicon. Install mlx-lm into the SAME environment",
@@ -494,7 +495,9 @@ class ServerManager:
         port = port or spec.default_port
         running = self.is_running(engine, host, port)
         installed = running or self.is_installed(engine)
-        cli_available = shutil.which("lms") is not None if engine == "lmstudio" else False
+        cli_available = (
+            shutil.which(runtime_executable("lms")) is not None if engine == "lmstudio" else False
+        )
 
         if running:
             state = "running"
@@ -555,10 +558,8 @@ class ServerManager:
     def can_start(self, engine: str) -> bool:
         """True when SuperQode can launch the server process itself."""
         if engine == "lmstudio":
-            # The GUI app alone is enough to be "installed", but starting the
-            # local server from SuperQode needs both the CLI and an already-open
-            # LM Studio backend.
-            return shutil.which("lms") is not None and self.app_running(engine)
+            # Modern lms can start the headless daemon without the desktop app.
+            return shutil.which(runtime_executable("lms")) is not None
         return self.is_installed(engine)
 
     def is_installed(self, engine: str, *, refresh_imports: bool = True) -> bool:
@@ -569,9 +570,12 @@ class ServerManager:
         process-global, so read-only callers should pass ``False``.
         """
         if engine == "ollama":
-            return shutil.which("ollama") is not None
+            return shutil.which(runtime_executable("ollama")) is not None
         if engine == "lmstudio":
-            return shutil.which("lms") is not None or Path("/Applications/LM Studio.app").exists()
+            return (
+                shutil.which(runtime_executable("lms")) is not None
+                or Path("/Applications/LM Studio.app").exists()
+            )
         if engine == "mlx":
             if refresh_imports:
                 # mlx-lm may have just been installed into this interpreter.
@@ -580,7 +584,7 @@ class ServerManager:
         if engine == "ds4":
             return self._ds4_binary() is not None
         if engine == "llama.cpp":
-            return shutil.which("llama-server") is not None
+            return shutil.which(runtime_executable("llama-server")) is not None
         return False
 
     def _ds4_binary(self) -> Optional[Path]:
@@ -630,10 +634,10 @@ class ServerManager:
             # Ollama's current guidance recommends at least 64K for coding,
             # web-search, and agent tool workloads.
             env["OLLAMA_CONTEXT_LENGTH"] = str(ctx or 64000)
-            return (["ollama", "serve", *extra_args], env, None)
+            return ([runtime_executable("ollama"), "serve", *extra_args], env, None)
 
         if engine == "lmstudio":
-            cmd = ["lms", "server", "start", "--port", str(port)]
+            cmd = [runtime_executable("lms"), "server", "start", "--port", str(port)]
             if host not in ("127.0.0.1", "localhost"):
                 cmd += ["--bind", host]
             return (cmd + extra_args, {}, None)
@@ -676,7 +680,15 @@ class ServerManager:
             return (cmd + extra_args, {}, binary.parent)
 
         if engine == "llama.cpp":
-            cmd = ["llama-server", "-m", str(model), "--host", host, "--port", str(port)]
+            cmd = [
+                runtime_executable("llama-server"),
+                "-m",
+                str(model),
+                "--host",
+                host,
+                "--port",
+                str(port),
+            ]
             if ctx:
                 cmd += ["-c", str(ctx)]
             if laguna_requested:
@@ -756,7 +768,11 @@ class ServerManager:
             return handle
 
         if not self.is_installed(engine):
-            raise ServerError(f"{engine} is not installed on this machine")
+            raise ServerError(
+                f"{engine} is not installed on this machine. Run: superqode local install {engine}"
+                if engine != "ds4"
+                else "ds4 is not installed. Run: superqode local serve ds4 --build"
+            )
 
         cmd, env_overrides, cwd = self.build_command(
             engine, host=host, port=port, model=model, ctx=ctx, extra_args=extra_args
@@ -843,6 +859,21 @@ class ServerManager:
     ) -> ServerHandle:
         """Run the LM Studio CLI handoff and surface its output immediately."""
         try:
+            if not self.app_running("lmstudio"):
+                daemon = subprocess.run(
+                    [runtime_executable("lms"), "daemon", "up"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                    env=env,
+                )
+                if daemon.returncode:
+                    detail = daemon.stderr or daemon.stdout or "daemon startup failed"
+                    raise ServerError(
+                        f"Could not start LM Studio's headless daemon: {detail}\n"
+                        "Open the LM Studio desktop app or update lms, then retry."
+                    )
             result = subprocess.run(  # noqa: S603
                 cmd,
                 capture_output=True,
@@ -925,9 +956,9 @@ class ServerManager:
 
     def _lms_load(self, model: str, ctx: Optional[int], timeout: int = 600) -> List[str]:
         """Load a model into LM Studio at a given context (best effort)."""
-        if not shutil.which("lms"):
+        if not shutil.which(runtime_executable("lms")):
             return ["lms CLI not found; load the model from the LM Studio app"]
-        cmd = ["lms", "load", model, "-y"]
+        cmd = [runtime_executable("lms"), "load", model, "-y"]
         if ctx:
             cmd += ["--context-length", str(ctx)]
         try:
@@ -965,10 +996,10 @@ class ServerManager:
     def stop(self, engine: str) -> bool:
         """Stop a managed server. Returns True if anything was stopped."""
         if engine == "lmstudio":
-            if shutil.which("lms"):
+            if shutil.which(runtime_executable("lms")):
                 try:
                     subprocess.run(  # noqa: S603
-                        ["lms", "server", "stop"],
+                        [runtime_executable("lms"), "server", "stop"],
                         capture_output=True,
                         timeout=15,
                         check=False,
