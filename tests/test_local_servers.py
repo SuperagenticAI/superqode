@@ -600,7 +600,7 @@ def test_precheck_lmstudio_app_only_is_not_startable(manager, monkeypatch):
     assert r.installed and not r.running
     assert r.startable is False
     assert r.cli_available is False
-    assert "Open LM Studio" in r.start_hint
+    assert "superqode local install lmstudio" in r.start_hint
 
 
 def test_precheck_lmstudio_cli_can_start_headless(manager, monkeypatch):

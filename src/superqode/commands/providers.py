@@ -1007,10 +1007,10 @@ def connect_local_provider(provider: Optional[str] = None, model: Optional[str] 
                 console.print(f"\n[yellow]💡 MLX requires a running server:[/yellow]")
                 console.print(f"[dim]  Run: superqode providers mlx server --model {model}[/dim]")
             elif provider == "lmstudio":
-                console.print(f"\n[yellow]💡 LM Studio requires the GUI application:[/yellow]")
-                console.print(f"[dim]  1. Download: https://lmstudio.ai/[/dim]")
-                console.print(f"[dim]  2. Load model in LM Studio[/dim]")
-                console.print(f"[dim]  3. Start Local Server[/dim]")
+                console.print(f"\n[yellow]💡 Start LM Studio (headless or desktop):[/yellow]")
+                console.print(f"[dim]  1. Install: superqode local install lmstudio[/dim]")
+                console.print(f"[dim]  2. Start: superqode local serve lmstudio[/dim]")
+                console.print(f"[dim]  3. Load a model (lms get / lms load) if needed[/dim]")
             return 1
 
         console.print(f"[green]✓ Connected to local {provider}/{model}[/green]")

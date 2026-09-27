@@ -512,7 +512,7 @@ class ServerManager:
         if spec.needs_model:
             start_hint = f":local serve {engine} --model <model-id>"
         elif engine == "lmstudio" and not startable:
-            start_hint = "Open LM Studio and start the Local Server on port 1234"
+            start_hint = "superqode local install lmstudio   # then: superqode local serve lmstudio"
         else:
             start_hint = f":local serve {engine}"
 

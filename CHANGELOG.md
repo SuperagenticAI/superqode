@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.21] - 2026-09-27
+
+### Added
+
+- Canonical local provider order: Ollama -> LM Studio -> llama.cpp -> SGLang ->
+  vLLM -> MLX.
+- `superqode local install` / `:local install` with plan -> confirm -> run ->
+  verify flow (model weights remain a separate step).
+- Missing local runtimes route to an install card in the TUI.
+- LM Studio headless-first install plus PATH resolution via
+  `runtime_executable`.
+- Optional isolated uv venvs for SGLang and vLLM under
+  `~/.superqode/runtimes/`.
+- Compact CONNECT and LOCAL provider pickers.
+
+### Changed
+
+- Remove stale LM Studio copy that still pointed at `npx lmstudio install-cli`
+  or "open the app first" after the CLI-missing early return; messaging now
+  matches the headless `install_plan` / `:local install` path.
+- Clarify that SGLang and vLLM use install and printed next steps rather than
+  `:local serve`.
+
 ## [2.4.20] - 2026-09-27
 
 ### Added

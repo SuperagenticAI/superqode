@@ -1519,9 +1519,9 @@ class LiteLLMGateway(GatewayInterface):
                 raise GatewayError(
                     f"Cannot connect to LM Studio server at {base_url}.\n\n"
                     f"LM Studio server is not running. To fix:\n\n"
-                    f"1. [cyan]Open LM Studio application[/cyan]\n"
-                    f"2. [cyan]Load a model (like qwen/qwen3-30b)[/cyan]\n"
-                    f"3. [cyan]Start the local server[/cyan]\n"
+                    f"1. [cyan]superqode local install lmstudio[/cyan] (if lms is missing)\n"
+                    f"2. [cyan]superqode local serve lmstudio[/cyan] (or open the desktop app)\n"
+                    f"3. [cyan]Load a model with lms get / lms load[/cyan]\n"
                     f"4. Try connecting again",
                     provider="lmstudio",
                     model=model,

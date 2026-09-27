@@ -1357,7 +1357,7 @@ class AgentRunMixin:
                 if provider == "ollama":
                     log.add_info("   Run: ollama serve")
                 elif provider == "lmstudio":
-                    log.add_info("   Open LM Studio and start the local server")
+                    log.add_info("   Run: superqode local serve lmstudio (or open the desktop app)")
                 elif provider == "vllm":
                     log.add_info(
                         "   Start vLLM server: python -m vllm.entrypoints.openai.api_server --model <model>"

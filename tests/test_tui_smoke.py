@@ -685,7 +685,7 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
                 running=False,
                 base_url="http://127.0.0.1:1234/v1",
                 state="stopped",
-                start_hint="Open LM Studio and start the Local Server on port 1234",
+                start_hint="superqode local install lmstudio   # then: superqode local serve lmstudio",
                 needs_model=False,
                 startable=False,
                 cli_available=False,
@@ -715,7 +715,7 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
     assert "I completed setup — check again" in text
 
 
-def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypatch):
+def test_lmstudio_cli_available_offers_headless_start_without_open_app_first(monkeypatch):
     import superqode.local.servers as servers
     from superqode.local.servers import LocalReadiness
 
@@ -747,15 +747,17 @@ def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypa
     text = "\n".join(render_plain(item) for item in log.items)
 
     assert handled is True
-    assert getattr(app, "_awaiting_local_server_start", None) is None
-    assert "First open LM Studio" in text
-    assert 'open -a "LM Studio"' in text
+    assert app._awaiting_local_server_start == "lmstudio"
+    assert "First open LM Studio" not in text
+    assert 'open -a "LM Studio"' not in text
+    assert "The lms CLI is available; SuperQode can start the backend" in text
     assert "lms server start --port 1234" in text
-    assert "Need SuperQode to run that command? Press Enter" not in text
+    assert "Start with SuperQode" in text
     assert "npx lmstudio install-cli" not in text
     assert not pinned
     assert app._prompts.is_active("local_server_setup")
     assert "Copy setup command" in text
+
 
 
 def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):

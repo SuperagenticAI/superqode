@@ -624,9 +624,9 @@ class LocalModelsMixin:
                 )
             elif provider == "lmstudio":
                 log.add_info("💡 Troubleshooting:")
-                log.add_info("   1. Open LM Studio application")
-                log.add_info("   2. Load a model in LM Studio")
-                log.add_info("   3. Start the local server (usually on port 1234)")
+                log.add_info("   1. Install if needed: superqode local install lmstudio")
+                log.add_info("   2. Start: superqode local serve lmstudio")
+                log.add_info("   3. Load a model with lms get / lms load if needed")
             elif provider == "ds4":
                 log.add_info("💡 Troubleshooting:")
                 log.add_info("   1. Start ds4-server")
@@ -1902,28 +1902,6 @@ class LocalModelsMixin:
 
         return t
 
-    def _local_cmd(self, args: str, log: ConversationLog):
-        """Local Agentic Coding stack commands: doctor and packs."""
-        sub = (args or "").strip().lower()
-        if sub in ("", "doctor"):
-            log.add_info("Running the Local Stack Doctor (hardware, engines, models)...")
-            self.run_worker(self._run_local_doctor(log))
-        elif sub == "packs":
-            from superqode.local.packs import USER_PACKS_DIR, list_packs
-
-            t = Text()
-            t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
-            t.append("Model Policy Packs\n\n", style=f"bold {THEME['text']}")
-            for pack in list_packs():
-                t.append(f"  {pack.name:<12}", style=THEME["cyan"])
-                t.append(f"{pack.description}\n", style=THEME["text"])
-                if pack.match:
-                    t.append(f"  {'':<12}matches: {', '.join(pack.match)}\n", style=THEME["dim"])
-            t.append(f"\n  Override or add packs in {USER_PACKS_DIR}\n", style=THEME["muted"])
-            self._show_command_output(log, t)
-        else:
-            log.add_info("Usage: :local [doctor|packs]")
-
     async def _run_local_doctor(self, log: ConversationLog):
         """Run the Local Stack Doctor off the event loop and render its report."""
         import asyncio as _asyncio
@@ -1954,6 +1932,25 @@ class LocalModelsMixin:
         parts = args.split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
         subargs = parts[1] if len(parts) > 1 else ""
+
+        if sub == "doctor":
+            log.add_info("Running the Local Stack Doctor (hardware, engines, models)...")
+            self.run_worker(self._run_local_doctor(log))
+            return
+        if sub == "packs":
+            from superqode.local.packs import USER_PACKS_DIR, list_packs
+
+            t = Text()
+            t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+            t.append("Model Policy Packs\n\n", style=f"bold {THEME['text']}")
+            for pack in list_packs():
+                t.append(f"  {pack.name:<12}", style=THEME["cyan"])
+                t.append(f"{pack.description}\n", style=THEME["text"])
+                if pack.match:
+                    t.append(f"  {'':<12}matches: {', '.join(pack.match)}\n", style=THEME["dim"])
+            t.append(f"\n  Override or add packs in {USER_PACKS_DIR}\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
 
         if sub == "" or sub == "status":
             # :local - Show all local providers status
@@ -2043,6 +2040,9 @@ class LocalModelsMixin:
             else:
                 log.add_info(
                     "Usage: :local serve <ollama|lmstudio|llama.cpp|mlx|ds4> [--model X] [--port N] [--ctx N] [--host H]"
+                )
+                log.add_system(
+                    "sglang/vllm: use :local install <engine>, then the printed next steps (not :local serve)"
                 )
                 log.add_system(
                     "e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090"
@@ -2780,58 +2780,38 @@ class LocalModelsMixin:
             if engine == "lmstudio":
                 if not readiness.cli_available:
                     return self._show_local_runtime_install("lmstudio", log)
+                # CLI present: headless daemon / lms can start without opening the app first.
+                self._awaiting_local_model = False
                 t.append(
                     "  Use the desktop app or let SuperQode start LM Studio's headless daemon.\n",
                     style=THEME["muted"],
                 )
-                if readiness.startable:
-                    self._awaiting_local_model = False
-                    t.append(
-                        "  The lms CLI is available; SuperQode can start the backend.\n",
-                        style=THEME["success"],
-                    )
-                    t.append(
-                        "  Recommended: start the Local Server in LM Studio, or run:\n",
-                        style=THEME["muted"],
-                    )
-                    t.append("      ", style="")
-                    t.append("lms server start --port 1234", style=THEME["cyan"])
-                    t.append("\n", style="")
-                else:
-                    t.append(
-                        "  First open LM Studio, load a chat model, then start the Local Server.\n",
-                        style=THEME["cyan"],
-                    )
-                    t.append("  Native app command: ", style=THEME["muted"])
-                    t.append('open -a "LM Studio"', style=THEME["cyan"])
-                    t.append("\n", style="")
-                    t.append("  Optional CLI after the app is open: ", style=THEME["muted"])
-                    t.append("lms server start --port 1234", style=THEME["cyan"])
-                    t.append("\n", style="")
+                t.append(
+                    "  The lms CLI is available; SuperQode can start the backend.\n",
+                    style=THEME["success"],
+                )
+                t.append(
+                    "  Recommended: start the Local Server in LM Studio, or run:\n",
+                    style=THEME["muted"],
+                )
+                t.append("      ", style="")
+                t.append("lms server start --port 1234", style=THEME["cyan"])
+                t.append("\n", style="")
                 t.append(
                     "  If you load by CLI, adjust model/context as needed: ", style=THEME["muted"]
                 )
                 t.append("lms load <model-key> --context-length <ctx>", style=THEME["cyan"])
                 t.append("\n", style="")
-                if not readiness.startable and not getattr(readiness, "cli_available", False):
-                    t.append("  Optional CLI setup: ", style=THEME["muted"])
-                    t.append("npx lmstudio install-cli", style=THEME["cyan"])
-                    t.append("\n", style="")
                 t.append("\n  Then run ", style=THEME["muted"])
                 t.append(":connect local", style=f"bold {THEME['cyan']}")
                 t.append(" again.\n", style=THEME["muted"])
-                self._awaiting_local_model = False
                 self._awaiting_local_provider = False
                 return self._show_local_server_setup_card(
                     engine,
                     log,
                     content=t,
-                    command=(
-                        "lms server start --port 1234"
-                        if readiness.startable
-                        else 'open -a "LM Studio"'
-                    ),
-                    can_start=readiness.startable,
+                    command="lms server start --port 1234",
+                    can_start=True,
                     title="Start LM Studio local server",
                 )
 
@@ -3011,7 +2991,7 @@ class LocalModelsMixin:
                 if sys.platform == "darwin"
                 else "curl -fsSL https://ollama.com/install.sh | sh"
             ),
-            "lmstudio": "https://lmstudio.ai/",
+            "lmstudio": "curl -fsSL https://lmstudio.ai/install.sh | bash",
             "ds4": "superqode local serve ds4 --build",
             "llama.cpp": "brew install llama.cpp",
         }.get(engine)
