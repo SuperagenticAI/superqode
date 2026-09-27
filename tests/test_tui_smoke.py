@@ -759,7 +759,6 @@ def test_lmstudio_cli_available_offers_headless_start_without_open_app_first(mon
     assert "Copy setup command" in text
 
 
-
 def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
     import superqode.local.servers as servers
     from superqode.local.servers import LocalReadiness
