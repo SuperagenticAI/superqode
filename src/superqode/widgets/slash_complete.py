@@ -313,7 +313,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":grok", "Connect Grok Build, xAI's own agent (ACP)", category="workflow"),
     SlashCommand(":grok connect", "Connect Grok Build over ACP", category="workflow"),
     SlashCommand(
-        ":grok models", "List the signed-in Grok CLI's model catalog", category="workflow"
+        ":grok models", "Pick a Grok subscription model from the live catalog", category="workflow"
     ),
     SlashCommand(":grok model", "Pick a Grok subscription model and connect", category="workflow"),
     SlashCommand(":grok status", "Check Grok CLI and login readiness", category="workflow"),

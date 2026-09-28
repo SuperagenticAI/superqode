@@ -678,16 +678,30 @@ def test_grok_cmd_routes_models_and_model_subcommands():
     assert calls == ["models", "picker", ("api", "grok-4.5")]
 
 
-class _PanelLog(_Log):
+class _PickerCapture:
+    """Stand-in that records vendor-picker opens without a Textual app."""
+
     def __init__(self):
-        super().__init__()
-        self.panels = []
+        self.picker_calls = []
+        self.infos = []
+        self.errors = []
+        self.current_provider = ""
+        self.current_model = ""
 
-    def write_feedback(self, content):
-        self.panels.append(content.plain if hasattr(content, "plain") else str(content))
+    def _grok_model_label(self, info):
+        from superqode.app_main import SuperQodeApp
+
+        return SuperQodeApp._grok_model_label(self, info)
+
+    def _show_vendor_model_picker(self, log, **kwargs):
+        self.picker_calls.append(kwargs)
+        return bool(kwargs.get("entries"))
+
+    def _grok_api_cmd(self, rest, log):
+        self.infos.append(("api", rest))
 
 
-def test_show_grok_models_lists_live_cli_catalog(monkeypatch):
+def test_show_grok_models_opens_vendor_picker_with_live_catalog(monkeypatch):
     from superqode.app_main import SuperQodeApp
 
     monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
@@ -697,13 +711,20 @@ def test_show_grok_models_lists_live_cli_catalog(monkeypatch):
         lambda: {"default": "grok-build", "models": ["grok-4.5", "grok-composer-2.5-fast"]},
     )
 
-    log = _PanelLog()
-    asyncio.run(SuperQodeApp._show_grok_models_async(object.__new__(SuperQodeApp), log))
+    stub = _PickerCapture()
+    # Bind mixin methods onto the capture stub.
+    asyncio.run(SuperQodeApp._show_grok_models_async(stub, _Log()))
 
-    panel = " ".join(log.panels)
-    assert "grok-composer-2.5-fast" in panel
-    assert "grok-build" in panel  # default alias is shown and marked
-    assert "signed-in CLI catalog" in panel
+    assert len(stub.picker_calls) == 1
+    call = stub.picker_calls[0]
+    assert call["title"].startswith("Select Grok Subscription Model")
+    ids = [entry[0] for entry in call["entries"]]
+    assert "grok-composer-2.5-fast" in ids
+    assert "grok-build" in ids  # default alias is inserted and selectable
+    assert call["current"] == "grok-build"
+    # Selecting a row must connect through the subscription harness path.
+    call["on_choose"]("grok-4.5")
+    assert stub.infos == [("api", "grok-4.5")]
 
 
 def test_show_grok_models_probes_cli_off_the_ui_thread(monkeypatch):
@@ -719,17 +740,20 @@ def test_show_grok_models_probes_cli_off_the_ui_thread(monkeypatch):
     monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
     monkeypatch.setattr(grok_cli_auth, "cached_cli_models", probe)
 
-    asyncio.run(SuperQodeApp._show_grok_models_async(object.__new__(SuperQodeApp), _PanelLog()))
+    stub = _PickerCapture()
+    asyncio.run(SuperQodeApp._show_grok_models_async(stub, _Log()))
 
     assert probe_threads
     assert probe_threads[0] != main_thread
+    assert stub.picker_calls  # picker still opens after the off-thread probe
 
 
 def test_show_grok_models_falls_back_when_logged_out(monkeypatch):
     from superqode.app_main import SuperQodeApp
     from superqode.providers import models as model_db
 
-    # CLI present but not signed in → login guidance (not the install path).
+    # CLI present but not signed in → builtin catalog in the picker, with a
+    # title hint to run grok login (not the install path).
     _fake_grok_cli_installed(monkeypatch)
     monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
     monkeypatch.setattr(grok_cli_auth, "cached_cli_models", lambda: {"default": "", "models": []})
@@ -737,13 +761,15 @@ def test_show_grok_models_falls_back_when_logged_out(monkeypatch):
     monkeypatch.setattr(model_db, "_live_models", None)
     monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
 
-    log = _PanelLog()
-    asyncio.run(SuperQodeApp._show_grok_models_async(object.__new__(SuperQodeApp), log))
+    stub = _PickerCapture()
+    asyncio.run(SuperQodeApp._show_grok_models_async(stub, _Log()))
 
-    panel = " ".join(log.panels)
-    assert "grok-4.5" in panel  # builtin snapshot
-    assert "builtin fallback" in panel
-    assert "grok login" in panel
+    assert len(stub.picker_calls) == 1
+    call = stub.picker_calls[0]
+    assert "builtin" in call["title"].lower()
+    assert "grok login" in call["title"].lower()
+    ids = [entry[0] for entry in call["entries"]]
+    assert "grok-4.5" in ids  # builtin snapshot
 
 
 def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeypatch):
@@ -766,11 +792,19 @@ def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeyp
         def _import_grok_token(self, log, **kwargs):
             return SuperQodeApp._import_grok_token(self, log, **kwargs)
 
-        def _show_provider_models(self, provider, log, use_picker=False):
-            self.picker_calls.append(provider)
+        def _grok_model_label(self, info):
+            return SuperQodeApp._grok_model_label(self, info)
+
+        def _show_grok_models_async(self, log):
+            self.picker_calls.append("models-async")
+            return SuperQodeApp._show_grok_models_async(self, log)
 
         def _show_grok_model_picker_async(self, log):
             return SuperQodeApp._show_grok_model_picker_async(self, log)
+
+        def _show_vendor_model_picker(self, log, **kwargs):
+            self.picker_calls.append(("vendor", kwargs.get("title")))
+            return True
 
         def run_worker(self, coroutine, **_kwargs):
             asyncio.run(coroutine)
@@ -783,10 +817,36 @@ def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeyp
     assert len(stub.login_launched) == 1
     assert stub.login_launched[0]["product"] == "grok"
 
-    # With a login present the BYOK picker opens for grok-cli.
+    # With a login present the shared vendor picker opens.
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
+    monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
+    monkeypatch.setattr(
+        grok_cli_auth,
+        "cached_cli_models",
+        lambda: {"default": "grok-4.6", "models": ["grok-4.6", "grok-4.5"]},
+    )
     stub, log = _Stub(), _Log()
     SuperQodeApp._show_grok_model_picker(stub, log)
-    assert stub.picker_calls == ["grok-cli"]
+    assert any(
+        (isinstance(c, tuple) and c[0] == "vendor") or c == "models-async"
+        for c in stub.picker_calls
+    )
     assert stub.login_launched == []
+
+
+def test_grok_model_label_keeps_id_and_context():
+    from superqode.app_main import SuperQodeApp
+    from superqode.providers.models import ModelInfo
+
+    info = ModelInfo(
+        id="grok-composer-2.5-fast",
+        name="Grok Composer",
+        provider="grok-cli",
+        context_window=256000,
+        description="Fast coding model on your subscription.",
+    )
+    label = SuperQodeApp._grok_model_label(object.__new__(SuperQodeApp), info)
+    assert "grok-composer-2.5-fast" in label
+    assert "256K" in label
+    assert "Fast coding" in label

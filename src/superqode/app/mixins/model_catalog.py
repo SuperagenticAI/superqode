@@ -1053,17 +1053,37 @@ class ModelCatalogMixin:
         except Exception:  # noqa: BLE001
             pass
 
+    def _grok_model_label(self, info) -> str:
+        """One picker row: id, context, and a short description."""
+        bits = [f"{info.id:28s}"]
+        if info.context_window:
+            bits.append(f"{info.context_display:>6s}")
+        desc = (info.description or "").strip()
+        if desc:
+            if len(desc) > 72:
+                desc = desc[:69].rstrip() + "..."
+            bits.append(desc)
+        return "  ".join(bits)
+
     def _show_grok_models(self, log) -> None:
-        """Schedule CLI model discovery without blocking the Textual event loop."""
+        """``:grok models`` opens the selectable picker, like the other agents."""
+        # Clear any stale CLI cache so an explicit list request re-probes.
+        from superqode.providers import grok_cli_auth
+
+        grok_cli_auth.clear_cli_models_cache()
         self.run_worker(self._show_grok_models_async(log), exclusive=False)
 
     async def _show_grok_models_async(self, log) -> None:
-        """List the subscription models the signed-in Grok CLI reports."""
+        """Open a keyboard-accessible picker over the Grok subscription catalog.
+
+        The old static panel looked selectable but ignored arrows/Enter, and the
+        BYOK model list re-bucketed subscription ids into Free/Recommended with
+        fake $0 prices. The shared vendor picker keeps CLI order and wires
+        ↑↓ / Enter / typed numbers.
+        """
         from superqode.providers import grok_cli_auth
         from superqode.providers.models import get_models_for_provider
 
-        # An explicit list request always re-probes the CLI.
-        grok_cli_auth.clear_cli_models_cache()
         listing: dict = {}
         try:
             listing = await asyncio.to_thread(grok_cli_auth.cached_cli_models)
@@ -1071,45 +1091,46 @@ class ModelCatalogMixin:
             pass
         live = bool(listing.get("models"))
         default_id = str(listing.get("default") or grok_cli_auth.DEFAULT_SUBSCRIPTION_MODEL)
-        source = str(listing.get("source") or "")
         models = get_models_for_provider("grok-cli")
+        if not models:
+            log.add_error("No Grok subscription models available.")
+            if shutil.which("grok") is None:
+                log.add_info("  Install: curl -fsSL https://x.ai/cli/install.sh | bash")
+            else:
+                log.add_info("  Log in first: run `grok login`, then :grok models.")
+            return
 
-        t = Text()
-        t.append("\n  Grok subscription models\n\n", style=f"bold {THEME['text']}")
-        for info in models.values():
-            marker = "▸ " if info.id == default_id else "  "
-            t.append(f"  {marker}", style=THEME["success" if marker.strip() else "muted"])
-            t.append(f"{info.id:28s}", style=THEME["cyan"])
-            t.append(f"{info.context_display:>6s}  ", style=THEME["muted"])
-            t.append(f"{info.description}\n", style=THEME["dim"])
-        t.append("\n  Source: ", style=THEME["muted"])
-        if live and source == "cache":
-            t.append("~/.grok/models_cache.json (signed-in CLI cache)\n", style=THEME["text"])
-        elif live and source == "proxy":
-            t.append("CLI chat proxy /models\n", style=THEME["text"])
-        elif live:
-            t.append("`grok models` (signed-in CLI catalog)\n", style=THEME["text"])
-        elif shutil.which("grok") is None:
-            t.append("builtin fallback: Grok CLI not installed\n", style=THEME["warning"])
-            t.append("  Install: ", style=THEME["muted"])
-            t.append("curl -fsSL https://x.ai/cli/install.sh | bash\n", style=THEME["cyan"])
-        else:
-            t.append(
-                "builtin fallback: CLI not signed in; run `grok login`\n",
-                style=THEME["warning"],
-            )
-        t.append("  Select and connect with ", style=THEME["muted"])
-        t.append(":grok model", style=THEME["cyan"])
-        t.append(" (picker) or ", style=THEME["muted"])
-        t.append(":grok model <name>\n", style=THEME["cyan"])
-        log.write_feedback(t)
+        entries = [(info.id, self._grok_model_label(info)) for info in models.values()]
+        title = "Select Grok Subscription Model"
+        if not live:
+            if shutil.which("grok") is None:
+                title += "  (builtin; install Grok CLI)"
+            else:
+                title += "  (builtin; run grok login)"
+
+        current = ""
+        if str(getattr(self, "current_provider", "") or "") == "grok-cli":
+            current = str(getattr(self, "current_model", "") or "")
+        if not current or current not in models:
+            current = default_id if default_id in models else next(iter(models))
+
+        opened = self._show_vendor_model_picker(
+            log,
+            title=title,
+            entries=entries,
+            on_choose=lambda chosen: self._grok_api_cmd(chosen, log),
+            current=current,
+            retry_hint="Run :grok models to choose again.",
+        )
+        if not opened:
+            log.add_error("No Grok subscription models to choose from.")
 
     def _show_grok_model_picker(self, log) -> None:
         """Interactive picker over the subscription catalog; Enter connects.
 
-        Reuses the BYOK model picker (numbers, arrows, search), so selecting a
-        model connects grok-cli/<model> on the subscription without switching
-        to the Grok CLI.
+        Requires a usable Grok CLI session first (same as ``:grok api``), then
+        opens the shared vendor picker so arrows, Enter, and typed numbers work.
+        Selecting a model connects grok-cli/<model> on the subscription.
         """
         if not self._import_grok_token(
             log, on_login_success=lambda: self._show_grok_model_picker(log)
@@ -1118,14 +1139,15 @@ class ModelCatalogMixin:
         self.run_worker(self._show_grok_model_picker_async(log), exclusive=False)
 
     async def _show_grok_model_picker_async(self, log) -> None:
-        """Warm the CLI catalog off-thread, then open the native model picker."""
+        """Warm the CLI catalog off-thread, then open the vendor model picker."""
         from superqode.providers import grok_cli_auth
 
         try:
             await asyncio.to_thread(grok_cli_auth.cached_cli_models)
         except Exception:  # noqa: BLE001 - the picker has a builtin fallback
             pass
-        self._show_provider_models("grok-cli", log, use_picker=False)
+        # Reuse the :grok models path so list + pick share one keyboard surface.
+        await self._show_grok_models_async(log)
 
     def _show_prime_models(self, log, search: str = "") -> None:
         """``:prime models`` opens the selectable picker, like the other agents."""

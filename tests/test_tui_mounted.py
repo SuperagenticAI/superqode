@@ -3088,6 +3088,46 @@ async def test_claude_model_list_is_selectable(monkeypatch):
         assert "Select Claude Model" in rendered
 
 
+async def test_grok_models_list_is_keyboard_selectable(monkeypatch):
+    """:grok models must open the vendor picker, not a dead static panel."""
+    from superqode.providers import grok_cli_auth
+
+    monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
+    monkeypatch.setattr(
+        grok_cli_auth,
+        "cached_cli_models",
+        lambda: {
+            "default": "grok-4.5",
+            "models": ["grok-4.5", "grok-composer-2.5-fast", "grok-4.6"],
+        },
+    )
+
+    app = SuperQodeApp()
+    chosen = []
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        # Bypass the connect side-effect; we only care that the list is navigable.
+        original_api = app._grok_api_cmd
+        app._grok_api_cmd = lambda model, _log: chosen.append(model)  # type: ignore[method-assign]
+        try:
+            await app._show_grok_models_async(log)
+            await _settle(pilot)
+
+            assert app._prompts.is_active("vendor_model")
+            rendered = "\n".join(line.text for line in log.lines)
+            assert "Select Grok Subscription Model" in rendered
+            assert "grok-composer-2.5-fast" in rendered
+
+            await pilot.press("down")
+            await _settle(pilot)
+            await pilot.press("enter")
+            await _settle(pilot)
+        finally:
+            app._grok_api_cmd = original_api  # type: ignore[method-assign]
+
+        assert chosen == ["grok-composer-2.5-fast"]
+
+
 async def test_manual_install_differs_from_cancel_and_links_the_vendor_docs():
     """'I will install it myself' must give more than Cancel does.
 

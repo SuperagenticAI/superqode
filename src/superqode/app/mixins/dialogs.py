@@ -1062,7 +1062,7 @@ class DialogsMixin:
         t.append("  :grok api [model]          ", style=THEME["cyan"])
         t.append("SuperQode harness on your subscription (opt-in)\n", style=THEME["muted"])
         t.append("  :grok models               ", style=THEME["cyan"])
-        t.append("list the signed-in CLI's model catalog\n", style=THEME["muted"])
+        t.append("pick a subscription model (arrows / Enter / numbers)\n", style=THEME["muted"])
         t.append("  :grok model [name]         ", style=THEME["cyan"])
         t.append("pick a subscription model for the SuperQode harness path\n", style=THEME["muted"])
         t.append("  :grok api off              ", style=THEME["cyan"])
