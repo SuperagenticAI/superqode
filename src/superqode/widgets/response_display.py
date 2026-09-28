@@ -46,20 +46,13 @@ def _t(key: str, fallback: str) -> str:
 
 
 def _code_theme() -> str:
-    """Pygments style matching the active TUI theme."""
+    """Pygments style for agent output (brand-fixed, never cyan/blue)."""
     try:
-        from superqode.app.theme_bridge import active_theme_name
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
     except Exception:
         return "superqode"
-    return {
-        "superqode": "superqode",
-        "tokyonight": "github-dark",
-        "dracula": "dracula",
-        "nord": "nord",
-        "monokai": "monokai",
-        "gruvbox": "gruvbox-dark",
-        "high-contrast": "github-dark",
-    }.get(active_theme_name(), "superqode")
 
 
 def _code_bg() -> str:
@@ -417,16 +410,8 @@ class ResponseDisplay(Container):
         for bullet_list in parsed.bullet_lists:
             list_text = Text()
             for i, item in enumerate(bullet_list):
-                colors = [
-                    _t("purple", "#a855f7"),
-                    _t("magenta", "#d946ef"),
-                    _t("pink", "#ec4899"),
-                    _t("orange", "#f97316"),
-                    _t("cyan", "#06b6d4"),
-                ]
-                color = colors[i % len(colors)]
-                list_text.append("  ◆ ", style=f"bold {color}")
-                list_text.append(item + "\n", style="#e4e4e7")
+                list_text.append("  ◆ ", style=f"bold {_t('dim', '#71717a')}")
+                list_text.append(item + "\n", style=_t("text", "#e4e4e7"))
             list_text.append("\n")
             elements.append(list_text)
 
@@ -440,7 +425,7 @@ class ResponseDisplay(Container):
 
         # Streaming cursor
         if self.state == ResponseState.STREAMING:
-            cursor = Text("▌", style=f"bold {_t('pink', '#ec4899')}")
+            cursor = Text("▌", style=f"bold {_t('dim', '#71717a')}")
             elements.append(cursor)
 
         return elements
@@ -458,8 +443,8 @@ class ResponseDisplay(Container):
         )
 
         title = Text()
-        title.append(f" {icon} ", style=_t("orange", "#f97316"))
-        title.append(block.language.upper(), style=f"bold {_t('pink', '#ec4899')}")
+        title.append(f" {icon} ", style=_t("dim", "#71717a"))
+        title.append(block.language.upper(), style=f"bold {_t('text', '#e4e4e7')}")
 
         return Panel(
             syntax,

@@ -63,6 +63,24 @@ except ImportError:
     SUPERQODE_ICONS = {}
 
 
+def _brand_code_theme() -> str:
+    try:
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+    except Exception:
+        return "superqode"
+
+
+def _brand_code_bg() -> str:
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+    except Exception:
+        return getattr(COLORS, "code_bg", "#0f0a1a")
+
+
 # ============================================================================
 # FILE TAB
 # ============================================================================
@@ -233,9 +251,10 @@ class CodeViewer(ScrollableContainer):
                 syntax = Syntax(
                     self._content,
                     self._language,
-                    theme="monokai",
+                    theme=_brand_code_theme(),
                     line_numbers=False,
                     word_wrap=False,
+                    background_color=_brand_code_bg(),
                 )
                 self.query_one("#code-content", Static).update(syntax)
             except Exception:

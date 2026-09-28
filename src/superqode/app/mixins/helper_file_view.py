@@ -17,6 +17,22 @@ from superqode.file_viewer import (
 )
 
 
+def _brand_code_theme() -> str:
+    try:
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+    except Exception:
+        return "superqode"
+
+
+def _brand_code_bg() -> str:
+    try:
+        return THEME.get("code_bg", THEME.get("bg", "#0f0a1a"))
+    except Exception:
+        return "#0f0a1a"
+
+
 class HelperFileViewMixin:
     """File view/info and in-file/directory search."""
 
@@ -76,10 +92,10 @@ class HelperFileViewMixin:
             syntax = Syntax(
                 preview_content,
                 info.language,
-                theme="monokai",
+                theme=_brand_code_theme(),
                 line_numbers=True,
                 word_wrap=True,
-                background_color="#000000",
+                background_color=_brand_code_bg(),
             )
 
             log.write(Panel(syntax, border_style=THEME["border"], box=ROUNDED, padding=(0, 1)))

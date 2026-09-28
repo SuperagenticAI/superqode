@@ -14,6 +14,16 @@ from rich.text import Text
 
 import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
 
+# NOTE: Only code output is brand-purple (AgentCodeBlock panel +
+# AgentCodespan). Prose elements (lists, tables, headings, links,
+# quotes, hr) intentionally use neutral styles so the transcript
+# doesn't look all-purple.
+_BRAND_PURPLE = "#a855f7"
+_BRANDED_CODE_STYLES = {
+    "markdown.code": f"bold {_BRAND_PURPLE} on black",
+    "markdown.code_block": f"{_BRAND_PURPLE} on black",
+}
+
 
 _MARKDOWN_TABLE_RE = re.compile(
     r"(?m)^\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$"
@@ -25,6 +35,23 @@ def _live_theme() -> dict[str, str]:
     from superqode.app.constants import THEME
 
     return THEME
+
+
+# Brand-fixed colors for agent output. These must never follow
+# theme_bridge.apply_theme(), otherwise any non-superqode palette
+# repaints code-block chrome cyan/blue via primary_bright/info.
+_BRAND_THEME = {
+    "purple": "#a855f7",
+    "pink": "#ec4899",
+    "text": "#e4e4e7",
+    "bg": "#0f0a1a",
+    "code_bg": "#0f0a1a",
+}
+
+
+def _brand_theme() -> dict[str, str]:
+    """Brand palette for agent markdown (immune to :theme switches)."""
+    return _BRAND_THEME
 
 
 _FENCED_MARKDOWN_RE = re.compile(
@@ -46,23 +73,23 @@ def _validated_lexer_name(name: str) -> str:
 
 
 class AgentHeading(Heading):
-    """Restrained headings for terminal chat output."""
+    """Theme-aware headings; code keeps brand purple separately."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         text = self.text.copy()
         text.justify = "left"
         level = int(self.tag[1:]) if self.tag[1:].isdigit() else 2
         theme = _live_theme()
-        color = theme["purple"] if level <= 2 else theme["pink"]
+        color = theme.get("text", "#e4e4e7")
         prefix = "▌ " if level <= 2 else "• "
         yield Text(prefix, style=f"bold {color}") + Text(text.plain, style=f"bold {color}")
 
 
 class AgentCodespan(Text):
-    """Inline code with subtle purple tint."""
+    """Inline code with subtle brand tint (always purple, theme-independent)."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        theme = _live_theme()
+        theme = _brand_theme()
         text = self.copy()
         text.stylize(f"bold {theme['purple']} on {theme.get('code_bg', theme['bg'])}")
         yield text
@@ -133,7 +160,7 @@ class AgentCodeBlock(CodeBlock):
     }
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        theme = _live_theme()
+        theme = _brand_theme()
         code = str(self.text).rstrip()
         lang = (self.lexer_name or "text").strip() or "text"
         lexer = _validated_lexer_name(self.NORMALIZE_LEXER.get(lang.lower(), lang))
@@ -148,7 +175,7 @@ class AgentCodeBlock(CodeBlock):
         syntax = Syntax(
             code,
             lexer,
-            theme=self.theme,
+            theme="superqode",
             # Wrapping a large code fence multiplies layout and render work.
             # Keep code horizontally stable and let the transcript clip it.
             word_wrap=False,
@@ -179,6 +206,16 @@ class AgentMarkdown(Markdown):
         "code_block": AgentCodeBlock,
         "codespan_open": AgentCodespan,
     }
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        # Only code spans/blocks get brand purple. Everything else
+        # (lists, tables, headings, links, quotes) keeps Rich defaults
+        # so prose stays neutral.
+        from rich.theme import Theme
+
+        brand = Theme(_BRANDED_CODE_STYLES)
+        with console.use_theme(brand):
+            yield from super().__rich_console__(console, options)
 
 
 def _is_markdown_table(text: str) -> bool:
@@ -220,18 +257,10 @@ def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
 
 def active_code_theme() -> str:
     """Return the Pygments theme matching the active TUI theme."""
-    from superqode.app.theme_bridge import active_theme_name
-
-    code_themes = {
-        "superqode": "superqode",
-        "tokyonight": "github-dark",
-        "dracula": "dracula",
-        "nord": "nord",
-        "monokai": "monokai",
-        "gruvbox": "gruvbox-dark",
-        "high-contrast": "github-dark",
-    }
-    return code_themes.get(active_theme_name(), "monokai")
+    # Brand decision: agent code blocks always use the SuperQode purple
+    # Pygments style regardless of the selected TUI theme, so code never
+    # renders cyan/blue (e.g. monokai/github-dark defaults).
+    return "superqode"
 
 
 def markdown_to_plain_text(text: str) -> str:

@@ -36,6 +36,24 @@ from rich.panel import Panel
 from rich.box import ROUNDED
 
 
+def _brand_code_theme() -> str:
+    try:
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+    except Exception:
+        return "superqode"
+
+
+def _brand_code_bg() -> str:
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+    except Exception:
+        return "#0f0a1a"
+
+
 # ============================================================================
 # FILE TYPE ICONS - Nerd Font style icons with colors
 # ============================================================================
@@ -698,10 +716,10 @@ class FilePreview(Container):
             syntax = Syntax(
                 text,
                 language,
-                theme="monokai",
+                theme=_brand_code_theme(),
                 line_numbers=True,
                 word_wrap=True,
-                background_color="#000000",
+                background_color=_brand_code_bg(),
             )
 
             return syntax

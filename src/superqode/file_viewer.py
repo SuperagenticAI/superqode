@@ -25,6 +25,24 @@ from rich.table import Table
 from rich.box import ROUNDED, SIMPLE
 
 
+def _brand_code_theme() -> str:
+    try:
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+    except Exception:
+        return "superqode"
+
+
+def _brand_code_bg() -> str:
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+    except Exception:
+        return "#0f0a1a"
+
+
 # Language detection by extension
 LANGUAGE_MAP = {
     # Python
@@ -285,7 +303,7 @@ class FileViewer:
         start_line: int = 1,
         end_line: Optional[int] = None,
         show_header: bool = True,
-        theme: str = "monokai",
+        theme: str | None = None,
     ) -> None:
         """Render the file content."""
         if self.info is None:
@@ -319,12 +337,12 @@ class FileViewer:
         syntax = Syntax(
             content_slice,
             self.info.language,
-            theme=theme,
+            theme=theme or _brand_code_theme(),
             line_numbers=True,
             start_line=start_line,
             word_wrap=True,
             highlight_lines=set(self.highlight_lines) if self.highlight_lines else None,
-            background_color="#000000",
+            background_color=_brand_code_bg(),
         )
 
         self.console.print(
@@ -424,21 +442,21 @@ def render_file(
     path: str,
     start_line: int = 1,
     end_line: Optional[int] = None,
-    theme: str = "monokai",
+    theme: str | None = None,
 ) -> None:
     """Render a file with syntax highlighting (simple interface)."""
     viewer = FileViewer(console)
     if viewer.open(path):
-        viewer.render(start_line, end_line, theme=theme)
+        viewer.render(start_line, end_line, theme=theme or _brand_code_theme())
 
 
 def render_file_preview(
-    console: Console, path: str, max_lines: int = 20, theme: str = "monokai"
+    console: Console, path: str, max_lines: int = 20, theme: str | None = None
 ) -> None:
     """Render a preview of a file (first N lines)."""
     viewer = FileViewer(console)
     if viewer.open(path):
-        viewer.render(1, max_lines, theme=theme)
+        viewer.render(1, max_lines, theme=theme or _brand_code_theme())
 
 
 def render_file_info(console: Console, path: str) -> None:

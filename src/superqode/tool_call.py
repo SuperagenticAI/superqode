@@ -23,6 +23,24 @@ from rich.markdown import Markdown
 from rich.box import ROUNDED, SIMPLE
 
 
+def _brand_code_theme() -> str:
+    try:
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
+    except Exception:
+        return "superqode"
+
+
+def _brand_code_bg() -> str:
+    try:
+        from superqode.app.constants import THEME as _LIVE
+
+        return _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+    except Exception:
+        return "#0f0a1a"
+
+
 class ToolStatus(Enum):
     """Tool call status."""
 
@@ -74,7 +92,7 @@ class ToolCall:
 TOOL_COLORS = {
     # Status colors
     "pending": "#a1a1aa",
-    "in_progress": "#06b6d4",
+    "in_progress": "#a855f7",
     "completed": "#22c55e",
     "failed": "#ef4444",
     # Kind colors
@@ -82,7 +100,7 @@ TOOL_COLORS = {
     "write": "#f97316",
     "edit": "#eab308",
     "shell": "#8b5cf6",
-    "search": "#06b6d4",
+    "search": "#a855f7",
     "other": "#a1a1aa",
     # UI colors
     "header": "#a855f7",
@@ -283,10 +301,10 @@ def render_tool_content(call: ToolCall, console: Console) -> None:
             syntax = Syntax(
                 str(content.data),
                 lang,
-                theme="monokai",
+                theme=_brand_code_theme(),
                 line_numbers=True,
                 word_wrap=True,
-                background_color="#000000",
+                background_color=_brand_code_bg(),
             )
             console.print(
                 Panel(syntax, border_style=TOOL_COLORS["border"], box=SIMPLE, padding=(0, 1))

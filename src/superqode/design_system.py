@@ -71,8 +71,8 @@ class ColorPalette:
     warning_light: str = "#fbbf24"  # Light amber
     error: str = "#f43f5e"  # Rose red
     error_light: str = "#fb7185"  # Light rose
-    info: str = "#06b6d4"  # Cyan
-    info_light: str = "#22d3ee"  # Light cyan
+    info: str = "#a855f7"  # Purple (was cyan)
+    info_light: str = "#c084fc"  # Light purple (was light cyan)
 
     # Text colors
     text_primary: str = "#fafafa"  # Brightest text

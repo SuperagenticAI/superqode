@@ -365,20 +365,13 @@ def render_thinking_section(lines: List[ThinkingLine], collapsed: bool = False) 
 
 
 def _code_theme_name() -> str:
-    """Pygments style matching the active TUI theme."""
+    """Pygments style for agent output (brand-fixed, never cyan/blue)."""
     try:
-        from superqode.app.theme_bridge import active_theme_name
+        from superqode.rendering.markdown import active_code_theme
+
+        return active_code_theme()
     except Exception:
         return "superqode"
-    return {
-        "superqode": "superqode",
-        "tokyonight": "github-dark",
-        "dracula": "dracula",
-        "nord": "nord",
-        "monokai": "monokai",
-        "gruvbox": "gruvbox-dark",
-        "high-contrast": "github-dark",
-    }.get(active_theme_name(), "superqode")
 
 
 def _code_background() -> str:

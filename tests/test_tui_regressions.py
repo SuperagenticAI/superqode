@@ -97,7 +97,7 @@ async def test_filtered_slash_rows_mount_with_active_theme_colors():
 def test_unified_log_code_theme_tracks_active_tui_theme():
     theme_bridge.apply_theme("nord")
     try:
-        assert UnifiedLogFormatter()._code_theme() == "nord"
+        assert UnifiedLogFormatter()._code_theme() == "superqode"
         assert UnifiedLogFormatter(LogConfig(code_theme="monokai"))._code_theme() == "monokai"
     finally:
         theme_bridge.apply_theme("superqode")

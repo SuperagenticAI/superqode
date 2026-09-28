@@ -2705,8 +2705,8 @@ class ConversationLog(RichLog):
             "read": "↳",
             "write": "↲",
             "edit": "⟳",
-            "shell": "▸",
-            "bash": "▸",
+            "shell": "⚡",
+            "bash": "⚡",
             "search": "⌕",
             "glob": "⋮",
             "grep": "⌕",
@@ -2717,15 +2717,20 @@ class ConversationLog(RichLog):
             if key in tool_name.lower():
                 tool_icon = icon
                 break
-        if display_label == "Run":
-            tool_icon = "▸"
+        if display_label == "Running":
+            tool_icon = "⚡"
+            verb_style = f"bold {THEME['purple']}"
+        else:
+            verb_style = f"bold {THEME['text']}"
 
         # Build a compact, scannable display. Normal mode shows only action rows;
         # verbose mode includes summarized successful output.
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
-        line.append(f"{tool_icon} ", style=THEME["dim"])
-        line.append(display_label, style=f"bold {THEME['text']}")
+        line.append(
+            f"{tool_icon} ", style=THEME["purple"] if display_label == "Running" else THEME["dim"]
+        )
+        line.append(display_label, style=verb_style)
         detail = self._format_tool_detail(
             tool_name,
             display_args,
@@ -2764,7 +2769,7 @@ class ConversationLog(RichLog):
 
         if output and status == "success":
             summary = summarize_tool_output(
-                "bash" if display_label == "Run" else tool_name,
+                "bash" if display_label == "Running" else tool_name,
                 status,
                 output,
                 mode,
@@ -3135,7 +3140,7 @@ class ConversationLog(RichLog):
         """Return a stable verb, ignoring ACP prose titles for shell calls."""
         arguments = arguments or {}
         if _is_shell_tool(tool_name) or extract_tool_command(arguments):
-            return "Run"
+            return "Running"
         return self._format_tool_name(tool_name).title()
 
     def _format_tool_detail(

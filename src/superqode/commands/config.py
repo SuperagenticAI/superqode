@@ -73,7 +73,19 @@ def config_show(path: str, fmt: str, section: Optional[str]):
     if fmt == "yaml":
         # Show raw YAML
         content = config_file.read_text()
-        syntax = Syntax(content, "yaml", theme="monokai", line_numbers=True)
+        try:
+            from superqode.rendering.markdown import active_code_theme
+
+            _theme = active_code_theme()
+        except Exception:
+            _theme = "superqode"
+        try:
+            from superqode.app.constants import THEME as _LIVE
+
+            _bg = _LIVE.get("code_bg", _LIVE.get("bg", "#0f0a1a"))
+        except Exception:
+            _bg = "#0f0a1a"
+        syntax = Syntax(content, "yaml", theme=_theme, line_numbers=True, background_color=_bg)
         console.print(syntax)
 
     elif fmt == "json":

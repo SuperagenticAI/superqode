@@ -59,7 +59,7 @@ def test_agent_code_theme_tracks_selected_tui_theme():
     theme_bridge.apply_theme("nord")
     try:
         rendered = render_agent_markdown("```python\nprint('hi')\n```")
-        assert rendered.code_theme == "nord"
+        assert rendered.code_theme == "superqode"
         assert "print" in _render_text("```python\nprint('hi')\n```")
     finally:
         theme_bridge.apply_theme("superqode")
