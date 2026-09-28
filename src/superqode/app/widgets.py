@@ -1190,6 +1190,7 @@ class HintsBar(Static):
         else:
             hints = [
                 ("🔌", ":connect", THEME["pink"]),
+                ("◇", ":free", THEME["success"]),
                 ("⚓", ":hub", THEME["link"]),
                 ("🧭", ":systemone", THEME["cyan"]),
                 ("🏠", ":home", THEME["link"]),
@@ -2025,8 +2026,8 @@ class ConversationLog(RichLog):
         # Transcript paste must include what ran — otherwise copied logs
         # show answers without the commands that produced them.
         for call in getattr(self, "_session_tool_calls", []):
-            name = self._format_tool_name(str(call.get("name") or "tool")).title()
             args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+            name = self._format_tool_label(str(call.get("name") or "tool"), args)
             detail = self._format_tool_detail(
                 str(call.get("name") or "tool"), args, max_length=1000
             )
@@ -2066,8 +2067,8 @@ class ConversationLog(RichLog):
             lines.extend(["Tool Runs", "---------"])
             for index, call in enumerate(tool_runs, 1):
                 status = str(call.get("status") or "unknown")
-                name = self._format_tool_name(str(call.get("name") or "tool")).title()
                 args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+                name = self._format_tool_label(str(call.get("name") or "tool"), args)
                 detail = self._format_tool_detail(
                     str(call.get("name") or "tool"), args, max_length=88
                 )
@@ -2697,6 +2698,8 @@ class ConversationLog(RichLog):
         # after it completes. The active strip provides the live summary and
         # this row preserves the exact command/target in the transcript.
 
+        display_label = self._format_tool_label(tool_name, display_args)
+
         # Tool type icons
         tool_icons = {
             "read": "↳",
@@ -2714,13 +2717,15 @@ class ConversationLog(RichLog):
             if key in tool_name.lower():
                 tool_icon = icon
                 break
+        if display_label == "Run":
+            tool_icon = "▸"
 
         # Build a compact, scannable display. Normal mode shows only action rows;
         # verbose mode includes summarized successful output.
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(f"{tool_icon} ", style=THEME["dim"])
-        line.append(self._format_tool_name(tool_name).title(), style=f"bold {THEME['text']}")
+        line.append(display_label, style=f"bold {THEME['text']}")
         detail = self._format_tool_detail(
             tool_name,
             display_args,
@@ -2759,7 +2764,7 @@ class ConversationLog(RichLog):
 
         if output and status == "success":
             summary = summarize_tool_output(
-                tool_name,
+                "bash" if display_label == "Run" else tool_name,
                 status,
                 output,
                 mode,
@@ -2882,10 +2887,11 @@ class ConversationLog(RichLog):
         for offset, call in enumerate(calls):
             number = start + offset
             status = str(call.get("status") or "unknown")
-            name = self._format_tool_name(str(call.get("name") or "tool")).title()
+            args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+            name = self._format_tool_label(str(call.get("name") or "tool"), args)
             detail = self._format_tool_detail(
                 str(call.get("name") or "tool"),
-                call.get("arguments") if isinstance(call.get("arguments"), dict) else {},
+                args,
                 max_length=72,
             )
             duration = _format_duration(call.get("duration"))
@@ -2981,7 +2987,7 @@ class ConversationLog(RichLog):
             # Full command, one place only (throbber is verb-only). No
             # truncation games here — this is the single live record.
             detail = self._format_tool_detail(name, args, max_length=180)
-            label = self._format_tool_name(name).title()
+            label = self._format_tool_label(name, args)
             line.append(label, style=f"bold {THEME['text']}")
             if detail:
                 line.append(" ")
@@ -3086,7 +3092,10 @@ class ConversationLog(RichLog):
         body.append(" to mouse-select & copy it", style=THEME["muted"])
         return Panel(
             body,
-            title=f"[bold {THEME['error']}]Tool failed: {self._format_tool_name(tool_name).title()}[/]",
+            title=(
+                f"[bold {THEME['error']}]Tool failed: "
+                f"{self._format_tool_label(tool_name, arguments)}[/]"
+            ),
             border_style=THEME["error"],
             box=ROUNDED,
             padding=(1, 2),
@@ -3121,6 +3130,13 @@ class ConversationLog(RichLog):
             "todo_write": "todo",
         }
         return aliases.get(name.lower(), name)
+
+    def _format_tool_label(self, tool_name: str, arguments: dict[str, Any] | None = None) -> str:
+        """Return a stable verb, ignoring ACP prose titles for shell calls."""
+        arguments = arguments or {}
+        if _is_shell_tool(tool_name) or extract_tool_command(arguments):
+            return "Run"
+        return self._format_tool_name(tool_name).title()
 
     def _format_tool_detail(
         self, tool_name: str, arguments: dict[str, Any], max_length: int

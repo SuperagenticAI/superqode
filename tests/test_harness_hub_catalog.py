@@ -148,20 +148,30 @@ def test_published_commands_never_pass_an_identifier_where_a_path_is_required():
                 assert spec.endswith((".yaml", ".yml")), f"{item['id']}: {command}"
 
 
-def test_jcode_states_a_buildable_route_unlike_a_desktop_only_harness(monkeypatch):
+def test_open_ecosystem_harnesses_state_honest_connector_boundaries(monkeypatch):
     monkeypatch.setattr(
         "superqode.harness.hub.harness_picker_items",
         lambda *_args, **_kwargs: [_item()],
     )
     by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
     jcode = by_id["ecosystem:jcode"]
+    zcode = by_id["ecosystem:zcode"]
+    exo = by_id["ecosystem:exoharness"]
 
     assert jcode["readiness"] == "not-supported"
     assert jcode["repository"] == "https://github.com/1jehuang/jcode"
     assert "TypeScript SDK" in jcode["capabilities"]
-    # ZCode documents no programmatic surface; jcode does. Say which is which.
     assert "buildable" in jcode["support_note"]
-    assert "does not document" in by_id["ecosystem:zcode"]["support_note"]
+    assert zcode["openness"] == "open"
+    assert zcode["license"] == "Apache-2.0"
+    assert zcode["repository"] == "https://github.com/zai-org/ZCode"
+    assert zcode["language"] == "TypeScript"
+    assert "terminal agent" in zcode["interface"]
+    assert "machine-readable" in zcode["support_note"]
+    assert exo["openness"] == "open"
+    assert exo["license"] == "MIT"
+    assert exo["repository"] == "https://github.com/exoharness/exo"
+    assert "does not run its remote setup script" in exo["support_note"]
 
 
 def test_headlong_has_no_task_contract_unlike_jcode(monkeypatch):
@@ -332,9 +342,9 @@ def test_full_public_hub_includes_model_access_inference_and_ecosystem(monkeypat
     assert "future integration" in by_id["ecosystem:qm"]["support_note"]
     assert by_id["ecosystem:zcode"]["readiness"] == "not-supported"
     assert by_id["ecosystem:zcode"]["runtime"] == "external"
-    assert "GLM-5.3" in by_id["ecosystem:zcode"]["description"]
-    assert "ACP server" in by_id["ecosystem:zcode"]["support_note"]
-    assert by_id["ecosystem:zcode"]["docs_url"] == "https://zcode.z.ai/en/docs/welcome"
+    assert "terminal" in by_id["ecosystem:zcode"]["description"]
+    assert "machine-readable" in by_id["ecosystem:zcode"]["support_note"]
+    assert by_id["ecosystem:zcode"]["docs_url"].endswith("apps/zcode-cli")
 
 
 def test_full_hub_covers_every_vendor_subscription_profile():
@@ -397,10 +407,10 @@ def test_a_harness_is_never_reported_as_open_on_a_guess():
     """
     by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
 
-    assert by_id["ecosystem:crush"]["openness"] == ""
-    assert by_id["ecosystem:crush"]["license"] == ""
+    assert by_id["ecosystem:crush"]["openness"] == "source-available"
+    assert by_id["ecosystem:crush"]["license"] == "FSL-1.1-MIT"
     assert all(
-        record["openness"] in {"open", "closed", ""}
+        record["openness"] in {"open", "source-available", "closed", ""}
         for record in build_hub_index(public=True)["items"]
     )
 
@@ -434,6 +444,41 @@ def test_hub_list_filters_by_openness_from_the_cli():
     payload = json.loads(result.output)
     assert payload["count"] > 0
     assert {item["openness"] for item in payload["items"]} == {"open"}
+
+
+def test_hub_distinguishes_open_source_source_available_and_proprietary():
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+
+    assert by_id["acp:omp"]["openness"] == "open"
+    assert by_id["acp:omp"]["license"] == "MIT"
+    assert by_id["acp:omp"]["language"] == "TypeScript/Rust"
+    assert by_id["ecosystem:crush"]["openness"] == "source-available"
+    assert by_id["ecosystem:crush"]["license"] == "FSL-1.1-MIT"
+
+
+def test_hub_show_resolves_names_case_and_ecosystem_prefixes():
+    runner = CliRunner()
+
+    codex = runner.invoke(hub, ["show", "Codex", "--json"])
+    zcode = runner.invoke(hub, ["show", "zcode", "--json"])
+    omp = runner.invoke(hub, ["show", "omp", "--json"])
+
+    assert codex.exit_code == 0
+    assert json.loads(codex.output)["id"] == "codex"
+    assert zcode.exit_code == 0
+    assert json.loads(zcode.output)["id"] == "ecosystem:zcode"
+    assert omp.exit_code == 0
+    assert json.loads(omp.output)["id"] == "acp:omp"
+
+
+def test_optional_hub_setup_is_actionable_and_rlm_code_is_listed():
+    by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
+
+    assert by_id["rlm-code"]["readiness"] == "setup-required"
+    assert by_id["rlm-code"]["install_command"] == 'uv tool install "superqode[rlm-code]"'
+    assert by_id["deepagents"]["setup_steps"]
+    assert by_id["uhp"]["install_command"] == ":connect uhp"
+    assert by_id["uhp"]["setup_steps"]
 
 
 def test_every_hub_entry_has_a_unique_id():

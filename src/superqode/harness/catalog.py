@@ -24,6 +24,7 @@ from .templates import (
     deepseek_harness_template,
     no_tool_template,
     pipy_template,
+    rlm_code_template,
     rlm_template,
     tau_template,
     uhp_template,
@@ -154,12 +155,14 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     no_tool = no_tool_template(name="no-tool")
     pipy = pipy_template()
     rlm = rlm_template()
+    rlm_code = rlm_code_template()
     tau = tau_template()
     uhp = uhp_template()
     dsh = deepseek_harness_template()
     deepagents = deepagents_template()
     from .backends.deepagents import deepagents_installation_status
     from .backends.dsh import dsh_installation_status
+    from .backends.rlm_code import rlm_code_installation_status
     from .backends.uhp import uhp_backend_status
     from .tau_adapter import tau_installation_status
 
@@ -167,6 +170,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     uhp_available, uhp_issue = uhp_backend_status()
     dsh_available, dsh_issue = dsh_installation_status()
     deepagents_available, deepagents_issue = deepagents_installation_status()
+    rlm_code_available, rlm_code_issue = rlm_code_installation_status()
     workflows = (
         HarnessDefinition(
             id="core",
@@ -233,6 +237,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     reserved = {entry.id for entry in workflows}
     reserved.update(alias for entry in workflows for alias in entry.aliases)
     reserved.add("tau")
+    reserved.add("rlm-code")
     reserved.add("uhp")
     reserved.add("deepseek-harness")
     reserved.add("deepagents")
@@ -270,6 +275,18 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         aliases=("huggingface-tau", "hf-tau"),
         available=tau_available,
         issue=tau_issue,
+    )
+    rlm_code_entry = HarnessDefinition(
+        id="rlm-code",
+        display_name="RLM Code",
+        description=rlm_code.description,
+        runtime=rlm_code.runtime.backend,
+        source="optional:rlm-code",
+        spec=rlm_code,
+        loop_policy=workbench_loop_policy(),
+        aliases=("rlm_code", "recursive-language-model-code"),
+        available=rlm_code_available,
+        issue=rlm_code_issue,
     )
     uhp_entry = HarnessDefinition(
         id="uhp",
@@ -309,7 +326,11 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     )
     # Keep optional first-party harness integrations on the first picker page.
     # They remain visible with a setup hint when their dependency is missing.
-    return workflows + (tau_entry, uhp_entry, dsh_entry, deepagents_entry) + tuple(presets)
+    return (
+        workflows
+        + (rlm_code_entry, tau_entry, uhp_entry, dsh_entry, deepagents_entry)
+        + tuple(presets)
+    )
 
 
 def _candidate_paths(root: Path) -> Iterable[Path]:

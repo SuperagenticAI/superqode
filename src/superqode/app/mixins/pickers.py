@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from textual import on
 from rich.text import Text
 from superqode.app.constants import (
@@ -131,6 +132,7 @@ class PickerNavigationMixin:
                 or getattr(self, "_awaiting_byok_provider", False)
                 or getattr(self, "_awaiting_local_provider", False)
                 or getattr(self, "_awaiting_recommendation_selection", False)
+                or getattr(self, "_awaiting_free_selection", False)
                 or getattr(self, "_awaiting_codex_model", False)
                 or getattr(self, "_awaiting_codex_effort", False)
                 or getattr(self, "_awaiting_session_resume", False)
@@ -235,6 +237,12 @@ class PickerNavigationMixin:
                 return True
             return False
 
+        if getattr(self, "_awaiting_free_selection", False):
+            choices = getattr(self, "_free_selection_list", [])
+            if choices and 1 <= num <= len(choices):
+                return bool(self._handle_free_selection(str(num), log))
+            return False
+
         if getattr(self, "_awaiting_harness_selection", False):
             entries = getattr(self, "_harness_selection_list", [])
             if entries and 1 <= num <= len(entries):
@@ -317,6 +325,7 @@ class PickerNavigationMixin:
         "_awaiting_harness_selection",
         "_awaiting_runtime_selection",
         "_awaiting_recommendation_selection",
+        "_awaiting_free_selection",
         "_awaiting_harness_wizard",
         # The ACP model pickers (OpenCode, Gemini, Claude, Codex, OpenHands)
         # all raise this one. Without it a click on a model row was not
@@ -471,6 +480,12 @@ class PickerNavigationMixin:
                 return True
             return False
 
+        if getattr(self, "_awaiting_free_selection", False):
+            choices = getattr(self, "_free_selection_list", [])
+            if choices and 1 <= num <= len(choices):
+                return bool(self._handle_free_selection(str(num), log))
+            return False
+
         if getattr(self, "_awaiting_harness_selection", False):
             entries = getattr(self, "_harness_selection_list", [])
             if entries and 1 <= num <= len(entries):
@@ -619,31 +634,44 @@ class PickerNavigationMixin:
         log: ConversationLog,
         *,
         reset_highlight: bool = True,
+        on_ready=None,
     ) -> bool:
-        """Show manual setup for a missing external ACP agent.
+        """Show safe setup choices for a missing external ACP agent.
 
-        This connection flow never runs vendor package-manager or shell
-        installers. Its automatic install picker is reserved for allow-listed
-        ``superqode[...]`` Python extras required by SuperQode's own runtimes.
+        Only reviewed open-source recipes shipped with SuperQode may be run.
+        Registry-only commands and every shell-script installer stay manual.
         """
-        from superqode.agents.install_commands import classify_install_command
+        from superqode.agents.install_commands import (
+            classify_install_command,
+            managed_agent_install,
+            managed_agent_install_rejection_reason,
+        )
         from superqode.agents.registry import get_agent_installation_info
         from superqode.app.prompt_stack import PromptSpec
 
         raw = str((get_agent_installation_info(agent_data) or {}).get("command", "") or "")
-        install = classify_install_command(raw)
+        install = managed_agent_install(agent_data) or classify_install_command(raw)
         if not install.raw:
             return False
 
         short_name = str(agent_data.get("short_name") or "")
         name = str(agent_data.get("name") or short_name)
 
-        options: list[tuple[str, str, str]] = [
-            ("copy", "Copy install command", "copy the exact vendor command"),
-            ("recheck", "I installed it — check again", "verify and connect this agent"),
-            ("manual", "I will install it myself", "show vendor guidance and leave setup"),
-            ("cancel", "Choose another connection", "return without installing"),
-        ]
+        options: list[tuple[str, str, str]] = []
+        installer = install.argv[0] if install.argv else ""
+        installer_ready = bool(installer and shutil.which(installer))
+        if install.runnable and install.managed and installer_ready:
+            options.append(
+                ("install", "Install it for me", f"run the reviewed {install.kind} recipe")
+            )
+        options.extend(
+            [
+                ("copy", "Copy install command", "copy the exact vendor command"),
+                ("recheck", "I installed it — check again", "verify and connect this agent"),
+                ("manual", "I will install it myself", "show vendor guidance and leave setup"),
+                ("cancel", "Choose another connection", "return without installing"),
+            ]
+        )
 
         if reset_highlight and not self._prompts.is_active("agent_install"):
             self._prompts.push(
@@ -652,13 +680,21 @@ class PickerNavigationMixin:
                     kind="picker",
                     options=lambda: list(options),
                     on_select=lambda option: self._apply_agent_install_choice(
-                        option[0], agent_data=agent_data, install=install
+                        option[0],
+                        agent_data=agent_data,
+                        install=install,
+                        on_ready=on_ready,
                     ),
                     on_cancel=lambda: self._show_connect_type_picker(
                         self.query_one("#log", ConversationLog)
                     ),
                     render=self._rerender_agent_install_picker,
-                    data={"agent": agent_data, "install": install, "options": options},
+                    data={
+                        "agent": agent_data,
+                        "install": install,
+                        "options": options,
+                        "on_ready": on_ready,
+                    },
                 )
             )
 
@@ -671,10 +707,33 @@ class PickerNavigationMixin:
         t.append(f"{install.raw}\n\n", style=THEME["cyan"])
         if install.reason:
             t.append(f"    {install.reason}\n\n", style=THEME["warning"])
-        elif install.runnable:
+        elif install.managed and not installer_ready:
             t.append(
-                "    External agent installers are manual-only in this flow; "
-                "SuperQode only auto-installs its own optional Python extras.\n\n",
+                f"    Cannot install automatically because `{installer}` is not on PATH. "
+                f"Install {installer}, then reopen this setup.\n\n",
+                style=THEME["warning"],
+            )
+        elif install.runnable and install.managed:
+            t.append(
+                f"    Reviewed recipe · {install.license} · {install.repository}\n"
+                "    The command runs without a shell and will be verified before connecting.\n\n",
+                style=THEME["muted"],
+            )
+            if install.license.lower() == "proprietary":
+                t.append(
+                    "    This installs the vendor CLI only; its account login and subscription "
+                    "remain vendor-managed.\n\n",
+                    style=THEME["warning"],
+                )
+        elif install.runnable:
+            rejection = managed_agent_install_rejection_reason(agent_data)
+            t.append(
+                (
+                    rejection
+                    or "This registry command is not in SuperQode's reviewed install manifest, "
+                    "so it remains manual."
+                )
+                + "\n\n",
                 style=THEME["warning"],
             )
 
@@ -694,7 +753,10 @@ class PickerNavigationMixin:
             return
         log = self.query_one("#log", ConversationLog)
         self._show_agent_install_picker(
-            dict(spec.data.get("agent") or {}), log, reset_highlight=False
+            dict(spec.data.get("agent") or {}),
+            log,
+            reset_highlight=False,
+            on_ready=spec.data.get("on_ready"),
         )
 
     def _show_vendor_model_picker(

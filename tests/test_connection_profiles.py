@@ -205,10 +205,13 @@ _FLAT_PROFILE_IDS_V1 = [
     "prime-agent-key",
     "jcode",
     "grok-key",
+    "zcode",
+    "exoharness",
     "fx-key",
     "qwen-code-key",
     "fast-agent",
     "pi",
+    "omp",
     "goose-key",
     "cline-key",
     "openhands-key",
@@ -220,7 +223,6 @@ _FLAT_PROFILE_IDS_V1 = [
     "droid-key",
     "junie-key",
     "muse-key",
-    "zcode",
     "qoder-key",
     "poolside-key",
     "protocol-acp",
@@ -478,11 +480,14 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
         "grok-key",
         "fx-key",
         "qwen-code-key",
+        "omp",
         "goose-key",
         "cline-key",
         "openhands-key",
         "letta",
         "warp",
+        "zcode",
+        "exoharness",
     ):
         assert required in ids
     assert get_connection_profile("letta").connector == "key-harness"
@@ -515,7 +520,7 @@ def test_v2_closed_menu_lists_factory_droid_key(monkeypatch):
     assert "muse-key" in ids
     assert "qoder-key" in ids
     assert "poolside-key" in ids
-    assert "zcode" in ids
+    assert "zcode" not in ids
     droid_key = next(p for p in rows if p.id == "droid-key")
     assert (droid_key.connector, droid_key.acp_agent, droid_key.menu) == (
         "vendor-key",
@@ -572,7 +577,7 @@ def test_optional_harnesses_is_still_the_v1_other_source():
     from superqode.harness import optional_harnesses
 
     ids = [entry.id for entry in optional_harnesses(".")]
-    assert ids == ["tau", "uhp", "deepseek-harness", "deepagents"]
+    assert ids == ["rlm-code", "tau", "uhp", "deepseek-harness", "deepagents"]
 
 
 def test_open_rows_surface_optional_harness_setup_hints(monkeypatch):
@@ -1043,6 +1048,37 @@ def test_dispatch_unavailable_first_party_acp_profile_shows_setup(_dispatch):
 
     assert not any(call[0] == "acp" for call in stub.calls)
     assert log.messages == ["Qwen Code needs setup: install Qwen Code, then run `qwen auth`"]
+
+
+def test_unavailable_subscription_with_reviewed_recipe_opens_installer(_dispatch):
+    profile = ConnectionProfile(
+        id="qwen-code",
+        label="Qwen Code",
+        description="First-party agent",
+        connector="acp",
+        acp_agent="qwen",
+        detect=lambda: False,
+        unavailable_hint="install Qwen Code, then run `qwen auth`",
+    )
+    log = SimpleNamespace(messages=[])
+    log.add_info = log.messages.append
+    stub = _DispatchStub()
+
+    def show(agent, target_log, *, on_ready=None):
+        stub.calls.append(("install-picker", agent["short_name"], callable(on_ready)))
+        return True
+
+    stub._show_agent_install_picker = show
+    stub._apply_subscription_billing_policy = lambda selected, target_log: stub.calls.append(
+        ("billing-policy", selected.id)
+    )
+
+    _dispatch(stub, profile, log=log)
+
+    assert ("billing-policy", "qwen-code") in stub.calls
+    assert ("install-picker", "qwen", True) in stub.calls
+    assert not any(call[0] == "acp" for call in stub.calls)
+    assert log.messages == []
 
 
 def test_dispatch_copilot_prefers_sdk_runtime(_dispatch, monkeypatch):

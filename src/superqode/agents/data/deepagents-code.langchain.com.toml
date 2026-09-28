@@ -28,7 +28,7 @@ runs it as an ACP server over standard input and output.
 ## Installation
 
 ```bash
-curl -LsSf https://langch.in/dcode | bash
+uv tool install deepagents-code
 ```
 
 Model provider extras are selected at install time:
@@ -44,5 +44,5 @@ and Gemini are included by default.
 '''
 
 [actions."*".install]
-command = "curl -LsSf https://langch.in/dcode | bash"
+command = "uv tool install deepagents-code"
 description = "Install Deep Agents Code"

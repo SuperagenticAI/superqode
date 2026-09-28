@@ -272,6 +272,9 @@ class HelpersMixin(
         if getattr(self, "_awaiting_codex_effort", False):
             self._handle_codex_effort_selection(buf, log)
             return
+        if getattr(self, "_awaiting_free_selection", False):
+            self._handle_free_selection(buf, log)
+            return
 
         # Fallback to universal selection for other modes
         try:
@@ -393,6 +396,7 @@ class HelpersMixin(
                 "_awaiting_local_dep_install",
                 "_awaiting_model_selection",
                 "_awaiting_recommendation_selection",
+                "_awaiting_free_selection",
                 "_awaiting_session_resume",
                 "_awaiting_mode_selection",
                 "_awaiting_harness_selection",

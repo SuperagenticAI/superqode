@@ -147,6 +147,7 @@ class SelectionAwareInput(TextArea):
             or getattr(app, "_awaiting_session_resume", False)
             or getattr(app, "_awaiting_mode_selection", False)
             or getattr(app, "_awaiting_harness_selection", False)
+            or getattr(app, "_awaiting_free_selection", False)
             # Excluded: _awaiting_byok_model, _awaiting_local_model
             # Users should type in the input for model selection
         )
@@ -324,6 +325,7 @@ class SelectionAwareInput(TextArea):
                 or getattr(app, "_awaiting_byok_model", False)
                 or getattr(app, "_awaiting_local_model", False)
                 or getattr(app, "_awaiting_harness_selection", False)
+                or getattr(app, "_awaiting_free_selection", False)
             ):
                 event.stop()
                 event.prevent_default()
@@ -445,6 +447,15 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_mode_down()
                 return
 
+            if getattr(app, "_awaiting_free_selection", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_free_up()
+                else:
+                    app.action_navigate_free_down()
+                return
+
             # Handle local provider/model arrows here too. Relying on the event
             # bubbling to the app-level handler is unreliable because the
             # underlying TextArea consumes up/down for cursor movement first.
@@ -550,6 +561,7 @@ class SelectionAwareInput(TextArea):
             ("_awaiting_runtime_selection", "action_select_highlighted_runtime"),
             ("_awaiting_session_resume", "action_select_highlighted_session_resume"),
             ("_awaiting_mode_selection", "action_select_highlighted_mode"),
+            ("_awaiting_free_selection", "action_select_highlighted_free"),
             ("_awaiting_harness_confirmation", "action_confirm_harness_switch"),
             ("_awaiting_harness_selection", "action_select_highlighted_harness"),
             ("_awaiting_local_provider", "action_select_highlighted_local_provider"),

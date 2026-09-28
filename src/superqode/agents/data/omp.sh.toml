@@ -1,0 +1,36 @@
+identity = "omp.sh"
+name = "Oh My Pi"
+short_name = "omp"
+url = "https://github.com/can1357/oh-my-pi"
+protocol = "acp"
+author_name = "Stencil Labs"
+author_url = "https://stencil.so"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "MIT-licensed, batteries-included Pi fork with native ACP and RPC modes, LSP, debugging, subagents, and broad model-provider support."
+tags = ["official-acp", "open-source", "coding", "featured"]
+recommended = true
+catalog_tier = "featured"
+run_command."*" = "omp acp"
+
+help = '''
+# Oh My Pi (OMP)
+
+Oh My Pi is an MIT-licensed TypeScript/Rust coding agent and a batteries-included fork of Pi.
+
+## Installation
+
+OMP requires Bun 1.3.14 or newer:
+
+```bash
+bun install -g @oh-my-pi/pi-coding-agent
+omp acp
+```
+
+SuperQode can run this reviewed package-manager installation after explicit confirmation. It does not run OMP's remote shell installer.
+'''
+
+[actions."*".install]
+command = "bun install -g @oh-my-pi/pi-coding-agent"
+description = "Install the Oh My Pi CLI with Bun"

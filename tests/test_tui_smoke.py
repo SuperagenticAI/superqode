@@ -1840,6 +1840,8 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":qe unit_tester" not in COMMANDS
     assert ":qe api_tester" not in COMMANDS
     assert ":connect" in COMMANDS
+    assert ":free" in COMMANDS
+    assert ":free live" in COMMANDS
     assert ":connect acp" in COMMANDS
     assert ":connect byok" in COMMANDS
     assert ":connect local" in COMMANDS
@@ -1897,6 +1899,8 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness fork" in slash_values
     assert ":harness events" in slash_values
     assert ":connect" in slash_values
+    assert ":free" in slash_values
+    assert ":free ready" in slash_values
     assert ":connect acp" in slash_values
     assert ":connect grok" in slash_values
     assert ":chat" in slash_values
@@ -2352,6 +2356,64 @@ def test_harness_picker_offers_in_tui_python_extra_install():
     assert "Copy install command" in rendered
     assert pending["command"] in rendered
     assert app._prompts.is_active("harness_install")
+
+
+def test_direct_deepagents_switch_offers_install_and_continue(monkeypatch):
+    """A missing DeepAgents SDK must not end in a leave-and-reopen warning."""
+    app = make_app()
+    log = FakeLog()
+    entry = SimpleNamespace(
+        id="deepagents",
+        display_name="DeepAgents",
+        available=False,
+        issue='uv tool install "superqode[deepagents]"',
+        source="optional:deepagents",
+    )
+    monkeypatch.setattr("superqode.harness.resolve_harness", lambda *_args, **_kwargs: entry)
+
+    app._harness_cmd("switch deepagents", log)
+
+    pending = app._awaiting_harness_install
+    assert pending["extra"] == "deepagents"
+    assert pending["resume_command"] == "switch deepagents"
+    rendered = render_plain(log.items[-1])
+    assert "Install and continue" in rendered
+    assert "then reopen :harness" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("source", "extra"),
+    [
+        ("optional:tau", "tau"),
+        ("optional:deepseek-harness", "deepseek-harness"),
+        ("optional:deepagents", "deepagents"),
+        ("optional:rlm-code", "rlm-code"),
+    ],
+)
+def test_optional_python_harnesses_share_install_extra_mapping(source, extra):
+    from superqode.app.harness_picker import harness_install_extra
+
+    assert harness_install_extra(SimpleNamespace(source=source, available=False)) == extra
+    assert harness_install_extra(SimpleNamespace(source=source, available=True)) == ""
+
+
+def test_letta_setup_card_offers_reviewed_install(monkeypatch):
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    monkeypatch.setattr(
+        "superqode.app.mixins.commands_impl.shutil.which",
+        lambda name: "/usr/bin/npm" if name == "npm" else None,
+    )
+    app = make_app()
+    log = FakeLog()
+
+    app._begin_key_harness(get_connection_profile("letta"), log)
+
+    rendered = render_plain(log.items[-1])
+    assert "Install it for me" in rendered
+    assert "npm install -g @letta-ai/letta-code" in rendered
+    assert "Apache-2.0" in rendered
+    assert app._prompts.is_active("managed_harness_install")
 
 
 def test_harness_install_confirmation_runs_worker():
@@ -5142,6 +5204,36 @@ def test_tool_running_rows_show_command_in_all_modes():
     assert "uv run pytest" in render_plain(log._active_tools_renderable())
 
 
+def test_acp_shell_title_is_replaced_by_run_without_repeating_command():
+    """ACP prose titles must not duplicate or title-case the raw shell command."""
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    command = (
+        'git status --porcelain=v1; echo "---BRANCH---"; '
+        "git branch --show-current; git log --oneline -10"
+    )
+    acp_title = (
+        'Git Status Porcelain V1; Echo " Branch "; Git Branch Show Current; Git Log Oneline 10'
+    )
+
+    log.add_tool_call(acp_title, status="running", arguments={"command": command})
+    active = render_plain(log._active_tools_renderable())
+    assert "Run" in active
+    assert acp_title not in active
+    assert active.count(command) == 1
+
+    log.add_tool_call(acp_title, status="success", arguments={"command": command})
+    completed = render_plain(writes[-1])
+    assert "Run" in completed
+    assert acp_title not in completed
+    assert completed.count(command) == 1
+
+    timeline = log.format_session_timeline()
+    assert acp_title not in timeline
+    assert timeline.count(command) == 1
+
+
 def test_running_python_and_bash_previews_use_cached_syntax_colors():
     from pygments.token import Token
 
@@ -6132,6 +6224,83 @@ def test_recommendation_number_connects_local_model():
     assert app._awaiting_recommendation_selection is False
 
 
+def test_free_command_opens_actionable_picker_without_replacing_harness():
+    app = make_app()
+    log = FakeLog()
+    active_harness = object()
+    app._pure_mode = active_harness
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    asyncio.run(app._free_cmd("", log))
+
+    rendered = render_plain(log.items[-1])
+    assert "Free Coding" in rendered
+    assert "Keep the current harness" in rendered
+    assert "Ollama local models" not in rendered
+    assert "MLX local server" not in rendered
+    assert "Google AI Studio" in rendered
+    assert "↑↓ navigate" in rendered
+    assert "▶ [ 1]" in rendered
+    assert app._awaiting_free_selection is True
+    assert app._free_highlighted_index == 0
+    assert app._pure_mode is active_harness
+
+
+def test_free_choice_continues_into_existing_byok_model_flow():
+    app = make_app()
+    log = FakeLog()
+    calls = []
+    app._connect_byok_cmd = lambda provider, target_log: calls.append(("byok", provider))
+
+    asyncio.run(app._free_cmd("google", log))
+    assert app._handle_free_selection("1", log) is True
+    assert calls[-1] == ("byok", "google")
+
+
+def test_free_picker_keyboard_navigation_starts_at_top():
+    app = make_app()
+    log = FakeLog()
+    app.query_one = lambda *_args, **_kwargs: log
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+
+    asyncio.run(app._free_cmd("", log))
+    assert app._free_highlighted_index == 0
+
+    app.action_navigate_free_down()
+    assert app._free_highlighted_index == 1
+    assert "▶ [ 2]" in render_plain(log.items[-1])
+
+    app.action_navigate_free_up()
+    app.action_navigate_free_up()
+    assert app._free_highlighted_index == 0
+
+
+def test_free_live_openrouter_choice_connects_through_openrouter(monkeypatch):
+    from superqode.providers.free_inference import LiveFreeInferenceCandidate
+
+    app = make_app()
+    log = FakeLog()
+    connected = []
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._connect_byok_mode = lambda provider, model, target_log: connected.append((provider, model))
+    candidate = LiveFreeInferenceCandidate(
+        source="openrouter",
+        provider="demo",
+        model="demo/free-coder:free",
+        name="Demo Free Coder",
+        source_url="https://openrouter.ai/models/demo/free-coder",
+        supports_tools=True,
+    )
+    monkeypatch.setattr(
+        "superqode.providers.free_inference.scan_live_free_candidates",
+        lambda **kwargs: ([candidate], []),
+    )
+
+    asyncio.run(app._free_cmd("live openrouter", log))
+    assert app._handle_free_selection("1", log) is True
+    assert connected == [("openrouter", "demo/free-coder:free")]
+
+
 def test_local_picker_labels_gemma4_as_tool_capable():
     from superqode.providers.local import LocalModel
 
@@ -6498,6 +6667,7 @@ def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
         assert kwargs["clear_log"] is False
         assert kwargs["subtitle"] == "Optional non-ACP harness integrations"
         assert [entry.id for entry in kwargs["catalog_entries"]] == [
+            "rlm-code",
             "tau",
             "uhp",
             "deepseek-harness",
@@ -6532,6 +6702,7 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
 
         assert len(calls) == 1
         assert [entry.id for entry in calls[0][1]["catalog_entries"]] == [
+            "rlm-code",
             "tau",
             "uhp",
             "deepseek-harness",
@@ -7324,6 +7495,21 @@ def test_calm_verb_target_renders_command_for_bash():
     verb, target = SuperQodeApp._calm_verb_target(_Stub(), "bash", {"command": "pytest -q"})
     assert verb == "bash" or verb == "run"  # widget formatter unavailable → fallback verb
     assert target == "pytest -q"
+
+
+def test_calm_verb_target_ignores_acp_prose_title_when_command_exists():
+    class _Stub:
+        def query_one(self, *_a, **_k):
+            raise RuntimeError("no widget in unit test")
+
+    verb, target = SuperQodeApp._calm_verb_target(
+        _Stub(),
+        "Git Diff U3 Src Tests Head C 51200",
+        {"command": "git diff -U3 -- src tests | head -c 51200"},
+    )
+
+    assert verb == "run"
+    assert target.endswith("head -c 51200")
 
 
 def test_calm_shell_tool_writes_copyable_command_rows():

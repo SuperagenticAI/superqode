@@ -665,28 +665,38 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
     HarnessCatalogEntry(
         id="zcode",
         label="ZCode",
-        description="Z.AI desktop harness for GLM. No ACP or headless CLI yet — inspect only.",
-        openness="closed",
+        description="Open-source Z.AI desktop, browser, and terminal harness — guided setup.",
+        openness="open",
+        license="Apache-2.0",
+        repository="https://github.com/zai-org/ZCode",
         homepage="https://zcode.z.ai/en",
-        auth=(
-            HarnessAuthSpec(
-                mode="byok",
-                connector="key-harness",
-                profile_id="zcode",
-                after_auth="inspect",
-                byok_providers=(),
-                local_providers=(),
-            ),
-        ),
         hub_id="ecosystem:zcode",
         readiness="not-supported",
         support_note=(
-            "ZCode is a desktop app. SuperQode cannot launch it until Z.AI ships "
-            "ACP, a headless CLI, or a documented key API."
+            "Clone the official repository and run its bootstrap flow. Native connection stays "
+            "pending until the CLI's machine-readable headless contract is verified."
         ),
         vendor_owned=True,
         list_visible=True,
-        show_in_closed=True,
+        show_in_open=True,
+    ),
+    HarnessCatalogEntry(
+        id="exoharness",
+        label="Exo",
+        description="MIT recursive harness with durable state and sandboxed execution — guided setup.",
+        openness="open",
+        license="MIT",
+        repository="https://github.com/exoharness/exo",
+        homepage="https://exoharness.ai/",
+        hub_id="ecosystem:exoharness",
+        readiness="not-supported",
+        support_note=(
+            "Exo requires Git and Docker and manages pinned Node, pnpm, and Rust toolchains. "
+            "Review its official setup script before running it manually."
+        ),
+        vendor_owned=True,
+        list_visible=True,
+        show_in_open=True,
     ),
     HarnessCatalogEntry(
         id="qwen-code",
@@ -830,6 +840,37 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         ),
         acp_agent="pi",
         hub_id="acp:pi",
+        vendor_owned=True,
+        list_visible=True,
+    ),
+    HarnessCatalogEntry(
+        id="omp",
+        label="Oh My Pi",
+        description=(
+            "Batteries-included MIT fork of Pi with TypeScript/Rust tooling, "
+            "native ACP, RPC, LSP, debugging, subagents, and broad provider support."
+        ),
+        openness="open",
+        license="MIT",
+        repository="https://github.com/can1357/oh-my-pi",
+        auth=(
+            HarnessAuthSpec(
+                mode="acp",
+                connector="acp",
+                profile_id="omp",
+                after_auth="acp-attach",
+            ),
+            *_key_auth(
+                "omp",
+                "acp-attach",
+                detect=_acp_probe("omp"),
+                unavailable_hint="install Oh My Pi so `omp` is on PATH",
+                byok_providers=None,
+                local_providers=None,
+            ),
+        ),
+        acp_agent="omp",
+        hub_id="acp:omp",
         vendor_owned=True,
         list_visible=True,
     ),

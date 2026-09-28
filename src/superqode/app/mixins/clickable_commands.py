@@ -23,6 +23,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "eval",
         "exit",
         "explore",
+        "free",
         "harness",
         "help",
         "home",

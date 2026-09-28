@@ -15,12 +15,27 @@ SuperQode has three related selectors:
 | Goal | Open | What it selects |
 | --- | --- | --- |
 | Use a coding agent or model | `:connect` | Account, external coding agent, provider, model, or vendor runtime |
+| Use a free coding route | `:free` | A ready account route or a current zero-price hosted model route |
 | Change the complete working behavior | `:harness` | Built-in, project, vendor, ACP, optional, installed, or registry harness |
 | Change only the execution backend | `:runtime list` | Native or framework-specific runtime adapter |
 
 For a first session, run `superqode`, choose `:connect`, and start coding. Use
 `:harness` when you want another agent or run contract. Building a custom
 HarnessSpec is a later step.
+
+If a harness is already selected, `:free` keeps that harness and opens an
+actionable list of free hosted and ACP inference routes. Selecting a
+row continues into the same provider/model picker used by `:connect`:
+
+```text
+:free                 # curated free and local routes
+:free ready           # routes already configured on this machine
+:free live openrouter # current zero-price OpenRouter model routes
+```
+
+Live catalog entries and provider limits can change. SuperQode shows their
+source and uses the existing connector rather than executing instructions from
+the remote catalog.
 
 ## Harness Choices
 
@@ -264,10 +279,10 @@ its registry id as well as its short alias:
 :connect agent-closed-harnesses
 ```
 
-Open is OSI-licensed harnesses on a key or local model. Closed is proprietary
-harnesses on that vendor's key. Setup-card rows such as Letta Code and Warp
-Agent are listed so you can find them; SuperQode does not start their loop
-from that row yet.
+Open is OSI-licensed harnesses, including integrations that accept a key or
+local model and setup-card rows for independently run tools. Closed is
+proprietary harnesses on that vendor's key. A setup card is discoverable and
+actionable, but does not imply that SuperQode can drive the harness yet.
 
 | Open harness | License | Direct selection | What the row does today |
 | --- | --- | --- | --- |
@@ -278,9 +293,12 @@ from that row yet.
 | Prime Agent | MIT | `:connect prime-agent-key` | Asks for a key or local model, then runs Prime through its Python RPC backend |
 | jcode | MIT | `:connect jcode` | Setup card |
 | Grok Build | Apache-2.0 | `:connect grok-key` | Attaches on an exported `GROK_CODE_XAI_API_KEY`, otherwise asks for a local endpoint |
+| ZCode | Apache-2.0 | `:connect zcode` | Guided source setup; native connection waits on a verified machine-readable CLI contract |
+| Exo | MIT | `:connect exoharness` | Guided prerequisite and reviewed-script setup; Exo continues to own its event log and sandbox lifecycle |
 | Qwen Code | Apache-2.0 | `:connect qwen-code-key` | Attaches on an exported `QWEN_API_KEY` or `DASHSCOPE_API_KEY`, otherwise asks for a model |
 | fast-agent | Apache-2.0 | `:connect fast-agent` | Asks for a key or local model, then attaches fast-agent over ACP with it |
 | Pi | MIT | `:connect pi` | Asks for a key or local model, then attaches Pi over ACP with it |
+| Oh My Pi (`omp`) | MIT | `:connect omp` | Installs or attaches OMP over native ACP, with key and local-model routes available |
 | Goose | Apache-2.0 | `:connect goose-key` | Setup card |
 | Cline | Apache-2.0 | `:connect cline-key` | Setup card |
 | OpenHands | MIT | `:connect openhands-key` | Setup card |
@@ -291,9 +309,17 @@ from that row yet.
 | Kimi Code | MIT | `:connect kimi-code-key` | Attaches on an exported `MOONSHOT_API_KEY` or `KIMI_API_KEY`, otherwise asks for a model |
 | fx | Apache-2.0 | `:connect fx-key` | Attaches on `AI_GATEWAY_API_KEY` (or `fx setup`). No local model or SuperQode BYOK picker |
 
+When a reviewed package-manager recipe exists, the setup screen offers
+**Install and continue** and resumes the exact route selected before setup.
+This covers the SuperQode extras for Tau, DeepSeek Harness, DeepAgents, and
+RLM Code; ACP installations for OpenCode, Qwen Code, fast-agent, Pi, Oh My Pi, Cline,
+Mistral Vibe, Hermes, and Deep Agents Code; and the standalone Letta Code CLI.
+Remote shell scripts, source builds, and unreviewed registry commands are
+displayed for manual review but never run by SuperQode.
+
 Eleven rows connect today. Tau, DeepSeek Harness, and DeepAgents switch to a
 SuperQode-hosted adapter and then run the model you choose. OpenCode, Grok
-Build, Qwen Code, Kimi Code, fast-agent, Pi, Prime Agent, and fx keep their
+Build, Qwen Code, Kimi Code, fast-agent, Pi, Oh My Pi, Prime Agent, and fx keep their
 own loop: the model step only decides which credentials they are handed, and
 SuperQode passes those to the agent process alone rather than exporting them
 into your shell. fx skips the model picker entirely and injects
@@ -357,7 +383,8 @@ that matches the account, runtime, and harness ownership required for the task.
 | Factory | Factory Droid subscription through ACP, or `FACTORY_API_KEY` on Closed | `:connect droid`, `:connect droid-key`, `:connect acp droid` |
 | Qoder | Qoder CLI personal access token on Closed | `:connect qoder-key` |
 | Poolside | Poolside API key or local OpenAI-compat on Closed | `:connect poolside-key` |
-| Z.AI | ZCode desktop harness, inspect only until a CLI/ACP surface exists | `:connect zcode` |
+| Z.AI | Open-source ZCode desktop, browser, and terminal harness; guided setup while native connection is pending | `:connect zcode` |
+| Exo | Open-source recursive harness; reviewed manual setup while its machine connector is pending | `:connect exoharness` |
 | Cognition | Devin ACP, Devin CLI runtime | `:connect devin`, `:connect acp devin`, `:runtime devin-cli` |
 | JetBrains | Junie on a JetBrains AI plan, or `JETBRAINS_API_KEY` on Closed | `:connect junie`, `:connect junie-key`, `:connect acp junie` |
 | Vercel fx | fx ACP on a Vercel login, or `AI_GATEWAY_API_KEY` on Open | `:connect fx`, `:connect fx-key`, `:connect acp fx` |

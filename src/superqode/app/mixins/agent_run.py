@@ -766,26 +766,7 @@ class AgentRunMixin:
                 _safe_call(self._calm_tool_running, name, args, log)
                 return
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
-            command = (
-                extract_tool_command(args)
-                if any(
-                    marker in name.lower()
-                    for marker in ("bash", "shell", "terminal", "exec", "run", "command")
-                )
-                or any(
-                    args.get(key)
-                    for key in (
-                        "command",
-                        "cmd",
-                        "commandLine",
-                        "command_line",
-                        "shellCommand",
-                        "script",
-                        "argv",
-                    )
-                )
-                else ""
-            )
+            command = extract_tool_command(args)
             if not file_path and not command:
                 command = (
                     args.get("query")
@@ -808,6 +789,8 @@ class AgentRunMixin:
                 _complete_tool_activity(name, status)
                 if self._is_calm_output():
                     meta = result.metadata or {}
+                    if meta.get("partial"):
+                        return
                     done_args = {**call_args, **meta}
                     _safe_call(self._calm_tool_done, name, done_args, log, result.success)
                     return
@@ -817,26 +800,7 @@ class AgentRunMixin:
                 display_args = {**call_args, **metadata}
                 from superqode.tools.display import extract_tool_command
 
-                result_command = (
-                    extract_tool_command(display_args)
-                    if any(
-                        marker in name.lower()
-                        for marker in ("bash", "shell", "terminal", "exec", "run", "command")
-                    )
-                    or any(
-                        display_args.get(key)
-                        for key in (
-                            "command",
-                            "cmd",
-                            "commandLine",
-                            "command_line",
-                            "shellCommand",
-                            "script",
-                            "argv",
-                        )
-                    )
-                    else ""
-                )
+                result_command = extract_tool_command(display_args)
                 result_path = str(
                     display_args.get("path")
                     or display_args.get("file_path")
@@ -4150,16 +4114,17 @@ class AgentRunMixin:
         from superqode.tools.display import extract_tool_command
 
         args = args or {}
+        command = extract_tool_command(args)
         try:
             log = self.query_one("#log", ConversationLog)
-            verb = log._format_tool_name(name)
+            verb = "run" if command else log._format_tool_name(name)
         except Exception:
-            verb = (name or "tool").replace("_", " ").split(" ")[0].lower()
+            verb = "run" if command else (name or "tool").replace("_", " ").split(" ")[0].lower()
         target = (
             args.get("path")
             or args.get("file_path")
             or args.get("filePath")
-            or extract_tool_command(args)
+            or command
             or args.get("pattern")
             or args.get("query")
             or args.get("url")
@@ -4206,10 +4171,10 @@ class AgentRunMixin:
     def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
         """Update the live throbber with the in-progress action."""
         verb, _target = self._calm_verb_target(name, args)
-        if any(
-            marker in name.lower()
-            for marker in ("bash", "shell", "terminal", "exec", "run", "command")
-        ):
+        # add_tool_call(running) only updates the #active-tools strip (it
+        # returns before writing a transcript row), so this stays single-row:
+        # live state here, transcript row once in _calm_tool_done.
+        if verb == "run":
             log.add_tool_call(name, "running", arguments=args or {})
         icons = getattr(self, "_CALM_VERB_ICONS", {})
         icon = icons.get(verb, "⚡")
@@ -4222,13 +4187,10 @@ class AgentRunMixin:
         self, name: str, args: Optional[dict], log: ConversationLog, ok: bool = True
     ) -> None:
         """Commit one tidy line for a finished tool (no raw output/diff)."""
-        if any(
-            marker in name.lower()
-            for marker in ("bash", "shell", "terminal", "exec", "run", "command")
-        ):
+        verb, target = self._calm_verb_target(name, args)
+        if verb == "run":
             log.add_tool_call(name, "success" if ok else "error", arguments=args or {})
             return
-        verb, target = self._calm_verb_target(name, args)
         self._calm_actions = getattr(self, "_calm_actions", 0) + 1
         icon = "✓" if ok else "✗"
         color = THEME["success"] if ok else THEME["error"]

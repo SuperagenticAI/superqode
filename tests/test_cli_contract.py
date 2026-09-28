@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 297
+EXPECTED_COMMAND_COUNT = 298
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -137,7 +137,12 @@ EXPECTED_COMMAND_COUNT = 297
 # `serve optimize --upstream-key-header` choice without adding a command.
 # Managed launcher lifecycle adds enable, status, disable, uninstall, and the
 # hidden shim target `launch` (292 -> 297).
-EXPECTED_HELP_TREE_SHA256 = "d4aefbf165ea14d5a63a439484a77fe180cd35db29a2aee308d306704e94a8e7"
+# The open-source Exo setup row adds one registry-derived `--connect` choice.
+# Click renders those choices as commands in this contract traversal, moving
+# the count 297 -> 298 without adding a new implementation entry point.
+# RLM Code is now a selectable optional harness, which widens the generated
+# harness choice lists without adding another Click command.
+EXPECTED_HELP_TREE_SHA256 = "44752dbfce8061cbeff4c84bf3c6599a3b4f1e223140ff488ceb0c6b1f26f557"
 
 
 def _render_help_tree() -> tuple[int, str]:

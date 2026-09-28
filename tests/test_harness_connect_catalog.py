@@ -28,6 +28,7 @@ def test_visible_open_rows_include_the_full_key_set():
         "qwen-code-key",
         "fast-agent",
         "pi",
+        "omp",
         "goose-key",
         "cline-key",
         "openhands-key",
@@ -36,6 +37,8 @@ def test_visible_open_rows_include_the_full_key_set():
         "letta",
         "warp",
         "kimi-code-key",
+        "zcode",
+        "exoharness",
     ):
         assert required in ids
     assert "deepagents-code" not in ids
@@ -52,7 +55,7 @@ def test_closed_list_includes_factory_muse_qoder_poolside():
     assert "muse-key" in ids
     assert "qoder-key" in ids
     assert "poolside-key" in ids
-    assert "zcode" in ids
+    assert "zcode" not in ids
     droid_key = get_entry("droid-key")
     assert droid_key is not None
     assert droid_key.openness == "closed"
@@ -69,6 +72,17 @@ def test_closed_list_includes_factory_muse_qoder_poolside():
     assert spec.local_providers == ()
     assert spec.detect is not None
     assert "install Factory Droid" in spec.unavailable_hint
+
+
+def test_zcode_and_exo_are_open_setup_rows():
+    for entry_id, license_name in (("zcode", "Apache-2.0"), ("exoharness", "MIT")):
+        entry = get_entry(entry_id)
+        assert entry is not None
+        assert entry.openness == "open"
+        assert entry.license == license_name
+        assert entry.readiness == "not-supported"
+        assert entry.wired is False
+        assert entry in list_entries("open")
 
 
 def test_fx_subscription_stays_off_open_and_fx_key_is_the_open_row():

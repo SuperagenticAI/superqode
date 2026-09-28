@@ -253,6 +253,45 @@ def test_hub_opens_harness_browser_and_keeps_explicit_model_search(monkeypatch):
     assert len(app._started) == 1
 
 
+def test_tui_hub_keeps_the_complete_picker_inventory(monkeypatch):
+    from superqode.app.harness_picker import HarnessPickerItem
+    from superqode.app.mixins import harness_hub
+
+    def item(item_id, group, kind="harness"):
+        return HarnessPickerItem(
+            id=item_id,
+            display_name=item_id,
+            description=item_id,
+            runtime="test",
+            source="test",
+            group=group,
+            available=True,
+            issue="",
+            continuity="fresh-session",
+            kind=kind,
+        )
+
+    expected = [
+        item("core", "SuperQode harnesses"),
+        item("acp:test", "ACP agents", "acp"),
+        item("preset", "Model and task presets"),
+        item("no-tool", "SuperQode harnesses"),
+    ]
+    calls = []
+
+    def picker(*_args, **kwargs):
+        calls.append(kwargs)
+        return expected
+
+    monkeypatch.setattr(harness_hub, "harness_picker_items", picker)
+    monkeypatch.setattr(harness_hub, "hub_ecosystem_picker_items", lambda: [])
+
+    actual = harness_hub.HarnessHubMixin._harness_hub_items()
+
+    assert {entry.id for entry in actual} == {entry.id for entry in expected}
+    assert calls == [{"include_all": True, "expand_protocol_catalog": True}]
+
+
 def test_model_search_mode_is_fully_removed():
     """:hub is a browser now; no leftover state may intercept typed prompts."""
     import inspect

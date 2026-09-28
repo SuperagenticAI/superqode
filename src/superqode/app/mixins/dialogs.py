@@ -2397,12 +2397,22 @@ class DialogsMixin:
 
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
+        try:
+            store = getattr(self, "_pure_last_tool_args", None)
+            if not isinstance(store, dict):
+                store = {}
+                self._pure_last_tool_args = store
+            store[name] = dict(args) if isinstance(args, dict) else {}
+        except Exception:
+            pass
         # Calm mode: surface the action in the live throbber, not a full row.
         if self._is_calm_output():
             self._calm_tool_running(name, args, log)
             return
+        from superqode.tools.display import extract_tool_command
+
         file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
-        command = args.get("command", "")
+        command = extract_tool_command(args)
         log.add_tool_call(name, "running", file_path, command, "", args)
 
     def _show_pure_tool_result(self, name: str, result, log: ConversationLog):
@@ -2418,11 +2428,15 @@ class DialogsMixin:
                 return
             # Forward every target-like field, not only path: bash results
             # carry "command" (a bare "run" line told the user nothing about
-            # what ran), search tools carry "pattern"/"query".
+            # what ran), search tools carry "pattern"/"query". Merge with the
+            # original call args so the command is never lost when metadata
+            # only carries progress markers.
+            call_args = getattr(self, "_pure_last_tool_args", {}).get(name, {})
+            merged = {**(call_args if isinstance(call_args, dict) else {}), **metadata}
             args = {
-                key: metadata.get(key)
-                for key in ("path", "command", "pattern", "query")
-                if metadata.get(key)
+                key: merged.get(key)
+                for key in ("path", "file_path", "command", "pattern", "query", "task", "url")
+                if merged.get(key)
             }
             self._calm_tool_done(name, args, log, ok=success)
             return
@@ -2972,6 +2986,10 @@ class DialogsMixin:
         )
         t.append("              ", style="")
         t.append("a SuperQode harness on your model, or one you build\n", style=THEME["muted"])
+        t.append("    :free", style=f"bold {THEME['success']}")
+        t.append(
+            "        connect the current harness to a free coding route\n", style=THEME["muted"]
+        )
         t.append("    :explore", style=f"bold {THEME['success']}")
         t.append("     every capability available here, with live status\n", style=THEME["muted"])
         t.append("    :tour", style=f"bold {THEME['success']}")
@@ -2991,6 +3009,9 @@ class DialogsMixin:
                 THEME["cyan"],
                 [
                     (":connect", "Interactive picker (choose acp, byok, or local)"),
+                    (":free", "Pick a free hosted or account-backed coding route"),
+                    (":free ready", "Show free routes already configured on this machine"),
+                    (":free live", "Scan current zero-price model catalogs"),
                     (":connect acp <name>", "Connect to ACP agent (opencode, claude, etc.)"),
                     (":connect byok", "Interactive BYOK provider/model picker"),
                     (":connect byok <provider>", "Select provider, then pick model"),

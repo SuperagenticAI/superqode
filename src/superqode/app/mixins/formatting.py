@@ -841,6 +841,55 @@ class FormattingMixin:
         t.append(":providers free --live models-dev\n", style=THEME["cyan"])
         return t
 
+    def _format_free_coding_picker(self, choices, offer_status, *, highlighted_index=0) -> Text:
+        """Render free coding routes as an actionable connection picker."""
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['green']}")
+        t.append("Free Coding\n\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Keep the current harness and connect it to a free model route.\n"
+            "  Offers and limits can change; source links and verification dates are shown.\n\n",
+            style=THEME["muted"],
+        )
+        if not choices:
+            t.append("  No matching free coding routes found.\n", style=THEME["warning"])
+            t.append("  Try :free or :free live.\n", style=THEME["muted"])
+            return t
+
+        for index, choice in enumerate(choices, 1):
+            kind, item = choice
+            selected = index - 1 == highlighted_index
+            if kind == "live":
+                ready = False
+                status = "free route"
+                title = item.name or item.model
+                detail = f"{item.source} · {item.provider}/{item.model}"
+                source_url = item.source_url
+            else:
+                status = offer_status(item)
+                ready = status == "ready"
+                title = item.name
+                detail = f"{item.offer_kind} · {item.access_mode}"
+                source_url = item.source_url
+            status_style = THEME["success"] if ready else THEME["warning"]
+            marker = "▶" if selected else " "
+            row_color = THEME["success"] if selected else THEME["cyan"]
+            t.append(f"  {marker} [{index:2}] ", style=self._picker_link_style(row_color, index))
+            t.append(
+                title,
+                style=self._picker_link_style(
+                    f"bold {THEME['success'] if selected else THEME['text']}", index
+                ),
+            )
+            t.append(f"  {status}\n", style=status_style)
+            t.append(f"       {detail}\n", style=THEME["muted"])
+            if source_url:
+                t.append(f"       {source_url}\n", style=THEME["dim"])
+
+        t.append("\n  ↑↓ navigate · Enter select · type a number", style=f"bold {THEME['cyan']}")
+        t.append(" · :free ready · :free live\n", style=THEME["muted"])
+        return t
+
     def _format_live_free_inference(self, candidates, errors, sources) -> Text:
         """Render live zero-price model routes."""
         t = Text()

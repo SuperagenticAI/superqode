@@ -45,5 +45,5 @@ See https://github.com/mistralai/mistral-vibe for details.
 '''
 
 [actions."*".install]
-command = "pip install mistral-vibe"
+command = "uv tool install mistral-vibe"
 description = "Install Mistral Vibe"

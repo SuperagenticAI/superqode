@@ -19,9 +19,16 @@ stops rather than escalating to sudo or editing PATH.
 from __future__ import annotations
 
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Any, Mapping
 
-__all__ = ["InstallCommand", "classify_install_command"]
+__all__ = [
+    "InstallCommand",
+    "classify_install_command",
+    "managed_agent_install",
+    "managed_agent_install_rejection_reason",
+    "managed_harness_install",
+]
 
 #: Leading tokens of commands whose artifact is explicitly named.
 _RUNNABLE_PREFIXES: tuple[tuple[str, ...], ...] = (
@@ -29,6 +36,7 @@ _RUNNABLE_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("npm", "i"),
     ("pnpm", "add"),
     ("yarn", "global"),
+    ("bun", "install"),
     ("cargo", "install"),
     ("go", "install"),
     ("uv", "tool"),
@@ -51,6 +59,12 @@ class InstallCommand:
     runnable: bool
     #: Why the command is not runnable, shown to the user.
     reason: str = ""
+    #: True only for a recipe reviewed and shipped by SuperQode. Registry
+    #: metadata alone can never opt a command into automatic execution.
+    managed: bool = False
+    repository: str = ""
+    license: str = ""
+    executable: str = ""
 
     @property
     def argv(self) -> list[str]:
@@ -139,6 +153,7 @@ def classify_install_command(raw: str) -> InstallCommand:
                 "npm": "npm",
                 "pnpm": "npm",
                 "yarn": "npm",
+                "bun": "npm",
                 "cargo": "cargo",
                 "go": "go",
                 "uv": "python",
@@ -155,3 +170,142 @@ def classify_install_command(raw: str) -> InstallCommand:
         runnable=False,
         reason="SuperQode only runs recognised package-manager installs.",
     )
+
+
+# Automatic external installs are deliberately opt-in. A remote registry can
+# describe and display a command, but cannot grant itself execution rights by
+# claiming an ``open-source`` tag. Each recipe below is reviewed and released
+# with SuperQode; its exact command is re-derived here at click time.
+_MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
+    "opencode": (
+        "npm install -g opencode-ai",
+        "https://github.com/anomalyco/opencode",
+        "MIT",
+        "opencode",
+    ),
+    "qwen": (
+        "npm install -g @qwen-code/qwen-code",
+        "https://github.com/QwenLM/qwen-code",
+        "Apache-2.0",
+        "qwen",
+    ),
+    "fast-agent": (
+        "uv tool install -U fast-agent-mcp",
+        "https://github.com/evalstate/fast-agent",
+        "Apache-2.0",
+        "fast-agent-acp",
+    ),
+    "pi": (
+        "npm install -g @earendil-works/pi-coding-agent pi-acp",
+        "https://github.com/earendil-works/pi",
+        "MIT",
+        "pi-acp",
+    ),
+    "omp": (
+        "bun install -g @oh-my-pi/pi-coding-agent",
+        "https://github.com/can1357/oh-my-pi",
+        "MIT",
+        "omp",
+    ),
+    "cline": (
+        "npm install -g @cline/cli",
+        "https://github.com/cline/cline",
+        "Apache-2.0",
+        "cline",
+    ),
+    "mistral-vibe": (
+        "uv tool install mistral-vibe",
+        "https://github.com/mistralai/mistral-vibe",
+        "Apache-2.0",
+        "vibe-acp",
+    ),
+    "hermes": (
+        "uv tool install 'hermes-agent[acp]'",
+        "https://github.com/nousresearch/hermes-agent",
+        "MIT",
+        "hermes",
+    ),
+    "deepagents-code": (
+        "uv tool install deepagents-code",
+        "https://github.com/langchain-ai/deepagents",
+        "MIT",
+        "dcode",
+    ),
+    # Subscription authentication remains vendor-owned. SuperQode only
+    # installs the named CLI package, then hands off to Junie's own login.
+    "junie": (
+        "npm install -g @jetbrains/junie",
+        "https://www.jetbrains.com/junie/",
+        "Proprietary",
+        "junie",
+    ),
+}
+
+_MANAGED_AGENT_IDENTITIES = {
+    "opencode": "opencode.ai",
+    "qwen": "qwenlm.github.io",
+    "fast-agent": "fastagent.ai",
+    "pi": "pi.dev",
+    "omp": "omp.sh",
+    "cline": "cline.bot",
+    "mistral-vibe": "mistral-vibe.mistral.ai",
+    "hermes": "hermes-agent.nousresearch.com",
+    "deepagents-code": "deepagents-code.langchain.com",
+    "junie": "junie.jetbrains.com",
+}
+
+_MANAGED_HARNESS_INSTALLS: dict[str, tuple[str, str, str, str]] = {
+    "letta": (
+        "npm install -g @letta-ai/letta-code",
+        "https://github.com/letta-ai/letta-code",
+        "Apache-2.0",
+        "letta",
+    ),
+}
+
+
+def _managed_install(
+    integration_id: str, recipes: Mapping[str, tuple[str, str, str, str]]
+) -> InstallCommand | None:
+    recipe = recipes.get((integration_id or "").strip())
+    if recipe is None:
+        return None
+    command, repository, license_name, executable = recipe
+    classified = classify_install_command(command)
+    if not classified.runnable:
+        return None
+    return replace(
+        classified,
+        managed=True,
+        repository=repository,
+        license=license_name,
+        executable=executable,
+    )
+
+
+def managed_agent_install(agent: Mapping[str, Any]) -> InstallCommand | None:
+    """Return a reviewed install recipe for a bundled agent."""
+    short_name = str(agent.get("short_name") or "").strip()
+    identity = str(agent.get("identity") or "").strip()
+    if identity != _MANAGED_AGENT_IDENTITIES.get(short_name):
+        return None
+    return _managed_install(short_name, _MANAGED_AGENT_INSTALLS)
+
+
+def managed_agent_install_rejection_reason(agent: Mapping[str, Any]) -> str:
+    """Explain why a known recipe did not pass its fail-closed identity check."""
+    short_name = str(agent.get("short_name") or "").strip()
+    identity = str(agent.get("identity") or "").strip()
+    expected = _MANAGED_AGENT_IDENTITIES.get(short_name)
+    if expected and identity != expected:
+        actual = identity or "<missing>"
+        return (
+            f"Managed install blocked: registry identity mismatch for {short_name!r}; "
+            f"expected {expected!r}, received {actual!r}."
+        )
+    return ""
+
+
+def managed_harness_install(harness_id: str) -> InstallCommand | None:
+    """Return a reviewed recipe for an open harness without an agent route."""
+    return _managed_install(harness_id, _MANAGED_HARNESS_INSTALLS)

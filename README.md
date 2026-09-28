@@ -138,7 +138,7 @@ superqode connect a2a --url https://a2a.superqode.dev
 
 ## The Harness Hub
 
-`:hub` opens a browsable catalog of **104 harnesses**: SuperQode's native
+`:hub` opens a browsable catalog of **115 harnesses**: SuperQode's native
 harnesses, vendor coding agents, the full ACP registry, optional runtimes,
 model presets, and the HarnessSpecs your own repository defines. The same
 catalog is on the web at [superqode.dev/hub](https://superqode.dev/hub).
@@ -149,7 +149,7 @@ catalog is on the web at [superqode.dev/hub](https://superqode.dev/hub).
 :harness switch rlm --fork   # or branch into an independent attempt
 ```
 
-**64 of those harnesses are open source**, across every route. Press `o` in the
+**71 of those harnesses are open source**, across every route. Press `o` in the
 Hub, or ask from the command line:
 
 ```bash

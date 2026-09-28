@@ -210,6 +210,22 @@ async def test_install_progress_is_visible_until_cleared():
         assert not panel.has_class("visible")
 
 
+async def test_managed_install_reports_missing_package_manager(monkeypatch):
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        monkeypatch.setattr("superqode.app.mixins.commands_impl.shutil.which", lambda _name: None)
+
+        with pytest.raises(FileNotFoundError, match="Required installer 'bun'"):
+            await app._run_install_with_progress(
+                "Oh My Pi",
+                "bun install -g @oh-my-pi/pi-coding-agent",
+                log,
+            )
+        await pilot.pause()
+        assert not getattr(app, "_install_in_progress", False)
+
+
 async def test_installer_streams_output_and_heartbeats_before_exit(monkeypatch):
     """A quiet SDK install must never leave the transcript frozen."""
     app = SuperQodeApp()
@@ -2495,6 +2511,40 @@ async def test_opencode_model_picker_opens_scrolled_to_the_top():
         assert "model-39" not in visible
 
 
+async def test_live_free_picker_opens_scrolled_to_first_result(monkeypatch):
+    """Deferred layout must not make a long live catalog open around row 11."""
+    from superqode.providers.free_inference import LiveFreeInferenceCandidate
+
+    candidates = [
+        LiveFreeInferenceCandidate(
+            source="openrouter",
+            provider="demo",
+            model=f"demo/free-coder-{index}:free",
+            name=f"Free Coder {index}",
+            source_url="https://openrouter.ai/models",
+            supports_tools=True,
+        )
+        for index in range(30)
+    ]
+    monkeypatch.setattr(
+        "superqode.providers.free_inference.scan_live_free_candidates",
+        lambda **_kwargs: (candidates, []),
+    )
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 18)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        await app._free_cmd("live openrouter", log)
+        await _settle(pilot)
+
+        assert app._free_highlighted_index == 0
+        assert log.scroll_y == 0
+        visible = "\n".join(line.text for line in log.lines[:12])
+        assert "Free Coding" in visible
+        assert "Free Coder 0" in visible
+        assert "Free Coder 10" not in visible
+
+
 async def test_clicking_an_acp_model_row_selects_that_model():
     """A boxed model row must be clickable, not just drag-selectable text.
 
@@ -3105,7 +3155,7 @@ async def test_npm_agent_is_manual_only(monkeypatch):
         assert "Install it for me" not in rendered
         assert "I will install it myself" in rendered
         assert "npm install -g @kilocode/cli" in rendered
-        assert "External agent installers are manual-only" in rendered
+        assert "not in SuperQode's reviewed install manifest" in rendered
         assert [option[0] for option in app._prompts.active.options()] == [
             "copy",
             "recheck",
@@ -3148,6 +3198,49 @@ async def test_pipe_to_shell_agent_is_never_offered_for_install(monkeypatch):
             "manual",
             "cancel",
         ]
+
+
+async def test_reviewed_deepagents_code_recipe_can_install_and_connect(monkeypatch):
+    """A curated OSS recipe is run without a shell, then verified before connect."""
+    agent = {
+        "identity": "deepagents-code.langchain.com",
+        "short_name": "deepagents-code",
+        "name": "Deep Agents Code",
+        "tags": ["open-source", "official-acp"],
+    }
+    connected: list[str] = []
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        monkeypatch.setattr(
+            "superqode.agents.registry.get_agent_installation_info",
+            lambda data: {"command": "uv tool install deepagents-code"},
+        )
+
+        async def complete(_title, command, _log):
+            return SimpleNamespace(returncode=0, stdout=command, stderr="")
+
+        monkeypatch.setattr(app, "_run_install_with_progress", complete)
+        monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda data: True)
+        monkeypatch.setattr(app, "_connect_agent", connected.append)
+
+        assert app._show_agent_install_picker(agent, log) is True
+        await _settle(pilot)
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "Install it for me" in rendered
+        assert "uv tool install deepagents-code" in rendered
+        assert "MIT" in rendered
+
+        app._apply_agent_install_choice(
+            "install",
+            agent_data=agent,
+            install=app._prompts.active.data["install"],
+            log=log,
+        )
+        await _settle(pilot, frames=12)
+
+        assert connected == ["deepagents-code"]
 
 
 async def test_external_agent_install_choice_is_defensively_rejected(monkeypatch):

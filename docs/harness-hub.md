@@ -36,8 +36,8 @@ conversation. Use the mouse or keyboard to:
 
 Press `/` to focus search, arrow keys to move, `Enter` to use (or learn more
 for coming-soon rows), `I` to inspect in place, `B` to build, and `Esc` to
-return. Click a row to preview; Use is explicit. `:hub` opens on **Ready**
-when anything is ready on this machine.
+return. Click a row to preview; Use is explicit. `:hub` opens on **All** so the
+catalog never hides entries before you choose a filter.
 
 ## What appears in the Hub
 
@@ -51,15 +51,20 @@ when anything is ready on this machine.
 | Ecosystem watch | Relevant external harness projects that are discoverable but not yet supported by SuperQode |
 | Project harnesses | Repository-owned HarnessSpecs discovered from the current project |
 
-An entry marked **Ready** can be started now (a signed-in coding agent, or a
-SuperQode harness that already has a model). **Needs a model** is a SuperQode
+In the TUI, an entry marked **Ready** can be started now (a signed-in coding
+agent, or a SuperQode harness that already has a model). **Needs a model** is a SuperQode
 harness such as Core or RLM: the harness is installed, but Use opens Local / an
 API key / a plan because there is nothing to talk to yet. **Needs setup** means
 a dependency, executable, or login is missing. **Coming soon** is an ecosystem
 entry SuperQode cannot run. These states describe startability, not a security
 certification.
 
-The Hub catalogs harnesses, and only harnesses. Model providers, local
+The exported catalog has no active TUI session from which to infer model
+selection. It therefore uses **Ready** structurally for built-in harnesses and
+lets the TUI refine that state to **Needs a model** on the current machine.
+
+The TUI, CLI, and published snapshot use the same complete harness inventory,
+including ACP agents and model/task presets. The Hub catalogs harnesses, and only harnesses. Model providers, local
 inference servers, memory providers, sandboxes, protocol surfaces,
 observability sinks, and chat channels are all real integrations, but someone
 opening the Hub is choosing a harness, not assembling a dependency list. Those
@@ -83,6 +88,7 @@ Press `o`, or select **Open source**. From the CLI:
 
 ```bash
 superqode hub list --openness open
+superqode hub list --openness source-available
 superqode hub list --openness closed
 superqode hub show deepagents
 ```
@@ -98,13 +104,14 @@ answer the question, in order of precedence:
 | SuperQode's own Apache-2.0 source | SuperQode harnesses and presets |
 
 Anything none of these can answer stays blank and is reported as **Not
-published** rather than assumed either way. Two cases this protects:
-a source-available license such as the Functional Source License is not
-reported as open source, and a repository's own HarnessSpec is never given a
-license SuperQode has no way to know.
+published** rather than assumed either way. Source-available projects are a
+separate class: their code is published, but their licence is not OSI open
+source. For example, Crush is labelled **Source available · FSL-1.1-MIT**, not
+Open source. A repository's own HarnessSpec is likewise never given a licence
+SuperQode has no way to know.
 
-Openness says nothing about readiness, support, or security. It answers one
-question: can you read and fork the code that runs the loop.
+Openness says nothing about readiness, support, or security. It reports the
+implementation's licensing class; the exact licence remains visible beside it.
 
 In the terminal these states are measured on the machine you are using. In the
 published snapshot they cannot be, so `--public` reports the structural answer

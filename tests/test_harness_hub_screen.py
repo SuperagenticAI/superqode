@@ -288,3 +288,33 @@ def test_native_harness_without_a_model_is_not_called_ready() -> None:
     assert screen._run_state(rlm) == "use"
     assert "ready" in screen._option_label(rlm).plain
     assert screen._run_state(screen.items[1]) == "setup"
+
+
+@pytest.mark.asyncio
+async def test_ready_filter_only_shows_immediately_runnable_rows() -> None:
+    app = App()
+    async with app.run_test(size=(100, 34)) as pilot:
+        app.push_screen(
+            HarnessHubScreen(
+                [_item("core", "Core"), _item("project", "Project", group="Project harnesses")],
+                initial_filter="ready",
+            )
+        )
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, HarnessHubScreen)
+        assert screen.filtered_items == []
+
+
+@pytest.mark.asyncio
+async def test_hub_searches_license_and_repository_metadata() -> None:
+    from superqode.harness.hub import hub_ecosystem_picker_items
+
+    zcode = next(item for item in hub_ecosystem_picker_items() if item.id == "ecosystem:zcode")
+    app = App()
+    async with app.run_test(size=(100, 34)) as pilot:
+        app.push_screen(HarnessHubScreen([zcode], query="Apache-2.0 zai-org"))
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, HarnessHubScreen)
+        assert [item.id for item in screen.filtered_items] == ["ecosystem:zcode"]

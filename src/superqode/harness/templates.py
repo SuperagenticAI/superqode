@@ -479,6 +479,59 @@ def tau_template(*, name: str = "tau") -> HarnessSpec:
     )
 
 
+def rlm_code_template(*, name: str = "rlm-code") -> HarnessSpec:
+    """Safe, model-neutral preset for the optional RLM Code backend."""
+    return HarnessSpec(
+        name=name,
+        description=(
+            "RLM Code recursive analysis harness with bounded REPL execution, "
+            "context isolation, and trajectory evidence."
+        ),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(
+            backend="rlm-code",
+            config={
+                "rlm_code": {
+                    "profile": "lid",
+                    "context_profile": "evidence",
+                    "sandbox_backend": "docker",
+                    "root_observation_mode": "opaque",
+                    "history_policy": "offload",
+                    "decomposition_hint": True,
+                }
+            },
+        ),
+        model_policy=ModelPolicySpec(profile="local-recursive-analysis"),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="docker",
+            approval_profile="deny",
+            allow_read=True,
+            allow_write=False,
+            allow_shell=False,
+            allow_network=False,
+        ),
+        agents=(
+            AgentSpec(
+                id="rlm-code-root",
+                role="recursive repository analysis",
+                tools=("python",),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "rlm-code",
+            "builtin_harness": True,
+            "category": "workflow",
+            "continuity": "fresh-session",
+            "optional_dependency": "rlm-code>=0.1.11,<0.2.0",
+            "selection_warning": (
+                "RLM Code executes generated Python inside its configured sandbox. "
+                "Docker is the safe default; unsafe exec is never enabled by this preset."
+            ),
+        },
+    )
+
+
 def uhp_template(*, name: str = "uhp") -> HarnessSpec:
     """Preset for a harness hosted on a Unified Harness Protocol server.
 

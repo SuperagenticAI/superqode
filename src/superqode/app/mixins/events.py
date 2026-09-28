@@ -369,6 +369,11 @@ class EventHandlerMixin:
                 event.input.value = ""
                 return
 
+            if getattr(self, "_awaiting_free_selection", False):
+                self.action_select_highlighted_free()
+                event.input.value = ""
+                return
+
             # Empty input with no selection mode - do nothing
             return
 
@@ -630,6 +635,10 @@ class EventHandlerMixin:
 
         if getattr(self, "_awaiting_mode_selection", False):
             if self._handle_mode_selection(text, log):
+                return
+
+        if getattr(self, "_awaiting_free_selection", False):
+            if self._handle_free_selection(text, log):
                 return
 
         # Check if awaiting ACP agent selection

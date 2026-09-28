@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
 
 
-HUB_SCHEMA_VERSION = "1.6"
+HUB_SCHEMA_VERSION = "1.7"
 DOCS_BASE = "https://docs.superqode.dev/"
 PROJECT_REPOSITORY = "https://github.com/SuperagenticAI/superqode"
 
@@ -29,6 +29,7 @@ REFERENCE_ONLY_KINDS = frozenset({"ecosystem"})
 
 OPENNESS_LABELS = {
     "open": "Open source",
+    "source-available": "Source available",
     "closed": "Proprietary",
 }
 OPENNESS_VALUES = tuple(OPENNESS_LABELS)
@@ -108,6 +109,7 @@ _DOCS_BY_ID = {
     "qwen-code": f"{DOCS_BASE}providers/qwen-code/",
     "kimi-code": f"{DOCS_BASE}providers/kimi/",
     "rlm": f"{DOCS_BASE}advanced/rlm/",
+    "rlm-code": f"{DOCS_BASE}advanced/rlm-code/",
     "pipy": f"{DOCS_BASE}advanced/pipy/",
     "tau": f"{DOCS_BASE}advanced/tau/",
     "uhp": f"{DOCS_BASE}providers/uhp/",
@@ -189,9 +191,6 @@ _PROJECT_OPENNESS = HubOpenness("open", "Apache-2.0", PROJECT_REPOSITORY)
 # here resolves through the fallbacks in ``_resolve_openness`` and, failing
 # those, stays unknown. A harness is never reported as open on a guess.
 #
-# Deliberately absent: Charm's Crush ships under the Functional Source License,
-# which is source-available rather than OSI open source, so it must not appear
-# under an open-source filter.
 _LANGCHAIN_DEEPAGENTS = HubOpenness("open", "MIT", "https://github.com/langchain-ai/deepagents")
 _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "deepagents": _LANGCHAIN_DEEPAGENTS,
@@ -203,6 +202,7 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "deepseek-harness": HubOpenness(
         "open", "MIT", "https://github.com/deepseek-ai/deepseek-harness"
     ),
+    "rlm-code": HubOpenness("open", "Apache-2.0", "https://github.com/SuperagenticAI/rlm-code"),
     "droid": HubOpenness("closed"),
     "grok": HubOpenness("open", "Apache-2.0", "https://github.com/xai-org/grok-build"),
     "muse": HubOpenness("closed"),
@@ -218,6 +218,7 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     # what those rows already state about the same harness.
     "acp:fast-agent": HubOpenness("open", "Apache-2.0", "https://github.com/evalstate/fast-agent"),
     "acp:pi": HubOpenness("open", "MIT", "https://github.com/earendil-works/pi"),
+    "acp:omp": HubOpenness("open", "MIT", "https://github.com/can1357/oh-my-pi"),
     "acp:mistral-vibe": HubOpenness(
         "open", "Apache-2.0", "https://github.com/mistralai/mistral-vibe"
     ),
@@ -249,8 +250,13 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "ecosystem:better-harness": HubOpenness(
         "open", "MIT", "https://github.com/QoderAI/better-harness"
     ),
-    # A download-only desktop application with no published source.
-    "ecosystem:zcode": HubOpenness("closed"),
+    "ecosystem:zcode": HubOpenness("open", "Apache-2.0", "https://github.com/zai-org/ZCode"),
+    "ecosystem:exoharness": HubOpenness("open", "MIT", "https://github.com/exoharness/exo"),
+    "ecosystem:crush": HubOpenness(
+        "source-available",
+        "FSL-1.1-MIT",
+        "https://github.com/charmbracelet/crush",
+    ),
 }
 
 
@@ -453,6 +459,11 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "The Pi coding agent and its pi-acp adapter both carry tsconfig.json.",
     ),
+    "acp:omp": HubLanguage(
+        "TypeScript/Rust",
+        "confirmed",
+        "can1357/oh-my-pi is a TypeScript monorepo with a Rust native core; both tsconfig.json and Cargo.toml are published.",
+    ),
     "acp:poolside": HubLanguage(
         "Unknown",
         "inferred",
@@ -605,7 +616,16 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "warpdotdev/warp carries Cargo.toml (Rust 98%).",
     ),
-    "ecosystem:zcode": HubLanguage("Unknown", "inferred", "Closed source desktop application."),
+    "ecosystem:zcode": HubLanguage(
+        "TypeScript",
+        "confirmed",
+        "zai-org/ZCode is a TypeScript monorepo; its terminal agent lives in apps/zcode-cli.",
+    ),
+    "ecosystem:exoharness": HubLanguage(
+        "Rust",
+        "confirmed",
+        "exoharness/exo carries Cargo.toml; the harness layer also includes TypeScript.",
+    ),
     "fx": HubLanguage("Zig", "confirmed", "vercel-labs/fx carries build.zig (Zig 81%)."),
     "gemma4-coding": HubLanguage(
         "Python",
@@ -712,6 +732,11 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "Python",
         "confirmed",
         "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
+    ),
+    "rlm-code": HubLanguage(
+        "Python",
+        "confirmed",
+        "SuperagenticAI/rlm-code carries pyproject.toml and publishes a Python package.",
     ),
     "tau": HubLanguage(
         "Python",
@@ -859,7 +884,7 @@ _SETUP_STEPS_BY_ID = {
         ),
     ),
     "deepagents-code": (
-        HubSetupStep("Install Deep Agents Code", "curl -LsSf https://langch.in/dcode | bash"),
+        HubSetupStep("Install Deep Agents Code", "uv tool install deepagents-code"),
         HubSetupStep(
             "Connect a model provider",
             "dcode",
@@ -902,6 +927,7 @@ _POPULARITY_RANK = {
     "workbench": 230,
     "pipy": 240,
     "rlm": 250,
+    "rlm-code": 252,
     "deepagents": 255,
     "no-tool": 260,
 }
@@ -931,16 +957,15 @@ def _spec_lifecycle_commands(reference: str) -> dict[str, tuple[str, ...]]:
 
 _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
     "ecosystem:zcode": {
-        "interface": "Desktop application",
+        "interface": "Desktop, browser, and terminal agent",
         "support_note": (
-            "Direct SuperQode integration is pending. ZCode currently runs as an independent "
-            "desktop harness and does not document an ACP server, headless CLI, or external "
-            "agent SDK."
+            "ZCode is open source and includes a terminal agent. SuperQode can guide its source "
+            "installation today; a native connector remains pending until ZCode's machine-readable "
+            "headless and session contracts are verified."
         ),
-        "docs_url": "https://zcode.z.ai/en/docs/welcome",
-        "install_command": (
-            "Download the official application for macOS, Windows, or Linux from zcode.z.ai."
-        ),
+        "docs_url": "https://github.com/zai-org/ZCode/tree/main/apps/zcode-cli",
+        "repository": "https://github.com/zai-org/ZCode",
+        "install_command": "git clone https://github.com/zai-org/ZCode.git",
         "tools": (
             "workspace files",
             "terminal commands",
@@ -951,7 +976,8 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
         "policies": (
             "ZCode owns its agent loop, permissions, tools, and task history",
             "ZCode authentication and Coding Plan quota remain with Z.AI",
-            "No commands are executed by SuperQode until an official connector exists",
+            "Source installation stays explicit; SuperQode does not silently install Node or pnpm",
+            "No agent commands are executed by SuperQode until the connector contract is verified",
         ),
         "capabilities": (
             "Official GLM-5.3 harness",
@@ -960,19 +986,73 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
             "Browser automation",
             "Remote control",
         ),
-        "based_on": "Z.AI ZCode Agent",
+        "based_on": "ZCode (TypeScript, Apache-2.0)",
         "popularity_rank": 65,
+        "last_verified": "2026-09-27",
         "setup_steps": (
             HubSetupStep(
-                "Install ZCode independently",
+                "Clone the official source",
+                command="git clone https://github.com/zai-org/ZCode.git",
+                description=("ZCode currently requires Git, Node 24.14.0, and pnpm 10.33.2."),
+            ),
+            HubSetupStep(
+                "Bootstrap and start the terminal agent",
+                command="cd ZCode && pnpm bootstrap && zcode",
+                description="Review the repository instructions before bootstrapping the monorepo.",
+            ),
+        ),
+    },
+    "ecosystem:exoharness": {
+        "interface": "Local REPL and web chat",
+        "support_note": (
+            "SuperQode guides Exo setup but does not run its remote setup script. Exo owns its "
+            "event log, sandboxes, secrets, and agent lifecycle; a native connector requires a "
+            "stable machine interface beyond its interactive REPL."
+        ),
+        "docs_url": "https://github.com/exoharness/exo/blob/main/exoharness/docs/spec.md",
+        "repository": "https://github.com/exoharness/exo",
+        "install_command": (
+            "Download https://raw.githubusercontent.com/exoharness/exo/main/setup.sh, review it, "
+            "then run it manually (requires Git and Docker)."
+        ),
+        "tools": (
+            "sandboxed shell",
+            "workspace mounts",
+            "sealed secrets",
+            "artifacts",
+            "event log",
+        ),
+        "policies": (
+            "Exo owns durable state, forks, rewinds, sandboxes, and tool execution",
+            "Secrets are brokered by Exo and kept out of model context",
+            "SuperQode never downloads and executes Exo's setup script automatically",
+        ),
+        "capabilities": (
+            "Event-sourced agent state",
+            "Fork and rewind runs",
+            "Self-modifying harness",
+            "Sealed secrets",
+            "Sandboxed execution",
+        ),
+        "based_on": "Exo (Rust and TypeScript, MIT)",
+        "popularity_rank": 70,
+        "last_verified": "2026-09-27",
+        "setup_steps": (
+            HubSetupStep(
+                "Download and review Exo's installer",
+                command=(
+                    "curl -fsSL https://raw.githubusercontent.com/exoharness/exo/main/setup.sh "
+                    "-o setup.sh"
+                ),
                 description=(
-                    "Download the official desktop application for macOS, Windows, or Linux. "
-                    "It currently runs outside SuperQode."
+                    "SuperQode will not execute the downloaded script. Exo requires Git and Docker "
+                    "and pins its own Node, pnpm, and Rust toolchains."
                 ),
             ),
             HubSetupStep(
-                "Connect a Z.AI account or model provider",
-                description="Complete authentication inside ZCode's onboarding flow.",
+                "Start Exo after setup",
+                command="./exo.sh",
+                description="The setup script is first-run only; exo.sh starts the REPL afterwards.",
             ),
         ),
     },
@@ -1365,7 +1445,7 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
     template = metadata.get("template")
     based_on = str(inherited or template or "Repository HarnessSpec")
     item_reference = str(item.path) if item.path is not None else item.id
-    return {
+    details: dict[str, Any] = {
         "tools": tools,
         "policies": policies,
         "capabilities": tuple(capabilities),
@@ -1381,6 +1461,33 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
         ),
         **_spec_lifecycle_commands(item_reference),
     }
+    if item.id == "uhp":
+        details.update(
+            install_command=":connect uhp",
+            setup_steps=(
+                HubSetupStep(
+                    "Connect a UHP server and select its harness",
+                    ":connect uhp",
+                    "The UHP client is included; setup stores the server URL, credential, and harness id.",
+                ),
+            ),
+            tui_commands=(":connect uhp", ":harness switch uhp", ":harness status"),
+        )
+    if item.install_extra:
+        from superqode.providers.env_introspect import extra_install_command
+
+        command = extra_install_command(item.install_extra)
+        details.update(
+            install_command=command,
+            setup_steps=(
+                HubSetupStep(
+                    f"Install the {item.display_name} integration into this SuperQode environment",
+                    command,
+                    "Select Set up in the Hub to install, verify, and continue without restarting the TUI.",
+                ),
+            ),
+        )
+    return details
 
 
 def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
@@ -1458,13 +1565,33 @@ def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
     }
 
 
-def hub_record(item: HarnessPickerItem, *, include_local_paths: bool = False) -> HubRecord:
+def hub_record(
+    item: HarnessPickerItem,
+    *,
+    include_local_paths: bool = False,
+    portable_install_commands: bool = False,
+) -> HubRecord:
     """Convert an internal picker item without exposing its executable target."""
     if item.kind in REFERENCE_ONLY_KINDS and isinstance(item.target, HubRecord):
         return item.target
     details = (
         _connection_details(item) if item.kind in {"connection", "acp"} else _native_details(item)
     )
+    if portable_install_commands and item.install_extra:
+        from superqode.providers.env_introspect import install_command
+
+        command = install_command(item.install_extra)
+        details = {
+            **details,
+            "install_command": command,
+            "setup_steps": (
+                HubSetupStep(
+                    f"Install the {item.display_name} integration",
+                    command,
+                    "In the TUI, select Set up to install, verify, and continue without restarting.",
+                ),
+            ),
+        }
     integration_level = _integration_level(item)
     openness = _resolve_openness(item, integration_level)
     language = _resolve_language(item, integration_level)
@@ -1518,9 +1645,16 @@ def _supplemental_records() -> list[HubRecord]:
         (
             "ecosystem:zcode",
             "ZCode",
-            "Z.AI's official desktop coding harness for GLM-5.3, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
+            "Z.AI's Apache-2.0 coding harness for desktop, browser, and terminal use, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
             "https://zcode.z.ai/en",
-            ("Z Code", "Z.AI ZCode", "official GLM-5.3 harness"),
+            ("Z Code", "Z.AI ZCode", "ZCode CLI", "official GLM harness"),
+        ),
+        (
+            "ecosystem:exoharness",
+            "Exo",
+            "An MIT-licensed recursive harness with durable event-sourced state, forks, rewinds, sealed secrets, and sandboxed execution.",
+            "https://exoharness.ai/",
+            ("exo", "exoharness", "recursive harness"),
         ),
         (
             "ecosystem:headlong",
@@ -1640,7 +1774,7 @@ def _supplemental_records() -> list[HubRecord]:
                 "support_note",
                 "Not currently supported in SuperQode; tracked for future integration.",
             ),
-            last_verified="2026-08-14",
+            last_verified=_ECOSYSTEM_DETAILS.get(item_id, {}).get("last_verified", "2026-08-14"),
             aliases=aliases,
             docs_url=_ECOSYSTEM_DETAILS.get(item_id, {}).get("docs_url", homepage),
             repository=_ECOSYSTEM_DETAILS.get(item_id, {}).get(
@@ -1683,7 +1817,7 @@ def hub_ecosystem_picker_items() -> list[HarnessPickerItem]:
             runtime=record.runtime,
             source=record.source,
             group=record.category,
-            available=record.readiness == "supported",
+            available=record.readiness == "ready",
             issue=record.setup,
             continuity=record.continuity,
             kind=record.kind,
@@ -1716,7 +1850,11 @@ def build_hub_index(
     if public:
         inventory = [item for item in inventory if item.group != "Project harnesses"]
     records = [
-        hub_record(item, include_local_paths=include_local_paths and not public).to_dict()
+        hub_record(
+            item,
+            include_local_paths=include_local_paths and not public,
+            portable_install_commands=public,
+        ).to_dict()
         for item in inventory
     ]
     if items is None and include_all:
@@ -1746,8 +1884,8 @@ def _publication_readiness(record: dict[str, Any]) -> str:
     everyone, and routes that wrap an external CLI, account, or optional
     package need setup for everyone.
 
-    States that were never machine-derived (``supported`` for model and
-    inference routes, ``not-supported`` for ecosystem entries) pass through.
+    States that were never machine-derived (currently ``not-supported`` for
+    ecosystem entries) pass through.
     """
     readiness = str(record.get("readiness", ""))
     if readiness not in {"ready", "setup-required", "discover"}:

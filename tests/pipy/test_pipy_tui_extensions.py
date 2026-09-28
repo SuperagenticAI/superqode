@@ -71,6 +71,7 @@ def test_harnesses_with_execution_caveats_carry_warnings():
         "rlm",
         "rlm-docker",
         "rlm-monty",
+        "rlm-code",
         # Delegates tool execution to DeepSeek's own runtime and permission mode.
         "deepseek-harness",
         # Delegates tool execution to the DeepAgents filesystem backend and its

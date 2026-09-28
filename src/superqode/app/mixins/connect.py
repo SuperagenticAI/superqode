@@ -513,6 +513,20 @@ class ConnectMixin:
             return
         key_spec = next((spec for spec in entry.auth if spec.mode in {"byok", "local"}), None)
         after_auth = key_spec.after_auth if key_spec is not None else ""
+        if entry.acp_agent:
+            from superqode.agents.registry import get_registry_agent_by_short_name
+            from superqode.commands.acp import check_agent_installed
+
+            agent_data = get_registry_agent_by_short_name(entry.acp_agent)
+            if agent_data and not check_agent_installed(agent_data):
+                show_installer = getattr(self, "_show_agent_install_picker", None)
+                if callable(show_installer) and show_installer(
+                    agent_data,
+                    log,
+                    on_ready=lambda: self._begin_key_harness(profile, log, apply_route=apply_route),
+                ):
+                    _drop_pending()
+                    return
         if after_auth in {"vendor-key-acp", "vendor-key-cli"}:
             _drop_pending()
             self._begin_vendor_key(profile, log)
@@ -606,8 +620,20 @@ class ConnectMixin:
             return None
         return frozenset(allowed)
 
-    def _write_harness_setup_card(self, log: ConversationLog, entry, spec) -> None:
+    def _write_harness_setup_card(
+        self, log: ConversationLog, entry, spec, *, offer_install: bool = True
+    ) -> None:
         """Honest card for a listed harness SuperQode cannot launch yet."""
+        if offer_install:
+            show_installer = getattr(self, "_show_managed_harness_install_picker", None)
+            if callable(show_installer) and show_installer(
+                entry,
+                log,
+                on_ready=lambda: self._write_harness_setup_card(
+                    log, entry, spec, offer_install=False
+                ),
+            ):
+                return
         t = Text()
         t.append("\n  ", style=THEME["muted"])
         t.append(entry.label, style=f"bold {THEME['purple']}")
@@ -1514,6 +1540,21 @@ class ConnectMixin:
             # replaces guidance the user can act on with a dead end, and the
             # picker connectors are menus that must always open.
             if conn == "acp":
+                from superqode.agents.registry import get_registry_agent_by_short_name
+
+                agent_data = get_registry_agent_by_short_name(profile.acp_agent or profile.id)
+                show_installer = getattr(self, "_show_agent_install_picker", None)
+                if agent_data and callable(show_installer):
+                    self._apply_subscription_billing_policy(profile, log)
+                    self._connecting_profile_id = getattr(profile, "id", "") or ""
+                    if show_installer(
+                        agent_data,
+                        log,
+                        on_ready=lambda: self._connect_acp_cmd(
+                            profile.acp_agent or profile.id, log
+                        ),
+                    ):
+                        return
                 log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
                 return
         if conn == "systemone-picker":

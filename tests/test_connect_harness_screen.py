@@ -181,6 +181,7 @@ def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeyp
             assert entry.source in {
                 "built-in",
                 "built-in-template",
+                "optional:rlm-code",
                 "optional:tau",
                 "optional:uhp",
                 "optional:deepseek-harness",
@@ -1445,6 +1446,34 @@ def test_an_acp_attach_row_asks_for_a_model_instead_of_a_setup_card(monkeypatch)
     assert stub.menus == [CONNECT_MENU_KEY_MODELS]
     assert stub._key_harness_session.entry_id == "opencode-key"
     assert stub._key_harness_session.after_auth == "acp-attach"
+
+
+def test_missing_open_agent_installs_before_model_selection(monkeypatch):
+    """A reviewed Open row resumes its own key/local flow after installation."""
+    _clear_key_envs(monkeypatch)
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda _agent: False)
+    stub = _attach_stub()
+    captured = []
+
+    def show(agent, log, *, on_ready=None):
+        captured.append((agent["short_name"], on_ready))
+        return True
+
+    stub._show_agent_install_picker = show
+    stub._begin_key_harness(get_connection_profile("qwen-code-key"), FakeLog())
+
+    assert len(captured) == 1
+    assert captured[0][0] == "qwen"
+    assert callable(captured[0][1])
+    assert stub.menus == []
+
+    captured[0][1]()
+    # Simulate the post-install verification succeeding on resume.
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda _agent: True)
+    captured[0][1]()
+    from superqode.providers.connection_profiles import CONNECT_MENU_KEY_MODELS
+
+    assert stub.menus == [CONNECT_MENU_KEY_MODELS]
 
 
 def test_choosing_a_provider_hands_its_key_to_the_agent(monkeypatch, tmp_path):

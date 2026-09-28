@@ -33,14 +33,20 @@ class HarnessHubMixin:
         elif lowered.startswith("show "):
             item_id = raw[5:].strip()
             try:
+                items = self._harness_hub_items()
+                wanted = item_id.casefold()
                 item = next(
-                    (
-                        candidate
-                        for candidate in self._harness_hub_items()
-                        if candidate.id.casefold() == item_id.casefold()
-                    ),
-                    None,
+                    (candidate for candidate in items if candidate.id.casefold() == wanted), None
                 )
+                if item is None:
+                    matches = [
+                        candidate
+                        for candidate in items
+                        if candidate.display_name.casefold() == wanted
+                        or wanted in {alias.casefold() for alias in hub_record(candidate).aliases}
+                        or candidate.id.removeprefix("ecosystem:").casefold() == wanted
+                    ]
+                    item = matches[0] if len(matches) == 1 else None
             except Exception as exc:
                 self._present_outcome(
                     Outcome(
@@ -107,28 +113,12 @@ class HarnessHubMixin:
 
     @staticmethod
     def _harness_hub_items() -> list[HarnessPickerItem]:
-        """Return runnable entries plus read-only ecosystem discovery records.
-
-        ACP agents are deliberately absent. Every one of them is reachable from
-        ``:connect acp``, which lists the full registry and marks what is
-        already installed, so carrying them here too made the Hub roughly twice
-        as long while saying the same thing twice. Leaving the protocol catalogue
-        unexpanded also avoids building several dozen entries only to drop them.
-        """
+        """Return the complete local catalog plus read-only ecosystem records."""
         items = [
-            *(
-                item
-                for item in harness_picker_items(
-                    Path.cwd(),
-                    include_all=True,
-                    expand_protocol_catalog=False,
-                )
-                # Presets are tunings of the four SuperQode harnesses rather
-                # than harnesses in their own right, so they pad the Hub without
-                # offering anything new to run; `:harness switch <preset>` and
-                # the preset menu still reach them.
-                if item.group not in {"ACP agents", "Model and task presets"}
-                and item.id != "no-tool"
+            *harness_picker_items(
+                Path.cwd(),
+                include_all=True,
+                expand_protocol_catalog=True,
             ),
             *hub_ecosystem_picker_items(),
         ]

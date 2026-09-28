@@ -327,7 +327,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
     def _matches_filter(self, item: HarnessPickerItem) -> bool:
         if self.filter_name == "ready":
-            return item.available
+            return self._run_state(item) == "use"
         if self.filter_name == "setup":
             return not item.available and item.kind not in REFERENCE_ONLY_KINDS
         if self.filter_name == "open":
@@ -369,6 +369,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     def _matches_query(self, item: HarnessPickerItem) -> bool:
         if not self.search_query:
             return True
+        record = hub_record(item, include_local_paths=True)
         haystack = " ".join(
             (
                 item.id,
@@ -379,7 +380,17 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                 item.source,
                 item.provider,
                 item.model,
-                language_of(item).language,
+                record.language,
+                record.openness,
+                record.license,
+                record.repository,
+                record.homepage,
+                record.docs_url,
+                record.interface,
+                record.support_note,
+                " ".join(record.aliases),
+                " ".join(record.capabilities),
+                " ".join(record.tools),
             )
         ).casefold()
         return all(part in haystack for part in self.search_query.casefold().split())

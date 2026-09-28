@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.6",
-  "generated_at": "2026-09-26T16:03:32.838148+00:00",
-  "count": 112,
+  "schema_version": "1.7",
+  "generated_at": "2026-09-28T06:33:02.988748+00:00",
+  "count": 115,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -521,7 +521,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/anthropic-claude/",
-      "install_command": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
+      "install_command": "uv tool install \"superqode[claude-agent-sdk]\"",
       "tui_commands": [
         ":connect claude",
         ":harness switch claude",
@@ -546,9 +546,9 @@
       "popularity_rank": 20,
       "setup_steps": [
         {
-          "title": "Complete the required setup",
-          "command": "",
-          "description": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY"
+          "title": "Install the Claude Agent SDK (API key) integration",
+          "command": "uv tool install \"superqode[claude-agent-sdk]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
         }
       ],
       "openness": "",
@@ -1491,7 +1491,7 @@
       "setup_steps": [
         {
           "title": "Install Deep Agents Code",
-          "command": "curl -LsSf https://langch.in/dcode | bash",
+          "command": "uv tool install deepagents-code",
           "description": ""
         },
         {
@@ -1771,7 +1771,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "curl -LsSf https://langch.in/dcode | bash",
+      "setup": "uv tool install deepagents-code",
       "warning": "",
       "project_path": "",
       "homepage": "https://docs.langchain.com/deepagents-code",
@@ -1781,7 +1781,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.langchain.com/deepagents-code",
-      "install_command": "curl -LsSf https://langch.in/dcode | bash",
+      "install_command": "uv tool install deepagents-code",
       "tui_commands": [
         ":connect acp deepagents-code",
         ":harness switch acp:deepagents-code",
@@ -1806,7 +1806,7 @@
       "setup_steps": [
         {
           "title": "Install Deep Agents Code",
-          "command": "curl -LsSf https://langch.in/dcode | bash",
+          "command": "uv tool install deepagents-code",
           "description": ""
         }
       ],
@@ -2917,6 +2917,64 @@
       "language": "TypeScript",
       "language_confidence": "confirmed",
       "language_evidence": "MoonshotAI/kimi-code is TypeScript. (Moonshot's separate Kimi CLI is Python.)"
+    },
+    {
+      "id": "acp:omp",
+      "name": "Oh My Pi (ACP)",
+      "description": "MIT-licensed, batteries-included Pi fork with native ACP and RPC modes, LSP, debugging, subagents, and broad model-provider support.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "bun install -g @oh-my-pi/pi-coding-agent",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/can1357/oh-my-pi",
+      "repository": "https://github.com/can1357/oh-my-pi",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/can1357/oh-my-pi",
+      "install_command": "bun install -g @oh-my-pi/pi-coding-agent",
+      "tui_commands": [
+        ":connect acp omp",
+        ":harness switch acp:omp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:omp \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Oh My Pi agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Oh My Pi",
+          "command": "bun install -g @oh-my-pi/pi-coding-agent",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "MIT",
+      "language": "TypeScript/Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "can1357/oh-my-pi is a TypeScript monorepo with a Rust native core; both tsconfig.json and Cargo.toml are published."
     },
     {
       "id": "acp:pi",
@@ -4381,7 +4439,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "pip install mistral-vibe",
+      "setup": "uv tool install mistral-vibe",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/mistralai/mistral-vibe",
@@ -4391,7 +4449,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://github.com/mistralai/mistral-vibe",
-      "install_command": "pip install mistral-vibe",
+      "install_command": "uv tool install mistral-vibe",
       "tui_commands": [
         ":connect acp mistral-vibe",
         ":harness switch acp:mistral-vibe",
@@ -4416,7 +4474,7 @@
       "setup_steps": [
         {
           "title": "Install Mistral Vibe",
-          "command": "pip install mistral-vibe",
+          "command": "uv tool install mistral-vibe",
           "description": ""
         }
       ],
@@ -4891,6 +4949,78 @@
       "language_evidence": "vinhnx/vtcode carries Cargo.toml."
     },
     {
+      "id": "rlm-code",
+      "name": "RLM Code",
+      "description": "RLM Code recursive analysis harness with bounded REPL execution, context isolation, and trajectory evidence.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "rlm-code",
+      "source": "optional:rlm-code",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "RLM Code is not installed; run uv tool install \"superqode[rlm-code]\"",
+      "warning": "RLM Code executes generated Python inside its configured sandbox. Docker is the safe default; unsafe exec is never enabled by this preset.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/rlm-code",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/advanced/rlm-code/",
+      "install_command": "uv tool install \"superqode[rlm-code]\"",
+      "tui_commands": [
+        ":harness switch rlm-code",
+        ":harness show rlm-code",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-code \"Describe your task\"",
+        "superqode harness show rlm-code"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python"
+      ],
+      "policies": [
+        "Sandbox: docker",
+        "Approvals: deny",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "rlm-code",
+      "popularity_rank": 252,
+      "setup_steps": [
+        {
+          "title": "Install the RLM Code integration",
+          "command": "uv tool install \"superqode[rlm-code]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "SuperagenticAI/rlm-code carries pyproject.toml and publishes a Python package."
+    },
+    {
       "id": "tau",
       "name": "Tau (Hugging Face)",
       "description": "Hugging Face Tau event-first agent in read-only preview mode; sessions and progress remain visible in SuperQode.",
@@ -4949,7 +5079,13 @@
       ],
       "based_on": "tau",
       "popularity_rank": 500,
-      "setup_steps": [],
+      "setup_steps": [
+        {
+          "title": "Install the Tau (Hugging Face) integration",
+          "command": "uv tool install \"superqode[tau]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
       "openness": "open",
       "license": "MIT",
       "language": "Python",
@@ -4969,7 +5105,7 @@
       "continuity": "exact-resume",
       "provider": "",
       "model": "",
-      "setup": "Connect one with `:connect uhp <url>` in the TUI, or `superqode connect uhp --base-url <url>` in a shell. SUPERQODE_UHP_BASE_URL and SUPERQODE_UHP_API_KEY work too.",
+      "setup": "",
       "warning": "",
       "project_path": "",
       "homepage": "",
@@ -4979,10 +5115,10 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/uhp/",
-      "install_command": "Connect one with `:connect uhp <url>` in the TUI, or `superqode connect uhp --base-url <url>` in a shell. SUPERQODE_UHP_BASE_URL and SUPERQODE_UHP_API_KEY work too.",
+      "install_command": ":connect uhp",
       "tui_commands": [
+        ":connect uhp",
         ":harness switch uhp",
-        ":harness show uhp",
         ":harness status"
       ],
       "cli_commands": [
@@ -5013,7 +5149,13 @@
       ],
       "based_on": "uhp",
       "popularity_rank": 500,
-      "setup_steps": [],
+      "setup_steps": [
+        {
+          "title": "Connect a UHP server and select its harness",
+          "command": ":connect uhp",
+          "description": "The UHP client is included; setup stores the server URL, credential, and harness id."
+        }
+      ],
       "openness": "open",
       "license": "Apache-2.0",
       "language": "Python",
@@ -5043,7 +5185,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/advanced/deepseek-harness/",
-      "install_command": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "install_command": "uv tool install \"superqode[deepseek-harness]\"",
       "tui_commands": [
         ":harness switch deepseek-harness",
         ":harness show deepseek-harness",
@@ -5082,7 +5224,13 @@
       ],
       "based_on": "deepseek-harness",
       "popularity_rank": 500,
-      "setup_steps": [],
+      "setup_steps": [
+        {
+          "title": "Install the DeepSeek Harness integration",
+          "command": "uv tool install \"superqode[deepseek-harness]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
       "openness": "open",
       "license": "MIT",
       "language": "TypeScript",
@@ -5151,7 +5299,13 @@
       ],
       "based_on": "deepagents",
       "popularity_rank": 255,
-      "setup_steps": [],
+      "setup_steps": [
+        {
+          "title": "Install the DeepAgents integration",
+          "command": "uv tool install \"superqode[deepagents]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
       "openness": "open",
       "license": "MIT",
       "language": "Python",
@@ -6231,7 +6385,7 @@
     {
       "id": "ecosystem:zcode",
       "name": "ZCode",
-      "description": "Z.AI's official desktop coding harness for GLM-5.3, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
+      "description": "Z.AI's Apache-2.0 coding harness for desktop, browser, and terminal use, with its own agent loop, tools, review flow, browser automation, and long-horizon task experience.",
       "category": "Ecosystem watch",
       "kind": "ecosystem",
       "runtime": "external",
@@ -6245,17 +6399,18 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://zcode.z.ai/en",
-      "repository": "",
-      "interface": "Desktop application",
-      "support_note": "Direct SuperQode integration is pending. ZCode currently runs as an independent desktop harness and does not document an ACP server, headless CLI, or external agent SDK.",
-      "last_verified": "2026-08-14",
+      "repository": "https://github.com/zai-org/ZCode",
+      "interface": "Desktop, browser, and terminal agent",
+      "support_note": "ZCode is open source and includes a terminal agent. SuperQode can guide its source installation today; a native connector remains pending until ZCode's machine-readable headless and session contracts are verified.",
+      "last_verified": "2026-09-27",
       "aliases": [
         "Z Code",
         "Z.AI ZCode",
-        "official GLM-5.3 harness"
+        "ZCode CLI",
+        "official GLM harness"
       ],
-      "docs_url": "https://zcode.z.ai/en/docs/welcome",
-      "install_command": "Download the official application for macOS, Windows, or Linux from zcode.z.ai.",
+      "docs_url": "https://github.com/zai-org/ZCode/tree/main/apps/zcode-cli",
+      "install_command": "git clone https://github.com/zai-org/ZCode.git",
       "tui_commands": [],
       "cli_commands": [],
       "eval_commands": [],
@@ -6270,7 +6425,8 @@
       "policies": [
         "ZCode owns its agent loop, permissions, tools, and task history",
         "ZCode authentication and Coding Plan quota remain with Z.AI",
-        "No commands are executed by SuperQode until an official connector exists"
+        "Source installation stays explicit; SuperQode does not silently install Node or pnpm",
+        "No agent commands are executed by SuperQode until the connector contract is verified"
       ],
       "capabilities": [
         "Official GLM-5.3 harness",
@@ -6279,25 +6435,96 @@
         "Browser automation",
         "Remote control"
       ],
-      "based_on": "Z.AI ZCode Agent",
+      "based_on": "ZCode (TypeScript, Apache-2.0)",
       "popularity_rank": 65,
       "setup_steps": [
         {
-          "title": "Install ZCode independently",
-          "command": "",
-          "description": "Download the official desktop application for macOS, Windows, or Linux. It currently runs outside SuperQode."
+          "title": "Clone the official source",
+          "command": "git clone https://github.com/zai-org/ZCode.git",
+          "description": "ZCode currently requires Git, Node 24.14.0, and pnpm 10.33.2."
         },
         {
-          "title": "Connect a Z.AI account or model provider",
-          "command": "",
-          "description": "Complete authentication inside ZCode's onboarding flow."
+          "title": "Bootstrap and start the terminal agent",
+          "command": "cd ZCode && pnpm bootstrap && zcode",
+          "description": "Review the repository instructions before bootstrapping the monorepo."
         }
       ],
-      "openness": "closed",
-      "license": "",
-      "language": "Unknown",
-      "language_confidence": "inferred",
-      "language_evidence": "Closed source desktop application."
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "TypeScript",
+      "language_confidence": "confirmed",
+      "language_evidence": "zai-org/ZCode is a TypeScript monorepo; its terminal agent lives in apps/zcode-cli."
+    },
+    {
+      "id": "ecosystem:exoharness",
+      "name": "Exo",
+      "description": "An MIT-licensed recursive harness with durable event-sourced state, forks, rewinds, sealed secrets, and sandboxed execution.",
+      "category": "Ecosystem watch",
+      "kind": "ecosystem",
+      "runtime": "external",
+      "source": "industry watch",
+      "readiness": "not-supported",
+      "integration_level": "ecosystem",
+      "continuity": "external",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://exoharness.ai/",
+      "repository": "https://github.com/exoharness/exo",
+      "interface": "Local REPL and web chat",
+      "support_note": "SuperQode guides Exo setup but does not run its remote setup script. Exo owns its event log, sandboxes, secrets, and agent lifecycle; a native connector requires a stable machine interface beyond its interactive REPL.",
+      "last_verified": "2026-09-27",
+      "aliases": [
+        "exo",
+        "exoharness",
+        "recursive harness"
+      ],
+      "docs_url": "https://github.com/exoharness/exo/blob/main/exoharness/docs/spec.md",
+      "install_command": "Download https://raw.githubusercontent.com/exoharness/exo/main/setup.sh, review it, then run it manually (requires Git and Docker).",
+      "tui_commands": [],
+      "cli_commands": [],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [
+        "sandboxed shell",
+        "workspace mounts",
+        "sealed secrets",
+        "artifacts",
+        "event log"
+      ],
+      "policies": [
+        "Exo owns durable state, forks, rewinds, sandboxes, and tool execution",
+        "Secrets are brokered by Exo and kept out of model context",
+        "SuperQode never downloads and executes Exo's setup script automatically"
+      ],
+      "capabilities": [
+        "Event-sourced agent state",
+        "Fork and rewind runs",
+        "Self-modifying harness",
+        "Sealed secrets",
+        "Sandboxed execution"
+      ],
+      "based_on": "Exo (Rust and TypeScript, MIT)",
+      "popularity_rank": 70,
+      "setup_steps": [
+        {
+          "title": "Download and review Exo's installer",
+          "command": "curl -fsSL https://raw.githubusercontent.com/exoharness/exo/main/setup.sh -o setup.sh",
+          "description": "SuperQode will not execute the downloaded script. Exo requires Git and Docker and pins its own Node, pnpm, and Rust toolchains."
+        },
+        {
+          "title": "Start Exo after setup",
+          "command": "./exo.sh",
+          "description": "The setup script is first-run only; exo.sh starts the REPL afterwards."
+        }
+      ],
+      "openness": "open",
+      "license": "MIT",
+      "language": "Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "exoharness/exo carries Cargo.toml; the harness layer also includes TypeScript."
     },
     {
       "id": "ecosystem:headlong",
@@ -6869,7 +7096,7 @@
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/charmbracelet/crush",
-      "repository": "",
+      "repository": "https://github.com/charmbracelet/crush",
       "interface": "External project",
       "support_note": "Not currently supported in SuperQode; tracked for future integration.",
       "last_verified": "2026-08-14",
@@ -6891,8 +7118,8 @@
       "based_on": "Independent project",
       "popularity_rank": 700,
       "setup_steps": [],
-      "openness": "",
-      "license": "",
+      "openness": "source-available",
+      "license": "FSL-1.1-MIT",
       "language": "Go",
       "language_confidence": "confirmed",
       "language_evidence": "charmbracelet/crush carries go.mod (Go 98%)."

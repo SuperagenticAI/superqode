@@ -134,6 +134,7 @@ notifications limited to state changes that require user awareness.
 Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 
 - `:connect` - Connect to provider/agent
+- `:free` - Keep the current harness and choose a free hosted or account-backed model route
 - `:home` - Return to the SuperQode home screen from any picker or workflow
 - `:connect kimi-code` - Connect Moonshot AI's first-party Kimi Code ACP server
 - `:connect qwen-code` - Connect QwenLM's first-party Qwen Code ACP server
@@ -229,7 +230,7 @@ show status, or display its local help where supported.
 | --- | --- |
 | General operation | `:help`, `:keys`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
 | Discovery | `:explore`, `:capabilities`, `:tour` |
-| Connections and authentication | `:connect`, `:connect a2a`, `:connect uhp`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
+| Connections and authentication | `:connect`, `:free`, `:connect a2a`, `:connect uhp`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |

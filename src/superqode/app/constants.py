@@ -285,6 +285,10 @@ THINKING_MSGS = [
 # Commands for autocompletion - ordered by priority (most common first)
 COMMANDS = [
     ":connect",
+    ":free",
+    ":free ready",
+    ":free live",
+    ":free live openrouter",
     ":connect agents",
     ":connect harness",
     ":connect models",

@@ -692,6 +692,8 @@ class SlashCommandMixin:
             self._model_cmd(args, log)
         elif c in ("providers", "provider"):
             self._providers_cmd(args, log)
+        elif c == "free":
+            self.run_worker(self._free_cmd(args, log))
         elif c in ("recommend", "model-guide"):
             self._recommend_cmd(args, log)
         elif c == "sandbox":

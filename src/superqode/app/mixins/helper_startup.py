@@ -396,6 +396,14 @@ class HelperStartupMixin:
                 "connection",
             ),
             PaletteCommand(
+                "free",
+                "Free Coding",
+                "Connect the current harness to a free model route",
+                "◇",
+                ":free",
+                "connection",
+            ),
+            PaletteCommand(
                 "sessions",
                 "Sessions",
                 "Browse recent coding sessions",

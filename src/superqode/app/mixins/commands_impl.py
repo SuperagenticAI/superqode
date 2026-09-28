@@ -219,6 +219,12 @@ class CommandImplMixin:
 
     async def _run_install_with_progress(self, title: str, command: str, log):
         """Stream installer output and heartbeats into the visible transcript."""
+        argv = shlex.split(command)
+        installer = argv[0] if argv else ""
+        if not installer or not shutil.which(installer):
+            raise FileNotFoundError(
+                f"Required installer {installer or '<missing>'!r} is not available on PATH."
+            )
         started = time.monotonic()
         self._install_in_progress = True
         cancel = threading.Event()
@@ -228,7 +234,6 @@ class CommandImplMixin:
         output_lines: queue.Queue[str] = queue.Queue()
 
         def run_install() -> subprocess.CompletedProcess[str]:
-            argv = shlex.split(command)
             with subprocess.Popen(
                 argv,
                 cwd=Path.cwd(),
@@ -407,7 +412,9 @@ class CommandImplMixin:
 
         self.run_worker(self._install_runtime_extra_then_continue(pending, log))
 
-    def _apply_agent_install_choice(self, choice: str, *, agent_data: dict, install, log=None):
+    def _apply_agent_install_choice(
+        self, choice: str, *, agent_data: dict, install, log=None, on_ready=None
+    ):
         """Run the selected action from the ACP agent install prompt."""
         if log is None:
             log = self.query_one("#log", ConversationLog)
@@ -431,7 +438,7 @@ class CommandImplMixin:
             return
 
         if choice == "copy":
-            self._show_agent_install_picker(agent_data, log)
+            self._show_agent_install_picker(agent_data, log, on_ready=on_ready)
             self._copy_setup_command(install.raw, log)
             return
 
@@ -440,9 +447,12 @@ class CommandImplMixin:
 
             if check_agent_installed(agent_data):
                 log.add_success(f"{name} is installed. Connecting now.")
-                self._connect_agent(str(agent_data.get("short_name") or ""))
+                if callable(on_ready):
+                    on_ready()
+                else:
+                    self._connect_agent(str(agent_data.get("short_name") or ""))
             else:
-                self._show_agent_install_picker(agent_data, log)
+                self._show_agent_install_picker(agent_data, log, on_ready=on_ready)
                 log.add_info(
                     f"{name} is still not available on PATH. Run the command above, then check again."
                 )
@@ -453,10 +463,213 @@ class CommandImplMixin:
             log.add_info(f"Skipped installing {name}. Choose a connection above.")
             return
 
-        log.add_error(
-            "The connection flow does not automatically install external agents. "
-            "Choose 'I will install it myself' to see the vendor command."
+        if choice == "install":
+            from superqode.agents.install_commands import (
+                managed_agent_install,
+                managed_agent_install_rejection_reason,
+            )
+
+            # Re-resolve from the immutable built-in manifest. Prompt data and
+            # remote registry metadata are not authorization to execute code.
+            reviewed = managed_agent_install(agent_data)
+            if reviewed is None or reviewed.command != install.command:
+                rejection = managed_agent_install_rejection_reason(agent_data)
+                log.add_error(
+                    rejection
+                    or "SuperQode does not automatically install external agents without a "
+                    "reviewed recipe. This agent does not have one. "
+                    "Choose the manual option to inspect its vendor command."
+                )
+                return
+            if self._prompts.is_active("agent_install"):
+                self._prompts.pop()
+            self.run_worker(
+                self._install_agent_then_connect(agent_data, reviewed, log, on_ready=on_ready),
+                exclusive=False,
+            )
+            return
+
+        log.add_error("Choose one of the installation actions shown above.")
+
+    async def _install_agent_then_connect(
+        self, agent_data: dict, install, log, *, on_ready=None
+    ) -> None:
+        """Run a reviewed package recipe, verify its binary, then connect."""
+        from superqode.commands.acp import check_agent_installed
+
+        name = str(agent_data.get("name") or agent_data.get("short_name") or "agent")
+        command = str(install.command or "")
+        log.add_info(f"Installing {name} from {install.repository} ({install.license})...")
+        self.is_busy = True
+        try:
+            completed = await self._run_install_with_progress(name, command, log)
+        except InstallCancelled:
+            log.add_info(f"{name} installation cancelled.")
+            self._show_install_recovery(
+                name,
+                command,
+                log,
+                lambda: self.run_worker(
+                    self._install_agent_then_connect(agent_data, install, log, on_ready=on_ready),
+                    exclusive=False,
+                ),
+            )
+            return
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.add_error(f"{name} installation failed: {exc}")
+            self._show_install_recovery(
+                name,
+                command,
+                log,
+                lambda: self.run_worker(
+                    self._install_agent_then_connect(agent_data, install, log, on_ready=on_ready),
+                    exclusive=False,
+                ),
+            )
+            return
+        finally:
+            self.is_busy = False
+
+        if completed.returncode != 0:
+            self._show_install_progress(name, command, "Failed")
+            log.add_error(f"{name} installation exited with {completed.returncode}.")
+            self._show_install_recovery(
+                name,
+                command,
+                log,
+                lambda: self.run_worker(
+                    self._install_agent_then_connect(agent_data, install, log, on_ready=on_ready),
+                    exclusive=False,
+                ),
+            )
+            return
+        if not check_agent_installed(agent_data):
+            self._show_install_progress(name, command, "Verification failed")
+            log.add_error(
+                f"{name} finished installing but its command is not available on PATH. "
+                "Restart the terminal or inspect the installer output."
+            )
+            return
+
+        log.add_success(f"{name} installed and verified. Connecting now.")
+        self._show_install_progress(name, command, "Connecting")
+        if callable(on_ready):
+            on_ready()
+        else:
+            self._connect_agent(str(agent_data.get("short_name") or ""))
+        self._show_install_progress(name, command, "")
+
+    def _show_managed_harness_install_picker(self, entry, log, *, on_ready=None) -> bool:
+        """Offer installation for a reviewed open harness without a connector."""
+        from superqode.agents.install_commands import managed_harness_install
+        from superqode.app.prompt_stack import PromptSpec
+
+        install = managed_harness_install(str(getattr(entry, "id", "") or ""))
+        if install is None or shutil.which(install.executable):
+            return False
+        options = (
+            *(
+                (("install", "Install it for me", f"run the reviewed {install.kind} recipe"),)
+                if install.argv and shutil.which(install.argv[0])
+                else ()
+            ),
+            ("copy", "Copy install command", "run it yourself in another terminal"),
+            ("cancel", "Choose another harness", "return without installing"),
         )
+        if not self._prompts.is_active("managed_harness_install"):
+            self._prompts.push(
+                PromptSpec(
+                    name="managed_harness_install",
+                    kind="picker",
+                    options=lambda: list(options),
+                    on_select=lambda option: self._apply_managed_harness_install_choice(
+                        option[0],
+                        entry=entry,
+                        install=install,
+                        log=log,
+                        on_ready=on_ready,
+                    ),
+                    on_cancel=lambda: self._apply_managed_harness_install_choice(
+                        "cancel",
+                        entry=entry,
+                        install=install,
+                        log=log,
+                        on_ready=on_ready,
+                    ),
+                    render=lambda: self._show_managed_harness_install_picker(
+                        entry, log, on_ready=on_ready
+                    ),
+                    data={"entry": entry, "install": install, "on_ready": on_ready},
+                )
+            )
+        text = Text()
+        text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        text.append("Setup required", style=f"bold {THEME['text']}")
+        text.append(f"   {getattr(entry, 'label', entry.id)}\n\n", style=THEME["muted"])
+        text.append("    Reviewed install command\n      ", style=THEME["muted"])
+        text.append(f"{install.command}\n\n", style=THEME["cyan"])
+        if install.argv and not shutil.which(install.argv[0]):
+            text.append(
+                f"    Automatic install needs `{install.argv[0]}` on PATH. "
+                "Install that package manager, then reopen setup.\n\n",
+                style=THEME["warning"],
+            )
+        text.append(
+            f"    {install.license} · {install.repository}\n"
+            "    The harness keeps ownership of its login, model, tools, and sessions.\n\n",
+            style=THEME["muted"],
+        )
+        text.append(self._setup_option_lines(options))
+        log.clear()
+        log.write(text)
+        self.set_timer(0.05, self._ensure_input_focus)
+        return True
+
+    def _apply_managed_harness_install_choice(
+        self, choice: str, *, entry, install, log, on_ready=None
+    ) -> None:
+        if choice == "copy":
+            self._copy_setup_command(install.command, log)
+            return
+        if choice == "install":
+            if self._prompts.is_active("managed_harness_install"):
+                self._prompts.pop()
+            self.run_worker(
+                self._install_managed_harness_then_continue(entry, install, log, on_ready=on_ready),
+                exclusive=False,
+            )
+            return
+        if self._prompts.is_active("managed_harness_install"):
+            self._prompts.pop()
+        self._show_connect_type_picker(log)
+
+    async def _install_managed_harness_then_continue(
+        self, entry, install, log, *, on_ready=None
+    ) -> None:
+        """Install and verify a reviewed standalone open harness."""
+        name = str(getattr(entry, "label", "") or getattr(entry, "id", "") or "Harness")
+        command = install.command
+        log.add_info(f"Installing {name} from {install.repository} ({install.license})...")
+        try:
+            completed = await self._run_install_with_progress(name, command, log)
+        except InstallCancelled:
+            log.add_info(f"{name} installation cancelled.")
+            return
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.add_error(f"{name} installation failed: {exc}")
+            return
+        if completed.returncode != 0:
+            self._show_install_progress(name, command, "Failed")
+            log.add_error(f"{name} installation exited with {completed.returncode}.")
+            return
+        if not shutil.which(install.executable):
+            self._show_install_progress(name, command, "Verification failed")
+            log.add_error(f"{name} installed but `{install.executable}` is not available on PATH.")
+            return
+        log.add_success(f"{name} installed and verified.")
+        self._show_install_progress(name, command, "")
+        if callable(on_ready):
+            on_ready()
 
     def _handle_dependency_install_input(self, text: str, log) -> bool:
         """Resolve a typed answer to the missing-dependency prompt."""
@@ -4380,11 +4593,14 @@ class CommandImplMixin:
             )
             return
         if not entry.available:
-            if entry.source == "optional:tau":
+            from superqode.app.harness_picker import harness_install_extra
+
+            install_extra = harness_install_extra(entry)
+            if install_extra:
                 self._show_harness_install_prompt(
                     entry,
                     log,
-                    extra="tau",
+                    extra=install_extra,
                     resume_command=f"switch {shlex.quote(entry.id)}",
                 )
                 return
@@ -6423,6 +6639,213 @@ class CommandImplMixin:
             log,
             self._format_free_inference_offers(offers, offer_status),
         )
+
+    async def _free_cmd(self, args: str, log: ConversationLog):
+        """Open the actionable free-coding connection picker."""
+        from superqode.providers.free_inference import (
+            list_free_inference_offers,
+            offer_status,
+            scan_live_free_candidates,
+        )
+
+        tokens = (args or "").lower().split()
+        live = "live" in tokens or "--live" in tokens
+        configured = "ready" in tokens or "configured" in tokens or "--configured" in tokens
+        sources = [token for token in tokens if token in {"openrouter", "models-dev", "litellm"}]
+        reserved = {
+            "live",
+            "--live",
+            "ready",
+            "configured",
+            "--configured",
+            *sources,
+        }
+        provider_filter = next((token for token in tokens if token not in reserved), None)
+
+        if hasattr(self, "_reset_connect_selection_states"):
+            self._reset_connect_selection_states()
+        self._awaiting_free_selection = False
+        self._free_selection_list = []
+
+        if live:
+            log.add_info("Scanning current zero-price model routes...")
+            candidates, errors = await asyncio.to_thread(
+                scan_live_free_candidates,
+                sources=sources or None,
+                limit=50,
+            )
+            if provider_filter:
+                needle = provider_filter.lower()
+                candidates = [
+                    item
+                    for item in candidates
+                    if needle in {item.provider.lower(), item.source.lower()}
+                    or needle in item.model.lower()
+                    or needle in item.name.lower()
+                ]
+            choices = [("live", item) for item in candidates]
+            if errors and not choices:
+                for error in errors:
+                    log.add_warning(f"{error['source']} scan failed: {error['error']}")
+        else:
+            offers = list_free_inference_offers(
+                provider=provider_filter,
+                configured_only=configured,
+            )
+            # Local models have a dedicated installation and connection flow.
+            # Calling them "free" also hides their hardware/runtime cost.
+            offers = [offer for offer in offers if offer.access_mode != "local"]
+            choices = [("offer", item) for item in offers]
+
+        self._free_selection_list = choices
+        self._free_highlighted_index = 0
+        self._awaiting_free_selection = bool(choices)
+        self._show_command_output(
+            log,
+            self._format_free_coding_picker(
+                choices,
+                offer_status,
+                highlighted_index=self._free_highlighted_index,
+            ),
+        )
+        self._keep_free_picker_at_top(log)
+
+    def _keep_free_picker_at_top(self, log: ConversationLog) -> None:
+        """Pin a newly rendered :free list to row one after Textual layout."""
+
+        def pin_top() -> None:
+            if not getattr(self, "_awaiting_free_selection", False):
+                return
+            if getattr(self, "_free_highlighted_index", 0) != 0:
+                return
+            # Keep follow mode disabled while the picker is idle. Otherwise
+            # Textual's deferred line layout follows the final row after the
+            # synchronous scroll_home and makes a 50-row live scan open midway.
+            log.auto_scroll = False
+            try:
+                log.scroll_to(x=0, y=0, animate=False, force=True)
+            except TypeError:
+                log.scroll_to(y=0, animate=False)
+            except Exception:  # noqa: BLE001 - viewport correction is best effort
+                log.scroll_home(animate=False)
+            try:
+                log.scroll_y = 0
+            except Exception:  # noqa: BLE001 - older Textual exposes only scroll_to
+                pass
+
+        pin_top()
+        try:
+            self.call_after_refresh(pin_top)
+        except Exception:  # noqa: BLE001 - unit-test stubs are not mounted apps
+            pass
+        if getattr(log, "is_attached", False):
+            try:
+                self.call_later(pin_top)
+                self.set_timer(0.05, pin_top)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _redraw_free_picker(self, log: ConversationLog) -> None:
+        """Redraw the free-route picker around its highlighted row."""
+        from superqode.providers.free_inference import offer_status
+
+        choices = getattr(self, "_free_selection_list", [])
+        self._show_command_output(
+            log,
+            self._format_free_coding_picker(
+                choices,
+                offer_status,
+                highlighted_index=getattr(self, "_free_highlighted_index", 0),
+            ),
+            clear_log=False,
+        )
+        self._scroll_to_highlighted_item(
+            log,
+            getattr(self, "_free_highlighted_index", 0),
+            len(choices),
+        )
+
+    def action_navigate_free_up(self) -> None:
+        """Move the :free picker highlight toward its first row."""
+        if not getattr(self, "_awaiting_free_selection", False):
+            return
+        current = getattr(self, "_free_highlighted_index", 0)
+        self._free_highlighted_index = max(0, current - 1)
+        self._redraw_free_picker(self.query_one("#log", ConversationLog))
+
+    def action_navigate_free_down(self) -> None:
+        """Move the :free picker highlight toward its last row."""
+        choices = getattr(self, "_free_selection_list", [])
+        if not getattr(self, "_awaiting_free_selection", False) or not choices:
+            return
+        current = getattr(self, "_free_highlighted_index", 0)
+        self._free_highlighted_index = min(len(choices) - 1, current + 1)
+        self._redraw_free_picker(self.query_one("#log", ConversationLog))
+
+    def action_select_highlighted_free(self) -> None:
+        """Connect the currently highlighted free route."""
+        if not getattr(self, "_awaiting_free_selection", False):
+            return
+        log = self.query_one("#log", ConversationLog)
+        self._handle_free_selection(str(getattr(self, "_free_highlighted_index", 0) + 1), log)
+
+    def _handle_free_selection(self, selection: str, log: ConversationLog) -> bool:
+        """Continue a :free choice into the normal model connection flow."""
+        if not getattr(self, "_awaiting_free_selection", False):
+            return False
+        value = (selection or "").strip().lower()
+        if value in {"back", "cancel", "q"}:
+            self._awaiting_free_selection = False
+            log.add_info("Free coding selection cancelled.")
+            return True
+        if not value.isdigit():
+            return False
+        choices = getattr(self, "_free_selection_list", [])
+        index = int(value) - 1
+        if not 0 <= index < len(choices):
+            log.add_error(f"Invalid free coding choice. Choose 1-{len(choices)}")
+            return True
+
+        kind, item = choices[index]
+        self._awaiting_free_selection = False
+        log.auto_scroll = True
+        if kind == "live":
+            provider = item.provider
+            model = item.model
+            if item.source == "openrouter":
+                provider = "openrouter"
+            from superqode.providers.registry import PROVIDERS
+
+            if provider not in PROVIDERS:
+                log.add_warning(
+                    f"{provider}/{model} is free in the live catalog, but SuperQode has no "
+                    "direct connector for that provider yet."
+                )
+                log.add_info(f"Source: {item.source_url}")
+                return True
+            log.add_info(f"Connecting the current harness to {provider}/{model}...")
+            self._connect_byok_mode(provider, model, log)
+            return True
+
+        offer = item
+        log.add_info(f"Opening {offer.name}...")
+        if offer.access_mode == "local":
+            self._connect_local_cmd(offer.provider, log)
+            return True
+        if offer.access_mode == "acp":
+            self._connect_acp_cmd(offer.provider, log)
+            return True
+
+        from superqode.providers.registry import PROVIDERS
+
+        if offer.provider in PROVIDERS:
+            self._connect_byok_cmd(offer.provider, log)
+            return True
+        log.add_warning(f"{offer.name} needs setup before SuperQode can connect it directly.")
+        log.add_info(offer.setup)
+        if offer.superqode_command:
+            log.add_info(f"Next: {offer.superqode_command}")
+        return True
 
     async def _providers_smoke_cmd(self, args: str, log: ConversationLog):
         """Run a local provider smoke check from the TUI."""

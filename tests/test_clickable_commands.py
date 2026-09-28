@@ -140,7 +140,10 @@ def test_the_hints_bar_carries_the_connection_slot():
     bar = HintsBar()
 
     bar.connected = False
-    assert ":connect" in bar.render().plain
+    idle = bar.render().plain
+    assert ":connect" in idle
+    assert ":free" in idle
+    assert idle.index(":connect") < idle.index(":free")
     assert ":hub" in bar.render().plain
     bar.connected = True
     assert ":disconnect" in bar.render().plain
@@ -152,7 +155,7 @@ def test_hint_entries_are_clickable():
 
     links = {span.style for span in rendered.spans if "superqode://cmd/" in str(span.style)}
     assert any("home" in str(style) for style in links)
-    for command in (":home", ":hub", ":help"):
+    for command in (":free", ":home", ":hub", ":help"):
         assert command in rendered.plain
 
 

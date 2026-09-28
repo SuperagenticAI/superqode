@@ -30,6 +30,17 @@ VENDOR_HARNESS_IDS = (
 VENDOR_ACP_AGENT_NAMES = frozenset({"kimi", "qwen", "deepagents-code"})
 ACP_BROWSER_ID = "acp:all"
 
+# Optional first-party harness integrations installed into SuperQode's active
+# Python environment. Keeping this mapping beside the picker model gives both
+# direct ``:harness switch`` and picker selection the same install-and-resume
+# behavior.
+_OPTIONAL_HARNESS_EXTRAS = {
+    "optional:tau": "tau",
+    "optional:deepseek-harness": "deepseek-harness",
+    "optional:deepagents": "deepagents",
+    "optional:rlm-code": "rlm-code",
+}
+
 
 @dataclass(frozen=True)
 class HarnessPickerItem:
@@ -65,6 +76,13 @@ def _native_group(entry) -> str:
     return "Model and task presets"
 
 
+def harness_install_extra(entry) -> str:
+    """Return the controlled SuperQode extra for an unavailable harness."""
+    if bool(getattr(entry, "available", False)):
+        return ""
+    return _OPTIONAL_HARNESS_EXTRAS.get(str(getattr(entry, "source", "") or ""), "")
+
+
 def _native_item(entry) -> HarnessPickerItem:
     return HarnessPickerItem(
         id=entry.id,
@@ -81,7 +99,7 @@ def _native_item(entry) -> HarnessPickerItem:
         path=entry.path,
         kind="harness",
         target=entry,
-        install_extra="tau" if entry.source == "optional:tau" and not entry.available else "",
+        install_extra=harness_install_extra(entry),
         warning=str(entry.spec.metadata.get("selection_warning") or ""),
     )
 

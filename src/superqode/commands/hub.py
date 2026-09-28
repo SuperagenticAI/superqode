@@ -70,7 +70,7 @@ def _filters(function):
         "--openness",
         type=click.Choice(list(OPENNESS_VALUES)),
         default=None,
-        help="Filter to harnesses whose implementation is open source or proprietary",
+        help="Filter by open-source, source-available, or proprietary implementation",
     )(function)
     function = click.option(
         "--language",
@@ -153,7 +153,24 @@ def hub_list(
 def hub_show(harness_id: str, json_output: bool):
     """Show one harness and its setup or continuity information."""
     payload = _catalog(query="", readiness="", category="")
-    item = next((entry for entry in payload["items"] if entry["id"] == harness_id), None)
+    wanted = harness_id.strip().casefold()
+    items = payload["items"]
+    item = next((entry for entry in items if str(entry["id"]).casefold() == wanted), None)
+    if item is None:
+        matches = [
+            entry
+            for entry in items
+            if wanted == str(entry.get("name") or "").casefold()
+            or wanted in {str(alias).casefold() for alias in entry.get("aliases") or ()}
+            or wanted == str(entry.get("id") or "").split(":", 1)[-1].casefold()
+        ]
+        if len(matches) == 1:
+            item = matches[0]
+        elif len(matches) > 1:
+            choices = ", ".join(str(entry["id"]) for entry in matches)
+            raise click.ClickException(
+                f"Harness name is ambiguous: {harness_id}. Use one of: {choices}"
+            )
     if item is None:
         raise click.ClickException(f"Harness not found: {harness_id}")
     if json_output:

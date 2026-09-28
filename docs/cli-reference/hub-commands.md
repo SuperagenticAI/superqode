@@ -16,9 +16,9 @@ sq hub --openness open
 | Option | Description |
 | --- | --- |
 | `--search`, `-s` | Search identity, name, description, category, runtime, source, provider, model, license, and repository |
-| `--readiness` | Filter to `ready`, `setup-required`, `supported`, or `not-supported` |
+| `--readiness` | Filter to `ready`, `setup-required`, or `not-supported` |
 | `--category` | Filter by an exact Hub category |
-| `--openness` | Filter to `open` or `closed` harness implementations. Entries whose licensing SuperQode cannot verify match neither value |
+| `--openness` | Filter to `open`, `source-available`, or `closed` harness implementations. Entries whose licensing SuperQode cannot verify match none of these values |
 | `--json` | Emit the versioned Hub index |
 | `--public` | Exclude repository and user-registry harnesses, and report machine-independent readiness, for a publication-safe snapshot |
 
@@ -31,6 +31,7 @@ superqode hub list
 superqode hub list --search acp
 superqode hub list --readiness setup-required
 superqode hub list --openness open
+superqode hub list --openness source-available
 superqode hub list --json
 superqode hub list --public --json
 ```
@@ -43,6 +44,7 @@ openness, license, repository, description, setup guidance, and warnings.
 ```bash
 superqode hub show codex
 superqode hub show codex --json
+superqode hub show omp --json
 ```
 
 The JSON catalog is presentation-neutral and excludes executable internal

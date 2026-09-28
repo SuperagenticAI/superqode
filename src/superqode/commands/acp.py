@@ -24,7 +24,8 @@ def check_agent_installed(agent: "Agent") -> bool:
     """Check if an agent is installed on the system."""
     import shutil
 
-    run_command = agent.get("run_command", {}).get("*", "")
+    declared = agent.get("run_command", {})
+    run_command = str(declared.get("*", "")) if isinstance(declared, dict) else str(declared or "")
     if not run_command:
         return False
 

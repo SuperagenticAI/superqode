@@ -188,7 +188,7 @@ def test_deep_agents_code_is_registered_as_its_own_agent():
     assert code is not None and general is not None
     assert code["identity"] != general["identity"]
     assert code["run_command"] == "dcode --acp"
-    assert code["installation_command"] == "curl -LsSf https://langch.in/dcode | bash"
+    assert code["installation_command"] == "uv tool install deepagents-code"
     assert registry_catalog_tier(code["identity"], code["short_name"]) == "featured"
 
 
@@ -197,6 +197,15 @@ def test_open_source_tags_survive_the_toml_to_metadata_conversion():
     agent = get_registry_agent_by_short_name("deepagents-code")
 
     assert "open-source" in agent["tags"]
+
+
+def test_install_probe_accepts_normalized_string_run_command(monkeypatch):
+    """Bundled registry lookup normalizes the platform command to a string."""
+    from superqode.commands.acp import check_agent_installed
+
+    monkeypatch.setattr("shutil.which", lambda name: "/tmp/qwen" if name == "qwen" else None)
+
+    assert check_agent_installed({"run_command": "qwen --acp"}) is True
 
 
 def test_convert_registry_agent_preserves_open_source_tags():
