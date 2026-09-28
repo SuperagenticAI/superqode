@@ -260,9 +260,12 @@ class FileAutocomplete(Container):
         height: auto;
         max-height: 12;
         background: #0a0a0a;
-        border: round #7c3aed;
+        border: round #27272a;
         padding: 0;
         display: none;
+    }
+    FileAutocomplete:focus-within {
+        border: round #6f5fa3;
     }
 
     FileAutocomplete.visible {
@@ -286,7 +289,9 @@ class FileAutocomplete(Container):
     }
 
     FileAutocomplete OptionList > .option-list--option-highlighted {
-        background: #7c3aed40;
+        background: #141416;
+        border-left: solid #6f5fa3;
+        color: #fafaf9;
     }
 
     FileAutocomplete .header {
@@ -362,7 +367,7 @@ class FileAutocomplete(Container):
             for path, score, positions in self._results:
                 # Highlight matched characters
                 display = path_fuzzy_search.highlight_match(
-                    path, positions, highlight_start="[bold cyan]", highlight_end="[/bold cyan]"
+                    path, positions, highlight_start="[bold #d9a54a]", highlight_end="[/bold #d9a54a]"
                 )
                 options.add_option(Text.from_markup(f"↳ {display}"))
         except Exception:

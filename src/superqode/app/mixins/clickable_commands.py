@@ -36,6 +36,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "sessions",
         "skills",
         "systemone",
+        "theme",
         "workspace-files",
         "workspace-close",
     }

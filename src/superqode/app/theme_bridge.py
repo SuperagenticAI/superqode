@@ -54,6 +54,9 @@ def _palette_to_theme(colors: "ds.ColorPalette") -> dict[str, str]:
         # visible text and is now dropped.
         "muted": colors.text_muted,
         "dim": colors.text_dim,
+        # Links are informational, not brand marks — follow ``info`` so the
+        # superqode theme's slate carries them instead of purple.
+        "link": colors.info,
     }
 
 

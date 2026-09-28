@@ -56,7 +56,7 @@ class ColorPalette:
     primary_dark: str = "#6d28d9"  # Deep violet
     primary: str = "#7c3aed"  # Main purple
     primary_light: str = "#8b5cf6"  # Light purple
-    primary_bright: str = "#a855f7"  # Bright purple
+    primary_bright: str = "#b794f6"  # Bright purple, lifted for dark surfaces
     primary_glow: str = "#c084fc"  # Glowing purple
 
     # Secondary - Magenta accent
@@ -795,7 +795,16 @@ class Theme:
 THEME_SUPERQODE = Theme(
     name="superqode",
     description="Default SuperQode theme - Purple quantum aesthetics",
-    colors=ColorPalette(),  # Default colors
+    colors=ColorPalette(
+        # Professional restraint: purple stays the brand accent (logo, active
+        # states) but stops flooding the UI. The old ``info`` *was* purple, and
+        # nearly every command hint/key label renders through ``cyan``/``teal``
+        # (which map to ``info``), so the whole TUI read violet. Slate carries
+        # those informational tones now; focus rings go neutral too.
+        border_focus="#3f3f46",
+        info="#8fa3bf",
+        info_light="#b3c2d8",
+    ),
 )
 
 THEME_TOKYONIGHT = Theme(

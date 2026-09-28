@@ -41,7 +41,7 @@ CONNECT_COMPLETION_COMMANDS = (
 )
 
 # Normal purple → pink → orange gradient for ASCII logo
-GRADIENT = ["#7c3aed", "#a855f7", "#c084fc", "#ec4899", "#f97316", "#fb923c"]
+GRADIENT = ["#7c3aed", "#b794f6", "#c084fc", "#ec4899", "#f97316", "#fb923c"]
 
 # Rainbow gradient for animations
 RAINBOW = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"]
@@ -52,7 +52,7 @@ THEME = {
     "surface2": "#0a0a0a",
     "border": "#1a1a1a",
     "border_active": "#2a2a2a",
-    "purple": "#a855f7",
+    "purple": "#b794f6",
     "user_prompt_bg": "#20162e",
     "magenta": "#d946ef",
     "pink": "#ec4899",
@@ -60,8 +60,8 @@ THEME = {
     "orange": "#f97316",
     "gold": "#fbbf24",
     "yellow": "#eab308",
-    "cyan": "#a855f7",
-    "teal": "#a855f7",
+    "cyan": "#8fa3bf",
+    "teal": "#8fa3bf",
     "green": "#22c55e",
     "success": "#22c55e",
     "error": "#ef4444",
@@ -77,7 +77,8 @@ THEME = {
     "dim": "#71717a",
     # Clickable text that carries no state of its own. A link that also carries
     # state (ready, destructive) keeps its own colour instead.
-    "link": "#a855f7",
+    # Slate, not purple: links are informational (see theme_bridge).
+    "link": "#8fa3bf",
 }
 
 # Rich emoji set for different contexts

@@ -196,8 +196,8 @@ def render_welcome(
                 style=f"bold {THEME['cyan']} {command_link('sessions')}",
             )
             footer.append(" browse  •  ", style=THEME["muted"])
-        footer.append(":hub", style=f"bold {THEME['cyan']}")
-        footer.append(" harnesses  •  ", style=THEME["muted"])
+        footer.append(":theme", style=f"bold {THEME['cyan']} {command_link('theme')}")
+        footer.append(" appearance  •  ", style=THEME["muted"])
         footer.append(":explore", style=f"bold {THEME['cyan']}")
         footer.append(" capabilities  •  ", style=THEME["muted"])
         footer.append(":tour", style=f"bold {THEME['cyan']}")
@@ -267,46 +267,6 @@ def render_welcome(
     desc_text.append("\n", style="")
     items.append(place(desc_text))
 
-    if not narrow:
-        state_text = Text(justify="left")
-        state_text.append("Current workspace\n", style=f"bold {THEME['text']}")
-        state_rows = [("Repository", _truncate_middle(state.repository or team_name, 46))]
-        # Before anything is connected these rows only report absence, which is
-        # what the next step already says. They appear once they carry news.
-        if state.connected:
-            state_rows.extend(
-                [
-                    ("Harness", state.harness or "Not selected"),
-                    ("Agent/model", state.connection or state.runtime or "Not connected"),
-                    ("Policy", f"Approval {state.approval or 'ask'}"),
-                ]
-            )
-            if state.runtime and state.connection:
-                state_rows.append(("Runtime", state.runtime))
-        state_rows.extend(_inventory_lines())
-        label_width = max(len(label) for label, _ in state_rows)
-        for index, (label, value) in enumerate(state_rows):
-            state_text.append(f"{label:<{label_width}}  ", style=THEME["dim"])
-            value_color = (
-                THEME["text"] if value not in {"Not selected", "Not connected"} else THEME["muted"]
-            )
-            state_text.append(_truncate_middle(value, 46), style=value_color)
-            state_text.append("\n")
-        items.append(place(state_text))
-
-    # The prompt placeholder and its clickable bar already expose commands.
-    # Keep the workspace optional, but do not bury it behind a command the
-    # user has to discover. This link opens the existing lightweight sidebar;
-    # it does not add a second IDE-like canvas.
-    drive_text = Text(justify=align)
-    if not narrow:
-        drive_text.append("Browse it like a browser", style=f"bold {THEME['cyan']}")
-        drive_text.append(" with your mouse  ·  or drive it like a pro with ", style=THEME["dim"])
-        drive_text.append(":", style=f"bold {THEME['success']}")
-        drive_text.append(" and ", style=THEME["muted"])
-        drive_text.append(":vim on", style=f"bold {THEME['success']}")
-        items.append(place(drive_text))
-
     workspace_text = Text(justify=align)
     if state.has_sessions:
         label = state.last_session_label or "last session"
@@ -320,14 +280,25 @@ def render_welcome(
             style=f"bold {THEME['cyan']} {command_link('sessions')}",
         )
         workspace_text.append(" browse\n", style=THEME["muted"])
-    workspace_text.append(
-        "Files & changes ↗",
-        style=f"bold {THEME['pink']} {command_link('workspace-files')}",
+        items.append(place(workspace_text))
+
+    footer_text = Text(justify=align)
+    footer_text.append(
+        ":theme",
+        style=f"bold {THEME['cyan']} {command_link('theme')}",
     )
-    workspace_text.append("  ·  ", style=THEME["muted"])
-    workspace_text.append("Ctrl+B", style=f"bold {THEME['cyan']} {command_link('workspace-files')}")
-    workspace_text.append("  ·  optional workspace", style=THEME["muted"])
-    items.append(place(workspace_text))
+    footer_text.append(" appearance  •  ", style=THEME["muted"])
+    footer_text.append(
+        ":connect",
+        style=f"bold {THEME['cyan']} {command_link('connect')}",
+    )
+    footer_text.append(" start  •  ", style=THEME["muted"])
+    footer_text.append(
+        ":help",
+        style=f"bold {THEME['cyan']} {command_link('help')}",
+    )
+    footer_text.append(" commands", style=THEME["muted"])
+    items.append(place(footer_text))
 
     return Group(*items)
 

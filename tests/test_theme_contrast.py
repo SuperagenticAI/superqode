@@ -104,7 +104,7 @@ class TestBrandIsPreserved:
     #: The signature purple-to-orange gradient, asserted verbatim.
     EXPECTED_GRADIENT = (
         "#7c3aed",
-        "#a855f7",
+        "#b794f6",
         "#c084fc",
         "#ec4899",
         "#f97316",
