@@ -650,7 +650,7 @@ def test_status_bar_buttons_are_not_hyperlinks():
 def test_hints_bar_marks_clickable_commands_with_an_arrow():
     idle = _hints(False).plain
     assert ":connect ↑" in idle
-    assert ":hub ↑" in idle
+    assert ":theme ↑" in idle
     working = _hints(True).plain
     assert ":disconnect ↑" in working
     assert ":help ↑" in working

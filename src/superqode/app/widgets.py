@@ -1191,7 +1191,7 @@ class HintsBar(Static):
             hints = [
                 ("🔌", ":connect", THEME["pink"]),
                 ("◇", ":free", THEME["success"]),
-                ("⚓", ":hub", THEME["link"]),
+                ("⚓", ":theme", THEME["link"]),
                 ("🧭", ":systemone", THEME["cyan"]),
                 ("🏠", ":home", THEME["link"]),
                 ("?", ":help", THEME["link"]),

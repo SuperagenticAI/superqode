@@ -668,7 +668,7 @@ def test_every_hint_responds_to_a_click():
     assert ":exit" not in rendered.plain
     assert "🏠 :home" in rendered.plain
     assert "🔌 :connect" in rendered.plain
-    assert "⚓ :hub" in rendered.plain
+    assert "⚓ :theme" in rendered.plain
     assert "? :help" in rendered.plain
 
 
