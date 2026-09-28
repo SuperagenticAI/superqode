@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.24] - 2026-09-28
+
+### Changed
+
+- Align accent and info colors toward purple across the TUI theme and design
+  system (cyan/teal info tones remapped).
+
+### Fixed
+
+- Make `:grok models` / `:grok model` a keyboard-accessible vendor picker
+  (arrows, Enter, numbers) with correct CLI order and labels, then connect
+  via `:grok api`. The static panel ignored keyboard input, and `:grok model`
+  reused the BYOK list which rebucketed subscription ids into Free/Recommended
+  with fake $0 prices.
+
 ## [2.4.23] - 2026-09-28
 
 ### Added
