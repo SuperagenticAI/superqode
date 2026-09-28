@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.25] - 2026-09-29
+
+### Changed
+
+- Restrain purple in the default theme to the brand accent only. `info` (and
+  the `cyan`/`teal` aliases that most command hints and key labels render
+  through) is now slate, and `primary_bright` is lifted to `#b794f6` for
+  contrast on dark surfaces. Links follow `info` rather than brand purple.
+- Simplify the welcome screen: drop the current-workspace and "browse it like
+  a browser" blocks, and surface `:theme` / `:connect` / `:help` as clickable
+  command links.
+
 ## [2.4.24] - 2026-09-28
 
 ### Changed

@@ -367,7 +367,10 @@ class FileAutocomplete(Container):
             for path, score, positions in self._results:
                 # Highlight matched characters
                 display = path_fuzzy_search.highlight_match(
-                    path, positions, highlight_start="[bold #d9a54a]", highlight_end="[/bold #d9a54a]"
+                    path,
+                    positions,
+                    highlight_start="[bold #d9a54a]",
+                    highlight_end="[/bold #d9a54a]",
                 )
                 options.add_option(Text.from_markup(f"↳ {display}"))
         except Exception:

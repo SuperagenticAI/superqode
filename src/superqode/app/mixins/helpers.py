@@ -440,11 +440,11 @@ class HelpersMixin(
             pass
         try:
             input_box = self.query_one("#input-box")
-            if working and not interactive:
-                input_box.border_title = "Agent working · Esc to cancel"
-            elif working and interactive:
+            if working and interactive:
                 input_box.border_title = "Action required"
             else:
+                # While the agent runs the box stays disabled (above) but keeps
+                # its normal title — no "working" banner, no cancel hint.
                 self._refresh_prompt_mode_label()
         except Exception:
             pass
