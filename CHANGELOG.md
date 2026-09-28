@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.23] - 2026-09-28
+
+### Added
+
+- Reviewed, opt-in managed install recipes for bundled agents and open
+  harnesses (fail-closed on registry identity mismatch), including new
+  omp.sh, mistral-vibe, and deepagents-code entries.
+- Harness Hub template support with refreshed hub catalog export.
+- Expanded TUI coverage: mounted-app, smoke, harness hub/connect screen, and
+  clickable-command tests.
+
+### Changed
+
+- Harden Harness Hub / Connect pickers, dialogs, formatting, and startup
+  helpers across TUI mixins and widgets.
+- Refresh Harness Hub docs, modes, TUI, and hub CLI reference.
+
+### Fixed
+
+- Block remote registries from self-granting automatic install execution;
+  only reviewed SuperQode recipes are runnable, with explicit rejection
+  reasons on identity mismatch.
+
 ## [2.4.22] - 2026-09-27
 
 ### Added
