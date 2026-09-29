@@ -23,7 +23,7 @@ def test_zai_registry_uses_general_api_only():
     assert provider.env_vars == ["ZAI_API_KEY"]
     assert provider.default_base_url == "https://api.z.ai/api/paas/v4"
     assert "/coding/" not in provider.default_base_url
-    assert provider.example_models[0] == "glm-5.2"
+    assert "glm-5.2" in provider.example_models
 
 
 def test_zai_glm52_model_metadata_does_not_claim_unknown_price_is_free():

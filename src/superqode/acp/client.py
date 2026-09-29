@@ -304,6 +304,9 @@ class ACPClient:
             # Applied last so a caller can override the defaults above.
             for name, value in (self.extra_env or {}).items():
                 env[str(name)] = str(value)
+            if self.subscription_vendor:
+                env, removed = subscription_child_env(self.subscription_vendor, env)
+                self.stripped_api_keys = list(dict.fromkeys([*self.stripped_api_keys, *removed]))
 
             # OpenCode's verbose logs are useful for debugging, but expensive on
             # normal runs because every non-JSON line has to be parsed and routed

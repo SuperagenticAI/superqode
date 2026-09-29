@@ -45,7 +45,9 @@ def test_system_context_falls_back_to_uv_tool(monkeypatch):
 def test_missing_extra_hint_appends_suffix(monkeypatch):
     monkeypatch.setattr(ei, "_running_in_uv_tool", lambda: True)
     hint = ei.missing_extra_hint("codex-sdk", suffix="then run `codex login`")
-    assert hint == 'uv tool install "superqode[codex-sdk]", then run `codex login`'
+    assert "--python" in hint
+    assert "superqode[codex-sdk]==" in hint
+    assert hint.endswith(", then run `codex login`")
 
 
 def test_install_command_never_recommends_pip():

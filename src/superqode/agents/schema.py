@@ -110,6 +110,10 @@ class Agent(TypedDict):
     welcome: NotRequired[str]
     """A Markdown document shown to the user when the conversation starts. Should contain a welcome message and any advice on getting started."""
     run_command: dict[OS, str]
+    launch_env: NotRequired[dict[str, str]]
+    user_defined: NotRequired[bool]
+    """Distribution defaults applied only to this agent's subprocess."""
+    required_env: NotRequired[list[str]]
     """Command to run the agent, by OS or wildcard."""
     actions: dict[OS, dict[Action, Command]]
     """Scripts to perform actions, typically at least to install the agent."""

@@ -481,6 +481,28 @@ def test_optional_hub_setup_is_actionable_and_rlm_code_is_listed():
     assert by_id["uhp"]["setup_steps"]
 
 
+def test_public_optional_setup_survives_an_installed_exporter():
+    item = _item(
+        id="deepagents",
+        group="Optional integrations",
+        source="optional:deepagents",
+        kind="harness",
+        available=True,
+        install_extra="",
+    )
+    record = build_hub_index(items=[item], public=True)["items"][0]
+    assert record["install_command"] == 'uv tool install "superqode[deepagents]"'
+    assert record["setup_steps"]
+
+
+def test_gemini_subscription_hub_has_install_and_google_login_steps():
+    record = build_hub_index(public=True)
+    gemini = next(item for item in record["items"] if item["id"] == "gemini-cli")
+    assert gemini["openness"] == "open"
+    assert gemini["setup_steps"][0]["command"] == "npm install -g @google/gemini-cli"
+    assert "Sign in with Google" in gemini["setup_steps"][1]["description"]
+
+
 def test_every_hub_entry_has_a_unique_id():
     """Native, vendor, ACP, and ecosystem routes are merged into one list.
 

@@ -71,6 +71,10 @@ class ProviderDef:
     # True when this id exists so `auth login` / auth.json can store a vendor
     # harness key. Hidden from `:connect byok` — SuperQode does not run the loop.
     harness_only: bool = False
+    # Billing is a property of the credential/endpoint, not the menu used to
+    # reach it. Plan credentials never fall back to a general API key.
+    auth_mode: str = "byok"
+    credential_prefix: str = ""
 
 
 # =============================================================================
@@ -78,6 +82,21 @@ class ProviderDef:
 # =============================================================================
 
 PROVIDERS: Dict[str, ProviderDef] = {
+    "minimax-token-plan": ProviderDef(
+        id="minimax-token-plan",
+        name="MiniMax Token Plan",
+        tier=ProviderTier.TIER2,
+        category=ProviderCategory.CHINA_LABS,
+        env_vars=["MINIMAX_TOKEN_PLAN_API_KEY"],
+        litellm_prefix="openai/",
+        docs_url="https://platform.minimax.io/subscribe/token-plan",
+        default_base_url="https://api.minimax.io/v1",
+        example_models=["MiniMax-M3.1-Flash-Preview", "MiniMax-M3", "MiniMax-M2.7"],
+        dynamic=True,
+        auth_mode="subscription",
+        credential_prefix="sk-cp",
+        notes="Use your Token Plan subscription key. General MINIMAX_API_KEY is not used.",
+    ),
     # =========================================================================
     # 🇺🇸 US LABS - Tier 1
     # =========================================================================
@@ -239,6 +258,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         # store; requests hit the CLI chat proxy documented by xAI with the
         # headers it requires. No env key involved.
         id="grok-cli",
+        auth_mode="subscription",
         name="Grok CLI Subscription",
         tier=ProviderTier.TIER1,
         category=ProviderCategory.US_LABS,

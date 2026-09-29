@@ -189,8 +189,12 @@ The models screen holds the three routes where SuperQode owns the tool loop:
 :connect plan
 ```
 
-`:connect plan` covers subscriptions that expose a model endpoint, so a plan
-you already pay for can drive a SuperQode harness instead of the vendor agent.
+`:connect plan` lists native model subscriptions and named vendor-agent
+alternatives. MiniMax Token Plan and the Grok CLI account proxy keep the selected
+SuperQode harness. Vendor-agent alternatives explicitly change the coding loop.
+Z.AI and Alibaba Coding Plan rows explain supported-agent setup and keep your
+current connection; their general APIs remain BYOK. Kimi and Copilot plan rows
+explicitly select their vendor harness. API-credit rows retain BYOK billing.
 Its direct routes are `plan-zai`, `plan-grok`, `plan-copilot`, `plan-moonshot`,
 `plan-qwen`, `plan-opencode`, `plan-ollama-cloud`, `plan-deepseek`, and
 `plan-minimax`, each used as `:connect <route>`.
@@ -206,6 +210,40 @@ Its direct routes are `plan-zai`, `plan-grok`, `plan-copilot`, `plan-moonshot`,
 :connect plan-deepseek
 :connect plan-minimax
 ```
+
+MiniMax uses the separate `minimax-token-plan` provider, an `sk-cp` credential
+in `MINIMAX_TOKEN_PLAN_API_KEY` or local auth storage, and
+`https://api.minimax.io/v1`. General MiniMax/OpenAI keys cannot substitute.
+See the [connection setup guide](../advanced/connection-profiles.md) for
+plan-specific instructions and upstream references.
+
+Every existing vendor-agent choice is also reachable from the model-source
+screen as a named harness switch:
+
+| Account alternative | Direct profile |
+| --- | --- |
+| Codex | `:connect plan-agent-codex` |
+| Grok Build | `:connect plan-agent-grok` |
+| Cursor | `:connect plan-agent-cursor` |
+| Amp | `:connect plan-agent-amp` |
+| Antigravity | `:connect plan-agent-antigravity` |
+| Muse Code | `:connect plan-agent-muse` |
+| Prime Agent | `:connect plan-agent-prime-agent` |
+| Gemini CLI | `:connect plan-agent-gemini-cli` |
+| Devin | `:connect plan-agent-devin` |
+| Factory Droid | `:connect plan-agent-droid` |
+| Kiro | `:connect plan-agent-kiro` |
+| GLM Agent | `:connect plan-agent-glm-cli` |
+| Qwen Code | `:connect plan-agent-qwen-code` |
+| Deep Agents Code | `:connect plan-agent-deepagents-code` |
+| Junie | `:connect plan-agent-junie` |
+| fx | `:connect plan-agent-fx` |
+
+OpenCode, fast-agent, Pi and omp offer an account option after selecting their
+Open harness. Direct shortcuts are `:connect account-opencode-key`, `:connect account-fast-agent`,
+`:connect account-pi` and `:connect account-omp`. These use the agent's own account/model settings.
+fast-agent uses `codexplan`; run `fast-agent auth provider login codex` first.
+BYOK/local choices remain available where the harness supports them.
 
 The build screen leads with importing, because a repository that already has
 agent configuration does not need to author anything:
@@ -369,7 +407,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | OpenAI Codex | Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect acp codex`, `:connect byok openai <model>` |
 | Anthropic Claude | Claude Agent SDK, Anthropic BYOK | `:runtime claude-agent-sdk`, `:connect byok anthropic <model>` |
 | Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
-| Google Gemini | Antigravity CLI, Google AI Studio BYOK, Google ADK runtime | `:connect antigravity`, `:connect byok google <model>`, `:runtime adk` |
+| Google Gemini | Gemini CLI Google sign-in, Google AI Studio BYOK, Google ADK runtime | `:connect gemini-cli`, `:connect acp gemini`, `:connect byok google <model>`, `:runtime adk` |
 | GitHub Copilot | Copilot SDK, Copilot CLI ACP | `:connect copilot`, `:connect copilot-cli`, `:connect acp copilot` |
 | xAI Grok | Grok Build ACP, Grok headless CLI, Grok subscription models, xAI BYOK | `:connect grok`, `:runtime grok-cli`, `:grok api [model]`, `:connect byok xai <model>` |
 | OpenCode | OpenCode ACP, OpenCode Zen BYOK | `:connect acp opencode`, `:connect byok opencode <model>` |
@@ -380,7 +418,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | LangChain [DeepAgents](../providers/deepagents.md) | Deep Agents Code ACP, DeepAgents SDK runtime, bare Deep Agent ACP | `:connect deepagents-code`, `superqode harness run deepagents "..."`, `:connect acp deepagents` |
 | DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
 | Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
-| MiniMax | MiniMax BYOK, local MiniMax model paths | `:connect byok minimax <model>`, `:connect local <provider> <model>` |
+| MiniMax | Token Plan subscription, general API BYOK, local models | `:connect plan-minimax`, `:connect byok minimax <model>`, `:connect local <provider> <model>` |
 | Meta | [Muse Code](../providers/muse-code.md) sign-in, Meta first-party BYOK, local Meta model paths | `:connect muse`, `:connect muse-key`, `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
 | Cursor | Cursor subscription through Cursor CLI ACP | `:connect cursor`, `:connect acp cursor` |
 | Amp | Amp subscription through its ACP adapter | `:connect amp`, `:connect acp amp` |

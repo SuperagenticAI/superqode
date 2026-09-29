@@ -153,7 +153,9 @@ class ACPAgentManager:
         self.connection: ClientSideConnection | None = None
         self._response_queue: asyncio.Queue = asyncio.Queue()
 
-    async def connect_to_agent(self, command: str, cwd: str | None = None) -> bool:
+    async def connect_to_agent(
+        self, command: str, cwd: str | None = None, *, extra_env: dict[str, str] | None = None
+    ) -> bool:
         """Connect to an ACP agent.
 
         Args:
@@ -189,6 +191,7 @@ class ACPAgentManager:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 cwd=cwd or os.getcwd(),
+                env={**os.environ, **extra_env} if extra_env else None,
             )
 
             if proc.stdin is None or proc.stdout is None:

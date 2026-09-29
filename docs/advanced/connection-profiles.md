@@ -4,17 +4,17 @@ Connection profiles determine how SuperQode connects to model providers and
 agent runtimes. Each profile has a connector type, optional runtime, local
 availability check, and the menu it appears on.
 
-Profiles are split across two screens. The root screen holds the three ways
-SuperQode's own harness runs a model plus two submenus. The subscriptions
-screen holds the vendor coding agents. Every profile stays reachable by name
-regardless of the screen it appears on, so `:connect codex` never requires a
-detour through the submenu.
+The root screen offers an existing agent, a SuperQode harness with your model,
+or a harness you build. Agent menus include subscriptions, Open/Closed
+harnesses and the ACP catalog. Selecting a SuperQode harness opens its model
+sources: local, BYOK and subscriptions/accounts. Every profile stays reachable
+by name, so `:connect codex` does not require navigating the menus.
 
-## Root Screen (`:connect`)
+## Model and agent sources (`:connect`)
 
 ### 1. Local (connector: local, runtime: builtin)
 
-Connects to local/self-hosted model servers. Opens a local provider picker (Ollama, MLX, LM Studio, vLLM, SGLang, TGI, DS4). Always available.
+Connects to local/self-hosted model servers. Opens a local provider picker (Ollama, MLX, LM Studio, vLLM, SGLang, TGI, DS4). Keeps the selected native harness.
 
 ### 2. ACP (Agent Client Protocol) (connector: acp-picker)
 
@@ -24,7 +24,9 @@ No model auth setup is needed before browsing the catalog.
 
 ### 3. BYOK (Bring Your Own Key) (connector: byok, runtime: builtin)
 
-Brings your own API key. Opens a cloud provider picker, then model selector. Uses builtin runtime. detect() checks for configured provider credentials.
+Brings your own API key. Opens a cloud provider picker, then model selector.
+Keeps the selected native harness. Credential detection checks configured
+credentials; account access is verified by the provider on the first request.
 
 ### 4. Subscriptions (connector: subscription-picker)
 
@@ -52,17 +54,63 @@ agents, with Hugging Face Tau shown alongside its live installation status.
 
 `:connect other-harnesses` still works; it opens the Open list.
 
-## Subscriptions Screen (`:connect subscriptions`)
+## Native model subscriptions and account alternatives
+
+The **Subscriptions / accounts** model screen shows both native model routes
+and explicit **Use … harness** alternatives. Native routes keep Core/PiPy;
+agent alternatives switch to the named agent's coding loop and transport.
+Selecting a plan that needs an external agent shows setup guidance and keeps
+the current connection until you choose that agent.
+
+| Source | Route |
+| --- | --- |
+| MiniMax Token Plan | `:connect plan-minimax`: native model access using `MINIMAX_TOKEN_PLAN_API_KEY` with an `sk-cp` key, or `superqode auth login minimax-token-plan`. Uses `https://api.minimax.io/v1`; ordinary MiniMax/OpenAI keys cannot substitute. |
+| Grok account | `:connect plan-grok` / `:grok api`: native model access using the Grok CLI session. |
+| Codex, Gemini, Copilot and other vendor agents | Explicit named harness alternatives; these accounts do not become generic native model credentials. |
+| Kimi Code | `:connect plan-moonshot` explicitly selects the Kimi Code agent. Moonshot platform API credits remain BYOK. |
+| Z.AI GLM Coding Plan | `:connect plan-zai` explains supported-agent setup; the general `zai` API is BYOK. Use `:connect glm-cli` for the GLM agent. |
+| Alibaba Coding Plan | `:connect plan-qwen` explains the separate `sk-sp` credential and coding endpoint. Qwen OAuth is `:connect qwen-code`; general DashScope is BYOK. |
+| OpenCode, Ollama Cloud, DeepSeek API credits | API-key routes with BYOK billing identity; menu placement does not turn credits into a subscription. |
+
+The [Z.AI supported-tool guidance](https://docs.z.ai/devpack/tool/others) and
+[Alibaba Coding Plan instructions](https://www.alibabacloud.com/help/en/model-studio/coding-plan)
+define the external-agent setup requirements. Native MiniMax routing follows
+its [Token Plan guidance](https://platform.minimax.io/subscribe/token-plan) and
+[OpenAI-compatible API](https://platform.minimax.io/docs/api-reference/text-openai-api).
+
+OpenCode, fast-agent, Pi and omp also offer an **agent subscription / account**
+row after selecting their Open harness. Their own configuration supplies the
+account and model. For fast-agent, run `fast-agent auth provider login codex`;
+SuperQode launches the account route with `FAST_AGENT_MODEL=codexplan`, including
+on reconnect. See [fast-agent's model setup](https://fast-agent.ai/models/).
+BYOK/local launch settings remain isolated from these account connections.
+
+Plan and account shortcuts select an interactive TUI route. For a headless
+native model run, supply the provider and model explicitly, for example
+`superqode --provider minimax-token-plan --model MiniMax-M3 -p "review this"`.
+The same plan credential is required; an interactive shortcut cannot silently
+fall through to a default API provider.
+
+## Vendor agents (`:connect subscriptions`)
 
 ### Codex Subscription (connector: runtime, runtime: codex-sdk)
 
 Self-contained: brings its own model and auth via Codex login. Requires openai_codex package and ~/.codex/auth.json. Auto-connects on selection.
 
-### Claude Code Subscription (connector: acp, agent: claude)
+### Claude Agent SDK (API key)
 
-Uses the locally authenticated Claude Code ACP adapter. The vendor adapter owns
-the subscription login and credential store. The API-key SDK remains available
-explicitly through `:runtime claude-agent-sdk`.
+Claude is available from the ACP catalog (`:connect acp claude`) and through
+the explicit API-key runtime (`:runtime claude-agent-sdk`). It is currently
+absent from the Subscriptions menu; `--connect claude` is not a valid profile.
+
+### Gemini CLI (connector: acp, agent: gemini)
+
+Use `:connect gemini-cli` for Google AI Pro / Ultra or Code Assist through
+Google sign-in over ACP. Install with `npm install -g @google/gemini-cli`, then
+run `gemini` and choose **Sign in with Google** using the account associated
+with your plan. The subscription route ignores exported Gemini API keys and
+the Vertex AI routing flag in the child process, and reports the ignored
+variables. `:connect acp gemini` remains the general ACP route.
 
 ### Cursor Subscription (connector: acp, agent: cursor)
 
@@ -74,7 +122,8 @@ Uses the signed-in Amp CLI through the `acp-amp` adapter.
 
 ### Antigravity CLI (connector: runtime)
 
-Handoff profile: shows the command to run `agy` in a terminal. Does not connect SuperQode's own loop. Requires agy binary on PATH.
+Uses the `antigravity-cli` runtime to drive `agy` with Google Sign-In.
+Requires a compatible `agy` binary on PATH.
 
 ### Grok Subscription (connector: acp, agent: grok)
 
@@ -146,11 +195,18 @@ row, not the Vercel login, and not a SuperQode BYOK or local model picker.
 
 ## TUI Usage
 
-In the TUI, use `:connect` to open the root screen. Each profile shows
-availability status. Navigate with arrows or number keys. Enter on
-**Subscriptions** opens the vendor screen, and Esc there returns to the root
-screen instead of leaving the flow. `H` still opens the Other Harnesses picker
-from the root screen.
+In the TUI, use `:connect` to open the root screen. Navigate with arrows or
+number keys. Esc returns to the previous screen. Availability means the local
+adapter is installed or its credentials are configured; vendor sign-in and
+model entitlement are verified on first use. Setup-only integrations explain
+their limitation rather than claiming an executable connection.
+
+Optional SDK installation hints target the running Python environment and
+retain the installed SuperQode version. Public fresh-install instructions use
+`uv tool install "superqode[EXTRA]"`. ACP registry refresh preserves versioned
+package requirements, launch arguments and environment defaults. Binary-only
+agents show the matching platform archive, checksum when published, and manual
+PATH setup instructions.
 
 Direct shortcuts:
 
@@ -214,7 +270,7 @@ Use `--connect` / `-C` global flag:
 superqode --connect codex --print "review this"
 superqode --connect copilot --print "review this"
 superqode --connect acp copilot
-superqode -C claude --print "summarize changes"
+superqode --runtime claude-agent-sdk --print "summarize changes"
 superqode --connect grok
 ```
 
@@ -230,12 +286,13 @@ superqode connect setup deepseek --json
 ## Runtime Mapping
 
 - Codex profile -> runtime: codex-sdk
-- GitHub Copilot profile -> SDK runtime when installed, otherwise Copilot ACP subprocess
+- GitHub Copilot profile -> SDK runtime when installed, otherwise `copilot-cli` runtime
 - Explicit `:copilot sdk` / `:copilot cli` -> force either official route
-- Claude profile -> runtime: claude-agent-sdk
+- Claude API-key runtime -> claude-agent-sdk
+- Gemini CLI subscription -> Gemini CLI ACP subprocess using Google sign-in
 - BYOK/Local -> runtime: builtin
 - ACP -> no runtime change (ACP subprocess)
-- Antigravity -> handoff (no runtime)
+- Antigravity -> antigravity-cli runtime
 - Grok subscription (`:connect grok`) -> Grok Build ACP subprocess (`grok agent stdio`)
 - Grok headless (`:runtime grok-cli`) -> `grok -p --output-format streaming-json`
 - Grok via SuperQode harness (`:grok api`) -> `grok-cli` provider + CLI session token

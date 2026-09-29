@@ -162,6 +162,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "muse",
     "prime-agent",
     "copilot",
+    "gemini-cli",
     "devin",
     "droid",
     "kiro",
@@ -182,15 +183,36 @@ _FLAT_PROFILE_IDS_V1 = [
     "local",
     "byok",
     "plan",
-    "plan-zai",
+    "plan-minimax",
     "plan-grok",
-    "plan-copilot",
+    "plan-zai",
     "plan-moonshot",
     "plan-qwen",
+    "plan-copilot",
     "plan-opencode",
     "plan-ollama-cloud",
     "plan-deepseek",
-    "plan-minimax",
+    *[
+        f"plan-agent-{pid}"
+        for pid in (
+            "codex",
+            "grok",
+            "cursor",
+            "amp",
+            "antigravity",
+            "muse",
+            "prime-agent",
+            "gemini-cli",
+            "devin",
+            "droid",
+            "kiro",
+            "glm-cli",
+            "qwen-code",
+            "deepagents-code",
+            "junie",
+            "fx",
+        )
+    ],
     "build-import",
     "build-preset",
     "build-wizard",
@@ -227,6 +249,10 @@ _FLAT_PROFILE_IDS_V1 = [
     "muse-key",
     "qoder-key",
     "poolside-key",
+    "account-opencode-key",
+    "account-fast-agent",
+    "account-pi",
+    "account-omp",
     "protocol-acp",
     "protocol-a2a",
     "protocol-uhp",
@@ -302,17 +328,19 @@ def test_devin_and_glm_are_acp_subscription_profiles():
     assert "glm-acp-agent" in glm.unavailable_hint
 
 
-def test_gemini_is_not_a_subscription_profile():
-    """Gemini CLI is an API-key route, so it must not sit under Subscriptions.
+def test_gemini_subscription_uses_google_signin_over_acp(monkeypatch):
+    """Google AI Pro/Ultra accounts remain supported alongside Antigravity."""
+    import superqode.providers.connection_profiles as cp
 
-    Google moved consumer plans to Antigravity, and a subscription entry must
-    never put the user on metered API billing. The agent stays reachable
-    through the ACP channel.
-    """
-    import pytest
-
-    with pytest.raises(Exception):
-        get_connection_profile("gemini-cli").id
+    profile = get_connection_profile("gemini-cli")
+    assert profile.id in connection_profile_ids(menu=CONNECT_MENU_SUBSCRIPTIONS)
+    assert profile.connector == "acp"
+    assert profile.acp_agent == "gemini"
+    assert "Sign in with Google" in profile.unavailable_hint
+    monkeypatch.setattr(cp.shutil, "which", lambda name: None)
+    assert not profile.available
+    monkeypatch.setattr(cp.shutil, "which", lambda name: "/usr/bin/gemini")
+    assert profile.available
 
 
 def test_subscription_cli_profiles_detect_their_binaries(monkeypatch):

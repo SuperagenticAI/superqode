@@ -805,7 +805,7 @@ class CommandImplMixin:
 
     def _show_vendor_runtime_setup(self, log) -> None:
         """Show optional vendor SDK and external CLI setup without installing."""
-        from superqode.providers.env_introspect import install_command
+        from superqode.providers.env_introspect import active_install_command as install_command
 
         text = Text()
         text.append("\n  Vendor runtime setup\n\n", style=f"bold {THEME['purple']}")
@@ -2871,7 +2871,7 @@ class CommandImplMixin:
                 style=THEME["text"],
             )
         if not sdk_ok:
-            from superqode.providers.env_introspect import install_command
+            from superqode.providers.env_introspect import active_install_command as install_command
 
             text.append("\n  SDK setup    ", style=THEME["muted"])
             text.append(f"{install_command('copilot-sdk')}\n", style=THEME["cyan"])
@@ -3199,7 +3199,7 @@ class CommandImplMixin:
             f"{feature} is provided by the GitHub Copilot SDK, and only the "
             "Copilot CLI route is available here."
         )
-        from superqode.providers.env_introspect import install_command
+        from superqode.providers.env_introspect import active_install_command as install_command
 
         log.add_info(f"Install the SDK with: {install_command('copilot-sdk')}")
         return True

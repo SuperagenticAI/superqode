@@ -165,7 +165,7 @@ def test_registry_converter_preserves_stable_alias_and_tier():
     assert converted["catalog_tier"] == "featured"
     assert converted["run_command"]["*"] == "qwen --acp"
     assert converted["actions"]["*"]["install"]["command"] == (
-        "npm install -g @qwen-code/qwen-code"
+        "npm install -g @qwen-code/qwen-code@0.20.1"
     )
 
 

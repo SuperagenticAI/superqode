@@ -175,6 +175,23 @@ class ConnectMixin:
         # A harness that allows no providers for a mode must not offer the row:
         # selecting it would open a picker with nothing in it.
         offered = [row for row in profiles if self._key_models_row_offered(row.id)]
+        key_session = getattr(self, "_key_harness_session", None)
+        if key_session:
+            from superqode.providers.harness_catalog import get_entry
+            from superqode.providers.connection_profiles import ConnectionProfile
+
+            entry = get_entry(key_session.entry_id)
+            if entry and any(spec.mode == "subscription" for spec in entry.auth):
+                offered.append(
+                    ConnectionProfile(
+                        id=f"account-{entry.id}",
+                        label="Use this agent's subscription / account",
+                        description="Use the model and account configured in this agent; keeps its coding loop",
+                        connector="harness-account",
+                        runtime=entry.id,
+                        menu=menu,
+                    )
+                )
         return offered or profiles
 
     def _key_models_row_offered(self, row_id: str) -> bool:
@@ -770,6 +787,12 @@ class ConnectMixin:
     ) -> dict[str, str]:
         """Merge session extra env into the child env if it belongs to this agent."""
         merged = dict(acp_extra_env or {})
+        agent = getattr(get_session(), "connected_agent", None) or {}
+        if (
+            isinstance(agent, dict)
+            and agent.get("short_name", "").lower() == (agent_type or "").lower()
+        ):
+            merged = {**(agent.get("launch_env") or {}), **merged}
         extra = getattr(self, "_acp_extra_env", None) or {}
         owned = (getattr(self, "_acp_extra_env_agent", None) or "").strip().lower()
         current = (agent_type or "").strip().lower()
@@ -1514,7 +1537,7 @@ class ConnectMixin:
                     pass
         self._open_connect_screen(log)
         conn = profile.connector
-        if conn not in {"byok", "local", "key-harness"}:
+        if conn not in {"byok", "local", "key-harness", "harness-account"}:
             self._clear_key_harness_session()
         if getattr(profile, "id", "") == "copilot-acp" and log is not None:
             log.add_info(
@@ -1614,11 +1637,7 @@ class ConnectMixin:
         elif conn == "byok":
             # Subscription-plan entries reuse the direct-provider engine, but
             # that transport detail must not relabel their auth/billing as BYOK.
-            from superqode.providers.connection_profiles import CONNECT_MENU_PLAN
-
-            self._next_direct_auth_mode = (
-                "subscription" if getattr(profile, "menu", "") == CONNECT_MENU_PLAN else "byok"
-            )
+            self._next_direct_auth_mode = getattr(profile, "auth_mode", "") or "byok"
             self._direct_connection_profile_id = str(getattr(profile, "id", "") or "")
             # An acp-attach session keeps this picker: the selection is diverted
             # to the agent in _connect_byok_mode rather than at the menu.
@@ -1689,6 +1708,57 @@ class ConnectMixin:
             from superqode.providers.connection_profiles import CONNECT_MENU_PLAN
 
             self._show_connect_type_picker(log, menu=CONNECT_MENU_PLAN)
+        elif conn == "plan-guidance":
+            log.add_info(profile.unavailable_hint)
+            log.add_info(
+                "Your current harness and model have been kept. Choose the agent route explicitly to switch."
+            )
+        elif conn == "plan-agent":
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            target = get_connection_profile(profile.acp_agent or "")
+            if target is None:
+                log.add_error("This account has no supported agent connection.")
+                return
+            log.add_info(
+                f"Using {target.label}'s coding loop through {target.transport or target.connector}."
+            )
+            self._dispatch_connection_profile(target, log)
+        elif conn == "harness-account":
+            from superqode.providers.harness_catalog import get_entry
+
+            key_session = getattr(self, "_key_harness_session", None)
+            entry = get_entry(key_session.entry_id if key_session else profile.runtime or "")
+            spec = (
+                next((s for s in entry.auth if s.mode == "subscription"), None) if entry else None
+            )
+            if not entry or not spec or not entry.acp_agent:
+                log.add_error("This harness does not expose a supported account route.")
+                return
+            from superqode.agents.registry import get_registry_agent_by_short_name
+            from superqode.commands.acp import check_agent_installed
+
+            agent_data = get_registry_agent_by_short_name(entry.acp_agent)
+            if agent_data and not check_agent_installed(agent_data):
+                installer = getattr(self, "_show_agent_install_picker", None)
+                if callable(installer) and installer(
+                    agent_data,
+                    log,
+                    on_ready=lambda: self._dispatch_connection_profile(profile, log),
+                ):
+                    return
+                log.add_info(f"Install {entry.label} first. {spec.notes}")
+                return
+            self._clear_key_harness_session()
+            self._clear_acp_extra_env()
+            self._acp_subscription_vendor = "codex" if entry.acp_agent == "fast-agent" else None
+            self._connecting_profile_id = f"account-{entry.id}"
+            log.add_info(
+                spec.notes
+                or "Using the agent's configured account and model; sign-in is checked by the agent."
+            )
+            self._connect_acp_cmd(entry.acp_agent, log)
+            self._set_acp_extra_env(dict(spec.account_env), entry.acp_agent)
         elif conn == "vendor-picker":
             from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
@@ -2823,7 +2893,6 @@ class ConnectMixin:
                 pass
         if self._redirect_harness_only_provider(provider, log):
             return
-        self._clear_acp_extra_env()
         if provider == "grok-cli":
             # The BYOK provider/model picker can reach this route without
             # passing through `:grok api`. Refresh the imported CLI credential
@@ -2859,25 +2928,19 @@ class ConnectMixin:
             )
             return
 
-        # Clear any existing ACP connection when switching to BYOK
-        if hasattr(self, "_acp_client") and self._acp_client:
-            # Disconnect ACP client if switching from ACP to BYOK
-            try:
-                if self._acp_loop_runner is not None:
-                    self._acp_loop_runner.run(self._acp_client.stop())
-                else:
-                    asyncio.create_task(self._acp_client.stop())
-            except Exception:
-                pass
-            self._acp_client = None
-            self._acp_client_key = None
+        # Validate plan credentials before disconnecting the current session.
+        # A missing plan key must never fall through to a global OpenAI key.
+        if provider_def.auth_mode == "subscription" and provider_def.env_vars:
+            from superqode.providers.credentials import provider_api_key
 
-        # Clear session state
-        session = get_session()
-        if hasattr(session, "connected_agent"):
-            session.connected_agent = None
-        if hasattr(session, "acp_manager"):
-            session.acp_manager = None
+            if not provider_api_key(provider_def):
+                log.add_error(
+                    f"{provider_def.name} requires its own subscription key "
+                    f"({', '.join(provider_def.env_vars)}). General API keys are not used. "
+                    f"Run superqode auth login {provider}."
+                )
+                return
+
         from superqode.providers.registry import ProviderCategory
         from superqode.pure_mode import PureMode
         from superqode.agent.system_prompts import SystemPromptLevel
@@ -2950,6 +3013,26 @@ class ConnectMixin:
                 log.write_feedback(t)
                 return
 
+        # Clear any existing ACP connection when switching to BYOK
+        self._clear_acp_extra_env()
+        if hasattr(self, "_acp_client") and self._acp_client:
+            # Disconnect ACP client if switching from ACP to BYOK
+            try:
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    asyncio.create_task(self._acp_client.stop())
+            except Exception:
+                pass
+            self._acp_client = None
+            self._acp_client_key = None
+
+        # Clear session state
+        session = get_session()
+        if hasattr(session, "connected_agent"):
+            session.connected_agent = None
+        if hasattr(session, "acp_manager"):
+            session.acp_manager = None
         # Store previous provider for quick switching
         if hasattr(self, "current_provider") and self.current_provider:
             self._previous_provider = (self.current_provider, self.current_model)
@@ -3071,12 +3154,11 @@ class ConnectMixin:
         else:
             exec_mode = "byok"
 
-        requested_auth = str(getattr(self, "_direct_auth_mode", "") or "").lower()
         auth_mode = (
             "local"
             if exec_mode == "local"
             else "subscription"
-            if requested_auth == "subscription"
+            if provider_def.auth_mode == "subscription"
             else "byok"
         )
 
@@ -3159,7 +3241,7 @@ class ConnectMixin:
         title = (
             "Local Model Selected"
             if local
-            else "Subscription Connected"
+            else "Subscription Model Selected"
             if subscription
             else "Provider Connected"
         )
@@ -3179,6 +3261,26 @@ class ConnectMixin:
         t.append("    Model    ", style=THEME["muted"])
         t.append(model, style=f"bold {THEME['cyan']}")
         t.append("\n")
+        t.append("    Harness  ", style=THEME["muted"])
+        t.append(
+            str(getattr(self, "current_harness", "") or os.getenv("SUPERQODE_HARNESS", "core")),
+            style=THEME["text"],
+        )
+        t.append("\n")
+        from superqode.providers.dynamic import resolve_provider_def, resolve_base_url
+        from urllib.parse import urlsplit, urlunsplit
+
+        definition = resolve_provider_def(provider)
+        endpoint = resolve_base_url(definition) if definition else ""
+        if endpoint:
+            parsed = urlsplit(endpoint)
+            # Never display URL credentials or query tokens in the transcript.
+            public_endpoint = urlunsplit(
+                (parsed.scheme, parsed.netloc.rsplit("@", 1)[-1], parsed.path, "", "")
+            )
+            t.append("    Endpoint ", style=THEME["muted"])
+            t.append(public_endpoint, style=THEME["dim"])
+            t.append("\n")
         if host:
             t.append("    Host     ", style=THEME["muted"])
             t.append(host, style=THEME["dim"])
@@ -3186,6 +3288,8 @@ class ConnectMixin:
         t.append(
             "\n  Validating the local server..."
             if local
+            else "\n  Configured. Account access is verified on the first request."
+            if subscription
             else "\n  Ready. Type a message to start.",
             style=THEME["muted"],
         )
@@ -3213,7 +3317,9 @@ class ConnectMixin:
             dedupe_key=f"connection:{mode}:{provider}:{model}",
         )
         vendor_owned = False
-        harness = str(getattr(self, "current_harness", "") or "core")
+        harness = str(
+            getattr(self, "current_harness", "") or os.getenv("SUPERQODE_HARNESS", "core")
+        )
         key_session = getattr(self, "_key_harness_session", None)
         if key_session is not None:
             from superqode.providers.harness_catalog import get_entry
@@ -3408,12 +3514,48 @@ class ConnectMixin:
         provider = str(connection.get("provider") or "")
         model = str(connection.get("model") or "")
 
+        # Restore the agent/account route before considering any stale model
+        # fields from a previous native connection. This also restores account
+        # launch defaults (for example fast-agent's codexplan).
+        if acp_agent and profile_id:
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            profile = get_connection_profile(profile_id)
+            if profile and profile.connector in {"acp", "harness-account"}:
+                self._dispatch_connection_profile(profile, log)
+                return
+
         if category == "acp" or (auth_mode == "acp" and not after_auth):
             if acp_agent:
                 self._connect_acp_cmd(acp_agent, log)
                 return
-        elif auth_mode == "subscription" and provider and model:
-            self._direct_auth_mode = "subscription"
+        elif (
+            provider
+            and model
+            and not after_auth
+            and (auth_mode == "subscription" or category in {"models", "plan"})
+        ):
+            saved_harness = str(connection.get("harness_id") or "")
+            if saved_harness:
+                from superqode.providers.dynamic import resolve_provider_def
+                from superqode.providers.credentials import provider_api_key
+                from superqode.pure_mode import PureMode
+
+                definition = resolve_provider_def(provider)
+                # Let the normal connector explain missing credentials without
+                # replacing the active harness first.
+                if definition and definition.env_vars and not provider_api_key(definition):
+                    self._connect_byok_mode(provider, model, log)
+                    return
+                try:
+                    pure = getattr(self, "_pure_mode", None) or PureMode()
+                    pure.select_harness(saved_harness)
+                except (FileNotFoundError, ValueError) as exc:
+                    log.add_error(f"Cannot restore harness {saved_harness}: {exc}")
+                    return
+                self._pure_mode = pure
+                os.environ["SUPERQODE_HARNESS"] = saved_harness
+            self._direct_auth_mode = auth_mode
             self._direct_connection_profile_id = profile_id
             self._connect_byok_mode(provider, model, log)
             return
@@ -3613,6 +3755,10 @@ class ConnectMixin:
                 badges = profile.badges
                 if is_highlighted and badges:
                     append_wrapped(" · ".join(badges), THEME["dim"])
+                if is_highlighted and profile.available and profile.verify_on_connect:
+                    append_wrapped(
+                        "Installed · account sign-in is verified on first use", THEME["muted"]
+                    )
                 if is_highlighted and not profile.available and profile.unavailable_hint:
                     append_wrapped(profile.unavailable_hint, THEME["warning"])
 
@@ -4205,7 +4351,7 @@ class ConnectMixin:
             profile_id=profile_id,
             acp_agent=acp_agent,
             openness="",
-            provider=str(getattr(self, "current_provider", "") or ""),
+            provider="",
             model=str(getattr(self, "current_model", "") or ""),
             transport="ACP",
             after_auth="",

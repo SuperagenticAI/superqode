@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from superqode.app.harness_picker import HarnessPickerItem, harness_picker_items
+from superqode.app.harness_picker import (
+    HarnessPickerItem,
+    harness_picker_items,
+    harness_source_extra,
+)
 
 
 HUB_SCHEMA_VERSION = "1.7"
@@ -97,6 +101,7 @@ def readiness_label(readiness: str) -> str:
 
 
 _DOCS_BY_ID = {
+    "gemini-cli": "https://geminicli.com/docs/get-started/authentication/",
     "codex": f"{DOCS_BASE}providers/codex/",
     "claude": f"{DOCS_BASE}providers/anthropic-claude/",
     "antigravity": f"{DOCS_BASE}providers/antigravity/",
@@ -121,6 +126,7 @@ _DOCS_BY_ID = {
 }
 
 _HOMEPAGE_BY_ID = {
+    "gemini-cli": "https://geminicli.com/",
     "codex": "https://openai.com/codex/",
     "claude": "https://www.anthropic.com/claude-code",
     "cursor": "https://cursor.com/",
@@ -193,6 +199,7 @@ _PROJECT_OPENNESS = HubOpenness("open", "Apache-2.0", PROJECT_REPOSITORY)
 #
 _LANGCHAIN_DEEPAGENTS = HubOpenness("open", "MIT", "https://github.com/langchain-ai/deepagents")
 _OPENNESS_BY_ID: dict[str, HubOpenness] = {
+    "gemini-cli": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
     "deepagents": _LANGCHAIN_DEEPAGENTS,
     "deepagents-code": _LANGCHAIN_DEEPAGENTS,
     "acp:deepagents": _LANGCHAIN_DEEPAGENTS,
@@ -766,6 +773,14 @@ class HubSetupStep:
 
 
 _SETUP_STEPS_BY_ID = {
+    "gemini-cli": (
+        HubSetupStep("Install Gemini CLI", "npm install -g @google/gemini-cli"),
+        HubSetupStep(
+            "Sign in with your Google plan account",
+            "gemini",
+            "Choose Sign in with Google for Google AI Pro / Ultra or Code Assist.",
+        ),
+    ),
     "codex": (
         HubSetupStep(
             "Install the SuperQode Codex integration",
@@ -1577,10 +1592,13 @@ def hub_record(
     details = (
         _connection_details(item) if item.kind in {"connection", "acp"} else _native_details(item)
     )
-    if portable_install_commands and item.install_extra:
+    # A public catalog must carry installation instructions even when the
+    # exporting machine already has this optional integration installed.
+    portable_extra = item.install_extra or harness_source_extra(item)
+    if portable_install_commands and portable_extra:
         from superqode.providers.env_introspect import install_command
 
-        command = install_command(item.install_extra)
+        command = install_command(portable_extra)
         details = {
             **details,
             "install_command": command,

@@ -2057,6 +2057,20 @@ class AgentRunMixin:
         # Closed/Open key paths set this at :connect time. Merge last so the
         # child sees the resolved key; never setdefault into SuperQode's env.
         # Only the agent the key was resolved for receives it.
+        selected_agent = getattr(get_session(), "connected_agent", None) or {}
+        override_name = f"SUPERQODE_{agent_type.upper().replace('-', '_')}_ACP_COMMAND"
+        if (
+            isinstance(selected_agent, dict)
+            and (
+                selected_agent.get("user_defined")
+                or (
+                    selected_agent.get("registry_source") == "official-registry"
+                    and agent_type not in {"prime-agent", "prime"}
+                )
+            )
+            and not os.getenv(override_name)
+        ):
+            command = selected_agent.get("run_command", {}).get("*", "") or command
         acp_extra_env = self._merge_acp_session_extra_env(agent_type, acp_extra_env)
 
         mode_label = {"auto": "🟢 AUTO", "ask": "🟡 ASK", "deny": "🔴 DENY"}.get(

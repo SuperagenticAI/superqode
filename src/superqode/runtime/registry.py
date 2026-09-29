@@ -47,9 +47,9 @@ def _builtin_factory(**kwargs) -> AgentRuntime:
 
 def _extra_install(extra: str) -> str:
     """uv install command for ``superqode[extra]`` targeting SuperQode's env."""
-    from superqode.providers.env_introspect import install_command
+    from superqode.providers.env_introspect import active_install_command
 
-    return install_command(extra)
+    return active_install_command(extra)
 
 
 def _adk_factory(**kwargs) -> AgentRuntime:

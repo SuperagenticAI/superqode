@@ -29,11 +29,14 @@ VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
     "droid": ("FACTORY_API_KEY",),
     "amp": ("AMP_API_KEY",),
     "kiro": ("KIRO_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
-    "glm": ("ZAI_API_KEY", "ZHIPUAI_API_KEY", "GLM_API_KEY"),
+    # GLM's ACP adapter uses a coding-plan key, not OAuth. Removing that key
+    # makes the advertised subscription route impossible to authenticate.
+    "glm": (),
     "qwen": ("DASHSCOPE_API_KEY", "QWEN_API_KEY"),
     "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
     "codex": ("OPENAI_API_KEY",),
     "antigravity": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"),
     # Muse Code documents this precedence explicitly: META_API_KEY wins over a
     # stored `muse login` session. META_MODEL_API_KEY is the BYOK provider key
     # and Muse never reads it, so it is deliberately not listed here.
@@ -85,7 +88,7 @@ def diverting_api_keys(vendor: str, env: Optional[Mapping[str, str]] = None) -> 
     if resolved is None:
         return []
     source = os.environ if env is None else env
-    if any(source.get(name) for name in EXPLICIT_OPT_IN_ENVS):
+    if resolved == "copilot" and any(source.get(name) for name in EXPLICIT_OPT_IN_ENVS):
         # The user explicitly supplied a token for this route; respect it.
         return []
     return [name for name in VENDOR_API_KEY_ENVS[resolved] if source.get(name)]
@@ -155,6 +158,13 @@ def subscription_notice(
     if not names:
         return []
     joined = ", ".join(names)
+    if "GOOGLE_GENAI_USE_VERTEXAI" in names:
+        return [
+            f"{joined} are set in this environment.",
+            f"This is a subscription connection, so these API credentials and billing "
+            f"overrides are ignored and {vendor_label} uses your Google sign-in instead.",
+            "Use :connect acp gemini to use Gemini CLI with API-key or Vertex AI authentication.",
+        ]
     plural = "keys are" if len(names) > 1 else "key is"
     entry = _vendor_key_entry(vendor) if vendor else None
     if entry is not None:

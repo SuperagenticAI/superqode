@@ -115,7 +115,7 @@ _MENU_PARENTS = {
 
 
 def connect_menu_version() -> str:
-    """Resolved ``v1``/``v2`` connect IA. Compiled default stays v1 until PR 6."""
+    """Resolved ``v1``/``v2`` connect menus; v2 is the shipped default."""
     from superqode.providers.harness_catalog import parse_connect_menu_flag
 
     return parse_connect_menu_flag()
@@ -197,6 +197,10 @@ class ConnectionProfile:
     # SPDX id when SuperQode has verified it. Blank is not "no licence": it is
     # a licence we have not checked, so the badge is simply omitted.
     license: str = ""
+    auth_mode: str = ""
+    # Account authentication is verified by the vendor when the process
+    # connects. A PATH probe only establishes installation.
+    verify_on_connect: bool = False
 
     @property
     def available(self) -> bool:
@@ -437,6 +441,13 @@ def _zai_ready() -> bool:
     return bool(provider_api_key(PROVIDERS["zai"]))
 
 
+def _provider_ready(provider: str) -> bool:
+    from .credentials import provider_api_key
+    from .registry import PROVIDERS
+
+    return bool(provider_api_key(PROVIDERS[provider]))
+
+
 _BYOK_KEY_ENVS = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -595,7 +606,7 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="plan",
         label="Subscription",
-        description="Plan credits instead of metered API billing",
+        description="Model plans and account subscriptions; agent routes name the harness switch",
         connector="plan-picker",
         runtime="builtin",
         menu=CONNECT_MENU_MODELS,
@@ -603,105 +614,84 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# Plans whose credits can drive a harness through a model endpoint. Vendors
-# that sell an agent rather than model access belong on the agents screen.
+# Native model plans and explicit vendor-agent alternatives. Unsupported
+# native account endpoints remain discoverable without misrouting billing.
 _PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
-        id="plan-zai",
-        label="GLM Coding Plan",
-        description="Z.AI GLM models on a coding plan",
+        id="plan-minimax",
+        label="MiniMax Token Plan (keep your harness)",
+        description="Native model access with a separate Token Plan key; keeps Core/PiPy",
         connector="byok",
-        byok_provider="zai",
+        byok_provider="minimax-token-plan",
+        auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
-        detect=_zai_ready,
-        unavailable_hint="set ZAI_API_KEY from your coding plan",
+        detect=lambda: _provider_ready("minimax-token-plan"),
+        unavailable_hint="set MINIMAX_TOKEN_PLAN_API_KEY to your sk-cp subscription key, or run `superqode auth login minimax-token-plan`",
     ),
     ConnectionProfile(
         id="plan-grok",
-        label="Grok subscription",
-        description="X / SuperGrok plan credits",
+        label="Grok models (keep your harness)",
+        description="SuperQode harness on the Grok CLI subscription login; no xAI API-key fallback",
         connector="grok-api",
+        auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
-        detect=lambda: _grok_cli_ready() or _env_key_set("XAI_API_KEY"),
-        unavailable_hint="run `grok` and sign in, or set XAI_API_KEY",
+        detect=_grok_cli_ready,
+        unavailable_hint="install Grok CLI and run `grok login`",
     ),
     ConnectionProfile(
-        id="plan-copilot",
-        label="Copilot models",
-        description="Models provided by your GitHub Copilot plan",
-        # The BYOK route lists what models.dev believes Copilot offers in
-        # general, which is not what a given plan is entitled to; the SDK and
-        # ACP routes ask the signed-in account. connect.py already warns anyone
-        # who reaches the BYOK route by typing, so the menu must not lead there.
-        connector="copilot",
-        runtime="copilot-sdk",
-        acp_agent="copilot",
-        self_contained=True,
+        id="plan-zai",
+        label="GLM Coding Plan (supported agent required)",
+        description="Not a Core/PiPy model provider; configure the plan in OpenCode, Pi, Goose or Droid",
+        connector="plan-guidance",
         menu=CONNECT_MENU_PLAN,
-        detect=_copilot_subscription_ready,
-        unavailable_hint="sign in with `copilot login`",
+        unavailable_hint="Z.AI limits this plan to its supported tools. Use :connect acp opencode, pi, goose or droid after configuring the Coding Plan there. General API access is :connect byok zai.",
     ),
     ConnectionProfile(
         id="plan-moonshot",
-        label="Moonshot Kimi",
-        description="Kimi models on a Moonshot plan",
-        connector="byok",
-        byok_provider="moonshot",
+        label="Kimi Code (use Kimi's harness)",
+        description="Kimi Code subscription through its vendor agent; Moonshot API credits are separate",
+        connector="plan-agent",
+        acp_agent="kimi-code",
         menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("MOONSHOT_API_KEY"),
-        unavailable_hint="set MOONSHOT_API_KEY",
     ),
     ConnectionProfile(
         id="plan-qwen",
-        label="Qwen / DashScope",
-        description="Qwen models through DashScope",
-        connector="byok",
-        byok_provider="alibaba",
+        label="Alibaba Coding Plan (supported agent required)",
+        description="Configure the plan-specific key and coding endpoint in your coding agent",
+        connector="plan-guidance",
         menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("DASHSCOPE_API_KEY", "ALIBABA_API_KEY"),
-        unavailable_hint="set DASHSCOPE_API_KEY",
+        unavailable_hint="Use the Coding Plan key (sk-sp-) and https://coding-intl.dashscope.aliyuncs.com/v1 in a supported interactive coding agent, then :connect acp opencode. Qwen OAuth is :connect qwen-code; general DashScope API access is :connect byok alibaba.",
     ),
     ConnectionProfile(
-        id="plan-opencode",
-        label="OpenCode Zen",
-        description="OpenCode Zen credits",
-        connector="byok",
-        byok_provider="opencode",
+        id="plan-copilot",
+        label="Copilot (use Copilot's harness)",
+        description="Explicitly switches to the Copilot SDK/CLI agent; does not supply Core/PiPy a model",
+        connector="plan-agent",
+        acp_agent="copilot",
         menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("OPENCODE_API_KEY"),
-        unavailable_hint="set OPENCODE_API_KEY",
     ),
-    ConnectionProfile(
-        id="plan-ollama-cloud",
-        label="Ollama Cloud",
-        description="Hosted Ollama models on your account",
-        connector="byok",
-        byok_provider="ollama-cloud",
-        menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("OLLAMA_API_KEY"),
-        unavailable_hint="set OLLAMA_API_KEY",
-    ),
-    ConnectionProfile(
-        id="plan-deepseek",
-        label="DeepSeek",
-        description="DeepSeek platform credits",
-        connector="byok",
-        byok_provider="deepseek",
-        menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("DEEPSEEK_API_KEY"),
-        unavailable_hint="set DEEPSEEK_API_KEY",
-    ),
-    ConnectionProfile(
-        id="plan-minimax",
-        label="MiniMax",
-        description="MiniMax platform credits",
-        connector="byok",
-        byok_provider="minimax",
-        menu=CONNECT_MENU_PLAN,
-        detect=lambda: _env_key_set("MINIMAX_API_KEY"),
-        unavailable_hint="set MINIMAX_API_KEY",
-    ),
+    # Credit accounts stay reachable by their existing ids without being
+    # relabelled as subscriptions by the dispatcher.
+    *[
+        ConnectionProfile(
+            id=f"plan-{slug}",
+            label=f"{label} (API credits; keep your harness)",
+            description="API/account credits with provider billing; keeps the selected harness",
+            connector="byok",
+            byok_provider=provider,
+            auth_mode="byok",
+            menu=CONNECT_MENU_PLAN,
+            detect=lambda pid=provider: _provider_ready(pid),
+            unavailable_hint=f"run `superqode auth login {provider}` with your API key",
+        )
+        for slug, label, provider in (
+            ("opencode", "OpenCode Zen", "opencode"),
+            ("ollama-cloud", "Ollama Cloud", "ollama-cloud"),
+            ("deepseek", "DeepSeek", "deepseek"),
+        )
+    ],
 ]
+
 
 # Ways to author a repository-owned HarnessSpec, cheapest first. Importing what
 # the repo already has beats any wizard as a first step, because it produces a
@@ -893,13 +883,24 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
             "`npm install -g @github/copilot`; then run `copilot login`"
         ),
     ),
-    # Gemini CLI is deliberately absent: Antigravity supersedes it for
-    # consumer Google accounts, and it stays reachable from the ACP catalogue.
-    # It is also an
-    # enterprise/API-key route rather than a subscription one, and Google has
-    # moved consumer plans to Antigravity. Subscriptions must never put a user
-    # on metered API billing. The agent is still reachable through the ACP
-    # channel with `:connect acp gemini` for anyone who still runs it.
+    ConnectionProfile(
+        id="gemini-cli",
+        label="Gemini CLI",
+        description="Google AI Pro / Ultra or Code Assist through Google sign-in over ACP",
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="gemini",
+        self_contained=True,
+        harness_openness="open",
+        model_openness="Gemini models",
+        transport="ACP",
+        license="Apache-2.0",
+        detect=lambda: shutil.which("gemini") is not None,
+        unavailable_hint=(
+            "run `npm install -g @google/gemini-cli`, then run `gemini` "
+            "and choose Sign in with Google using your plan's account"
+        ),
+    ),
     ConnectionProfile(
         id="devin",
         harness_openness="closed",
@@ -1046,6 +1047,33 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         ),
     ),
 ]
+
+# Installation does not establish account sign-in. Vendor processes perform
+# that check on first connection; tell the user before selecting a route.
+_AGENT_PROFILES = [
+    replace(p, verify_on_connect=True)
+    if p.connector in {"acp", "prime-rpc", "runtime", "copilot"}
+    else p
+    for p in _AGENT_PROFILES
+]
+_PLAN_PROFILES.extend(
+    ConnectionProfile(
+        id=f"plan-agent-{p.id}",
+        label=f"{p.label} (use agent harness)",
+        description=f"Switch to {p.label}'s coding loop. {p.description}",
+        connector="plan-agent",
+        acp_agent=p.id,
+        menu=CONNECT_MENU_PLAN,
+        detect=p.detect,
+        product_detect=p.product_detect,
+        unavailable_hint=p.unavailable_hint,
+        verify_on_connect=p.verify_on_connect,
+        transport=p.transport,
+    )
+    for p in _AGENT_PROFILES
+    if p.id not in {"copilot", "kimi-code"}
+)
+
 
 # Existing-harness categories. v1 is three rows (Subscriptions / ACP / Other).
 # v2 replaces Other with Open, and adds Closed only once that list has members.
@@ -1263,6 +1291,11 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
         else:
             detect = _always_ready
             hint = ""
+        if key_spec is None or key_spec.after_auth in {"setup-card", "inspect"}:
+            detect = _const_detect(False)
+            hint = (
+                entry.support_note or "Integration pending. Select this entry for its setup guide."
+            )
         profiles.append(
             ConnectionProfile(
                 id=entry.id,
@@ -1353,6 +1386,7 @@ def _flat_profiles() -> List[ConnectionProfile]:
             *profiles,
             *_catalog_harness_profiles("open"),
             *_catalog_harness_profiles("closed"),
+            *_catalog_account_profiles(),
             # Protocol rows are drawn, so `--connect protocol-uhp` has to
             # validate the same way every other drawn row does.
             *_PROTOCOL_PROFILES,
@@ -1522,11 +1556,11 @@ CONNECT_MENU_TITLES = {
     ),
     CONNECT_MENU_KEY_MODELS: (
         "Select a model",
-        "Local or your API key. This harness does not use a SuperQode plan.",
+        "Local, your API key, or the agent’s own authenticated account.",
     ),
     CONNECT_MENU_PLAN: (
         "Subscription",
-        "Plans whose credits can run the harness you picked.",
+        "Model routes keep your harness. Agent routes explicitly switch the coding loop.",
     ),
     CONNECT_MENU_BUILD: (
         "Build your own harness",
@@ -1737,6 +1771,8 @@ def get_connection_profile(id_or_label: str) -> Optional[ConnectionProfile]:
         return _AGENT_SUBSCRIPTIONS_V2 if connect_menu_version() == "v2" else _AGENT_SUBSCRIPTIONS
     if key == "agent-acp":
         return _AGENT_ACP_V2 if connect_menu_version() == "v2" else _AGENT_ACP
+    if key.startswith("account-"):
+        return next((p for p in _catalog_account_profiles() if p.id == key), None)
     if key in _BY_ID:
         return _BY_ID[key]
     catalog_rows = (*_catalog_harness_profiles("open"), *_catalog_harness_profiles("closed"))
@@ -1747,6 +1783,25 @@ def get_connection_profile(id_or_label: str) -> Optional[ConnectionProfile]:
         if profile.label.lower() == key:
             return profile
     return None
+
+
+def _catalog_account_profiles() -> List[ConnectionProfile]:
+    from superqode.providers.harness_catalog import HARNESS_CATALOG
+
+    return [
+        ConnectionProfile(
+            id=f"account-{entry.id}",
+            label=f"{entry.label} (use agent account)",
+            description="Use the account and model configured in this agent",
+            connector="harness-account",
+            runtime=entry.id,
+            acp_agent=entry.acp_agent,
+            transport="ACP",
+            verify_on_connect=True,
+        )
+        for entry in HARNESS_CATALOG
+        if entry.list_visible and any(spec.mode == "subscription" for spec in entry.auth)
+    ]
 
 
 def connection_profile_ids(

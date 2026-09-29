@@ -12,6 +12,8 @@ import asyncio
 import json
 import logging
 import shlex
+import platform
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -359,7 +361,12 @@ def get_cached_acp_catalog() -> list[dict[str, Any]]:
             existing["actions"] = converted["actions"]
         bundled_instructions = str(converted.get("installation_instructions") or "")
         if bundled_instructions:
-            existing["installation_instructions"] = bundled_instructions
+            current_instructions = str(existing.get("installation_instructions") or "")
+            existing["installation_instructions"] = (
+                f"{current_instructions}\n\n{bundled_instructions}"
+                if current_instructions and bundled_instructions not in current_instructions
+                else current_instructions or bundled_instructions
+            )
         if not existing.get("repository") and converted.get("repository"):
             existing["repository"] = converted["repository"]
     _cached_catalog = list(merged.values())
@@ -453,16 +460,41 @@ def _distribution_commands(agent: dict[str, Any]) -> tuple[str, str]:
         package = npx["package"]
         args = [str(arg) for arg in npx.get("args", [])]
         launcher = shlex.join(["npx", "-y", package, *args])
-        return command or launcher, f"npm install -g {_package_without_version(package)}"
+        if command and "args" in npx:
+            executable = shlex.split(command)[0]
+            command = shlex.join([executable, *args])
+            if registry_id == "github-copilot-cli" and "--stdio" not in args:
+                command += " --stdio"
+        return command or launcher, f"npm install -g {shlex.quote(package)}"
 
     uvx = distribution.get("uvx")
     if isinstance(uvx, dict) and isinstance(uvx.get("package"), str):
         package = uvx["package"]
         args = [str(arg) for arg in uvx.get("args", [])]
         launcher = shlex.join(["uvx", package, *args])
-        return command or launcher, f"uv tool install {_package_without_version(package)}"
+        if command and "args" in uvx:
+            command = shlex.join([shlex.split(command)[0], *args])
+        return command or launcher, f"uv tool install {shlex.quote(package)}"
 
+    binary = _platform_binary(distribution)
+    if command and "args" in binary:
+        command = shlex.join([shlex.split(command)[0], *[str(a) for a in binary["args"]]])
+    if not command and binary.get("cmd"):
+        executable = str(binary["cmd"]).replace("\\", "/").rsplit("/", 1)[-1]
+        command = shlex.join([executable, *[str(a) for a in binary.get("args", [])]])
     return command, ""
+
+
+def _platform_binary(distribution: dict[str, Any]) -> dict[str, Any]:
+    binaries = distribution.get("binary")
+    if not isinstance(binaries, dict):
+        return {}
+    os_name = {"darwin": "darwin", "win32": "windows", "linux": "linux"}.get(
+        sys.platform, sys.platform
+    )
+    arch = {"arm64": "aarch64", "AMD64": "x86_64"}.get(platform.machine(), platform.machine())
+    selected = binaries.get(f"{os_name}-{arch}")
+    return selected if isinstance(selected, dict) else {}
 
 
 def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
@@ -479,6 +511,13 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
         or f"{registry_id}.registry.agentclientprotocol.com"
     )
     command, install_command = _distribution_commands(registry_agent)
+    distribution = registry_agent.get("distribution")
+    distribution = distribution if isinstance(distribution, dict) else {}
+    launcher = distribution.get("npx") or distribution.get("uvx") or _platform_binary(distribution)
+    launcher = launcher if isinstance(launcher, dict) else {}
+    default_env = launcher.get("env")
+    default_env = default_env if isinstance(default_env, dict) else {}
+    launch_env = {k: v for k, v in default_env.items() if isinstance(k, str) and isinstance(v, str)}
     command = str(bundled.get("run_command") or command)
     install_command = str(bundled.get("installation_command") or install_command)
     tier = registry_catalog_tier(registry_id, short_name)
@@ -499,6 +538,21 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
             f"See {url} for authentication and installation details. "
             "Run `superqode agents refresh` to update registry metadata."
         )
+    if not install_command and distribution.get("binary"):
+        binary = _platform_binary(distribution)
+        instructions += (
+            " This agent uses platform binaries. Install the archive for your OS/architecture "
+            "from the vendor's download page, verify its published checksum, and add its "
+            f"executable to PATH. Automatic archive installation is not available. See {url}."
+        )
+        if binary.get("archive"):
+            instructions += f" Platform archive: {binary['archive']}."
+            if binary.get("sha256"):
+                instructions += f" SHA256: {binary['sha256']}."
+        elif not command:
+            instructions += " No distribution is published for this OS/architecture."
+    if not command:
+        instructions += " No compatible launch command is published; configure a local ACP agent before connecting."
 
     # Preserve openness-related tags from the live registry and bundled TOML
     # (for example ``open-source``) instead of replacing them with catalog tiers.
@@ -532,6 +586,10 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
         "registry_id": registry_id,
         "registry_version": str(registry_agent.get("version") or ""),
         "registry_source": source,
+        "launch_env": launch_env,
+        "distribution": distribution,
+        "registry_license": str(registry_agent.get("license") or ""),
+        "registry_license_url": str(registry_agent.get("license_url") or ""),
         "help": f"# {name}\n\n{description}\n\n## Installation\n\n{instructions}",
         "installation_instructions": instructions,
         "run_command": {"*": command},

@@ -26,10 +26,17 @@ def provider_api_key(provider_def: ProviderDef) -> Optional[str]:
     only while still valid; refresh is provider-specific and should live in the
     provider's OAuth implementation, not in this generic resolver.
     """
+
+    def accepted(value: str | None) -> Optional[str]:
+        if not value:
+            return None
+        prefix = provider_def.credential_prefix
+        return value if not prefix or value.startswith(prefix) else None
+
     for env_name in provider_def.env_vars or []:
         value = os.environ.get(env_name)
         if value:
-            return value
+            return accepted(value)
 
     if provider_def.id == "grok-cli":
         from .grok_cli_auth import resolve_provider_token
@@ -38,11 +45,11 @@ def provider_api_key(provider_def: ProviderDef) -> Optional[str]:
 
     local_auth = get_local_auth(provider_def.id)
     if isinstance(local_auth, ApiAuth):
-        return local_auth.key or None
+        return accepted(local_auth.key)
     if isinstance(local_auth, OAuthAuth) and not local_auth.is_expired():
-        return local_auth.access or None
+        return accepted(local_auth.access)
     if isinstance(local_auth, WellKnownAuth):
-        return local_auth.token or local_auth.key or None
+        return accepted(local_auth.token or local_auth.key)
     return None
 
 

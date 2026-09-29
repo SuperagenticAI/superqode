@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.30] - 2026-09-29
+
+### Added
+
+- Gemini CLI subscription discovery with Google sign-in setup and explicit
+  vendor-agent alternatives in the native harness model-source menu.
+- Account connections for OpenCode, fast-agent, Pi and omp, including
+  fast-agent Codex plan launch settings and reconnect support.
+- Native MiniMax Token Plan model access with a separate validated subscription
+  credential and endpoint.
+
+### Fixed
+
+- Keep subscription credentials separate from general API billing. Z.AI and
+  Alibaba Coding Plan choices explain supported-agent setup; Kimi and Copilot
+  alternatives explicitly identify their vendor harness.
+- Preserve the current agent and credentials when model setup fails, and
+  restore the saved native harness and exact model route on reconnect.
+- Retain ACP registry package versions, launch arguments, scoped environment
+  defaults and user-defined command overrides. Binary-only agents show
+  matching platform download and checksum guidance.
+- Apply subscription billing guards after child-environment overlays and keep
+  explicit Copilot tokens scoped to Copilot. OAuth/local agent health checks
+  require only explicitly declared environment variables.
+- Target the active Python environment and installed SuperQode version in SDK
+  setup hints; keep public installation guidance independent of the exporting
+  machine's installed extras.
+- Prevent interactive account and plan shortcuts from falling through to an
+  unrelated default provider in headless mode.
+- Correct connection documentation, readiness guidance, Gemini discovery and
+  Qoder/Poolside capability declarations, and refresh the published Hub catalog.
+
 ## [2.4.29] - 2026-09-29
 
 ### Added

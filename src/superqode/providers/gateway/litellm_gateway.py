@@ -509,6 +509,16 @@ class LiteLLMGateway(GatewayInterface):
 
         base_url = resolve_base_url(provider_def)
         api_key = provider_api_key(provider_def)
+        if provider_def.auth_mode == "subscription":
+            if not api_key:
+                raise ValueError(
+                    f"{provider_def.name} requires its subscription credential; "
+                    "general API-key fallback is disabled."
+                )
+            # The authenticated endpoint and credential must stay together.
+            # Caller/global OpenAI settings cannot turn a plan into API billing.
+            request_kwargs["api_base"] = base_url
+            request_kwargs["api_key"] = api_key
         if base_url and "api_base" not in request_kwargs:
             request_kwargs["api_base"] = base_url
         if api_key and "api_key" not in request_kwargs:

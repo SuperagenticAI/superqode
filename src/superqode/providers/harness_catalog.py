@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Tuple
 
@@ -60,6 +60,7 @@ class HarnessAuthSpec:
     unavailable_hint: str = ""
     notes: str = ""
     inject_env: bool = False  # Closed Factory: child-only extra env
+    account_env: Tuple[Tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1118,6 +1119,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="qoder",
         hub_id="acp:qoder",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -1147,6 +1149,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="poolside",
         hub_id="acp:poolside",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -1261,3 +1264,44 @@ __all__ = [
     "list_entries",
     "parse_connect_menu_flag",
 ]
+
+
+# These external agents own their account authentication and model selection.
+# Their key/local setup remains separate from an account-backed ACP session.
+_ACCOUNT_ROUTES = {
+    "fast-agent": HarnessAuthSpec(
+        mode="subscription",
+        connector="acp",
+        profile_id="fast-agent",
+        after_auth="acp-attach",
+        account_env=(("FAST_AGENT_MODEL", "codexplan"),),
+        notes="Run fast-agent auth provider login codex first. Using fast-agent's codexplan model on that account.",
+    ),
+    "pi": HarnessAuthSpec(
+        mode="subscription",
+        connector="acp",
+        profile_id="pi",
+        after_auth="acp-attach",
+        notes="Run pi and use /login to configure your account and model, then connect here. Pi owns token refresh and entitlement checks.",
+    ),
+    "omp": HarnessAuthSpec(
+        mode="subscription",
+        connector="acp",
+        profile_id="omp",
+        after_auth="acp-attach",
+        notes="Configure your account and model inside omp before connecting. The agent verifies its account on first use.",
+    ),
+    "opencode-key": HarnessAuthSpec(
+        mode="subscription",
+        connector="acp",
+        profile_id="opencode-key",
+        after_auth="acp-attach",
+        notes="Run opencode auth login and choose the model in OpenCode first. The agent owns account authentication and model selection.",
+    ),
+}
+HARNESS_CATALOG = tuple(
+    replace(entry, auth=(*entry.auth, _ACCOUNT_ROUTES[entry.id]))
+    if entry.id in _ACCOUNT_ROUTES
+    else entry
+    for entry in HARNESS_CATALOG
+)

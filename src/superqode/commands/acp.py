@@ -460,13 +460,9 @@ def validate_agent_environment(agent: "Agent") -> list[str]:
     agent_name = agent.get("short_name", "").lower()
 
     # Define known environment variable requirements for agents
-    env_requirements = {
-        "claude": ["ANTHROPIC_API_KEY"],
-        "opencode": ["ZHIPUAI_API_KEY"],  # GLM-4.7 uses ZHIPUAI
-        "gemini": ["GOOGLE_API_KEY"],
-        "openai": ["OPENAI_API_KEY"],
-        "kimi": ["MOONSHOT_API_KEY"],
-    }
+    # Many agents support account sign-in and local models without API keys.
+    # Require only variables explicitly declared by this configured agent.
+    env_requirements = {agent_name: agent.get("required_env", [])}
 
     # Check if agent requires specific environment variables
     if agent_name in env_requirements:
@@ -625,7 +621,12 @@ async def connect_to_agent(agent_identifier: str, project_dir: str | None = None
     try:
         # Connect to the agent
         cwd = project_dir or os.getcwd()
-        success = await manager.connect_to_agent(run_command, cwd)
+        launch_env = agent.get("launch_env") or {}
+        success = (
+            await manager.connect_to_agent(run_command, cwd, extra_env=launch_env)
+            if launch_env
+            else await manager.connect_to_agent(run_command, cwd)
+        )
 
         if not success:
             _console.print(f"[red]Failed to connect to {agent['name']}.[/red]")

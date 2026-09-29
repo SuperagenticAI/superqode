@@ -142,7 +142,9 @@ EXPECTED_COMMAND_COUNT = 298
 # the count 297 -> 298 without adding a new implementation entry point.
 # RLM Code is now a selectable optional harness, which widens the generated
 # harness choice lists without adding another Click command.
-EXPECTED_HELP_TREE_SHA256 = "44752dbfce8061cbeff4c84bf3c6599a3b4f1e223140ff488ceb0c6b1f26f557"
+# Rebaselined for Gemini subscription discovery and explicit model/account
+# alternatives. Only the registry-derived --connect choices change.
+EXPECTED_HELP_TREE_SHA256 = "e6afa25b8aeba3f40d5689886f53f0cfcc78c8df970d31d6f8ba3a46e9578979"
 
 
 def _render_help_tree() -> tuple[int, str]:

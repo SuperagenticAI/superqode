@@ -94,6 +94,18 @@ class TestKeyDetection:
 
 
 class TestChildEnvironment:
+    def test_gemini_subscription_ignores_api_key_and_vertex_routes(self):
+        env = {
+            "PATH": "/usr/bin",
+            "GEMINI_API_KEY": "key",
+            "GOOGLE_API_KEY": "other-key",
+            "GOOGLE_GENAI_USE_VERTEXAI": "true",
+        }
+        child, stripped = subscription_child_env("gemini-cli", env)
+        assert child == {"PATH": "/usr/bin"}
+        assert stripped == ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"]
+        assert env["GEMINI_API_KEY"] == "key"
+
     def test_subscription_env_removes_the_keys_and_names_them(self):
         env = {
             "PATH": "/usr/bin",
@@ -252,6 +264,20 @@ class TestACPClientIntegration:
         assert "GROK_CODE_XAI_API_KEY" not in captured["env"]
         assert client.stripped_api_keys == ["GROK_CODE_XAI_API_KEY", "XAI_API_KEY"]
 
+    def test_launch_defaults_cannot_reintroduce_metered_keys(self, tmp_path, monkeypatch):
+        captured = {}
+
+        async def fake_exec(cmd, **kwargs):
+            captured["env"] = kwargs.get("env", {})
+            raise RuntimeError("stop after env capture")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_shell", fake_exec)
+        client = self._client("gemini", tmp_path)
+        client.extra_env = {"GEMINI_API_KEY": "manifest-key", "GOOGLE_GENAI_USE_VERTEXAI": "true"}
+        asyncio.run(client.start())
+        assert "GEMINI_API_KEY" not in captured["env"]
+        assert "GOOGLE_GENAI_USE_VERTEXAI" not in captured["env"]
+
     def test_plain_acp_client_keeps_the_environment_untouched(self, tmp_path, monkeypatch):
         """Only Subscriptions changes billing; the ACP channel is unaffected."""
         monkeypatch.setenv("XAI_API_KEY", "xai-secret")
@@ -271,6 +297,28 @@ class TestACPClientIntegration:
 
 
 class TestConnectFlowInformsTheUser:
+    def test_gemini_subscription_sets_vendor_and_explains_billing_overrides(self, monkeypatch):
+        from superqode.app.mixins.connect import ConnectMixin
+        from superqode.providers.connection_profiles import get_connection_profile
+
+        monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+        monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+        messages = []
+
+        class Log:
+            def add_info(self, value):
+                messages.append(str(value))
+
+        stub = ConnectMixin()
+        stub._apply_subscription_billing_policy(get_connection_profile("gemini-cli"), Log())
+        assert stub._acp_subscription_vendor == "gemini"
+        joined = " ".join(messages)
+        assert "GEMINI_API_KEY" in joined
+        assert "GOOGLE_GENAI_USE_VERTEXAI" in joined
+        assert "Google sign-in" in joined
+        assert ":connect acp gemini" in joined
+        assert "gemini-secret" not in joined
+
     def test_subscription_profile_reports_the_ignored_key(self, monkeypatch):
         from superqode.app.mixins.connect import ConnectMixin
         from superqode.providers.connection_profiles import get_connection_profile
@@ -779,3 +827,11 @@ class TestFactoryKeyPath:
         joined = " ".join(messages)
         assert ":connect droid-key" in joined
         assert stub._redirect_harness_only_provider("openai", Log()) is False
+
+
+def test_copilot_explicit_token_does_not_disable_other_vendor_billing_guards():
+    child, stripped = subscription_child_env(
+        "gemini", {"COPILOT_GITHUB_TOKEN": "github-token", "GEMINI_API_KEY": "metered-key"}
+    )
+    assert "GEMINI_API_KEY" not in child
+    assert stripped == ["GEMINI_API_KEY"]

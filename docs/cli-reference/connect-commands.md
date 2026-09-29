@@ -28,10 +28,11 @@ superqode -C PROFILE [COMMAND]
 | Profile | Description |
 |---------|-------------|
 | `codex` | Self-contained. Uses Codex SDK. Auto-sets runtime to `codex-sdk`. Requires `openai_codex` package and `~/.codex/auth.json`. |
-| `copilot` | One Copilot-plan entry. Prefers the official SDK when installed and otherwise uses an installed Copilot CLI over ACP. |
+| `copilot` | One Copilot-plan entry. Prefers the official SDK when installed and otherwise uses the `copilot-cli` runtime. ACP is available through `:connect acp copilot`. |
 | `cursor` | Cursor subscription through the signed-in Cursor Agent CLI and its native ACP mode. |
 | `amp` | Amp subscription through the signed-in Amp CLI and ACP adapter. |
 | `antigravity` | Self-contained `agy` runtime using Google Sign-In and the OS keyring. |
+| `gemini-cli` | Gemini CLI over ACP using Google sign-in for Google AI Pro / Ultra or Code Assist. Install `@google/gemini-cli`, run `gemini`, and choose **Sign in with Google**. |
 | `grok` | Grok Build (xAI's own agent) on your Grok subscription over ACP (`grok agent stdio`). Requires the `grok` binary and `grok login`. To run SuperQode's harness on the same subscription instead, use `:grok api`. |
 | `droid` | Factory Droid subscription through the authenticated Droid CLI ACP mode. |
 | `droid-key` | Factory Droid with `FACTORY_API_KEY` (Closed harnesses). Child process only; not the Droid CLI login. |
@@ -52,11 +53,12 @@ superqode -C PROFILE [COMMAND]
 selects an installed official integration:
 
 - `--connect codex` sets runtime to `codex-sdk`
-- `--connect copilot` prefers `copilot-sdk`, otherwise starts `copilot --acp --stdio`
+- `--connect copilot` prefers `copilot-sdk`, otherwise selects `copilot-cli`
 - `--connect antigravity` sets runtime to `antigravity-cli`
 
-Claude Pro and Max are not connection profiles because Anthropic documents
-those subscriptions for its first-party clients and bills API usage separately.
+Claude Pro and Max are currently absent from the subscription profiles.
+Anthropic's [SDK quickstart](https://code.claude.com/docs/en/agent-sdk/quickstart)
+requires prior approval for third-party products offering Claude account login.
 Use `--runtime claude-agent-sdk` or `--connect byok anthropic <model>` with an
 Anthropic API key.
 

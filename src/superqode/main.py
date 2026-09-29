@@ -746,6 +746,14 @@ def cli_main(
         except Exception:  # noqa: BLE001 — startup must remain resilient
             _profile = None
         if _profile is not None:
+            if headless_intent and (
+                _profile.menu == "plan"
+                or _profile.connector in {"plan-agent", "plan-guidance", "harness-account"}
+            ):
+                raise click.UsageError(
+                    f"--connect {_profile.id} is an interactive account/setup route. "
+                    "Use the TUI, or choose an explicit --runtime/--provider for headless use."
+                )
             # Runtime-connector profiles (Codex) map to a runtime backend; an
             # explicit --runtime still wins.
             if _profile.connector == "runtime" and _profile.runtime and not runtime_name:

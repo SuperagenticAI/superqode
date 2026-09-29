@@ -13,6 +13,7 @@ VENDOR_HARNESS_IDS = (
     "kimi-code",
     "qwen-code",
     "antigravity",
+    "gemini-cli",
     "grok",
     "copilot",
     "cursor",
@@ -80,6 +81,11 @@ def harness_install_extra(entry) -> str:
     """Return the controlled SuperQode extra for an unavailable harness."""
     if bool(getattr(entry, "available", False)):
         return ""
+    return harness_source_extra(entry)
+
+
+def harness_source_extra(entry) -> str:
+    """Declared optional extra, independent of this machine's installation."""
     return _OPTIONAL_HARNESS_EXTRAS.get(str(getattr(entry, "source", "") or ""), "")
 
 

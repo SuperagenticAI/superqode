@@ -443,6 +443,7 @@ def test_the_subscriptions_category_holds_every_plan_codex_first():
         "muse",
         "prime-agent",
         "copilot",
+        "gemini-cli",
         "devin",
         "droid",
         "kiro",
@@ -1266,7 +1267,7 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
     for profile in profiles:
         assert profile.menu == CONNECT_MENU_PLAN
         # Every row has to lead somewhere the dispatcher understands.
-        assert profile.connector in {"byok", "grok-api", "copilot"}
+        assert profile.connector in {"byok", "grok-api", "plan-agent", "plan-guidance"}
         if profile.connector == "byok":
             assert profile.byok_provider
         if profile.connector == "copilot":
@@ -1292,6 +1293,9 @@ def test_choosing_a_plan_connects_that_provider():
         def _grok_api_cmd(self, rest, log):
             self.grok.append(rest)
 
+        def _dispatch_connection_profile(self, profile, log):
+            SuperQodeApp._dispatch_connection_profile(self, profile, log)
+
         def _connect_copilot_subscription(self, profile, log):
             self.copilot.append(profile.id)
 
@@ -1301,7 +1305,7 @@ def test_choosing_a_plan_connects_that_provider():
     )
     # The vendor route, not BYOK: BYOK lists the whole Copilot catalogue
     # rather than what this plan may actually use.
-    assert stub.copilot == ["plan-copilot"]
+    assert stub.copilot == ["copilot"]
     assert stub.byok == []
 
     stub = PlanStub()
@@ -1309,10 +1313,12 @@ def test_choosing_a_plan_connects_that_provider():
     assert stub.grok == [""]
 
     stub = PlanStub()
-    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("plan-zai"), FakeLog())
-    assert stub.byok == ["zai"]
+    SuperQodeApp._dispatch_connection_profile(
+        stub, get_connection_profile("plan-minimax"), FakeLog()
+    )
+    assert stub.byok == ["minimax-token-plan"]
     assert stub._next_direct_auth_mode == "subscription"
-    assert stub._direct_connection_profile_id == "plan-zai"
+    assert stub._direct_connection_profile_id == "plan-minimax"
 
 
 def test_direct_plan_connection_persists_as_subscription(tmp_path, monkeypatch):
@@ -1322,15 +1328,17 @@ def test_direct_plan_connection_persists_as_subscription(tmp_path, monkeypatch):
     class Stub(ConnectMixin):
         current_harness = "core"
         _key_harness_session = None
-        _direct_connection_profile_id = "plan-zai"
+        _direct_connection_profile_id = "plan-minimax"
 
     stub = Stub()
-    stub._finish_successful_model_connect("zai", "glm-4.6", "subscription", FakeLog())
+    stub._finish_successful_model_connect(
+        "minimax-token-plan", "MiniMax-M3", "subscription", FakeLog()
+    )
 
     saved = stub._load_connection_config()
     assert saved["category"] == "plan"
     assert saved["auth_mode"] == "subscription"
-    assert saved["profile_id"] == "plan-zai"
+    assert saved["profile_id"] == "plan-minimax"
 
 
 def test_the_subscription_row_opens_the_subscription_menu():
@@ -1380,6 +1388,8 @@ def test_both_copilot_entries_ask_the_account():
 
     for profile_id in ("copilot", "plan-copilot"):
         profile = get_connection_profile(profile_id)
+        if profile.connector == "plan-agent":
+            profile = get_connection_profile(profile.acp_agent)
         assert profile.connector == "copilot", profile_id
         assert profile.runtime == "copilot-sdk", profile_id
 

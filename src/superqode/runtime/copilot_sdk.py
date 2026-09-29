@@ -27,11 +27,11 @@ def _require_sdk() -> None:
     try:
         import copilot  # noqa: F401
     except ImportError as exc:
-        from superqode.providers.env_introspect import install_command
+        from superqode.providers.env_introspect import active_install_command
 
         raise RuntimeNotInstalledError(
             "GitHub Copilot SDK runtime requires the 'copilot-sdk' extra. "
-            f"Install with: {install_command('copilot-sdk')}, then authenticate "
+            f"Install with: {active_install_command('copilot-sdk')}, then authenticate "
             "with `copilot login` or set COPILOT_GITHUB_TOKEN."
         ) from exc
 

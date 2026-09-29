@@ -77,6 +77,7 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
                     if file.name.endswith(".toml") and file.is_file():
                         try:
                             agent: "Agent" = tomllib.load(file.open("rb"))
+                            agent["user_defined"] = search_path == user_agent_dir
                             if agent.get("active", True):
                                 # Validate required fields
                                 required_fields = ["identity", "name", "short_name", "protocol"]
@@ -115,7 +116,16 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
             for warning in warnings:
                 console.print(f"[yellow]Warning: {warning}[/yellow]")
 
-    agent_map = {agent["identity"]: agent for agent in agents}
+    agent_map = {}
+    for agent in agents:
+        if agent.get("user_defined"):
+            short_name = str(agent.get("short_name") or "").casefold()
+            agent_map = {
+                identity: existing
+                for identity, existing in agent_map.items()
+                if str(existing.get("short_name") or "").casefold() != short_name
+            }
+        agent_map[agent["identity"]] = agent
 
     # Ensure the bundled catalog has stable terminal groups even before the
     # first network refresh.
@@ -153,6 +163,12 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
                 existing["registry_id"] = converted.get("registry_id", "")
                 existing["registry_version"] = converted.get("registry_version", "")
                 existing["registry_source"] = converted.get("registry_source", "")
+                existing["registry_license"] = converted.get("registry_license", "")
+                existing["registry_license_url"] = converted.get("registry_license_url", "")
+                if not existing.get("user_defined"):
+                    existing["launch_env"] = converted.get("launch_env", {})
+                    if converted.get("registry_source") == "official-registry":
+                        existing["run_command"] = converted["run_command"]
                 existing["catalog_tier"] = converted.get("catalog_tier", "all")
                 existing["recommended"] = converted.get("recommended", False)
                 existing["tags"] = sorted(

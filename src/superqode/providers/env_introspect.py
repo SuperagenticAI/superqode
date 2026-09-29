@@ -27,6 +27,7 @@ __all__ = [
     "environment_info",
     "running_context",
     "install_command",
+    "active_install_command",
     "extra_install_command",
     "python_package_install_command",
     "missing_extra_hint",
@@ -172,7 +173,23 @@ def extra_install_command(extra: str) -> str:
         if shutil.which("uv"):
             return f'uv pip install --python {python} -e ".[{extra}]"'
         return f'{python} -m pip install -e ".[{extra}]"'
-    return python_package_install_command(f"superqode[{extra}]")
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        requirement = f"superqode[{extra}]=={version('superqode')}"
+    except PackageNotFoundError:
+        requirement = f"superqode[{extra}]"
+    return python_package_install_command(requirement)
+
+
+def active_install_command(extra: str) -> str:
+    """Add an extra to this installation without replacing its environment.
+
+    uv/pip retain already-installed optional dependencies. Pinning the running
+    version prevents an unrelated SuperQode upgrade during adapter setup.
+    Public exports use install_command for a fresh installation instead.
+    """
+    return install_command(extra) if running_context() == "system" else extra_install_command(extra)
 
 
 def python_package_install_command(requirement: str, *, python: str | None = None) -> str:
@@ -191,7 +208,7 @@ def missing_extra_hint(extra: str, *, suffix: str = "") -> str:
     ``suffix`` is appended for runtimes that need more than the package, e.g.
     ``"then run `codex login`"``.
     """
-    hint = install_command(extra)
+    hint = active_install_command(extra)
     if suffix:
         return f"{hint}, {suffix}"
     return hint
