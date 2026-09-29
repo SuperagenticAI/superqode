@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-09-29T09:07:57.074880+00:00",
-  "count": 117,
+  "generated_at": "2026-09-29T22:32:56.994107+00:00",
+  "count": 118,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -443,7 +443,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv tool install \"superqode[codex-sdk]\", then run `codex login`",
+      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[codex-sdk]\", then run `codex login`",
       "warning": "",
       "project_path": "",
       "homepage": "https://openai.com/codex/",
@@ -453,7 +453,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/codex/",
-      "install_command": "uv tool install \"superqode[codex-sdk]\", then run `codex login`",
+      "install_command": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[codex-sdk]\", then run `codex login`",
       "tui_commands": [
         ":connect codex",
         ":codex status",
@@ -511,7 +511,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv tool install \"superqode[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
+      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
       "warning": "",
       "project_path": "",
       "homepage": "https://www.anthropic.com/claude-code",
@@ -761,6 +761,74 @@
       "language_evidence": "Closed source. Ships as one self-contained agy binary with no separate runtime; Google\u2019s CLI docs and launch coverage describe it as a Go build sharing the Antigravity IDE agent harness."
     },
     {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "description": "Google AI Pro / Ultra or Code Assist through Google sign-in over ACP",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "gemini",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "run `npm install -g @google/gemini-cli`, then run `gemini` and choose Sign in with Google using your plan's account",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://geminicli.com/",
+      "repository": "https://github.com/google-gemini/gemini-cli",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://geminicli.com/docs/get-started/authentication/",
+      "install_command": "run `npm install -g @google/gemini-cli`, then run `gemini` and choose Sign in with Google using your plan's account",
+      "tui_commands": [
+        ":connect gemini-cli",
+        ":harness switch gemini-cli",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run gemini-cli \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "Apache-2.0",
+        "Gemini models",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Gemini CLI",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Gemini CLI",
+          "command": "npm install -g @google/gemini-cli",
+          "description": ""
+        },
+        {
+          "title": "Sign in with your Google plan account",
+          "command": "gemini",
+          "description": "Choose Sign in with Google for Google AI Pro / Ultra or Code Assist."
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "JavaScript/TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Not yet researched; read from the npm install command."
+    },
+    {
       "id": "grok",
       "name": "Grok",
       "description": "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, over ACP). Headless vendor loop: :runtime grok-cli. SuperQode harness on the same plan: :grok api",
@@ -841,7 +909,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv tool install \"superqode[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/features/copilot",
@@ -851,7 +919,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/github-copilot/",
-      "install_command": "uv tool install \"superqode[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "install_command": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
       "tui_commands": [
         ":connect copilot",
         ":copilot status",
@@ -4671,7 +4739,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n",
+      "setup": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n No compatible launch command is published; configure a local ACP agent before connecting.",
       "warning": "",
       "project_path": "",
       "homepage": "https://docs.openclaw.ai",
@@ -4681,7 +4749,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.openclaw.ai",
-      "install_command": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n",
+      "install_command": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n No compatible launch command is published; configure a local ACP agent before connecting.",
       "tui_commands": [
         ":connect acp openclaw",
         ":harness switch acp:openclaw",
@@ -4707,7 +4775,7 @@
         {
           "title": "Set up OpenClaw",
           "command": "",
-          "description": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n"
+          "description": "# OpenClaw\n\nOpenClaw is listed on the official ACP agents page. Use `openclaw` as the\nSuperQode agent name.\n\n## Connection\n\nSuperQode does not currently ship a curated OpenClaw launch command. Check the\nOpenClaw documentation for the latest ACP command before connecting.\n\n---\n\n**Docs**: https://docs.openclaw.ai\n No compatible launch command is published; configure a local ACP agent before connecting."
         }
       ],
       "openness": "",
@@ -5376,7 +5444,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/deepagents/",
-      "install_command": "",
+      "install_command": "uv tool install \"superqode[deepagents]\"",
       "tui_commands": [
         ":harness switch deepagents",
         ":harness show deepagents",
@@ -5415,7 +5483,13 @@
       ],
       "based_on": "deepagents",
       "popularity_rank": 255,
-      "setup_steps": [],
+      "setup_steps": [
+        {
+          "title": "Install the DeepAgents integration",
+          "command": "uv tool install \"superqode[deepagents]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
       "openness": "open",
       "license": "MIT",
       "language": "Python",
@@ -6181,7 +6255,7 @@
       "integration_level": "preset",
       "continuity": "context-replay",
       "provider": "zai",
-      "model": "glm-5.2",
+      "model": "glm-5.3",
       "setup": "",
       "warning": "",
       "project_path": "",
