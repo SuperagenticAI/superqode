@@ -56,7 +56,7 @@ def _code_theme() -> str:
 
 
 def _code_bg() -> str:
-    return _t("code_bg", _t("bg", "#0f0a1a"))
+    return _t("code_bg", _t("bg", "default"))
 
 
 class ResponseState(Enum):
@@ -200,13 +200,13 @@ class CodeBlockWidget(Static):
     CodeBlockWidget {
         height: auto;
         margin: 1 0;
-        border: solid #a855f7;
-        background: #0f0a1a;
+        border: solid #7fb069;
+        background: transparent;
     }
 
     CodeBlockWidget .code-header {
         height: 1;
-        background: #0f0a1a;
+        background: transparent;
         padding: 0 1;
     }
 
@@ -230,7 +230,7 @@ class CodeBlockWidget(Static):
         header.append(self.block.language.upper(), style=f"bold {_t('pink', '#ec4899')}")
 
         if self.block.filename:
-            header.append(f"  {self.block.filename}", style=_t("purple", "#a855f7"))
+            header.append(f"  {self.block.filename}", style=_t("green", "#7fb069"))
 
         # Syntax highlighted code (theme-matched style)
         syntax = Syntax(
@@ -247,7 +247,7 @@ class CodeBlockWidget(Static):
             syntax,
             title=header,
             title_align="left",
-            border_style=_t("purple", "#a855f7"),
+            border_style=_t("green", "#7fb069"),
             box=ROUNDED,
             padding=(0, 0),
         )
@@ -268,8 +268,8 @@ class ResponseDisplay(Container):
     DEFAULT_CSS = """
     ResponseDisplay {
         height: auto;
-        border: solid #a855f7;
-        background: #0d0a15;
+        border: solid #7fb069;
+        background: transparent;
         padding: 1;
         margin: 0 0 1 0;
     }
@@ -360,7 +360,7 @@ class ResponseDisplay(Container):
         text = Text()
 
         # Agent avatar and name
-        text.append("🤖 ", style="bold #a855f7")
+        text.append("🤖 ", style="#7fb069")
         text.append(self.agent_name, style="bold #e4e4e7")
 
         # Model name
@@ -385,7 +385,7 @@ class ResponseDisplay(Container):
         for header_level, header_text in parsed.headers:
             # Header styling based on level (theme accents)
             styles = {
-                1: (f"bold {_t('purple', '#a855f7')}", "═" * 40),
+                1: (f"{_t('green', '#7fb069')}", "═" * 40),
                 2: (f"bold {_t('pink', '#ec4899')}", "─" * 30),
                 3: (f"bold {_t('orange', '#f97316')}", ""),
             }
@@ -394,7 +394,7 @@ class ResponseDisplay(Container):
             header = Text()
             header.append("\n" + header_text + "\n", style=style)
             if underline:
-                header.append(underline + "\n", style=_t("purple", "#a855f7"))
+                header.append(underline + "\n", style=_t("green", "#7fb069"))
 
             elements.append(header)
 
@@ -450,7 +450,7 @@ class ResponseDisplay(Container):
             syntax,
             title=title,
             title_align="left",
-            border_style=_t("purple", "#a855f7"),
+            border_style=_t("green", "#7fb069"),
             box=ROUNDED,
             padding=(0, 1),
         )
@@ -460,7 +460,7 @@ class ResponseDisplay(Container):
         text = Text()
 
         if self.state == ResponseState.COMPLETE:
-            text.append("✓ ", style=_t("success", "#22c55e"))
+            text.append("✓ ", style=_t("success", "#7fb069"))
             text.append(f"{self.duration:.1f}s", style=_t("dim", "#71717a"))
 
             if self._token_count:

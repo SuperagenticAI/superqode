@@ -1375,6 +1375,60 @@ class ModelCatalogMixin:
             return normalized or None
         return normalized
 
+    @staticmethod
+    def _empty_turn_hint(agent_type: str, model_display: str) -> str:
+        """Agent-specific hint for an ACP session that ends with no text/tools."""
+        key = (agent_type or "").strip().lower().replace("_", "-")
+        # Accept the unhyphenated typo users type for fast-agent.
+        if key in {"fastagent", "fast-agent-mcp", "fastagent-mcp"}:
+            key = "fast-agent"
+        hints = {
+            "deepagents-code": (
+                f"The ACP session connected ({model_display}), but dcode returned an empty turn. "
+                "Most common causes: (1) dcode is not authenticated — run `dcode` once and "
+                "complete `/auth`; (2) `dcode --acp` is not on PATH — install with "
+                "`uv tool install deepagents-code`; (3) the model id is wrong — try "
+                "`:connect deepagents-code-key` to pass the key explicitly. "
+                "Re-run with SUPERQODE_ACP_PRINT_LOGS=1 and `:log verbose` for the agent's stderr."
+            ),
+            "deepagents": (
+                f"The ACP session connected ({model_display}), but the Deep Agent returned an empty turn. "
+                "If you meant the SDK runtime instead, it needs its LangChain provider package: "
+                "`pip install langchain-ollama langchain-openai` (ollama/openai), "
+                "`pip install langchain-anthropic` (anthropic), "
+                "`pip install langchain-google-genai` (google), or install everything with "
+                '`uv tool install "superqode[deepagents]"`, then `:retry`. '
+                "Check with `superqode runtime doctor deepagents`."
+            ),
+            "fast-agent": (
+                f"The ACP session connected ({model_display}), but fast-agent returned an empty turn. "
+                "Most common causes: (1) no model/key configured — run `fast-agent go --message hi` once "
+                "to complete setup; (2) stale install — `uv tool install -U fast-agent-mcp`; "
+                "(3) custom server command — check SUPERQODE_FAST_AGENT_ACP_COMMAND. "
+                "Note the spelling is `fast-agent` (with a hyphen). "
+                "Re-run with SUPERQODE_ACP_PRINT_LOGS=1 and `:log verbose` for the agent's stderr."
+            ),
+        }
+        if key in hints:
+            return hints[key]
+        install = ""
+        try:
+            from superqode.agents.acp_registry import get_registry_agent_by_short_name
+
+            meta = get_registry_agent_by_short_name(key) or {}
+            cmd = str(meta.get("installation_command") or "").strip()
+            if cmd:
+                install = f" Install: `{cmd}`."
+        except Exception:
+            install = ""
+        return (
+            f"The ACP session connected ({model_display}), but the agent returned an empty turn. "
+            f"This usually means the agent is not authenticated, not installed, or rejected the model id.{install} "
+            "Re-run with SUPERQODE_ACP_PRINT_LOGS=1 and `:log verbose` to see the agent's stderr, "
+            "or run `superqode agents doctor "
+            f"{agent_type}` to check its setup."
+        )
+
     def _show_agent_header_with_model(self, name: str, model: str, log: ConversationLog):
         """Show agent output header with model information and approval mode.
 

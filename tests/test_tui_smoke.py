@@ -433,15 +433,15 @@ def test_welcome_uses_unified_harness_positioning():
     text = render_plain(welcome)
 
     assert "THE HARNESS LAYER FOR CODING AGENTS" in text
-    # Commands live beside the prompt; the home screen stays product-focused.
-    for command in (":connect", ":help", ":harness", ":work", ":init"):
+    # Navigation footer lives on the home screen; configuration stays in the prompt area.
+    for command in (":theme", ":connect", ":help"):
+        assert command in text, f"{command} belongs to the welcome footer"
+    for command in (":harness", ":work", ":init", ":mode", ":memory"):
         assert command not in text, f"{command} belongs to the prompt area"
     assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" in text
     assert "Terminal-first · Any agent or model" in text
     assert "Interoperability: Local · ACP · MCP · A2A · UHP · BYOK · Jev SystemOne Harness" in text
-    assert "Current workspace" in text
-    assert "/work/repository" in text
     # Harness, model and policy report only absence before a connection, which
     # is what the next step already says.
     assert "Not selected" not in text
@@ -450,10 +450,7 @@ def test_welcome_uses_unified_harness_positioning():
     assert "Next step" not in text
     assert "[1]" not in text
     assert "Ctrl+C" not in text
-    # What remains is the product and one line telling you how to drive it.
-    assert "Browse it like a browser" in text
-    assert "with your mouse  ·  or drive it like a pro with : and :vim on" in text
-    assert "Files & changes ↗" in text
+    # What remains is the product story plus the navigation footer.
     assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
@@ -476,7 +473,9 @@ def test_home_workspace_action_is_clickable_and_opens_existing_sidebar():
         for segment in console.render(welcome)
         if segment.style is not None and segment.style.link
     }
-    assert "superqode://cmd/workspace-files" in links
+    assert "superqode://cmd/connect" in links
+    assert "superqode://cmd/theme" in links
+    assert "superqode://cmd/help" in links
 
     app = make_app()
     opened = []
@@ -550,7 +549,7 @@ def test_an_unconnected_workspace_is_still_told_to_connect():
     bar = HintsBar()
     bar.connected = False
     assert ":connect" in bar.render().plain
-    assert ":hub" in bar.render().plain
+    assert ":theme" in bar.render().plain
 
 
 def test_welcome_compacts_for_narrow_terminals():
@@ -561,8 +560,9 @@ def test_welcome_compacts_for_narrow_terminals():
     assert "Local · ACP · MCP · A2A · UHP · BYOK" in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
-    # Identity only. Commands live in the prompt area at every width.
-    assert ":connect" not in text
+    # Identity plus navigation footer. Commands live in the prompt area at every width.
+    assert ":connect" in text
+    assert ":theme" in text
     assert "Ctrl+C exit" not in text
     assert "Return here anytime" not in text
 
@@ -626,11 +626,13 @@ def test_the_closing_line_is_not_buried_behind_blank_lines():
     text = render_plain(render_welcome([], width=100))
     lines = text.splitlines()
 
-    workspace = next(i for i, line in enumerate(lines) if "Current workspace" in line)
-    closing = next(i for i, line in enumerate(lines) if "Browse it like a browser" in line)
+    interoperability = next(i for i, line in enumerate(lines) if "Interoperability:" in line)
+    closing = next(i for i, line in enumerate(lines) if ":connect" in line)
 
-    # Heading, the repository row, and at most one blank between them.
-    assert closing - workspace <= 3, f"closing line is {closing - workspace} lines below"
+    # Footer follows the product story with at most one blank between them.
+    assert closing - interoperability <= 3, (
+        f"closing line is {closing - interoperability} lines below"
+    )
 
 
 def test_hints_bar_is_navigation_only():
@@ -643,7 +645,7 @@ def test_hints_bar_is_navigation_only():
     text = render_plain(HintsBar().render())
 
     assert ":connect" in text
-    assert ":hub" in text
+    assert ":theme" in text
     assert ":home" in text
     assert ":help" in text
     for configuration in (":mode", ":harness", ":work", ":memory", ":init"):

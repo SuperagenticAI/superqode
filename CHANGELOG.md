@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.26] - 2026-09-29
+
+### Added
+
+- Route the Z.AI general API to GLM-5.3 (`zai/glm-5.3`, 1M context) with
+  `zai/glm-5.2` / `5.1` / `5` fallbacks, plus `glm53` / `glm53-zai` aliases.
+  The `:connect zcode` setup card now detects an installed `zcode` binary and
+  prints the source-install command otherwise.
+- ACP empty-turn failures now name the likely missing piece per agent
+  (deepagents-code auth/install, deepagents LangChain provider package,
+  fast-agent setup, registry install command otherwise); `fastagent` is
+  accepted as an alias for `fast-agent`.
+
 ## [2.4.25] - 2026-09-29
 
 ### Changed

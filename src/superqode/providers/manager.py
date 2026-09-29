@@ -1069,6 +1069,7 @@ class ProviderManager:
                 requires_api_key=True,
                 configured=self._is_provider_configured("zai"),
                 models=[
+                    ModelInfo("glm-5.3", "GLM-5.3", "zai", context_size=1_000_000),
                     ModelInfo("glm-5.2", "GLM-5.2", "zai", context_size=1_000_000),
                     ModelInfo("glm-5.1", "GLM-5.1", "zai", context_size=200_000),
                     ModelInfo("glm-5-turbo", "GLM-5 Turbo", "zai", context_size=200_000),

@@ -201,6 +201,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "tau",
     "deepseek-harness",
     "deepagents",
+    "deepagents-code-key",
     "opencode-key",
     "prime-agent-key",
     "jcode",
@@ -474,6 +475,7 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
     assert ("deepseek-harness", "DeepSeek Harness", "key-harness") in rows
     assert ("deepagents", "DeepAgents (SDK)", "key-harness") in rows
     for required in (
+        "deepagents-code-key",
         "opencode-key",
         "prime-agent-key",
         "jcode",

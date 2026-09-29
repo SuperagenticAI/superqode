@@ -316,6 +316,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         default_base_url="https://api.z.ai/api/paas/v4",
         docs_url="https://docs.z.ai/guides/overview/quick-start",
         example_models=[
+            "glm-5.3",
             "glm-5.2",
             "glm-5.1",
             "glm-5-turbo",

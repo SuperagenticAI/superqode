@@ -274,6 +274,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "tau": "concepts/modes.md",
         "deepseek-harness": "concepts/modes.md",
         "deepagents": "providers/deepagents.md",
+        "deepagents-code-key": "providers/deepagents.md",
         "opencode-key": "concepts/modes.md",
         "prime-agent-key": "concepts/modes.md",
         "jcode": "concepts/modes.md",

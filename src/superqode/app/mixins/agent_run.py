@@ -1953,7 +1953,7 @@ class AgentRunMixin:
         elif agent_type == "cagent":
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
-        elif agent_type == "fast-agent":
+        elif agent_type in ("fast-agent", "fastagent", "fast-agent-mcp"):
             command = os.getenv(
                 "SUPERQODE_FAST_AGENT_ACP_COMMAND",
                 "uvx --from fast-agent-mcp@latest fast-agent-acp",
@@ -2774,10 +2774,7 @@ class AgentRunMixin:
                         "SUPERQODE_ACP_PRINT_LOGS=1 and use :log verbose."
                     )
                 else:
-                    empty_message = (
-                        "The ACP session connected, but the agent returned an empty turn. "
-                        "Check the agent configuration and retry."
-                    )
+                    empty_message = self._empty_turn_hint(agent_type, model_display)
                 self._call_ui(
                     log.end_agent_session,
                     False,

@@ -432,6 +432,27 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         wired=True,
     ),
     HarnessCatalogEntry(
+        id="deepagents-code-key",
+        label="Deep Agents Code (API key)",
+        description="Attach Deep Agents Code over ACP after you provide a key or a local model.",
+        openness="open",
+        license="MIT",
+        repository="https://github.com/langchain-ai/deepagents",
+        auth=_key_auth(
+            "deepagents-code-key",
+            "acp-attach",
+            detect=_acp_probe("deepagents-code"),
+            unavailable_hint="install Deep Agents Code, then `dcode --acp` must be runnable",
+            byok_providers=None,
+            local_providers=None,
+        ),
+        acp_agent="deepagents-code",
+        hub_id="deepagents-code",
+        vendor_owned=True,
+        wired=True,
+        list_visible=True,
+    ),
+    HarnessCatalogEntry(
         id="opencode",
         label="OpenCode",
         description="Open-source harness over ACP. The agent keeps its own login.",
@@ -469,6 +490,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="opencode",
         hub_id="acp:opencode",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -505,6 +527,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         ),
         hub_id="prime-agent",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -627,6 +650,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="grok",
         hub_id="grok",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -671,10 +695,21 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         repository="https://github.com/zai-org/ZCode",
         homepage="https://zcode.z.ai/en",
         hub_id="ecosystem:zcode",
+        auth=(
+            HarnessAuthSpec(
+                mode="byok",
+                connector="key-harness",
+                profile_id="zcode",
+                after_auth="setup-card",
+                byok_providers=(),
+                local_providers=(),
+            ),
+        ),
         readiness="not-supported",
         support_note=(
-            "Clone the official repository and run its bootstrap flow. Native connection stays "
-            "pending until the CLI's machine-readable headless contract is verified."
+            "Clone the official repository and run its bootstrap flow (`pnpm bootstrap`), "
+            "then run `zcode` in its own terminal. Native embedding stays "
+            "pending until the CLI's machine-readable headless/ACP contract is verified."
         ),
         vendor_owned=True,
         list_visible=True,
@@ -785,12 +820,13 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="qwen",
         hub_id="qwen-code",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
         id="fast-agent",
         label="fast-agent",
-        description="Open-source ACP agent. Key or local attach ships in a later PR.",
+        description="Open-source ACP agent. Bring a provider key or a local model; SuperQode attaches over ACP with it.",
         openness="open",
         license="Apache-2.0",
         repository="https://github.com/evalstate/fast-agent",
@@ -813,12 +849,13 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="fast-agent",
         hub_id="acp:fast-agent",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
         id="pi",
         label="Pi",
-        description="Minimal open-source harness. Key or local attach ships in a later PR.",
+        description="Minimal open-source harness. Bring a provider key or a local model; SuperQode attaches over ACP with it.",
         openness="open",
         license="MIT",
         repository="https://github.com/earendil-works/pi",
@@ -841,6 +878,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="pi",
         hub_id="acp:pi",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -872,6 +910,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         acp_agent="omp",
         hub_id="acp:omp",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -883,7 +922,9 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         repository="https://github.com/block/goose",
         auth=_key_auth(
             "goose-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("goose"),
+            unavailable_hint="install Goose, then `goose acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),
@@ -891,6 +932,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="acp:goose",
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -902,7 +944,9 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         repository="https://github.com/cline/cline",
         auth=_key_auth(
             "cline-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("cline"),
+            unavailable_hint="run `npm install -g @cline/cli`, then `cline --acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),
@@ -910,6 +954,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="acp:cline",
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -921,7 +966,9 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         repository="https://github.com/OpenHands/OpenHands",
         auth=_key_auth(
             "openhands-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("openhands"),
+            unavailable_hint="install OpenHands, then `openhands acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),
@@ -929,6 +976,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="acp:openhands",
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -942,13 +990,16 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="acp:mistral-vibe",
         auth=_key_auth(
             "mistral-vibe-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("mistral-vibe"),
+            unavailable_hint="run `uv tool install mistral-vibe`, then `vibe-acp` must be runnable",
             env_vars=("MISTRAL_API_KEY",),
             byok_providers=None,
             local_providers=None,
         ),
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -962,12 +1013,15 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="acp:hermes",
         auth=_key_auth(
             "hermes-key",
-            "setup-card",
+            "acp-attach",
+            detect=_acp_probe("hermes"),
+            unavailable_hint="run `uv tool install 'hermes-agent[acp]'`, then `hermes acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(
@@ -1043,6 +1097,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="kimi-code",
         readiness="setup-required",
         vendor_owned=True,
+        wired=True,
         list_visible=True,
     ),
     HarnessCatalogEntry(

@@ -818,8 +818,8 @@ def glm52_coding_template() -> HarnessSpec:
                 "GLM-5.2 long-horizon coding harness via the first-party Z.AI general API."
             ),
             "model_policy": ModelPolicySpec(
-                primary="zai/glm-5.2",
-                fallbacks=("zai/glm-5.1", "zai/glm-5"),
+                primary="zai/glm-5.3",
+                fallbacks=("zai/glm-5.2", "zai/glm-5.1", "zai/glm-5"),
                 profile="glm52-coding",
                 pack="glm",
                 temperature=0.2,

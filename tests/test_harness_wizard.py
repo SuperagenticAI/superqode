@@ -29,8 +29,8 @@ def test_wizard_glm_starter():
 def test_wizard_glm52_zai_starter():
     spec = build_wizard_spec(WizardAnswers(name="g52", starter="glm52-coding"))
 
-    assert spec.model_policy.primary == "zai/glm-5.2"
-    assert spec.model_policy.fallbacks == ("zai/glm-5.1", "zai/glm-5")
+    assert spec.model_policy.primary == "zai/glm-5.3"
+    assert spec.model_policy.fallbacks == ("zai/glm-5.2", "zai/glm-5.1", "zai/glm-5")
     assert spec.model_policy.pack == "glm"
     assert spec.model_policy.reasoning == "max"
     assert spec.model_policy.context_window == 1_000_000

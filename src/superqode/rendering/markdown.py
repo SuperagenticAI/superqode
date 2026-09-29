@@ -14,14 +14,14 @@ from rich.text import Text
 
 import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
 
-# NOTE: Only code output is brand-purple (AgentCodeBlock panel +
+# NOTE: Only code output is brand-green (AgentCodeBlock panel +
 # AgentCodespan). Prose elements (lists, tables, headings, links,
 # quotes, hr) intentionally use neutral styles so the transcript
-# doesn't look all-purple.
-_BRAND_PURPLE = "#a855f7"
+# doesn't look all-green.
+_BRAND_GREEN = "#7fb069"
 _BRANDED_CODE_STYLES = {
-    "markdown.code": f"bold {_BRAND_PURPLE} on black",
-    "markdown.code_block": f"{_BRAND_PURPLE} on black",
+    "markdown.code": _BRAND_GREEN,
+    "markdown.code_block": _BRAND_GREEN,
 }
 
 
@@ -41,11 +41,11 @@ def _live_theme() -> dict[str, str]:
 # theme_bridge.apply_theme(), otherwise any non-superqode palette
 # repaints code-block chrome cyan/blue via primary_bright/info.
 _BRAND_THEME = {
-    "purple": "#a855f7",
+    "green": "#7fb069",
     "pink": "#ec4899",
     "text": "#e4e4e7",
-    "bg": "#0f0a1a",
-    "code_bg": "#0f0a1a",
+    "bg": "default",
+    "code_bg": "default",
 }
 
 
@@ -73,7 +73,7 @@ def _validated_lexer_name(name: str) -> str:
 
 
 class AgentHeading(Heading):
-    """Theme-aware headings; code keeps brand purple separately."""
+    """Theme-aware headings; code keeps brand green separately."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         text = self.text.copy()
@@ -86,12 +86,12 @@ class AgentHeading(Heading):
 
 
 class AgentCodespan(Text):
-    """Inline code with subtle brand tint (always purple, theme-independent)."""
+    """Inline code with subtle brand tint (always green, theme-independent)."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         theme = _brand_theme()
         text = self.copy()
-        text.stylize(f"bold {theme['purple']} on {theme.get('code_bg', theme['bg'])}")
+        text.stylize(f"{theme['green']} on {theme.get('code_bg', theme['bg'])}")
         yield text
 
 
@@ -190,8 +190,8 @@ class AgentCodeBlock(CodeBlock):
         )
         yield Panel(
             syntax,
-            title=f"[bold {theme['purple']}]{icon} {lang}[/]{title_suffix}",
-            border_style=theme["purple"],
+            title=f"[{theme['green']}]{icon} {lang}[/]{title_suffix}",
+            border_style=theme["green"],
             padding=(0, 0),
         )
 
@@ -208,7 +208,7 @@ class AgentMarkdown(Markdown):
     }
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        # Only code spans/blocks get brand purple. Everything else
+        # Only code spans/blocks get brand green. Everything else
         # (lists, tables, headings, links, quotes) keeps Rich defaults
         # so prose stays neutral.
         from rich.theme import Theme
@@ -257,7 +257,7 @@ def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
 
 def active_code_theme() -> str:
     """Return the Pygments theme matching the active TUI theme."""
-    # Brand decision: agent code blocks always use the SuperQode purple
+    # Brand decision: agent code blocks always use the SuperQode green
     # Pygments style regardless of the selected TUI theme, so code never
     # renders cyan/blue (e.g. monokai/github-dark defaults).
     return "superqode"

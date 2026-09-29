@@ -150,6 +150,21 @@ def _validate_deepagents_request(request: HarnessBackendRequest) -> None:
         )
 
 
+#: LangChain provider package needed per SuperQode provider id fragment.
+#: Used to turn langchain's bare ImportError into an actionable install hint.
+_LANGCHAIN_PROVIDER_PACKAGES = {
+    "ollama": "langchain-ollama",
+    "lmstudio": "langchain-openai",
+    "mlx": "langchain-openai",
+    "llamacpp": "langchain-openai",
+    "openai": "langchain-openai",
+    "openai-compatible": "langchain-openai",
+    "anthropic": "langchain-anthropic",
+    "google_genai": "langchain-google-genai",
+    "mistralai": "langchain-mistralai",
+}
+
+
 def _create_agent_for_request(request: HarnessBackendRequest) -> tuple[Any, dict[str, Any]]:
     _validate_deepagents_request(request)
     create_deep_agent, filesystem_backend_cls, filesystem_permission_cls = _load_deepagents()
@@ -161,20 +176,35 @@ def _create_agent_for_request(request: HarnessBackendRequest) -> tuple[Any, dict
     )
     model = _model_spec(request.provider, request.model)
     backend = filesystem_backend_cls(root_dir=str(request.working_directory), virtual_mode=True)
-    agent = create_deep_agent(
-        model=model,
-        tools=[],
-        system_prompt=profile.job_description or None,
-        subagents=_subagent_specs(
-            request.spec.agents, provider=request.provider, default_model=model
-        ),
-        skills=_skill_sources(request.spec),
-        memory=_memory_sources(request.spec),
-        permissions=_filesystem_permissions(request, filesystem_permission_cls),
-        backend=backend,
-        response_format=request.metadata.get("response_format"),
-        name=request.spec.name,
-    )
+    try:
+        agent = create_deep_agent(
+            model=model,
+            tools=[],
+            system_prompt=profile.job_description or None,
+            subagents=_subagent_specs(
+                request.spec.agents, provider=request.provider, default_model=model
+            ),
+            skills=_skill_sources(request.spec),
+            memory=_memory_sources(request.spec),
+            permissions=_filesystem_permissions(request, filesystem_permission_cls),
+            backend=backend,
+            response_format=request.metadata.get("response_format"),
+            name=request.spec.name,
+        )
+    except ImportError as exc:
+        # LangChain raises e.g. "Initializing ChatOllama requires the
+        # langchain-ollama package". Surface the exact pip requirement so
+        # :retry works after installing it.
+        prefix = model.split(":", 1)[0] if ":" in model else ""
+        package = _LANGCHAIN_PROVIDER_PACKAGES.get(prefix)
+        hint = (
+            f"pip install {package}" if package else "pip install langchain-ollama langchain-openai"
+        )
+        raise ImportError(
+            f"DeepAgents model {model!r} needs the {package or 'LangChain provider'} package. "
+            f"Install it with `{hint}` (or `pip install superqode[deepagents]`), then use :retry. "
+            f"Cause: {exc}"
+        ) from exc
     return agent, {"model_policy": model_policy.profile, "model": model}
 
 

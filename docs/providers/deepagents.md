@@ -47,6 +47,12 @@ superqode agents doctor deepagents-code
 :connect deepagents-code
 ```
 
+Bring your own key or a local model instead:
+
+```text
+:connect deepagents-code-key
+```
+
 It also appears in the unified Harness Switcher:
 
 ```text

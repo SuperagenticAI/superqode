@@ -289,6 +289,7 @@ actionable, but does not imply that SuperQode can drive the harness yet.
 | Tau | MIT | `:connect tau` | Switches to the hosted Tau adapter, then asks for a key or local model |
 | DeepSeek Harness | MIT | `:connect deepseek-harness` | Switches to the hosted adapter, then DeepSeek BYOK or a local OpenAI-compatible URL |
 | DeepAgents SDK | MIT | `:connect deepagents` | Switches to the SDK adapter, then Anthropic, Google, or a documented local extra |
+| Deep Agents Code | MIT | `:connect deepagents-code-key` | Asks for a key or local model, then attaches Deep Agents Code over ACP with it |
 | OpenCode | MIT | `:connect opencode-key` | Asks for a key or local model, then attaches OpenCode over ACP with it |
 | Prime Agent | MIT | `:connect prime-agent-key` | Asks for a key or local model, then runs Prime through its Python RPC backend |
 | jcode | MIT | `:connect jcode` | Setup card |

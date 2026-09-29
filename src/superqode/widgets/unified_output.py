@@ -55,7 +55,7 @@ class Theme:
     magenta = "#d946ef"
     pink = "#ec4899"
     cyan = "#06b6d4"
-    green = "#22c55e"
+    green = "#7fb069"
     orange = "#f97316"
     gold = "#fbbf24"
     blue = "#3b82f6"
@@ -77,11 +77,11 @@ class Theme:
     bg_surface = "#111111"
     bg_elevated = "#1a1a1a"
     bg_thinking = "#0d1117"
-    bg_response = "#0f0a1a"
+    bg_response = "default"
 
     # Border colors
     border = "#27272a"
-    border_active = "#a855f7"
+    border_active = "#7fb069"
 
 
 # Gradient colors for visual interest
@@ -515,8 +515,8 @@ class ResponseSection(Container):
     ResponseSection {
         height: auto;
         min-height: 5;
-        background: #0f0a1a;
-        border: round #a855f7;
+        background: transparent;
+        border: round #7fb069;
         padding: 1;
         margin: 0 0 1 0;
     }
@@ -602,7 +602,7 @@ class ResponseSection(Container):
         # Gradient line
         line = "─" * 50
         for i, char in enumerate(line):
-            color = GRADIENT_PURPLE[i % len(GRADIENT_PURPLE)]
+            color = GRADIENT_SUCCESS[i % len(GRADIENT_SUCCESS)]
             text.append(char, style=color)
         text.append("\n")
 
@@ -615,7 +615,7 @@ class ResponseSection(Container):
             text.append("✕ ", style=f"bold {Theme.error}")
             text.append("Error", style=f"bold {Theme.error}")
         else:
-            text.append("🤖 ", style=Theme.purple)
+            text.append("🤖 ", style=Theme.green)
             if self._agent_name:
                 text.append(self._agent_name, style=f"bold {Theme.text}")
             else:

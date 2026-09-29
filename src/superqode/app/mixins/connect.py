@@ -641,10 +641,27 @@ class ConnectMixin:
         t.append(
             "  This harness is on the Open/Closed list so you can find it.\n", style=THEME["text"]
         )
-        if (
-            getattr(entry, "id", "") == "zcode"
-            or getattr(entry, "readiness", "") == "not-supported"
-        ):
+        if getattr(entry, "id", "") == "zcode":
+            import shutil
+
+            if shutil.which("zcode") is not None:
+                t.append(
+                    "  `zcode` is installed. Launch it in its own terminal with `zcode` — "
+                    "SuperQode cannot embed its loop yet (no verified ACP/headless contract).\n\n",
+                    style=THEME["text"],
+                )
+            else:
+                t.append(
+                    "  SuperQode cannot launch it yet — no verified ACP/headless contract. "
+                    "Install it from source, then run `zcode` in its own terminal.\n\n",
+                    style=THEME["text"],
+                )
+            t.append(
+                "  git clone https://github.com/zai-org/ZCode.git && "
+                "cd ZCode && pnpm bootstrap && zcode\n\n",
+                style=THEME["cyan"],
+            )
+        elif getattr(entry, "readiness", "") == "not-supported":
             t.append(
                 "  SuperQode cannot launch it yet — there is no ACP, CLI, or key API.\n\n",
                 style=THEME["text"],

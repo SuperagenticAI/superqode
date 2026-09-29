@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-09-28T06:33:02.988748+00:00",
-  "count": 115,
+  "generated_at": "2026-09-29T09:07:57.074880+00:00",
+  "count": 117,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -2397,6 +2397,64 @@
       "language_evidence": "Closed source. gnu/musl target triples; derives from Amazon Q Developer CLI (Rust)."
     },
     {
+      "id": "acp:letta",
+      "name": "Letta Code (ACP)",
+      "description": "Memory-first open harness. First-party ACP adapter; tools run locally with cloud-oauth or fully local.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "npm install -g @letta-ai/letta-code",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/letta-ai/letta-code",
+      "repository": "https://github.com/letta-ai/letta-code",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/letta-ai/letta-code",
+      "install_command": "npm install -g @letta-ai/letta-code",
+      "tui_commands": [
+        ":connect acp letta",
+        ":harness switch acp:letta",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:letta \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Letta Code agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Letta Code",
+          "command": "npm install -g @letta-ai/letta-code",
+          "description": ""
+        }
+      ],
+      "openness": "",
+      "license": "",
+      "language": "JavaScript/TypeScript",
+      "language_confidence": "inferred",
+      "language_evidence": "Not yet researched; read from the npm install command."
+    },
+    {
       "id": "acp:openhands",
       "name": "OpenHands (ACP)",
       "description": "AI coding agent platform by All-Hands-AI with ACP support.",
@@ -4137,6 +4195,64 @@
       "language_evidence": "No public source or distribution signal yet."
     },
     {
+      "id": "acp:jcode",
+      "name": "jcode (ACP)",
+      "description": "Open-source terminal coding agent. Native `jcode acp` JSON-RPC mode over stdio.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:all",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "curl -fsSL https://jcode.sh/install.sh | bash",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://github.com/1jehuang/jcode",
+      "repository": "https://github.com/1jehuang/jcode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://github.com/1jehuang/jcode",
+      "install_command": "curl -fsSL https://jcode.sh/install.sh | bash",
+      "tui_commands": [
+        ":connect acp jcode",
+        ":harness switch acp:jcode",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:jcode \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "jcode agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install jcode",
+          "command": "curl -fsSL https://jcode.sh/install.sh | bash",
+          "description": ""
+        }
+      ],
+      "openness": "",
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution signal yet."
+    },
+    {
       "id": "acp:junie",
       "name": "JetBrains Junie (ACP)",
       "description": "JetBrains' AI agent with ACP support across their entire IDE ecosystem.",
@@ -5250,7 +5366,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv tool install \"superqode[deepagents]\"",
+      "setup": "",
       "warning": "DeepAgents runs its own filesystem and execute tools, so SuperQode approvals do not gate them. Model routes resolve through LangChain's provider strings.",
       "project_path": "",
       "homepage": "",
@@ -5260,7 +5376,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/deepagents/",
-      "install_command": "uv tool install \"superqode[deepagents]\"",
+      "install_command": "",
       "tui_commands": [
         ":harness switch deepagents",
         ":harness show deepagents",
@@ -5299,13 +5415,7 @@
       ],
       "based_on": "deepagents",
       "popularity_rank": 255,
-      "setup_steps": [
-        {
-          "title": "Install the DeepAgents integration",
-          "command": "uv tool install \"superqode[deepagents]\"",
-          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
-        }
-      ],
+      "setup_steps": [],
       "openness": "open",
       "license": "MIT",
       "language": "Python",

@@ -288,6 +288,40 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         "installation_instructions": "Install LLMling-Agent via pip.",
         "requirements": ["python3", "pip"],
     },
+    # =========================================================================
+    # 15. Letta Code - Memory-first agent harness (first-party ACP adapter)
+    # =========================================================================
+    "letta.com": {
+        "identity": "letta.com",
+        "name": "Letta Code",
+        "short_name": "letta",
+        "url": "https://github.com/letta-ai/letta-code",
+        "author_name": "Letta",
+        "author_url": "https://www.letta.com/",
+        "description": "Memory-first open harness. First-party ACP adapter; tools run locally with cloud-oauth or fully local.",
+        "run_command": "npx -y @letta-ai/letta-acp",
+        "status": "available",
+        "installation_command": "npm install -g @letta-ai/letta-code",
+        "installation_instructions": "Install Letta Code, then run `letta` and use /login or /connect. The ACP adapter ships with it.",
+        "requirements": ["node", "npm"],
+    },
+    # =========================================================================
+    # 16. jcode - Terminal coding agent with native ACP mode
+    # =========================================================================
+    "jcode.sh": {
+        "identity": "jcode.sh",
+        "name": "jcode",
+        "short_name": "jcode",
+        "url": "https://github.com/1jehuang/jcode",
+        "author_name": "1jehuang",
+        "author_url": "https://github.com/1jehuang",
+        "description": "Open-source terminal coding agent. Native `jcode acp` JSON-RPC mode over stdio.",
+        "run_command": "jcode acp",
+        "status": "available",
+        "installation_command": "curl -fsSL https://jcode.sh/install.sh | bash",
+        "installation_instructions": "Install jcode, then `jcode login --provider <id>` for a subscription or key-backed provider.",
+        "requirements": ["jcode"],
+    },
 }
 
 

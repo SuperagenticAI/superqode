@@ -764,6 +764,26 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # Z.AI (first-party general API)
     # =========================================================================
     "zai": {
+        "glm-5.3": ModelInfo(
+            id="glm-5.3",
+            name="GLM-5.3",
+            provider="zai",
+            input_price=1.4,
+            output_price=4.4,
+            context_window=1_000_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Current Z.AI flagship for complex software engineering and agent tasks",
+            recommended_for=["long-horizon coding", "large codebases", "agent workflows"],
+            released="2026-08",
+        ),
         "glm-5.2": ModelInfo(
             id="glm-5.2",
             name="GLM-5.2",
