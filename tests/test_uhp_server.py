@@ -621,7 +621,7 @@ def test_missing_server_extra_names_the_uhp_extra(monkeypatch):
     assert "uv pip install 'superqode[uhp]'" in str(excinfo.value)
 
 
-# ── protocol version 2026-09-12 ────────────────────────────────────────────────
+# ── protocol version 2026-09-28 ────────────────────────────────────────────────
 
 
 @pytest.mark.anyio
@@ -630,20 +630,21 @@ async def test_serves_both_versions_and_echoes_the_one_asked_for():
     transport = httpx.ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         body = (await client.get("/v1/uhp")).json()
-        assert body["versions"] == ["2026-09-12", "2026-08-11"]
-        assert body["default_version"] == "2026-09-12"
-        # Additive chapter this server does not implement: false, not absent.
+        assert body["versions"] == ["2026-09-28", "2026-09-12", "2026-08-11"]
+        assert body["default_version"] == "2026-09-28"
+        # Additive chapters this server does not implement: false, not absent.
         assert body["capabilities"]["plugins"] is False
+        assert body["capabilities"]["environments"] is False
         assert "plugin_schemas" not in body
 
-        for version in ("2026-09-12", "2026-08-11"):
+        for version in ("2026-09-28", "2026-09-12", "2026-08-11"):
             response = await client.get("/v1/harnesses", headers={VERSION_HEADER: version})
             assert response.status_code == 200
             assert response.headers[VERSION_HEADER] == version
 
         # No header means the server's default, stated in the response.
         bare = await client.get("/v1/harnesses")
-        assert bare.headers[VERSION_HEADER] == "2026-09-12"
+        assert bare.headers[VERSION_HEADER] == "2026-09-28"
 
 
 # ── spec MUSTs the Core suite does not reach ───────────────────────────────────
