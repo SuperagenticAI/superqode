@@ -221,6 +221,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "letta",
     "warp",
     "kimi-code-key",
+    "open-browse-acp",
     "droid-key",
     "junie-key",
     "muse-key",
@@ -613,7 +614,7 @@ def test_open_menu_reads_list_entries_live(monkeypatch):
         lambda menu: live if menu == "open" else [],
     )
     rows = list_connection_profiles(CONNECT_MENU_OPEN)
-    assert [p.id for p in rows] == ["tau"]
+    assert [p.id for p in rows] == ["tau", "open-browse-acp"]
 
 
 def test_antigravity_profile_is_signed_in_cli_runtime_connector():

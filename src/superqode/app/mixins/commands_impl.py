@@ -3489,7 +3489,11 @@ class CommandImplMixin:
             )
 
         try:
-            completed = await asyncio.to_thread(_run)
+            self._call_ui(self._start_thinking, "Looking up Antigravity models…")
+            try:
+                completed = await asyncio.to_thread(_run)
+            finally:
+                self._call_ui(self._stop_thinking)
         except (OSError, subprocess.SubprocessError) as exc:
             log.add_error(f"Could not list Antigravity models: {exc}")
             return
@@ -3904,7 +3908,13 @@ class CommandImplMixin:
 
     def _prime_connect(self, selector: str, log) -> None:
         """Connect Prime Agent with the native Python RPC client."""
-        if not self._connect_prime_rpc(selector, log):
+        try:
+            connected = self._connect_prime_rpc(selector, log)
+        except Exception as exc:  # noqa: BLE001 - picker must never die silently
+            log.add_error(f"Could not connect Prime Agent: {exc}")
+            log.add_info("Run :prime models to choose again.")
+            return
+        if not connected:
             return
         pinned = self._prime_opts().describe()
         if pinned:

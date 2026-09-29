@@ -1576,7 +1576,9 @@ class AgentRunMixin:
             )
             session_type = "new session" if self._is_first_message else "continuing session"
             self._call_ui(
-                log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
+                log.add_meta,
+                f"Using model: {model_display} | Mode: {mode_label} ({session_type})",
+                "🧠",
             )
 
             # Show persona info if available
@@ -2020,7 +2022,9 @@ class AgentRunMixin:
         )
         session_type = "new session"
         self._call_ui(
-            log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
+            log.add_meta,
+            f"Using model: {model_display} | Mode: {mode_label} ({session_type})",
+            "🧠",
         )
 
         if persona_context and persona_context.is_valid:
@@ -2623,13 +2627,16 @@ class AgentRunMixin:
                     if active_model:
                         self._call_ui(self._set_acp_status, active_model)
                         self._call_ui(
-                            log.add_info,
+                            log.add_meta,
                             f"Reusing warm ACP session with {active_model}. Sending prompt...",
+                            "🔗",
                         )
                     else:
-                        self._call_ui(log.add_info, "Reusing warm ACP session. Sending prompt...")
+                        self._call_ui(
+                            log.add_meta, "Reusing warm ACP session. Sending prompt...", "🔗"
+                        )
                 else:
-                    self._call_ui(log.add_info, f"Starting ACP process: {command}")
+                    self._call_ui(log.add_meta, f"Starting ACP process: {command}", "🚀")
                     ok = await client.start()
                     if not ok:
                         self._acp_client = None
@@ -2656,11 +2663,12 @@ class AgentRunMixin:
                     if active_model:
                         self._call_ui(self._set_acp_status, active_model)
                         self._call_ui(
-                            log.add_info,
+                            log.add_meta,
                             f"ACP session ready with {active_model}. Sending prompt...",
+                            "⚡",
                         )
                     else:
-                        self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
+                        self._call_ui(log.add_meta, "ACP session ready. Sending prompt...", "⚡")
 
                 async def send_and_wait() -> str | None:
                     prompt_task = asyncio.create_task(client.send_prompt(message))
@@ -2885,7 +2893,9 @@ class AgentRunMixin:
             )
             session_type = "new session" if self._is_first_message else "continuing session"
             self._call_ui(
-                log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
+                log.add_meta,
+                f"Using model: {model_display} | Mode: {mode_label} ({session_type})",
+                "🧠",
             )
 
             # Show persona info if available
@@ -3501,7 +3511,9 @@ class AgentRunMixin:
             )
             session_type = "new session" if self._is_first_message else "continuing session"
             self._call_ui(
-                log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
+                log.add_meta,
+                f"Using model: {model_display} | Mode: {mode_label} ({session_type})",
+                "🧠",
             )
 
             # Show persona info if available

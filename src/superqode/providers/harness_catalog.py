@@ -420,8 +420,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
     ),
     HarnessCatalogEntry(
         id="deepagents-code",
-        label="Deep Agents Code",
-        description="LangChain's terminal coding agent over its own ACP server.",
+        label="Deep Agents Code (ACP · own login)",
+        description="[ACP — agent owns loop/tools/journal] LangChain's terminal coding agent over its own ACP server. Also listed under ACP agents as acp:deepagents-code.",
         openness="open",
         license="MIT",
         repository="https://github.com/langchain-ai/deepagents",
@@ -433,8 +433,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
     ),
     HarnessCatalogEntry(
         id="deepagents-code-key",
-        label="Deep Agents Code (API key)",
-        description="Attach Deep Agents Code over ACP after you provide a key or a local model.",
+        label="Deep Agents Code + my model (ACP attach)",
+        description="[ACP attach — not a local loop] Pick your API key or local model first, then it is handed to Deep Agents Code over ACP. The agent owns tools/journal; a local path/journal does not apply. Prefer acp:deepagents-code for the direct ACP route.",
         openness="open",
         license="MIT",
         repository="https://github.com/langchain-ai/deepagents",
@@ -825,8 +825,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
     ),
     HarnessCatalogEntry(
         id="fast-agent",
-        label="fast-agent",
-        description="Open-source ACP agent. Bring a provider key or a local model; SuperQode attaches over ACP with it.",
+        label="fast-agent (ACP · bring key or local model)",
+        description="[ACP attach — not a local loop] Open-source ACP agent. Bring a provider key or a local model; SuperQode attaches over ACP with it. The agent owns tools/journal. Also listed under ACP agents as acp:fast-agent.",
         openness="open",
         license="Apache-2.0",
         repository="https://github.com/evalstate/fast-agent",

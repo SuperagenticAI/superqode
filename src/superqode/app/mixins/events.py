@@ -254,6 +254,15 @@ class EventHandlerMixin:
                 self._selection_digit_buffer = ""
         log = self.query_one("#log", ConversationLog)
 
+        if text:
+            # A new prompt/command means the user wants to see its output.
+            # Drop any reading lock so the result lands in view instead of
+            # silently below the fold (e.g. `:help` then `:agy models`).
+            try:
+                log.resume_follow()
+            except Exception:  # noqa: BLE001 - follow is best effort
+                pass
+
         if getattr(self, "_install_in_progress", False):
             if text.lower() in {":cancel", "/cancel", "cancel"}:
                 self._cancel_install()

@@ -27,7 +27,7 @@ VENDOR_HARNESS_IDS = (
     "junie",
     "fx",
 )
-VENDOR_ACP_AGENT_NAMES = frozenset({"kimi", "qwen", "deepagents-code"})
+VENDOR_ACP_AGENT_NAMES = frozenset({"kimi", "qwen"})
 ACP_BROWSER_ID = "acp:all"
 
 # Optional first-party harness integrations installed into SuperQode's active

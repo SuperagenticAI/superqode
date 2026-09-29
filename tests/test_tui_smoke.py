@@ -6682,9 +6682,10 @@ def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
     app.action_browse_harnesses_from_connect()
     assert app._awaiting_connect_type is True
     assert app._connect_menu == "open-harnesses"
+    open_entries = list_entries("open")
     assert picker_rows(render_plain(log.items[-1])) == [
-        (index, entry.label) for index, entry in enumerate(list_entries("open"), start=1)
-    ]
+        (index, entry.label) for index, entry in enumerate(open_entries, start=1)
+    ] + [(len(open_entries) + 1, "Browse ACP agents →")]
 
 
 @pytest.mark.parametrize("menu_version", ["v1", "v2"])
@@ -6719,9 +6720,10 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
     assert app._connect_menu == "open-harnesses"
     rendered = render_plain(log.items[-1])
     assert "Other harnesses now live under Open harnesses." in rendered
+    open_entries = list_entries("open")
     assert picker_rows(rendered) == [
-        (index, entry.label) for index, entry in enumerate(list_entries("open"), start=1)
-    ]
+        (index, entry.label) for index, entry in enumerate(open_entries, start=1)
+    ] + [(len(open_entries) + 1, "Browse ACP agents →")]
 
 
 def test_byok_completion_hides_legacy_github_copilot_provider():

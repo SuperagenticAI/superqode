@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.27] - 2026-09-29
+
+### Added
+
+- `Browse ACP agents →` cross-link row on the Open harnesses connect menu so
+  the ACP registry (fast-agent, Deep Agents Code, OpenCode) is one click away
+  instead of hunted for.
+
+### Changed
+
+- Catalog copy now states the transport up front: `Deep Agents Code (ACP · own
+  login)`, `Deep Agents Code + my model (ACP attach)`, and
+  `fast-agent (ACP · bring key or local model)` each say the agent owns
+  tools/journal and name their `acp:` alias. `deepagents-code` also dropped out
+  of the vendor ACP agent name set, since it is listed as an ACP agent already.
+- Model, session and ACP lifecycle notices render as meta lines with icons
+  (🧠 model, 🚀 start, 🔗 reuse, ⚡ ready) instead of plain info text.
+- Sending a new prompt or command resumes transcript auto-follow, so results
+  land in view rather than below the fold after a long output (e.g. `:help`
+  then `:agy models`).
+
+### Fixed
+
+- `:prime` connect failures report the underlying error and suggest re-running
+  `:prime models` instead of dying silently from the model picker.
+- Selecting a Prime Agent model clears the catalog from the transcript so the
+  success receipt starts on a clean view; failures still keep the list above the
+  error.
+- `:agy models` shows a thinking indicator while the model list is fetched.
+
 ## [2.4.26] - 2026-09-29
 
 ### Added

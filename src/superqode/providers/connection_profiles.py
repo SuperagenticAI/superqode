@@ -1278,6 +1278,24 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
                 unavailable_hint=hint,
             )
         )
+    if menu == "open":
+        # Cross-link, not a duplicate: the ACP registry (fast-agent,
+        # deepagents-code, …) lives on its own screen. One row here stops
+        # users hunting for ACP inside Open harnesses.
+        profiles.append(
+            ConnectionProfile(
+                id="open-browse-acp",
+                label="Browse ACP agents →",
+                description=(
+                    "Same agents over Agent Client Protocol with their own login — "
+                    "fast-agent, Deep Agents Code, OpenCode and the live catalog."
+                ),
+                connector="acp-picker",
+                menu=screen,
+                transport="ACP",
+                detect=_always_ready,
+            )
+        )
     return profiles
 
 

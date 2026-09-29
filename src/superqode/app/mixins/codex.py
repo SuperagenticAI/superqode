@@ -1100,7 +1100,9 @@ class CodexMixin:
             )
             session_type = "new session" if self._is_first_message else "continuing session"
             self._call_ui(
-                log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
+                log.add_meta,
+                f"Using model: {model_display} | Mode: {mode_label} ({session_type})",
+                "🧠",
             )
 
             # Show persona info if available

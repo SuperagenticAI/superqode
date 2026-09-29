@@ -1185,11 +1185,21 @@ class ModelCatalogMixin:
             return
 
         entries = [(info.id, self._prime_model_label(info)) for info in models]
+
+        def _choose_prime_model(chosen: str) -> None:
+            # Drop the catalog from the transcript so selection lands on a
+            # clean success receipt instead of below a hundred-row list.
+            # (The picker already cleared the view when it opened, so this
+            # removes only the list itself.) Failures keep the list visible
+            # above the error via _prime_connect's own receipt.
+            log.clear()
+            self._prime_connect(chosen, log)
+
         opened = self._show_vendor_model_picker(
             log,
             title=f"Select Prime Agent Model{f'  ({search})' if search else ''}",
             entries=entries,
-            on_choose=lambda chosen: self._prime_connect(chosen, log),
+            on_choose=_choose_prime_model,
             current=self._prime_opts().model,
             retry_hint="Run :prime models to choose again.",
         )
