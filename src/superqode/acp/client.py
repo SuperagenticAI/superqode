@@ -431,7 +431,7 @@ class ACPClient:
             }
         )
 
-    async def send_prompt(self, prompt: str) -> Optional[str]:
+    async def send_prompt(self, prompt: str, *, images=None) -> Optional[str]:
         """
         Send a prompt to the agent and wait for completion.
 
@@ -441,6 +441,12 @@ class ACPClient:
         self.reset_stats()
 
         content_blocks: List[ContentBlock] = [{"type": "text", "text": prompt}]
+        if images:
+            if not self._agent_capabilities.get("promptCapabilities", {}).get("image", False):
+                raise ValueError(
+                    "This ACP agent does not advertise image input. Choose an image-capable agent."
+                )
+            content_blocks.extend(image.acp_part() for image in images)
 
         response = await self._call_method(
             "session/prompt",

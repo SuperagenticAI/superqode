@@ -240,6 +240,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "local": "providers/local.md",
         "byok": "providers/byok.md",
         "acp": "providers/acp.md",
+        "open-browse-acp": "concepts/modes.md",
         "codex": "providers/codex.md",
         "copilot": "providers/github-copilot.md",
         "cursor": "concepts/modes.md",

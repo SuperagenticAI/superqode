@@ -339,7 +339,11 @@ def test_aclose_awaits_async_runtime_cleanup():
     assert asyncio.run(exercise()).closed is True
 
 
-def test_structured_runtime_events_are_capability_based():
+def test_structured_runtime_events_are_capability_based(monkeypatch):
+    # A harness selected by another test must not redirect this fake runtime
+    # through a real provider/kernel route.
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
+
     class Runtime:
         def cancel(self):
             return None

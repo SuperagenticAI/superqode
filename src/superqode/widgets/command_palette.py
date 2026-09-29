@@ -27,6 +27,8 @@ class PaletteCommand:
     shortcut: str = ""
     category: str = "general"
     action: Callable | None = None
+    command: str = ""
+    prefill: bool = False
 
 
 # Default palette commands
@@ -93,6 +95,7 @@ class PaletteItem(Widget):
     }
 
     PaletteItem .content {
+        width: 1fr;
         height: 3;
         padding-left: 1;
     }
@@ -146,8 +149,7 @@ class PaletteItem(Widget):
         with Vertical(classes="content"):
             yield Static(self.command.label, classes="label")
             yield Static(self.command.description, classes="description")
-        if self.command.shortcut:
-            yield Static(self.command.shortcut, classes="shortcut")
+        yield Static(self.command.shortcut, classes="shortcut")
 
     def watch_selected(self, selected: bool) -> None:
         self.set_class(selected, "selected")
@@ -167,9 +169,10 @@ class CommandPalette(Widget):
     CommandPalette {
         layer: overlay;
         align: center top;
-        margin-top: 3;
-        width: 70;
-        height: auto;
+        margin-top: 1;
+        width: 95%;
+        max-width: 70;
+        height: 85%;
         max-height: 25;
         background: #000000;
         border: double #7c3aed;
@@ -183,7 +186,7 @@ class CommandPalette(Widget):
     CommandPalette #palette-title-bar {
         height: 3;
         background: #000000;
-        padding: 1;
+        padding: 0 1;
     }
 
     CommandPalette #palette-title {
@@ -217,8 +220,8 @@ class CommandPalette(Widget):
     }
 
     CommandPalette #palette-results {
-        height: auto;
-        max-height: 16;
+        height: 1fr;
+        min-height: 1;
         background: #000000;
     }
 
@@ -231,7 +234,7 @@ class CommandPalette(Widget):
     }
 
     CommandPalette #palette-footer {
-        height: 2;
+        height: 1;
         background: #000000;
         color: #c4b5fd;
         padding: 0 1;
@@ -242,6 +245,12 @@ class CommandPalette(Widget):
         text-align: center;
         color: #c4b5fd;
     }
+
+    CommandPalette.compact PaletteItem { height: 2; }
+    CommandPalette.compact PaletteItem .description { display: none; }
+    CommandPalette.compact PaletteItem .icon,
+    CommandPalette.compact PaletteItem .content,
+    CommandPalette.compact PaletteItem .shortcut { height: 1; }
     """
 
     class CommandSelected(Message):
@@ -267,7 +276,7 @@ class CommandPalette(Widget):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self.commands = commands or DEFAULT_PALETTE_COMMANDS
+        self.commands = commands if commands is not None else DEFAULT_PALETTE_COMMANDS
         self.filtered_commands: list[PaletteCommand] = []
         self.fuzzy = FuzzySearch()
 
@@ -277,13 +286,41 @@ class CommandPalette(Widget):
             yield Static("Type to search commands", id="palette-subtitle")
         with Vertical(id="palette-search-container"):
             yield Input(placeholder="Search commands...", id="palette-search")
-        yield VerticalScroll(id="palette-results")
+        with VerticalScroll(id="palette-results"):
+            # Reuse rows while filtering. Remounting rows races rapid typing
+            # and reopening, and needlessly interrupts scrolling and focus.
+            placeholder = PaletteCommand("empty", "", "")
+            for index in range(10):
+                command = self.commands[index] if index < len(self.commands) else placeholder
+                yield PaletteItem(command, id=f"palette-item-{index}")
+            yield Static("No matching commands found", id="palette-empty", classes="no-results")
         with Vertical(id="palette-footer"):
             yield Static("↑↓ Navigate  │  Enter Select  │  Esc Close", id="footer-hints")
 
     def on_mount(self) -> None:
         """Initialize on mount."""
         self._update_filtered_commands()
+        self.refresh_theme_colors()
+
+    def refresh_theme_colors(self) -> None:
+        from superqode.app.constants import THEME
+
+        self.styles.background = THEME["bg"]
+        self.styles.border = ("double", THEME["purple"])
+        for widget in self.query("Static, Input, Vertical, VerticalScroll"):
+            widget.styles.background = THEME["bg"]
+            widget.styles.color = THEME["text"]
+        self.query_one("#palette-search", Input).styles.border = ("tall", THEME["purple"])
+        self.query_one("#palette-title").styles.color = THEME["purple"]
+        for item in self.query(PaletteItem):
+            item.styles.background = THEME["surface2"] if item.selected else THEME["bg"]
+            item.styles.border_left = ("thick", THEME["purple"] if item.selected else THEME["bg"])
+            for widget in item.query("Static"):
+                widget.styles.color = THEME["purple"] if item.selected else THEME["text"]
+            item.query_one(".description").styles.color = THEME["muted"]
+
+    def on_resize(self) -> None:
+        self.set_class(self.size.width < 50, "compact")
 
     def show(self) -> None:
         """Show command palette."""
@@ -292,11 +329,13 @@ class CommandPalette(Widget):
         self.is_visible = True
         self.add_class("show-palette")
         self._update_filtered_commands()
+        self.refresh_theme_colors()
 
         # Focus search input
         search_input = self.query_one("#palette-search", Input)
         search_input.value = ""
         search_input.focus()
+        self.query_one("#palette-results", VerticalScroll).scroll_home(animate=False)
 
     def hide(self) -> None:
         """Hide command palette."""
@@ -337,23 +376,29 @@ class CommandPalette(Widget):
 
     def _render_commands(self) -> None:
         """Render filtered commands."""
-        container = self.query_one("#palette-results", VerticalScroll)
-        container.remove_children()
-
-        if not self.filtered_commands:
-            container.mount(Static("No matching commands found", classes="no-results"))
-            return
-
-        for i, cmd in enumerate(self.filtered_commands):
-            item = PaletteItem(cmd, id=f"palette-item-{i}")
-            item.selected = i == self.selected_index
-            container.mount(item)
+        self.query_one("#palette-empty").display = not self.filtered_commands
+        for index, item in enumerate(self.query("#palette-results PaletteItem")):
+            item.display = index < len(self.filtered_commands)
+            if not item.display:
+                continue
+            command = self.filtered_commands[index]
+            item.command = command
+            item.selected = index == self.selected_index
+            for selector, value in (
+                (".icon", command.icon),
+                (".label", command.label),
+                (".description", command.description),
+                (".shortcut", command.shortcut),
+            ):
+                item.query_one(selector, Static).update(value)
+        self.refresh_theme_colors()
 
     def _update_selection(self) -> None:
         """Update visual selection state."""
         for i, item in enumerate(self.query("#palette-results PaletteItem")):
             if isinstance(item, PaletteItem):
                 item.selected = i == self.selected_index
+        self.refresh_theme_colors()
 
     def move_selection(self, delta: int) -> None:
         """Move selection up or down."""
@@ -365,10 +410,9 @@ class CommandPalette(Widget):
 
         # Scroll to make selection visible
         try:
-            container = self.query_one("#palette-results", VerticalScroll)
             selected_item = self.query_one(f"#palette-item-{self.selected_index}")
             if selected_item:
-                container.scroll_visible(selected_item)
+                selected_item.scroll_visible(animate=False)
         except Exception:
             pass
 
@@ -389,15 +433,19 @@ class CommandPalette(Widget):
         if event.key == "escape":
             self.hide()
             event.stop()
+            event.prevent_default()
         elif event.key == "up":
             self.move_selection(-1)
             event.stop()
+            event.prevent_default()
         elif event.key == "down":
             self.move_selection(1)
             event.stop()
+            event.prevent_default()
         elif event.key == "enter":
             self.select_current()
             event.stop()
+            event.prevent_default()
 
     @on(PaletteItem.Selected)
     def on_item_selected(self, event: PaletteItem.Selected) -> None:

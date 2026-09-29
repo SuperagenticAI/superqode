@@ -453,6 +453,10 @@ class AgentRunMixin:
         from superqode.providers.gateway.base import Message
         from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
+        images = getattr(self, "_current_images", [])
+        self._current_images = []
+        history = getattr(self, "_chat_history", [])
+
         try:
             provider = self._pure_mode.session.provider
             model = self._pure_mode.session.model
@@ -461,11 +465,14 @@ class AgentRunMixin:
                     log.add_error,
                     "No model is selected. Reconnect with :connect local before chatting.",
                 )
+                self._call_ui(self._restore_image_input, images)
                 return
             history = self._chat_history
             if not isinstance(history, list):
                 history = self._chat_history = []
-            history.append(Message(role="user", content=text))
+            from superqode.image_input import image_message
+
+            history.append(Message(role="user", content=image_message(text, images)))
             who = f"{provider}/{model}"
             self._call_ui(lambda: log.reset_response_stream(who))
 
@@ -520,6 +527,7 @@ class AgentRunMixin:
                         "and not an embedding-only model."
                     )
                 self._call_ui(log.add_info, note)
+                self._call_ui(self._restore_image_input, images)
                 return
             self._call_ui(lambda: log.write_final_response(full, agent=who))
 
@@ -529,6 +537,10 @@ class AgentRunMixin:
             tps = (tokens / decode_dur) if decode_dur and decode_dur > 0 else None
             self._call_ui(self._write_chat_stats, log, ttft, tps, tokens, end_t - t0)
         except Exception as exc:  # noqa: BLE001 - surface any model/transport error
+            if images:
+                self._call_ui(self._restore_image_input, images)
+                if history and history[-1].role == "user":
+                    history.pop()
             self._call_ui(log.add_error, f"Chat error: {exc}")
         finally:
             # Stops the indicator + scanning waves and restores the prompt.
@@ -539,6 +551,9 @@ class AgentRunMixin:
         """Send message to provider session with streaming output."""
         from time import monotonic
         import traceback
+
+        images = getattr(self, "_current_images", [])
+        self._current_images = []
 
         # Handle session commands
         if text.strip().startswith("/sessions"):
@@ -594,12 +609,14 @@ class AgentRunMixin:
             log.add_error("Not connected to a model. Use :connect byok to select a provider/model.")
             log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
+            self._restore_image_input(images)
             return
 
         if not self._pure_mode.session.connected:
             log.add_error("Connection not established. Please reconnect using :connect byok")
             log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
+            self._restore_image_input(images)
             return
 
         # A builtin AgentLoop (._agent), a harness, OR a self-contained runtime
@@ -612,6 +629,7 @@ class AgentRunMixin:
             log.add_error("Agent not initialized. Please reconnect using :connect byok")
             log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
+            self._restore_image_input(images)
             return
 
         provider = self._pure_mode.session.provider
@@ -946,8 +964,11 @@ class AgentRunMixin:
                 last_display_time = time.time()
 
                 try:
+                    image_kwargs = {}
+                    if images:
+                        image_kwargs["images"] = images
                     async for chunk in self._pure_mode.run_streaming(
-                        text, plan_mode=plan_mode_for_run
+                        text, plan_mode=plan_mode_for_run, **image_kwargs
                     ):
                         if getattr(self, "_cancel_requested", False) or getattr(
                             self._pure_mode, "_cancel_requested", False
@@ -979,6 +1000,11 @@ class AgentRunMixin:
                                     accumulated_chunk = ""
                                     last_display_time = current_time
 
+                    image_error = getattr(
+                        getattr(self._pure_mode, "_agent", None), "last_stream_error", ""
+                    )
+                    if images and image_error:
+                        raise ValueError(image_error)
                     if accumulated_chunk:
                         _safe_call(log.add_response_chunk, accumulated_chunk)
                 finally:
@@ -1017,6 +1043,7 @@ class AgentRunMixin:
                 if is_local:
                     self._stop_thinking()
                 self._stop_stream_animation()
+                self._restore_image_input(images)
                 self._show_error_card(
                     log,
                     f"{error_type} while running agent",
@@ -1297,6 +1324,7 @@ class AgentRunMixin:
             self._stop_thinking()
             self._stop_stream_animation()
             self.is_busy = False
+            self._restore_image_input(images)
             error_msg = str(e)
             error_trace = traceback.format_exc()
 
@@ -1530,6 +1558,17 @@ class AgentRunMixin:
             self._run_acp_jsonrpc_client(
                 message, agent_type, model, display_name, log, persona_context
             )
+            return
+
+        if getattr(self, "_current_images", []):
+            images = self._current_images
+            self._current_images = []
+            self._call_ui(self._restore_image_input, images)
+            self._call_ui(
+                log.add_error,
+                "This runtime does not support image input. Use built-in coding, direct Chat, or an image-capable ACP agent.",
+            )
+            self._call_ui(self._stop_thinking)
             return
 
         try:
@@ -1851,6 +1890,9 @@ class AgentRunMixin:
         from pathlib import Path
 
         from superqode.acp.client import ACPClient
+
+        images = getattr(self, "_current_images", [])
+        self._current_images = []
 
         # Prepend file context if available (from @file references)
         file_context = getattr(self, "_current_file_context", "")
@@ -2671,7 +2713,8 @@ class AgentRunMixin:
                         self._call_ui(log.add_meta, "ACP session ready. Sending prompt...", "⚡")
 
                 async def send_and_wait() -> str | None:
-                    prompt_task = asyncio.create_task(client.send_prompt(message))
+                    image_kwargs = {"images": images} if images else {}
+                    prompt_task = asyncio.create_task(client.send_prompt(message, **image_kwargs))
                     prompt_started_at = time.monotonic()
                     waiting_notice_sent = False
 
@@ -2825,6 +2868,7 @@ class AgentRunMixin:
             self._agent_process = None
             self._acp_client = None
             self._acp_client_key = None
+            self._call_ui(self._restore_image_input, images)
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(
@@ -2836,6 +2880,7 @@ class AgentRunMixin:
             self._agent_process = None
             self._acp_client = None
             self._acp_client_key = None
+            self._call_ui(self._restore_image_input, images)
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(

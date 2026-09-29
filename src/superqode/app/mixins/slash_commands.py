@@ -583,6 +583,12 @@ class SlashCommandMixin:
             self.run_worker(self._compare_cmd(args, log))
         elif c in ("paste", "image", "img"):
             self._handle_paste_image(args, log)
+        elif c in ("voice", "dictate"):
+            if args.strip().lower() in {"off", "hide", "close"}:
+                self.query_one("#dictation-guide").remove_class("visible")
+                self._ensure_input_focus()
+            else:
+                self.action_voice_input()
         elif c == "queue":
             self._handle_queue(args, log)
         elif c == "steer":
@@ -1077,6 +1083,9 @@ class SlashCommandMixin:
 
     def _handle_paste_image(self, args: str, log: ConversationLog):
         """`:paste` — attach an image from a path or the system clipboard."""
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the current run to finish before attaching an image.")
+            return
         value = (args or "").strip().strip("'\"")
         if value:
             path = Path(value).expanduser()
@@ -1087,14 +1096,20 @@ class SlashCommandMixin:
             else:
                 log.add_error(f"Not a readable image: {value}")
             return
-        image_path = self._grab_clipboard_image()
-        if image_path is not None:
-            self._stage_image_attachment(image_path, log, source="clipboard")
-        else:
-            log.add_info(
-                "No image found on the clipboard. Copy an image, then run :paste — "
-                "or use :paste <path-to-image>."
-            )
+
+        def capture() -> None:
+            image_path = self._grab_clipboard_image()
+            if image_path is not None:
+                self._call_ui(
+                    lambda: self._stage_image_attachment(image_path, log, source="clipboard")
+                )
+            else:
+                self._call_ui(
+                    log.add_info,
+                    "No image found on the clipboard. Copy an image, then run :paste — or use :paste <path-to-image>.",
+                )
+
+        self.run_worker(capture, thread=True, group="clipboard-image", exclusive=True)
 
     def _handle_session(self, args: str, log: ConversationLog):
         """Session subcommands: `:session` (info) and `:session rename <name>`."""
@@ -2147,6 +2162,10 @@ class SlashCommandMixin:
     def _handle_message(self, text: str, log: ConversationLog):
         session = get_session()
         mode = get_mode()
+        from superqode.image_input import parse_image_paths, strip_image_paths
+
+        image_refs = parse_image_paths(text)
+        original_text = text
 
         # Skip permission input handling when using modal dialogs
         # (permissions are handled directly in the modal)
@@ -2173,7 +2192,27 @@ class SlashCommandMixin:
 
         if getattr(self, "is_busy", False):
             # Enter explicitly means "send next". :steer changes this run.
+            if getattr(self, "_staged_images", {}) or image_refs:
+                log.add_error("Wait for the current run to finish before sending images.")
+                self._set_prompt_prefill(text)
+                return
             self._enqueue_message(text)
+            return
+
+        # Bare terminal drops, quoted paths, and @image mentions all share the
+        # same multimodal payload route. File paths are not model prompt text.
+        for ref in image_refs:
+            if not self._stage_image_attachment(ref.path, log, source="path"):
+                self._set_prompt_prefill(original_text)
+                return
+        if image_refs:
+            text = strip_image_paths(text, image_refs)
+            if not text:
+                log.add_info("Image attached. Add a prompt, then press Enter to send.")
+                return
+        images = self._prepare_image_input(log)
+        if images is None:
+            self._set_prompt_prefill(text)
             return
 
         # Chat mode: a raw, direct-to-model conversation. No repo context, no
@@ -2183,6 +2222,8 @@ class SlashCommandMixin:
             chat_ready, chat_message, _who = self._direct_chat_status()
             if not chat_ready:
                 log.add_error(chat_message)
+                if images:
+                    self._set_prompt_prefill(text)
                 self._chat_mode = False
                 self._refresh_prompt_mode_label()
                 return
@@ -2192,6 +2233,7 @@ class SlashCommandMixin:
             self._update_terminal_title(text)
             self.is_busy = True
             self._cancel_requested = False
+            self._consume_image_input(images)
             self._chat_worker(text, log)
             return
 
@@ -2276,10 +2318,12 @@ class SlashCommandMixin:
         if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
             self.is_busy = True
             self._cancel_requested = False
+            self._consume_image_input(images)
             self._send_to_pure_mode(text, log)
         elif session.is_connected_to_agent():
             self.is_busy = True
             self._cancel_requested = False
+            self._consume_image_input(images)
             agent = session.connected_agent
             # Get the actual agent name from the connected agent, not from old session state
             name = agent.get("short_name", agent.get("name", "agent")) if agent else "agent"
@@ -2295,6 +2339,8 @@ class SlashCommandMixin:
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
         else:
+            if images:
+                self._set_prompt_prefill(text)
             log.add_info(
                 "Not connected. Use :connect for chat/coding, or :systemone connect <pack> for direct Jev decisions. :systemone live only enables tool checks."
             )

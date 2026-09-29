@@ -1779,7 +1779,7 @@ class CommandImplMixin:
             return
         if action in {"clear", "reset"}:
             self._attached_refs = []
-            self._set_prompt_prefill("")
+            self._sync_attachment_prefill()
             log.add_info("Cleared staged prompt references.")
             return
         if action in {"remove", "rm", "delete"}:
@@ -1813,6 +1813,9 @@ class CommandImplMixin:
                 path = Path.cwd() / path
             if not path.exists():
                 log.add_error(f"Cannot attach missing path: {raw}")
+                continue
+            if self._is_image_path(str(path)):
+                self._stage_image_attachment(path, log, source="path")
                 continue
             try:
                 refs.append("@" + str(path.relative_to(Path.cwd())))

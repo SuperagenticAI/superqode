@@ -103,6 +103,17 @@ def expand_file_references(text: str, root_path: Path) -> Tuple[str, List[Tuple[
                     break
 
         if file_path.exists() and file_path.is_file():
+            # Images travel as multimodal parts, never replacement-decoded text.
+            if file_path.suffix.lower() in {
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".gif",
+                ".webp",
+                ".bmp",
+                ".tiff",
+            }:
+                continue
             try:
                 content = file_path.read_text(errors="replace")
                 # Limit content size

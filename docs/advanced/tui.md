@@ -331,6 +331,51 @@ included with your message when you submit.
 > Compare @tests/test_tui_smoke.py with @src/superqode/app_main.py
 ```
 
+### Prompt history and code copying
+
+Use `Ctrl+K` for the searchable command palette. `Ctrl+Shift+R` opens prompt
+history search; `:history search`, `:history-search`, `:search-history`, and `:prompt-history` open
+the same overlay. Type a fuzzy query, use arrows to navigate, and press Enter to
+load a complete prompt for editing. Escape keeps your current draft. `Ctrl+Y`
+or `:yank` copies the final fenced code block from the last response.
+
+### Images and OS dictation
+
+Attach screenshots, diagrams, and mockups with `:paste /path/to/image.png`,
+`:image /path/to/image.png`, or `:attach /path/to/image.png`. Pasting an image
+file path also stages it. For a clipboard image, run `:paste`; clipboard capture
+runs in the background and depends on your operating system's clipboard support.
+An inline mention such as `Review @screenshot.png` also sends image content.
+Terminal-dropped absolute paths, quoted paths, shell-escaped spaces, and local
+`file://` URLs are recognized as attachments. A path submitted on its own stages
+the image; add your question and press `Enter` to send it. Text submitted alongside
+an image path sends both the text and image. Missing files produce an error and
+retain the draft rather than being dispatched as slash commands.
+
+The composer shows staged attachments with a clickable `×`. You can also use
+`:attach remove <number>` or `:attach clear`. Attaching and removing images keeps
+your draft. Up to four PNG, JPEG, GIF, or WebP images can accompany a prompt,
+with a 4 MB limit per image. Image bytes are sent as image content, never read
+as text files.
+
+Image input is supported in direct Chat with a vision-capable model, the built-in
+coding loop, and ACP agents that advertise image input. Other harness/runtime
+routes currently report that composer image input is unavailable. Rejected
+requests restore the images and draft so you can change connections and retry.
+Saved coding sessions retain prompt text; reattach images when resuming a session.
+
+Run `:voice` (alias `:dictate`), or choose **OS Dictation** in the command palette,
+to focus the composer and show guidance. On macOS, enable Dictation in System
+Settings → Keyboard and use your configured shortcut. On Windows, use `Win+H`.
+On Linux, use a desktop dictation tool that inserts text into your terminal.
+Dictated text stays editable: review it and press Enter to send. Use `:voice off`
+to hide the guidance. Terminal support varies; if dictation cannot insert text
+directly, dictate into a supported text editor and paste it into the composer.
+SuperQode does not record audio or start the operating system's microphone.
+
+See [Apple's Dictation guide](https://support.apple.com/guide/mac-help/mh40584/mac)
+and [Microsoft's voice typing guide](https://support.microsoft.com/en-us/accessibility/windows/use-voice-typing-to-talk-instead-of-type-on-your-pc).
+
 ### Streaming markdown
 
 Assistant responses render as **live, formatted markdown** while they stream -
@@ -935,7 +980,25 @@ and activity time from the backend record; only the session you resume is
 registered for future use. Selected session id and sidebar width are persisted
 per project under `.superqode/ui-state.json`.
 
-Select a file in the sidebar to preview it. With the preview focused:
+Open Files with `Ctrl+2`. Use arrow keys to browse, expand or collapse folders,
+and `Enter` to preview a file; mouse selection uses the same preview. `Ctrl+F`
+searches filenames while focus is in the sidebar. Use `Up` / `Down` to choose a
+result, then `Enter`, or click the result. All returned filename matches are
+keyboard-accessible through the scrolling result window.
+
+`Esc` closes file search, returns from a preview to Files, then closes the
+sidebar and restores prompt focus. `Ctrl+B` hides or reopens the sidebar without
+resetting its selected tab. Browsing leaves the prompt draft intact. Outside
+the sidebar, `Ctrl+F` starts transcript search and saves an existing draft in
+`:stash` before prefilling the search command.
+
+The existing Search tab searches file contents after a short typing pause.
+Ignored dependency and build directories are skipped before traversal, and
+outdated searches cannot overwrite newer results. Select a code-search result
+with the keyboard or mouse to reveal its matching line in the existing preview,
+within the preview limits below.
+
+With the preview focused:
 
 | Key | Action |
 | --- | --- |

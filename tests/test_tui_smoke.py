@@ -6879,13 +6879,13 @@ def test_history_manager_navigation_and_dedup(tmp_path):
     assert hm2.get_previous() == ":diff"
 
 
-def test_selection_aware_input_history_arrows():
+def test_selection_aware_input_history_arrows(tmp_path):
     from unittest.mock import MagicMock
     from superqode.app.inputs import SelectionAwareInput
     from superqode.history import HistoryManager
 
     app = make_app()
-    hm = HistoryManager()
+    hm = HistoryManager(history_file=tmp_path / "history.jsonl")
     hm.append_sync("first prompt")
     hm.append_sync("second prompt")
     app._history_manager = hm

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.29] - 2026-09-29
+
+### Added
+
+- Composer image attachments for direct Chat, built-in coding, and image-capable
+  ACP agents, with visible removal controls, bounded image payloads, and draft
+  restoration after rejected requests.
+- `:voice` / `:dictate` and a command-palette entry for OS dictation guidance;
+  dictated text remains editable before submission.
+
+### Changed
+
+- Repository navigation keeps its selected tab and prompt draft, supports
+  contextual Ctrl+F file search, and gives keyboard and mouse access to search
+  results. Code-search selections reveal the matching preview line.
+- Filename indexing starts when search is opened rather than during startup.
+  Code search is debounced, cancels superseded work, and prunes ignored trees
+  before traversal.
+- Command palette and prompt history overlays adapt to smaller terminals and
+  selected themes. History search ranks fuzzy matches and shows snippets around
+  matches, including those later in multiline prompts.
+- Clipboard image capture runs away from the TUI event loop.
+
+### Fixed
+
+- Terminal image drops are staged before composer insertion. Absolute paths
+  cannot be mistaken for slash commands, and prompts containing image paths
+  send native image payloads with their text. Quoted and escaped filenames are
+  supported; missing images retain the draft with a readable error.
+- Delayed focus callbacks no longer interrupt sidebar browsing. Escape restores
+  focus through search, preview, Files, and the prompt.
+- Alt+A approves a ready plan even with the composer focused; otherwise it
+  retains its return-to-agent behavior.
+- Dispatch palette entries from their own command definitions, wire previously
+  unhandled entries, and remove the duplicate context entry.
+- Keep image files out of text-reference expansion and preserve drafts when
+  attachments are added or removed.
+
 ## [2.4.28] - 2026-09-29
 
 ### Added

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import asyncio
-import time
 from pathlib import Path
 from typing import Optional
 from superqode.app.widgets import (
@@ -28,6 +27,8 @@ class HelperMcpAttachMixin:
     @staticmethod
     def _extract_mcp_refs_from_text(text: str) -> tuple[str, list[str]]:
         """Remove inline MCP refs from prompt text and return them separately."""
+        if "mcp://" not in text:
+            return text.strip(), []
         from superqode.app_main import SuperQodeApp
 
         parts = text.split()
@@ -143,11 +144,102 @@ class HelperMcpAttachMixin:
             return []
 
     def _sync_attachment_prefill(self) -> None:
-        if not getattr(self, "_attached_refs", None):
-            self._set_prompt_prefill("")
+        refs = getattr(self, "_attached_refs", [])
+        images = getattr(self, "_staged_images", {})
+        self._staged_images = {ref: image for ref, image in images.items() if ref in refs}
+        text_refs = [ref for ref in refs if ref not in self._staged_images]
+        prefill = " ".join(dict.fromkeys(text_refs)) + " " if text_refs else ""
+        try:
+            from superqode.app.inputs import SelectionAwareInput
+
+            draft = self.query_one("#prompt-input", SelectionAwareInput).value
+        except Exception:
+            draft = ""
+        previous = getattr(self, "_attachment_prefill", "")
+        if previous and draft.startswith(previous):
+            draft = draft[len(previous) :]
+        self._attachment_prefill = prefill
+        self._set_prompt_prefill(prefill + draft)
+        self._refresh_attachment_bar()
+
+    def _refresh_attachment_bar(self) -> None:
+        from rich.text import Text
+        from rich.style import Style
+        from textual.widgets import Static
+        from superqode.app.constants import THEME
+
+        try:
+            panel = self.query_one("#attachment-bar", Static)
+        except Exception:
             return
-        prefill = " ".join(dict.fromkeys(self._attached_refs)) + " "
-        self._set_prompt_prefill(prefill)
+        refs = getattr(self, "_attached_refs", [])
+        line = Text("◈ Attachments  ", style=THEME["purple"])
+        for index, ref in enumerate(refs, 1):
+            label = Path(ref.lstrip("@")).name
+            if len(label) > 24:
+                label = label[:21] + "…"
+            line.append(f"{index}. {label} ×", style=THEME["text"])
+            line.stylize(
+                Style(meta={"@click": f"app.remove_attachment({index})"}),
+                len(line) - len(f"{index}. {label} ×"),
+            )
+            line.append("  ")
+        panel.update(line)
+        panel.set_class(bool(refs), "visible")
+
+    def _prepare_image_input(self, log: ConversationLog) -> list | None:
+        """Snapshot images for this turn, keeping the draft intact on failure."""
+        from superqode.image_input import load_image
+
+        staged = getattr(self, "_staged_images", {})
+        if not staged:
+            return []
+        if getattr(self, "is_busy", False):
+            log.add_error("Wait for the current run to finish before sending images.")
+            return None
+        pure = getattr(self, "_pure_mode", None)
+        if pure is not None and pure.session.connected:
+            if not getattr(self, "_chat_mode", False) and (
+                getattr(pure, "_harness_spec", None) is not None
+                or not getattr(pure, "_agent", None)
+            ):
+                log.add_error(
+                    "Image input is available in direct Chat, built-in coding, and image-capable ACP agents. Your attachments are still staged."
+                )
+                return None
+            if not self._model_supports_vision(pure.session.model):
+                log.add_error(
+                    "The selected model does not support images. Choose a vision model; your attachments are still staged."
+                )
+                return None
+        try:
+            return [load_image(image.path) for image in staged.values()]
+        except ValueError as exc:
+            log.add_error(str(exc))
+            return None
+
+    def _consume_image_input(self, images: list) -> None:
+        self._current_images = images
+        staged = getattr(self, "_staged_images", {})
+        self._attached_refs = [
+            ref for ref in getattr(self, "_attached_refs", []) if ref not in staged
+        ]
+        self._staged_images = {}
+        self._refresh_attachment_bar()
+
+    def _restore_image_input(self, images: list) -> None:
+        if not images:
+            return
+        for image in images:
+            try:
+                ref = "@" + str(image.path.relative_to(Path.cwd()))
+            except ValueError:
+                ref = "@" + str(image.path)
+            self._staged_images[ref] = image
+            if ref not in self._attached_refs:
+                self._attached_refs.append(ref)
+        self._refresh_attachment_bar()
+        self._set_prompt_prefill(getattr(self, "_last_user_message", ""))
 
     def _is_image_path(self, value: str) -> bool:
         """True if value looks like a path to a readable image file."""
@@ -156,6 +248,19 @@ class HelperMcpAttachMixin:
             return path.suffix.lower() in self._IMAGE_EXTENSIONS and path.is_file()
         except Exception:
             return False
+
+    def _stage_pasted_images(self, text: str) -> bool:
+        """Handle a path-only terminal drop before TextArea inserts it."""
+        from superqode.image_input import parse_image_paths, strip_image_paths
+
+        refs = parse_image_paths(text)
+        if not refs or strip_image_paths(text, refs):
+            return False
+        log = self.query_one("#log", ConversationLog)
+        for ref in refs:
+            if not self._stage_image_attachment(ref.path, log, source="pasted path"):
+                return False
+        return True
 
     def _grab_clipboard_image(self) -> Optional[Path]:
         """Best-effort capture of an image on the system clipboard to a temp PNG.
@@ -173,7 +278,9 @@ class HelperMcpAttachMixin:
             target_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
             target_dir = Path(tempfile.gettempdir())
-        out = target_dir / f"clipboard-{int(time.time())}.png"
+        from uuid import uuid4
+
+        out = target_dir / f"clipboard-{uuid4().hex}.png"
 
         if shutil.which("pngpaste"):
             try:
@@ -214,12 +321,31 @@ class HelperMcpAttachMixin:
         self, path: Path, log: ConversationLog, *, source: str = ""
     ) -> bool:
         """Stage an image file for the next prompt and inform the user."""
+        from superqode.image_input import MAX_IMAGES, load_image
+
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the current run to finish before attaching an image.")
+            return False
+        try:
+            image = load_image(path)
+        except ValueError as exc:
+            log.add_error(str(exc))
+            return False
+        path = image.path
         try:
             ref = "@" + str(path.relative_to(Path.cwd()))
         except ValueError:
             ref = "@" + str(path)
         if not hasattr(self, "_attached_refs"):
             self._attached_refs = []
+        if not hasattr(self, "_staged_images"):
+            self._staged_images = {}
+        if ref not in self._staged_images and len(self._staged_images) >= MAX_IMAGES:
+            log.add_error(
+                f"Attach up to {MAX_IMAGES} images per prompt. Remove one with :attach remove <number>."
+            )
+            return False
+        self._staged_images[ref] = image
         self._attached_refs.append(ref)
         self._attached_refs = list(dict.fromkeys(self._attached_refs))
         self._sync_attachment_prefill()

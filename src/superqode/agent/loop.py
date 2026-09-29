@@ -667,7 +667,7 @@ class AgentMessage:
     """A message in the agent conversation."""
 
     role: str  # "user", "assistant", "tool"
-    content: str
+    content: str | list[dict]
     tool_calls: Optional[List[Dict]] = None
     tool_call_id: Optional[str] = None
     name: Optional[str] = None  # Tool name for tool messages
@@ -2372,7 +2372,7 @@ class AgentLoop:
         """Back-compat alias for :meth:`_execute_tool_batch`."""
         return await self._execute_tool_batch(tool_calls)
 
-    async def run(self, user_message: str) -> AgentResponse:
+    async def run(self, user_message: str, *, images=None) -> AgentResponse:
         """Run the agent loop until completion.
 
         Args:
@@ -2501,7 +2501,11 @@ class AgentLoop:
             messages.extend(self._load_stored_messages())
 
         # Add user message
-        messages.append(AgentMessage(role="user", content=user_message))
+        from superqode.image_input import image_message
+
+        messages.append(
+            AgentMessage(role="user", content=image_message(user_message, images or []))
+        )
 
         # Save to session storage if enabled
         if self._session_manager:
@@ -2965,6 +2969,8 @@ class AgentLoop:
     async def run_streaming(
         self,
         user_message: str,
+        *,
+        images=None,
     ) -> AsyncIterator[str]:
         """Run the agent loop with streaming output.
 
@@ -2982,6 +2988,7 @@ class AgentLoop:
             "total_tokens": 0,
             "total_cost": 0.0,
         }
+        self.last_stream_error = ""
 
         fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
@@ -3001,7 +3008,11 @@ class AgentLoop:
         if not fast_chat:
             messages.extend(self._load_stored_messages())
 
-        messages.append(AgentMessage(role="user", content=user_message))
+        from superqode.image_input import image_message
+
+        messages.append(
+            AgentMessage(role="user", content=image_message(user_message, images or []))
+        )
         if self._session_manager:
             self._session_manager.add_user_message(user_message)
 
@@ -3231,6 +3242,7 @@ class AgentLoop:
                     error_msg = str(e)
                     error_type = type(e).__name__
                     # Yield original streaming error for maximum transparency
+                    self.last_stream_error = error_msg
                     yield f"\n\n[Error: {error_type}] {error_msg}"
                     full_content = f"[Error: {error_type}] {error_msg}"
                     return
@@ -3264,6 +3276,7 @@ class AgentLoop:
                 except Exception as e:
                     error_msg = str(e)
                     error_type = type(e).__name__
+                    self.last_stream_error = error_msg
                     yield f"\n\n[Error: {error_type}] {error_msg}"
                     return
 

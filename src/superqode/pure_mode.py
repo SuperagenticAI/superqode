@@ -600,8 +600,14 @@ class PureMode:
             self._agent.config.system_prompt_level = level
             self._agent.system_prompt = self._agent._build_system_prompt()
 
-    async def run(self, prompt: str, plan_mode: Optional[bool] = None) -> AgentResponse:
+    async def run(
+        self, prompt: str, plan_mode: Optional[bool] = None, *, images=None
+    ) -> AgentResponse:
         """Run a task in Pure Mode."""
+        if images and (self._harness_spec is not None or self._agent is None):
+            raise ValueError(
+                "This runtime does not support composer image input. Use built-in coding or direct Chat."
+            )
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
@@ -633,7 +639,8 @@ class PureMode:
         if plan_mode is not None:
             self._agent.config.plan_mode = plan_mode
         try:
-            response = await self._agent.run(prompt)
+            image_kwargs = {"images": images} if images else {}
+            response = await self._agent.run(prompt, **image_kwargs)
         finally:
             self._agent.config.plan_mode = previous_plan_mode
 
@@ -656,11 +663,15 @@ class PureMode:
             return False
         return bool(agent.steer(message))
 
-    async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
+    async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None, *, images=None):
         """Run a task with streaming output."""
         # Never let a provider/runtime without usage metadata display figures
         # left over from the previous turn.
         self._last_stats = {}
+        if images and (self._harness_spec is not None or self._agent is None):
+            raise ValueError(
+                "This runtime does not support composer image input. Use built-in coding or direct Chat."
+            )
         self._cancel_requested = False
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
@@ -735,7 +746,8 @@ class PureMode:
         if plan_mode is not None:
             self._agent.config.plan_mode = plan_mode
         try:
-            async for chunk in self._agent.run_streaming(prompt):
+            image_kwargs = {"images": images} if images else {}
+            async for chunk in self._agent.run_streaming(prompt, **image_kwargs):
                 if self._cancel_requested:
                     break
                 if self.on_stream_chunk:

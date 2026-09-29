@@ -15,6 +15,11 @@ from superqode.sidebar import (
 class SidebarMixin:
     """Sidebar panels, resize, and Ctrl+1..6 / toggle sidebar actions."""
 
+    def on_collapsible_sidebar_dismiss(self, event: CollapsibleSidebar.Dismiss) -> None:
+        event.stop()
+        if self.sidebar_visible:
+            self.action_toggle_sidebar()
+
     def _init_sidebar_resize(self):
         """Initialize sidebar resize handling."""
         try:
@@ -164,11 +169,12 @@ class SidebarMixin:
         if self.sidebar_visible:
             sidebar.add_class("visible")
             divider.remove_class("-hidden")
-            sidebar.focus_tree()
+            sidebar.focus_current_view()
         else:
             sidebar.remove_class("visible")
             divider.add_class("-hidden")
             # Return focus to input when sidebar is closed
+            self.query_one("#prompt-input").focus()
             self.set_timer(0.1, self._ensure_input_focus)
 
     def action_shrink_sidebar(self):
@@ -189,6 +195,7 @@ class SidebarMixin:
         sidebar.current_view = "files"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_tree()
 
     def action_sidebar_harness(self):
         """Switch sidebar to harness overview."""
@@ -197,6 +204,7 @@ class SidebarMixin:
         self._refresh_harness_panel()
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_current_view()
 
     def action_sidebar_agent(self):
         """Switch sidebar to agent panel."""
@@ -204,6 +212,7 @@ class SidebarMixin:
         sidebar.current_view = "agent"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_current_view()
 
     def action_sidebar_context(self):
         """Switch sidebar to context panel."""
@@ -211,6 +220,7 @@ class SidebarMixin:
         sidebar.current_view = "context"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_current_view()
 
     def action_sidebar_terminal(self):
         """Switch sidebar to terminal panel."""
@@ -225,6 +235,7 @@ class SidebarMixin:
         sidebar.current_view = "diff"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_current_view()
 
     def action_sidebar_history(self):
         """Switch sidebar to history panel."""
@@ -232,6 +243,7 @@ class SidebarMixin:
         sidebar.current_view = "history"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+        sidebar.focus_current_view()
 
     @on(CollapsibleSidebar.FileOpened)
     def on_sidebar_file_opened(self, event: CollapsibleSidebar.FileOpened) -> None:

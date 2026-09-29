@@ -16,7 +16,7 @@ class Message:
     """A chat message."""
 
     role: str  # "system", "user", "assistant", "tool"
-    content: str
+    content: str | list[dict]
     name: Optional[str] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_call_id: Optional[str] = None

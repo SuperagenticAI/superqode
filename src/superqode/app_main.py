@@ -214,7 +214,7 @@ class SuperQodeApp(
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
-        Binding("ctrl+k", "command_palette", "Commands", show=True),
+        Binding("ctrl+k", "command_palette", "Commands", show=True, priority=True),
         Binding("ctrl+r", "rewind", "Rewind", show=True),
         Binding("ctrl+f", "search_transcript", "Search", show=True, priority=True),
         Binding("f1", "show_help", "Help", show=True),
@@ -391,6 +391,8 @@ class SuperQodeApp(
         self._permission_pulse_timer: Optional[Timer] = None  # Timer for permission pulse animation
         self._permission_pending = False  # Track if permission is pending
         self._attached_refs: list[str] = []
+        self._staged_images = {}
+        self._current_images = []
         self._prompt_completion_candidates: list[PromptCompletionCandidate] = []
         self._prompt_completion_index = 0
         self._prompt_completion_visible = False
@@ -440,6 +442,8 @@ class SuperQodeApp(
                             # No restrict parameter - allow all characters including colon
                         )
                     yield Static("", id="prompt-completions")
+                    yield Static("", id="attachment-bar")
+                    yield Static("", id="dictation-guide")
                     yield Static("", id="queued-input")
                     yield HintsBar(id="hints")
 
@@ -545,8 +549,24 @@ class SuperQodeApp(
         "rewind",
     }
 
+    def _sidebar_has_focus(self) -> bool:
+        if not self.screen_stack or not self.sidebar_visible:
+            return False
+        focused = self.focused
+        return bool(
+            self.sidebar_visible
+            and focused is not None
+            and any(isinstance(node, CollapsibleSidebar) for node in focused.ancestors_with_self)
+        )
+
     def _focus_input_on_ready(self):
         """Focus the input box once widgets are ready."""
+        if len(self.screen_stack) != 1:
+            return
+        if self.query("CommandPalette.show-palette"):
+            return
+        if self._sidebar_has_focus():
+            return
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             # Ensure input is ready to receive all characters
@@ -560,6 +580,12 @@ class SuperQodeApp(
 
     def _ensure_input_focus(self):
         """Ensure the input box has focus - called after operations."""
+        if len(self.screen_stack) != 1:
+            return
+        if self.query("CommandPalette.show-palette"):
+            return
+        if self._sidebar_has_focus():
+            return
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             if not input_widget.has_focus:
@@ -1188,22 +1214,15 @@ class SuperQodeApp(
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"}
 
     def on_paste(self, event) -> None:
-        """Auto-attach when an image file path is pasted into the terminal."""
-        text = (getattr(event, "text", "") or "").strip().strip("'\"")
-        if text and "\n" not in text and self._is_image_path(text):
-            try:
-                log = self.query_one("#log", ConversationLog)
-            except Exception:
-                return
-            path = Path(text).expanduser()
-            if not path.is_absolute():
-                path = Path.cwd() / path
-            self._stage_image_attachment(path, log, source="pasted path")
-            try:
-                event.stop()
-                event.prevent_default()
-            except Exception:
-                pass
+        """Stage composer image drops before insertion, once per paste event."""
+        if getattr(event, "_image_paste_checked", False):
+            return
+        event._image_paste_checked = True
+        if not isinstance(self.focused, SelectionAwareInput):
+            return
+        if self._stage_pasted_images(event.text):
+            event.stop()
+            event.prevent_default()
 
     # Runtimes that are self-contained (own model + auth) and can be used in the
     # TUI without a separate :connect step.

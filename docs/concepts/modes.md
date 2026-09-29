@@ -279,6 +279,10 @@ its registry id as well as its short alias:
 :connect agent-closed-harnesses
 ```
 
+The Open harnesses menu also includes **Browse ACP agents →**
+(also reachable through `:connect open-browse-acp`). This opens the [ACP agent picker](../providers/acp.md),
+where each agent owns its authentication, model, and tool loop.
+
 Open is OSI-licensed harnesses, including integrations that accept a key or
 local model and setup-card rows for independently run tools. Closed is
 proprietary harnesses on that vendor's key. A setup card is discoverable and

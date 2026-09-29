@@ -31,6 +31,7 @@ def _isolate_mounted_app_startup(monkeypatch):
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     monkeypatch.setattr(SuperQodeApp, "_prewarm_litellm", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_models_dev_refresh", lambda self: None)
+    monkeypatch.setattr(SuperQodeApp, "_start_acp_registry_refresh", lambda self: None)
 
 
 async def _settle(pilot, frames: int = 6) -> None:
@@ -1342,7 +1343,8 @@ async def test_completed_plan_opens_branded_interactive_review_panel(monkeypatch
         assert ran == ["plan-approve"]
 
 
-async def test_plan_review_alt_shortcuts_are_scoped_to_ready_plan(monkeypatch):
+@pytest.mark.parametrize("focus_prompt", [False, True])
+async def test_plan_review_alt_shortcuts_are_scoped_to_ready_plan(monkeypatch, focus_prompt):
     app = SuperQodeApp()
     handled = []
     monkeypatch.setattr(
@@ -1354,9 +1356,38 @@ async def test_plan_review_alt_shortcuts_are_scoped_to_ready_plan(monkeypatch):
         app._pending_plan_request = "Refactor renderer"
         app._pending_plan_content = "1. Inspect\n2. Refactor\n3. Test"
         app._pending_plan_status = "pending"
+        if focus_prompt:
+            app.query_one("#prompt-input", SelectionAwareInput).focus()
+            await pilot.pause()
         await pilot.press("alt+a", "alt+e", "alt+r")
 
         assert handled == ["approve", "edit", "reject"]
+
+
+@pytest.mark.parametrize(
+    ("status", "content"),
+    [("", ""), ("pending", ""), ("pending", "  \n"), ("approved", "1. Refactor")],
+)
+async def test_alt_a_returns_to_agent_without_ready_plan(monkeypatch, status, content):
+    app = SuperQodeApp()
+    handled = []
+    monkeypatch.setattr(
+        SuperQodeApp, "action_return_to_agent", lambda self: handled.append("agent")
+    )
+    monkeypatch.setattr(
+        SuperQodeApp, "_handle_plan", lambda self, action, log: handled.append(action)
+    )
+    async with app.run_test(size=(90, 28)) as pilot:
+        app._pending_plan_status = status
+        app._pending_plan_content = content
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.load_text("Keep my draft")
+        prompt.focus()
+        await pilot.pause()
+        await pilot.press("alt+a")
+
+        assert handled == ["agent"]
+        assert prompt.value == "Keep my draft"
 
 
 async def test_successful_edit_tool_marks_file_in_sidebar_session(tmp_path, monkeypatch):

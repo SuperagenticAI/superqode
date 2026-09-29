@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import subprocess
 import asyncio
+import os
 from pathlib import Path
 from typing import Optional, Callable, List
 from dataclasses import dataclass
@@ -27,10 +28,12 @@ from textual.widgets.tree import TreeNode
 from textual.widgets._directory_tree import DirEntry
 from textual.reactive import reactive
 from textual.message import Message
-from textual import on, work
+from textual import events, on, work
 from textual.binding import Binding
 
 from rich.text import Text
+from rich.style import Style
+from rich.cells import cell_len
 from rich.syntax import Syntax
 from rich.panel import Panel
 from rich.box import ROUNDED
@@ -584,6 +587,7 @@ class FilePreview(Container):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._preview_generation = 0
+        self._preview_line = 1
 
     def compose(self) -> ComposeResult:
         """Compose the preview layout."""
@@ -609,19 +613,39 @@ class FilePreview(Container):
             self.query_one("#preview-syntax", Static).update(self._render_empty())
         else:
             self.query_one("#preview-syntax", Static).update("Loading preview…")
-            self._load_preview(path, self._preview_generation)
+            self._preview_worker = self._load_preview(
+                path, self._preview_generation, self._preview_line
+            )
 
     @work(thread=True, exclusive=True, group="file-preview")
-    def _load_preview(self, path: Path, generation: int) -> None:
+    def _load_preview(self, path: Path, generation: int, line_no: int = 1) -> None:
         from textual.worker import get_current_worker
 
-        content = self._render_file_content(path)
+        content = self._render_file_content(path, line_no)
         if not get_current_worker().is_cancelled:
             self.app.call_from_thread(self._show_preview, generation, content)
 
     def _show_preview(self, generation: int, content: Text | Syntax) -> None:
         if self.is_mounted and generation == self._preview_generation:
             self.query_one("#preview-syntax", Static).update(content)
+            if isinstance(content, Syntax) and self._preview_line > 1:
+                self.call_after_refresh(self._reveal_preview_line, generation, content)
+
+    def _reveal_preview_line(self, generation: int, content: Syntax) -> None:
+        if generation != self._preview_generation or not self.is_mounted:
+            return
+        widget = self.query_one("#preview-syntax", Static)
+        # Measure with Rich's own wrapping so narrow previews retain the target
+        # even when earlier source lines occupy multiple terminal rows.
+        gutter = len(str(content.start_line + content.code.count("\n"))) + 3
+        width = max(1, widget.content_size.width - gutter)
+        rows = sum(
+            max(1, len(Text(line.expandtabs(content.tab_size)).wrap(self.app.console, width)))
+            for line in content.code.splitlines()[: self._preview_line - 1]
+        )
+        self.query_one("#preview-content", FilePreviewScroll).scroll_to(
+            y=max(0, rows - 2), animate=False
+        )
 
     def _render_header(self) -> Text:
         """Render the header with file info."""
@@ -695,7 +719,7 @@ class FilePreview(Container):
         t.append("Click files to preview\n", style="#71717a")
         return t
 
-    def _render_file_content(self, path: Path) -> Text | Syntax:
+    def _render_file_content(self, path: Path, line_no: int = 1) -> Text | Syntax:
         """Render file content with syntax highlighting."""
         try:
             if not path.is_file():
@@ -720,6 +744,7 @@ class FilePreview(Container):
                 line_numbers=True,
                 word_wrap=True,
                 background_color=_brand_code_bg(),
+                highlight_lines={line_no} if line_no > 1 else set(),
             )
 
             return syntax
@@ -748,8 +773,9 @@ class FilePreview(Container):
             size /= 1024
         return f"{size:.1f} TB"
 
-    def set_file(self, path: Path) -> None:
+    def set_file(self, path: Path, *, line_no: int = 1) -> None:
         """Set the file to preview."""
+        self._preview_line = max(1, line_no)
         if self.current_file == path:
             self.watch_current_file(path)
         else:
@@ -1375,6 +1401,9 @@ class FileSearchResults(Container):
         except Exception:
             pass
 
+    def on_resize(self, event: events.Resize) -> None:
+        self.watch_selected_index(self.selected_index)
+
     def _render_results(self) -> Text:
         """Render search results."""
         t = Text()
@@ -1383,7 +1412,10 @@ class FileSearchResults(Container):
             t.append("  No matches found", style="italic #71717a")
             return t
 
-        for i, path in enumerate(self.results[:10]):
+        start = max(0, self.selected_index - 9)
+        for i in range(start, min(start + 10, len(self.results))):
+            path = self.results[i]
+            row_start = len(t)
             # Selection indicator
             if i == self.selected_index:
                 t.append("▸ ", style="bold #a855f7")
@@ -1395,26 +1427,44 @@ class FileSearchResults(Container):
             t.append(f"{icon} ", style=color)
 
             # Path (relative, truncated)
-            rel_path = str(path)[-45:] if len(str(path)) > 45 else str(path)
-            if len(str(path)) > 45:
-                rel_path = "..." + rel_path
+            root = getattr(self.parent, "root_path", None)
+            rel_path = (
+                str(path.relative_to(root)) if root and path.is_relative_to(root) else str(path)
+            )
+            available = max(8, self.size.width - 6)
+            if cell_len(rel_path) > available:
+                rel_path = "…" + rel_path[-(available - 1) :]
+            label = Text(rel_path)
+            label.truncate(available, overflow="ellipsis")
+            rel_path = label.plain
 
             if i == self.selected_index:
                 t.append(rel_path, style="bold white")
             else:
                 t.append(rel_path, style="#a1a1aa")
 
+            t.stylize(Style(meta={"file_index": i}), row_start, len(t))
             t.append("\n")
 
         if len(self.results) > 10:
-            t.append(f"  +{len(self.results) - 10} more results", style="#71717a")
+            t.append(
+                f"  {start + 1}–{min(start + 10, len(self.results))} of {len(self.results)} matches",
+                style="#71717a",
+            )
 
         return t
+
+    def on_click(self, event: events.Click) -> None:
+        index = event.style.meta.get("file_index")
+        if isinstance(index, int) and 0 <= index < len(self.results):
+            event.stop()
+            self.selected_index = index
+            self.post_message(self.FileSelected(self.results[index]))
 
     def move_selection(self, delta: int) -> None:
         """Move selection up or down."""
         if self.results:
-            new_index = (self.selected_index + delta) % min(len(self.results), 10)
+            new_index = max(0, min(self.selected_index + delta, len(self.results) - 1))
             self.selected_index = new_index
 
     def get_selected(self) -> Optional[Path]:
@@ -1448,10 +1498,10 @@ class FileSearch(Container):
     """
 
     BINDINGS = [
-        Binding("escape", "close_search", "Close", show=False),
-        Binding("up", "move_up", "Up", show=False),
-        Binding("down", "move_down", "Down", show=False),
-        Binding("enter", "select_file", "Select", show=False),
+        Binding("escape", "close_search", "Close", show=False, priority=True),
+        Binding("up", "move_up", "Up", show=False, priority=True),
+        Binding("down", "move_down", "Down", show=False, priority=True),
+        Binding("enter", "select_file", "Select", show=False, priority=True),
     ]
 
     class FileSelected(Message):
@@ -1471,15 +1521,18 @@ class FileSearch(Container):
         self.root_path = root_path
         self._all_files: List[Path] = []
         self._files_loaded = False
+        self._files_loading = False
 
     def compose(self) -> ComposeResult:
         """Compose the search widget."""
         yield Input(placeholder="🔍 Search files...", id="search-input")
         yield FileSearchResults(id="search-results")
 
-    def on_mount(self) -> None:
-        """Load files on mount."""
-        self._load_files()
+    def start_search(self) -> None:
+        """Index only when search is opened, not during TUI startup."""
+        if not self._files_loaded and not self._files_loading:
+            self._files_loading = True
+            self._file_worker = self._load_files()
 
     #: Directory names never worth walking into for the file search.
     _SKIP_DIRS = frozenset({"node_modules", "__pycache__", "venv", ".venv"})
@@ -1510,6 +1563,8 @@ class FileSearch(Container):
                     name = entry.name
                     if name.startswith(".") or name in self._SKIP_DIRS:
                         continue
+                    if entry.is_symlink():
+                        continue
                     if entry.is_dir():
                         stack.append(entry)
                         continue
@@ -1521,11 +1576,17 @@ class FileSearch(Container):
 
         self._all_files = files
         self._files_loaded = True
+        self._files_loading = False
+        if getattr(self, "is_mounted", False):
+            self.app.call_from_thread(self._refresh_query)
 
     @on(Input.Changed, "#search-input")
     def on_search_changed(self, event: Input.Changed) -> None:
         """Handle search input changes."""
-        query = event.value.lower().strip()
+        self._refresh_query()
+
+    def _refresh_query(self) -> None:
+        query = self.query_one("#search-input", Input).value.lower().strip()
         results_widget = self.query_one("#search-results", FileSearchResults)
 
         if not query:
@@ -1582,6 +1643,12 @@ class FileSearch(Container):
             self.post_message(self.FileSelected(path))
             self.action_close_search()
 
+    @on(FileSearchResults.FileSelected)
+    def on_result_selected(self, event: FileSearchResults.FileSelected) -> None:
+        event.stop()
+        self.post_message(self.FileSelected(event.path))
+        self.action_close_search()
+
 
 # ============================================================================
 # CODEBASE SEARCH (Content Search / Grep)
@@ -1599,7 +1666,26 @@ class CodeSearchResult:
     match_end: int
 
 
-def search_codebase(root_path: Path, query: str, max_results: int = 100) -> List[CodeSearchResult]:
+def _walk_code_files(root_path: Path):
+    """Prune ignored trees before descending, without following symlink loops."""
+    ignored = {"node_modules", "__pycache__", "venv", "dist", "build"}
+    dotfiles = {".env", ".gitignore", ".dockerignore"}
+    for directory, dirs, files in os.walk(root_path, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if not name.startswith(".") and name not in ignored)
+        for name in sorted(files):
+            if not name.startswith(".") or name in dotfiles:
+                path = Path(directory) / name
+                if not path.is_symlink() and path.is_file():
+                    yield path
+
+
+def search_codebase(
+    root_path: Path,
+    query: str,
+    max_results: int = 100,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> List[CodeSearchResult]:
     """Search through file contents (grep-like)."""
     results = []
     query_lower = query.lower()
@@ -1651,22 +1737,12 @@ def search_codebase(root_path: Path, query: str, max_results: int = 100) -> List
     }
 
     try:
-        for path in root_path.rglob("*"):
-            if not path.is_file():
-                continue
-
-            # Skip hidden and ignored directories
-            parts = path.parts
-            if any(
-                p.startswith(".")
-                and p not in {".env", ".gitignore", ".dockerignore"}
-                or p in {"node_modules", "__pycache__", "venv", ".venv", "dist", "build"}
-                for p in parts
-            ):
-                continue
+        for path in _walk_code_files(root_path):
+            if cancelled and cancelled():
+                return results
 
             # Only search code files
-            if path.suffix.lower() not in code_extensions:
+            if path.suffix.lower() not in code_extensions and path.name not in code_extensions:
                 continue
 
             # Skip large files
@@ -1680,6 +1756,8 @@ def search_codebase(root_path: Path, query: str, max_results: int = 100) -> List
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
                     for line_no, line in enumerate(f, 1):
+                        if cancelled and cancelled():
+                            return results
                         line_lower = line.lower()
                         idx = line_lower.find(query_lower)
                         if idx != -1:
@@ -1749,6 +1827,9 @@ class CodeSearchResults(Container):
         except Exception:
             pass
 
+    def on_resize(self, event: events.Resize) -> None:
+        self.watch_selected_index(self.selected_index)
+
     def _render_results(self) -> Text:
         """Render search results."""
         t = Text()
@@ -1761,7 +1842,9 @@ class CodeSearchResults(Container):
         current_file = None
         display_count = 0
 
-        for i, result in enumerate(self.results[:30]):  # Show max 30 results
+        start = max(0, self.selected_index - 5)
+        for i in range(start, min(start + 6, len(self.results))):
+            result = self.results[i]
             # File header
             if result.path != current_file:
                 if current_file is not None:
@@ -1770,14 +1853,21 @@ class CodeSearchResults(Container):
 
                 # File icon and path
                 icon, color = get_file_icon(result.path)
+                root = getattr(self.parent, "root_path", None)
                 rel_path = (
-                    str(result.path)[-50:] if len(str(result.path)) > 50 else str(result.path)
+                    str(result.path.relative_to(root))
+                    if root and result.path.is_relative_to(root)
+                    else str(result.path)
                 )
-                if len(str(result.path)) > 50:
-                    rel_path = "..." + rel_path
+                available = max(8, self.size.width - 5)
+                if cell_len(rel_path) > available:
+                    rel_path = "…" + rel_path[-(available - 1) :]
+                label = Text(rel_path)
+                label.truncate(available, overflow="ellipsis")
                 t.append(f"  {icon} ", style=color)
-                t.append(rel_path + "\n", style="bold #a1a1aa")
+                t.append(label.plain + "\n", style="bold #a1a1aa")
 
+            row_start = len(t)
             # Result line
             if i == self.selected_index:
                 t.append("  ▸ ", style="bold #a855f7")
@@ -1800,18 +1890,32 @@ class CodeSearchResults(Container):
             else:
                 t.append(line, style="#a1a1aa")
 
+            row = t[row_start:]
+            row.truncate(max(8, self.size.width), overflow="ellipsis")
+            t = t[:row_start] + row
+            t.stylize(Style(meta={"code_index": i}), row_start, len(t))
             t.append("\n", style="")
             display_count += 1
 
-        if len(self.results) > 30:
-            t.append(f"\n  +{len(self.results) - 30} more results", style="#71717a")
+        if len(self.results) > 6:
+            t.append(
+                f"\n  {start + 1}–{min(start + 6, len(self.results))} of {len(self.results)} matches",
+                style="#71717a",
+            )
 
         return t
+
+    def on_click(self, event: events.Click) -> None:
+        index = event.style.meta.get("code_index")
+        if isinstance(index, int) and 0 <= index < len(self.results):
+            event.stop()
+            self.selected_index = index
+            self.post_message(self.ResultSelected(self.results[index]))
 
     def move_selection(self, delta: int) -> None:
         """Move selection up or down."""
         if self.results:
-            max_idx = min(len(self.results), 30) - 1
+            max_idx = len(self.results) - 1
             new_index = max(0, min(self.selected_index + delta, max_idx))
             self.selected_index = new_index
 
@@ -1852,10 +1956,10 @@ class CodebaseSearch(Container):
     """
 
     BINDINGS = [
-        Binding("escape", "close_search", "Close", show=False),
-        Binding("up", "move_up", "Up", show=False),
-        Binding("down", "move_down", "Down", show=False),
-        Binding("enter", "select_result", "Select", show=False),
+        Binding("escape", "close_search", "Close", show=False, priority=True),
+        Binding("up", "move_up", "Up", show=False, priority=True),
+        Binding("down", "move_down", "Down", show=False, priority=True),
+        Binding("enter", "select_result", "Select", show=False, priority=True),
     ]
 
     _searching: bool = False
@@ -1878,6 +1982,7 @@ class CodebaseSearch(Container):
         self.root_path = root_path
         self._searching = False
         self._last_query = ""
+        self._search_timer = None
 
     def compose(self) -> ComposeResult:
         """Compose the search widget."""
@@ -1889,8 +1994,15 @@ class CodebaseSearch(Container):
     def on_search_changed(self, event: Input.Changed) -> None:
         """Handle search input changes."""
         query = event.value.strip()
+        if query == self._last_query:
+            return
+        if self._search_timer is not None:
+            self._search_timer.stop()
+            self._search_timer = None
 
         if not query or len(query) < 2:
+            self._last_query = ""
+            self._searching = False
             self.query_one("#code-search-results", CodeSearchResults).results = []
             self.query_one("#code-search-results", CodeSearchResults).remove_class("visible")
             self.query_one("#search-status", Static).update("")
@@ -1898,17 +2010,29 @@ class CodebaseSearch(Container):
 
         if query != self._last_query:
             self._last_query = query
-            self._do_search(query)
+            results = self.query_one("#code-search-results", CodeSearchResults)
+            results.results = []
+            results.remove_class("visible")
+            self._search_timer = self.set_timer(0.15, lambda: self._begin_search(query))
 
-    @work(thread=True)
+    def _begin_search(self, query: str) -> None:
+        self._search_timer = None
+        if query != self._last_query:
+            return
+        self._searching = True
+        self._update_status("Searching...")
+        self._do_search(query)
+
+    @work(thread=True, exclusive=True, group="code-search")
     def _do_search(self, query: str) -> None:
         """Perform search in background."""
-        self._searching = True
-        self.app.call_from_thread(self._update_status, "Searching...")
+        from textual.worker import get_current_worker
 
-        results = search_codebase(self.root_path, query)
+        worker = get_current_worker()
+        results = search_codebase(self.root_path, query, cancelled=lambda: worker.is_cancelled)
 
-        self.app.call_from_thread(self._show_results, results)
+        if not worker.is_cancelled:
+            self.app.call_from_thread(self._show_results, query, results)
 
     def _update_status(self, status: str) -> None:
         """Update status text."""
@@ -1917,8 +2041,10 @@ class CodebaseSearch(Container):
         except Exception:
             pass
 
-    def _show_results(self, results: List[CodeSearchResult]) -> None:
+    def _show_results(self, query: str, results: List[CodeSearchResult]) -> None:
         """Show search results."""
+        if query != self._last_query:
+            return
         self._searching = False
         try:
             results_widget = self.query_one("#code-search-results", CodeSearchResults)
@@ -1935,11 +2061,15 @@ class CodebaseSearch(Container):
 
     def action_close_search(self) -> None:
         """Close the search."""
+        if self._search_timer is not None:
+            self._search_timer.stop()
+            self._search_timer = None
+        self._last_query = ""
+        self._searching = False
         self.query_one("#code-search-input", Input).value = ""
         self.query_one("#code-search-results", CodeSearchResults).results = []
         self.query_one("#code-search-results", CodeSearchResults).remove_class("visible")
         self.query_one("#search-status", Static).update("")
-        self._last_query = ""
         self.post_message(self.SearchClosed())
 
     def action_move_up(self) -> None:
@@ -1957,6 +2087,12 @@ class CodebaseSearch(Container):
         if result:
             self.post_message(self.ResultSelected(result.path, result.line_no))
             self.action_close_search()
+
+    @on(CodeSearchResults.ResultSelected)
+    def on_result_selected(self, event: CodeSearchResults.ResultSelected) -> None:
+        event.stop()
+        self.post_message(self.ResultSelected(event.result.path, event.result.line_no))
+        self.action_close_search()
 
 
 # ============================================================================
@@ -2540,6 +2676,16 @@ class CollapsibleSidebar(Container):
         background: #000000;
     }
 
+    CollapsibleSidebar #file-tree {
+        height: 1fr;
+    }
+
+    CollapsibleSidebar #file-navigation-hints {
+        height: 2;
+        padding: 0 1;
+        color: $text-muted;
+    }
+
     CollapsibleSidebar #harness-view {
         height: 100%;
         width: 100%;
@@ -2689,6 +2835,8 @@ class CollapsibleSidebar(Container):
 
     """
 
+    can_focus = True
+
     BINDINGS = [
         Binding("ctrl+f", "toggle_search", "Search", show=True),
         Binding("escape", "dismiss", "Close", show=False),
@@ -2775,6 +2923,9 @@ class CollapsibleSidebar(Container):
             # Files view (default)
             with Container(id="files-view"):
                 yield ColorfulDirectoryTree(self.root_path, id="file-tree")
+                yield Static(
+                    "↑↓ browse · Enter open\nCtrl+F find · Esc back", id="file-navigation-hints"
+                )
 
             # Code view (hidden by default)
             with Container(id="code-view"):
@@ -2902,7 +3053,9 @@ class CollapsibleSidebar(Container):
                 pass
 
             # View-specific actions
-            if view == "changes":
+            if view == "files":
+                self.query_one("#file-tree", ColorfulDirectoryTree).focus()
+            elif view == "changes":
                 # Refresh changes when switching to changes tab
                 try:
                     self.query_one("#git-changes", GitChangesPanel).refresh_changes()
@@ -2939,9 +3092,10 @@ class CollapsibleSidebar(Container):
         search = self.query_one("#file-search", FileSearch)
         if search.has_class("-hidden"):
             search.remove_class("-hidden")
+            search.start_search()
             search.query_one("#search-input", Input).focus()
         else:
-            search.add_class("-hidden")
+            search.action_close_search()
 
     def action_dismiss(self) -> None:
         """Dismiss the sidebar."""
@@ -3083,8 +3237,7 @@ class CollapsibleSidebar(Container):
         """Handle search close - hide search widget."""
         event.stop()
         self.query_one("#file-search", FileSearch).add_class("-hidden")
-        if self.current_view == "files":
-            self.query_one("#file-tree", ColorfulDirectoryTree).focus()
+        self.focus_current_view()
 
     @on(CodebaseSearch.ResultSelected)
     def on_codebase_search_result_selected(self, event: CodebaseSearch.ResultSelected) -> None:
@@ -3095,15 +3248,15 @@ class CollapsibleSidebar(Container):
 
         # Set file in preview and switch to code view
         preview = self.query_one("#file-preview", FilePreview)
-        preview.set_file(path)
+        preview.set_file(path, line_no=event.line_no)
         self.current_view = "code"
 
     @on(CodebaseSearch.SearchClosed)
     def on_codebase_search_closed(self, event: CodebaseSearch.SearchClosed) -> None:
         """Handle codebase search close."""
         event.stop()
-        # Stay on search view but could switch to files
-        pass
+        if self.current_view == "search":
+            self.focus_tree()
 
     @on(FilePreview.EditRequested)
     def on_edit_requested(self, event: FilePreview.EditRequested) -> None:
@@ -3146,3 +3299,20 @@ class CollapsibleSidebar(Container):
         """Focus the file tree."""
         self.current_view = "files"
         self.query_one("#file-tree", ColorfulDirectoryTree).focus()
+
+    def focus_current_view(self) -> None:
+        """Restore focus without throwing away the selected tab or tree cursor."""
+        search = self.query_one("#file-search", FileSearch)
+        if not search.has_class("-hidden"):
+            search.start_search()
+            search.query_one("#search-input", Input).focus()
+            return
+        targets = {
+            "files": "#file-tree",
+            "code": "#preview-content",
+            "search": "#code-search-input",
+            "changes": "#git-changes",
+        }
+        matches = self.query(targets.get(self.current_view, f"#{self.current_view}-panel"))
+        target = matches.first() if matches else self
+        (target if target.can_focus else self).focus()

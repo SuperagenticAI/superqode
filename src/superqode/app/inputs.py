@@ -50,6 +50,13 @@ class SelectionAwareInput(TextArea):
         self.load_text("")
         self._resize_to_content()
 
+    def _on_paste(self, event: events.Paste) -> None:
+        # Textual dispatches inherited handlers automatically. Stop its default
+        # insertion only when the composer successfully stages a path-only drop.
+        handler = getattr(self.app, "on_paste", None)
+        if handler is not None:
+            handler(event)
+
     def __init__(self, *args, suggester=None, **kwargs) -> None:
         # TextArea doesn't support Input's suggester API. Accept it so the prompt
         # can keep the existing construction path while using soft wrapping.
@@ -204,6 +211,12 @@ class SelectionAwareInput(TextArea):
             return
 
         if event.key == "alt+a":
+            # Let the app-level plan handler approve a ready plan before this
+            # composer shortcut can intercept the event for workspace navigation.
+            if getattr(app, "_pending_plan_status", "") == "pending" and bool(
+                getattr(app, "_pending_plan_content", "").strip()
+            ):
+                return
             if hasattr(app, "action_return_to_agent"):
                 app.action_return_to_agent()
                 event.stop()

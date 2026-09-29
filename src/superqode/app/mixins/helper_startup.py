@@ -114,7 +114,7 @@ class HelperStartupMixin:
 
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
-        return [
+        commands = [
             PaletteCommand(
                 "start_coding",
                 "Start Coding",
@@ -447,14 +447,6 @@ class HelperStartupMixin:
                 "session",
             ),
             PaletteCommand(
-                "context",
-                "Context",
-                "Show current mode, role, provider, model, and cwd",
-                "📋",
-                ":context",
-                "harness",
-            ),
-            PaletteCommand(
                 "attach",
                 "Attach Reference",
                 "Insert a file path or URL reference into the next prompt",
@@ -540,7 +532,7 @@ class HelperStartupMixin:
             ),
             PaletteCommand(
                 "workspace",
-                "Search Workspace",
+                "Manage Workspaces",
                 "Register repos for fast multi-repo (--all-repos) search",
                 "📁",
                 ":workspace list",
@@ -556,10 +548,60 @@ class HelperStartupMixin:
             ),
             PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
             PaletteCommand(
+                "theme",
+                "Change Theme",
+                "Choose a SuperQode terminal theme",
+                "◈",
+                ":theme",
+                "system",
+            ),
+            PaletteCommand(
                 "clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"
             ),
             PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
+            PaletteCommand(
+                "image",
+                "Attach Image",
+                "Attach a screenshot from clipboard or path",
+                "◈",
+                ":paste",
+                "view",
+            ),
+            PaletteCommand(
+                "voice",
+                "OS Dictation",
+                "Dictate into the composer, then edit and send",
+                "◉",
+                ":voice",
+                "view",
+            ),
+            PaletteCommand(
+                "history_search",
+                "Search Prompt History",
+                "Find and reuse an earlier prompt",
+                "↩",
+                ":history search",
+                "session",
+            ),
         ]
+        for command in commands:
+            if command.shortcut.startswith((":", "/")):
+                command.command = command.shortcut.rstrip()
+            command.prefill = command.id in {
+                "resume",
+                "fork",
+                "find",
+                "search",
+                "attach",
+                "prompt_file",
+                "harness_events",
+                "harness_evidence",
+                "harness_replay",
+                "harness_fork",
+            }
+        next(command for command in commands if command.id == "clear").command = ":clear"
+        next(command for command in commands if command.id == "quit").command = ":quit"
+        return commands
 
     def _init_undo_manager(self):
         """Initialize the undo manager for checkpoint/restore."""

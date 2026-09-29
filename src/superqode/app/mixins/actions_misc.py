@@ -36,6 +36,10 @@ class MiscActionsMixin:
         self._welcome_active = False
         log = self.query_one("#log", ConversationLog)
         log.redraw_conversation()
+        try:
+            self.query_one("#prompt-input", SelectionAwareInput).focus()
+        except Exception:
+            pass
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_show_help(self):
@@ -90,6 +94,40 @@ class MiscActionsMixin:
                     pass
 
         self.push_screen(HistorySearchModal(entries=entries), callback=_on_dismissed)
+
+    def action_remove_attachment(self, index: int) -> None:
+        self._attach_cmd(f"remove {index}", self.query_one("#log", ConversationLog))
+        self._ensure_input_focus()
+
+    def action_voice_input(self) -> None:
+        """Keep OS dictation in the editable composer, with platform guidance."""
+        import sys
+        from rich.text import Text
+        from textual.widgets import Static
+        from superqode.app.constants import THEME
+
+        if getattr(self, "is_busy", False):
+            self.notify(
+                "Wait for the current run to finish before dictating.", title="OS Dictation"
+            )
+            return
+        if sys.platform == "darwin":
+            hint = "Use your Dictation shortcut · Enable in System Settings → Keyboard → Dictation"
+        elif sys.platform == "win32":
+            hint = "Press Win+H to start Windows voice typing"
+        else:
+            hint = "Use your desktop dictation tool to insert text into this terminal"
+        panel = self.query_one("#dictation-guide", Static)
+        text = Text("◉ OS Dictation  ", style=THEME["purple"])
+        text.append(hint, style=THEME["text"])
+        text.append(
+            "\nEdit your words, then Enter to send · :voice off to hide", style=THEME["muted"]
+        )
+        panel.update(text)
+        panel.add_class("visible")
+        if self._vim_enabled():
+            self._set_vim_state("insert")
+        self._ensure_input_focus()
 
     def action_open_editor(self):
         """Open external editor for composing message (Ctrl+E)."""
@@ -254,10 +292,31 @@ class MiscActionsMixin:
         """
         from superqode.app.inputs import SelectionAwareInput
 
+        from superqode.sidebar import CollapsibleSidebar
+
+        focused = getattr(self, "focused", None)
+        if focused is not None:
+            sidebar = next(
+                (
+                    node
+                    for node in focused.ancestors_with_self
+                    if isinstance(node, CollapsibleSidebar)
+                ),
+                None,
+            )
+            if sidebar is not None:
+                sidebar.action_toggle_search()
+                return
+
         try:
             prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
         except Exception:
             return
+        draft = prompt_input.value
+        if draft.strip() and not draft.startswith(":search "):
+            if not hasattr(self, "_draft_stash"):
+                self._draft_stash = []
+            self._draft_stash.append(draft)
         prompt_input.value = ":search "
         prompt_input.cursor_position = len(prompt_input.value)
         prompt_input.focus()

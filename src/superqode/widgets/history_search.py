@@ -19,6 +19,8 @@ from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from superqode.history import HistoryEntry
+from superqode.app.constants import THEME
+from superqode.utils.fuzzy import FuzzySearch
 
 try:
     from superqode.design_system import COLORS as SQ_COLORS
@@ -40,8 +42,8 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
     """Fuzzy/interactive search over prompt history."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("enter", "confirm", "Select", show=False),
+        Binding("escape", "cancel", "Cancel", priority=True),
+        Binding("enter", "confirm", "Select", show=False, priority=True),
     ]
 
     CSS = """
@@ -50,12 +52,13 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
     }
 
     HistorySearchModal > Vertical {
-        width: 82;
-        height: auto;
-        max-height: 85%;
+        width: 95%;
+        max-width: 82;
+        height: 85%;
+        max-height: 24;
         background: #0a0a0a;
         border: round #7c3aed;
-        padding: 1 2;
+        padding: 0 1;
     }
 
     HistorySearchModal .title {
@@ -84,8 +87,8 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
     }
 
     HistorySearchModal #history-list {
-        height: auto;
-        max-height: 14;
+        height: 1fr;
+        min-height: 1;
         background: #000000;
         border: solid #27272a;
     }
@@ -122,6 +125,7 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
                 clean_entries.append((text, ts, mode))
 
         self._all_entries = clean_entries
+        self._fuzzy = FuzzySearch()
         self._filtered_entries: list[tuple[str, Optional[float], str]] = list(clean_entries[:100])
 
     def compose(self) -> ComposeResult:
@@ -139,24 +143,44 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
             )
 
     def on_mount(self) -> None:
+        self.refresh_theme_colors()
         search_input = self.query_one("#history-search-input", Input)
         search_input.focus()
 
+    def refresh_theme_colors(self) -> None:
+        box = self.query_one(Vertical)
+        box.styles.background = THEME["surface2"]
+        box.styles.border = ("round", THEME["purple"])
+        for widget in self.query("Static, Input, OptionList"):
+            widget.styles.color = THEME["text"]
+            widget.styles.background = THEME["surface2"]
+        for widget in self.query("Input, OptionList"):
+            widget.styles.border = ("solid", THEME["purple"])
+
     def _build_options(self, query: str) -> list[Option]:
         query_lower = query.lower().strip()
-        filtered: list[tuple[str, Optional[float], str]] = []
-
-        for text, ts, mode in self._all_entries:
-            if not query_lower or query_lower in text.lower():
-                filtered.append((text, ts, mode))
-                if len(filtered) >= 50:
-                    break
+        items = [(" ".join(entry[0].splitlines()), entry) for entry in self._all_entries]
+        ranked = self._fuzzy.search_with_data(
+            query_lower, items, max_results=len(items), threshold=float("-inf")
+        )
+        ranked = [
+            (match, entry)
+            for match, entry in ranked
+            if not query_lower or len(match.positions) == len(query_lower)
+        ]
+        # Exact substrings beat scattered matches; recency breaks equal scores.
+        if query_lower:
+            ranked.sort(
+                key=lambda row: (query_lower in row[0].text.lower(), row[0].score), reverse=True
+            )
+        filtered = [entry for _, entry in ranked[:50]]
+        positions = {entry[0]: match.positions for match, entry in ranked[:50]}
 
         self._filtered_entries = filtered
         options: list[Option] = []
 
         if not filtered:
-            msg = Text("  No matching history", style="#71717a")
+            msg = Text("  No matching history", style=THEME["muted"])
             options.append(Option(msg, disabled=True))
             return options
 
@@ -166,24 +190,32 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
             if ts:
                 try:
                     dt = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
-                    opt_text.append(f"{dt} ", style="#71717a")
+                    opt_text.append(f"{dt} ", style=THEME["muted"])
                 except Exception:
-                    opt_text.append("• ", style="#71717a")
+                    opt_text.append("• ", style=THEME["muted"])
             else:
-                opt_text.append("• ", style="#71717a")
+                opt_text.append("• ", style=THEME["muted"])
 
             # Highlight query matches in text
             display_text = " ".join(text.splitlines())
-            if len(display_text) > 60:
-                display_text = display_text[:59] + "…"
-
-            if query_lower and query_lower in display_text.lower():
-                idx = display_text.lower().find(query_lower)
-                opt_text.append(display_text[:idx], style="#e4e4e7")
-                opt_text.append(display_text[idx : idx + len(query_lower)], style="bold #fbbf24")
-                opt_text.append(display_text[idx + len(query_lower) :], style="#e4e4e7")
-            else:
-                opt_text.append(display_text, style="#e4e4e7")
+            matched = positions.get(text, [])
+            exact = display_text.lower().find(query_lower) if query_lower else -1
+            if exact >= 0:
+                matched = list(range(exact, exact + len(query_lower)))
+            start = max(0, matched[0] - 12) if matched else 0
+            display = Text("…" if start else "", style=THEME["text"])
+            offset = len(display)
+            display.append(display_text[start : start + 60])
+            for position in matched:
+                if start <= position < start + 60:
+                    display.stylize(
+                        f"bold {THEME['purple']}",
+                        offset + position - start,
+                        offset + position - start + 1,
+                    )
+            if len(display_text) > start + 60:
+                display.append("…")
+            opt_text.append_text(display)
 
             options.append(Option(opt_text))
 
@@ -229,9 +261,9 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
 
     def action_confirm(self) -> None:
         """Confirm selection."""
+        if not self._filtered_entries:
+            return
         option_list = self.query_one("#history-list", OptionList)
-        search_input = self.query_one("#history-search-input", Input)
-
         if option_list.highlighted is not None and 0 <= option_list.highlighted < len(
             self._filtered_entries
         ):
@@ -239,13 +271,7 @@ class HistorySearchModal(ModalScreen[Optional[str]]):
             self.dismiss(selected_text)
             return
 
-        query = search_input.value.strip()
-        if self._filtered_entries:
-            self.dismiss(self._filtered_entries[0][0])
-        elif query:
-            self.dismiss(query)
-        else:
-            self.dismiss(None)
+        self.dismiss(self._filtered_entries[0][0])
 
     def action_cancel(self) -> None:
         """Cancel selection."""

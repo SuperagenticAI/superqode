@@ -248,6 +248,11 @@ ConversationLog {
 }
 #hints { text-align: center; color: #71717a; height: 1; margin-top: 0; padding: 0; }
 
+#attachment-bar { display: none; height: auto; max-height: 5; margin: 0 2; }
+#attachment-bar.visible { display: block; }
+#dictation-guide { display: none; height: auto; max-height: 5; margin: 0 2; }
+#dictation-guide.visible { display: block; }
+
 #active-tools {
     display: none;
     height: 1;

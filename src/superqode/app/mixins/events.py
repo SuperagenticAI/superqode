@@ -20,6 +20,16 @@ from superqode.app.inputs import SelectionAwareInput
 class EventHandlerMixin:
     """on_* message handlers for custom widgets (non-lifecycle)."""
 
+    def on_command_palette_command_selected(self, event: CommandPalette.CommandSelected) -> None:
+        # Name-based dispatch also works when this handler lives on a plain mixin.
+        event.stop()
+        self.on_command_palette_selected(event)
+
+    def on_command_palette_dismissed(self, event: CommandPalette.Dismissed) -> None:
+        event.stop()
+        if len(self.screen_stack) == 1:
+            self._ensure_input_focus()
+
     def on_resizable_divider_resized(self, event) -> None:
         """Handle sidebar resize via divider drag."""
         try:
@@ -37,74 +47,24 @@ class EventHandlerMixin:
     def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
         """Route command palette selections through the existing command dispatcher."""
         log = self.query_one("#log", ConversationLog)
-        command_map = {
-            "start_coding": ":connect",
-            "harness_status": ":status",
-            "retry": ":retry",
-            "work_summary": ":work",
-            "doctor_current": ":doctor current",
-            "doctor_connection": ":doctor connection",
-            "session_current": ":session current",
-            "review_diff": ":diff",
-            "connect": ":connect",
-            "connect_byok": ":connect byok",
-            "connect_local": ":connect local",
-            "acp_agents": ":acp list",
-            "models": ":models",
-            "model_status": ":model",
-            "health": ":health",
-            "provider_guide": ":providers",
-            "recommend": ":recommend coding",
-            "sandbox_status": ":sandbox",
-            "plugins": ":plugins",
-            "benchmark": ":benchmark",
-            "tools": ":tools",
-            "skills": ":skills",
-            "recipes": ":recipes",
-            "harness": ":harness",
-            "harness_inspect": ":harness inspect",
-            "harness_doctor": ":harness doctor",
-            "harness_graph": ":harness graph",
-            "harness_runs": ":harness runs",
-            "mcp": ":mcp status",
-            "sessions": "/sessions",
-            "compact": "/compact",
-            "context": ":context",
-            "diff": ":diff",
-            "approve": ":approve",
-            "reject": ":reject",
-            "undo": ":undo",
-            "files": ":files",
-            "mode": ":mode",
-            "help": ":help",
-            "clear": ":clear",
-            "quit": ":quit",
-        }
-        prompt_commands = {
-            "resume": "/resume ",
-            "fork": "/fork ",
-            "find": ":find ",
-            "search": ":search ",
-            "attach": ":attach ",
-            "prompt_file": ":prompt ",
-            "harness_events": ":harness events ",
-            "harness_evidence": ":harness evidence ",
-            "harness_replay": ":harness replay ",
-            "harness_fork": ":harness fork ",
-        }
-
         if event.command.id == "sidebar":
             self.action_toggle_sidebar()
             return
-
-        if event.command.id in prompt_commands:
+        if event.command.action is not None:
+            event.command.action()
+            return
+        if event.command.prefill:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
-            input_widget.value = prompt_commands[event.command.id]
+            if input_widget.value.strip():
+                stash = list(getattr(self, "_draft_stash", []))
+                stash.append(input_widget.value)
+                self._draft_stash = stash[-20:]
+            input_widget.value = event.command.command + " "
             input_widget.cursor_position = len(input_widget.value)
             input_widget.focus()
             return
 
-        command = command_map.get(event.command.id)
+        command = event.command.command
         if command:
             self._handle_command(command, log)
         else:
@@ -195,7 +155,9 @@ class EventHandlerMixin:
         style = getattr(event, "style", None)
         link = getattr(style, "link", None) if style is not None else None
         if link and str(link).startswith("superqode://cmd/"):
-            command = str(link).rsplit("/", 1)[-1].strip()
+            from urllib.parse import unquote
+
+            command = unquote(str(link).split("superqode://cmd/", 1)[1]).strip()
             if command:
                 event.stop()
                 event.prevent_default()
@@ -384,6 +346,8 @@ class EventHandlerMixin:
                 return
 
             # Empty input with no selection mode - do nothing
+            if getattr(self, "_staged_images", {}):
+                log.add_info("Image attached. Add a prompt, then press Enter to send.")
             return
 
         # Clear input immediately after submission (user has pressed Enter)
@@ -420,7 +384,11 @@ class EventHandlerMixin:
         if text.startswith(":"):
             command_prefix = ":"
         elif text.startswith("/"):
-            command_prefix = "/"
+            from superqode.image_input import parse_image_paths
+
+            refs = parse_image_paths(text)
+            if not refs or refs[0].start != 0:
+                command_prefix = "/"
 
         if command_prefix:
             cmd = text[len(command_prefix) :].strip().lower()
