@@ -55,9 +55,14 @@ except ImportError:
 # ============================================================================
 
 LEADER_KEYS = {
+    "a": {
+        "label": "Agent",
+        "description": "Return to agent workspace",
+        "action": "return_to_agent",
+    },
     "h": {
         "label": "Help",
-        "description": "Show help",
+        "description": "Show help and shortcuts",
         "action": "show_help",
     },
     "e": {
@@ -69,6 +74,16 @@ LEADER_KEYS = {
         "label": "Copy",
         "description": "Copy last response",
         "action": "copy_response",
+    },
+    "y": {
+        "label": "Yank",
+        "description": "Copy code snippet",
+        "action": "copy_code",
+    },
+    "r": {
+        "label": "History",
+        "description": "Search prompt history",
+        "action": "search_history",
     },
     "s": {
         "label": "Select",
@@ -228,12 +243,15 @@ class LeaderKeyMixin:
 
         # Map actions to app methods
         action_map = {
+            "return_to_agent": "action_return_to_agent",
             "show_help": "action_show_help",
             "open_editor": "action_open_editor",
             "copy_response": "action_copy_response",
-            "show_select": "_show_select",
-            "show_theme": "_show_theme",
-            "show_diagnostics": "_show_diagnostics",
+            "copy_code": "action_copy_code",
+            "search_history": "action_search_history",
+            "show_select": "action_show_select",
+            "show_theme": "action_show_theme",
+            "show_diagnostics": "action_show_diagnostics",
             "toggle_sidebar": "action_toggle_sidebar",
             "quit_app": "action_quit",
         }

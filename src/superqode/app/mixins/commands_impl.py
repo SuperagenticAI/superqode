@@ -5134,10 +5134,10 @@ class CommandImplMixin:
         text.append(" cancel\n", style=THEME["dim"])
 
         log.auto_scroll = False
-        if clear_log:
-            log.clear()
+        log.clear()
         log.write(text)
-        log.scroll_home(animate=False)
+        if clear_log:
+            log.scroll_home(animate=False)
         log.auto_scroll = True
         self._scroll_to_highlighted_item(log, selected_index, len(entries))
         self.set_timer(0.05, self._ensure_input_focus)
@@ -5164,7 +5164,7 @@ class CommandImplMixin:
         self._show_harness_picker(
             self.query_one("#log", ConversationLog),
             include_all=bool(getattr(self, "_harness_include_all", False)),
-            clear_log=True,
+            clear_log=False,
             catalog_entries=entries,
             subtitle=getattr(self, "_harness_picker_subtitle", None),
         )
@@ -5664,19 +5664,43 @@ class CommandImplMixin:
                 log.add_info("Harness selection cancelled. Reopen it with :harness")
 
     def _handle_harness_picker_input(self, value: str, log) -> bool:
-        """Resolve a typed picker number or harness name."""
+        """Resolve a typed picker number or harness name (exact, prefix, or substring)."""
         if not getattr(self, "_awaiting_harness_selection", False):
             return False
         entries = getattr(self, "_harness_selection_list", [])
         choice = str(value or "").strip().lower()
+        if not choice:
+            return False
         index = -1
         if choice.isdigit() and 1 <= int(choice) <= len(entries):
             index = int(choice) - 1
         else:
+
+            def _entry_names(entry) -> set[str]:
+                names = {str(getattr(entry, "id", "") or "").lower()}
+                for attr in ("display_name", "label", "name"):
+                    val = getattr(entry, attr, None)
+                    if val:
+                        names.add(str(val).lower())
+                return {n for n in names if n}
+
+            # 1. Exact match on id or any display name/label
             for candidate_index, entry in enumerate(entries):
-                if choice in {entry.id.lower(), entry.display_name.lower()}:
+                if choice in _entry_names(entry):
                     index = candidate_index
                     break
+            # 2. Prefix match
+            if index < 0:
+                for candidate_index, entry in enumerate(entries):
+                    if any(name.startswith(choice) for name in _entry_names(entry)):
+                        index = candidate_index
+                        break
+            # 3. Substring match
+            if index < 0:
+                for candidate_index, entry in enumerate(entries):
+                    if any(choice in name for name in _entry_names(entry)):
+                        index = candidate_index
+                        break
         if index < 0:
             log.add_error("Unknown harness. Use the arrow keys or enter an available harness name.")
             return True

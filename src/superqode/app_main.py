@@ -217,6 +217,7 @@ class SuperQodeApp(
         Binding("ctrl+k", "command_palette", "Commands", show=True),
         Binding("ctrl+r", "rewind", "Rewind", show=True),
         Binding("ctrl+f", "search_transcript", "Search", show=True, priority=True),
+        Binding("f1", "show_help", "Help", show=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
         Binding("pageup", "scroll_log_page_up", "Scroll Up", show=False),
         Binding("pagedown", "scroll_log_page_down", "Scroll Down", show=False),
@@ -286,6 +287,8 @@ class SuperQodeApp(
         Binding("ctrl+6", "sidebar_history", "History", show=False),
         # Copy functionality
         Binding("ctrl+shift+c", "copy_response", "Copy", show=False),
+        Binding("ctrl+y", "copy_code", "Yank Code", show=False),
+        Binding("ctrl+shift+r", "search_history", "Search History", show=False),
         # External editor
         Binding("ctrl+e", "open_editor", "Editor", show=False),
         # Reword and resend the previous prompt

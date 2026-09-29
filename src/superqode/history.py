@@ -64,7 +64,7 @@ class HistoryManager:
                 self.history_file.parent.mkdir(parents=True, exist_ok=True)
                 self.history_file.touch(exist_ok=True)
 
-                with self.history_file.open("r") as f:
+                with self.history_file.open("r", encoding="utf-8", errors="replace") as f:
                     for line in f:
                         line = line.strip()
                         if line:
@@ -78,6 +78,50 @@ class HistoryManager:
             return entries
 
         self._entries = await asyncio.to_thread(_read_history)
+        self._loaded = True
+        self._position = len(self._entries)
+        return True
+
+    def ensure_loaded(self, max_entries: int = 500) -> bool:
+        """Synchronously ensure history entries are loaded up to max_entries."""
+        if self._loaded:
+            return True
+        try:
+            if not self.history_file.exists():
+                self.history_file.parent.mkdir(parents=True, exist_ok=True)
+                self.history_file.touch(exist_ok=True)
+                self._entries = []
+                self._loaded = True
+                self._position = 0
+                return True
+
+            entries: List[HistoryEntry] = []
+            limit = max(1, int(max_entries))
+            with self.history_file.open("rb") as f:
+                f.seek(0, 2)
+                position = f.tell()
+                chunks: list[bytes] = []
+                newline_count = 0
+                while position > 0 and newline_count <= limit:
+                    chunk_size = min(8192, position)
+                    position -= chunk_size
+                    f.seek(position)
+                    chunk = f.read(chunk_size)
+                    chunks.append(chunk)
+                    newline_count += chunk.count(b"\n")
+
+            tail = b"".join(reversed(chunks)).splitlines()[-limit:]
+            for raw_line in tail:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        entries.append(HistoryEntry(**data))
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+            self._entries = entries
+        except Exception:
+            self._entries = []
         self._loaded = True
         self._position = len(self._entries)
         return True
@@ -129,6 +173,11 @@ class HistoryManager:
         if not input_text.strip():
             return None
 
+        # Avoid recording immediate consecutive duplicates
+        if self._entries and self._entries[-1].input == input_text:
+            self._position = len(self._entries)
+            return self._entries[-1]
+
         entry = HistoryEntry(
             input=input_text,
             timestamp=datetime.now().timestamp(),
@@ -143,7 +192,7 @@ class HistoryManager:
 
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.history_file.open("a") as f:
+            with self.history_file.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(entry)) + "\n")
         except Exception:
             pass
@@ -151,21 +200,37 @@ class HistoryManager:
         return entry
 
     def get_previous(self) -> Optional[str]:
-        """Get previous history entry (for up arrow)."""
+        """Get previous history entry (for up arrow), skipping consecutive duplicates."""
+        self.ensure_loaded()
         if not self._entries or self._position <= 0:
             return None
 
-        self._position -= 1
-        return self._entries[self._position].input
+        current = (
+            self._entries[self._position].input
+            if 0 <= self._position < len(self._entries)
+            else None
+        )
+        while self._position > 0:
+            self._position -= 1
+            val = self._entries[self._position].input
+            if val != current:
+                return val
+        return None
 
     def get_next(self) -> Optional[str]:
-        """Get next history entry (for down arrow)."""
-        if self._position >= len(self._entries) - 1:
-            self._position = len(self._entries)
+        """Get next history entry (for down arrow), skipping consecutive duplicates."""
+        self.ensure_loaded()
+        if not self._entries or self._position >= len(self._entries):
             return ""
 
-        self._position += 1
-        return self._entries[self._position].input
+        current = self._entries[self._position].input
+        while self._position < len(self._entries) - 1:
+            self._position += 1
+            val = self._entries[self._position].input
+            if val != current:
+                return val
+        self._position = len(self._entries)
+        return ""
 
     def reset_position(self) -> None:
         """Reset navigation position to end."""

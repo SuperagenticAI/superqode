@@ -442,10 +442,17 @@ class HelpersMixin(
             input_box = self.query_one("#input-box")
             if working and interactive:
                 input_box.border_title = "Action required"
+            elif working:
+                input_box.border_title = "⚡ Running · [Esc] Cancel · Output below ↓"
             else:
-                # While the agent runs the box stays disabled (above) but keeps
-                # its normal title — no "working" banner, no cancel hint.
                 self._refresh_prompt_mode_label()
+        except Exception:
+            pass
+        try:
+            from superqode.app.widgets import HintsBar
+
+            hints = self.query_one("#hints", HintsBar)
+            hints.is_working = working and not interactive
         except Exception:
             pass
 

@@ -2883,24 +2883,19 @@ class DialogsMixin:
         git_branch = "-"
         git_dirty = "-"
         try:
-            branch = subprocess.run(
-                ["git", "branch", "--show-current"],
-                cwd=Path.cwd(),
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=2,
-            )
-            git_branch = branch.stdout.strip() or "-"
-            status = subprocess.run(
-                ["git", "status", "--short"],
-                cwd=Path.cwd(),
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=2,
-            )
-            git_dirty = "dirty" if status.stdout.strip() else "clean"
+            detector = getattr(self, "_detect_git_branch", None)
+            detected = detector() if callable(detector) else ""
+            if detected:
+                git_branch = detected
+                status = subprocess.run(
+                    ["git", "status", "--short"],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=1,
+                )
+                git_dirty = "dirty" if status.stdout.strip() else "clean"
         except Exception:
             pass
 

@@ -1168,17 +1168,32 @@ class HintsBar(Static):
 
     approval_mode = reactive("auto")
     connected = reactive(False)
+    is_working = reactive(False)
 
     def render(self) -> Text:
         t = Text()
 
         # t.append("\n", style="")
 
+        if self.is_working:
+            t.append("⚡ ", style="bold #a855f7")
+            t.append("Agent working…", style="bold #c084fc")
+            t.append("  •  ", style=THEME["dim"])
+            t.append("Esc", style="bold #fbbf24")
+            t.append(" Cancel", style=THEME["text"])
+            t.append("  •  ", style=THEME["dim"])
+            t.append("↓ Output streaming below", style=f"bold {THEME['cyan']}")
+            t.append("  •  ", style=THEME["dim"])
+            t.append("Alt+A", style="bold #38bdf8")
+            t.append(" Agent Screen", style=THEME["text"])
+            return t
+
         # Before connecting, the only thing that matters is connecting. Once a
         # session is running, the bar becomes what to do with it: evaluating,
         # optimising and memory have no entry point anywhere else in the TUI.
         if self.connected:
             hints = [
+                ("🤖", ":agent", THEME["purple"]),
                 ("⏏", ":disconnect", THEME["pink"]),
                 ("◈", ":harness", THEME["link"]),
                 ("🧠", ":memory", THEME["link"]),
@@ -1625,6 +1640,16 @@ class ConversationLog(RichLog):
         # output. Keep it minimal: identity line, then a purple input rail.
         lines = (str(text).strip() or "(empty)").splitlines() or ["(empty)"]
         question = Text()
+        turn_num = sum(1 for m in self._messages if m[0] == "user")
+        import time as _time
+
+        turn_time = _time.strftime("%H:%M")
+        question.append("  ", style="")
+        question.append("─── ", style=THEME["border_active"])
+        question.append(f"Turn #{turn_num}", style=f"bold {THEME['cyan']}")
+        question.append(f" · {turn_time} ", style=THEME["dim"])
+        question.append("─" * 36, style=THEME["border_active"])
+        question.append("\n\n")
         question.append("  › ", style=f"bold {THEME['purple']}")
         question.append("YOU", style=f"bold {THEME['purple']}")
         question.append("\n")
@@ -1634,7 +1659,12 @@ class ConversationLog(RichLog):
             question.append(line, style=THEME["text"])
             if index < len(lines) - 1:
                 question.append("\n")
-        self.write(Padding(question, (1, 0, 1, 0)))
+        self.write(Padding(question, (0, 0, 1, 0)))
+        try:
+            self.scroll_end(animate=False)
+            self.call_after_refresh(self.scroll_end, animate=False)
+        except Exception:
+            pass
 
     def add_agent(self, text: str, agent: str = "Agent"):
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
@@ -1998,13 +2028,13 @@ class ConversationLog(RichLog):
         return f"{output[:_HISTORICAL_TOOL_OUTPUT_LIMIT]}\n… {omitted:,} characters omitted"
 
     def get_last_code_block(self) -> str:
-        """First fenced code block from the last agent response (paste-ready)."""
+        """Last fenced code block from the last agent response (paste-ready)."""
         import re
 
         text = self._last_response or ""
-        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+        matches = list(re.finditer(r"```[^\r\n]*\r?\n(.*?)```", text, re.DOTALL))
+        if matches:
+            return matches[-1].group(1).strip()
         return ""
 
     def get_all_text(self) -> str:
@@ -2389,6 +2419,39 @@ class ConversationLog(RichLog):
         self.clear_running_tools()
         self.reset_response_stream()
         self._set_viewport_mode("following")
+
+    def redraw_conversation(self) -> None:
+        """Re-render the active conversation turns into the visual log."""
+        if not getattr(self, "_messages", None):
+            self.clear()
+            self.resume_follow()
+            return
+        saved_messages = list(self._messages)
+        self.clear()
+        self._messages = []
+        for role, body, agent in saved_messages:
+            if role == "user":
+                self.add_user(body)
+            elif role in ("agent", "assistant"):
+                self.add_assistant(body, agent=agent or "Assistant")
+            elif role == "system":
+                self.add_system(body)
+            elif role == "error":
+                self.add_error(body)
+            elif role == "success":
+                self.add_success(body)
+            elif role == "info":
+                self.add_info(body)
+            elif role == "meta":
+                self.add_meta(body)
+            else:
+                self.add_info(body)
+        self.resume_follow()
+        try:
+            self.scroll_end(animate=False)
+            self.call_after_refresh(self.scroll_end, animate=False)
+        except Exception:
+            pass
 
     def reset_response_stream(self, agent: str = "Assistant") -> None:
         """Reset per-response streaming buffers before a new streamed answer."""

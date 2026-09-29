@@ -37,6 +37,16 @@ class SelectionAwareInput(TextArea):
 
     def action_clear_prompt(self) -> None:
         """Clear the entire prompt buffer (every line), not just the current line."""
+        self._history_draft = None
+        self._navigating_history = False
+        try:
+            app = self.app
+        except Exception:
+            app = getattr(self, "_app", None)
+        if app is not None:
+            history_mgr = getattr(app, "_history_manager", None)
+            if history_mgr is not None and hasattr(history_mgr, "reset_position"):
+                history_mgr.reset_position()
         self.load_text("")
         self._resize_to_content()
 
@@ -50,6 +60,8 @@ class SelectionAwareInput(TextArea):
         kwargs.setdefault("tab_behavior", "focus")
         super().__init__(*args, **kwargs)
         self.suggester = suggester
+        self._history_draft: Optional[str] = None
+        self._navigating_history: bool = False
 
     @property
     def value(self) -> str:
@@ -116,10 +128,20 @@ class SelectionAwareInput(TextArea):
 
     def _submit_current_value(self, event: events.Key) -> None:
         value = self.value
+        self._history_draft = None
+        self._navigating_history = False
+        try:
+            app = self.app
+        except Exception:
+            app = getattr(self, "_app", None)
+        if app is not None:
+            history_mgr = getattr(app, "_history_manager", None)
+            if history_mgr is not None and hasattr(history_mgr, "reset_position"):
+                history_mgr.reset_position()
         event.stop()
         event.prevent_default()
         self.post_message(Input.Submitted(self, value))
-        after_submit = getattr(self.app, "_vim_after_submit", None)
+        after_submit = getattr(app, "_vim_after_submit", None) if app else None
         if callable(after_submit):
             after_submit()
 
@@ -174,7 +196,19 @@ class SelectionAwareInput(TextArea):
             self._insert_newline(event)
             return
 
-        app = self.app
+        try:
+            app = self.app
+        except Exception:
+            app = getattr(self, "_app", None)
+        if app is None:
+            return
+
+        if event.key == "alt+a":
+            if hasattr(app, "action_return_to_agent"):
+                app.action_return_to_agent()
+                event.stop()
+                event.prevent_default()
+                return
 
         if event.key == "escape" and getattr(app, "_install_in_progress", False):
             app.action_smart_cancel()
@@ -232,6 +266,23 @@ class SelectionAwareInput(TextArea):
                 event.stop()
                 event.prevent_default()
                 return
+
+        if event.key in {"escape", "ctrl+["} and getattr(self, "_navigating_history", False):
+            draft = (
+                getattr(self, "_history_draft", None)
+                if getattr(self, "_history_draft", None) is not None
+                else ""
+            )
+            self._history_draft = None
+            self._navigating_history = False
+            history_mgr = getattr(app, "_history_manager", None)
+            if history_mgr is not None and hasattr(history_mgr, "reset_position"):
+                history_mgr.reset_position()
+            self.value = draft
+            self.cursor_position = len(draft)
+            event.stop()
+            event.prevent_default()
+            return
 
         # Key B (or fallback Left Arrow) navigates back when the prompt is
         # empty, matching the visible Back control. Backspace strictly deletes
@@ -491,6 +542,44 @@ class SelectionAwareInput(TextArea):
                     else:
                         app.action_navigate_opencode_model_down()
                 return
+
+            # Prompt history navigation when not in any selection mode
+            history_mgr = getattr(app, "_history_manager", None)
+            if history_mgr is not None and not self._is_in_selection_mode_for_number_keys(app):
+                lines = self.text.split("\n")
+                row, _col = self.cursor_location
+                if event.key == "up" and (row == 0 or len(lines) <= 1):
+                    if not getattr(self, "_navigating_history", False):
+                        self._history_draft = self.value
+                        self._navigating_history = True
+                    prev_item = history_mgr.get_previous()
+                    if prev_item is not None:
+                        self.value = prev_item
+                        self.cursor_position = len(prev_item)
+                        event.stop()
+                        event.prevent_default()
+                        return
+                elif (
+                    event.key == "down"
+                    and getattr(self, "_navigating_history", False)
+                    and (row == len(lines) - 1 or len(lines) <= 1)
+                ):
+                    next_item = history_mgr.get_next()
+                    if next_item:
+                        self.value = next_item
+                        self.cursor_position = len(next_item)
+                        event.stop()
+                        event.prevent_default()
+                        return
+                    else:
+                        draft = getattr(self, "_history_draft", None) or ""
+                        self._history_draft = None
+                        self._navigating_history = False
+                        self.value = draft
+                        self.cursor_position = len(draft)
+                        event.stop()
+                        event.prevent_default()
+                        return
 
         # For all other keys or when not in selection mode, let parent handle it
         # TextArea handles normal editing, wrapping, and cursor movement.

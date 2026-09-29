@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 from rich.console import Group
@@ -20,6 +21,7 @@ class WelcomeState:
     """Operational state displayed on the terminal home screen."""
 
     repository: str = ""
+    git_branch: str = ""
     harness: str = ""
     connection: str = ""
     runtime: str = ""
@@ -155,10 +157,16 @@ def render_welcome(
         workspace.append("Current workspace\n", style=f"bold {THEME['text']}")
         rows = [
             ("Repository", state.repository or team_name),
-            ("Harness", state.harness or "Not selected"),
-            ("Agent/model", state.connection or state.runtime),
-            ("Policy", f"Approval {state.approval or 'ask'}"),
         ]
+        if state.git_branch:
+            rows.append(("Branch", state.git_branch))
+        rows.extend(
+            [
+                ("Harness", state.harness or "Not selected"),
+                ("Agent/model", state.connection or state.runtime),
+                ("Policy", f"Approval {state.approval or 'ask'}"),
+            ]
+        )
         if state.runtime and state.connection:
             rows.append(("Runtime", state.runtime))
         label_width = max(len(label) for label, _value in rows)
@@ -266,6 +274,15 @@ def render_welcome(
         desc_text.append(interoperability, style=THEME["muted"])
     desc_text.append("\n", style="")
     items.append(place(desc_text))
+
+    if state.git_branch:
+        branch_text = Text(justify=align)
+        repo_name = Path(state.repository).name if state.repository else ""
+        if repo_name:
+            branch_text.append(repo_name, style="bold #ffffff")
+            branch_text.append("  ·  ", style=THEME["dim"])
+        branch_text.append(f"⎇ {state.git_branch}\n", style=f"bold {THEME['cyan']}")
+        items.append(place(branch_text))
 
     workspace_text = Text(justify=align)
     if state.has_sessions:

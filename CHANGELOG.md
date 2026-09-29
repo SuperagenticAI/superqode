@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.28] - 2026-09-29
+
+### Added
+
+- A faster, more expressive terminal workflow: searchable prompt history,
+  shell-style Up/Down history navigation with draft restoration, slash-command
+  suggestions, F1 help, and an expanded leader-key menu.
+- One-keystroke code extraction with Ctrl+Y, leader `y`, `:yank`, and
+  `:copy code`; the final fenced code block is copied exactly, including
+  language tags such as `c++`.
+- A dedicated agent-workspace return path through Alt+A, leader `a`, and
+  `:agent`, restoring the live conversation after command and picker screens.
+- Clearer live-run chrome, turn separators and timestamps, context usage in the
+  status bar, repository branch details on the welcome screen, and richer
+  connected-session hints.
+
+### Changed
+
+- Harness selection now accepts exact names, prefixes, and substrings, keeps
+  keyboard navigation visually stable, and improves setup guidance for
+  integrations that cannot launch directly.
+- Prompt history is de-duplicated during navigation and search, malformed UTF-8
+  is handled safely, and initial loading reads only a bounded tail of the
+  history file instead of scanning it all on the TUI thread.
+- Local connection detection is briefly cached to keep repeated connect-menu
+  renders responsive, while git branch detection reads local repository
+  metadata without invoking a subprocess.
+- Command suggestions now work consistently with both `:` and `/` prefixes.
+
+### Fixed
+
+- History search now reads the history manager's entries correctly instead of
+  failing when opened from its shortcut or command.
+- Agent-workspace shortcuts now target a real action and restore even an empty
+  conversation cleanly.
+- Ctrl+G remains reserved for stashing prompt drafts and no longer conflicts
+  with returning to the agent workspace.
+- Code yank selects the last fenced block rather than the first and supports
+  non-word language identifiers.
+
 ## [2.4.27] - 2026-09-29
 
 ### Added

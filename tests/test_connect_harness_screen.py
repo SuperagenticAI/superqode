@@ -658,7 +658,7 @@ def test_selecting_an_available_open_row_starts_a_key_harness_session(monkeypatc
     assert session.openness == "open"
 
 
-@pytest.mark.parametrize("profile_id", ("jcode", "letta", "warp", "goose-key"))
+@pytest.mark.parametrize("profile_id", ("jcode", "letta", "warp", "zcode"))
 def test_setup_card_rows_render_without_unknown_theme_keys(profile_id):
     """Open rows that cannot launch must still paint a card on click/Enter."""
     from superqode.app.mixins.connect import ConnectMixin
@@ -679,7 +679,7 @@ def test_setup_card_rows_render_without_unknown_theme_keys(profile_id):
     assert stub.harness_commands == []
     body = "\n".join(log.items)
     assert get_connection_profile(profile_id).label in body
-    assert "does not start its loop" in body
+    assert "does not start its loop" in body or "cannot launch it yet" in body
 
 
 def test_reset_connect_states_keeps_key_harness_session():

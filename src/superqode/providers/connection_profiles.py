@@ -47,6 +47,7 @@ import importlib.util
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -1829,12 +1830,30 @@ def display_ordered_profiles(menu: str) -> List[ConnectionProfile]:
     return [profile for _group, profiles in grouped_menu_profiles(menu) for profile in profiles]
 
 
+_DETECTED_CHIPS_CACHE: tuple[float, Optional[str], int, List[DetectedChip]] | None = None
+_DETECTED_CHIPS_TTL = 3.0
+
+
+def clear_detected_chips_cache() -> None:
+    """Clear cached detected chips, e.g. after a profile or server install/switch."""
+    global _DETECTED_CHIPS_CACHE
+    _DETECTED_CHIPS_CACHE = None
+
+
 def detected_chips(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[DetectedChip]:
     """Clickable sources already usable here, for the connect header.
 
     Probes are local only (``which``, file and env checks); this renders on
     the first frame of ``:connect``.
     """
+    global _DETECTED_CHIPS_CACHE
+    now = time.monotonic()
+    key = str(repo_root) if repo_root else None
+    if _DETECTED_CHIPS_CACHE is not None:
+        cached_time, cached_key, cached_limit, cached_result = _DETECTED_CHIPS_CACHE
+        if now - cached_time < _DETECTED_CHIPS_TTL and cached_key == key and cached_limit == limit:
+            return list(cached_result)
+
     ready = [
         profile
         for profile in _AGENT_PROFILES
@@ -1885,7 +1904,9 @@ def detected_chips(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[
             DetectedChip(profile.label.replace(" subscription", ""), "profile", profile.id)
             for profile in ready
         ]
-    return [*chips, *extras]
+    result = [*chips, *extras]
+    _DETECTED_CHIPS_CACHE = (now, key, limit, result)
+    return result
 
 
 def detected_sources(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[str]:

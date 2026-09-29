@@ -36,23 +36,27 @@ class CommandSuggester(Suggester):
         Designed for zero-latency typing experience.
 
         Supports:
-        - Basic commands: :help, :clear, etc.
+        - Colon commands: :help, :connect, :clear, etc.
+        - Slash commands: /help, /connect, /clear, etc.
         """
         # Ultra-fast path: not a command (most common case)
         if not value:
             return None
 
-        # Fast path: doesn't start with ':'
-        if not value.startswith(":"):
+        # Fast path: doesn't start with ':' or '/'
+        if not (value.startswith(":") or value.startswith("/")):
             return None
 
-        value_lower = value.lower()
+        prefix = value[0]
+        colon_value = ":" + value[1:]
+        value_lower = colon_value.lower()
+
         if value_lower == ":q":
-            return ":quit"
+            return prefix + "quit"
         if value_lower in self._colon_commands_lower:
             return None
         if value_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
-            return ":connect"
+            return prefix + "connect"
 
         # Fast matching - use pre-filtered colon commands
         # Find first command that starts with the value
@@ -62,7 +66,7 @@ class CommandSuggester(Suggester):
         )
         for cmd_lower, command in pairs:
             if cmd_lower.startswith(value_lower) and cmd_lower != value_lower:
-                return command
+                return prefix + command[1:]
 
         return None
 

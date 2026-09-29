@@ -449,7 +449,12 @@ class SlashCommandMixin:
             self._disconnect_everything(log)
         elif c == "acp":
             self._acp_cmd(args, log)
-        elif c in ("agents", "agent"):
+        elif c == "agent":
+            if not args.strip():
+                self.action_return_to_agent()
+            else:
+                self._agents_cmd(args, log)
+        elif c == "agents":
             self._agents_cmd(args, log)
         elif c == "a2a":
             self.run_worker(self._a2a_cmd(args, log))
@@ -525,6 +530,10 @@ class SlashCommandMixin:
         # Copy/Open/Edit commands
         elif c == "copy":
             self._handle_copy(log, args)
+        elif c == "yank":
+            self._handle_copy(log, "code")
+        elif c in ("history-search", "search-history"):
+            self.action_search_history()
         elif c == "open":
             self._handle_open(log)
         elif c == "select":
@@ -4160,9 +4169,14 @@ class SlashCommandMixin:
 
     def _handle_history(self, args: str, log: ConversationLog):
         """Handle :history command."""
-        if args.lower() == "clear":
+        arg_clean = args.strip().lower()
+        if arg_clean == "clear":
             self._history_manager.clear()
             log.add_success("History cleared")
+            return
+
+        if arg_clean in ("search", "find") or arg_clean.startswith(("search ", "find ")):
+            self.action_search_history()
             return
 
         entries = self._history_manager.get_recent(20)

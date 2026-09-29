@@ -662,9 +662,50 @@ class HelperStartupMixin:
         except Exception:
             return None
 
+    @staticmethod
+    def _detect_git_branch(repo_dir: str | Path | None = None) -> str:
+        """Quickly detect the current git branch without slow remote probes."""
+        try:
+            cwd = Path(repo_dir) if repo_dir else Path.cwd()
+            curr = cwd.resolve()
+            git_path: Optional[Path] = None
+            for p in (curr, *curr.parents):
+                candidate = p / ".git"
+                if candidate.exists():
+                    git_path = candidate
+                    cwd = p
+                    break
+            if not git_path:
+                return ""
+            head_path: Optional[Path] = None
+            if git_path.is_dir():
+                head_path = git_path / "HEAD"
+            elif git_path.is_file():
+                content = git_path.read_text(encoding="utf-8").strip()
+                if content.startswith("gitdir:"):
+                    raw_dir = content[7:].strip()
+                    resolved = Path(raw_dir)
+                    if not resolved.is_absolute():
+                        resolved = (cwd / resolved).resolve()
+                    head_path = resolved / "HEAD"
+            if head_path and head_path.is_file():
+                head_content = head_path.read_text(encoding="utf-8").strip()
+                if head_content.startswith("ref: refs/heads/"):
+                    return head_content[16:].strip()
+                if head_content.startswith("ref: refs/"):
+                    return head_content[10:].strip()
+                if len(head_content) >= 7 and all(
+                    c in "0123456789abcdefABCDEF" for c in head_content[:7]
+                ):
+                    return head_content[:7]
+        except Exception:
+            pass
+        return ""
+
     def _welcome_state(self, team_name: str) -> WelcomeState:
         """Collect non-blocking operational state for the terminal home screen."""
         repository = str(Path.cwd())
+        git_branch = self._detect_git_branch(repository)
         harness_name = ""
         try:
             spec, path = self._active_harness_spec()
@@ -716,6 +757,7 @@ class HelperStartupMixin:
 
         return WelcomeState(
             repository=repository or team_name,
+            git_branch=git_branch,
             harness=harness_name,
             connection=connection,
             runtime=runtime,

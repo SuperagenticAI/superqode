@@ -6726,6 +6726,256 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
     ] + [(len(open_entries) + 1, "Browse ACP agents →")]
 
 
+def test_move_harness_selection_updates_without_clear_log():
+    app = make_app()
+    log = FakeLog()
+    app.query_one = lambda selector, *args, **kwargs: log if selector == "#log" else None
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+
+    from superqode.providers.harness_catalog import list_entries
+
+    entries = list_entries("open")
+    app._awaiting_harness_selection = True
+    app._harness_selection_list = entries
+    app._harness_highlighted_index = 0
+
+    picker_calls = []
+    app._show_harness_picker = lambda target_log, **kwargs: picker_calls.append(
+        (target_log, kwargs)
+    )
+
+    app._move_harness_selection(1)
+    assert app._harness_highlighted_index == 1
+    assert len(picker_calls) == 1
+    assert picker_calls[0][1]["clear_log"] is False
+
+
+def test_welcome_renders_git_branch_when_present():
+    state = WelcomeState(
+        repository="/work/my-project",
+        git_branch="feature/faster-picker",
+        harness="review-harness",
+        connection="anthropic/claude-opus",
+        runtime="acp",
+    )
+    text = render_plain(render_welcome([], width=100, state=state))
+    assert "Branch" in text
+    assert "feature/faster-picker" in text
+
+
+def test_detect_git_branch(tmp_path):
+    app = make_app()
+    # 1. Standard git HEAD
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text("ref: refs/heads/develop\n", encoding="utf-8")
+    assert app._detect_git_branch(tmp_path) == "develop"
+
+    # 1b. Monorepo subfolder detection
+    subfolder = tmp_path / "packages" / "frontend"
+    subfolder.mkdir(parents=True)
+    assert app._detect_git_branch(subfolder) == "develop"
+
+    # 1c. Ref tag
+    (git_dir / "HEAD").write_text("ref: refs/tags/v2.1.0\n", encoding="utf-8")
+    assert app._detect_git_branch(tmp_path) == "tags/v2.1.0"
+
+    # 2. Detached HEAD
+    (git_dir / "HEAD").write_text("1a2b3c4d5e6f\n", encoding="utf-8")
+    assert app._detect_git_branch(tmp_path) == "1a2b3c4"
+
+    # 3. Worktree pointer file
+    worktree_repo = tmp_path / "worktree"
+    worktree_repo.mkdir()
+    actual_gitdir = tmp_path / "actual_gitdir"
+    actual_gitdir.mkdir()
+    (actual_gitdir / "HEAD").write_text("ref: refs/heads/worktree-branch\n", encoding="utf-8")
+    (worktree_repo / ".git").write_text(f"gitdir: {actual_gitdir}\n", encoding="utf-8")
+    assert app._detect_git_branch(worktree_repo) == "worktree-branch"
+
+
+def test_disconnected_welcome_screen_renders_git_branch():
+    state = WelcomeState(
+        repository="/Users/alice/projects/awesome-repo",
+        git_branch="feat/quick-tui",
+    )
+    assert not state.connected
+    text = render_plain(render_welcome([], width=100, state=state))
+    assert "awesome-repo" in text
+    assert "feat/quick-tui" in text
+
+
+def test_handle_harness_picker_input_prefix_and_substring_match():
+    app = make_app()
+    log = FakeLog()
+    from superqode.providers.harness_catalog import list_entries
+
+    entries = list_entries("open")
+    app._awaiting_harness_selection = True
+    app._harness_selection_list = entries
+
+    selected = []
+    app.action_select_highlighted_harness = lambda: selected.append(
+        app._harness_selection_list[app._harness_highlighted_index].id
+    )
+
+    # Empty / whitespace input should NOT select any entry
+    assert app._handle_harness_picker_input("", log) is False
+    assert app._handle_harness_picker_input("   ", log) is False
+    assert len(selected) == 0
+
+    # Prefix match on an available entry
+    first_entry = entries[0]
+    prefix = first_entry.id[:4]
+    result = app._handle_harness_picker_input(prefix, log)
+    assert result is True
+    assert len(selected) == 1
+    assert selected[0] == first_entry.id
+
+
+def test_command_suggester_supports_slash_commands():
+    from superqode.app.suggester import CommandSuggester
+
+    suggester = CommandSuggester()
+
+    assert asyncio.run(suggester.get_suggestion("/")) == "/connect"
+    assert asyncio.run(suggester.get_suggestion("/c")) == "/connect"
+    assert asyncio.run(suggester.get_suggestion("/q")) == "/quit"
+    assert asyncio.run(suggester.get_suggestion("/co")) == "/connect"
+
+
+def test_history_manager_navigation_and_dedup(tmp_path):
+    from superqode.history import HistoryManager
+
+    history_file = tmp_path / "history.jsonl"
+    hm = HistoryManager(history_file=history_file)
+
+    # Empty initially
+    assert hm.get_previous() is None
+    assert hm.get_next() == ""
+
+    # Append items
+    hm.append_sync(":help")
+    hm.append_sync(":status")
+    # Immediate duplicate should be ignored
+    hm.append_sync(":status")
+    hm.append_sync(":diff")
+
+    # Navigate up
+    assert hm.get_previous() == ":diff"
+    assert hm.get_previous() == ":status"
+    assert hm.get_previous() == ":help"
+    assert hm.get_previous() is None
+
+    # Navigate down
+    assert hm.get_next() == ":status"
+    assert hm.get_next() == ":diff"
+    assert hm.get_next() == ""
+
+    # Persistence & ensure_loaded
+    hm2 = HistoryManager(history_file=history_file)
+    hm2.ensure_loaded()
+    assert hm2.get_previous() == ":diff"
+
+
+def test_selection_aware_input_history_arrows():
+    from unittest.mock import MagicMock
+    from superqode.app.inputs import SelectionAwareInput
+    from superqode.history import HistoryManager
+
+    app = make_app()
+    hm = HistoryManager()
+    hm.append_sync("first prompt")
+    hm.append_sync("second prompt")
+    app._history_manager = hm
+
+    inp = SelectionAwareInput()
+    inp._app = app
+    inp.load_text("my unsaved draft")
+
+    def make_key_event(key_name):
+        ev = MagicMock()
+        ev.key = key_name
+        ev.aliases = {key_name}
+        ev.character = key_name
+        return ev
+
+    # Press Up -> loads "second prompt"
+    ev_up = make_key_event("up")
+    inp.on_key(ev_up)
+    ev_up.stop.assert_called_once()
+    assert inp.value == "second prompt"
+    assert inp._history_draft == "my unsaved draft"
+
+    # Press Up again -> loads "first prompt"
+    ev_up2 = make_key_event("up")
+    inp.on_key(ev_up2)
+    assert inp.value == "first prompt"
+
+    # Press Down -> returns to "second prompt"
+    ev_down = make_key_event("down")
+    inp.on_key(ev_down)
+    assert inp.value == "second prompt"
+
+    # Press Down again -> restores "my unsaved draft"
+    ev_down2 = make_key_event("down")
+    inp.on_key(ev_down2)
+    assert inp.value == "my unsaved draft"
+    assert inp._history_draft is None
+    assert inp._navigating_history is False
+
+    # Escape cancels history browsing and restores draft
+    inp.value = "another draft"
+    inp.on_key(make_key_event("up"))
+    assert inp.value == "second prompt"
+    ev_esc = make_key_event("escape")
+    inp.on_key(ev_esc)
+    ev_esc.stop.assert_called_once()
+    assert inp.value == "another draft"
+    assert inp._navigating_history is False
+
+
+def test_misc_actions_and_leader_key_dispatch():
+    app = make_app()
+    log = FakeLog()
+    app.query_one = lambda selector, *args, **kwargs: log if selector == "#log" else None
+
+    # Test action_show_help
+    called_help = []
+    app._show_help = lambda target_log: called_help.append(target_log)
+    app.action_show_help()
+    assert len(called_help) == 1
+
+    # Test action_show_theme
+    called_theme = []
+    app._handle_theme = lambda args, target_log: called_theme.append((args, target_log))
+    app.action_show_theme()
+    assert len(called_theme) == 1
+
+    # Test action_show_diagnostics
+    called_diag = []
+    app._handle_diagnostics = lambda args, target_log: called_diag.append((args, target_log))
+    app.action_show_diagnostics()
+    assert len(called_diag) == 1
+
+    # Test action_show_select
+    called_select = []
+    app._handle_select = lambda target_log, args: called_select.append((target_log, args))
+    app.action_show_select()
+    assert len(called_select) == 1
+
+    # Verify leader key maps to valid app methods
+    from superqode.widgets.leader_key import LeaderKeyMixin
+
+    app._leader_mode = True
+    executed = []
+    app.action_show_help = lambda: executed.append("help")
+    app._handle_leader_action = LeaderKeyMixin._handle_leader_action.__get__(app, app.__class__)
+    app._handle_leader_action("show_help")
+    assert "help" in executed
+
+
 def test_byok_completion_hides_legacy_github_copilot_provider():
     app = make_app()
 

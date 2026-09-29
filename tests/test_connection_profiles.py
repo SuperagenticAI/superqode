@@ -1564,3 +1564,16 @@ class _NullLog:
 
     def clear(self):
         pass
+
+
+def test_detected_chips_caches_results():
+    from superqode.providers.connection_profiles import clear_detected_chips_cache, detected_chips
+
+    clear_detected_chips_cache()
+    first = detected_chips()
+    second = detected_chips()
+    assert first == second
+
+    clear_detected_chips_cache()
+    third = detected_chips()
+    assert third == first

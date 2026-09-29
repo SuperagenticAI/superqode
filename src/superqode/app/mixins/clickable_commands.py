@@ -16,6 +16,7 @@ from superqode.app.prompt_stack import PromptSpec
 #: CONFIRM_WHILE_BUSY as well.
 CLICKABLE_COMMANDS: frozenset[str] = frozenset(
     {
+        "agent",
         "back",
         "connect",
         "disconnect",

@@ -17,10 +17,79 @@ from superqode.app.inputs import SelectionAwareInput
 class MiscActionsMixin:
     """Copy/editor/undo/redo/checkpoint/rewind/split-view actions."""
 
+    def action_return_to_agent(self) -> None:
+        """Restore the conversation after viewing a command or picker screen."""
+        reset_connect = getattr(self, "_reset_connect_selection_states", None)
+        if callable(reset_connect):
+            reset_connect()
+        for flag in (
+            "_awaiting_session_resume",
+            "_awaiting_mode_selection",
+            "_awaiting_harness_selection",
+            "_awaiting_harness_confirmation",
+            "_awaiting_recommendation_selection",
+            "_awaiting_free_selection",
+            "_awaiting_model_selection",
+        ):
+            setattr(self, flag, False)
+
+        self._welcome_active = False
+        log = self.query_one("#log", ConversationLog)
+        log.redraw_conversation()
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_show_help(self):
+        """Show help reference (F1 or Leader Key 'h')."""
+        log = self.query_one("#log", ConversationLog)
+        self._show_help(log)
+
+    def action_show_theme(self):
+        """Open theme picker (Leader Key 't')."""
+        log = self.query_one("#log", ConversationLog)
+        self._handle_theme("", log)
+
+    def action_show_diagnostics(self):
+        """Show diagnostics view (Leader Key 'd')."""
+        log = self.query_one("#log", ConversationLog)
+        self._handle_diagnostics("", log)
+
+    def action_show_select(self):
+        """Open selectable transcript view (Leader Key 's')."""
+        log = self.query_one("#log", ConversationLog)
+        self._handle_select(log, "")
+
     def action_copy_response(self):
         """Copy last agent response to clipboard (Ctrl+Shift+C)."""
         log = self.query_one("#log", ConversationLog)
         self._handle_copy(log)
+
+    def action_copy_code(self):
+        """Copy last fenced code block from agent response to clipboard (Ctrl+Y or Leader 'y')."""
+        log = self.query_one("#log", ConversationLog)
+        self._handle_copy(log, "code")
+
+    def action_search_history(self):
+        """Open interactive prompt history search modal (Ctrl+Shift+R or Leader 'r')."""
+        from superqode.widgets.history_search import HistorySearchModal
+
+        history_manager = getattr(self, "_history_manager", None)
+        if history_manager is not None:
+            history_manager.ensure_loaded()
+            entries = history_manager.entries
+        else:
+            entries = []
+
+        def _on_dismissed(selected: str | None) -> None:
+            self.set_timer(0.05, self._ensure_input_focus)
+            if selected is not None and selected.strip():
+                try:
+                    prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
+                    prompt_input.load_text(selected)
+                    prompt_input.focus()
+                except Exception:
+                    pass
+
+        self.push_screen(HistorySearchModal(entries=entries), callback=_on_dismissed)
 
     def action_open_editor(self):
         """Open external editor for composing message (Ctrl+E)."""
