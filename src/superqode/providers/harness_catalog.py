@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Tuple
@@ -26,8 +27,8 @@ CONNECT_MENU_VALUES = frozenset({"v1", "v2"})
 CONNECT_MENU_ENV = "SUPERQODE_CONNECT_MENU"
 
 #: Parsed ``connect_menu`` per config file, keyed by path and invalidated by
-#: (mtime, size). Editing the file still takes effect on the next read.
-_CONNECT_MENU_CACHE: dict[Path, Tuple[Tuple[int, int], Optional[str]]] = {}
+#: file identity and timestamps, with a one-second fallback for coarse clocks.
+_CONNECT_MENU_CACHE: dict[Path, tuple[tuple[int, int, int, int], Optional[str], float]] = {}
 
 
 def user_config_path() -> Path:
@@ -145,22 +146,24 @@ def parse_connect_menu_flag(
 
 
 def _connect_menu_from_config(path: Path) -> Optional[str]:
-    """Read ``connect_menu``, caching per (path, mtime, size).
+    """Read ``connect_menu`` with file stamps and a bounded freshness interval.
 
     ``connect_menu_version()`` is consulted while drawing every picker row, so
     an uncached read means a stat and a parse per keystroke. The environment is
-    still checked live above, which is what tests vary.
+    still checked live above. A one-second refresh also catches same-size
+    writes on filesystems whose timestamps do not change between quick edits.
     """
     try:
         stat = path.stat()
-        stamp = (stat.st_mtime_ns, stat.st_size)
+        stamp = (stat.st_mtime_ns, stat.st_size, stat.st_ino, stat.st_ctime_ns)
     except OSError:
         return None
     cached = _CONNECT_MENU_CACHE.get(path)
-    if cached is not None and cached[0] == stamp:
+    now = time.monotonic()
+    if cached is not None and cached[0] == stamp and now - cached[2] < 1.0:
         return cached[1]
     value = _read_connect_menu(path)
-    _CONNECT_MENU_CACHE[path] = (stamp, value)
+    _CONNECT_MENU_CACHE[path] = (stamp, value, now)
     return value
 
 

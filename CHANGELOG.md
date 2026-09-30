@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   diagnostic results after the selected route or harness changes.
 - Cancel native turns reliably and preserve cooperative ACP sessions, with
   bounded recovery for unresponsive agents and protection against stale timers.
+- Refresh connection-menu configuration after rapid same-size edits on
+  filesystems with coarse timestamps, and validate connection controls on Windows.
 - Bound ACP conversation replay to the selected agent and 12,000 content
   characters, and allow explicit tool tests for unfamiliar local model names.
 

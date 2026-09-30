@@ -375,8 +375,12 @@ def test_the_connect_menu_flag_is_not_reread_on_every_row(tmp_path, monkeypatch)
         assert parse_connect_menu_flag(config_path=config) == "v2"
     assert len(reads) == 1
 
-    # A later edit is still picked up: the stamp changes with the contents.
+    # Use an explicit stamp so coarse filesystem clocks remain deterministic.
+    import os
+
+    previous = config.stat()
     config.write_text('{"connect_menu": "v1"}', encoding="utf-8")
+    os.utime(config, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000_000))
     assert parse_connect_menu_flag(config_path=config) == "v1"
     assert len(reads) == 2
 
@@ -394,3 +398,28 @@ def test_both_readers_agree_on_where_the_user_config_lives(monkeypatch, tmp_path
 
     assert Stub()._user_config_path() == user_config_path()
     assert user_config_path() == tmp_path / ".superqode" / "config.json"
+
+
+def test_connect_menu_cache_refreshes_when_filesystem_stamp_does_not_change(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import superqode.providers.harness_catalog as catalog
+
+    monkeypatch.delenv("SUPERQODE_CONNECT_MENU", raising=False)
+    clock = [0.0]
+    monkeypatch.setattr(catalog, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    config = tmp_path / "config.json"
+    config.write_text('{"connect_menu": "v2"}', encoding="utf-8")
+    real_stat = Path.stat
+
+    def coarse_stat(path, *args, **kwargs):
+        if path == config:
+            return SimpleNamespace(st_mtime_ns=1, st_ctime_ns=1, st_ino=1, st_size=22)
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", coarse_stat)
+    assert parse_connect_menu_flag(config_path=config) == "v2"
+    config.write_text('{"connect_menu": "v1"}', encoding="utf-8")
+    clock[0] = 0.5
+    assert parse_connect_menu_flag(config_path=config) == "v2"
+    clock[0] = 1.1
+    assert parse_connect_menu_flag(config_path=config) == "v1"

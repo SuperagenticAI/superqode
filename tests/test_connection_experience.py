@@ -290,7 +290,7 @@ async def test_acp_cancel_preserves_cooperative_session_and_bounds_recovery(resp
 
     task = asyncio.create_task(prompt())
     preserved = await cancel_prompt_with_grace(
-        SimpleNamespace(cancel=cancel, stop=stop), task, timeout=0.01
+        SimpleNamespace(cancel=cancel, stop=stop), task, timeout=1.0 if responsive else 0.05
     )
     assert preserved is responsive
     assert stopped == ([] if responsive else [True])
