@@ -101,6 +101,67 @@ def _menu_history_label(menu: str) -> str:
 
 
 class ConnectMixin:
+    def _connection_auth_for_status(self) -> str:
+        from superqode.providers.connection_profiles import (
+            get_connection_profile,
+            CONNECT_MENU_SUBSCRIPTIONS,
+        )
+
+        profile = get_connection_profile(str(getattr(self, "_connecting_profile_id", "") or ""))
+        if profile is not None:
+            return profile.auth_mode or (
+                "subscription" if profile.menu == CONNECT_MENU_SUBSCRIPTIONS else ""
+            )
+        return "subscription" if getattr(self, "_acp_subscription_vendor", None) else ""
+
+    def _begin_connection_view(self, log: ConversationLog) -> None:
+        """Isolate inline setup from the conversation and its prompt draft."""
+        if (
+            getattr(self, "is_busy", False)
+            or not isinstance(log, ConversationLog)
+            or not log.is_mounted
+        ):
+            return
+        if not log.suspend_navigation_view():
+            return
+        prompt = self.query_one("#prompt-input")
+        self._connection_draft = prompt.value
+        self._connection_cursor = prompt.cursor_location
+        prompt.value = ""
+        self._connection_welcome = getattr(self, "_welcome_active", False)
+        self._welcome_active = False
+        self.default_screen.add_class("connection-setup")
+        self._history.clear()
+        self._record_screen("conversation", "Agent", lambda: self._end_connection_view(log))
+
+    def _end_connection_view(self, log: ConversationLog) -> bool:
+        if not isinstance(log, ConversationLog) or not log.is_mounted:
+            return False
+        if not log.restore_navigation_view():
+            return False
+        self.default_screen.remove_class("connection-setup")
+        self._reset_connect_selection_states()
+        self._prompts.clear()
+        self._history.clear()
+        self._welcome_active = getattr(self, "_connection_welcome", False)
+        prompt = self.query_one("#prompt-input")
+        prompt.value = getattr(self, "_connection_draft", "")
+        prompt.cursor_location = getattr(self, "_connection_cursor", (0, 0))
+        # Input.Submitted clears a selection answer after its callback returns.
+        # Restore the conversation draft after that synchronous dispatch too.
+        draft, cursor = prompt.value, prompt.cursor_location
+
+        def restore_draft():
+            if getattr(log, "_navigation_view", None) is None and not prompt.value:
+                prompt.value = draft
+                prompt.cursor_location = cursor
+
+        self.call_after_refresh(restore_draft)
+        self._workspace_intro_visible = False
+        self._sync_navigation_controls()
+        self._ensure_input_focus()
+        return True
+
     """Local/BYOK/ACP connection flows and catalog refresh."""
 
     def _open_connection_browser(self, log: ConversationLog, query: str = "") -> None:
@@ -111,6 +172,7 @@ class ConnectMixin:
             if profile_id == "__last__":
                 self._connect_last(log)
             elif profile_id and profile_id.startswith("acp:"):
+                self._begin_connection_view(log)
                 self._harness_cmd(f"switch {profile_id}", log)
             elif profile_id:
                 from superqode.providers.connection_profiles import get_connection_profile
@@ -1705,6 +1767,9 @@ class ConnectMixin:
         """
         if log is None:
             return
+        begin = getattr(self, "_begin_connection_view", None)
+        if callable(begin):
+            begin(log)
         try:
             log.clear()
             log.scroll_home(animate=False)
@@ -3828,6 +3893,9 @@ class ConnectMixin:
             normalize_menu,
         )
 
+        begin = getattr(self, "_begin_connection_view", None)
+        if callable(begin):
+            begin(log)
         current_menu = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
         if menu is None:
             # A fresh `:connect` always lands on the root screen; arrow-key
@@ -3863,9 +3931,12 @@ class ConnectMixin:
 
         is_root = menu == CONNECT_MENU_ROOT
         title, subtitle = connect_menu_titles().get(menu, ("Connect", ""))
+        compact = bool(
+            isinstance(log, ConversationLog) and log.is_mounted and self.size.height < 30
+        )
 
         t = Text()
-        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("  ◈ " if compact else "\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append(f"{title}\n", style=f"bold {THEME['text']}")
         if subtitle:
             t.append(f"  {subtitle}\n", style=THEME["muted"])
@@ -3874,7 +3945,8 @@ class ConnectMixin:
         if note:
             t.append(f"  {note}\n", style=f"bold {THEME['success']}")
             self._connect_context_note = ""
-        t.append("\n", style="")
+        if not compact:
+            t.append("\n", style="")
 
         # Show what was detected locally before the user chooses anything.
         # Chips are clickable; info-only notes (repo markers) stay plain.
@@ -3906,7 +3978,7 @@ class ConnectMixin:
                 if notes:
                     t.append("  ·  ", style=THEME["dim"])
                     t.append(" · ".join(notes), style=THEME["dim"])
-                t.append("\n\n", style="")
+                t.append("\n" if compact else "\n\n", style="")
                 self._connect_chip_hits = hits
 
         # Grouping is per-menu; most screens are flat. Drawn from the same
@@ -3973,7 +4045,7 @@ class ConnectMixin:
                 # with their own underline and colour, which turned every
                 # description into a smeared rule. Clicks on these lines still
                 # select the row, resolved by position in _click_selects_picker_row.
-                if profile.description:
+                if profile.description and (not compact or is_highlighted):
                     if is_highlighted:
                         append_wrapped(profile.description, THEME["muted"])
                     else:
@@ -4076,6 +4148,7 @@ class ConnectMixin:
 
     def _show_connect_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive provider picker with model counts and API key guidance."""
+        self._begin_connection_view(log)
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_free_providers
         from superqode.providers.dynamic import connect_provider_ids, resolve_provider_def
         from superqode.providers.models import get_models_for_provider, get_data_source

@@ -254,6 +254,19 @@ class ColorfulStatusBar(Static):
         def right_separator() -> None:
             right.append(" │ ", style="#3f3f46")
 
+        def append_auth(default: str = "") -> None:
+            auth_mode = (self.connection_auth or default).strip().lower()
+            label = {
+                "subscription": "SUBSCRIPTION" if medium else "SUB",
+                "local": "LOCAL",
+                "byok": "BYOK",
+            }.get(auth_mode, auth_mode.upper())
+            if label:
+                color = {"subscription": "#c084fc", "local": "#06b6d4", "byok": "#f59e0b"}.get(
+                    auth_mode, "#a1a1aa"
+                )
+                result.append(f"{label} ", style=f"bold {color}")
+
         # Compact branded identity, kept in the corner. Version is retained at
         # every width. No OSC-8: terminals underline hyperlinks on hover.
         identity = Text()
@@ -270,6 +283,8 @@ class ColorfulStatusBar(Static):
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
         model_limit = 42 if wide else 24 if medium else 15 if width >= 64 else 10
+        if self.connection_auth and width < 90:
+            model_limit = min(model_limit, max(4, width - 70))
         provider_limit = 24 if medium else 12 if width >= 64 else 8
         conn_start = cell_len(result.plain)
         conn_action = ""
@@ -284,19 +299,7 @@ class ColorfulStatusBar(Static):
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
             result.append("● ", style="#22c55e")
-            auth_mode = (self.connection_auth or "byok").strip().lower()
-            auth_label = {
-                "subscription": "SUBSCRIPTION" if medium else "SUB",
-                "local": "LOCAL",
-                "byok": "BYOK",
-            }.get(auth_mode, auth_mode.upper())
-            auth_color = {
-                "subscription": "#c084fc",
-                "local": "#06b6d4",
-                "byok": "#f59e0b",
-            }.get(auth_mode, "#a1a1aa")
-            if auth_label:
-                result.append(f"{auth_label} ", style=f"bold {auth_color}")
+            append_auth("byok")
             result.append(
                 self._truncate_status_value(self.byok_provider, provider_limit),
                 style="bold #10b981",
@@ -311,6 +314,7 @@ class ColorfulStatusBar(Static):
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
             result.append("● ", style="#22c55e")
+            append_auth()
             result.append(
                 self._truncate_status_value(self.active_model, model_limit),
                 style="bold #10b981",
@@ -320,6 +324,7 @@ class ColorfulStatusBar(Static):
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
             result.append("● ", style="#22c55e")
+            append_auth()
             result.append(
                 self._truncate_status_value(self.active_runtime, model_limit),
                 style="bold #10b981",
@@ -339,6 +344,8 @@ class ColorfulStatusBar(Static):
                 separator()
                 result.append("rt ", style="#71717a")
                 runtime_limit = 20 if medium else 7
+                if self.connection_auth and width < 90:
+                    runtime_limit = 8 if medium else 4
                 result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
 
             harness = (self.active_harness or "").strip()
@@ -2406,6 +2413,10 @@ class ConversationLog(RichLog):
 
     def reset_conversation(self) -> None:
         """Switch transcripts without leaking copy, search, or tool history."""
+        self._restored_history = []
+        self._history_start = 0
+        self._history_end = 0
+        self._navigation_view = None
         self.clear()
         self._messages.clear()
         self._last_response = ""
@@ -2419,6 +2430,180 @@ class ConversationLog(RichLog):
         self.clear_running_tools()
         self.reset_response_stream()
         self._set_viewport_mode("following")
+
+    HISTORY_PAGE_SIZE = 40
+
+    def replay_history(self, turns: list, receipt: str = "") -> None:
+        """Render a bounded recent page while keeping full copy/search history."""
+        self.reset_conversation()
+        self._restored_history = [
+            (
+                "user" if str(turn.get("role") or "").lower() == "user" else "agent",
+                str(turn.get("content") or ""),
+                "Assistant",
+            )
+            for turn in turns
+            if str(turn.get("role") or "").lower() in {"user", "assistant"}
+            and str(turn.get("content") or "")
+        ]
+        self._history_start = max(0, len(self._restored_history) - self.HISTORY_PAGE_SIZE)
+        self._history_end = len(self._restored_history)
+        self._write_history_page(
+            0 if not self._history_start else self._history_start, len(self._restored_history)
+        )
+        self._messages = list(self._restored_history)
+        if receipt:
+            self.add_info(receipt)
+        self.scroll_end(animate=False)
+
+    def _write_history_page(self, start: int, end: int, *, earlier: bool = True) -> None:
+        if start and earlier:
+            self.write(
+                Text(
+                    "  Load earlier ↗\n", style=f"{THEME['cyan']} {command_link('history-earlier')}"
+                )
+            )
+        self._messages = list(self._restored_history[:start])
+        for role, body, agent in self._restored_history[start:end]:
+            if role == "user":
+                self.add_user(body)
+            elif role in {"agent", "assistant"}:
+                self.add_assistant(body, agent=agent)
+            else:
+                writer = getattr(self, f"add_{role}", self.add_info)
+                writer(body)
+        if end < len(self._restored_history):
+            self.write(
+                Text("  Load later ↗\n", style=f"{THEME['cyan']} {command_link('history-later')}")
+            )
+
+    def focus_history_match(self, message_index: int) -> bool:
+        """Expose an unloaded search match without rendering the entire history."""
+        if (
+            not getattr(self, "_restored_history", [])
+            or getattr(self, "_navigation_view", None) is not None
+        ):
+            return False
+        if self._history_start <= message_index < self._history_end:
+            return False
+        messages, response = self._messages, self._last_response
+        self._restored_history = list(messages)
+        start = message_index // self.HISTORY_PAGE_SIZE * self.HISTORY_PAGE_SIZE
+        end = min(len(messages), start + self.HISTORY_PAGE_SIZE)
+        self.clear()
+        self._write_history_page(start, end)
+        self._messages, self._last_response = messages, response
+        self._history_start, self._history_end = start, end
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("user_locked")
+        self.call_after_refresh(self.scroll_home, animate=False)
+        return True
+
+    def load_later_history(self) -> None:
+        end = getattr(self, "_history_end", 0)
+        if not end or end >= len(self._restored_history):
+            return
+        messages, response = self._messages, self._last_response
+        old_scroll = self.scroll_y
+        if self.lines and "Load later" in self.lines[-1].text:
+            self.lines.pop()
+        next_end = min(len(self._restored_history), end + self.HISTORY_PAGE_SIZE)
+        self._write_history_page(end, next_end, earlier=False)
+        self._messages, self._last_response = messages, response
+        self._history_end = next_end
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("user_locked")
+        self.call_after_refresh(self.scroll_to, y=old_scroll, animate=False, force=True)
+
+    def load_earlier_history(self) -> None:
+        """Prepend one page, retaining new turns and the reader's viewport."""
+        end = getattr(self, "_history_start", 0)
+        if not end or getattr(self, "_navigation_view", None) is not None:
+            return
+        start = max(0, end - self.HISTORY_PAGE_SIZE)
+        lines, messages = self.lines, self._messages
+        removed = 0
+        if lines and "Load earlier" in lines[0].text:
+            lines = lines[1:]
+            removed = 1
+        last_response = self._last_response
+        old_width, old_scroll = self._widest_line_width, self.scroll_y
+        self.lines = []
+        self.clear()
+        self._pending_response_reveal_token = None
+        self._write_history_page(start, end)
+        if self.lines and "Load later" in self.lines[-1].text:
+            self.lines.pop()
+        added = len(self.lines)
+        self.lines.extend(lines)
+        self._messages = messages
+        self._last_response = last_response
+        self._history_start = start
+        self._widest_line_width = max(old_width, self._widest_line_width)
+        self._line_cache.clear()
+        from textual.geometry import Size
+
+        self.virtual_size = Size(self._widest_line_width, len(self.lines))
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("user_locked")
+        for key in ("_response_start_y", "_response_end_y"):
+            value = getattr(self, key, None)
+            if value is not None:
+                setattr(self, key, value + added)
+        self.refresh(layout=True)
+        self.call_after_refresh(
+            self.scroll_to, y=max(0, old_scroll + added - removed), animate=False, force=True
+        )
+
+    def suspend_navigation_view(self) -> bool:
+        """Give setup its own display buffers without discarding the transcript."""
+        if getattr(self, "_navigation_view", None) is not None:
+            return False
+        fields = (
+            "lines",
+            "_start_line",
+            "_widest_line_width",
+            "_deferred_renders",
+            "_messages",
+            "_viewport_mode",
+            "_unread_output_lines",
+            "_response_start_y",
+            "_response_end_y",
+            "_last_response",
+            "_last_error",
+        )
+        self._navigation_view = {key: getattr(self, key) for key in fields}
+        self._navigation_view.update(scroll_y=self.scroll_y, auto_scroll=self.auto_scroll)
+        self.lines = []
+        from collections import deque
+
+        self._deferred_renders = deque()
+        self._messages = []
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("following")
+        self.clear()
+        return True
+
+    def restore_navigation_view(self) -> bool:
+        """Return to the saved conversation, including its reading position."""
+        saved = getattr(self, "_navigation_view", None)
+        if saved is None:
+            return False
+        self._navigation_view = None
+        scroll_y = saved.pop("scroll_y")
+        auto_scroll = saved.pop("auto_scroll")
+        for key, value in saved.items():
+            setattr(self, key, value)
+        self._line_cache.clear()
+        from textual.geometry import Size
+
+        self.virtual_size = Size(self._widest_line_width, len(self.lines))
+        self.auto_scroll = auto_scroll
+        self.refresh(layout=True)
+        self.scroll_to(y=scroll_y, animate=False, force=True)
+        self.call_after_refresh(self.scroll_to, y=scroll_y, animate=False, force=True)
+        self._sync_unread_indicator()
+        return True
 
     def redraw_conversation(self) -> None:
         """Re-render the active conversation turns into the visual log."""

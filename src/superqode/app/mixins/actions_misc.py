@@ -19,6 +19,9 @@ class MiscActionsMixin:
 
     def action_return_to_agent(self) -> None:
         """Restore the conversation after viewing a command or picker screen."""
+        log = self.query_one("#log", ConversationLog)
+        if self._end_connection_view(log):
+            return
         reset_connect = getattr(self, "_reset_connect_selection_states", None)
         if callable(reset_connect):
             reset_connect()
@@ -215,6 +218,7 @@ class MiscActionsMixin:
 
     def action_cancel_agent(self):
         """Cancel the currently running agent operation."""
+        self._queue_paused = True
         log = self.query_one("#log", ConversationLog)
         if getattr(self, "_cancel_requested", False) and self.is_busy:
             return

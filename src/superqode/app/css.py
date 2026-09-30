@@ -247,6 +247,11 @@ ConversationLog {
     display: block;
 }
 #hints { text-align: center; color: #71717a; height: 1; margin-top: 0; padding: 0; }
+/* Setup gets room without changing any of its labels or controls. */
+Screen.connection-setup #input-box { margin: 0; min-height: 3; max-height: 5; }
+Screen.connection-setup #prompt-input { height: 1; min-height: 1; max-height: 3; }
+Screen.connection-setup #hints { display: none; }
+Screen.connection-setup #conversation { padding: 0; }
 
 #attachment-bar { display: none; height: auto; max-height: 5; margin: 0 2; }
 #attachment-bar.visible { display: block; }

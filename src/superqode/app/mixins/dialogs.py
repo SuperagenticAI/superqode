@@ -2300,6 +2300,18 @@ class DialogsMixin:
             # Collapsed one-liner (normal and minimal modes).
             self._write_collapsed_changes_line(log, files_modified, file_diffs)
 
+        # Activity opens recorded turn evidence without expanding the transcript
+        # or presenting unrelated working-tree changes as this task's edits.
+        if files_modified or any(
+            call.get("status") in {"success", "error"} for call in getattr(log, "_tool_calls", [])
+        ):
+            from superqode.app.task_review import task_review
+
+            self._outcome_store().add(task_review(summary, getattr(log, "_tool_calls", [])))
+            from superqode.app.mixins.clickable_commands import command_link
+
+            log.write(Text("  :activity ↗\n", style=f"{THEME['cyan']} {command_link('activity')}"))
+
         # NEW: Trigger sidebar auto-navigation if files were modified
         if files_modified:
             self.set_timer(0.2, lambda: self._navigate_to_sidebar_changes(files_modified))
@@ -2475,6 +2487,7 @@ class DialogsMixin:
         reuse_snapshot: bool = False,
     ):
         """Show the curated ACP picker or a requested catalog tier."""
+        self._begin_connection_view(log)
         # Recorded so back from a connected agent returns to this listing
         # rather than skipping past it to the category screen above.
         try:

@@ -26,11 +26,16 @@ class HelperExitLifecycleMixin:
             log: The conversation log widget
             context: Optional context string (e.g., "DEV.FULLSTACK", "OPENCODE")
         """
-        log.clear()
+        restored = self._end_connection_view(log)
+        self._welcome_active = False
+        if not restored:
+            log.clear()
         # Connection/setup content is useful until the first real prompt. Once
         # work starts, the persistent status bar carries the active model and
         # the transcript should become conversation-only.
-        self._workspace_intro_visible = True
+        self._workspace_intro_visible = not restored or not any(
+            role == "user" for role, *_ in getattr(log, "_messages", [])
+        )
 
         # Show minimal ready message
         t = Text()
@@ -168,6 +173,7 @@ class HelperExitLifecycleMixin:
         )
 
     def _go_home(self, log: ConversationLog):
+        self._end_connection_view(log)
         cancel = getattr(self, "_cancel_harness_wizard", None)
         if callable(cancel):
             try:

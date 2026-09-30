@@ -420,7 +420,7 @@ class HelpersMixin(
             self.set_timer(0.2, self._drain_message_queue)
 
     def _set_composer_working_state(self, working: bool, *, interactive: bool = False) -> None:
-        """Show the composer as disabled work chrome, or enable it for a decision."""
+        """Keep drafts editable during work; submissions use the message queue."""
         try:
             prompt_area = self.query_one("#prompt-area")
             prompt_area.set_class(working and not interactive, "working")
@@ -429,7 +429,15 @@ class HelpersMixin(
             pass
         try:
             prompt = self.query_one("#prompt-input", SelectionAwareInput)
-            prompt.disabled = working and not interactive
+            prompt.disabled = False
+            if interactive and getattr(self, "_decision_draft", None) is None:
+                self._decision_draft = (prompt.value, prompt.cursor_location)
+                prompt.value = ""
+            elif not interactive and getattr(self, "_decision_draft", None) is not None:
+                draft, cursor = self._decision_draft
+                self._decision_draft = None
+                prompt.value = draft
+                prompt.cursor_location = cursor
             if working and not interactive:
                 hide_completions = getattr(self, "_hide_prompt_completion_panel", None)
                 if callable(hide_completions):
@@ -761,6 +769,7 @@ class HelpersMixin(
 
             status = self.query_one("#status-bar", ColorfulStatusBar)
             status.update_byok_status(tokens=max(0, int(tokens or 0)))
+            status.connection_auth = getattr(self, "_connection_auth_for_status", lambda: "")()
             status.active_runtime = runtime_name
             if runtime_name == "antigravity-managed":
                 status.active_model = (
@@ -1380,10 +1389,8 @@ class HelpersMixin(
             input_widget.placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
         except Exception:
             pass
-        # The agent normally keeps working after a decision. Return to the
-        # disabled work state instead of leaving the composer accidentally live.
-        if getattr(self, "is_busy", False):
-            self._set_composer_working_state(True)
+        # Restore the working draft after a decision, even if the turn ended.
+        self._set_composer_working_state(bool(getattr(self, "is_busy", False)))
 
     def _set_input_placeholder(self, text: str) -> None:
         """Best-effort prompt hint for inline decisions."""

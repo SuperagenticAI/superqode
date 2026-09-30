@@ -433,13 +433,21 @@ class HelperVimMixin:
             return
         message_index = matches[self._vim_search_index]
         try:
+            focus = getattr(log, "focus_history_match", None)
+            if callable(focus) and not getattr(self, "is_busy", False):
+                focus(message_index)
             log.auto_scroll = False
             messages = list(getattr(log, "_messages", []))
             target_y = 0
-            for _role, content, _agent in messages[:message_index]:
+            for _role, content, _agent in messages[
+                getattr(log, "_history_start", 0) : message_index
+            ]:
                 target_y += max(2, len(str(content).splitlines()) + 2)
             visible_height = max(6, int(getattr(getattr(log, "size", None), "height", 18) or 18))
-            log.scroll_to(y=max(0, target_y - max(1, visible_height // 3)), animate=False)
+            position = max(0, target_y - max(1, visible_height // 3))
+            log.scroll_to(y=position, animate=False)
+            if callable(getattr(log, "call_after_refresh", None)):
+                log.call_after_refresh(log.scroll_to, y=position, animate=False)
         except Exception:
             pass
 

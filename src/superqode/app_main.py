@@ -1169,6 +1169,7 @@ class SuperQodeApp(
 
     def _cancel_connected_run(self, log) -> None:
         """Abort the live model or harness turn and unlock the composer."""
+        self._queue_paused = True
         self._cancel_requested = True
         pure = getattr(self, "_pure_mode", None)
         if pure is not None:

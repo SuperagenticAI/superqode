@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.32] - 2026-09-30
+
+### Added
+
+- Task outcomes in Activity with recorded file changes, diff previews and
+  terminal command results.
+- Paged conversation history with earlier/later navigation, full transcript
+  copy and search across restored messages.
+- `:queue send` to resume queued messages after cancellation.
+
+### Fixed
+
+- Keep the composer editable during runs and preserve unfinished drafts when
+  queued messages are delivered or approval prompts are answered.
+- Pause queued messages after cancellation until explicitly resumed.
+- Restore conversation content, prompt drafts and scroll position after
+  connection setup, including successful connection changes.
+- Fit connection navigation in 80×24 terminals and allow long connection
+  details to scroll while keeping action buttons visible.
+- Show authentication status consistently across connection types and compact
+  terminal widths.
+- Prevent connection and runtime switches from interrupting active work.
+
 ## [2.4.31] - 2026-09-30
 
 ### Added

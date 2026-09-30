@@ -216,6 +216,28 @@ class EventHandlerMixin:
                 self._selection_digit_buffer = ""
         log = self.query_one("#log", ConversationLog)
 
+        if getattr(self, "_permission_pending", False) and not getattr(
+            self, "_awaiting_agent_question", False
+        ):
+            # Approval answers are decisions, never queued coding prompts.
+            if text.lower() in {
+                "y",
+                "yes",
+                "allow",
+                "ok",
+                "n",
+                "no",
+                "deny",
+                "reject",
+                "a",
+                "all",
+                "allow all",
+                "yes all",
+            }:
+                event.input.value = ""
+                self._handle_permission_input(text)
+            return
+
         if text:
             # A new prompt/command means the user wants to see its output.
             # Drop any reading lock so the result lands in view instead of

@@ -1042,6 +1042,7 @@ class ModelCatalogMixin:
             # A new ACP connection supersedes any prior local or BYOK display.
             status.update_byok_status()
             status.active_runtime = "acp"
+            status.connection_auth = getattr(self, "_connection_auth_for_status", lambda: "")()
             status.active_model = model or ""
             # The agent owns its loop, tools and prompt, so it is the active
             # harness. Leaving this field alone kept the startup value, which

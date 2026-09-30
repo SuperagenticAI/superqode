@@ -1187,6 +1187,7 @@ class LocalModelsMixin:
             clear_log: If True, clear the log before writing (default: True).
                       Set to False when updating during navigation to reduce flickering.
         """
+        self._begin_connection_view(log)
         # CRITICAL: Force complete state reset - we MUST show provider picker, not models
         # Clear ALL local-related state to prevent any auto-selection
         self._awaiting_local_provider = True

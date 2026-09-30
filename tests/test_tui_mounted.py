@@ -83,7 +83,7 @@ async def test_terminal_resize_clamps_without_losing_preferred_sidebar_width(tmp
         assert get_sidebar_width() == 60
 
 
-async def test_composer_stays_visible_but_disabled_while_agent_is_working():
+async def test_composer_stays_visible_and_editable_while_agent_is_working():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         composer = app.query_one("#prompt-area")
@@ -97,7 +97,7 @@ async def test_composer_stays_visible_but_disabled_while_agent_is_working():
         await pilot.pause()
         assert not composer.has_class("hidden")
         assert composer.has_class("working")
-        assert prompt.disabled
+        assert not prompt.disabled
         assert not app._prompt_completion_visible
         assert not completions.has_class("visible")
         assert bottom_wave.is_active
@@ -117,7 +117,7 @@ async def test_composer_stays_visible_but_disabled_while_agent_is_working():
         app.is_busy = True
         await pilot.pause()
         assert composer.has_class("working")
-        assert prompt.disabled
+        assert not prompt.disabled
 
         app.is_busy = False
         await pilot.pause()
@@ -125,7 +125,7 @@ async def test_composer_stays_visible_but_disabled_while_agent_is_working():
         assert not prompt.disabled
 
 
-async def test_busy_composer_reenables_only_for_required_agent_input():
+async def test_busy_composer_distinguishes_drafting_from_required_agent_input():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
@@ -134,7 +134,7 @@ async def test_busy_composer_reenables_only_for_required_agent_input():
 
         app.is_busy = True
         await pilot.pause()
-        assert prompt.disabled
+        assert not prompt.disabled
 
         app._show_permission_prompt("bash", {"command": "pytest -q"}, log)
         await pilot.pause()
@@ -145,7 +145,7 @@ async def test_busy_composer_reenables_only_for_required_agent_input():
         app._permission_pending = False
         app._reset_input_placeholder()
         await pilot.pause()
-        assert prompt.disabled
+        assert not prompt.disabled
         assert composer.has_class("working")
 
 
@@ -166,7 +166,7 @@ async def test_full_agent_ui_lifecycle_stays_fast_and_readable():
             arguments={"code": "for item in range(3): print(item)"},
         )
         await pilot.pause()
-        assert prompt.disabled
+        assert not prompt.disabled
         assert "for item in range" in log._active_tools_renderable().plain
 
         app._show_permission_prompt("bash", {"command": "pytest -q"}, log)
@@ -174,7 +174,7 @@ async def test_full_agent_ui_lifecycle_stays_fast_and_readable():
         assert not prompt.disabled
         assert app._handle_permission_input("y")
         await pilot.pause()
-        assert prompt.disabled
+        assert not prompt.disabled
 
         log.add_tool_call(
             "python_repl",

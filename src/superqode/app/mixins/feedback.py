@@ -265,6 +265,16 @@ class FeedbackMixin:
         if not title or not primary:
             return False
 
+        if severity == "success" and title in {
+            "Connected",
+            "Agent connected",
+            "Model ready",
+            "Model selected",
+        }:
+            finish = getattr(self, "_end_connection_view", None)
+            if callable(finish) and log is not None:
+                finish(log)
+
         key = dedupe_key or f"{severity}:{title}:{primary}:{detail}"
         now = monotonic()
         recent = getattr(self, "_transition_notice_times", None)

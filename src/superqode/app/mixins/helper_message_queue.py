@@ -62,6 +62,7 @@ class HelperMessageQueueMixin:
         self._render_queued_input()
 
     def _clear_message_queue(self, log: ConversationLog | None = None) -> None:
+        self._queue_paused = False
         self._typeahead_queue = []
         self._queue_edit_index = None
         self._render_queued_input()
@@ -71,18 +72,35 @@ class HelperMessageQueueMixin:
     def _drain_message_queue(self) -> None:
         """Send the next queued message if the agent is idle."""
         queue = getattr(self, "_typeahead_queue", [])
-        if not queue or getattr(self, "is_busy", False):
+        if (
+            not queue
+            or getattr(self, "is_busy", False)
+            or getattr(self, "_cancel_requested", False)
+            or getattr(self, "_queue_paused", False)
+        ):
             return
         if getattr(self, "_queue_edit_index", None) is not None:
             return
         # Don't interrupt selection/question flows.
-        if getattr(self, "_awaiting_agent_question", False) or self._in_selection_mode():
+        if (
+            getattr(self, "_awaiting_agent_question", False)
+            or getattr(self, "_permission_pending", False)
+            or self._in_selection_mode()
+        ):
             return
         text = queue.pop(0)
         self._render_queued_input()
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+            draft, cursor = input_widget.value, input_widget.cursor_location
             input_widget.value = text
             self.post_message(Input.Submitted(input_widget, text))
+
+            def restore_draft():
+                if not input_widget.value:
+                    input_widget.value = draft
+                    input_widget.cursor_location = cursor
+
+            self.call_after_refresh(restore_draft)
         except Exception:
             pass

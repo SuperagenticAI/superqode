@@ -393,7 +393,27 @@ class SlashCommandMixin:
         else:
             args = parts[1] if len(parts) > 1 else ""
 
+        if (
+            getattr(self, "is_busy", False)
+            and c in {"connect", "runtime", "harness", "model", "resume"}
+            and args.strip().split(" ", 1)[0] not in {"status", "doctor", "list", "help", "test"}
+        ):
+            log.add_info(
+                "Wait for the active turn to finish or cancel it before switching sessions."
+            )
+            return
+
         self._record_ex_command(cmd, c)
+        if c == "connect" and args.strip().split(" ", 1)[0] not in {
+            "search",
+            "status",
+            "test",
+            "refresh",
+            "sync",
+        }:
+            begin = getattr(self, "_begin_connection_view", None)
+            if callable(begin):
+                begin(log)
         # A command the user has already found should never be suggested as a
         # discovery hint later. Progress is cached and only new roots write.
         try:
@@ -560,7 +580,14 @@ class SlashCommandMixin:
         elif c == "undo":
             self._handle_undo(log)
         elif c == "history":
-            self._handle_history(args, log)
+            if args.strip() in {"earlier", "later"}:
+                if not getattr(self, "is_busy", False) and not self._in_selection_mode():
+                    if args.strip() == "earlier":
+                        log.load_earlier_history()
+                    else:
+                        log.load_later_history()
+            else:
+                self._handle_history(args, log)
         elif c == "transcript":
             self._handle_select(log, "transcript")
         elif c == "timeline":
@@ -863,6 +890,12 @@ class SlashCommandMixin:
         words = raw.split(maxsplit=2)
         arg = words[0].lower() if words else ""
         queue = getattr(self, "_typeahead_queue", [])
+        if arg == "send":
+            if not getattr(self, "is_busy", False):
+                self._queue_paused = False
+                self._cancel_requested = False
+                self._drain_message_queue()
+            return
         cancelling_edit = arg == "edit" and len(words) > 1 and words[1].lower() == "cancel"
         if not queue and arg in {"edit", "move", "drop"} and raw != "drop" and not cancelling_edit:
             log.add_info("No queued messages to change.")
@@ -944,7 +977,7 @@ class SlashCommandMixin:
             t.append(f"{preview}\n", style=THEME["text"])
         t.append("\n  ", style="")
         t.append(
-            ":queue edit N · :queue edit cancel · :queue move N N · :queue drop N · :queue clear",
+            ":queue edit N · :queue edit cancel · :queue move N N · :queue drop N · :queue clear · :queue send",
             style=f"bold {THEME['cyan']}",
         )
         t.append("\n", style=THEME["muted"])
@@ -1592,6 +1625,12 @@ class SlashCommandMixin:
         receipt: str = "",
     ) -> None:
         """Clear the conversation log and replay restored user/assistant turns."""
+        finish = getattr(self, "_end_connection_view", None)
+        if callable(finish):
+            finish(log)
+        if isinstance(log, ConversationLog) and log.is_mounted:
+            log.replay_history(turns, receipt)
+            return
         try:
             reset = getattr(log, "reset_conversation", log.clear)
             reset()
@@ -2204,6 +2243,9 @@ class SlashCommandMixin:
                 return
             self._enqueue_message(text)
             return
+
+        if not getattr(self, "_typeahead_queue", []):
+            self._queue_paused = False
 
         # Bare terminal drops, quoted paths, and @image mentions all share the
         # same multimodal payload route. File paths are not model prompt text.

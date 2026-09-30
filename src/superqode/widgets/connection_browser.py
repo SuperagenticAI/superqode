@@ -6,7 +6,7 @@ from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, Horizontal
+from textual.containers import Vertical, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList, Static, Button, Footer
 from textual.widgets.option_list import Option
@@ -68,13 +68,16 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
     #connection-title { height: auto; text-style: bold; margin-bottom: 1; }
     #connection-search { margin-bottom: 1; }
     #connection-results { height: 1fr; }
-    #connection-detail { height: auto; max-height: 8; margin: 1 0; }
+    #connection-detail { height: auto; margin: 1 0; }
+    #connection-detail-scroll { height: auto; max-height: 8; margin: 1 0; }
+    #connection-detail-scroll #connection-detail { margin: 0; }
     #connection-buttons { height: 3; }
     #connection-buttons Button { margin-right: 1; min-width: 8; width: auto; padding: 0 1; }
     #connection-browser.compact { padding: 0 1; }
     #connection-browser.compact #connection-title { height: 1; margin: 0; }
     #connection-browser.compact #connection-search { margin: 0; }
-    #connection-browser.compact #connection-detail { height: 2; max-height: 2; margin: 0; }
+    #connection-browser.compact #connection-detail-scroll { height: 5; max-height: 5; margin: 0; }
+    #connection-browser.compact #connection-detail { height: auto; }
     """
 
     def __init__(self, *, query: str = "", loader=load_connection_profiles, cwd=None):
@@ -98,7 +101,8 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
                 id="connection-search",
             )
             yield OptionList(id="connection-results")
-            yield Static("Loading local connection catalog…", id="connection-detail")
+            with VerticalScroll(id="connection-detail-scroll", can_focus=True):
+                yield Static("Loading local connection catalog…", id="connection-detail")
             with Horizontal(id="connection-buttons"):
                 yield Button("Connect", id="connection-select", variant="primary", disabled=True)
                 yield Button("Favorite", id="connection-favorite", disabled=True)
@@ -198,6 +202,7 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
         else:
             text.append("Loading local connection catalog…")
         self.query_one("#connection-detail", Static).update(text)
+        self.query_one("#connection-detail-scroll").scroll_home(animate=False)
         self.query_one("#connection-select", Button).disabled = selected is None
         favorite = self.query_one("#connection-favorite", Button)
         favorite.disabled = selected is None

@@ -209,6 +209,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:context` - Show, pin, or re-detect the model's loaded context window
 - `:thinking` - Cycle thinking-log verbosity (also `Ctrl+T`)
 - `:queue clear` - Clear queued type-ahead messages
+- `:queue send` - Send the next queued message when idle
 - `:workspace add|remove|list` - Register extra repositories for cross-repo search
 - `:memory` - Search, remember, and inspect project memory providers
 - `:sandbox` - Show or set the local command sandbox mode
@@ -311,9 +312,12 @@ When an agent needs clarification it can use the `ask_user` tool. The TUI render
 
 You do not have to wait for a run to finish before typing.
 
-On builtin connections (local models and BYOK providers), a message submitted mid-run is **steered into the current run**: it lands between the agent's tool calls and shapes the work in progress. The log confirms delivery with `steering the current run`. This is the fastest way to correct course ("skip the docs, focus on the failing test") without cancelling anything.
+The prompt stays editable during a run. Pressing `Enter` adds your message to the **type-ahead queue** for the next turn. The queue renders under the prompt with a live preview and sends automatically when the agent is free. `:queue clear` empties it.
 
-On connections that cannot be steered (ACP agents, vendor SDK runtimes) and during selection or question flows, messages go to the **type-ahead queue** instead. The queue renders under the prompt with a live preview and sends automatically when the agent is free. `:queue clear` empties it.
+Queued delivery keeps an unfinished draft intact. Cancelling a run pauses queued
+delivery; `:queue send` sends the next queued message when the agent is idle.
+
+Use `:steer <message>` to correct the current run when the connected agent supports live steering. Unsupported steering retains your text as a draft. Approval and agent-question input is handled separately, with your working draft restored after the decision.
 
 ## Prompt Input
 
@@ -962,6 +966,21 @@ harness, bad credentials, external-only, missing transcript) and continuity
 (exact resume, context replay, cannot resume); rename; and resume the selection.
 Discovery and availability probes run in background workers, so large stores do
 not freeze input while the browser opens.
+
+Long restored transcripts initially display the most recent 40 messages. Click
+**Load earlier** to prepend another page without losing newer turns or your
+reading position. The complete restored conversation remains available to copy
+and transcript search.
+Use `:history earlier` or `:history later` to navigate pages from the keyboard.
+
+Connection setup preserves the displayed conversation, prompt draft, and reading
+position. Back or Escape from the root picker restores them. Short terminals
+show descriptions for the selected connection; the search dialog's details can
+be scrolled independently of its buttons.
+
+After an editing or tool-using turn, `:activity` includes the recorded file changes,
+diff previews, and test-command outcomes. Unavailable test evidence is shown as
+**Not recorded**; the agent's prose alone does not establish that tests passed.
 
 Newly saved custom harness sessions retain their spec path as well as their
 harness name. Keep that spec available when returning to the project. Resume

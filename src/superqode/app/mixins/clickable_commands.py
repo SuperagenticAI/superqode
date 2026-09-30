@@ -16,6 +16,9 @@ from superqode.app.prompt_stack import PromptSpec
 #: CONFIRM_WHILE_BUSY as well.
 CLICKABLE_COMMANDS: frozenset[str] = frozenset(
     {
+        "activity",
+        "history-earlier",
+        "history-later",
         "agent",
         "back",
         "connect",
@@ -183,6 +186,9 @@ class ClickableCommandMixin:
 
     def _dispatch_clicked_command(self, command: str) -> None:
         log = self._clicked_command_log()
+        if command in {"history-earlier", "history-later"}:
+            self._handle_command(f":history {command.removeprefix('history-')}", log)
+            return
         if command == "workspace-files":
             self.action_sidebar_files()
             return
