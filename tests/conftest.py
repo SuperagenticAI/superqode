@@ -114,5 +114,8 @@ def _isolate_connection_defaults(tmp_path_factory, monkeypatch, request):
     isolated_home = tmp_path_factory.mktemp("connection-home")
     monkeypatch.setenv("HOME", str(isolated_home))
     monkeypatch.setenv("USERPROFILE", str(isolated_home))
-    monkeypatch.setenv("SUPERQODE_RUNTIME", "builtin")
+    # An explicit builtin env value would count as an intentional override
+    # of ACP/subscription routing. Preserve the genuine no-override default.
+    monkeypatch.setenv("SUPERQODE_RUNTIME", "")
+    monkeypatch.delenv("SUPERQODE_RUNTIME", raising=False)
     monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
