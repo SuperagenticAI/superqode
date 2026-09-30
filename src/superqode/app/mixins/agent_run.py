@@ -134,6 +134,77 @@ class AgentRunMixin:
         except Exception:
             pass
 
+    WAVE_INITIAL_BURST_SECONDS = 3.0
+    WAVE_BURST_SECONDS = 1.0
+    WAVE_BURST_INTERVAL = 5.0
+
+    def _set_wave_motion(self, active: bool) -> None:
+        for selector in ("#thinking-wave", "#thinking-wave-bottom"):
+            try:
+                wave = self.query_one(selector)
+                wave.is_active = active
+                if getattr(self, "_wave_burst_running", False):
+                    wave.add_class("visible")
+                else:
+                    wave.remove_class("visible")
+            except Exception:
+                pass
+
+    def _begin_wave_bursts(self) -> None:
+        if getattr(self, "_wave_burst_running", False):
+            return  # Streaming and preparation share one run's schedule.
+        if not getattr(self, "_wave_window_focused", True):
+            self._wave_resume_on_focus = True
+            try:
+                self.query_one("#streaming-thinking").auto_refresh = None
+            except Exception:
+                pass
+            return
+        self._wave_burst_running = True
+        self._wave_generation = getattr(self, "_wave_generation", 0) + 1
+        generation = self._wave_generation
+        self._show_wave_burst(generation, duration=self.WAVE_INITIAL_BURST_SECONDS)
+        self._wave_repeat_timer = self.set_interval(
+            self.WAVE_BURST_INTERVAL, lambda: self._show_wave_burst(generation)
+        )
+
+    def _show_wave_burst(
+        self, generation: int | None = None, *, duration: float | None = None
+    ) -> None:
+        if generation is not None and generation != getattr(self, "_wave_generation", 0):
+            return
+        if not getattr(self, "is_busy", False):
+            self._stop_wave_bursts()
+            return
+        if not getattr(self, "_wave_burst_running", False):
+            return
+        timer = getattr(self, "_wave_end_timer", None)
+        if timer is not None:
+            timer.stop()
+        self._set_wave_motion(True)
+        generation = getattr(self, "_wave_generation", 0)
+        self._wave_end_timer = self.set_timer(
+            self.WAVE_BURST_SECONDS if duration is None else duration,
+            lambda: self._end_wave_burst(generation),
+        )
+
+    def _end_wave_burst(self, generation: int | None = None) -> None:
+        if generation is not None and generation != getattr(self, "_wave_generation", 0):
+            return
+        self._wave_end_timer = None
+        self._set_wave_motion(False)
+
+    def _stop_wave_bursts(self) -> None:
+        self._wave_generation = getattr(self, "_wave_generation", 0) + 1
+        self._wave_burst_running = False
+        self._wave_resume_on_focus = False
+        for attribute in ("_wave_repeat_timer", "_wave_end_timer"):
+            timer = getattr(self, attribute, None)
+            if timer is not None:
+                timer.stop()
+            setattr(self, attribute, None)
+        self._set_wave_motion(False)
+
     def _start_stream_animation(self, log: ConversationLog):
         """Start animation during agent streaming."""
         self._stream_animation_frame = 0
@@ -153,24 +224,12 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show the branded top scanning line.
-        try:
-            thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
-            thinking_wave.is_active = True
-            thinking_wave.add_class("visible")
-        except Exception:
-            pass
-
-        try:
-            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            bottom_wave.is_active = True
-            bottom_wave.add_class("visible")
-        except Exception:
-            pass
+        self._begin_wave_bursts()
 
     def _stop_stream_animation(self):
         """Stop the streaming animation."""
         self.is_busy = False
+        self._stop_wave_bursts()
 
         self._set_composer_working_state(False)
 
@@ -217,20 +276,7 @@ class AgentRunMixin:
         except Exception:
             pass
 
-        # Show scanning line animation at TOP
-        try:
-            thinking_wave = self.query_one("#thinking-wave", TopScanningLine)
-            thinking_wave.is_active = True
-            thinking_wave.add_class("visible")
-        except Exception:
-            pass
-
-        try:
-            bottom_wave = self.query_one("#thinking-wave-bottom", BottomScanningLine)
-            bottom_wave.is_active = True
-            bottom_wave.add_class("visible")
-        except Exception:
-            pass
+        self._begin_wave_bursts()
 
         self._set_composer_working_state(True)
 
@@ -241,6 +287,7 @@ class AgentRunMixin:
             show_done: If True, show "Done in X.Xs" message. Default False for streaming.
         """
         self.is_busy = False
+        self._stop_wave_bursts()
 
         # Calm mode: commit the end-of-turn action roll-up before tearing down.
         if self._is_calm_output() and getattr(self, "_calm_actions", 0) > 0:
@@ -672,7 +719,9 @@ class AgentRunMixin:
         try:
             root_path = Path(os.getcwd())
             pre_existing_modified = {
-                change.path for change in get_git_changes(root_path) if change.status in ("M", "A")
+                change.path
+                for change in await asyncio.to_thread(get_git_changes, root_path)
+                if change.status in ("M", "A")
             }
         except Exception:
             pre_existing_modified = set()
@@ -1173,7 +1222,7 @@ class AgentRunMixin:
                     # Merge tool-tracked writes with git changes detected after the run.
                     try:
                         root_path = Path(os.getcwd())
-                        git_changes = get_git_changes(root_path)
+                        git_changes = await asyncio.to_thread(get_git_changes, root_path)
                         git_files_modified = [
                             change.path
                             for change in git_changes
@@ -1186,7 +1235,7 @@ class AgentRunMixin:
                         pass
 
                     # Compute file diffs for detected files
-                    file_diffs = self._compute_file_diffs(files_modified)
+                    file_diffs = await asyncio.to_thread(self._compute_file_diffs, files_modified)
 
                     # Use ACP-style outcome display for both ACP and BYOK
                     outcome_agent = (
@@ -1263,7 +1312,7 @@ class AgentRunMixin:
                     # Compute file diffs even when no text response.
                     try:
                         root_path = Path(os.getcwd())
-                        git_changes = get_git_changes(root_path)
+                        git_changes = await asyncio.to_thread(get_git_changes, root_path)
                         git_files_modified = [
                             change.path
                             for change in git_changes
@@ -1275,7 +1324,7 @@ class AgentRunMixin:
                     except Exception:
                         pass
 
-                    file_diffs = self._compute_file_diffs(files_modified)
+                    file_diffs = await asyncio.to_thread(self._compute_file_diffs, files_modified)
 
                     # Show completion summary with file changes
                     self._show_completion_summary(

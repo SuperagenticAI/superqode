@@ -74,7 +74,7 @@ uv tool list
 
 ### First Local Response Is Slow
 
-Local servers often pay a cold-start cost on the first generation. They may need to load model weights, allocate KV cache, or initialize runtime kernels. SuperQode warms local models automatically when you connect from the TUI, but the first prompt can still be slow if the model is large or the machine is under memory pressure.
+Local servers often pay a cold-start cost on the first generation. They may need to load model weights, allocate KV cache, or initialize runtime kernels. SuperQode warms local models automatically when you connect from the TUI. Questions entered during warmup wait in the queue until readiness. If warmup fails or times out, queued questions stay paused; reconnect, then use `:queue send`. The first prompt can still be slow if the model is large or the machine is under memory pressure.
 
 Manual warmup:
 

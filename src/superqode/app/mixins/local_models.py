@@ -502,6 +502,7 @@ class LocalModelsMixin:
         quiet: bool = False,
     ):
         """Test connection to a local provider."""
+        checking_local = False
         try:
             from superqode.providers.registry import PROVIDERS, ProviderCategory
             import os
@@ -543,32 +544,52 @@ class LocalModelsMixin:
                     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
                     if not quiet:
                         log.add_info(f"Ollama host: {ollama_host}")
-                    health = await OllamaClient(host=ollama_host).get_status()
-                    if health.available:
+                    if os.getenv("SUPERQODE_LOCAL_WARMUP", "1").strip().lower() in {
+                        "1",
+                        "true",
+                        "yes",
+                        "on",
+                    } and not getattr(self, "is_busy", False):
+                        checking_local = True
+                        self._local_warmup_pending = True
+                        self._call_ui(self._start_thinking, "Checking local server…")
+                        self._call_ui(self._set_thinking_status, "Checking local server…")
+                    available = await OllamaClient(host=ollama_host).is_available()
+                    if available:
                         if not quiet:
                             log.add_success(f"✓ Ollama server ready at {ollama_host}")
-                        await self._warmup_local_generation(provider, model, log)
-                        self._announce_local_model_ready(
-                            provider=provider,
-                            model=model,
-                            log=log,
-                        )
+                        warmed = await self._warmup_local_generation(provider, model, log)
+                        if not warmed:
+                            self._announce_transition(
+                                title="Local model selected",
+                                primary=f"{provider}/{model}",
+                                detail="Server reachable · generation checked on first prompt",
+                                severity="information",
+                                log=log,
+                                persist=True,
+                                popup=False,
+                            )
                     else:
                         self._surface_local_connection_failure(
                             log,
-                            f"Ollama connection failed: {health.error or 'server unavailable'}",
+                            "Ollama connection failed: server unavailable",
                         )
                 else:
                     if not quiet:
                         log.add_info(
                             "Local provider selected. First prompt will validate generation."
                         )
-                    await self._warmup_local_generation(provider, model, log)
-                    self._announce_local_model_ready(
-                        provider=provider,
-                        model=model,
-                        log=log,
-                    )
+                    warmed = await self._warmup_local_generation(provider, model, log)
+                    if not warmed:
+                        self._announce_transition(
+                            title="Local model selected",
+                            primary=f"{provider}/{model}",
+                            detail="Generation checked on first prompt",
+                            severity="information",
+                            log=log,
+                            persist=True,
+                            popup=False,
+                        )
             else:
                 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
                 from superqode.providers.gateway.base import Message
@@ -643,41 +664,58 @@ class LocalModelsMixin:
             # Use set_timer since we're in the app's event loop, not a separate thread
             self.set_timer(0.1, self._ensure_input_focus)
 
+        finally:
+            if checking_local and getattr(self, "_local_warmup_pending", False):
+                self._finish_local_warmup(log, ready=False)
+
+    def _finish_local_warmup(self, log: ConversationLog, *, ready: bool) -> None:
+        self._local_warmup_pending = False
+        if not ready and getattr(self, "_typeahead_queue", []):
+            self._queue_paused = True
+            log.add_info(
+                "Your queued questions are kept. Reconnect, then use :queue send to resume."
+            )
+        self._call_ui(self._render_queued_input)
+        self._call_ui(self._stop_thinking)
+
     async def _warmup_local_generation(
         self,
         provider: str,
         model: str,
         log: ConversationLog,
-    ) -> None:
-        """Send a tiny local request so the first real prompt avoids cold start.
+    ) -> bool:
+        """Optionally warm a local model, returning whether generation succeeded.
 
         This is best-effort and never fails the connection. Local servers often
         load weights, allocate KV cache, or JIT paths on the first generation;
-        doing that visibly during connect makes the first user response feel
-        much less broken.
+        Prompts entered during warmup stay queued until the model is ready.
         """
         import asyncio
         import os
         import time
 
-        if os.getenv("SUPERQODE_LOCAL_WARMUP", "1").strip().lower() in (
-            "0",
-            "false",
-            "no",
-            "off",
+        if os.getenv("SUPERQODE_LOCAL_WARMUP", "1").strip().lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return False
+        if provider == "ds4" or (
+            getattr(self, "is_busy", False) and not getattr(self, "_local_warmup_pending", False)
         ):
-            return
-        if provider == "ds4":
-            return
+            return False
 
         from superqode.providers.gateway.base import Message
         from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
+        self._local_warmup_pending = True
+        succeeded = False
         self._call_ui(self._start_thinking, "Warming local model…")
         self._call_ui(self._set_thinking_status, "Warming local model…")
-        gateway = LiteLLMGateway()
         started = time.monotonic()
         try:
+            gateway = LiteLLMGateway()
             try:
                 await asyncio.wait_for(
                     gateway.chat_completion(
@@ -686,6 +724,7 @@ class LocalModelsMixin:
                         provider=provider,
                         max_tokens=4,
                         temperature=0.0,
+                        **({"think": False} if provider == "ollama" else {}),
                     ),
                     timeout=float(os.getenv("SUPERQODE_LOCAL_WARMUP_TIMEOUT", "45")),
                 )
@@ -693,15 +732,16 @@ class LocalModelsMixin:
                 log.add_warning(
                     "Local warmup timed out; connected, but the first prompt may still be slow."
                 )
-                return
+                return False
             except Exception as exc:  # noqa: BLE001
                 self._surface_local_connection_failure(
                     log,
                     f"Local model check failed: {exc}",
                 )
-                return
+                return False
 
             elapsed = time.monotonic() - started
+            succeeded = True
             log.add_meta(f"Ready · {provider}/{model} · warm {elapsed:.1f}s")
             self._announce_local_model_ready(
                 provider=provider,
@@ -709,8 +749,9 @@ class LocalModelsMixin:
                 log=log,
                 detail=f"warmup {elapsed:.1f}s",
             )
+            return True
         finally:
-            self._call_ui(self._stop_thinking)
+            self._finish_local_warmup(log, ready=succeeded)
 
     def _connect_local_cmd(self, args: str, log: ConversationLog):
         """Handle :connect local command - Interactive local provider/model picker."""

@@ -1598,6 +1598,9 @@ class ModelCatalogMixin:
         # Get models from database
         db_models = get_models_for_provider(provider_id)
 
+        if clear_log:
+            self._byok_highlighted_model_index = 0
+
         if db_models:
             # Helper function to detect latest models for any provider
             def is_latest_model(model_id: str, info) -> bool:
@@ -1799,6 +1802,17 @@ class ModelCatalogMixin:
             idx = 1
             model_list = []
 
+            def append_row_number():
+                selected = (idx - 1) == getattr(self, "_byok_highlighted_model_index", 0)
+                style = f"bold {THEME['success']}" if selected else THEME["dim"]
+                t.append("  ▶ " if selected else "    ", style=style)
+                t.append(f"[{idx:2}] ", style=self._picker_link_style(style, idx))
+
+            def append_row_end(model_id):
+                if (idx - 1) == getattr(self, "_byok_highlighted_model_index", 0):
+                    t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+                t.append(f"\n         {model_id}\n", style=THEME["muted"])
+
             # Show Recommended models first
             if recommended:
                 t.append(f"  🎯 Recommended for Coding:\n", style=f"bold {THEME['success']}")
@@ -1880,7 +1894,7 @@ class ModelCatalogMixin:
             if budget:
                 t.append(f"  💰 Budget-Friendly (< $1/1M):\n", style=f"bold {THEME['cyan']}")
                 for model_id, info in budget[:6]:
-                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                    append_row_number()
                     t.append(f"{info.name:<25}", style=f"bold {THEME['text']}")
                     t.append(f"{info.price_display:>12}", style=THEME["gold"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -1891,7 +1905,7 @@ class ModelCatalogMixin:
                     if caps:
                         t.append(f" • {' '.join(caps)}", style=THEME["dim"])
 
-                    t.append(f"\n         {model_id}\n", style=THEME["muted"])
+                    append_row_end(model_id)
 
                     model_list.append(model_id)
                     idx += 1
@@ -1909,7 +1923,7 @@ class ModelCatalogMixin:
                     )
                     t.append("):\n", style=f"bold {THEME['success']}")
                 for model_id, info in free[:6]:
-                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                    append_row_number()
                     t.append(f"{info.name:<25}", style=f"bold {THEME['success']}")
                     t.append(f"{'FREE':>12}", style=THEME["success"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -1922,7 +1936,7 @@ class ModelCatalogMixin:
                     if caps:
                         t.append(f" • {' '.join(caps)}", style=THEME["dim"])
 
-                    t.append(f"\n         {model_id}\n", style=THEME["muted"])
+                    append_row_end(model_id)
 
                     model_list.append(model_id)
                     idx += 1
@@ -1937,14 +1951,14 @@ class ModelCatalogMixin:
                 sorted_others = latest_others + regular_others
 
                 for model_id, info in sorted_others[:remaining]:
-                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                    append_row_number()
                     # Highlight latest models
                     is_latest = get_latest_priority(model_id, info) < 0
                     name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
                     t.append(f"{info.name:<25}", style=name_style)
                     t.append(f"{info.price_display:>12}", style=THEME["gold"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
-                    t.append(f"\n         {model_id}\n", style=THEME["muted"])
+                    append_row_end(model_id)
 
                     model_list.append(model_id)
                     idx += 1

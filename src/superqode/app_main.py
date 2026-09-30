@@ -498,16 +498,10 @@ class SuperQodeApp(
         self._init_sidebar_resize()
         # Apply user keybinding overrides, if any
         self._load_custom_keybindings()
-        self.set_timer(0.75, self._prewarm_litellm)
-        # Keep the dynamic catalog fresh independently of optional provider
-        # health checks. The short delay lets the first frame render first.
+        # Catalogs refresh once per launch; manual refresh stays available.
+        # LiteLLM loads when a selected local/BYOK connection needs it.
         self.set_timer(0.5, self._start_models_dev_refresh)
-        self.set_interval(60 * 60, self._start_models_dev_refresh)
-        # The agent registry gets the same treatment: refresh after the first
-        # frame, then hourly. Fetching it when the user opens the ACP screen
-        # would put the network on the one path they are waiting on.
         self.set_timer(0.5, self._start_acp_registry_refresh)
-        self.set_interval(60 * 60, self._start_acp_registry_refresh)
         self.set_timer(1.2, self._report_catalog_freshness)
         if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
             self._run_startup_health_check()

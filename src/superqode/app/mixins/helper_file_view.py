@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 from pathlib import Path
+from textual import work
+from textual.worker import get_current_worker
 from rich.text import Text
 from rich.panel import Panel
 from rich.box import ROUNDED
@@ -33,10 +35,29 @@ def _brand_code_bg() -> str:
         return "#0f0a1a"
 
 
+class _WorkerLog:
+    """Marshal worker output to the app thread without touching widgets there."""
+
+    def __init__(self, app, log):
+        self.app, self.log = app, log
+
+    def __getattr__(self, name):
+        callback = getattr(self.log, name)
+
+        def deliver(*args):
+            if get_current_worker().is_cancelled or not self.app.is_running:
+                return
+            return self.app._call_ui(callback, *args)
+
+        return deliver
+
+
 class HelperFileViewMixin:
     """File view/info and in-file/directory search."""
 
+    @work(thread=True, group="file-operations")
     def _find_files(self, query: str, log: ConversationLog):
+        log = _WorkerLog(self, log)
         if not query:
             log.add_info("Usage: :find <query>")
             return
@@ -62,8 +83,10 @@ class HelperFileViewMixin:
         except Exception as e:
             log.add_error(str(e))
 
+    @work(thread=True, group="file-operations")
     def _view_file(self, file_path: str, log: ConversationLog):
         """View file content with syntax highlighting."""
+        log = _WorkerLog(self, log)
         from rich.syntax import Syntax
 
         try:
@@ -82,11 +105,11 @@ class HelperFileViewMixin:
                 return
 
             # Read and display content
-            content = atomic_read(file_path)
-            lines = content.splitlines()
-
-            # Show first 50 lines
-            preview_lines = lines[:50]
+            # The metadata pass counts lines in constant memory. Only retain
+            # the preview, rather than allocating the entire file a second time.
+            with Path(file_path).open(encoding="utf-8") as source:
+                preview = source.read(65_536)
+            preview_lines = preview.splitlines()[:50]
             preview_content = "\n".join(preview_lines)
 
             syntax = Syntax(
@@ -100,16 +123,20 @@ class HelperFileViewMixin:
 
             log.write(Panel(syntax, border_style=THEME["border"], box=ROUNDED, padding=(0, 1)))
 
-            if len(lines) > 50:
-                log.add_info(f"Showing first 50 of {len(lines)} lines")
+            if info.lines > 50:
+                log.add_info(f"Showing first 50 of {info.lines} lines")
+            if len(preview) == 65_536 and len(preview_lines) < 50:
+                log.add_info("Preview limited to 65,536 characters.")
 
         except FileNotFoundError:
             log.add_error(f"File not found: {file_path}")
         except Exception as e:
             log.add_error(f"Error viewing file: {e}")
 
+    @work(thread=True, group="file-operations")
     def _view_file_info(self, file_path: str, log: ConversationLog):
         """View file information without content."""
+        log = _WorkerLog(self, log)
         try:
             info = get_file_info(file_path)
 
@@ -150,8 +177,10 @@ class HelperFileViewMixin:
         except Exception as e:
             log.add_error(f"Error: {e}")
 
+    @work(thread=True, group="file-operations")
     def _search_in_file(self, term: str, file_path: str, log: ConversationLog):
         """Search for a term in a specific file."""
+        log = _WorkerLog(self, log)
         try:
             content = atomic_read(file_path)
             lines = content.splitlines()
@@ -201,12 +230,15 @@ class HelperFileViewMixin:
         except Exception as e:
             log.add_error(f"Error: {e}")
 
+    @work(thread=True, group="file-operations")
     def _search_in_directory(self, term: str, log: ConversationLog):
         """Search for a term in all files in current directory."""
+        log = _WorkerLog(self, log)
         import os
 
         results = []
         cwd = Path.cwd()
+        needle = term.lower()
 
         # Search in common code files
         extensions = {
@@ -242,6 +274,8 @@ class HelperFileViewMixin:
         }
 
         for root, dirs, files in os.walk(cwd):
+            if get_current_worker().is_cancelled:
+                return
             # Skip hidden and common ignore directories
             dirs[:] = [
                 d
@@ -254,13 +288,15 @@ class HelperFileViewMixin:
                 if Path(file).suffix.lower() in extensions:
                     file_path = Path(root) / file
                     try:
-                        content = file_path.read_text(encoding="utf-8", errors="ignore")
-                        for i, line in enumerate(content.splitlines(), 1):
-                            if term.lower() in line.lower():
-                                rel_path = file_path.relative_to(cwd)
-                                results.append((str(rel_path), i, line.strip()))
-                                if len(results) >= 50:
-                                    break
+                        with file_path.open(encoding="utf-8", errors="ignore") as source:
+                            for i, line in enumerate(source, 1):
+                                if get_current_worker().is_cancelled:
+                                    return
+                                if needle in line.lower():
+                                    rel_path = file_path.relative_to(cwd)
+                                    results.append((str(rel_path), i, line.strip()))
+                                    if len(results) >= 50:
+                                        break
                     except Exception:
                         continue
 

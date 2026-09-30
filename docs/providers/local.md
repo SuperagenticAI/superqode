@@ -63,7 +63,7 @@ superqode --harness superqode.local.yaml
 
 ### Warmup And First Response Latency
 
-The first generation from a local model can be slow because the server may need to load weights, allocate KV cache, or initialize runtime paths. When you connect a local model from the TUI, SuperQode sends a tiny best-effort warmup request before your first real prompt. If warmup fails or times out, the connection still succeeds and the first prompt may pay the cold-start cost.
+The first generation from a local model can be slow because the server may need to load weights, allocate KV cache, or initialize runtime paths. TUI connection setup warms the model by default. Questions entered during warmup remain queued and send after readiness. Ollama uses one availability check and a tiny generation with reasoning disabled for warmup only. If warmup fails or times out, queued questions stay paused; reconnect, then use `:queue send` to resume. DS4 retains its separate warmup setting.
 
 Disable automatic TUI warmup when you want full manual control:
 

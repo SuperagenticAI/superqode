@@ -173,6 +173,10 @@ class ClickableCommandMixin:
 
     def _run_clicked_command(self, command: str) -> None:
         command = command.strip().lstrip(":")
+        parts = command.split()
+        if len(parts) == 2 and parts[0] == "tools" and parts[1].isdigit():
+            self._show_tools(parts[1], self._clicked_command_log())
+            return
         if command not in CLICKABLE_COMMANDS:
             return
         if command == "back":

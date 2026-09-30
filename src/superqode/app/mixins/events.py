@@ -106,7 +106,35 @@ class EventHandlerMixin:
         except (OSError, ValueError):
             pass
 
+    def on_app_blur(self, event: events.AppBlur) -> None:
+        self._wave_window_focused = False
+        resume = getattr(self, "_wave_burst_running", False) or getattr(
+            self, "_wave_resume_on_focus", False
+        )
+        self._stop_wave_bursts()
+        self._wave_resume_on_focus = resume
+        try:
+            self.query_one("#prompt-input")._sync_working_animation()
+            self.query_one("#streaming-thinking").auto_refresh = None
+        except Exception:
+            pass
+
+    def on_app_focus(self, event: events.AppFocus) -> None:
+        self._wave_window_focused = True
+        try:
+            self.query_one("#prompt-input")._sync_working_animation()
+        except Exception:
+            pass
+        if getattr(self, "is_busy", False):
+            if getattr(self, "_wave_resume_on_focus", False):
+                self._begin_wave_bursts()
+            try:
+                self.query_one("#streaming-thinking").auto_refresh = 1 / 2
+            except Exception:
+                pass
+
     def on_unmount(self) -> None:
+        self._stop_wave_bursts()
         self._flush_draft_recovery()
 
     def on_command_palette_command_selected(self, event: CommandPalette.CommandSelected) -> None:

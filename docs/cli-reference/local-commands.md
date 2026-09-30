@@ -419,7 +419,7 @@ superqode local models ollama
 
 Preload a model and report first-token latency. Run it before a session so the first real prompt does not pay the model-load cost. A high TTFT here usually means the context window is too large for the hardware.
 
-When you connect a local model from the TUI, SuperQode also sends a tiny best-effort warmup request automatically. This keeps the first real prompt from paying the cold model load when the local server supports it. The connection still succeeds if warmup fails or times out.
+TUI generation warmup is enabled by default. Questions entered while the model warms remain queued and send after readiness. If warmup fails or times out, reconnect and use `:queue send` to resume retained questions. Set `SUPERQODE_LOCAL_WARMUP=0` for manual control. DS4 uses its separate warmup setting.
 
 ```bash
 superqode local warm ollama --model qwen3:8b

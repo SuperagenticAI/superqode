@@ -1,7 +1,10 @@
 """Prompt autocompletion panel and candidates."""
 
 from __future__ import annotations
+import asyncio
+from time import monotonic
 from pathlib import Path
+from textual import work
 from textual.widgets import Static
 from rich.text import Text
 from superqode.app.constants import (
@@ -22,7 +25,14 @@ class CompletionMixin:
 
     def _complete_prompt_input(self, input_widget: SelectionAwareInput) -> bool:
         """Complete the active prompt command in-place."""
-        candidates = self._prompt_completion_candidates_for(input_widget.value)
+        if self._completion_needs_io(input_widget.value):
+            if getattr(self, "_completion_ready_value", None) != input_widget.value:
+                self._update_prompt_completion_panel(input_widget.value)
+                self._completion_accept_value = input_widget.value
+                return True
+            candidates = list(self._prompt_completion_candidates)
+        else:
+            candidates = self._prompt_completion_candidates_for(input_widget.value)
         if not candidates:
             self._hide_prompt_completion_panel()
             return False
@@ -223,7 +233,9 @@ class CompletionMixin:
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
                 return self._merge_completion_candidates(
-                    self._candidate_after_prefix(value, prefix, provider()),
+                    self._candidate_after_prefix(
+                        value, prefix, self._cached_completion_source(provider)
+                    ),
                     self._static_command_candidates(value),
                 )
 
@@ -442,13 +454,61 @@ class CompletionMixin:
             return "submit"
         return "accept"
 
+    def _completion_needs_io(self, value: str) -> bool:
+        return bool(self._MENTION_QUERY_RE.search(value)) or value.lower().startswith(
+            (":attach ", ":prompt ", ":skills ", ":recipe ", ":recipes ", ":mcp ")
+        )
+
+    def _cached_completion_source(self, provider):
+        # Short-lived, workspace-specific snapshots avoid rereading skill/recipe
+        # metadata for every character. Explicit commands still load fresh data.
+        cache = getattr(self, "_completion_source_cache", {})
+        key = (Path.cwd(), provider)
+        now = monotonic()
+        previous = cache.get(key)
+        if previous is not None and now - previous[0] < 2:
+            return previous[1]
+        candidates = provider()
+        cache[key] = (now, candidates)
+        if len(cache) > 32:
+            cache.pop(next(iter(cache)))
+        self._completion_source_cache = cache
+        return candidates
+
     def _update_prompt_completion_panel(self, value: str) -> None:
-        """Refresh the visible prompt completion panel as the prompt changes."""
-        candidates = self._prompt_completion_candidates_for(value)
+        """Keep filesystem completion work away from keyboard handling."""
+        self._completion_revision = getattr(self, "_completion_revision", 0) + 1
+        revision = self._completion_revision
+        self._completion_ready_value = None
+        if getattr(self, "_completion_accept_value", None) != value:
+            self._completion_accept_value = None
+        if self._completion_needs_io(value):
+            self._hide_prompt_completion_panel(invalidate=False)
+            self._load_prompt_completions(value, revision)
+            return
+        self._apply_prompt_completions(value, self._prompt_completion_candidates_for(value))
+
+    @work(exclusive=True, group="prompt-completion")
+    async def _load_prompt_completions(self, value: str, revision: int) -> None:
+        # Debounce filesystem work, and reject results for an obsolete draft.
+        await asyncio.sleep(0.05)
+        candidates = await asyncio.to_thread(self._prompt_completion_candidates_for, value)
+        if revision != self._completion_revision:
+            return
+        if self.query_one("#prompt-input", SelectionAwareInput).value != value:
+            return
+        self._apply_prompt_completions(value, candidates)
+
+    def _apply_prompt_completions(self, value: str, candidates) -> None:
+        self._completion_ready_value = value
         if not candidates:
-            self._hide_prompt_completion_panel()
+            self._completion_accept_value = None
+            self._hide_prompt_completion_panel(invalidate=False)
             return
         self._show_prompt_completion_panel(candidates)
+        if getattr(self, "_completion_accept_value", None) == value and len(candidates) == 1:
+            self._completion_accept_value = None
+            self._accept_prompt_completion(self.query_one("#prompt-input", SelectionAwareInput))
 
     def _show_prompt_completion_panel(self, candidates: list[PromptCompletionCandidate]) -> None:
         # Keep every matching candidate so a command group (notably :codex)
@@ -462,7 +522,10 @@ class CompletionMixin:
         self._prompt_completion_visible = True
         self._render_prompt_completion_panel()
 
-    def _hide_prompt_completion_panel(self) -> None:
+    def _hide_prompt_completion_panel(self, *, invalidate: bool = True) -> None:
+        if invalidate:
+            self._completion_revision = getattr(self, "_completion_revision", 0) + 1
+            self._completion_accept_value = None
         self._prompt_completion_candidates = []
         self._prompt_completion_index = 0
         self._prompt_completion_visible = False

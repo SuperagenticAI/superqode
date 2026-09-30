@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 import os
+from functools import lru_cache
+from time import monotonic
 from pathlib import Path
 from superqode.app.constants import (
     COMMANDS,
     CONNECT_COMPLETION_COMMANDS,
 )
 from superqode.app.recipes import PromptCompletionCandidate
+
+
+@lru_cache(maxsize=32)
+def _directory_completion_snapshot(base: str, window: int):
+    """Reuse metadata while typing a path; refresh within one second."""
+    with os.scandir(base) as entries:
+        rows = []
+        for entry in entries:
+            try:
+                directory = entry.is_dir()
+                regular = entry.is_file()
+                rows.append((entry.name, directory, regular))
+            except OSError:
+                continue  # Files can disappear while a completion is collected.
+    return tuple(sorted(rows, key=lambda row: (not row[1], row[0].lower())))
+
+
+@lru_cache(maxsize=256)
+def _completion_file_size(path: str, window: int) -> int:
+    return Path(path).stat().st_size
 
 
 class HelperCompletionHelpersMixin:
@@ -64,27 +86,24 @@ class HelperCompletionHelpersMixin:
         base = Path(raw_dir or ".").expanduser()
         if not base.is_absolute():
             base = Path.cwd() / base
-        if not base.exists() or not base.is_dir():
-            return []
         try:
-            entries = sorted(
-                base.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())
-            )
+            entries = _directory_completion_snapshot(str(base), int(monotonic()))
         except OSError:
             return []
         candidates: list[tuple[str, str]] = []
-        for entry in entries:
-            if raw_name and not entry.name.lower().startswith(raw_name.lower()):
+        for name, directory, regular in entries:
+            if raw_name and not name.lower().startswith(raw_name.lower()):
                 continue
-            if entry.name.startswith(".") and not raw_name.startswith("."):
+            if name.startswith(".") and not raw_name.startswith("."):
                 continue
-            if files_only and not entry.is_file():
+            if files_only and not regular:
                 continue
-            rel = os.path.join(raw_dir, entry.name) if raw_dir else entry.name
-            if entry.is_dir():
-                candidates.append((rel + "/", "directory"))
-            else:
-                candidates.append((rel, f"{entry.stat().st_size} bytes"))
+            rel = os.path.join(raw_dir, name) if raw_dir else name
+            try:
+                size = 0 if directory else _completion_file_size(str(base / name), int(monotonic()))
+            except OSError:
+                continue
+            candidates.append((rel + "/", "directory") if directory else (rel, f"{size} bytes"))
             if len(candidates) >= 8:
                 break
         return candidates

@@ -696,6 +696,13 @@ def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMes
     i, n = 0, len(messages)
     while i < n:
         msg = messages[i]
+        if msg.role == "tool":
+            # A bounded history/compacted tail can begin after its assistant
+            # call was removed. Keep the output as context, never as an orphan
+            # protocol tool message that a strict provider will reject.
+            out.append(replace(msg, role="user", tool_call_id=None, name=None))
+            i += 1
+            continue
         out.append(msg)
         tool_calls = msg.tool_calls if msg.role == "assistant" else None
         if not tool_calls:
@@ -708,14 +715,42 @@ def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMes
         while j < n and messages[j].role == "tool":
             following.append(messages[j])
             j += 1
-        out.extend(following)
-
-        answered_ids = {m.tool_call_id for m in following if m.tool_call_id}
-        # Calls not satisfied by a matching id.
-        remaining = [tc for tc in tool_calls if not (tc.get("id") and tc.get("id") in answered_ids)]
-        # Tool results without an id answer the remaining calls positionally.
-        idless = sum(1 for m in following if not m.tool_call_id)
-        unanswered = remaining[idless:]
+        # Give incomplete assistant call records IDs without mutating the
+        # stored history, and use the same IDs for their repaired results.
+        tool_calls = [
+            tc
+            if isinstance(tc.get("id"), str) and tc["id"].strip()
+            else dict(tc, id=str(uuid.uuid4()))
+            for tc in tool_calls
+        ]
+        if tool_calls != msg.tool_calls:
+            out[-1] = replace(msg, tool_calls=tool_calls)
+        answered_ids = {
+            m.tool_call_id
+            for m in following
+            if isinstance(m.tool_call_id, str) and m.tool_call_id.strip()
+        }
+        remaining = [tc for tc in tool_calls if tc["id"] not in answered_ids]
+        call_ids = {tc["id"] for tc in tool_calls}
+        seen = set()
+        orphaned = []
+        for result in following:
+            identifier = result.tool_call_id
+            if not isinstance(identifier, str) or not identifier.strip():
+                matches = [
+                    tc for tc in remaining if (tc.get("function") or {}).get("name") == result.name
+                ]
+                call = matches[0] if matches else (remaining[0] if remaining else None)
+                if call is not None:
+                    remaining.remove(call)
+                    result = replace(result, tool_call_id=call["id"])
+                    identifier = call["id"]
+            if isinstance(identifier, str) and identifier in call_ids and identifier not in seen:
+                out.append(result)
+                seen.add(identifier)
+            else:
+                orphaned.append(replace(result, role="user", tool_call_id=None, name=None))
+        unanswered = [tc for tc in tool_calls if tc["id"] not in seen]
 
         for tc in unanswered:
             tc_id = tc.get("id") or str(uuid.uuid4())
@@ -732,6 +767,7 @@ def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMes
                     name=name,
                 )
             )
+        out.extend(orphaned)
         i = j
     return out
 
@@ -1290,6 +1326,7 @@ class AgentLoop:
                     role=message.role,
                     content=message.content,
                     tool_calls=message.tool_calls,
+                    tool_call_id=message.tool_call_id,
                     name=message.tool_name,
                 )
             )
@@ -1391,6 +1428,9 @@ class AgentLoop:
                         "role": m.role,
                         "content": _content_for_counting(m.content),
                         "tool_calls": m.tool_calls,
+                        "tool_call_id": m.tool_call_id,
+                        "name": m.name,
+                        "reasoning_content": m.reasoning_content,
                     }
                     for m in messages
                 ]
@@ -1983,6 +2023,9 @@ class AgentLoop:
                 "role": m.role,
                 "content": _content_for_counting(m.content),
                 "tool_calls": m.tool_calls,
+                "tool_call_id": m.tool_call_id,
+                "name": m.name,
+                "reasoning_content": m.reasoning_content,
                 "tool_result": m.content if m.role == "tool" else None,
             }
             for m in messages
@@ -2028,6 +2071,9 @@ class AgentLoop:
                     "role": m.role,
                     "content": _content_for_counting(m.content),
                     "tool_calls": m.tool_calls,
+                    "tool_call_id": m.tool_call_id,
+                    "name": m.name,
+                    "reasoning_content": m.reasoning_content,
                     "tool_result": m.content if m.role == "tool" else None,
                 }
                 for m in messages
@@ -2077,6 +2123,9 @@ class AgentLoop:
                     "role": m.role,
                     "content": _content_for_counting(m.content),
                     "tool_calls": m.tool_calls,
+                    "tool_call_id": m.tool_call_id,
+                    "name": m.name,
+                    "reasoning_content": m.reasoning_content,
                     "tool_result": m.content if m.role == "tool" else None,
                 }
                 for m in messages
@@ -2120,6 +2169,9 @@ class AgentLoop:
                 "role": m.role,
                 "content": _content_for_counting(m.content),
                 "tool_calls": m.tool_calls,
+                "tool_call_id": m.tool_call_id,
+                "name": m.name,
+                "reasoning_content": m.reasoning_content,
                 "tool_result": m.content if m.role == "tool" else None,
             }
             for m in body
@@ -2152,7 +2204,14 @@ class AgentLoop:
             # Fallback: mechanical prune-from-front (existing path).
             pruned_dicts = self.context_manager.prune_history(msg_dicts)
             result_messages = [
-                AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
+                AgentMessage(
+                    role=d["role"],
+                    content=d["content"],
+                    tool_calls=d.get("tool_calls"),
+                    tool_call_id=d.get("tool_call_id"),
+                    name=d.get("name"),
+                    reasoning_content=d.get("reasoning_content"),
+                )
                 for d in pruned_dicts
             ]
 
@@ -2792,7 +2851,9 @@ class AgentLoop:
                         )
                     )
                     if self._session_manager:
-                        self._session_manager.add_tool_result(tool_name, result.to_message())
+                        self._session_manager.add_tool_result(
+                            tool_name, result.to_message(), tool_call_id=tool_call_id
+                        )
                     image_msg = self._image_followup_message(result)
                     if image_msg is not None:
                         messages.append(image_msg)
@@ -3344,7 +3405,9 @@ class AgentLoop:
                         )
                     )
                     if self._session_manager:
-                        self._session_manager.add_tool_result(tool_name, result.to_message())
+                        self._session_manager.add_tool_result(
+                            tool_name, result.to_message(), tool_call_id=tool_call_id
+                        )
                     image_msg = self._image_followup_message(result)
                     if image_msg is not None:
                         messages.append(image_msg)

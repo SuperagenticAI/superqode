@@ -38,7 +38,12 @@ class FormattingMixin:
             return
         t = Text()
         t.append(f"  ⏳ queued ({len(queue)})  ", style=f"bold {THEME['warning']}")
-        t.append("sends when the agent is free  •  ", style=THEME["dim"])
+        if getattr(self, "_local_warmup_pending", False):
+            t.append("waiting for model warmup  •  ", style=THEME["dim"])
+        elif getattr(self, "_queue_paused", False):
+            t.append("paused · :queue send to resume  •  ", style=THEME["dim"])
+        else:
+            t.append("sends when the agent is free  •  ", style=THEME["dim"])
         t.append(":queue edit N · :queue drop N", style=f"bold {THEME['cyan']}")
         t.append("\n", style="")
         for index, msg in enumerate(queue[:5], 1):
@@ -312,7 +317,7 @@ class FormattingMixin:
             cmd = tool_input.get("command", "")
             if len(cmd) > 50:
                 cmd = cmd[:47] + "..."
-            msg = f"{icon} Running: {cmd}"
+            msg = f"{icon} Run: {cmd}"
         elif tool_name in ("search", "grep"):
             pattern = tool_input.get("pattern", tool_input.get("query", ""))
             if len(pattern) > 30:

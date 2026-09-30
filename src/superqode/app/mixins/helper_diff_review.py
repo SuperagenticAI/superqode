@@ -189,14 +189,16 @@ class HelperDiffReviewMixin:
                 if not file_path.is_file():
                     continue
                 try:
-                    data = file_path.read_text(encoding="utf-8", errors="ignore")
+                    file_size = file_path.stat().st_size
+                    with file_path.open(encoding="utf-8", errors="ignore") as source:
+                        data = source.read(200_001)
                 except Exception:
                     continue
                 if len(data) > 200_000:
                     untracked_chunks.append(
                         f"diff --git a/{path} b/{path}\nnew file mode 100644\n"
                         f"--- /dev/null\n+++ b/{path}\n@@\n"
-                        f"# file is too large to preview inline ({len(data):,} bytes)"
+                        f"# file is too large to preview inline ({file_size:,} bytes)"
                     )
                     continue
                 added = "\n".join(f"+{line}" for line in data.splitlines())

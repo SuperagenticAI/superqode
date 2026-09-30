@@ -149,6 +149,49 @@ async def test_busy_composer_distinguishes_drafting_from_required_agent_input():
         assert composer.has_class("working")
 
 
+async def test_failed_tool_detail_click_opens_overlay_without_stopping_run():
+    from textual.widgets import TextArea
+    from rich.style import Style
+
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        log = app.query_one("#log", ConversationLog)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        app._start_thinking()
+        prompt.value = "Keep my draft"
+        log.add_tool_call(
+            "bash", status="success", arguments={"command": "echo first"}, output="first"
+        )
+        log.add_tool_call(
+            "bash",
+            status="error",
+            arguments={"command": "bad command"},
+            output="Failure details",
+            metadata={"exit_code": 1},
+        )
+        await pilot.pause()
+        visible = "\n".join(line.text for line in log.lines)
+        assert "Tool failed:" not in visible
+        assert "Failure details" not in visible
+        event = SimpleNamespace(
+            style=Style(link="superqode://cmd/tools%202"),
+            stop=lambda: None,
+            prevent_default=lambda: None,
+        )
+        app.on_click(event)
+        await _settle(pilot)
+        detail = app.screen.query_one("#text-area", TextArea).text
+        assert "bad command" in detail
+        assert "Failure details" in detail
+        assert "Exit:     1" in detail
+        assert app.is_busy
+        assert prompt.value == "Keep my draft"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.is_busy
+        app._stop_thinking()
+
+
 async def test_full_agent_ui_lifecycle_stays_fast_and_readable():
     """Work, tool approval and response reveal share one stable TUI lifecycle."""
     app = SuperQodeApp()
@@ -509,6 +552,45 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
 
         assert app._byok_highlighted_provider_index == 6
         assert log.scroll_y <= selected_y < log.scroll_y + visible_height
+
+
+@pytest.mark.parametrize("selection", ["arrows", "number"])
+async def test_openrouter_free_model_keyboard_selection(monkeypatch, selection):
+    from superqode.providers.models import ModelCapability, ModelInfo
+
+    models = {
+        f"coding-{i}": ModelInfo(
+            f"coding-{i}",
+            f"Coding {i}",
+            "openrouter",
+            input_price=2,
+            output_price=3,
+            capabilities=[ModelCapability.CODE],
+        )
+        for i in range(12)
+    }
+    models["free-model:free"] = ModelInfo("free-model:free", "Free Model", "openrouter")
+    monkeypatch.setattr("superqode.providers.models.get_models_for_provider", lambda _: models)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-placeholder")
+    app = SuperQodeApp()
+    captured = []
+    app._connect_byok_mode = lambda provider, model, _: captured.append((provider, model))
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_provider_models("openrouter", log)
+        await _settle(pilot)
+        if selection == "arrows":
+            for _ in range(12):
+                await pilot.press("down")
+            await _settle(pilot)
+            selected_y = next(i for i, line in enumerate(log.lines) if "← SELECTED" in line.text)
+            assert "Free Model" in log.lines[selected_y].text
+            assert log.scroll_y <= selected_y < log.scroll_y + log.scrollable_content_region.height
+        else:
+            await pilot.press("1", "3")
+        await pilot.press("enter")
+        await _settle(pilot)
+        assert captured == [("openrouter", "free-model:free")]
 
 
 async def test_command_completion_uses_brand_palette():

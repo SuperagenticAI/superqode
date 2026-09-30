@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.35] - 2026-09-30
+
+### Fixed
+
+- Remove numbered turn banners from the transcript, keeping the clean user
+  heading and prompt rail.
+- Label shell tool actions as Run, and keep failed tools compact with a red
+  cross and a clickable numbered detail view. Show failure cards only in
+  verbose mode while retaining recorded command, output, and exit metadata.
+- Move the moving three-dot working indicator into the empty prompt box. Keep
+  drafts editable, pause its timer while typing or unfocused, and restore the
+  usual prompt hint after work or when an approval needs an answer.
+  Use a bright theme accent for the label and random theme colors for the dots.
+- Show the keyboard selection on Free, Budget, and other BYOK model rows,
+  keeping the highlighted model visible when navigating across groups.
+- Preserve tool-call IDs across Core harness turns, saved sessions, and context
+  compaction. Repair matching legacy tool results before sending history so
+  strict providers such as OpenRouter do not reject subsequent prompts.
+- Show branded top and bottom animations for three seconds when a run starts,
+  then in one-second bursts every five seconds, keeping live status visible
+  between bursts. Pause animations when the terminal loses focus and stop burst
+  timers when the run ends.
+- Refresh catalogs once at startup instead of hourly, and load LiteLLM only
+  when needed by a selected connection instead of preloading on every launch.
+- Run file searches, previews, filesystem autocomplete, and Git diff collection
+  away from the TUI event loop. Reuse short-lived completion metadata, discard
+  stale results, and keep typing responsive while slow filesystem work finishes.
+- Stream directory-search files and retain only the first 50 preview lines
+  instead of allocating whole files for those operations.
+- Keep local warmup enabled, clearly label questions waiting for model readiness,
+  and retain queued questions when warmup fails. Use one Ollama availability check
+  and disable reasoning only for its tiny warmup request.
+- Pass Ollama context and GPU options through LiteLLM without a nested options
+  object that the server ignores; preserve explicit caller settings.
+
 ## [2.4.34] - 2026-09-30
 
 ### Fixed

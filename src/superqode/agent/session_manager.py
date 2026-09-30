@@ -59,6 +59,7 @@ class SessionMessage:
     tool_calls: Optional[List[Dict]] = None
     tool_name: Optional[str] = None
     tool_result: Optional[str] = None
+    tool_call_id: Optional[str] = None
 
 
 def _metadata_from_dict(data: Dict[str, Any]) -> SessionMetadata:
@@ -257,12 +258,14 @@ class SessionStore:
         session_id: str,
         tool_name: str,
         result: str,
+        tool_call_id: Optional[str] = None,
     ):
-        """Append a tool result message."""
+        """Append a tool result message, preserving its assistant-call link."""
         message = SessionMessage(
             role="tool",
             content=result,
             tool_name=tool_name,
+            tool_call_id=tool_call_id,
         )
         self.append_message(session_id, message)
 
@@ -487,11 +490,11 @@ class SessionManager:
             SessionMessage(role="assistant", content=content, tool_calls=tool_calls),
         )
 
-    def add_tool_result(self, tool_name: str, result: str):
+    def add_tool_result(self, tool_name: str, result: str, tool_call_id: Optional[str] = None):
         """Add tool result to current session."""
         if not self._current_session_id:
             raise RuntimeError("No active session. Call start_session first.")
-        self.store.append_tool_result(self._current_session_id, tool_name, result)
+        self.store.append_tool_result(self._current_session_id, tool_name, result, tool_call_id)
 
     def get_messages(self, limit: Optional[int] = None) -> List[SessionMessage]:
         """Get messages from current session."""

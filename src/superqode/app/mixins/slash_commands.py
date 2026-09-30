@@ -1,6 +1,8 @@
 """Slash / ':' command dispatch."""
 
 from __future__ import annotations
+import asyncio
+from textual import work
 import os
 import select
 import signal
@@ -4029,39 +4031,50 @@ class SlashCommandMixin:
             )
             return
 
-        sections: list[tuple[str, str]] = []
-
-        # Include approval-manager pending diffs first, before the git view.
         approval_manager = getattr(self, "_approval_manager", None)
-        if approval_manager:
-            pending = approval_manager.get_pending()
-            if pending:
-                pending_lines = [f"Pending approval changes ({len(pending)})", ""]
-                for req in pending:
-                    if req.old_content is not None and req.new_content:
-                        diff = compute_diff(
-                            req.old_content, req.new_content, req.file_path or "file"
-                        )
-                        pending_lines.append(
-                            f"# {req.file_path or 'file'}  +{diff.additions} -{diff.deletions}  "
-                            f"approval:{req.id}"
-                        )
-                        import difflib
+        pending = list(approval_manager.get_pending()) if approval_manager else []
+        if self.is_running:
+            return self._load_diff_review(args, log, pending)
+        # Standalone helper callers use the same collector without a mounted UI.
+        self._finish_diff_command(args, log, self._collect_diff_sections(pending))
 
-                        pending_lines.extend(
-                            difflib.unified_diff(
-                                req.old_content.splitlines(),
-                                req.new_content.splitlines(),
-                                fromfile=f"a/{req.file_path or 'file'}",
-                                tofile=f"b/{req.file_path or 'file'}",
-                                lineterm="",
-                            )
+    def _collect_diff_sections(self, pending) -> list[tuple[str, str]]:
+        sections: list[tuple[str, str]] = []
+        # Include approval-manager pending diffs first, before the git view.
+        if pending:
+            pending_lines = [f"Pending approval changes ({len(pending)})", ""]
+            for req in pending:
+                if req.old_content is not None and req.new_content:
+                    diff = compute_diff(req.old_content, req.new_content, req.file_path or "file")
+                    pending_lines.append(
+                        f"# {req.file_path or 'file'}  +{diff.additions} -{diff.deletions}  "
+                        f"approval:{req.id}"
+                    )
+                    import difflib
+
+                    pending_lines.extend(
+                        difflib.unified_diff(
+                            req.old_content.splitlines(),
+                            req.new_content.splitlines(),
+                            fromfile=f"a/{req.file_path or 'file'}",
+                            tofile=f"b/{req.file_path or 'file'}",
+                            lineterm="",
                         )
-                        pending_lines.append("")
-                sections.append(("Pending approvals", "\n".join(pending_lines).strip()))
+                    )
+                    pending_lines.append("")
+            sections.append(("Pending approvals", "\n".join(pending_lines).strip()))
 
         sections.extend(self._current_git_diff_sections())
 
+        return sections
+
+    @work(exclusive=True, group="diff-review")
+    async def _load_diff_review(self, args: str, log: ConversationLog, pending) -> None:
+        sections = await asyncio.to_thread(self._collect_diff_sections, pending)
+        self._finish_diff_command(args, log, sections)
+
+    def _finish_diff_command(self, args: str, log: ConversationLog, sections) -> None:
+        arg = args.strip().lower()
         if not sections:
             log.add_info("No diffs found. Use :diff split or :diff unified to set mode.")
             return

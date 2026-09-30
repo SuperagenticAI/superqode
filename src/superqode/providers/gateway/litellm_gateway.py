@@ -918,6 +918,12 @@ class LiteLLMGateway(GatewayInterface):
         """
         if provider not in self._LOCAL_SHAPED_PROVIDERS:
             return
+        if provider == "ollama":
+            # Serialization stays correct even when automatic tuning is off.
+            # LiteLLM creates the wire-level options object from flat kwargs.
+            options = dict(request_kwargs.pop("options", None) or {})
+            for key, value in options.items():
+                request_kwargs.setdefault(key, value)
         if os.environ.get("SUPERQODE_DISABLE_LOCAL_SHAPING", "").strip().lower() in {
             "1",
             "true",
@@ -935,9 +941,7 @@ class LiteLLMGateway(GatewayInterface):
             keep_alive = os.environ.get("SUPERQODE_OLLAMA_KEEP_ALIVE", "30m")
             # LiteLLM forwards unknown kwargs into Ollama's "options" payload.
             request_kwargs.setdefault("keep_alive", keep_alive)
-            options = dict(request_kwargs.get("options") or {})
-            options.setdefault("num_ctx", self._ollama_num_ctx_for(model))
-            request_kwargs["options"] = options
+            request_kwargs.setdefault("num_ctx", self._ollama_num_ctx_for(model))
 
     # Patterns the in-band extractor recognizes. Order matters: try the
     # most specific (XML-style tag) first to avoid greedy code-fence matches

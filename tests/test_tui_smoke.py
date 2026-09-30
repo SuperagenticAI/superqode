@@ -3657,6 +3657,40 @@ def test_byok_highlighted_model_enter_selects_current_model(monkeypatch):
     assert app._awaiting_byok_model is False
 
 
+@pytest.mark.parametrize("target", ["budget", "free", "other"])
+def test_byok_all_model_groups_show_keyboard_selection(monkeypatch, target):
+    models = {
+        "coding": ModelInfo(
+            "coding",
+            "Coding",
+            "openrouter",
+            input_price=2,
+            output_price=3,
+            capabilities=[ModelCapability.CODE],
+        ),
+        "budget": ModelInfo("budget", "Budget", "openrouter", input_price=0.5, output_price=1),
+        "free": ModelInfo("free", "Free", "openrouter"),
+        "other": ModelInfo("other", "Other", "openrouter", input_price=2, output_price=3),
+    }
+    monkeypatch.setattr("superqode.providers.models.get_models_for_provider", lambda _: models)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-placeholder")
+    app = make_app()
+    log = FakeLog()
+    app.query_one = lambda *args, **kwargs: log
+    app._scroll_to_highlighted_item = lambda *args: None
+    captured = []
+    app._connect_byok_mode = lambda provider, model, _: captured.append((provider, model))
+    app._show_provider_models("openrouter", log)
+    for _ in range(app._byok_model_list.index(target)):
+        app.action_navigate_model_down()
+    selected = [line for line in log.items[-1].plain.splitlines() if "← SELECTED" in line]
+    assert len(selected) == 1
+    assert models[target].name in selected[0]
+    assert "▶" in selected[0]
+    app.action_select_highlighted_model()
+    assert captured == [("openrouter", target)]
+
+
 def test_picker_link_click_selects_byok_model_directly():
     app = make_app()
     log = FakeLog()
@@ -5182,7 +5216,9 @@ def test_tool_output_modes_minimal_normal_verbose():
     log.tool_output_mode = "minimal"
     log.add_tool_call("bash", status="error", arguments={"command": "bad"}, output="boom")
     error = render_plain(writes[-1])
-    assert "boom" in error
+    assert "boom" not in error
+    assert ":tools 4" in error
+    assert "boom" in log.format_tool_run_detail(4)
 
 
 def test_tool_running_rows_show_command_in_all_modes():
@@ -5337,8 +5373,10 @@ def test_active_tool_status_tracks_running_tools_with_log_rows():
     assert render_plain(log._active_tools_renderable()).strip() == ""
 
 
-def test_failed_tool_renders_failure_card_with_command_context():
+@pytest.mark.parametrize("mode", ["normal", "minimal"])
+def test_failed_tool_stays_compact_with_expandable_details(mode):
     log = ConversationLog()
+    log.tool_output_mode = mode
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
 
@@ -5352,15 +5390,23 @@ def test_failed_tool_renders_failure_card_with_command_context():
     )
 
     rendered = "\n".join(render_plain(item) for item in writes)
-    assert "Tool failed: Run" in rendered
-    assert "exit 1" in rendered
+    assert len(writes) == 1
+    assert "✕" in rendered
+    assert "Run" in rendered and "Running" not in rendered
+    assert ":tools 1" in rendered
+    assert "Tool failed:" not in rendered
     assert "uv run pytest" in rendered
-    assert "/repo" in rendered
-    assert "FAILED tests/test_example.py" in rendered
+    assert "FAILED tests/test_example.py" not in rendered
+    detail = log.format_tool_run_detail(1)
+    assert "Exit:     1" in detail
+    assert "/repo" in detail
+    assert "FAILED tests/test_example.py" in detail
+    assert any("superqode://cmd/tools%201" in str(span.style) for span in writes[0].spans)
 
 
 def test_failed_tool_timeout_card_shows_timeout():
     log = ConversationLog()
+    log.tool_output_mode = "verbose"
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
 
@@ -5375,6 +5421,7 @@ def test_failed_tool_timeout_card_shows_timeout():
     rendered = "\n".join(render_plain(item) for item in writes)
     assert "timeout 300s" in rendered
     assert "npm test" in rendered
+    assert "Tool failed: Run" in rendered
 
 
 def test_tool_runs_index_and_detail_capture_output_metadata_and_diff():
@@ -7185,6 +7232,7 @@ def test_tui_local_airplane_requires_subcommand():
 
 
 def test_tui_local_warmup_sends_tiny_generation(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_LOCAL_WARMUP", "1")
     from superqode.providers.gateway.base import GatewayResponse
     import superqode.providers.gateway.litellm_gateway as gateway_mod
 

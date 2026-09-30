@@ -124,7 +124,7 @@ def test_shaping_sets_keep_alive_and_num_ctx_for_ollama():
     kwargs: dict = {}
     gw._apply_local_request_shaping("ollama", "qwen2.5-coder:7b", kwargs, has_tools=True)
     assert kwargs["keep_alive"] == "30m"
-    assert kwargs["options"]["num_ctx"] == 32768
+    assert kwargs["num_ctx"] == 32768
 
 
 def test_shaping_clamps_temperature_when_tools_present():
@@ -165,8 +165,9 @@ def test_shaping_preserves_existing_options():
     gw = LiteLLMGateway()
     kwargs: dict = {"options": {"num_ctx": 65536, "num_gpu": 1}}
     gw._apply_local_request_shaping("ollama", "qwen2.5", kwargs, has_tools=False)
-    assert kwargs["options"]["num_ctx"] == 65536  # caller wins
-    assert kwargs["options"]["num_gpu"] == 1
+    assert kwargs["num_ctx"] == 65536  # caller wins
+    assert kwargs["num_gpu"] == 1
+    assert "options" not in kwargs
 
 
 def test_shaping_keep_alive_env_override(monkeypatch):
@@ -175,6 +176,43 @@ def test_shaping_keep_alive_env_override(monkeypatch):
     kwargs: dict = {}
     gw._apply_local_request_shaping("ollama", "qwen2.5", kwargs, has_tools=False)
     assert kwargs["keep_alive"] == "2h"
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_ollama_adapter_receives_flat_options_on_the_wire(stream):
+    """Exercise LiteLLM's real serialization, not just our shaping dictionary."""
+    from litellm.utils import get_optional_params
+    from litellm.llms.ollama.chat.transformation import OllamaChatConfig
+
+    kwargs = {"options": {"num_ctx": 8192, "num_gpu": 1}, "stream": stream}
+    LiteLLMGateway()._apply_local_request_shaping("ollama", "fixture", kwargs, has_tools=False)
+    optional = get_optional_params(model="fixture", custom_llm_provider="ollama_chat", **kwargs)
+    wire = OllamaChatConfig().transform_request(
+        model="fixture",
+        messages=[{"role": "user", "content": "hello"}],
+        optional_params=optional,
+        litellm_params={},
+        headers={},
+    )
+    assert wire["options"]["num_ctx"] == 8192
+    assert wire["options"]["num_gpu"] == 1
+    assert "options" not in wire["options"]
+    assert wire["keep_alive"] == "30m"
+    assert wire["stream"] is stream
+
+
+def test_ollama_top_level_option_wins_over_nested_option():
+    kwargs = {"num_ctx": 4096, "options": {"num_ctx": 8192}}
+    LiteLLMGateway()._apply_local_request_shaping("ollama", "fixture", kwargs, has_tools=False)
+    assert kwargs["num_ctx"] == 4096
+    assert "options" not in kwargs
+
+
+def test_ollama_explicit_options_serialize_when_automatic_tuning_is_disabled(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_DISABLE_LOCAL_SHAPING", "1")
+    kwargs = {"options": {"num_ctx": 4096}, "temperature": 0.9}
+    LiteLLMGateway()._apply_local_request_shaping("ollama", "fixture", kwargs, has_tools=True)
+    assert kwargs == {"num_ctx": 4096, "temperature": 0.9}
 
 
 # ---------------------------------------------------------------------------

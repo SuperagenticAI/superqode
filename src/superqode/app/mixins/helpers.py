@@ -430,6 +430,7 @@ class HelpersMixin(
         try:
             prompt = self.query_one("#prompt-input", SelectionAwareInput)
             prompt.disabled = False
+            prompt.set_working(working and not interactive)
             if interactive and getattr(self, "_decision_draft", None) is None:
                 self._decision_draft = (prompt.value, prompt.cursor_location)
                 prompt.value = ""

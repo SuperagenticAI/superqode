@@ -853,6 +853,8 @@ class TopScanningLine(Static):
 
     def render(self) -> Text:
         if not self.is_active:
+            if self.has_class("visible"):
+                return Text("─" * (self.size.width or 80), style="dim #7c3aed")
             return Text("")
 
         width = self.size.width or 80
@@ -908,6 +910,8 @@ class BottomScanningLine(Static):
 
     def render(self) -> Text:
         if not self.is_active:
+            if self.has_class("visible"):
+                return Text("─" * (self.size.width or 80), style="dim #7c3aed")
             return Text("")
 
         width = self.size.width or 80
@@ -1206,9 +1210,6 @@ class HintsBar(Static):
         # t.append("\n", style="")
 
         if self.is_working:
-            t.append("⚡ ", style="bold #a855f7")
-            t.append("Agent working…", style="bold #c084fc")
-            t.append("  •  ", style=THEME["dim"])
             t.append("Esc", style="bold #fbbf24")
             t.append(" Cancel", style=THEME["text"])
             t.append("  •  ", style=THEME["dim"])
@@ -1670,16 +1671,6 @@ class ConversationLog(RichLog):
         # output. Keep it minimal: identity line, then a purple input rail.
         lines = (str(text).strip() or "(empty)").splitlines() or ["(empty)"]
         question = Text()
-        turn_num = sum(1 for m in self._messages if m[0] == "user")
-        import time as _time
-
-        turn_time = _time.strftime("%H:%M")
-        question.append("  ", style="")
-        question.append("─── ", style=THEME["border_active"])
-        question.append(f"Turn #{turn_num}", style=f"bold {THEME['cyan']}")
-        question.append(f" · {turn_time} ", style=THEME["dim"])
-        question.append("─" * 36, style=THEME["border_active"])
-        question.append("\n\n")
         question.append("  › ", style=f"bold {THEME['purple']}")
         question.append("YOU", style=f"bold {THEME['purple']}")
         question.append("\n")
@@ -3026,7 +3017,7 @@ class ConversationLog(RichLog):
             if key in tool_name.lower():
                 tool_icon = icon
                 break
-        if display_label == "Running":
+        if display_label == "Run":
             tool_icon = "⚡"
             verb_style = f"bold {THEME['purple']}"
         else:
@@ -3037,7 +3028,7 @@ class ConversationLog(RichLog):
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(
-            f"{tool_icon} ", style=THEME["purple"] if display_label == "Running" else THEME["dim"]
+            f"{tool_icon} ", style=THEME["purple"] if display_label == "Run" else THEME["dim"]
         )
         line.append(display_label, style=verb_style)
         detail = self._format_tool_detail(
@@ -3078,7 +3069,7 @@ class ConversationLog(RichLog):
 
         if output and status == "success":
             summary = summarize_tool_output(
-                "bash" if display_label == "Running" else tool_name,
+                "bash" if display_label == "Run" else tool_name,
                 status,
                 output,
                 mode,
@@ -3087,10 +3078,17 @@ class ConversationLog(RichLog):
                 style = THEME["error"] if status == "error" else THEME["muted"]
                 line.append(f"\n    → {summary}", style=style)
 
+        if status == "error":
+            run_number = len(getattr(self, "_session_tool_calls", [])) + 1
+            line.append("  ▸ ", style=THEME["dim"])
+            line.append(
+                f":tools {run_number}",
+                style=f"{THEME['muted']} {command_link(f'tools%20{run_number}')}",
+            )
         line.append("\n")
         self.write(line)
 
-        if status == "error":
+        if status == "error" and mode == "verbose":
             self.write(
                 self._render_tool_failure_card(
                     tool_name,
@@ -3449,7 +3447,7 @@ class ConversationLog(RichLog):
         """Return a stable verb, ignoring ACP prose titles for shell calls."""
         arguments = arguments or {}
         if _is_shell_tool(tool_name) or extract_tool_command(arguments):
-            return "Running"
+            return "Run"
         return self._format_tool_name(tool_name).title()
 
     def _format_tool_detail(

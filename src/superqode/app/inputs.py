@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from time import monotonic
+from random import sample
+
+from rich.text import Text
 from textual import events
 from textual.binding import Binding
+from textual.content import Content
+from textual.strip import Strip
 from textual.widgets import Input, TextArea
+
+from superqode.app.constants import THEME
 
 
 class SelectionAwareInput(TextArea):
@@ -24,6 +32,71 @@ class SelectionAwareInput(TextArea):
     DEFAULT_PLACEHOLDER = (
         "Get started with :connect · Browse with mouse · Run shell commands with >"
     )
+    WORKING_DOT_FRAMES = ("●··", "·●·", "··●")
+
+    def set_working(self, working: bool) -> None:
+        """Show activity in an empty composer without changing its draft."""
+        if working != getattr(self, "_is_working", False):
+            if working:
+                self._ready_placeholder = self.placeholder
+                self._working_started_at = monotonic()
+            else:
+                if self.placeholder == getattr(self, "_working_placeholder", None):
+                    self.placeholder = self._ready_placeholder
+            self._is_working = working
+        self._sync_working_animation()
+
+    def _update_working_placeholder(self) -> None:
+        if not getattr(self, "_is_working", False) or self.text:
+            return
+        elapsed = max(0.0, monotonic() - self._working_started_at)
+        frame = self.WORKING_DOT_FRAMES[int(elapsed * 2) % len(self.WORKING_DOT_FRAMES)]
+        self._working_placeholder = f"Agent working {frame}"
+        accents = list(
+            dict.fromkeys(THEME[key] for key in ("purple", "pink", "gold", "cyan", "success"))
+        )
+        colors = sample(accents, min(3, len(accents)))
+        content = Text("Agent working ", style=f"bold {THEME['purple']}")
+        for index, dot in enumerate(frame):
+            content.append(dot, style=f"bold {colors[index % len(colors)]}")
+        self._working_content = content
+        self.placeholder = self._working_placeholder
+
+    def render_line(self, y: int) -> Strip:
+        # TextArea applies its muted placeholder style over rich text. Render
+        # only the working hint here so theme accents retain their brightness.
+        if (
+            getattr(self, "_is_working", False)
+            and not self.text
+            and self.placeholder == getattr(self, "_working_placeholder", None)
+        ):
+            lines = Content.from_text(self._working_content).wrap(max(1, self.content_size.width))
+            if 0 <= y < len(lines):
+                content = lines[y]
+                return Strip(content.render_segments(self.visual_style), content.cell_length)
+        return super().render_line(y)
+
+    def _sync_working_animation(self) -> None:
+        active = (
+            getattr(self, "_is_working", False)
+            and not self.text
+            and getattr(self.app, "_wave_window_focused", True)
+        )
+        timer = getattr(self, "_working_timer", None)
+        if not active:
+            if timer is not None:
+                timer.stop()
+                self._working_timer = None
+            return
+        self._update_working_placeholder()
+        if timer is None:
+            self._working_timer = self.set_interval(0.5, self._update_working_placeholder)
+
+    def on_unmount(self) -> None:
+        timer = getattr(self, "_working_timer", None)
+        if timer is not None:
+            timer.stop()
+            self._working_timer = None
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
     # are surprising here: Ctrl+A is line-start and Ctrl+U only deletes to the
@@ -66,6 +139,8 @@ class SelectionAwareInput(TextArea):
         kwargs.setdefault("highlight_cursor_line", False)
         kwargs.setdefault("tab_behavior", "focus")
         super().__init__(*args, **kwargs)
+        self._working_timer = None
+        self._is_working = False
         self.suggester = suggester
         self._history_draft: Optional[str] = None
         self._navigating_history: bool = False
@@ -126,6 +201,7 @@ class SelectionAwareInput(TextArea):
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._resize_to_content()
+        self._sync_working_animation()
         schedule = getattr(self.app, "_schedule_draft_save", None)
         if callable(schedule):
             schedule()
@@ -287,6 +363,11 @@ class SelectionAwareInput(TextArea):
                 event.stop()
                 event.prevent_default()
                 return
+
+        if event.key == "escape" and getattr(app, "_completion_ready_value", None) is None:
+            hide_completion = getattr(app, "_hide_prompt_completion_panel", None)
+            if callable(hide_completion):
+                hide_completion()
 
         if event.key in {"escape", "ctrl+["} and getattr(self, "_navigating_history", False):
             draft = (
