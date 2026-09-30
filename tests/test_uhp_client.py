@@ -1382,7 +1382,8 @@ async def test_client_downgrades_to_a_version_the_server_serves():
     async with _client(handler) as client:
         harnesses = await client.list_harnesses()
         assert harnesses[0].id == "chrn_a"
-        assert seen == ["2026-09-12", "2026-08-11"]
+        # One retry: drop straight to the newest offered version in common.
+        assert seen == ["2026-09-28", "2026-08-11"]
         # The negotiated version sticks for later calls.
         await client.list_harnesses()
         assert seen[-1] == "2026-08-11"
@@ -1413,10 +1414,19 @@ def test_best_common_version_prefers_the_newest():
     from superqode.harness.uhp_client import UHPDiscovery
 
     both = UHPDiscovery.from_payload(
+        {
+            "versions": ["2026-08-11", "2026-09-12", "2026-09-28"],
+            "default_version": "2026-09-28",
+        }
+    )
+    assert both.best_common_version == "2026-09-28"
+    assert both.speaks_target_version is True
+
+    mid = UHPDiscovery.from_payload(
         {"versions": ["2026-08-11", "2026-09-12"], "default_version": "2026-09-12"}
     )
-    assert both.best_common_version == "2026-09-12"
-    assert both.speaks_target_version is True
+    assert mid.best_common_version == "2026-09-12"
+    assert mid.speaks_target_version is True
 
     old = UHPDiscovery.from_payload({"versions": ["2026-08-11"], "default_version": "2026-08-11"})
     assert old.best_common_version == "2026-08-11"

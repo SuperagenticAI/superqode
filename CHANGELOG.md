@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **UHP `2026-09-28`.** The client targets it and the server serves it beside
+  `2026-09-12` and `2026-08-11`. Discovery reports `environments: false` (the
+  Environments chapter is optional and not implemented). Same additive pattern
+  as the earlier plugins capability flag.
+
 ## [2.4.31] - 2026-09-30
 
 ### Added

@@ -5,9 +5,10 @@ a *native* UHP server (Path A), complementary to HarnessRouter: SuperQode's own
 harness bind speaks the wire format directly, rather than wrapping Codex/Claude
 as a multi-backend runner.
 
-Serves UHP ``2026-09-12`` and ``2026-08-11``. Passes the conformance suite at
-class ``core``. Session listing is served where the bind is not shared; file
-artifacts are not implemented, so the class stays ``core``.
+Serves UHP ``2026-09-28``, ``2026-09-12``, and ``2026-08-11``. Passes the
+conformance suite at class ``core``. Session listing is served where the bind
+is not shared; file artifacts and Environments are not implemented, so the
+class stays ``core``.
 """
 
 from __future__ import annotations
@@ -40,8 +41,9 @@ from superqode.harness.uhp_client import (
 #: Default protocol version: what a caller gets when it names none.
 SUPPORTED_VERSION = UHP_PROTOCOL_VERSION
 
-#: Every version served, newest first. 2026-09-12 is additive to 2026-08-11,
-#: so both answer from one code path and only the echoed header differs.
+#: Every version served, newest first. 2026-09-28 is additive to 2026-09-12,
+#: and that one to 2026-08-11, so all answer from one code path and only the
+#: echoed header differs.
 SUPPORTED_VERSIONS: tuple[str, ...] = UHP_SUPPORTED_VERSIONS
 
 #: Discovery document object type.
@@ -434,6 +436,8 @@ class UHPServer:
                 # than this field". `plugin_schemas` belongs to a server that
                 # answers true, so it stays off the document.
                 "plugins": False,
+                # 2026-09-28 adds Environments. Same honesty rule as plugins.
+                "environments": False,
             },
             "implementation": {
                 "name": self.config.implementation_name,

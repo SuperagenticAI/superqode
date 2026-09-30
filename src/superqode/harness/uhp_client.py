@@ -27,11 +27,12 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-UHP_PROTOCOL_VERSION = "2026-09-12"
+UHP_PROTOCOL_VERSION = "2026-09-28"
 
-#: Versions this client can read, newest first. 2026-09-12 is additive to
-#: 2026-08-11, so one client parses both; only the header differs.
-UHP_SUPPORTED_VERSIONS: tuple[str, ...] = ("2026-09-12", "2026-08-11")
+#: Versions this client can read, newest first. 2026-09-28 is additive to
+#: 2026-09-12, and that one to 2026-08-11, so one client parses all three;
+#: only the header differs.
+UHP_SUPPORTED_VERSIONS: tuple[str, ...] = ("2026-09-28", "2026-09-12", "2026-08-11")
 
 #: Sent on every request so a server does not silently answer at another
 #: version than the one this client was written against.

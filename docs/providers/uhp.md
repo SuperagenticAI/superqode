@@ -22,11 +22,13 @@ HarnessRouter wraps Codex, Claude Code, and similar tools as a catalog;
 `serve uhp` makes SuperQode's own harness speak UHP so any UHP client can drive
 it. They are partners, not substitutes.
 
-SuperQode targets UHP version `2026-09-12` and sends it on every client
-request. The native server serves `2026-09-12` and `2026-08-11` from one code
-path, because the newer version is additive: it answers either, and echoes back
-the one the caller asked for. A client that meets a server offering only the
-older version drops to it automatically.
+SuperQode targets UHP version `2026-09-28` and sends it on every client
+request. The native server serves `2026-09-28`, `2026-09-12`, and `2026-08-11`
+from one code path, because each newer version is additive: it answers any of
+them, and echoes back the one the caller asked for. Discovery reports
+`plugins: false` and `environments: false` (those chapters are optional and not
+implemented here). A client that meets a server offering only an older version
+drops to it automatically.
 
 ---
 
@@ -62,7 +64,7 @@ advertises, and selects one when the server offers only one.
 
 ```text
 Connected:  https://your-server
-Protocol:   UHP 2026-09-12 (full)
+Protocol:   UHP 2026-09-28 (full)
 Auth:       bearer key
 
 Harnesses (2):
@@ -421,9 +423,10 @@ only when the payload nests a full error object.
 
 ## Limits
 
-- The client reads `2026-09-12` and `2026-08-11`. It asks for the newer one
-  and retries at the older when a server answers `unsupported_protocol_version`.
-  `connect uhp` warns only when there is no version in common.
+- The client reads `2026-09-28`, `2026-09-12`, and `2026-08-11`. It asks for
+  the newest and retries older versions when a server answers
+  `unsupported_protocol_version`. `connect uhp` warns only when there is no
+  version in common.
 - File artifacts are reported as citations with a download URL. Use
   `UHPClient.save_file` / `download_citations`, or pass `--download-dir` on
   `harness run uhp`, to copy them into a local directory.
@@ -482,7 +485,7 @@ process list.
 
 ### What it serves
 
-Core surface under `/v1/…` (protocols `2026-09-12` and `2026-08-11`):
+Core surface under `/v1/…` (protocols `2026-09-28`, `2026-09-12`, and `2026-08-11`):
 
 | Method | Path | Notes |
 | --- | --- | --- |
