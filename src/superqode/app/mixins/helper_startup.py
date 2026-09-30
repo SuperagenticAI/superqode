@@ -116,6 +116,30 @@ class HelperStartupMixin:
         """Build the command palette from the real TUI command surface."""
         commands = [
             PaletteCommand(
+                "context_next",
+                "Inspect Next Prompt",
+                "Inspect context and remove staged references while keeping your draft",
+                "📎",
+                ":context next",
+                "harness",
+            ),
+            PaletteCommand(
+                "task_changes",
+                "Review Task Changes",
+                "Review per-file task diffs and restore a task file",
+                "🧾",
+                ":diff task",
+                "changes",
+            ),
+            PaletteCommand(
+                "retry_connection",
+                "Retry Connection",
+                "Retry the last setup target while keeping your conversation",
+                "🔌",
+                ":connect retry",
+                "connection",
+            ),
+            PaletteCommand(
                 "start_coding",
                 "Start Coding",
                 "Connect an agent/model and begin implementation work",

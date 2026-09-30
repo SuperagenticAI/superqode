@@ -101,6 +101,39 @@ def _menu_history_label(menu: str) -> str:
 
 
 class ConnectMixin:
+    def _retry_connection(self, log: ConversationLog) -> None:
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the active turn to finish before retrying a connection.")
+            return
+        target = getattr(self, "_connection_retry_target", None)
+        if not target:
+            log.add_info("No connection attempt to retry. Use :connect search.")
+            return
+        self._begin_connection_view(log)
+        kind, values = target
+        if kind == "acp":
+            self._connect_agent(*values)
+        elif kind == "model":
+            self._connect_byok_mode(*values, log)
+        elif kind == "profile":
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            profile = get_connection_profile(values[0])
+            if profile is not None:
+                self._dispatch_connection_profile(profile, log)
+
+    def _connection_attempt_failed(self, log: ConversationLog, detail: str) -> None:
+        self._connection_attempt_state = "Failed"
+        self._end_connection_view(log)
+        self._announce_transition(
+            title="Connection failed",
+            primary=detail,
+            severity="error",
+            log=log,
+            guidance=":connect retry",
+            dedupe_key="connection-recovery:" + detail,
+        )
+
     def _connection_auth_for_status(self) -> str:
         from superqode.providers.connection_profiles import (
             get_connection_profile,
@@ -321,6 +354,11 @@ class ConnectMixin:
             if local:
                 text.append("  Local help: :local setup · :local status · :connect test --tools\n")
             text.append("  Cancel: Esc cancels the active turn\n")
+        attempt = getattr(self, "_connection_attempt_state", "")
+        if attempt:
+            text.append(f"  Last attempt: {attempt}\n")
+        if getattr(self, "_connection_retry_target", None):
+            text.append("  Retry setup: :connect retry\n")
         text.append("\n  :connect search · :connect test · :sessions\n", style=THEME["muted"])
         log.write(text)
 
@@ -373,7 +411,9 @@ class ConnectMixin:
     def _connection_tools_command(self, args: str, log: ConversationLog) -> bool:
         sub, _, rest = args.strip().partition(" ")
         sub = sub.casefold()
-        if sub == "search":
+        if sub == "retry":
+            self._retry_connection(log)
+        elif sub == "search":
             self._open_connection_browser(log, rest.strip())
         elif sub == "status":
             self._show_connection_status(log)
@@ -1821,6 +1861,8 @@ class ConnectMixin:
         still know which harness they belong to. Any other connector ends that
         flow so a later Core switch does not inherit KEY_MODELS / persist.
         """
+        self._connection_retry_target = ("profile", (profile.id,))
+        self._connection_attempt_state = "Setup"
         self._reset_connect_selection_states()
         if profile.connector != "harness-wizard":
             cancel = getattr(self, "_cancel_harness_wizard", None)
@@ -3156,7 +3198,26 @@ class ConnectMixin:
             )
         )
 
-    def _connect_byok_mode(
+    def _connect_byok_mode(self, provider, model, log, resolved_role=None, **kwargs):
+        self._connection_retry_target = ("model", (provider, model))
+        self._connection_attempt_state = "Connecting"
+        pure = getattr(self, "_pure_mode", None)
+        previous = dict(vars(pure)) if pure is not None else None
+        previous_session = dict(vars(pure.session)) if pure is not None else None
+        try:
+            result = self._connect_byok_mode_impl(provider, model, log, resolved_role, **kwargs)
+            if self._connection_attempt_state == "Connecting":
+                self._connection_attempt_state = "Setup required"
+            return result
+        except Exception as exc:
+            if pure is not None and previous is not None:
+                vars(pure).clear()
+                vars(pure).update(previous)
+                vars(pure.session).clear()
+                vars(pure.session).update(previous_session)
+            self._connection_attempt_failed(log, str(exc))
+
+    def _connect_byok_mode_impl(
         self,
         provider: str,
         model: str,
@@ -3307,26 +3368,6 @@ class ConnectMixin:
                 log.write_feedback(t)
                 return
 
-        # Clear any existing ACP connection when switching to BYOK
-        self._clear_acp_extra_env()
-        if hasattr(self, "_acp_client") and self._acp_client:
-            # Disconnect ACP client if switching from ACP to BYOK
-            try:
-                if self._acp_loop_runner is not None:
-                    self._acp_loop_runner.run(self._acp_client.stop())
-                else:
-                    asyncio.create_task(self._acp_client.stop())
-            except Exception:
-                pass
-            self._acp_client = None
-            self._acp_client_key = None
-
-        # Clear session state
-        session = get_session()
-        if hasattr(session, "connected_agent"):
-            session.connected_agent = None
-        if hasattr(session, "acp_manager"):
-            session.acp_manager = None
         # Store previous provider for quick switching
         if hasattr(self, "current_provider") and self.current_provider:
             self._previous_provider = (self.current_provider, self.current_model)
@@ -3433,6 +3474,28 @@ class ConnectMixin:
             role_config=resolved_role,
             session_id=session_id,
         )
+
+        # Clear any existing ACP connection when switching to BYOK
+        self._clear_acp_extra_env()
+        if hasattr(self, "_acp_client") and self._acp_client:
+            # Disconnect ACP client if switching from ACP to BYOK
+            try:
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    asyncio.create_task(self._acp_client.stop())
+            except Exception:
+                pass
+            self._acp_client = None
+            self._acp_client_key = None
+
+        # Clear session state
+        session = get_session()
+        if hasattr(session, "connected_agent"):
+            session.connected_agent = None
+        if hasattr(session, "acp_manager"):
+            session.acp_manager = None
+        self._connection_attempt_state = "Selected · access checked on use"
 
         # Update state
         session = get_session()
@@ -4855,6 +4918,54 @@ class ConnectMixin:
     @work(exclusive=True)
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
         log = self.query_one("#log", ConversationLog)
+        self._connection_retry_target = ("acp", (agent_id, model_hint))
+        self._connection_attempt_state = "Connecting"
+        previous_session = dict(vars(get_session()))
+        previous_fields = {
+            name: getattr(self, name, None)
+            for name in (
+                "current_agent",
+                "current_model",
+                "current_provider",
+                "current_mode",
+                "current_role",
+                "_is_first_message",
+                "_opencode_session_id",
+                "_acp_extra_env",
+                "_acp_extra_env_agent",
+                "_pending_vendor_key",
+                "_pending_acp_fresh_target",
+            )
+        }
+        previous_chrome = []
+        for selector, fields in (
+            ("#mode-badge", ("mode", "role", "agent", "model", "provider", "execution_mode")),
+            (
+                "#status-bar",
+                (
+                    "byok_provider",
+                    "byok_model",
+                    "connection_auth",
+                    "active_runtime",
+                    "active_model",
+                    "active_harness",
+                ),
+            ),
+        ):
+            try:
+                widget = self.query_one(selector)
+                previous_chrome.append((widget, {name: getattr(widget, name) for name in fields}))
+            except Exception:
+                pass
+
+        def restore_connection():
+            vars(get_session()).update(previous_session)
+            for name, value in previous_fields.items():
+                setattr(self, name, value)
+            for widget, fields in previous_chrome:
+                for name, value in fields.items():
+                    setattr(widget, name, value)
+
         self._retain_acp_extra_env_for(agent_id)
 
         try:
@@ -4863,6 +4974,7 @@ class ConnectMixin:
             agent = await get_agent_by_short_name_async(agent_id)
 
             if agent:
+                self._connection_attempt_state = "Selected · account checked on first use"
                 session = get_session()
                 session.connect_to_agent(agent)
 
@@ -5031,22 +5143,12 @@ class ConnectMixin:
             else:
                 self._pending_harness_acp_transition = None
                 self._abandon_vendor_key_attach(agent_id)
-                self._announce_transition(
-                    title="Agent not found",
-                    primary=agent_id,
-                    detail="No matching ACP agent is available",
-                    severity="error",
-                    log=log,
-                    guidance="Run :connect acp all to review available agents.",
+                restore_connection()
+                self._connection_attempt_failed(
+                    log, f"No matching ACP agent is available: {agent_id}"
                 )
         except Exception as e:
             self._pending_harness_acp_transition = None
             self._abandon_vendor_key_attach(agent_id)
-            self._announce_transition(
-                title="Connection failed",
-                primary=agent_id,
-                detail=str(e),
-                severity="error",
-                log=log,
-                guidance="Run :log verbose for startup details.",
-            )
+            restore_connection()
+            self._connection_attempt_failed(log, f"{agent_id}: {e}")

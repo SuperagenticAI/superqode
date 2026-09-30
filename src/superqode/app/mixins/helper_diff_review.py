@@ -13,11 +13,53 @@ from superqode.sidebar import (
 class HelperDiffReviewMixin:
     """Git diff computation and per-entry diff review/approve."""
 
+    def _begin_task_changes(self) -> None:
+        from superqode.app.task_changes import TaskChanges
+
+        self._task_changes_current = TaskChanges(Path.cwd()).capture()
+
+    def _task_change_sections(self, task_id: str = "") -> list[tuple[str, str]]:
+        tasks = getattr(self, "_task_changes_history", {})
+        task = tasks.get(task_id) if task_id else getattr(self, "_task_changes_current", None)
+        if task is None:
+            return []
+        return [
+            (
+                "Task changes · prior edits preserved"
+                if data.get("preexisting")
+                else "Task changes",
+                data["diff_text"],
+            )
+            for name, data in task.diffs.items()
+            if name not in task.undone
+        ]
+
+    def _undo_task_file(self, task_id: str, name: str) -> str:
+        if getattr(self, "is_busy", False):
+            return "Wait for the current run to finish before undoing task changes."
+        task = getattr(self, "_task_changes_history", {}).get(task_id)
+        if task is None:
+            return "This task baseline is no longer available."
+        try:
+            return task.undo(name)
+        except (OSError, ValueError) as exc:
+            return str(exc)
+
     def _compute_file_diffs(self, files_modified: list) -> dict:
         """Compute diff data for modified files.
 
         Returns dict mapping file_path -> {"additions": int, "deletions": int, "diff_text": str}
         """
+        task = getattr(self, "_task_changes_current", None)
+        if task is not None and task.available:
+            file_diffs = task.finish(files_modified)
+            files_modified[:] = list(file_diffs)
+            history = getattr(self, "_task_changes_history", {})
+            history[task.id] = task
+            while len(history) > 3:
+                del history[next(iter(history))]
+            self._task_changes_history = history
+            return file_diffs
         file_diffs = {}
         root_path = Path(os.getcwd())
 
@@ -280,8 +322,10 @@ class HelperDiffReviewMixin:
             if not current_lines:
                 continue
             current_lines.append(line)
-            if line.startswith("+++ b/") and not current_path:
+            if line.startswith("+++ b/"):
                 current_path = line.removeprefix("+++ b/")
+            elif line.startswith("--- a/"):
+                current_path = line.removeprefix("--- a/")
         finish()
         return entries
 
@@ -312,6 +356,10 @@ class HelperDiffReviewMixin:
                     current = {"path": line[2:].split("  ", 1)[0], "additions": 0, "deletions": 0}
                 else:
                     continue
+            if line.startswith("+++ b/"):
+                current["path"] = line.removeprefix("+++ b/")
+            elif line.startswith("--- a/"):
+                current["path"] = line.removeprefix("--- a/")
             if line.startswith("+") and not line.startswith("+++"):
                 current["additions"] = int(current.get("additions") or 0) + 1
             elif line.startswith("-") and not line.startswith("---"):

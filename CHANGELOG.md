@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.33] - 2026-09-30
+
+### Added
+
+- Task-scoped per-file diff review and guarded undo that preserve pre-existing
+  staged and unstaged edits without changing Git's index.
+- `:context next` to inspect the draft, staged references, available instructions
+  and tools, with reference removal controls.
+- `:connect retry` and connection-catalog retry controls that preserve drafts,
+  conversation content and search filters.
+- Repeatable local TUI responsiveness probe for streaming, long history, typing,
+  scrolling and terminal resizing.
+
+### Fixed
+
+- Keep previous direct-model session state when replacement initialization fails,
+  and defer ACP teardown until the replacement model has initialized.
+- Scroll long Activity evidence and fit diff-review controls in small terminals.
+- Show observed tool execution and approval/question waits in the live indicator.
+- Scan only new streamed markdown characters while buffering unfinished code.
+
 ## [2.4.32] - 2026-09-30
 
 ### Added

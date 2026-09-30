@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import shlex
 
-from superqode.app.outcomes import Outcome, OutcomeSeverity
+from superqode.app.outcomes import Outcome, OutcomeSeverity, OutcomeAction
 
 
 def _test_command(command: str) -> bool:
@@ -84,4 +84,11 @@ def task_review(summary: dict, calls: list[dict]) -> Outcome:
         details=tuple(details),
         severity=OutcomeSeverity.WARNING if failed else OutcomeSeverity.INFORMATION,
         source="task",
+        actions=(
+            OutcomeAction(
+                "review", "Review changes", f":diff task {summary['task_id']}", primary=True
+            ),
+        )
+        if summary.get("task_id") and files
+        else (),
     )

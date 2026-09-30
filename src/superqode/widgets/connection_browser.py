@@ -107,6 +107,7 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
                 yield Button("Connect", id="connection-select", variant="primary", disabled=True)
                 yield Button("Favorite", id="connection-favorite", disabled=True)
                 yield Button("Last used", id="connection-last")
+                yield Button("Retry", id="connection-retry", disabled=True)
             yield Footer()
 
     def on_mount(self):
@@ -139,12 +140,15 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
         if not self.is_mounted:
             return
         self.load_failed = True
+        self.query_one("#connection-retry", Button).disabled = False
         self._detail()
 
     def _loaded(self, profiles, readiness):
         if not self.is_mounted:
             return
         self.catalog_loaded = True
+        self.load_failed = False
+        self.query_one("#connection-retry", Button).disabled = True
         self.profiles = profiles
         self.readiness = readiness
         self._refresh_results()
@@ -193,10 +197,12 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
                 )
             elif verify:
                 text.append("\nInstalled; account access is verified on first use")
+            else:
+                text.append("\nSetup available; access has not been verified")
             if selected.badges:
                 text.append("\n" + " · ".join(selected.badges))
         elif self.load_failed:
-            text.append("Could not load the catalog. Go back and retry :connect search.")
+            text.append("Could not load the catalog. Retry keeps your search and current session.")
         elif self.catalog_loaded:
             text.append("No matching connections. Try a shorter search or clear the filter.")
         else:
@@ -241,6 +247,13 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
                 severity="warning",
             )
         self._refresh_results(keep_id=selected.id)
+
+    @on(Button.Pressed, "#connection-retry")
+    def retry_load(self):
+        self.load_failed = False
+        self.query_one("#connection-retry", Button).disabled = True
+        self._detail()
+        self._load_profiles()
 
     @on(Button.Pressed, "#connection-last")
     def reconnect_last(self):

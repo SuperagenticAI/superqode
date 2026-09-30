@@ -2307,6 +2307,9 @@ class DialogsMixin:
         ):
             from superqode.app.task_review import task_review
 
+            task = getattr(self, "_task_changes_current", None)
+            if task is not None and task.id in getattr(self, "_task_changes_history", {}):
+                summary = {**summary, "task_id": task.id}
             self._outcome_store().add(task_review(summary, getattr(log, "_tool_calls", [])))
             from superqode.app.mixins.clickable_commands import command_link
 
@@ -2871,6 +2874,7 @@ class DialogsMixin:
         t.append(f"{Path.cwd()}\n", style=THEME["text"])
 
         refs = getattr(self, "_attached_refs", [])
+        t.append("  Inspect next prompt: :context next\n", style=THEME["cyan"])
         t.append(f"  📎 Attachments: ", style=THEME["muted"])
         t.append(f"{len(refs)}\n", style=THEME["cyan"] if refs else THEME["dim"])
         for ref in refs[:5]:
@@ -3858,7 +3862,9 @@ class DialogsMixin:
             return f"Failed to open {path}: {exc}"
         return f"Opened: {path}"
 
-    def _open_diff_review_overlay(self, sections: list[tuple[str, str]]) -> None:
+    def _open_diff_review_overlay(
+        self, sections: list[tuple[str, str]], *, task_id: str = ""
+    ) -> None:
         """Open an interactive diff review overlay with file navigation."""
         from textual.binding import Binding
         from textual.containers import Horizontal, Vertical
@@ -3871,6 +3877,7 @@ class DialogsMixin:
         approve_entry = self._approve_diff_entry
         reject_entry = self._reject_diff_entry
         open_entry = self._open_diff_entry_file
+        undo_task_file = self._undo_task_file
 
         class DiffReviewScreen(ModalScreen):
             BINDINGS = [
@@ -3880,6 +3887,7 @@ class DialogsMixin:
                 Binding("a", "show_all", "All files"),
                 Binding("o", "open_current_file", "Open file"),
                 Binding("x", "copy_current_patch", "Copy patch"),
+                Binding("u", "undo_current", "Undo file"),
                 Binding("y", "approve_current", "Approve"),
                 Binding("r", "reject_current", "Reject"),
                 Binding("ctrl+c", "copy_current", "Copy"),
@@ -3924,8 +3932,20 @@ class DialogsMixin:
             }
 
             DiffReviewScreen .buttons {
-                height: 3;
+                height: auto;
+                layout: grid;
+                grid-size: 5;
+                grid-rows: 3 3;
                 align: center middle;
+            }
+            DiffReviewScreen.compact > Vertical { padding: 0 1; }
+            DiffReviewScreen.compact .title { height: 1; }
+            DiffReviewScreen.compact .status { margin-bottom: 0; }
+            DiffReviewScreen.compact .hints { height: 1; }
+            DiffReviewScreen .buttons Button {
+                min-width: 8;
+                width: 1fr;
+                padding: 0;
             }
             """
 
@@ -3944,10 +3964,10 @@ class DialogsMixin:
             def compose(self):
                 with Vertical():
                     yield Static("🧾 Diff Review", classes="title")
-                    yield Static(self._status_text(), id="diff-status", classes="status")
+                    yield Static(Text(self._status_text()), id="diff-status", classes="status")
                     yield TextArea(self._current_text, id="text-area", read_only=True)
                     yield Static(
-                        "n/p file • o open • x copy patch • y/r pending approval • a all • Esc close",
+                        "n/p file • o open • x copy patch • u undo task file • a all • Esc close",
                         classes="hints",
                     )
                     with Horizontal(classes="buttons"):
@@ -3958,8 +3978,22 @@ class DialogsMixin:
                         yield Button("Copy Patch", id="copy-patch", variant="default")
                         yield Button("Approve", id="approve-current", variant="success")
                         yield Button("Reject", id="reject-current", variant="error")
+                        yield Button(
+                            "Undo File",
+                            id="undo-task-file",
+                            variant="warning",
+                            disabled=not bool(task_id),
+                        )
                         yield Button("Copy View", id="copy-current", variant="default")
                         yield Button("Close", id="close-btn", variant="default")
+
+            def on_mount(self):
+                self.set_class(self.app.size.height < 30, "compact")
+                self._refresh_view()
+
+            def on_resize(self, event):
+                self.set_class(event.size.height < 30, "compact")
+                self._refresh_view()
 
             def on_button_pressed(self, event):
                 if event.button.id == "prev-file":
@@ -3976,6 +4010,8 @@ class DialogsMixin:
                     self.action_approve_current()
                 elif event.button.id == "reject-current":
                     self.action_reject_current()
+                elif event.button.id == "undo-task-file":
+                    self.action_undo_current()
                 elif event.button.id == "copy-current":
                     self.action_copy_current()
                 elif event.button.id == "close-btn":
@@ -4035,6 +4071,35 @@ class DialogsMixin:
                 self._safe_notify(message, severity="warning")
                 self._remove_current_entry_if_decided(entry)
 
+            def action_undo_current(self):
+                entry = self._selected_entry()
+                if not task_id or entry is None:
+                    self._safe_notify("Select a task file to undo.", severity="warning")
+                    return
+                if getattr(self, "_undo_armed_path", "") != entry["path"]:
+                    self._undo_armed_path = entry["path"]
+                    self._safe_notify(
+                        "Press Undo File again to restore this file to its pre-task contents.",
+                        severity="warning",
+                    )
+                    return
+                self._undo_armed_path = ""
+                message = undo_task_file(task_id, entry["path"])
+                self._safe_notify(
+                    message, severity="information" if message.startswith("Undid") else "warning"
+                )
+                if message.startswith("Undid"):
+                    self._entries.remove(entry)
+                    self._index = min(self._index, len(self._entries) - 1)
+                    self._content = (
+                        "\n\n".join(
+                            format_entry(item, index=index, total=len(self._entries))
+                            for index, item in enumerate(self._entries)
+                        )
+                        or "Task changes undone."
+                    )
+                    self._refresh_view()
+
             def action_copy_current(self):
                 self._copy_to_clipboard(self._current_text)
                 self._safe_notify("Diff copied", severity="information")
@@ -4069,17 +4134,20 @@ class DialogsMixin:
                     self._refresh_view()
 
             def _refresh_view(self):
+                self._undo_armed_path = ""
                 if self._index < 0:
                     self._current_text = self._content
                 else:
-                    self._current_text = format_entry(
-                        self._entries[self._index],
-                        index=self._index,
-                        total=len(self._entries),
+                    self._current_text = (
+                        str(self._entries[self._index].get("patch") or "")
+                        if self.has_class("compact")
+                        else format_entry(
+                            self._entries[self._index], index=self._index, total=len(self._entries)
+                        )
                     )
                 try:
                     self.query_one("#text-area", TextArea).load_text(self._current_text)
-                    self.query_one("#diff-status", Static).update(self._status_text())
+                    self.query_one("#diff-status", Static).update(Text(self._status_text()))
                 except Exception:
                     pass
 

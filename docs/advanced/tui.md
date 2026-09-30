@@ -1047,3 +1047,41 @@ Typing `:` or `/` exposes every declared TUI command. Contextual completion
 adds agents, providers, models, files, skills, recipes, MCP servers, and runtime
 values without hiding management subcommands such as `:attach clear` or
 `:runtime doctor`.
+
+## Reviewing a task and its next prompt
+
+Use `:diff task` to open the latest task's per-file changes. Activity also offers
+**Review changes** on recorded task outcomes. These diffs compare against the
+working files before the run, so prior staged and unstaged edits remain part of
+the baseline. The existing `:diff` command still shows the full working tree.
+
+In a task diff, **Undo File** (or `u`) restores one file to that baseline. Press
+it twice to confirm. Undo refuses a file that changed after the task, and does
+not alter Git's index. Baselines are kept for the latest three tasks in this TUI
+session. Files over 2 MB, symlinks and files without a captured baseline cannot
+be restored this way. Each task has a 32 MB snapshot budget. Task review requires
+a Git workspace; changes made concurrently during a run can also appear in the
+comparison, so review the diff before undoing.
+
+Use `:context next`, or **Inspect Next Prompt** in the command palette, to
+inspect the draft, staged file/image/MCP references and
+available instructions and tools. Select a reference and choose **Remove** to
+exclude it while keeping the rest of the draft. Instructions and tool lists are
+read-only. External harnesses and ACP agents own their final context; the preview
+identifies that boundary. MCP resources are fetched when sending, rather than
+when inspecting. Direct Chat keeps its existing context behavior.
+
+After a failed connection attempt, `:connect retry` retries the same target.
+Failed setup restores the conversation and draft; connection catalog loading
+also has a **Retry** button that retains the search. `:connect status` distinguishes
+selection and setup from verified access.
+
+The running indicator shows observed tool execution, approval/question waits and
+incoming response text alongside elapsed time. Waiting for a response does not
+claim a provider is healthy or identify the reason for a delay.
+
+For a repeatable local rendering probe, run
+`python scripts/benchmark_tui_responsiveness.py`. It measures streamed code,
+10,000-message history, typing, scrolling and resizing at two terminal sizes.
+The output records headless local timings; SSH latency requires a real terminal
+session.

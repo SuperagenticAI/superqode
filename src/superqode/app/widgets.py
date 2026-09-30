@@ -1044,12 +1044,35 @@ class StreamingThinkingIndicator(Static):
         # cycling phrase. Generic "thinking" statuses are skipped since the
         # phrase already conveys that.
         status = (self.status or "").strip()
+        try:
+            app = self.app
+            if getattr(app, "_awaiting_agent_question", False):
+                status = "Awaiting your answer"
+            elif getattr(app, "_permission_pending", False):
+                status = "Awaiting approval"
+            else:
+                log = app.query_one("#log", ConversationLog)
+                active = getattr(log, "_active_tool_start_times", [])
+                if active:
+                    current = active[-1]
+                    operation = (
+                        current.get("command")
+                        or current.get("path")
+                        or current.get("name")
+                        or "tool"
+                    )
+                    status = "Executing · " + " ".join(str(operation).split())
+                elif not status or status.startswith("Working"):
+                    status = "Waiting for response"
+        except Exception:
+            pass
         if status and "thinking" not in status.lower():
             result.append("  ·  ", style="#71717a")
             result.append(status, style="#a1a1aa")
 
         result.append("   ", style="")
-
+        if self.is_mounted and self.size.width:
+            result.truncate(self.size.width, overflow="ellipsis")
         return result
 
 
@@ -2203,6 +2226,9 @@ class ConversationLog(RichLog):
         self._streaming_response = ""
         self._streaming_notice_shown = False
         self._streamed_offset = 0
+        self._markdown_scan_offset = 0
+        self._markdown_scan_fences = 0
+        self._markdown_scan_safe = 0
         self._answer_header_shown = False
         self._active_response_agent = agent_name or "Assistant"
         self._rendered_response_text = ""
@@ -2387,6 +2413,11 @@ class ConversationLog(RichLog):
             return
 
         self._streaming_response += text
+        try:
+            indicator = self.app.query_one("#streaming-thinking", StreamingThinkingIndicator)
+            indicator.status = "Receiving response"
+        except Exception:
+            pass
         if self._viewport_mode != "user_locked":
             self.auto_scroll = True
         self._write_answer_header(getattr(self, "_active_response_agent", "Assistant"))
@@ -2401,10 +2432,11 @@ class ConversationLog(RichLog):
         # user sees formatted output live instead of waiting for the full
         # response. RichLog is append-only, so we only render text up to the
         # last safe paragraph boundary and keep the in-progress tail buffered.
-        pending = self._streaming_response[self._streamed_offset :]
-        flush_len = self._stable_markdown_split(pending)
-        if flush_len:
-            flushed = pending[:flush_len]
+        flush_len = self._incremental_markdown_split() - self._streamed_offset
+        if flush_len > 0:
+            flushed = self._streaming_response[
+                self._streamed_offset : self._streamed_offset + flush_len
+            ]
             block = flushed.strip("\n")
             self._streamed_offset += flush_len
             if block:
@@ -2643,12 +2675,35 @@ class ConversationLog(RichLog):
         self._streaming_response = ""
         self._streaming_notice_shown = False
         self._streamed_offset = 0
+        self._markdown_scan_offset = 0
+        self._markdown_scan_fences = 0
+        self._markdown_scan_safe = 0
         self._answer_header_shown = False
         self._active_response_agent = agent or "Assistant"
         self._rendered_response_text = ""
         self._response_start_y = None
         self._response_end_y = None
         self._pending_response_reveal_token = None
+
+    def _incremental_markdown_split(self) -> int:
+        """Scan new characters only, including delimiters spanning chunks."""
+        import re
+
+        response = self._streaming_response
+        start = getattr(self, "_markdown_scan_offset", 0)
+        fences = getattr(self, "_markdown_scan_fences", 0)
+        safe = getattr(self, "_markdown_scan_safe", 0)
+        end = start
+        for match in re.finditer(r"```|\n\n", response[start:]):
+            end = start + match.end()
+            if match.group() == "```":
+                fences += 1
+            elif fences % 2 == 0:
+                safe = end
+        self._markdown_scan_offset = max(end, len(response) - 2, start)
+        self._markdown_scan_fences = fences
+        self._markdown_scan_safe = safe
+        return safe
 
     @staticmethod
     def _stable_markdown_split(buffer: str) -> int:
@@ -2908,6 +2963,12 @@ class ConversationLog(RichLog):
                     break
 
         self._update_active_tool_status()
+        if status in {"running", "success", "error"}:
+            try:
+                indicator = self.app.query_one("#streaming-thinking", StreamingThinkingIndicator)
+                indicator.status = "Waiting for response"
+            except Exception:
+                pass
 
         # Track file modifications
         if status in ("running", "success") and file_path:

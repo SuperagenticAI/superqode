@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+import asyncio
 import os
 import re
 import subprocess
@@ -594,6 +595,10 @@ class AgentRunMixin:
                 log.add_info("Context compacted.")
             return
 
+        begin_changes = getattr(self, "_begin_task_changes", None)
+        if callable(begin_changes):
+            await asyncio.to_thread(begin_changes)
+
         mcp_context = await self._resolve_mcp_attachment_context(log)
         if mcp_context:
             text = f"{mcp_context}\n\n{text}"
@@ -1181,7 +1186,7 @@ class AgentRunMixin:
                         pass
 
                     # Compute file diffs for detected files
-                    file_diffs = self._compute_file_diffs(files_modified) if files_modified else {}
+                    file_diffs = self._compute_file_diffs(files_modified)
 
                     # Use ACP-style outcome display for both ACP and BYOK
                     outcome_agent = (
@@ -1270,7 +1275,7 @@ class AgentRunMixin:
                     except Exception:
                         pass
 
-                    file_diffs = self._compute_file_diffs(files_modified) if files_modified else {}
+                    file_diffs = self._compute_file_diffs(files_modified)
 
                     # Show completion summary with file changes
                     self._show_completion_summary(
@@ -1369,6 +1374,9 @@ class AgentRunMixin:
     @work(exclusive=True, thread=True)
     def _send_to_agent(self, text: str, name: str, log: ConversationLog):
         """Send message to agent with real-time streaming output."""
+        begin_changes = getattr(self, "_begin_task_changes", None)
+        if callable(begin_changes):
+            begin_changes()
         session = get_session()
         agent = session.connected_agent
 

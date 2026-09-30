@@ -211,9 +211,12 @@ class ActivityScreen(Screen[OutcomeSelection | None]):
         border-right: solid #27272a;
         background: #080808;
     }
-    ActivityScreen #activity-detail {
+    ActivityScreen #activity-detail-scroll {
         width: 1fr;
         height: 100%;
+    }
+    ActivityScreen #activity-detail {
+        height: auto;
         padding: 2;
     }
     ActivityScreen #activity-actions {
@@ -237,7 +240,8 @@ class ActivityScreen(Screen[OutcomeSelection | None]):
         yield Static("Activity · results and state changes", id="activity-title")
         with Horizontal(id="activity-body"):
             yield OptionList(*self._options(), id="activity-list")
-            yield Static(self._initial_detail(), id="activity-detail")
+            with ScrollableContainer(id="activity-detail-scroll"):
+                yield Static(self._initial_detail(), id="activity-detail")
         with Horizontal(id="activity-actions"):
             yield Button("Open action", id="activity-open", variant="primary")
             yield Button("Back", id="activity-close")
@@ -270,6 +274,9 @@ class ActivityScreen(Screen[OutcomeSelection | None]):
         if outcome is not None:
             self.selected_outcome = outcome
             self.query_one("#activity-detail", Static).update(outcome_text(outcome))
+            self.query_one("#activity-detail-scroll", ScrollableContainer).scroll_home(
+                animate=False
+            )
             self._update_open_button()
 
     def _primary_action(self):

@@ -521,7 +521,10 @@ class SlashCommandMixin:
         elif c == "optimize":
             self._jev_optimize_cmd(args, log)
         elif c == "context":
-            self._show_context(log)
+            if args.strip().lower() == "next":
+                self._preview_next_context(log)
+            else:
+                self._show_context(log)
         elif c == "status":
             self._show_harness_status(log)
         elif c == "harness":
@@ -665,7 +668,7 @@ class SlashCommandMixin:
         elif c == "connect":
             if (
                 args
-                and args.split()[0].casefold() in {"search", "status", "test"}
+                and args.split()[0].casefold() in {"search", "status", "test", "retry"}
                 and self._connection_tools_command(args, log)
             ):
                 return
@@ -4013,6 +4016,17 @@ class SlashCommandMixin:
         elif arg == "compact":
             self._diff_viewer.set_mode(DiffMode.COMPACT)
             log.add_info("Diff mode: compact")
+            return
+
+        if arg == "task" or arg.startswith("task "):
+            task_id = args.strip().split(maxsplit=1)[1] if " " in args.strip() else ""
+            sections = self._task_change_sections(task_id)
+            if not sections:
+                log.add_info("No task changes are available to review.")
+                return
+            self._open_diff_review_overlay(
+                sections, task_id=task_id or getattr(self._task_changes_current, "id", "")
+            )
             return
 
         sections: list[tuple[str, str]] = []

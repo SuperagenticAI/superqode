@@ -12,6 +12,141 @@ from superqode.app.widgets import (
 class HelperMcpAttachMixin:
     """MCP resource resolution and prompt/image attachment staging."""
 
+    def _preview_next_context(self, log: ConversationLog) -> None:
+        from superqode.widgets.context_preview import ContextItem, ContextPreviewScreen
+        from superqode.widgets.file_reference import parse_file_references, FILE_REFERENCE_PATTERN
+        from superqode.app.inputs import SelectionAwareInput
+
+        prompt = self.query_one("#prompt-input", SelectionAwareInput)
+        draft, cursor = prompt.value, prompt.cursor_location
+        chat = bool(getattr(self, "_chat_mode", False))
+        items = [ContextItem("Prompt", draft or "No prompt drafted yet.")]
+        _, inline_mcp_refs = self._extract_mcp_refs_from_text(draft)
+        refs = list(
+            dict.fromkeys(
+                [
+                    *getattr(self, "_attached_refs", []),
+                    *([] if chat else ["@" + ref for ref in parse_file_references(draft)]),
+                    *([] if chat else inline_mcp_refs),
+                ]
+            )
+        )
+        for ref in refs:
+            image = ref in getattr(self, "_staged_images", {}) or (
+                ref.startswith("@") and self._is_image_path(ref[1:])
+            )
+            status = (
+                "Image payload"
+                if image
+                else "Reference text only in Chat"
+                if chat
+                else "MCP resource · read on send, at most 5 resources / 30,000 characters"
+                if ref.startswith("mcp://")
+                else "File content · expanded on send, at most 50,000 characters per file"
+                if ref.startswith("@")
+                else "URL text · content is not fetched automatically"
+            )
+            items.append(
+                ContextItem(
+                    ref,
+                    f"{ref}\n\n{status}\nRemove excludes this reference from the next prompt.",
+                    ref,
+                )
+            )
+        if chat:
+            items.append(
+                ContextItem(
+                    "Instructions and tools",
+                    "Direct Chat sends conversation messages and image payloads. It adds no project instructions, file expansion, MCP resources or coding tools.",
+                )
+            )
+        else:
+            pure = getattr(self, "_pure_mode", None)
+            agent = self._active_agent_loop()
+            if (
+                getattr(pure, "runtime_name", "builtin") != "builtin"
+                or getattr(pure, "_harness_spec", None) is not None
+            ):
+                agent = None
+            if agent is not None:
+                instructions = str(getattr(agent, "system_prompt", "") or "")
+                items.append(
+                    ContextItem(
+                        "Instructions",
+                        instructions[:32000]
+                        + (
+                            "\nPreview limited to 32,000 characters."
+                            if len(instructions) > 32000
+                            else ""
+                        )
+                        or "No instructions recorded.",
+                    )
+                )
+                tools = getattr(agent, "tools", None)
+                active = (
+                    tools.active_tools()
+                    if tools is not None and hasattr(tools, "active_tools")
+                    else tools.list()
+                    if tools is not None
+                    else []
+                )
+                names = [str(t.name) for t in active]
+                definitions = getattr(agent, "_mcp_tools", [])
+                names.extend(str(getattr(t, "name", "")) for t in definitions)
+                items.append(
+                    ContextItem(
+                        "Tools",
+                        "Currently active tools\n\n"
+                        + ("\n".join(dict.fromkeys(names)) or "None")
+                        + "\n\nThe agent may discover additional tools during execution.",
+                    )
+                )
+            else:
+                items.append(
+                    ContextItem(
+                        "Instructions and tools",
+                        "Instructions, history and tool availability are managed by the selected harness or ACP agent. SuperQode cannot inspect its complete provider payload.",
+                    )
+                )
+            servers = self._configured_mcp_server_ids()
+            if servers:
+                items.append(
+                    ContextItem(
+                        "MCP configuration",
+                        "Configured servers (configuration alone does not verify connectivity or tool exposure):\n"
+                        + "\n".join(servers),
+                    )
+                )
+            items.append(
+                ContextItem(
+                    "Conversation",
+                    "The active session retains prior conversation context. Use :compact to reduce it, or a fresh session to start again. Context expansion and compaction can change the final provider payload.",
+                )
+            )
+
+        def selected(reference):
+            prompt.value, prompt.cursor_location = draft, cursor
+            if reference:
+                staged = getattr(self, "_attached_refs", [])
+                if reference in staged:
+                    staged.remove(reference)
+                    self._sync_attachment_prefill()
+                if reference.startswith("@"):
+                    prompt.value = FILE_REFERENCE_PATTERN.sub(
+                        lambda match: "" if "@" + match.group(1) == reference else match.group(0),
+                        prompt.value,
+                    )
+                elif reference.startswith("mcp://"):
+                    import re
+
+                    prompt.value = re.sub(
+                        r"(?<!\S)" + re.escape(reference) + r"(?!\S)", "", prompt.value
+                    )
+                log.add_info(f"Removed staged reference: {reference}")
+            self._ensure_input_focus()
+
+        self.push_screen(ContextPreviewScreen(items), callback=selected)
+
     @staticmethod
     def _parse_mcp_resource_ref(ref: str) -> tuple[str, str] | None:
         if not ref.startswith("mcp://"):
