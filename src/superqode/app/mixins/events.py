@@ -20,6 +20,95 @@ from superqode.app.inputs import SelectionAwareInput
 class EventHandlerMixin:
     """on_* message handlers for custom widgets (non-lifecycle)."""
 
+    def _init_draft_recovery(self) -> None:
+        from pathlib import Path
+        from superqode.app.draft_recovery import DraftStore
+        from superqode.image_input import ImageAttachment
+
+        # Headless probes do not read or overwrite the developer's real draft.
+        # Tests can inject a store explicitly to exercise restart behavior.
+        store = getattr(self, "_draft_store", None)
+        if self.is_headless and store is None:
+            return
+        self._draft_store = store or DraftStore(Path.cwd())
+        self._draft_revision = 0
+        state = self._draft_store.load()
+        if not state:
+            return
+        prompt = self.query_one("#prompt-input", SelectionAwareInput)
+        if prompt.value:
+            return
+        self._attached_refs = state["refs"]
+        self._attachment_prefill = state["prefill"]
+        self._staged_images = {
+            ref: ImageAttachment(Path(path), "", "")
+            for ref, path in state["images"].items()
+            if ref in self._attached_refs
+        }
+        prompt.value = state["text"]
+        prompt.cursor_position = state["cursor"]
+        self._refresh_attachment_bar()
+        self.query_one("#log", ConversationLog).add_info("Recovered your unsent draft.")
+
+    def _schedule_draft_save(self) -> None:
+        if getattr(self, "_draft_store", None) is None:
+            return
+        self._draft_snapshot()
+        timer = getattr(self, "_draft_save_timer", None)
+        if timer is not None:
+            timer.stop()
+        self._draft_save_timer = self.set_timer(0.5, self._save_draft_in_background)
+
+    def _draft_snapshot(self) -> tuple[dict, int]:
+        from textual.css.query import NoMatches
+
+        try:
+            prompt = self.query_one("#prompt-input", SelectionAwareInput)
+        except NoMatches:
+            self._draft_revision += 1
+            return getattr(self, "_last_draft_snapshot", {}), self._draft_revision
+        text, cursor = prompt.value, prompt.cursor_position
+        decision = getattr(self, "_decision_draft", None)
+        if decision is not None:
+            text, (row, column) = decision
+            cursor = sum(len(line) + 1 for line in text.split("\n")[:row]) + column
+        self._draft_revision += 1
+        state = {
+            "text": text,
+            "cursor": cursor,
+            "refs": list(getattr(self, "_attached_refs", [])),
+            "images": {
+                ref: str(image.path) for ref, image in getattr(self, "_staged_images", {}).items()
+            },
+            "prefill": getattr(self, "_attachment_prefill", ""),
+        }
+        self._last_draft_snapshot = state
+        return state, self._draft_revision
+
+    async def _save_draft_in_background(self) -> None:
+        import asyncio
+
+        try:
+            state, revision = self._draft_snapshot()
+            await asyncio.to_thread(self._draft_store.save, state, revision)
+        except (OSError, ValueError):
+            pass  # Recovery must not interrupt typing on a read-only workspace.
+
+    def _flush_draft_recovery(self) -> None:
+        if getattr(self, "_draft_store", None) is None:
+            return
+        timer = getattr(self, "_draft_save_timer", None)
+        if timer is not None:
+            timer.stop()
+        try:
+            state, revision = self._draft_snapshot()
+            self._draft_store.save(state, revision)
+        except (OSError, ValueError):
+            pass
+
+    def on_unmount(self) -> None:
+        self._flush_draft_recovery()
+
     def on_command_palette_command_selected(self, event: CommandPalette.CommandSelected) -> None:
         # Name-based dispatch also works when this handler lives on a plain mixin.
         event.stop()

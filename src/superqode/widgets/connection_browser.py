@@ -12,6 +12,7 @@ from textual.widgets import Input, OptionList, Static, Button, Footer
 from textual.widgets.option_list import Option
 
 from superqode.app.project_ui_state import get_connection_preferences, set_connection_favorites
+from superqode.widgets.panel_shortcuts import PanelShortcuts, PanelShortcutMixin
 
 
 def load_connection_profiles():
@@ -55,12 +56,10 @@ def filter_connections(profiles, query: str, favorites: list[str], recent: list[
     )
 
 
-class ConnectionBrowserScreen(ModalScreen[str | None]):
+class ConnectionBrowserScreen(PanelShortcutMixin, ModalScreen[str | None]):
     BINDINGS = [
         Binding("escape", "close", "Back", priority=True),
         Binding("ctrl+s", "favorite", "Favorite", priority=True),
-        Binding("down", "next", "Next", show=False, priority=True),
-        Binding("up", "previous", "Previous", show=False, priority=True),
     ]
     CSS = """
     ConnectionBrowserScreen { align: center middle; }
@@ -109,6 +108,14 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
                 yield Button("Last used", id="connection-last")
                 yield Button("Retry", id="connection-retry", disabled=True)
             yield Footer()
+            yield PanelShortcuts(
+                {
+                    "connection-search": "↑↓ Select · Enter Connect · Tab Details · Esc Back",
+                    "connection-results": "↑↓ Select · Enter Connect · Ctrl+S Favorite · Esc Back",
+                    "connection-detail-scroll": "↑↓ Scroll · Tab Controls · Esc Back",
+                },
+                "Enter Activate · Tab Next control · Esc Back",
+            )
 
     def on_mount(self):
         self.query_one("#connection-browser").set_class(self.size.height < 26, "compact")
@@ -258,6 +265,19 @@ class ConnectionBrowserScreen(ModalScreen[str | None]):
     @on(Button.Pressed, "#connection-last")
     def reconnect_last(self):
         self.dismiss("__last__")
+
+    def on_key(self, event):
+        # Search-input arrows navigate results; focused details keep their own
+        # scrolling keys, and Tab/Enter continue to operate native controls.
+        focused = self.focused
+        if (
+            focused is not None
+            and focused.id == "connection-search"
+            and event.key in {"up", "down"}
+        ):
+            event.stop()
+            event.prevent_default()
+            self.action_next() if event.key == "down" else self.action_previous()
 
     def action_next(self):
         self.query_one("#connection-results", OptionList).action_cursor_down()

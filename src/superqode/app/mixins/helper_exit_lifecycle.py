@@ -363,6 +363,7 @@ class HelperExitLifecycleMixin:
 
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""
+        self._flush_draft_recovery()
         # Cancel any pending operations
         self._cancel_requested = True
 

@@ -94,6 +94,7 @@ class FeedbackMixin:
     def _handle_outcome_selection(self, selection, log: ConversationLog | None) -> None:
         """Run a command selected from an outcome screen."""
         command = str(getattr(selection, "command", "") or "")
+        self._ensure_input_focus()
         if not command:
             return
         if log is None:
@@ -291,9 +292,9 @@ class FeedbackMixin:
                 item_key: timestamp for item_key, timestamp in recent.items() if timestamp >= cutoff
             }
 
-        # Completed changes stay visible without scrolling. Routine successes
-        # use a toast; warnings and errors require an acknowledgeable modal.
-        show_popup = severity != "information" if popup is None else popup
+        # Routine receipts stay in Activity and the transcript. Explicit popup
+        # requests are honored; warnings and errors open actionable feedback.
+        show_popup = (modal is True or severity in {"warning", "error"}) if popup is None else popup
         should_modal = severity in {"warning", "error"} if modal is None else modal
         modal_shown = False
         if show_popup and persist and should_modal:

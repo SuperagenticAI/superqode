@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.34] - 2026-09-30
+
+### Fixed
+
+- Keep context preview open while removing references, with Delete to remove and
+  Enter to inspect; preserve draft text, cursor and prompt focus on return.
+- Keep connection-search navigation separate from detail scrolling, open selected
+  Activity actions with Enter, and restore prompt focus after closing panels.
+- Quiet routine success popups while retaining Activity receipts and actionable
+  error feedback.
+
+### Added
+
+- Workspace draft recovery with debounced private saves of text, cursor and
+  attachment references, plus focus-aware panel shortcut hints.
+- Offline real-PTY checks for paste, newline encodings, resize, Escape and OSC 52
+  clipboard output, with a live-terminal compatibility checklist.
+- Keyboard and draft-preservation regression checks, plus a CI responsiveness gate
+  with downloadable timing reports for small and large terminal sizes.
+
 ## [2.4.33] - 2026-09-30
 
 ### Added

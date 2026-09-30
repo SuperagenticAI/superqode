@@ -134,6 +134,10 @@ async def test_context_preview_removes_reference_without_losing_draft(quiet, siz
         await pilot.pause()
         assert prompt.value.strip() == "explain this carefully"
         assert app._attached_refs == []
+        assert app.screen is not app.default_screen
+        app.screen.action_close()
+        await pilot.pause()
+        assert prompt.has_focus
 
 
 async def test_failed_connection_restores_transcript_draft_and_retry_target(quiet, monkeypatch):

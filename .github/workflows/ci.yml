@@ -33,6 +33,23 @@ jobs:
         run: uv run python scripts/check_public_docs_style.py
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
+      - name: TUI keyboard and draft checks
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_productivity.py tests/test_tui_draft_recovery.py -q
+      - name: TUI real-terminal input and rendering
+        run: uv run --frozen python scripts/check_tui_terminal.py --output tui-terminal.json
+      - name: TUI responsiveness budget
+        run: uv run --frozen python scripts/benchmark_tui_responsiveness.py --check --output tui-responsiveness.json
+      - name: Save TUI responsiveness measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tui-responsiveness
+          path: |
+            tui-responsiveness.json
+            tui-terminal.json
+          if-no-files-found: ignore
 
   # Pull requests only. The suite takes several minutes and carries a standing
   # backlog of failures, so running it on every push blocked work without

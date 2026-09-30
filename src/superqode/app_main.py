@@ -485,6 +485,7 @@ class SuperQodeApp(
         self._refresh_harness_panel()
         self._sync_vim_state()
         self._load_welcome()
+        self._init_draft_recovery()
         # Sync approval mode to hints bar
         self._sync_approval_mode()
         # PERFORMANCE: Initialize animation manager for throttled animations

@@ -202,6 +202,7 @@ class ConnectMixin:
 
         def chosen(profile_id):
             self._ensure_input_focus()
+            self._ensure_input_focus()
             if profile_id == "__last__":
                 self._connect_last(log)
             elif profile_id and profile_id.startswith("acp:"):

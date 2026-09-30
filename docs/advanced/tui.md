@@ -1066,7 +1066,10 @@ comparison, so review the diff before undoing.
 Use `:context next`, or **Inspect Next Prompt** in the command palette, to
 inspect the draft, staged file/image/MCP references and
 available instructions and tools. Select a reference and choose **Remove** to
-exclude it while keeping the rest of the draft. Instructions and tool lists are
+exclude it while keeping the rest of the draft. Delete also removes the selected
+reference, and the preview stays open for further removals. Enter focuses the
+selected item's detail; Tab moves between controls and Esc returns to the draft
+with its cursor preserved. Instructions and tool lists are
 read-only. External harnesses and ACP agents own their final context; the preview
 identifies that boundary. MCP resources are fetched when sending, rather than
 when inspecting. Direct Chat keeps its existing context behavior.
@@ -1080,8 +1083,55 @@ The running indicator shows observed tool execution, approval/question waits and
 incoming response text alongside elapsed time. Waiting for a response does not
 claim a provider is healthy or identify the reason for a delay.
 
+In Activity, Enter runs the selected outcome's recovery or review action when
+available; otherwise it focuses the evidence for scrolling. Connection search
+uses Up/Down to select results, while those keys scroll a focused detail pane.
+Routine success receipts remain in Activity without opening a popup.
+
 For a repeatable local rendering probe, run
 `python scripts/benchmark_tui_responsiveness.py`. It measures streamed code,
 10,000-message history, typing, scrolling and resizing at two terminal sizes.
 The output records headless local timings; SSH latency requires a real terminal
-session.
+session. Add `--check --output tui-responsiveness.json` to enforce the checked-in
+performance budgets and save a report. CI runs this check alongside the keyboard
+regressions and uploads the timing report as an artifact.
+
+## Draft recovery and terminal checks
+
+SuperQode saves unsent text, cursor position and staged attachment references in
+`.superqode/draft.json` within the working directory after 500 ms without an edit
+or cursor movement, and flushes on normal exit. Returning to the same directory
+restores the draft without sending it. The file uses owner-only permissions;
+clearing the draft and its attachments removes it. Drafts larger than 1 MB are
+not saved. Image bytes are reloaded from the referenced paths when sending, so
+missing or changed images go through the usual send-time validation. A crash can
+lose edits inside the debounce window. Read-only workspaces remain usable without
+draft recovery.
+
+Context preview, connections, outcomes and Activity show one compact line of
+shortcuts for the focused control. In context preview, Delete appears only for a
+removable reference.
+
+Run `python scripts/check_tui_terminal.py --output tui-terminal.json` on macOS or
+Linux for an offline smoke check using real pseudo-terminals. It verifies
+bracketed multiline paste, Ctrl+J and CSI-u Shift/Alt+Enter, copy-command routing,
+OSC 52 emission, resize and Escape at 80×24 and 120×40. Native clipboard writes
+are disabled during the check. The two TERM profiles exercise terminal parsing;
+they do not simulate a running tmux server or an SSH connection.
+
+Before a release that changes terminal handling, repeat these checks in macOS
+Terminal/iTerm2, a Linux terminal, Windows Terminal, tmux and an SSH session:
+
+| Check | Expected behavior |
+| --- | --- |
+| Paste several lines of indented code | Exact indentation; no automatic send |
+| Add a newline with Ctrl+J | Newline; Enter still submits |
+| Try Shift/Alt+Enter with extended keys enabled | Newline; Ctrl+J is the fallback |
+| Resize while streaming and reading earlier output | Draft and reading position survive |
+| Open a panel, Tab through controls, then Esc | Return to the editable draft |
+| Run `:copy code` and paste into an editor | Exact code, including indentation |
+| Copy over SSH and inside tmux | Local clipboard receives OSC 52 when permitted |
+
+Record terminal versions and any extended-key or clipboard settings with the
+results. CI saves PTY reports, but acceptance of OSC 52 by a real terminal and
+remote clipboard policy require the live checks above.

@@ -18,7 +18,7 @@ class HelperMcpAttachMixin:
         from superqode.app.inputs import SelectionAwareInput
 
         prompt = self.query_one("#prompt-input", SelectionAwareInput)
-        draft, cursor = prompt.value, prompt.cursor_location
+        draft = prompt.value
         chat = bool(getattr(self, "_chat_mode", False))
         items = [ContextItem("Prompt", draft or "No prompt drafted yet.")]
         _, inline_mcp_refs = self._extract_mcp_refs_from_text(draft)
@@ -124,28 +124,54 @@ class HelperMcpAttachMixin:
                 )
             )
 
-        def selected(reference):
-            prompt.value, prompt.cursor_location = draft, cursor
-            if reference:
-                staged = getattr(self, "_attached_refs", [])
-                if reference in staged:
-                    staged.remove(reference)
-                    self._sync_attachment_prefill()
-                if reference.startswith("@"):
-                    prompt.value = FILE_REFERENCE_PATTERN.sub(
-                        lambda match: "" if "@" + match.group(1) == reference else match.group(0),
-                        prompt.value,
-                    )
-                elif reference.startswith("mcp://"):
-                    import re
+        def remove_reference(reference):
+            import re
 
-                    prompt.value = re.sub(
-                        r"(?<!\S)" + re.escape(reference) + r"(?!\S)", "", prompt.value
-                    )
-                log.add_info(f"Removed staged reference: {reference}")
+            text, position = prompt.value, prompt.cursor_position
+
+            def remove_span(start, end):
+                nonlocal text, position
+                if position >= end:
+                    position -= end - start
+                elif position > start:
+                    position = start
+                text = text[:start] + text[end:]
+
+            staged = getattr(self, "_attached_refs", [])
+            if reference in staged:
+                staged.remove(reference)
+                previous = getattr(self, "_attachment_prefill", "")
+                if previous and text.startswith(previous):
+                    remove_span(0, len(previous))
+                images = getattr(self, "_staged_images", {})
+                self._staged_images = {ref: image for ref, image in images.items() if ref in staged}
+                text_refs = [ref for ref in staged if ref not in self._staged_images]
+                prefill = " ".join(dict.fromkeys(text_refs)) + " " if text_refs else ""
+                self._attachment_prefill = prefill
+                text = prefill + text
+                position += len(prefill)
+            if reference.startswith("@"):
+                spans = [
+                    (match.start(), match.end())
+                    for match in FILE_REFERENCE_PATTERN.finditer(text)
+                    if "@" + match.group(1) == reference
+                ]
+            else:
+                spans = [
+                    (match.start(), match.end())
+                    for match in re.finditer(r"(?<!\S)" + re.escape(reference) + r"(?!\S)", text)
+                ]
+            for start, end in reversed(spans):
+                remove_span(start, end)
+            prompt.value = text
+            prompt.cursor_position = position
+            self._refresh_attachment_bar()
+            return text
+
+        def closed(_selection):
             self._ensure_input_focus()
 
-        self.push_screen(ContextPreviewScreen(items), callback=selected)
+        self.push_screen(ContextPreviewScreen(items, on_remove=remove_reference), callback=closed)
 
     @staticmethod
     def _parse_mcp_resource_ref(ref: str) -> tuple[str, str] | None:
@@ -298,6 +324,9 @@ class HelperMcpAttachMixin:
         self._refresh_attachment_bar()
 
     def _refresh_attachment_bar(self) -> None:
+        schedule = getattr(self, "_schedule_draft_save", None)
+        if callable(schedule):
+            schedule()
         from rich.text import Text
         from rich.style import Style
         from textual.widgets import Static

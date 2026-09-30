@@ -3,6 +3,8 @@ include NOTICE
 include README.md
 include CHANGELOG.md
 include scripts/check_release_metadata.py
+include scripts/benchmark_tui_responsiveness.py
+include scripts/check_tui_terminal.py
 recursive-include examples *.md *.py *.yaml
 recursive-include src/superqode/data/eval_fixtures *.log
 recursive-include src/superqode/data/eval_packs *.yaml

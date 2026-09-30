@@ -126,9 +126,17 @@ class SelectionAwareInput(TextArea):
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._resize_to_content()
+        schedule = getattr(self.app, "_schedule_draft_save", None)
+        if callable(schedule):
+            schedule()
         update_panel = getattr(self.app, "_update_prompt_completion_panel", None)
         if callable(update_panel):
             update_panel(self.value)
+
+    def on_text_area_selection_changed(self, event: TextArea.SelectionChanged) -> None:
+        schedule = getattr(self.app, "_schedule_draft_save", None)
+        if callable(schedule):
+            schedule()
 
     def on_resize(self, event: events.Resize) -> None:
         self._resize_to_content()

@@ -3881,15 +3881,15 @@ class DialogsMixin:
 
         class DiffReviewScreen(ModalScreen):
             BINDINGS = [
-                Binding("escape", "dismiss", "Close"),
-                Binding("n", "next_file", "Next file"),
-                Binding("p", "previous_file", "Previous file"),
-                Binding("a", "show_all", "All files"),
-                Binding("o", "open_current_file", "Open file"),
-                Binding("x", "copy_current_patch", "Copy patch"),
-                Binding("u", "undo_current", "Undo file"),
-                Binding("y", "approve_current", "Approve"),
-                Binding("r", "reject_current", "Reject"),
+                Binding("escape", "dismiss", "Close", priority=True),
+                Binding("n", "next_file", "Next file", priority=True),
+                Binding("p", "previous_file", "Previous file", priority=True),
+                Binding("a", "show_all", "All files", priority=True),
+                Binding("o", "open_current_file", "Open file", priority=True),
+                Binding("x", "copy_current_patch", "Copy patch", priority=True),
+                Binding("u", "undo_current", "Undo file", priority=True),
+                Binding("y", "approve_current", "Approve", priority=True),
+                Binding("r", "reject_current", "Reject", priority=True),
                 Binding("ctrl+c", "copy_current", "Copy"),
             ]
 

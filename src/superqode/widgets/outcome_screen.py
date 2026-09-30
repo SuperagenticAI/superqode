@@ -14,6 +14,7 @@ from textual.widgets import Button, Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
 from superqode.app.outcomes import Outcome, OutcomeSeverity
+from superqode.widgets.panel_shortcuts import PanelShortcuts, PanelShortcutMixin
 
 
 _SEVERITY_COLORS = {
@@ -58,11 +59,11 @@ def outcome_text(outcome: Outcome) -> Text:
     return text
 
 
-class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
+class OutcomeScreen(PanelShortcutMixin, ModalScreen[OutcomeSelection | None]):
     """Focused, acknowledgeable result that never lands below the fold."""
 
     BINDINGS = [
-        Binding("escape", "close", "Close"),
+        Binding("escape", "close", "Close", priority=True),
         Binding("enter", "close", "Close"),
     ]
 
@@ -134,6 +135,10 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
                 yield Static(outcome_text(self.outcome))
             with Horizontal(id="outcome-actions"):
                 yield from self._action_buttons()
+            yield PanelShortcuts(
+                {"outcome-content": "↑↓ Scroll · Tab Actions · Esc Close"},
+                "Enter Activate · Tab Next action · Esc Close",
+            )
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -183,11 +188,11 @@ class OutcomeScreen(ModalScreen[OutcomeSelection | None]):
         return True
 
 
-class ActivityScreen(Screen[OutcomeSelection | None]):
+class ActivityScreen(PanelShortcutMixin, Screen[OutcomeSelection | None]):
     """Session activity browser for results the user may have missed."""
 
     BINDINGS = [
-        Binding("escape", "close", "Back"),
+        Binding("escape", "close", "Back", priority=True),
         Binding("q", "close", "Back", show=False),
     ]
 
@@ -246,6 +251,13 @@ class ActivityScreen(Screen[OutcomeSelection | None]):
             yield Button("Open action", id="activity-open", variant="primary")
             yield Button("Back", id="activity-close")
         yield Footer()
+        yield PanelShortcuts(
+            {
+                "activity-list": "↑↓ Select · Enter Open action or evidence · Esc Back",
+                "activity-detail-scroll": "↑↓ Scroll · Tab Actions · Esc Back",
+            },
+            "Enter Activate · Tab Next control · Esc Back",
+        )
 
     def on_mount(self) -> None:
         self._update_open_button()
@@ -278,6 +290,14 @@ class ActivityScreen(Screen[OutcomeSelection | None]):
                 animate=False
             )
             self._update_open_button()
+
+    @on(OptionList.OptionSelected, "#activity-list")
+    def open_selected(self):
+        action = self._primary_action()
+        if action is not None:
+            self.dismiss(OutcomeSelection(action.id, action.command))
+        else:
+            self.query_one("#activity-detail-scroll", ScrollableContainer).focus()
 
     def _primary_action(self):
         outcome = self.selected_outcome
