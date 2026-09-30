@@ -529,3 +529,50 @@ Connect Command:
 - `superqode providers test` - Test provider connection
 - `superqode agents list` - List installed ACP agents
 - `superqode auth info` - Show authentication status
+
+## Connection checks and search in the TUI
+
+`:connect search` opens a searchable catalog across harnesses, subscriptions,
+API keys, local models and protocol routes. Type several words to narrow the
+list, use Up/Down and Enter to choose, or click Connect. Ctrl+S saves a favorite
+for this project; favorites and recent connections appear first. **Last used**
+restores the saved connection. Escape closes search and preserves your prompt
+draft and active connection. Install and sign-in guidance appears with each
+selection when setup is needed.
+
+**Build your own harness (Advanced)** opens repository configuration tools.
+For guided setup, choose an existing harness and then your model source.
+
+| TUI command | What it checks |
+| --- | --- |
+| `:connect status` | Selected route, harness/runtime, approval policy, declared capabilities and the last check. Sends no request. |
+| `:connect test` | Credential configuration for cloud routes; server model metadata and selected model availability for local routes. Sends no generation request. |
+| `:connect test --infer` | Explicit small generation request for a direct model route. May consume account usage. Sends no project context and executes no tools. |
+| `:connect test --tools` | Explicit local model tool probe. Validates the returned function name and arguments without executing the tool. |
+
+Configured credentials do not establish sign-in, entitlement, quota or model
+access. Local model metadata establishes reachability and model listing;
+generation and tool support require their explicit probes. Catalog context
+limits are separate from the server's loaded context limit. Use `:local setup`
+for hardware and installation guidance and `:local status` for local engines.
+
+ACP and SDK/CLI runtimes own their authentication and requests. Connection
+checks report negotiated ACP capabilities or runtime ownership; send a prompt
+through that selected route to verify its account/model access. These checks
+never substitute a direct API request for a subscription runtime. A delayed
+result is discarded if the selected route or harness changes during the check.
+
+Escape sends ACP cancellation and allows the agent to finish the cancelled
+turn while preserving its session. An unresponsive agent is stopped and can
+be reconnected on retry. Native model and harness cancellation stops the
+active turn and clears its running tool indicators.
+
+### Optional live validation
+
+The normal tests use mocked transports and do not require account credentials.
+To run a live check against a selected model, set
+`SUPERQODE_LIVE_CONNECTION_PROVIDER` and `SUPERQODE_LIVE_CONNECTION_MODEL`, then
+run `pytest tests/test_connection_live.py`. Local metadata checks do not generate
+text. Set `SUPERQODE_LIVE_CONNECTION_INFER=1` to explicitly allow a minimal
+generation request, including for a cloud route; account usage may apply.
+SDK and ACP account verification still requires exercising their own runtimes.

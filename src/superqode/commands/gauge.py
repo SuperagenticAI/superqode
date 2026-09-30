@@ -13,6 +13,7 @@ from pathlib import Path
 import click
 
 from superqode.gauge import LEVELS, check_levels, highest_level
+from superqode.gauge.levels import release_failures
 
 
 def _load(path: Path) -> dict:
@@ -207,7 +208,10 @@ def _add_reliability(record, runs: list[dict]) -> None:
 @click.argument("record_path", type=click.Path(exists=True, path_type=Path))
 @click.option("--level", type=click.Choice(list(LEVELS)), default="L2", show_default=True)
 @click.option("--quiet", is_flag=True)
-def gauge_gate(record_path: Path, level: str, quiet: bool) -> None:
+@click.option(
+    "--require-ship", is_flag=True, help="Require L2 or higher and recorded ship approval."
+)
+def gauge_gate(record_path: Path, level: str, quiet: bool, require_ship: bool = False) -> None:
     """Exit non-zero when the record does not reach LEVEL. The CI verb."""
     record = _load(record_path)
     failures = check_levels(record)
@@ -220,7 +224,14 @@ def gauge_gate(record_path: Path, level: str, quiet: bool) -> None:
                 click.echo(f"      {problem}")
         click.echo(f"\nhighest level met: {reached or 'none'}")
 
-    if reached is None or LEVELS.index(reached) < LEVELS.index(level):
+    blockers = release_failures(record) if require_ship else []
+    required_level = level
+    if require_ship and LEVELS.index(required_level) < LEVELS.index("L2"):
+        required_level = "L2"
+    if blockers and not quiet:
+        for blocker in blockers:
+            click.echo(f"release blocked: {blocker}")
+    if blockers or reached is None or LEVELS.index(reached) < LEVELS.index(required_level):
         raise SystemExit(1)
 
 

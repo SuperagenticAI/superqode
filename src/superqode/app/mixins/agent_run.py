@@ -2679,6 +2679,18 @@ class AgentRunMixin:
 
             try:
                 if client.is_running():
+                    if getattr(self, "_pending_acp_fresh_target", None) == agent_type:
+                        if not await client.reset_session():
+                            self._call_ui(
+                                log.add_error,
+                                "Could not create a fresh ACP session. Retry; no prompt was sent to the old session.",
+                            )
+                            return None, {}
+                        self._pending_acp_fresh_target = None
+                        self._call_ui(
+                            log.add_info,
+                            "Created a fresh ACP session without previous conversation context.",
+                        )
                     active_model = getattr(client, "_current_model_id", None) or model_id
                     if active_model:
                         self._call_ui(self._set_acp_status, active_model)
@@ -2709,6 +2721,9 @@ class AgentRunMixin:
                             )
                         return None, {}
 
+                if getattr(self, "_pending_acp_fresh_target", None) == agent_type:
+                    self._pending_acp_fresh_target = None
+
                 # Store for cancellation cleanup (deduped)
                 self._bind_acp_client(client, client_key)
                 if getattr(client, "_process", None) is not None:
@@ -2734,19 +2749,13 @@ class AgentRunMixin:
 
                     while not prompt_task.done():
                         if self._cancel_requested:
-                            try:
-                                await client.cancel()
-                            except Exception:
-                                pass
-                            prompt_task.cancel()
-                            try:
-                                await prompt_task
-                            except asyncio.CancelledError:
-                                pass
-                            await client.stop()
-                            self._acp_client = None
-                            self._acp_client_key = None
-                            self._agent_process = None
+                            from superqode.acp.client import cancel_prompt_with_grace
+
+                            preserved = await cancel_prompt_with_grace(client, prompt_task)
+                            if not preserved and self._acp_client is client:
+                                self._acp_client = None
+                                self._acp_client_key = None
+                                self._agent_process = None
                             return "cancelled"
                         if (
                             not waiting_notice_sent

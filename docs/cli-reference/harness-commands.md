@@ -1085,3 +1085,17 @@ superqode harness registry install team-coder --output harness.yaml
 - [Harness System](../advanced/harness-system.md): full spec-field reference.
 - [Configuration vs Harness](../concepts/configuration-vs-harness.md): how `harness.yaml` differs from `superqode.yaml`.
 - [Runtime Backends](../runtimes.md): the engines a harness can run on.
+
+### ACP switch continuity
+
+`:harness switch acp:<name>` queues up to 12 recent conversation messages,
+with a total limit of 12,000 content characters, for the selected agent's first
+prompt. This is conversation context replay; it does not clone the previous
+agent's tool state or approvals. Replay is delivered only to the selected
+agent and is consumed once.
+
+Use `:harness switch acp:<name> --fresh` to switch without replaying any previous
+conversation. This flag applies to ACP switches. For native harness sessions,
+`:harness switch <name> --fork` branches the current session and `:sessions`
+lets you choose an existing saved session. ACP exact resume depends on the
+agent advertising `loadSession`; `:connect status` shows that negotiated state.

@@ -92,7 +92,7 @@ bundled ACP agent in one place.
 |------|-------------|----------|
 | **Use an agent you already have** | Vendor coding agents, the ACP catalog, and optional harness integrations | `:connect agents` |
 | **Run a SuperQode harness on a model you choose** | Local engines, your API key, or a plan endpoint | `:connect models` |
-| **Build your own harness for this repo** | Import, preset, wizard, or blank HarnessSpec | `:connect build` |
+| **Build your own harness for this repo (Advanced)** | Import, preset, wizard, or blank HarnessSpec | `:connect build` |
 
 Each rung opens the specific methods underneath it:
 

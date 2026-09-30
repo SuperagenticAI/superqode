@@ -487,8 +487,8 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="build",
-        label="Build your own harness",
-        description="Import existing config, start from a preset, or run the wizard",
+        label="Build your own harness (Advanced)",
+        description="Import existing config, presets or the wizard",
         connector="build-picker",
         detect=lambda: True,
     ),
@@ -1563,8 +1563,8 @@ CONNECT_MENU_TITLES = {
         "Model routes keep your harness. Agent routes explicitly switch the coding loop.",
     ),
     CONNECT_MENU_BUILD: (
-        "Build your own harness",
-        "Saved as YAML in this repository.",
+        "Build your own harness (Advanced)",
+        "Configure tools and workflows in repository YAML. Choose an existing harness for guided setup.",
     ),
 }
 

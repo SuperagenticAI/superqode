@@ -1816,12 +1816,15 @@ class HelpersMixin(
 
         # Group by status
         ready = []
+        unverified = []
         not_configured = []
         errors = []
 
         for pid, result in sorted(results.items()):
             if result.status == ProviderStatus.READY:
                 ready.append((pid, result))
+            elif result.status in {ProviderStatus.CONFIGURED, ProviderStatus.UNKNOWN}:
+                unverified.append((pid, result))
             elif result.status == ProviderStatus.NOT_CONFIGURED:
                 not_configured.append((pid, result))
             else:
@@ -1837,6 +1840,14 @@ class HelpersMixin(
                     t.append(f"  {result.model_available}", style=THEME["muted"])
                 t.append("\n", style="")
             t.append("\n", style="")
+
+        if unverified:
+            t.append(
+                f"  ○ Setup found; access not verified ({len(unverified)})\n", style=THEME["muted"]
+            )
+            for pid, result in unverified:
+                t.append(f"    {pid}  {result.message}\n", style=THEME["muted"])
+            t.append("\n")
 
         # Not configured
         if not_configured:
@@ -1860,7 +1871,9 @@ class HelpersMixin(
 
         t.append(f"  💡 ", style=THEME["muted"])
         t.append(":connect <provider>", style=THEME["success"])
-        t.append(" to connect to a ready provider\n", style=THEME["muted"])
+        t.append(
+            " to select a provider; :connect test checks the active route\n", style=THEME["muted"]
+        )
 
         self._call_ui(log.write, t)
 

@@ -8,6 +8,7 @@ SuperQode emits is checked by the same rules a third party would apply.
 from __future__ import annotations
 
 import re
+import math
 from typing import Any
 
 LEVELS = ("L1", "L2", "L3", "L4")
@@ -91,6 +92,7 @@ def _l2(record: dict[str, Any]) -> list[str]:
     if not task_set.get("canary_ids"):
         problems.append("no contamination probes recorded")
 
+    problems.extend(gate_floor_failures(record))
     return problems
 
 
@@ -157,3 +159,45 @@ def highest_level(record: dict[str, Any]) -> str | None:
             break
         reached = level
     return reached
+
+
+def gate_floor_failures(record: dict[str, Any]) -> list[str]:
+    """Compare recorded minimum floors with their matching measures."""
+    failures = []
+    for gate in record.get("gates") or []:
+        floor = gate.get("floor")
+        if floor is None:
+            continue
+        gid = gate.get("id")
+        matches = [
+            m
+            for m in record.get("measures") or []
+            if m.get("id") == gid and (gate.get("split") is None or m.get("split") == gate["split"])
+        ]
+        if len(matches) != 1:
+            failures.append(f"gate {gid} requires one matching measure for its floor")
+            continue
+        value = matches[0].get("value")
+        if any(
+            isinstance(n, bool) or not isinstance(n, (int, float)) or not math.isfinite(n)
+            for n in (floor, value)
+        ):
+            failures.append(f"gate {gid} requires finite numeric floor and value")
+        elif gate.get("result") == "pass" and value < floor:
+            failures.append(f"gate {gid} reports pass below its floor")
+    return failures
+
+
+def release_failures(record: dict[str, Any]) -> list[str]:
+    """Check recorded release approval after conformance validation."""
+    decision = record.get("decision") or {}
+    failures = []
+    if decision.get("verdict") != "ship":
+        failures.append("release requires decision.verdict: ship")
+    actor = decision.get("actor")
+    if not isinstance(actor, str) or not actor.strip() or actor.strip().lower() == "unknown":
+        failures.append("release requires a named decision.actor")
+    gates = record.get("gates") or []
+    if not gates or any(g.get("result") != "pass" for g in gates):
+        failures.append("release requires passing deterministic gates")
+    return failures

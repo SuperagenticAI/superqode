@@ -84,9 +84,38 @@ def set_sidebar_width(width: int, *, cwd: str | Path | None = None) -> None:
     save_ui_state({"sidebar_width": value}, cwd=cwd)
 
 
+def get_connection_preferences(cwd: str | Path | None = None) -> tuple[list[str], list[str]]:
+    """Only profile ids are stored; credentials and endpoint URLs never enter UI state."""
+    state = load_ui_state(cwd)
+
+    def ids(key: str) -> list[str]:
+        value = state.get(key)
+        if not isinstance(value, list):
+            return []
+        return list(dict.fromkeys(v for v in value if isinstance(v, str) and 0 < len(v) < 128))[:30]
+
+    return ids("favorite_connections"), ids("recent_connections")
+
+
+def set_connection_favorites(ids: list[str], *, cwd: str | Path | None = None) -> None:
+    save_ui_state({"favorite_connections": list(dict.fromkeys(ids))[:30]}, cwd=cwd)
+
+
+def remember_connection(profile_id: str, *, cwd: str | Path | None = None) -> None:
+    if not profile_id:
+        return
+    _, recent = get_connection_preferences(cwd)
+    save_ui_state(
+        {"recent_connections": [profile_id, *[i for i in recent if i != profile_id]][:30]}, cwd=cwd
+    )
+
+
 __all__ = [
     "DEFAULT_SIDEBAR_WIDTH",
     "UI_STATE_FILENAME",
+    "get_connection_preferences",
+    "set_connection_favorites",
+    "remember_connection",
     "get_last_session_id",
     "get_sidebar_width",
     "load_ui_state",

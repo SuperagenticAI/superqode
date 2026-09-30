@@ -636,6 +636,12 @@ class SlashCommandMixin:
         elif c == "connect" and (args == "systemone" or args.startswith("systemone ")):
             self._systemone_cmd("connect " + args[len("systemone") :].strip(), log)
         elif c == "connect":
+            if (
+                args
+                and args.split()[0].casefold() in {"search", "status", "test"}
+                and self._connection_tools_command(args, log)
+            ):
+                return
             # Parse subcommand: :connect [acp|byok|local] [args...]
             if not args:
                 # Clear any BYOK state before showing connection type picker

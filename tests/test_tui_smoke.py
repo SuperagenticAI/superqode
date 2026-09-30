@@ -2271,6 +2271,7 @@ def test_harness_switch_explicit_acp_agent_queues_context_replay(monkeypatch):
     pending = app._pending_harness_acp_transition
     assert pending["from"] == "core"
     assert pending["message_count"] == 2
+    app.current_agent = "qwen"
     replayed = app._consume_pending_acp_context_replay("Fix it and run the tests.")
     assert "[SuperQode context replay]" in replayed
     assert "Inspect the failing parser." in replayed
@@ -6452,7 +6453,7 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     assert picker_rows(rendered) == [
         (1, "Use an agent you already have"),
         (2, "Connect a harness with your model"),
-        (3, "Build your own harness"),
+        (3, "Build your own harness (Advanced)"),
         (4, "Connect with SystemOne models"),
         (5, "Reach a remote agent with protocols"),
     ]
@@ -8550,3 +8551,214 @@ def test_resume_latest_picks_most_recent(tmp_path, monkeypatch):
 
     app._handle_resume_session("latest", log)
     assert resumed == ["newer-sess"]
+
+
+def test_cancel_agent_reaches_native_cancellation():
+    app = make_app()
+    log = FakeLog()
+    pure = FakePureMode()
+    app._pure_mode = pure
+    app.is_busy = True
+    app._cancel_requested = False
+    app.query_one = lambda *args, **kwargs: log
+    app._active_local_provider_model = lambda: (None, None)
+    app._stop_stream_animation = lambda: None
+    app._stop_thinking = lambda: None
+    app.action_cancel_agent()
+    assert pure.cancelled is True
+    assert app.is_busy is False
+
+
+def test_acp_cancel_timer_cannot_kill_replacement_or_next_turn():
+    app = make_app()
+    log = FakeLog()
+    terminated = []
+    client = FakeACPClient()
+    client._process = SimpleNamespace(returncode=None, terminate=lambda: terminated.append(True))
+    app._acp_client = client
+    app._acp_loop_runner = FakeACPLoopRunner()
+    app.is_busy = True
+    app._cancel_requested = False
+    app.query_one = lambda *args, **kwargs: log
+    app._active_local_provider_model = lambda: (None, None)
+    app._stop_stream_animation = lambda: setattr(app, "is_busy", False)
+    app._stop_thinking = lambda: None
+    timers = []
+    app.set_timer = lambda delay, callback: timers.append(callback)
+    app.action_cancel_agent()
+    assert terminated == []
+    assert app.is_busy is True
+    app._cancel_requested = False
+    timers[0]()
+    assert terminated == []
+    app._cancel_requested = True
+    app._acp_client = FakeACPClient()
+    timers[0]()
+    assert terminated == []
+    app._acp_client = client
+    timers[0]()
+    assert terminated == [True]
+
+
+def test_acp_context_replay_is_bounded_and_target_specific():
+    app = make_app()
+    log = FakeLog()
+    log._messages = [("user", "x" * 20_000, "")]
+    entry = SimpleNamespace(id="acp:qwen", target={"short_name": "qwen"})
+    app._prepare_acp_harness_switch(entry, log)
+    pending = app._pending_harness_acp_transition
+    assert pending["character_count"] == 12_000
+    assert sum(len(content) for _, content, _ in pending["messages"]) == 12_000
+    app.current_agent = "pi"
+    assert app._consume_pending_acp_context_replay("New prompt") == "New prompt"
+    assert app._pending_harness_acp_transition is None
+
+
+def test_acp_switch_fresh_does_not_carry_conversation(monkeypatch):
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda agent: True)
+    app = make_app()
+    log = FakeLog()
+    log._messages = [("user", "Private context from the previous task", "")]
+    connected = []
+    app._connect_acp_cmd = lambda args, target_log: connected.append(args)
+    app._harness_cmd("switch acp:qwen --fresh", log)
+    assert connected == ["qwen"]
+    app.current_agent = "qwen"
+    assert app._consume_pending_acp_context_replay("New task") == "New task"
+
+
+@pytest.mark.asyncio
+async def test_connection_check_ignores_results_after_harness_switch(monkeypatch):
+    from superqode.providers.connection_diagnostics import ConnectionCheck
+
+    app = make_app()
+    app._pure_mode = SimpleNamespace(
+        session=SimpleNamespace(
+            provider="ollama", model="model", connected=True, harness_name="Core"
+        ),
+        runtime_name="builtin",
+    )
+    monkeypatch.setattr(
+        "superqode.app.mixins.connect.get_session", lambda: SimpleNamespace(connected_agent=None)
+    )
+
+    async def check(*args, **kwargs):
+        app._pure_mode.session.harness_name = "Workbench"
+        return ConnectionCheck("reachable", "reachable", "ollama", "model")
+
+    monkeypatch.setattr("superqode.providers.connection_diagnostics.check_model_connection", check)
+    log = FakeLog()
+    await app._test_current_connection(log)
+    assert getattr(app, "_last_connection_check", None) is None
+    assert any("Connection changed" in str(item) for item in log.items)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["acp", "runtime"])
+async def test_connection_test_does_not_bypass_acp_or_sdk_ownership(monkeypatch, kind):
+    app = make_app()
+    app._connection_target = lambda: (kind, "codex", "model")
+    app._connection_fingerprint = lambda: kind
+    shown = []
+    app._show_connection_status = lambda log: shown.append(True)
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("A direct model gateway would bypass the selected account runtime")
+
+    monkeypatch.setattr(
+        "superqode.providers.connection_diagnostics.check_model_connection", forbidden
+    )
+    await app._test_current_connection(FakeLog(), infer=True)
+    assert shown == [True]
+
+
+def test_connection_browser_routes_registry_agents_through_harness_switcher():
+    app = make_app()
+    screens = []
+    app.push_screen = lambda screen, callback=None: screens.append((screen, callback))
+    commands = []
+    app._harness_cmd = lambda command, log: commands.append(command)
+    app._open_connection_browser(FakeLog())
+    screens[0][1]("acp:pi")
+    assert commands == ["switch acp:pi"]
+
+
+def test_sdk_connection_status_does_not_require_unrelated_api_key(monkeypatch):
+    app = make_app()
+    app._pure_mode = SimpleNamespace(
+        session=SimpleNamespace(
+            provider="openai", model="model", connected=True, harness_name="Codex SDK"
+        ),
+        runtime_name="codex-sdk",
+    )
+    monkeypatch.setattr(
+        "superqode.app.mixins.connect.get_session", lambda: SimpleNamespace(connected_agent=None)
+    )
+    monkeypatch.setattr("superqode.providers.credentials.provider_api_key", lambda definition: None)
+    log = FakeLog()
+    app._show_connection_status(log)
+    rendered = log.items[-1].plain
+    assert "Authentication owned by the SDK/CLI runtime" in rendered
+    assert "credential missing" not in rendered
+
+
+def test_fresh_acp_switch_resets_warm_session_before_sending(monkeypatch):
+    class SessionLog(FakeLog):
+        def start_agent_session(self, *args):
+            pass
+
+        def add_response_chunk(self, text):
+            self.items.append(text)
+
+        def end_agent_session(self, *args):
+            pass
+
+    class WarmClient:
+        def __init__(self):
+            self._process = None
+            self._current_model_id = "opencode/model"
+            self._message_buffer = ""
+            self.events = []
+
+        def is_running(self):
+            return True
+
+        async def reset_session(self):
+            self.events.append("new_session")
+            return True
+
+        async def send_prompt(self, message):
+            self.events.append("prompt")
+            self._message_buffer = "Fresh result"
+            await self.on_message("Fresh result")
+            return "end_turn"
+
+        def get_message_buffer(self):
+            return self._message_buffer
+
+        def get_stats(self):
+            return SimpleNamespace(
+                tool_count=0,
+                files_modified=[],
+                files_read=[],
+                duration=0.01,
+                prompt_tokens=0,
+                completion_tokens=0,
+                thinking_tokens=0,
+                cost=0,
+            )
+
+    app = make_app()
+    client = WarmClient()
+    app._acp_client = client
+    app._acp_client_key = (str(Path.cwd()), "opencode acp", "opencode/model", ())
+    app._pending_acp_fresh_target = "opencode"
+    app._acp_loop_runner = FakeACPLoopRunner()
+    app._call_ui = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    app._stop_thinking = lambda: None
+    app._start_stream_animation = lambda *args: None
+    app._stop_stream_animation = lambda: None
+    app._show_final_outcome = lambda *args: None
+    app._run_acp_jsonrpc_client("New task", "opencode", "model", "OpenCode", SessionLog())
+    assert client.events == ["new_session", "prompt"]
+    assert app._pending_acp_fresh_target is None

@@ -7,3 +7,4 @@ recursive-include examples *.md *.py *.yaml
 recursive-include src/superqode/data/eval_fixtures *.log
 recursive-include src/superqode/data/eval_packs *.yaml
 recursive-include src/superqode/systemone/packs *.yaml
+include tests/fixtures/gauge-release-policy.json

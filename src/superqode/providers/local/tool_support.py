@@ -335,10 +335,9 @@ async def test_tool_calling(
 
     start_time = time.time()
 
-    # First check heuristics
+    # Hints can tune the request, but an explicit live test must not turn an
+    # unfamiliar model name into an untested negative result.
     info = get_tool_capability_info(model_id)
-    if info.confidence == "heuristic" and not info.supports_tools:
-        return ToolTestResult(model_id=model_id, supports_tools=False, notes=info.notes)
 
     # Prepare test request
     endpoint = f"{provider_host}/api/chat"

@@ -200,7 +200,7 @@ def render_local_setup_guide(guide: LocalSetupGuide, *, tui_first: bool = False)
         "   Bigger context can help large repos, but it costs memory and can slow local decoding."
     )
 
-    lines.extend(["", "5. Build your own harness"])
+    lines.extend(["", "5. Build your own harness (Advanced)"])
     build_cmd = f"superqode local build --repo {guide.repo} --model {model_id}{pack}"
     tui_build = build_cmd.replace("superqode local", ":local", 1)
     if tui_first:

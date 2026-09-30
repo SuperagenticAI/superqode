@@ -61,6 +61,28 @@ jobs:
             uv run superqode harness doctor --spec "$spec" --runtime builtin --json >/dev/null
           done
 
+  connection-experience:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Connection and terminal interaction checks
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_connection_experience.py tests/test_connect_harness_screen.py tests/test_subscription_billing_policy.py tests/test_harness_connect_catalog.py -q
+
   build:
     runs-on: ubuntu-latest
     steps:

@@ -41,6 +41,28 @@ from superqode.acp.types import (
 )
 
 
+async def cancel_prompt_with_grace(
+    client, prompt_task: asyncio.Task, *, timeout: float = 2.0
+) -> bool:
+    """Cancel a turn, preserving the ACP process when it responds in time.
+
+    Return True when the existing session can be reused, False after stopping
+    an unresponsive or failed agent. Never execute another prompt as a probe.
+    """
+    try:
+        await asyncio.wait_for(client.cancel(), timeout=timeout)
+        await asyncio.wait_for(asyncio.shield(prompt_task), timeout=timeout)
+        return True
+    except Exception:
+        prompt_task.cancel()
+        try:
+            await prompt_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await client.stop()
+        return False
+
+
 PROTOCOL_VERSION = 1
 CLIENT_NAME = "SuperQode"
 CLIENT_VERSION = "0.1.20"

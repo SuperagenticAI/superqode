@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.31] - 2026-09-30
+
+### Added
+
+- Searchable connection catalog covering harnesses and ACP agents, with project
+  favorites, recent connections, setup guidance and draft-preserving navigation.
+- `:connect status` and explicit connection checks that distinguish configured
+  credentials, local server/model reachability, generation and tool calling.
+- Local model tool probes that validate function names and arguments without
+  executing tools, plus optional live connection tests and cross-platform CI.
+- `:harness switch acp:<name> --fresh` to start without previous conversation
+  context, including resetting an existing warm ACP session before sending.
+- `gauge gate --require-ship` to require L2 readiness and recorded ship approval.
+
+### Changed
+
+- Label Build your own harness as Advanced in connection and setup guidance.
+- Keep SDK/CLI and ACP account verification within their owning runtimes;
+  explicit direct-model inference checks send no project context.
+
+### Fixed
+
+- Avoid reporting saved credentials as verified provider readiness, and discard
+  diagnostic results after the selected route or harness changes.
+- Cancel native turns reliably and preserve cooperative ACP sessions, with
+  bounded recovery for unresponsive agents and protection against stale timers.
+- Bound ACP conversation replay to the selected agent and 12,000 content
+  characters, and allow explicit tool tests for unfamiliar local model names.
+
 ## [2.4.30] - 2026-09-29
 
 ### Added

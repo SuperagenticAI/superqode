@@ -1,5 +1,5 @@
 """
-SuperQode Provider Health Check - Check provider connectivity on startup.
+SuperQode Provider Health Check - Inspect provider setup without paid requests.
 
 Features:
 - Async health checks for all configured providers
@@ -19,13 +19,13 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
-from superqode.providers.registry import PROVIDERS, ProviderDef
+from superqode.providers.registry import PROVIDERS, ProviderCategory, ProviderDef
+from superqode.providers.credentials import provider_api_key
 
 
 # ============================================================================
@@ -37,6 +37,7 @@ class ProviderStatus(Enum):
     """Provider health status."""
 
     UNKNOWN = "unknown"
+    CONFIGURED = "configured"
     READY = "ready"
     NOT_CONFIGURED = "not_configured"
     ERROR = "error"
@@ -63,6 +64,7 @@ class HealthResult:
     def status_icon(self) -> str:
         icons = {
             ProviderStatus.READY: "✓",
+            ProviderStatus.CONFIGURED: "○",
             ProviderStatus.NOT_CONFIGURED: "○",
             ProviderStatus.ERROR: "✗",
             ProviderStatus.RATE_LIMITED: "⏳",
@@ -129,7 +131,7 @@ class HealthChecker:
                         results[pid] = HealthResult(
                             provider_id=pid,
                             status=ProviderStatus.ERROR,
-                            message=str(result),
+                            message="Could not inspect provider configuration",
                         )
                     else:
                         results[pid] = result
@@ -147,7 +149,9 @@ class HealthChecker:
         force: bool = False,
     ) -> HealthResult:
         """Check a specific provider."""
-        provider_def = PROVIDERS.get(provider_id)
+        from superqode.providers.dynamic import resolve_provider_def
+
+        provider_def = resolve_provider_def(provider_id)
         if not provider_def:
             return HealthResult(
                 provider_id=provider_id,
@@ -169,27 +173,24 @@ class HealthChecker:
         provider_def: ProviderDef,
     ) -> HealthResult:
         """Check if provider is configured (has API key)."""
-        # Local providers are always configured
-        if not provider_def.env_vars:
+        if provider_def.category == ProviderCategory.LOCAL:
             return HealthResult(
                 provider_id=provider_id,
                 status=ProviderStatus.UNKNOWN,  # Need connectivity check
-                message="Local provider",
+                message="Local route; server and model access not verified",
             )
 
-        # Check if any required env var is set
-        for env_var in provider_def.env_vars:
-            if os.environ.get(env_var):
-                return HealthResult(
-                    provider_id=provider_id,
-                    status=ProviderStatus.UNKNOWN,  # Need connectivity check
-                    message=f"Configured via {env_var}",
-                )
+        if provider_api_key(provider_def):
+            return HealthResult(
+                provider_id=provider_id,
+                status=ProviderStatus.CONFIGURED,
+                message="Credential configured; account and model access not verified",
+            )
 
         return HealthResult(
             provider_id=provider_id,
             status=ProviderStatus.NOT_CONFIGURED,
-            message=f"Set {provider_def.env_vars[0]} to enable",
+            message=f"Run superqode auth login {provider_id} to configure",
         )
 
     async def _check_provider(
@@ -198,58 +199,16 @@ class HealthChecker:
         provider_def: ProviderDef,
         force: bool = False,
     ) -> HealthResult:
-        """Actually check provider connectivity."""
-        import time
-
-        # Check cache
+        """Inspect configuration without claiming live connectivity."""
+        # Startup checks only inspect configuration. A saved credential is not
+        # evidence of working sign-in, quota, entitlement or model access.
         if not force and provider_id in self._cache:
             cached = self._cache[provider_id]
             if datetime.now() - cached.checked_at < self.CACHE_TTL:
                 return cached
-
-        start = time.time()
-
-        try:
-            # For now, just check if the provider is configured
-            # A full check would make a test API call
-            config_result = self._check_configuration(provider_id, provider_def)
-
-            if config_result.status == ProviderStatus.NOT_CONFIGURED:
-                return config_result
-
-            # Provider is configured, mark as ready
-            # (In production, would make a test API call here)
-            latency = (time.time() - start) * 1000
-
-            model = provider_def.example_models[0] if provider_def.example_models else ""
-
-            result = HealthResult(
-                provider_id=provider_id,
-                status=ProviderStatus.READY,
-                message="API key configured",
-                latency_ms=latency,
-                model_available=model,
-            )
-
-            self._cache[provider_id] = result
-            return result
-
-        except Exception as e:
-            error_msg = str(e).lower()
-
-            if "rate" in error_msg or "429" in error_msg:
-                status = ProviderStatus.RATE_LIMITED
-            elif "auth" in error_msg or "401" in error_msg or "403" in error_msg:
-                status = ProviderStatus.AUTH_ERROR
-            else:
-                status = ProviderStatus.ERROR
-
-            return HealthResult(
-                provider_id=provider_id,
-                status=status,
-                message=str(e)[:100],
-                latency_ms=(time.time() - start) * 1000,
-            )
+        result = self._check_configuration(provider_id, provider_def)
+        self._cache[provider_id] = result
+        return result
 
     def get_ready_providers(self) -> List[str]:
         """Get list of ready provider IDs."""

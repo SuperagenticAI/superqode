@@ -137,7 +137,7 @@ model routes, and `jev` opens Jev Tool Routing setup. See the
 | --- | --- | --- |
 | `:connect agents` | Use an agent you already have | Vendor coding agents, the full ACP catalog, and optional harness integrations |
 | `:connect models` | Run a SuperQode harness on a model you choose | `:connect local`, `:connect byok`, and `:connect plan` |
-| `:connect build` | Build your own harness for this repository | Import, preset, wizard, and blank HarnessSpec routes |
+| `:connect build` | Build your own harness for this repository (Advanced) | Import, preset, wizard, and blank HarnessSpec routes |
 
 Above the options, the root screen lists what it detected on this machine:
 installed agents, running local engines, API keys already in the environment,

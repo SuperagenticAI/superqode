@@ -1,0 +1,1051 @@
+[
+  {
+    "name": "approved",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "ship",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L2",
+    "release_permitted": true
+  },
+  {
+    "name": "held",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "hold",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L2",
+    "release_permitted": false
+  },
+  {
+    "name": "rejected",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "reject",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L2",
+    "release_permitted": false
+  },
+  {
+    "name": "failed-gate-held",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "fail",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "hold",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L2",
+    "release_permitted": false
+  },
+  {
+    "name": "unsealed-held",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": false,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "hold",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L1",
+    "release_permitted": false
+  },
+  {
+    "name": "missing-probes",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "ship",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L1",
+    "release_permitted": false
+  },
+  {
+    "name": "unknown-actor",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "ship",
+        "actor": "unknown",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L2",
+    "release_permitted": false
+  },
+  {
+    "name": "below-floor",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.1,
+          "split": "held-out",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "ship",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L1",
+    "release_permitted": false
+  },
+  {
+    "name": "split-mismatch",
+    "record": {
+      "supergauge": "0.1",
+      "record_id": "aqr_release_fixture",
+      "emitted_at": "2026-09-23T11:04:22Z",
+      "profile": {
+        "id": "sg/coding-agent",
+        "version": "0.1",
+        "tier": "T1"
+      },
+      "subject": {
+        "agent": "acme-support-triage",
+        "harness_digest": "sha256:333c4d21acbabbf6512c51b9259457a59ba710b08af5f07a9025de21eb201d2c",
+        "code_digest": "sha256:f47aaef37a75a7e20710d98f06e981b3307e55ce0d0819168146a69c68d0364e",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-opus-5"
+        },
+        "authority": {
+          "acs_policy_version": "2.1",
+          "sandbox": "docker",
+          "egress": "deny-by-default",
+          "capabilities": [
+            "repo.read",
+            "repo.write:branch",
+            "test.run"
+          ]
+        }
+      },
+      "task_set": {
+        "manifest_digest": "sha256:fc2c02c8e4a65afb341b9472cb8cc9ff05a05fa8043a28a4f54ac9ad11c889e7",
+        "held_in": 34,
+        "held_out": 12,
+        "sealed": true,
+        "canary_ids": [
+          "tsk_c1",
+          "tsk_c2"
+        ]
+      },
+      "measures": [
+        {
+          "id": "task.completion",
+          "value": 0.83,
+          "split": "held-in",
+          "n": 12
+        },
+        {
+          "id": "answer.grounded",
+          "value": 0.81,
+          "n": 40
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "value": 0.71,
+          "n": 40
+        },
+        {
+          "id": "assurance.evidence_complete",
+          "value": true
+        }
+      ],
+      "gates": [
+        {
+          "id": "policy.hard_rules",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.tool_abuse",
+          "result": "pass",
+          "source": "acs"
+        },
+        {
+          "id": "safety.isolation",
+          "result": "pass",
+          "source": "native"
+        },
+        {
+          "id": "task.completion",
+          "floor": 0.8,
+          "split": "held-out",
+          "result": "pass"
+        },
+        {
+          "id": "assurance.judge_agreement",
+          "floor": 0.6,
+          "result": "pass"
+        }
+      ],
+      "assurance": {
+        "judge": {
+          "id": "typesafe/jev@1",
+          "model": "jev-1.13.0",
+          "pack_digest": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+          "human_agreement_kappa": 0.71,
+          "sampled": 40,
+          "calibration_ece": 0.08
+        },
+        "evidence": {
+          "ledger": ".superqode/decision-traces/",
+          "format": "superqode.harness-protocol/1",
+          "events": 418,
+          "replayable": true
+        },
+        "evaluator_independent": true
+      },
+      "decision": {
+        "verdict": "ship",
+        "actor": "priya@acme.example",
+        "rationale": "Checks passed; release approved.",
+        "rolls_back_to": "sha256:c120737106c0cd7a39102797cba5528781586a70469c289d3119c7f3dc4507e7"
+      }
+    },
+    "level": "L1",
+    "release_permitted": false
+  }
+]

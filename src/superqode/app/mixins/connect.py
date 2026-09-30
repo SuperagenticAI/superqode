@@ -103,6 +103,235 @@ def _menu_history_label(menu: str) -> str:
 class ConnectMixin:
     """Local/BYOK/ACP connection flows and catalog refresh."""
 
+    def _open_connection_browser(self, log: ConversationLog, query: str = "") -> None:
+        from superqode.widgets.connection_browser import ConnectionBrowserScreen
+
+        def chosen(profile_id):
+            self._ensure_input_focus()
+            if profile_id == "__last__":
+                self._connect_last(log)
+            elif profile_id and profile_id.startswith("acp:"):
+                self._harness_cmd(f"switch {profile_id}", log)
+            elif profile_id:
+                from superqode.providers.connection_profiles import get_connection_profile
+
+                profile = get_connection_profile(profile_id)
+                if profile:
+                    self._dispatch_connection_profile(profile, log)
+
+        self.push_screen(ConnectionBrowserScreen(query=query), callback=chosen)
+
+    def _connection_target(self) -> tuple[str, str, str]:
+        """Capture the active route so delayed checks cannot update another route."""
+        agent = getattr(get_session(), "connected_agent", None)
+        pure = getattr(self, "_pure_mode", None)
+        session = getattr(pure, "session", None)
+        if agent and (
+            getattr(get_session(), "execution_mode", "acp") == "acp"
+            or not getattr(session, "connected", False)
+        ):
+            return (
+                "acp",
+                str(agent.get("short_name") or ""),
+                str(getattr(self, "current_model", "") or ""),
+            )
+        provider = str(
+            getattr(session, "provider", "") or getattr(self, "current_provider", "") or ""
+        )
+        model = str(getattr(session, "model", "") or getattr(self, "current_model", "") or "")
+        runtime = getattr(session, "harness_runtime", "") or getattr(
+            pure, "runtime_name", "builtin"
+        )
+        return ("runtime" if runtime != "builtin" else "model"), provider, model
+
+    def _connection_fingerprint(self):
+        pure = getattr(self, "_pure_mode", None)
+        session = getattr(pure, "session", None)
+        from superqode.providers.dynamic import resolve_provider_def, resolve_base_url
+        from superqode.providers.credentials import provider_api_key
+
+        target = self._connection_target()
+        definition = resolve_provider_def(target[1]) if target[0] == "model" and target[1] else None
+        endpoint = resolve_base_url(definition) if definition else ""
+        credential = hash(provider_api_key(definition)) if definition else None
+        return (
+            target,
+            endpoint,
+            credential,
+            id(session),
+            id(getattr(pure, "_runtime", None)),
+            id(getattr(pure, "_harness_session", None)),
+            id(getattr(self, "_acp_client", None)),
+            getattr(session, "harness_name", ""),
+            getattr(pure, "runtime_name", ""),
+            os.getenv("SUPERQODE_HARNESS", "core"),
+        )
+
+    def _show_connection_status(self, log: ConversationLog) -> None:
+        """Show configured, negotiated and tested state without a network request."""
+        kind, provider, model = self._connection_target()
+        text = Text("\n  Connection status\n\n", style=f"bold {THEME['text']}")
+        if not provider:
+            log.add_info("No connection selected. Use :connect to choose a harness and model.")
+            return
+        text.append(f"  {'Agent' if kind == 'acp' else 'Provider'}: {provider}\n")
+        text.append(f"  Model: {model or 'Agent default'}\n")
+        text.append(f"  Approval policy: {getattr(self, 'approval_mode', 'ask')}\n")
+        if kind == "acp":
+            client = getattr(self, "_acp_client", None)
+            running = bool(client and client.is_running())
+            text.append(
+                f"  Transport: ACP · {'session running' if running else 'selected; starts on first prompt'}\n"
+            )
+            text.append(
+                "  Account: sign-in and entitlement are verified by the agent on first use\n"
+            )
+            if running:
+                caps = client.get_agent_capabilities()
+                text.append(
+                    "  Resume: "
+                    + (
+                        "exact session resume advertised"
+                        if caps.get("loadSession")
+                        else "new session with context replay"
+                    )
+                    + "\n"
+                )
+                inputs = caps.get("promptCapabilities") or {}
+                text.append(
+                    "  Images: "
+                    + ("advertised" if inputs.get("image") else "not advertised")
+                    + "\n"
+                )
+                text.append("  Cancel: Esc sends session/cancel\n")
+            else:
+                text.append("  Resume and input capabilities: not yet negotiated\n")
+        else:
+            from superqode.providers.dynamic import resolve_provider_def
+            from superqode.providers.credentials import provider_api_key
+            from superqode.providers.registry import ProviderCategory
+            from superqode.providers.models import get_model_info
+
+            definition = resolve_provider_def(provider)
+            local = bool(definition and definition.category == ProviderCategory.LOCAL)
+            configured = bool(definition and (local or provider_api_key(definition)))
+            setup = (
+                "Authentication owned by the SDK/CLI runtime; access not verified"
+                if kind == "runtime"
+                else "local server route"
+                if local
+                else "credential configured"
+                if configured
+                else "credential missing or expired"
+            )
+            text.append(f"  Setup: {setup}\n")
+            session = getattr(getattr(self, "_pure_mode", None), "session", None)
+            text.append(
+                f"  Harness: {getattr(session, 'harness_name', '') or os.getenv('SUPERQODE_HARNESS', 'core')}\n"
+            )
+            from superqode.providers.connection_diagnostics import public_endpoint
+            from superqode.providers.dynamic import resolve_base_url
+
+            endpoint = resolve_base_url(definition) if definition else None
+            if endpoint:
+                text.append(f"  Server: {public_endpoint(endpoint)}\n")
+            info = get_model_info(provider, model) if model else None
+            if info:
+                text.append(
+                    f"  Catalog context limit: {info.context_window:,} tokens (loaded server limit may differ)\n"
+                )
+                text.append(
+                    f"  Catalog tool calling: {'supported' if info.supports_tools else 'not declared'}\n"
+                )
+                text.append(
+                    f"  Catalog images: {'supported' if info.supports_vision else 'not declared'}\n"
+                )
+            pure = getattr(self, "_pure_mode", None)
+            text.append(f"  Runtime: {getattr(pure, 'runtime_name', 'builtin')}\n")
+            result = getattr(self, "_last_connection_check", None)
+            if result and result[0] == self._connection_fingerprint():
+                check = result[1]
+                text.append(f"  Last check: {check.status} · {check.message}\n")
+                if check.context_window:
+                    text.append(f"  Server context limit: {check.context_window:,} tokens\n")
+            else:
+                text.append("  Access: not verified. Use :connect test for setup/server checks.\n")
+            if local:
+                text.append("  Local help: :local setup · :local status · :connect test --tools\n")
+            text.append("  Cancel: Esc cancels the active turn\n")
+        text.append("\n  :connect search · :connect test · :sessions\n", style=THEME["muted"])
+        log.write(text)
+
+    async def _test_current_connection(
+        self, log: ConversationLog, *, infer: bool = False, tools: bool = False
+    ) -> None:
+        from superqode.providers.connection_diagnostics import check_model_connection
+
+        target = self._connection_target()
+        fingerprint = self._connection_fingerprint()
+        kind, provider, model = target
+        if not provider:
+            log.add_info("Choose a connection with :connect first.")
+            return
+        if kind == "acp":
+            self._show_connection_status(log)
+            log.add_info(
+                "ACP checks use the agent's negotiated capabilities. Send a prompt to verify account/model access."
+            )
+            return
+        if kind == "runtime":
+            self._show_connection_status(log)
+            log.add_info(
+                "This SDK/CLI runtime owns its requests. Send a prompt through the selected runtime to verify access; a direct API check would test a different route."
+            )
+            return
+        log.add_info(
+            "Running a minimal inference check; this may consume account usage."
+            if infer or tools
+            else "Checking configuration and local server metadata; no generation request is sent."
+        )
+        try:
+            result = await asyncio.wait_for(
+                check_model_connection(provider, model, infer=infer, tools=tools), timeout=25
+            )
+        except asyncio.CancelledError:
+            log.add_info("Connection check cancelled. Your connection has been kept.")
+            raise
+        except TimeoutError:
+            log.add_error("Connection check timed out. Check the server/network and retry.")
+            return
+        if self._connection_fingerprint() != fingerprint:
+            log.add_info(
+                "Connection changed during the check. Run :connect test for the current route."
+            )
+            return
+        self._last_connection_check = (fingerprint, result)
+        self._show_connection_status(log)
+
+    def _connection_tools_command(self, args: str, log: ConversationLog) -> bool:
+        sub, _, rest = args.strip().partition(" ")
+        sub = sub.casefold()
+        if sub == "search":
+            self._open_connection_browser(log, rest.strip())
+        elif sub == "status":
+            self._show_connection_status(log)
+        elif sub == "test":
+            if rest.strip() not in {"", "--infer", "--tools"}:
+                log.add_info(
+                    "Use :connect test, --infer (may consume usage), or --tools (local model probe)."
+                )
+            else:
+                self.run_worker(
+                    self._test_current_connection(
+                        log, infer=rest.strip() == "--infer", tools=rest.strip() == "--tools"
+                    ),
+                    group="connection-check",
+                    exclusive=True,
+                )
+        else:
+            return False
+        return True
+
     def action_refresh_byok_models(self):
         """Refresh BYOK providers/models from models.dev API."""
         if not (
@@ -3771,6 +4000,8 @@ class ConnectMixin:
             t.append("Esc", style=THEME["purple"])
             t.append(" back  ", style=THEME["dim"])
         t.append("·  1-5\n" if is_root else "·  or type a number\n", style=THEME["dim"])
+        t.append("  :connect search", style=THEME["cyan"])
+        t.append(" · favorites / recent\n", style=THEME["muted"])
 
         if preserve_log:
             # Opened underneath something the user still needs to read, such as
@@ -4330,6 +4561,21 @@ class ConnectMixin:
             data["connection"] = current
 
         self._update_user_config(_mutate)
+        from superqode.app.project_ui_state import remember_connection
+
+        profile_id = fields.get("profile_id") or (
+            f"acp:{fields['acp_agent']}"
+            if fields.get("acp_agent")
+            else "local"
+            if fields.get("auth_mode") == "local"
+            else "byok"
+            if fields.get("provider")
+            else "acp"
+        )
+        try:
+            remember_connection(profile_id)
+        except OSError:
+            pass  # A read-only project must not prevent connecting.
 
     def _persist_acp_connection(self, acp_agent: str) -> None:
         """Write connection.* for an ACP attach. Subscriptions keep their category."""
@@ -4548,6 +4794,8 @@ class ConnectMixin:
                 session.connect_to_agent(agent)
 
                 self.current_agent = agent.get("short_name", agent_id)
+                if getattr(self, "_pending_acp_fresh_target", None) != self.current_agent:
+                    self._pending_acp_fresh_target = None
                 self.current_mode = "agent"
                 self.current_role = ""
 

@@ -46,13 +46,19 @@ Exit non-zero when a record does not reach a given level. This is the command
 intended for a pipeline step.
 
 ```bash
-sq gauge gate record.yaml --level L2 --quiet
+sq gauge gate record.yaml --level L2 --require-ship --quiet
 ```
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `--level {L1..L4}` | `L2` | Minimum level required |
 | `--quiet` | off | Suppress the report, leave the exit code |
+| `--require-ship` | off | Require at least L2, a ship verdict, a named actor and passing gates |
+
+Conformance records may carry hold or reject decisions. Use `--require-ship`
+in deployment jobs to check the recorded release approval as well as the level.
+Your release system must authenticate the approver, bind the record to the
+candidate and enforce its profile. The actor field records an identity.
 
 Without `--quiet` it prints each level with its blockers:
 

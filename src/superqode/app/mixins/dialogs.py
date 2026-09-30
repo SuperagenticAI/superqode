@@ -3003,7 +3003,16 @@ class DialogsMixin:
                 "🔌 Connection & Providers",
                 THEME["cyan"],
                 [
-                    (":connect", "Interactive picker (choose acp, byok, or local)"),
+                    (":connect", "Choose a harness, subscription, API key or local model"),
+                    (":connect search", "Search connections; favorite with Ctrl+S"),
+                    (":connect status", "Show configured and verified state and capabilities"),
+                    (":connect test", "Check setup and local model metadata without generation"),
+                    (
+                        ":connect test --infer",
+                        "Explicit minimal generation check; may consume usage",
+                    ),
+                    (":connect test --tools", "Probe local tool calls without executing a tool"),
+                    (":connect build", "Build your own harness (Advanced)"),
                     (":free", "Pick a free hosted or account-backed coding route"),
                     (":free ready", "Show free routes already configured on this machine"),
                     (":free live", "Scan current zero-price model catalogs"),

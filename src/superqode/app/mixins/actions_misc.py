@@ -216,10 +216,15 @@ class MiscActionsMixin:
     def action_cancel_agent(self):
         """Cancel the currently running agent operation."""
         log = self.query_one("#log", ConversationLog)
+        if getattr(self, "_cancel_requested", False) and self.is_busy:
+            return
         self._cancel_requested = True
         provider, model = self._active_local_provider_model()
 
         if self._acp_client is not None:
+            client = self._acp_client
+            cancel_token = object()
+            self._acp_cancel_token = cancel_token
             try:
                 if self._acp_loop_runner is not None:
                     self._acp_loop_runner.run(self._acp_client.cancel(), timeout=1.0)
@@ -227,15 +232,33 @@ class MiscActionsMixin:
                     asyncio.create_task(self._acp_client.cancel())
             except Exception:
                 pass
-            try:
-                process = getattr(self._acp_client, "_process", None)
-                if process is not None and process.returncode is None:
-                    process.terminate()
-            except Exception:
-                pass
+
+            def stop_unresponsive_agent():
+                # Give session/cancel time to finish the turn. A stale timer
+                # must never terminate a replacement agent or a later turn.
+                if (
+                    self._acp_client is not client
+                    or getattr(self, "_acp_cancel_token", None) is not cancel_token
+                    or not self.is_busy
+                    or not getattr(self, "_cancel_requested", False)
+                ):
+                    return
+                try:
+                    process = getattr(client, "_process", None)
+                    if process is not None and process.returncode is None:
+                        process.terminate()
+                        log.add_info(
+                            "ACP agent did not stop; its process was terminated. Retry to reconnect."
+                        )
+                except Exception:
+                    pass
+
+            self.set_timer(3.0, stop_unresponsive_agent)
             log.add_info("🛑 Cancelling ACP agent operation...")
             self._stop_stream_animation()
             self._stop_thinking()
+            # Keep later prompts out until the ACP worker completes cancellation.
+            self.is_busy = True
             return
 
         if self._agent_process is not None:
@@ -248,9 +271,6 @@ class MiscActionsMixin:
             self._stop_stream_animation()
             self._stop_thinking()
         elif self.is_busy:
-            if getattr(self, "_cancel_requested", False):
-                return
-            self._cancel_requested = True
             pure = getattr(self, "_pure_mode", None)
             if pure is not None and hasattr(pure, "cancel"):
                 pure.cancel()
