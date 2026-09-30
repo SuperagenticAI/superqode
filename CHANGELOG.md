@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Lock optional `a2a-sdk` to **1.2.0** (PyPI 2026-09-29): InMemoryTaskStore timestamp fix (#1233),
+  multi-replica cluster mode, agent-card caching headers, and stricter server validation.
+  Extra pin is now `>=1.2.0,<2.0.0`.
+
 ## [2.4.31] - 2026-09-30
 
 ### Added

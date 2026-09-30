@@ -509,7 +509,7 @@ def serve_uhp(
     public_catalog: bool,
     harness_id: Optional[str],
 ):
-    """Expose a HarnessSpec as a native UHP 2026-08-11 HTTP server.
+    """Expose a HarnessSpec as a native UHP 2026-09-12 HTTP server.
 
     This is SuperQode's own harness speaking UHP — complementary to
     HarnessRouter, not a multi-backend runner replacement.
