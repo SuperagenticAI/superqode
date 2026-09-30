@@ -81,7 +81,20 @@ jobs:
       - name: Connection and terminal interaction checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_connection_experience.py tests/test_connect_harness_screen.py tests/test_subscription_billing_policy.py tests/test_harness_connect_catalog.py -q
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_connection_experience.py tests/test_connect_harness_screen.py tests/test_subscription_billing_policy.py tests/test_harness_connect_catalog.py -q --junitxml=connection-tests.xml
+      - name: Report connection failures
+        if: failure()
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          results = Path("connection-tests.xml")
+          if results.exists():
+              for case in ET.parse(results).iter("testcase"):
+                  for failure in [*case.findall("failure"), *case.findall("error")]:
+                      message = f"{case.get('classname')}.{case.get('name')}: {failure.text or failure.get('message', '')}"
+                      message = message[:6000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error::{message}")
 
   build:
     runs-on: ubuntu-latest
