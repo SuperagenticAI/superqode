@@ -95,3 +95,24 @@ def _clear_cli_probe_caches():
         model_db._live_autoload_attempted,
     ) = live_state
     clear_effective_models_cache()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_connection_defaults(tmp_path_factory, monkeypatch, request):
+    """Keep saved accounts and runtime selection out of ordinary unit tests.
+
+    Mounted apps can restore the developer's saved connection and change the
+    process runtime. Each test starts with an empty home and builtin defaults;
+    tests for another route explicitly set their own account/configuration.
+    Opt-in live tests retain the real account storage.
+    """
+    if (
+        request.node.get_closest_marker("integration")
+        or request.node.path.name == "test_connection_live.py"
+    ):
+        return
+    isolated_home = tmp_path_factory.mktemp("connection-home")
+    monkeypatch.setenv("HOME", str(isolated_home))
+    monkeypatch.setenv("USERPROFILE", str(isolated_home))
+    monkeypatch.setenv("SUPERQODE_RUNTIME", "builtin")
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
