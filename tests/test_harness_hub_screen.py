@@ -286,8 +286,29 @@ def test_native_harness_without_a_model_is_not_called_ready() -> None:
     screen.session_connected = True
     screen.session_model = "qwen3:8b"
     assert screen._run_state(rlm) == "use"
-    assert "ready" in screen._option_label(rlm).plain
+    assert "available" in screen._option_label(rlm).plain
     assert screen._run_state(screen.items[1]) == "setup"
+    assert "setup required" in screen._option_label(screen.items[1]).plain
+
+
+@pytest.mark.asyncio
+async def test_hub_available_label_explains_connection_checks() -> None:
+    app = App()
+    async with app.run_test(size=(100, 34)) as pilot:
+        app.push_screen(
+            HarnessHubScreen(
+                [_item("core", "Core")], session_connected=True, session_model="test-model"
+            )
+        )
+        await pilot.pause()
+        screen = app.screen
+        assert str(screen.query_one("#hub-filter-ready", Button).label) == "Available"
+        assert str(screen.query_one("#hub-filter-setup", Button).label) == "Setup required"
+        rendered = screen.query_one("#hub-detail").render()
+        detail = getattr(rendered, "plain", str(rendered))
+        assert "Available" in detail
+        assert "local checks" in detail
+        assert "verified when connecting" in detail
 
 
 @pytest.mark.asyncio

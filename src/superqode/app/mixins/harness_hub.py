@@ -11,6 +11,7 @@ from superqode.app.widgets import ConversationLog
 from superqode.harness.hub import (
     REFERENCE_ONLY_KINDS,
     hub_ecosystem_picker_items,
+    hub_picker_items,
     hub_record,
     readiness_label,
 )
@@ -135,7 +136,7 @@ class HarnessHubMixin:
                 replace(item, display_name=f"SuperQode {item.display_name}")
                 if item.group == "SuperQode harnesses"
                 else item
-                for item in items
+                for item in hub_picker_items(items)
             ),
             key=lambda item: item.display_name.casefold(),
         )
@@ -229,7 +230,7 @@ class HarnessHubMixin:
         log: ConversationLog,
     ) -> None:
         record = hub_record(item, include_local_paths=True)
-        status = readiness_label(record.readiness)
+        status = readiness_label(record.readiness, local=True)
         details = [
             item.description,
             f"Status: {status}",

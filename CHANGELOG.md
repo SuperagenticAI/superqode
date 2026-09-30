@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.36] - 2026-10-01
+
+### Fixed
+
+- Show each coding agent once in the Harness Hub, omitting duplicate ACP
+  listings when a primary agent connection exists. Remove the ACP suffix from
+  remaining Hub names while preserving explicit ACP connections.
+- Label local Harness Hub availability as Available and Setup required instead
+  of Ready and Needs setup. Explain that availability checks run locally and
+  authentication and connectivity are verified when connecting. Keep Needs a
+  model for built-in harnesses awaiting model selection.
+- Refresh the publication-safe Hub catalog and document the simplified agent
+  listings and local availability labels.
+
 ## [2.4.35] - 2026-09-30
 
 ### Fixed

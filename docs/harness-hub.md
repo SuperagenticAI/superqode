@@ -5,6 +5,11 @@ description: Discover, build, inspect, run, evaluate, and optimize coding-agent 
 
 # Harness Hub
 
+The Harness Hub lists each coding agent once, without an ACP suffix in its
+name. When an agent has a primary connection, its duplicate ACP listing is
+omitted. Standalone ACP agents remain discoverable, and explicit ACP connections
+remain available through `:connect acp`.
+
 The Harness Hub is the catalog. `:connect` is how you start a harness. Browse
 what SuperQode can run, inspect setup, and Use an entry that is ready on this
 machine.
@@ -27,7 +32,7 @@ The Hub is a full terminal screen rather than a block appended to the
 conversation. Use the mouse or keyboard to:
 
 - search names, runtimes, sources, licenses, and descriptions
-- filter to **Ready**, **Needs setup**, **Open source**, **Your harnesses**, or
+- filter to **Available**, **Setup required**, **Open source**, **Your harnesses**, or
   **Coming soon** (`a` `r` `s` `o` `c` `n`)
 - inspect setup, runtime, provenance, and session-continuity details without
   leaving the Hub
@@ -38,6 +43,12 @@ Press `/` to focus search, arrow keys to move, `Enter` to use (or learn more
 for coming-soon rows), `I` to inspect in place, `B` to build, and `Esc` to
 return. Click a row to preview; Use is explicit. `:hub` opens on **All** so the
 catalog never hides entries before you choose a filter.
+
+**Available** reflects basic availability checks on the machine running
+SuperQode. Authentication and connectivity are verified when connecting.
+**Setup required** means a local availability check failed; inspect the entry
+for installation instructions. Built-in harnesses without a selected model
+show **Needs a model**.
 
 ## What appears in the Hub
 

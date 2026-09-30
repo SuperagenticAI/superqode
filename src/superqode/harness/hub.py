@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -95,8 +95,13 @@ def language_label(language: str, confidence: str = "") -> str:
     return f"{name} (inferred)" if confidence == "inferred" else name
 
 
-def readiness_label(readiness: str) -> str:
-    """Return the public label for a readiness value."""
+def readiness_label(readiness: str, *, local: bool = False) -> str:
+    """Return a readiness label, with availability wording for local TUI checks."""
+    if local:
+        if readiness == "ready":
+            return "Available"
+        if readiness == "setup-required":
+            return "Setup required"
     return READINESS_LABELS.get(readiness, str(readiness).replace("-", " ").capitalize())
 
 
@@ -1846,6 +1851,28 @@ def hub_ecosystem_picker_items() -> list[HarnessPickerItem]:
     ]
 
 
+def hub_picker_items(items: Iterable[HarnessPickerItem]) -> list[HarnessPickerItem]:
+    """Show agents once in the Hub without changing explicit ACP routes."""
+    inventory = list(items)
+    primary_agents = set()
+    for item in inventory:
+        if item.kind == "connection":
+            primary_agents.add(item.id.casefold())
+            acp_agent = getattr(item.target, "acp_agent", None)
+            if acp_agent:
+                primary_agents.add(acp_agent.casefold())
+    if "deepagents-code" in primary_agents:
+        primary_agents.add("deepagents")
+
+    return [
+        replace(item, display_name=item.display_name.removesuffix(" (ACP)"))
+        if item.kind == "acp"
+        else item
+        for item in inventory
+        if item.kind != "acp" or item.id.removeprefix("acp:").casefold() not in primary_agents
+    ]
+
+
 def build_hub_index(
     root: str | Path = ".",
     *,
@@ -1865,6 +1892,7 @@ def build_hub_index(
             include_live_registry=not public,
         )
     )
+    inventory = hub_picker_items(inventory)
     if public:
         inventory = [item for item in inventory if item.group != "Project harnesses"]
     records = [

@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from click.testing import CliRunner
 
-from superqode.app.harness_picker import HarnessPickerItem
+from superqode.app.harness_picker import HarnessPickerItem, harness_acp_item
+from superqode.app.mixins.harness_hub import HarnessHubMixin
 from superqode.commands.hub import hub
 from superqode.harness.hub import HUB_SCHEMA_VERSION, build_hub_index, filter_hub_records
 from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS, connection_profile_ids
@@ -329,6 +331,39 @@ def test_full_hub_expands_protocol_registry(monkeypatch):
     assert calls[0]["expand_protocol_catalog"] is True
 
 
+def test_hub_shows_one_agent_and_preserves_standalone_acp_routes(monkeypatch):
+    items = [
+        _item(),
+        _item(
+            id="gemini-cli", display_name="Gemini CLI", target=SimpleNamespace(acp_agent="gemini")
+        ),
+        _item(id="acp:codex", display_name="Codex (ACP)", kind="acp"),
+        _item(id="acp:gemini", display_name="Gemini CLI (ACP)", kind="acp"),
+        _item(id="acp:goose", display_name="Goose (ACP)", kind="acp", runtime="ACP"),
+    ]
+    monkeypatch.setattr("superqode.harness.hub.harness_picker_items", lambda *_a, **_k: items)
+    monkeypatch.setattr(
+        "superqode.app.mixins.harness_hub.harness_picker_items", lambda *_a, **_k: items
+    )
+    monkeypatch.setattr("superqode.app.mixins.harness_hub.hub_ecosystem_picker_items", lambda: [])
+
+    tui = HarnessHubMixin._harness_hub_items()
+    records = build_hub_index(public=True)["items"]
+    assert {item.id for item in tui} == {"codex", "gemini-cli", "acp:goose"}
+    assert not {"acp:codex", "acp:gemini"} & {item["id"] for item in records}
+    goose = next(item for item in tui if item.id == "acp:goose")
+    assert goose.display_name == "Goose"
+    assert goose.runtime == "ACP"
+    assert items[4].display_name == "Goose (ACP)"
+
+
+def test_explicit_acp_connection_remains_available():
+    codex = harness_acp_item("acp:codex")
+    assert codex is not None
+    assert codex.id == "acp:codex"
+    assert codex.kind == "acp"
+
+
 def test_full_public_hub_includes_model_access_inference_and_ecosystem(monkeypatch):
     monkeypatch.setattr(
         "superqode.harness.hub.harness_picker_items",
@@ -507,13 +542,14 @@ def test_every_hub_entry_has_a_unique_id():
     """Native, vendor, ACP, and ecosystem routes are merged into one list.
 
     A repeated id would make two different harnesses collide in the Hub, in
-    `hub show`, and in the published catalog. DeepAgents ships as four separate
-    routes, which is exactly the shape that would trip over this.
+    `hub show`, and in the published catalog. Native DeepAgents and the coding
+    agent remain distinct; duplicate ACP transports do not get separate rows.
     """
     ids = [item["id"] for item in build_hub_index(public=True)["items"]]
 
     assert len(ids) == len(set(ids))
-    assert {"deepagents", "deepagents-code", "acp:deepagents", "acp:deepagents-code"} <= set(ids)
+    assert {"deepagents", "deepagents-code"} <= set(ids)
+    assert not {"acp:deepagents", "acp:deepagents-code"} & set(ids)
 
 
 def test_published_snapshot_lists_every_hub_record():
@@ -559,7 +595,7 @@ def test_public_hub_uses_deterministic_bundled_acp_catalog(monkeypatch):
 def test_public_hub_preserves_agent_repository_and_setup_metadata():
     by_id = {item["id"]: item for item in build_hub_index(public=True)["items"]}
 
-    assert by_id["acp:codex"]["repository"] == "https://github.com/openai/codex"
+    assert by_id["codex"]["repository"] == "https://github.com/openai/codex"
     assert by_id["acp:bub"]["repository"] == "https://github.com/bubbuild/bub"
     assert "Install Harn" in by_id["acp:harn"]["setup"]
     assert all(

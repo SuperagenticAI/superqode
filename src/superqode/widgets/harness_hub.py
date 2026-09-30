@@ -54,7 +54,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         Binding("b", "build", "Build"),
         Binding("j", "jev_routing", "Jev routing"),
         Binding("a", "filter_all", "All", show=False),
-        Binding("r", "filter_ready", "Ready", show=False),
+        Binding("r", "filter_ready", "Available", show=False),
         Binding("s", "filter_setup", "Setup", show=False),
         Binding("o", "filter_open", "Open source", show=False),
         Binding("c", "filter_custom", "Yours", show=False),
@@ -273,8 +273,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
         with Horizontal(id="hub-filters"):
             yield Button("All", id="hub-filter-all")
-            yield Button("Ready", id="hub-filter-ready")
-            yield Button("Needs setup", id="hub-filter-setup")
+            yield Button("Available", id="hub-filter-ready")
+            yield Button("Setup required", id="hub-filter-setup")
             yield Button("Open source", id="hub-filter-open")
             yield Button("Your harnesses", id="hub-filter-custom")
             yield Button("Coming soon", id="hub-filter-coming")
@@ -451,8 +451,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         """How far this row is from actually running.
 
         Built-in SuperQode harnesses (Core, RLM, PiPy, Workbench) are always
-        *installed*, but they still need a model. Coding agents that are
-        logged in can Use immediately.
+        *installed*, but they still need a model. Available coding agents can
+        start connecting; authentication is verified by the connection flow.
         """
         if item.kind in REFERENCE_ONLY_KINDS:
             return "coming"
@@ -480,11 +480,11 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             text.append("  ACTIVE", style="bold #c4b5fd")
         text.append(f"\n    {item.group} · ", style="#71717a")
         status = {
-            "use": "ready",
+            "use": "available",
             "choose-model": "needs a model",
-            "setup": "needs setup",
+            "setup": "setup required",
             "coming": "coming soon",
-        }.get(state, "needs setup")
+        }.get(state, "setup required")
         text.append(status, style=mark_color)
         if item.runtime:
             text.append(f" · {item.runtime}", style="#a1a1aa")
@@ -554,15 +554,20 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             )
         elif state == "use":
             text.append("\nEnter or Use starts this harness.\n", style="#c4b5fd")
+            text.append(
+                "Availability is based on local checks. Authentication and connectivity "
+                "are verified when connecting.\n",
+                style="#a1a1aa",
+            )
         else:
-            text.append("\nNeeds setup before Use.\n", style="#fbbf24")
+            text.append("\nSetup required on this machine before Use.\n", style="#fbbf24")
         text.append("\n")
         status_value = {
-            "use": "Ready",
+            "use": "Available",
             "choose-model": "Needs a model",
-            "setup": "Needs setup",
+            "setup": "Setup required",
             "coming": "Coming soon",
-        }.get(state, readiness_label(record.readiness))
+        }.get(state, readiness_label(record.readiness, local=True))
         rows = (
             ("Status", status_value),
             ("Type", item.group),
