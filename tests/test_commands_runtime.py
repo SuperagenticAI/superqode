@@ -53,6 +53,7 @@ def test_list_json_emits_array(runner, monkeypatch):
         "devin-cli",
         "copilot-cli",
         "grok-cli",
+        "muse",
         "pydanticai",
     }
     # Exactly one entry is marked active.

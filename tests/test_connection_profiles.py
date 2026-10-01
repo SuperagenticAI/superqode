@@ -653,11 +653,12 @@ def test_antigravity_profile_is_signed_in_cli_runtime_connector():
     assert "google sign-in" in antigravity.description.lower()
 
 
-def test_muse_is_an_external_cli_subscription_profile():
-    """Muse Code 0.1.0 ships no ACP server, so it connects as an external CLI."""
+def test_muse_is_a_native_session_subscription_profile():
     muse = get_connection_profile("muse")
 
-    assert muse.connector == "external-cli"
+    assert muse.connector == "runtime"
+    assert muse.runtime == "muse"
+    assert muse.self_contained
     assert muse.transport == "CLI"
     assert muse.harness_openness == "closed"
     assert muse in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)
@@ -696,10 +697,10 @@ def test_muse_is_ready_only_once_it_has_a_credential(monkeypatch, tmp_path):
     auth_file.write_text('{"schema_version": 1, "providers": {"meta": {}}}', encoding="utf-8")
     assert cp._muse_cli_ready() is True
 
-    # So does an API key on its own.
+    # An API key alone does not satisfy the account route.
     auth_file.write_text('{"schema_version": 1, "providers": {}}', encoding="utf-8")
     monkeypatch.setenv("META_API_KEY", "k")
-    assert cp._muse_cli_ready() is True
+    assert cp._muse_cli_ready() is False
 
 
 def test_muse_auth_path_follows_the_same_env_the_launcher_reads(monkeypatch, tmp_path):

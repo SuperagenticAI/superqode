@@ -78,6 +78,9 @@ class DialogsMixin:
         # Mark that the log currently shows only the welcome, so resizes can
         # re-flow it responsively until the user starts interacting.
         self._welcome_active = True
+        # Command submission stops resize reflow, but the welcome can remain
+        # in the saved navigation view until a connection succeeds.
+        self._welcome_present = True
         # Show the first-run card until the first connection lands, and note
         # the visit for the session hint.
         self._maybe_show_onboarding(log)

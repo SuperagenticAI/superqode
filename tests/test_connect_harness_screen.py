@@ -361,12 +361,7 @@ def test_the_acp_category_opens_the_original_catalogue_screen():
     assert stub.opened == 1
 
 
-def test_selecting_muse_reports_readiness_instead_of_failing():
-    """Muse is the first live user of the external-cli connector.
-
-    That branch previously matched only Antigravity and errored on anything
-    else, so a Muse row that dispatched nowhere would look broken.
-    """
+def test_selecting_muse_connects_native_session_runtime():
     from superqode.app_main import SuperQodeApp
 
     class MuseStub(DispatchStub):
@@ -374,7 +369,8 @@ def test_selecting_muse_reports_readiness_instead_of_failing():
             super().__init__()
             self.shown = 0
 
-        def _show_muse_connect(self, log):
+        def _runtime_cmd(self, runtime, log):
+            assert runtime == "muse"
             self.shown += 1
 
     stub = MuseStub()
@@ -386,7 +382,7 @@ def test_selecting_muse_reports_readiness_instead_of_failing():
 
 
 def test_the_muse_key_row_gates_on_the_key_instead_of_erroring(monkeypatch):
-    """`muse-key` shares Muse's external-cli connector but is not the plan row.
+    """`muse-key` uses an external CLI connector, separate from the account runtime.
 
     The branch matched `muse` and `antigravity` by id, so the Closed key row
     fell through to "Unsupported external CLI profile" and META_API_KEY was

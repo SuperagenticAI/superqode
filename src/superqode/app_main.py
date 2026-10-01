@@ -1231,6 +1231,7 @@ class SuperQodeApp(
             "antigravity-cli",
             "antigravity-managed",
             "devin-cli",
+            "muse",
             # Subscription CLI runtimes: the vendor login supplies both auth and
             # model, so they must auto-connect like the other self-contained
             # runtimes. Without this, :connect copilot reported "Already on

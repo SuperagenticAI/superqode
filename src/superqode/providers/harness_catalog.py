@@ -662,7 +662,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         label="Muse Code",
         description="Meta's Muse Code agent with your Meta account sign-in.",
         openness="closed",
-        auth=_plan_auth("muse", connector="external-cli"),
+        auth=_plan_auth("muse", connector="runtime"),
         hub_id="muse",
         vendor_owned=True,
         wired=True,
@@ -683,8 +683,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         hub_id="muse",
         readiness="setup-required",
         support_note=(
-            "Muse Code has no ACP server or headless mode SuperQode can drive, "
-            "so run `muse` yourself. It prefers META_API_KEY over a stored "
+            "This API-key route currently runs outside SuperQode: run `muse` "
+            "directly. It prefers META_API_KEY over a stored "
             "`muse login` session, so the key is what gets billed."
         ),
         vendor_owned=True,

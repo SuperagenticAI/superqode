@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.37] - 2026-10-01
+
+### Added
+
+- Connect Muse Code’s native session host to the TUI prompt, including streamed responses, tool approvals, cancellation and successive prompts. Start the host on demand and show an actionable error if Muse rejects a saved login.
+
+### Known limitations
+
+- Muse Code can reject a detected saved credential as “not logged in”. Refresh the login in the vendor CLI before retrying. Live authenticated model responses were not verified for this release; protocol and TUI regression tests passed.
+
+### Fixed
+
+- Dismiss the welcome screen after a successful agent or model connection,
+  including self-contained vendor runtimes such as Antigravity CLI. Preserve
+  existing conversation history and prompt drafts; cancelled or failed setup
+  can still return to the welcome screen.
+
 ## [2.4.36] - 2026-10-01
 
 ### Fixed

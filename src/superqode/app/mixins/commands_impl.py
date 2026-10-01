@@ -2090,6 +2090,13 @@ class CommandImplMixin:
                 log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
                 return
 
+        if sub == "muse":
+            from superqode.providers.connection_profiles import _muse_signed_in
+
+            if not _muse_signed_in():
+                self._show_muse_status(log)
+                return
+
         current = resolve_runtime_name()
         if sub in self._SELF_CONTAINED_RUNTIMES:
             existing = getattr(self, "_pure_mode", None)
@@ -2148,6 +2155,7 @@ class CommandImplMixin:
                     "antigravity-cli": "google",
                     "antigravity-managed": "google",
                     "devin-cli": "devin",
+                    "muse": "meta",
                 }.get(sub, "openai")
                 pure.connect(provider=provider, model="", working_directory=Path.cwd())
                 self._announce_self_contained_connection(sub, log)

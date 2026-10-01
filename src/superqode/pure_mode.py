@@ -460,6 +460,7 @@ class PureMode:
             "copilot-sdk",
             "claude-agent-sdk",
             "antigravity-sdk",
+            "muse",
         ):
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":

@@ -26,7 +26,7 @@ class HelperExitLifecycleMixin:
             log: The conversation log widget
             context: Optional context string (e.g., "DEV.FULLSTACK", "OPENCODE")
         """
-        restored = self._end_connection_view(log)
+        restored = self._finish_successful_connection_view(log)
         self._welcome_active = False
         if not restored:
             log.clear()
@@ -55,6 +55,7 @@ class HelperExitLifecycleMixin:
 
     def _begin_conversation_transcript(self, log: ConversationLog) -> None:
         """Replace temporary connection/setup content with the first turn."""
+        self._welcome_present = False
         # A live conversation is the new navigation root. Stale connection
         # picker history must never replace its transcript via Back.
         try:

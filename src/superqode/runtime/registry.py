@@ -191,6 +191,9 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "antigravity-cli": _antigravity_cli_factory,
     "antigravity-managed": _antigravity_managed_factory,
     "devin-cli": _devin_cli_factory,
+    "muse": lambda **kwargs: importlib.import_module("superqode.runtime.muse").MuseRuntime(
+        **kwargs
+    ),
     # Subscription runtimes that drive the vendor CLI directly (no ACP).
     "copilot-cli": _vendor_cli_factory("copilot"),
     "grok-cli": _vendor_cli_factory("grok"),
@@ -208,6 +211,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "antigravity-cli": "Google Antigravity CLI (Google Sign-In)",
     "antigravity-managed": "Google-hosted Antigravity agent (Gemini API key)",
     "devin-cli": "Cognition Devin CLI (devin auth login)",
+    "muse": "Meta Muse Code native session protocol (muse login)",
     "copilot-cli": "GitHub Copilot CLI on your subscription (copilot login)",
     "grok-cli": "Grok CLI on your subscription (grok login)",
 }
@@ -237,6 +241,7 @@ _DOCUMENTATION_URLS: dict[str, str] = {
     "antigravity-sdk": "https://antigravity.google/docs/cli-install",
     "antigravity-cli": "https://antigravity.google/docs/cli-install",
     "devin-cli": "https://docs.devin.ai/cli",
+    "muse": "https://dev.meta.ai/docs/muse-code",
 }
 
 
@@ -396,6 +401,11 @@ def list_runtimes(*, probe: bool = False) -> list[RuntimeInfo]:
                 installed, ready, install_hint, status_detail = _cli_presence(
                     "devin", "Devin", _DEVIN_INSTALL_HINT
                 )
+            implemented = True
+        elif name == "muse":
+            installed, ready, install_hint, status_detail = _cli_presence(
+                "muse", "Muse Code", "install Muse Code from https://dev.meta.ai, then muse login"
+            )
             implemented = True
         elif name == "antigravity-managed":
             installed = True

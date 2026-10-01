@@ -353,6 +353,9 @@ class SlashCommandMixin:
         self._set_status_runtime("systemone")
         self._set_status_model(pure.session.model)
         pack = pure._harness_spec.systemone.pack
+        finish = getattr(self, "_finish_successful_connection_view", None)
+        if callable(finish):
+            finish(log)
         log.add_system(
             f"Connected to decision pack {pack} with {pure.session.model}. Enter state for this pack; no coding model or tool execution is involved."
         )

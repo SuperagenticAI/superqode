@@ -166,6 +166,7 @@ class HelpersMixin(
                     # must not be presented as the active harness.
                     harness = {
                         "codex-sdk": "codex",
+                        "muse": "Muse Code",
                         "copilot-sdk": "copilot",
                         "claude-agent-sdk": "claude",
                         "antigravity-sdk": "antigravity",
@@ -781,6 +782,7 @@ class HelpersMixin(
                 status.active_model = ""
             status.active_harness = {
                 "codex-sdk": "codex",
+                "muse": "Muse Code",
                 "copilot-sdk": "copilot",
                 "claude-agent-sdk": "claude",
                 "antigravity-sdk": "antigravity",

@@ -4415,6 +4415,7 @@ class AgentRunMixin:
         if runtime_name in self._SELF_CONTAINED_RUNTIMES:
             friendly = {
                 "codex-sdk": "Codex",
+                "muse": "Muse Code",
                 "copilot-sdk": "Copilot SDK",
                 "claude-agent-sdk": "Claude Agent SDK",
                 "antigravity-sdk": "Antigravity SDK",

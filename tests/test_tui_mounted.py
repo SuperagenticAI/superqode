@@ -1192,6 +1192,105 @@ async def test_plain_write_panel_visible_after_byok_navigation(monkeypatch):
         assert log.scroll_y <= panel_y < log.scroll_y + visible_height
 
 
+@pytest.mark.parametrize("setup_view", [False, True])
+@pytest.mark.parametrize("route", ["vendor", "model"])
+async def test_successful_connection_dismisses_welcome(setup_view, route, monkeypatch):
+    app = SuperQodeApp()
+    monkeypatch.setattr(app, "_mark_onboarding_complete", lambda: None)
+    async with app.run_test(size=(100, 34)) as pilot:
+        await pilot.pause()
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        app._show_welcome("test-project")
+        await pilot.pause()
+        assert "THE HARNESS LAYER" in "\n".join(line.text for line in log.lines)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        # Exercise the real Enter handler, which stops welcome reflow before
+        # dispatching a connection command. The banner is still present.
+        original_handler = app._handle_command
+        monkeypatch.setattr(app, "_handle_command", lambda *_args: None)
+        prompt.value = ":connect antigravity"
+        await pilot.press("enter")
+        await pilot.pause()
+        monkeypatch.setattr(app, "_handle_command", original_handler)
+        assert not app._welcome_active
+        assert app._welcome_present
+        prompt.value = "draft to keep"
+        if setup_view:
+            app._begin_connection_view(log)
+            log.add_info("Temporary setup screen")
+
+        if route == "vendor":
+            app._announce_self_contained_connection("antigravity-cli", log)
+        else:
+            app._clear_for_workspace(log, "BYOK")
+            log.add_info("Model connection complete")
+        await pilot.pause()
+        rendered = "\n".join(line.text for line in log.lines)
+        assert (
+            "Connected — Antigravity CLI" if route == "vendor" else "Model connection complete"
+        ) in rendered
+        assert "THE HARNESS LAYER" not in rendered
+        assert "Temporary setup screen" not in rendered
+        assert not app._welcome_active
+        assert prompt.value == "draft to keep"
+        assert app._workspace_intro_visible
+
+        # Resize/catalog reflow must not bring the old welcome back.
+        app._rerender_welcome()
+        await pilot.pause()
+        assert "THE HARNESS LAYER" not in "\n".join(line.text for line in log.lines)
+
+
+async def test_muse_connect_activates_prompt_and_dismisses_welcome(monkeypatch, tmp_path):
+    from superqode.pure_mode import PureMode
+    from superqode.runtime.muse import MuseRuntime
+
+    monkeypatch.setattr("superqode.providers.connection_profiles._muse_signed_in", lambda: True)
+    monkeypatch.setattr("superqode.runtime.muse.shutil.which", lambda _name: "/mock/muse")
+    monkeypatch.setenv("SUPERQODE_RUNTIME", "builtin")
+    app = SuperQodeApp()
+    pure = PureMode(runtime="muse")
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
+    monkeypatch.setattr(app, "_mark_onboarding_complete", lambda: None)
+    sent = []
+    monkeypatch.setattr(app, "_send_to_pure_mode", lambda text, target: sent.append(text))
+    async with app.run_test(size=(100, 34)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        app._show_welcome("test-project")
+        app._pure_mode = pure
+        app._handle_command(":connect muse", log)
+        await pilot.pause()
+        assert pure.session.connected
+        assert isinstance(pure._runtime, MuseRuntime)
+        assert pure._runtime._process is None  # No background host at connect/startup.
+        rendered = "\n".join(line.text for line in log.lines)
+        assert "Connected — Muse Code" in rendered
+        assert "THE HARNESS LAYER" not in rendered
+        app._handle_message("hi", log)
+        await pilot.pause()
+        assert sent == ["hi"]
+        assert "Not connected" not in "\n".join(line.text for line in log.lines)
+        pure.disconnect()
+
+
+async def test_cancelled_connection_restores_welcome():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 34)) as pilot:
+        await pilot.pause()
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        app._show_welcome("test-project")
+        await pilot.pause()
+        app._begin_connection_view(log)
+        log.add_info("Temporary setup screen")
+        app._end_connection_view(log)
+        await pilot.pause()
+        assert app._welcome_active
+        assert "THE HARNESS LAYER" in "\n".join(line.text for line in log.lines)
+
+
 async def test_first_prompt_replaces_connection_landing_but_keeps_status():
     app = SuperQodeApp()
     async with app.run_test(size=(80, 24)) as pilot:

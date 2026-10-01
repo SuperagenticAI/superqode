@@ -382,10 +382,14 @@ def _prime_agent_present() -> bool:
 
 
 def _muse_cli_ready() -> bool:
-    """Muse Code is installed and holds a credential it can actually use."""
+    """Muse account route has an installed CLI and a stored credential.
+
+    This is a local setup hint; Muse validates the login on model calls.
+    Environment API keys do not satisfy this account route.
+    """
     if shutil.which("muse") is None:
         return False
-    return _muse_signed_in() or _env_key_set("META_API_KEY")
+    return _muse_signed_in()
 
 
 def _muse_product_present() -> bool:
@@ -830,7 +834,9 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         transport="CLI",
         label="Muse Code",
         description="Use Meta's Muse Code agent with your Meta account sign-in",
-        connector="external-cli",
+        connector="runtime",
+        runtime="muse",
+        self_contained=True,
         menu=CONNECT_MENU_VENDORS,
         detect=_muse_cli_ready,
         product_detect=_muse_product_present,

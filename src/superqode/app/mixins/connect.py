@@ -167,6 +167,19 @@ class ConnectMixin:
         self._history.clear()
         self._record_screen("conversation", "Agent", lambda: self._end_connection_view(log))
 
+    def _finish_successful_connection_view(self, log: ConversationLog) -> bool:
+        """Restore a conversation after setup, but dismiss the welcome on success."""
+        restored = self._end_connection_view(log)
+        if getattr(self, "_welcome_present", False) or getattr(self, "_welcome_active", False):
+            self._welcome_active = False
+            self._welcome_present = False
+            self._connection_welcome = False
+            if not any(role == "user" for role, *_ in getattr(log, "_messages", [])):
+                log.clear()
+                log.auto_scroll = True
+                self._workspace_intro_visible = True
+        return restored
+
     def _end_connection_view(self, log: ConversationLog) -> bool:
         if not isinstance(log, ConversationLog) or not log.is_mounted:
             return False
@@ -1558,7 +1571,7 @@ class ConnectMixin:
     def _begin_vendor_key_cli(self, profile, log: ConversationLog) -> None:
         """Closed key path for a harness SuperQode cannot drive over ACP.
 
-        Muse Code has no ACP server and no headless mode SuperQode consumes, so
+        The dedicated Muse API-key route currently runs outside SuperQode, so
         the key cannot be handed to a child process here. Gate on the key, then
         state plainly that the user runs the vendor CLI and it reads that key.
         """
@@ -2242,6 +2255,9 @@ class ConnectMixin:
         except Exception:  # noqa: BLE001 - connection works without mounted chrome
             pass
 
+        finish = getattr(self, "_finish_successful_connection_view", None)
+        if callable(finish):
+            finish(log)
         log.add_success(
             "Prime Agent connected through prime-agent-python-client (native Python RPC)."
         )
@@ -2271,8 +2287,10 @@ class ConnectMixin:
             if not started:
                 log.add_info("Muse Code already has a credential.")
                 self._show_muse_connect(log)
-        elif action in {"connect", "status", "doctor"}:
+        elif action == "connect":
             self._show_muse_connect(log)
+        elif action in {"status", "doctor"}:
+            self._show_muse_status(log)
         elif action in {"help", "?"}:
             log.add_info("Usage: :muse [connect|login|status|help]")
         else:
@@ -2425,14 +2443,11 @@ class ConnectMixin:
             self._show_muse_connect(log)
 
     def _show_muse_connect(self, log: ConversationLog) -> None:
-        """Report Muse Code readiness and hand the user a command to run.
+        """Connect Muse Code's native session host to the main prompt."""
+        self._runtime_cmd("muse", log)
 
-        Muse Code 0.1.0 exposes no ACP server, and SuperQode does not consume
-        its headless JSONL events yet, so this route stays honest: it reports
-        what is installed and signed in rather than pretending we can stream
-        its tool calls. The subscription billing rule still applies, because
-        Muse prefers META_API_KEY over the account login this route selects.
-        """
+    def _show_muse_status(self, log: ConversationLog) -> None:
+        """Report local credential presence; Muse validates it on the first call."""
         from superqode.providers.connection_profiles import _muse_auth_path, _muse_signed_in
         from superqode.providers.subscription_env import diverting_api_keys
 
@@ -2465,20 +2480,11 @@ class ConnectMixin:
             log.write(t)
             return
 
-        # Muse reads META_API_KEY ahead of any stored login, so a key left in
-        # the shell silently moves an account session onto per-token billing.
-        # SuperQode does not spawn Muse here, so it cannot strip the key the way
-        # subscription_child_env does for driven routes: say what will actually
-        # happen when the user runs `muse` themselves.
         if signed_in and diverting_api_keys("muse"):
-            t.append("\n  META_API_KEY is set in this environment.\n", style=THEME["warning"])
             t.append(
-                "  Muse Code prefers it over your account login, so this ", style=THEME["muted"]
+                "\n  SuperQode ignores META_API_KEY on this account route.\n", style=THEME["muted"]
             )
-            t.append("bills per token.\n", style=THEME["warning"])
-            t.append("  Unset it before running ", style=THEME["muted"])
-            t.append("muse", style=THEME["cyan"])
-            t.append(" to spend your Meta account session instead.\n", style=THEME["muted"])
+            t.append("  Direct `muse` launches may prefer that API key.\n", style=THEME["dim"])
         elif env_key:
             t.append(
                 "\n  META_API_KEY is set, so Muse Code bills per token.\n", style=THEME["warning"]
@@ -2507,16 +2513,13 @@ class ConnectMixin:
             # account without billing authenticates fine and still fails on the
             # first model call, so never imply sign-in is sufficient.
             t.append(
-                "\n  Signed in. Model calls bill to your Meta account, so a\n", style=THEME["muted"]
+                "\n  Saved credential detected; Muse validates it on the first call.\n",
+                style=THEME["muted"],
             )
-            t.append(
-                "  team without billing enabled still gets refused by Meta.\n", style=THEME["muted"]
-            )
+            t.append("  Your Meta account must have billing enabled.\n", style=THEME["muted"])
 
-        t.append(
-            "\n  SuperQode does not drive Muse Code yet. Run it directly:\n", style=THEME["muted"]
-        )
-        t.append("    muse\n", style=THEME["cyan"])
+        t.append("\n  Connect Muse Code to the SuperQode prompt:\n", style=THEME["muted"])
+        t.append("    :connect muse\n", style=THEME["cyan"])
         t.append("\n  Next:\n", style=THEME["muted"])
         t.append("    • ", style=THEME["dim"])
         t.append(":connect byok meta", style=THEME["cyan"])
@@ -2862,6 +2865,11 @@ class ConnectMixin:
                     (":connect acp devin", "for the richer ACP path with tool calls"),
                     (":runtime list", "to compare available runtime routes"),
                 ),
+            },
+            "muse": {
+                "auth": "Meta account sign-in managed by Muse Code",
+                "model": "managed by Muse Code",
+                "commands": ((":muse status", "for installation and sign-in details"),),
             },
         }
         details = connection_details.get(

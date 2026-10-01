@@ -272,7 +272,7 @@ class FeedbackMixin:
             "Model ready",
             "Model selected",
         }:
-            finish = getattr(self, "_end_connection_view", None)
+            finish = getattr(self, "_finish_successful_connection_view", None)
             if callable(finish) and log is not None:
                 finish(log)
 
