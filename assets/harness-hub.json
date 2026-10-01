@@ -1,6 +1,6 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-01T05:44:26.358114+00:00",
+  "generated_at": "2026-10-01T08:55:32.268921+00:00",
   "count": 99,
   "categories": [
     "SuperQode harnesses",
@@ -6048,7 +6048,7 @@
     {
       "id": "ecosystem:warp",
       "name": "Warp Agent",
-      "description": "Warp's AGPL-3.0 Agent CLI, the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+      "description": "Warp's proprietary server-side agent harness with an AGPL-3.0 client, runnable in any terminal with a Warp account or WARP_API_KEY.",
       "category": "Ecosystem watch",
       "kind": "ecosystem",
       "runtime": "external",
@@ -6095,7 +6095,7 @@
         "Model routing",
         "Cloud handoff (Oz)"
       ],
-      "based_on": "Warp Agent (AGPL-3.0)",
+      "based_on": "Warp Agent (proprietary harness; AGPL-3.0 client)",
       "popularity_rank": 70,
       "setup_steps": [
         {
@@ -6109,8 +6109,8 @@
           "description": "Sign in with your Warp account, or export WARP_API_KEY."
         }
       ],
-      "openness": "open",
-      "license": "AGPL-3.0",
+      "openness": "closed",
+      "license": "Proprietary (harness); AGPL-3.0 (client)",
       "language": "Rust",
       "language_confidence": "confirmed",
       "language_evidence": "warpdotdev/warp carries Cargo.toml (Rust 98%)."
