@@ -8,6 +8,12 @@ from superqode.providers.harness_catalog import CONNECT_MENU_DEFAULT
 
 
 @pytest.fixture(autouse=True)
+def _isolate_herdr_env(monkeypatch):
+    for key in ("HERDR_ENV", "HERDR_BIN_PATH", "HERDR_SOCKET_PATH", "HERDR_PANE_ID"):
+        monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_systemone_env(monkeypatch):
     """Keep a live TUI session from turning the gate on in unit tests.
 

@@ -1032,6 +1032,9 @@ class ModelCatalogMixin:
             self.query_one("#status-bar", ColorfulStatusBar).active_model = model or ""
         except Exception:  # noqa: BLE001
             pass
+        from superqode.app.herdr import sync
+
+        sync(self)
 
     def _set_acp_status(self, model: str = "") -> None:
         """Synchronize an ACP connection with the persistent top status bar."""

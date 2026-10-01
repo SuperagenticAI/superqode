@@ -343,7 +343,8 @@ class SuperQodeApp(
         False  # Flag to prevent immediate provider selection after showing picker
     )
     _awaiting_permission = False  # Track if waiting for permission response
-    _awaiting_agent_question = False  # Track if an agent is waiting for user input
+    _awaiting_agent_question = reactive(False)  # Agent needs user input
+    _permission_pending = reactive(False)
     _available_models: Dict[str, List[str]] = {}  # Available models per agent
     _last_response: str = ""  # Store last agent response for :copy command
     _last_user_message: str = ""  # Store last user prompt for :retry
@@ -366,8 +367,20 @@ class SuperQodeApp(
     _pending_plan_content: str = ""  # Exact model-authored plan awaiting review
     _approved_plan_for_next_run: str = ""  # One-shot execution context after approval
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        resume: str | None = None,
+        fork_from: str | None = None,
+        approval_mode: str | None = None,
+        interaction_mode: str | None = None,
+    ):
         super().__init__()
+        self._startup_resume = resume or fork_from or ""
+        self._startup_fork = bool(fork_from)
+        self._startup_interaction_mode = interaction_mode
+        if approval_mode is not None:
+            self.approval_mode = approval_mode
         # Modal prompts declare their Enter/text/Esc/navigation behavior once
         # here instead of being hand-registered across five dispatch sites.
         self._prompts = PromptStack()
@@ -479,6 +492,9 @@ class SuperQodeApp(
         yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
 
     def on_mount(self):
+        from superqode.app.herdr import start
+
+        start(self)
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
         self._set_prompt_border_title()
@@ -506,8 +522,44 @@ class SuperQodeApp(
         if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
             self._run_startup_health_check()
         # Auto-connect a connection profile if requested via --connect.
-        if os.getenv("SUPERQODE_CONNECT", "").strip():
+        if self._startup_resume:
+            self.set_timer(0.1, self._run_startup_session)
+        elif self._startup_interaction_mode:
+            self._apply_interaction_mode(
+                self._startup_interaction_mode, self.query_one("#log", ConversationLog)
+            )
+        if not self._startup_resume and os.getenv("SUPERQODE_CONNECT", "").strip():
             self.set_timer(1.0, self._run_startup_connect)
+
+    def _run_startup_session(self) -> None:
+        from superqode.app.herdr import sync
+
+        log = self.query_one("#log", ConversationLog)
+        if not self._handle_resume_session(self._startup_resume, log):
+            self._herdr_restore_error = "Session restore failed"
+            sync(self)
+            return
+        self._herdr_restore_error = ""
+        if self._startup_fork:
+            self._handle_fork_session("", log)
+        if self._startup_interaction_mode:
+            self._apply_interaction_mode(self._startup_interaction_mode, log)
+        sync(self)
+
+    def watch_approval_mode(self, mode: str) -> None:
+        from superqode.app.herdr import sync
+
+        sync(self)
+
+    def watch__permission_pending(self, pending: bool) -> None:
+        from superqode.app.herdr import sync
+
+        sync(self)
+
+    def watch__awaiting_agent_question(self, pending: bool) -> None:
+        from superqode.app.herdr import sync
+
+        sync(self)
 
     def _run_startup_connect(self) -> None:
         """Dispatch the connection profile named in SUPERQODE_CONNECT (--connect)."""
@@ -1358,7 +1410,13 @@ class SuperQodeApp(
 
 
 def run_textual_app():
-    SuperQodeApp().run()
+    app = SuperQodeApp()
+    try:
+        app.run()
+    finally:
+        from superqode.app.herdr import close
+
+        close(app)
 
 
 if __name__ == "__main__":

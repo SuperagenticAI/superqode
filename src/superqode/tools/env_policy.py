@@ -19,6 +19,8 @@ import os
 import re
 from typing import Dict, Optional
 
+from superqode.herdr import child_env
+
 POLICY_ENV = "SUPERQODE_SHELL_ENV_POLICY"
 ALLOW_ENV = "SUPERQODE_SHELL_ENV_ALLOW"
 
@@ -61,8 +63,10 @@ def build_shell_env(base: Optional[Dict[str, str]] = None) -> Optional[Dict[str,
 
     Returns None under the default inherit policy (callers pass env=None so
     the child inherits, preserving exact current behavior), or a filtered
-    copy under ``filter-secrets``.
+    copy under ``filter-secrets``. Herdr pane variables are always removed.
     """
+    if any(key.startswith("HERDR_") for key in (os.environ if base is None else base)):
+        base = child_env(base)
     policy = env_policy()
     if policy in ("inherit", "off", "none", ""):
         return None if base is None else dict(base)

@@ -40,6 +40,8 @@ from superqode.acp.types import (
     AvailableCommandsResponse,
 )
 
+from superqode.herdr import child_env
+
 
 async def cancel_prompt_with_grace(
     client, prompt_task: asyncio.Task, *, timeout: float = 2.0
@@ -342,7 +344,7 @@ class ACPClient:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
                 cwd=str(self.project_root),
-                env=env,
+                env=child_env(env),
                 limit=10 * 1024 * 1024,  # 10MB buffer
             )
 
@@ -1656,7 +1658,7 @@ class ACPClient:
                 stderr=asyncio.subprocess.STDOUT,
                 stdin=asyncio.subprocess.PIPE,
                 cwd=cwd or str(self.project_root),
-                env=env,
+                env=child_env(env),
             )
 
             self._terminals[terminal_id] = {

@@ -161,6 +161,7 @@ def test_integrations_and_new_harness_guides_are_top_level_tabs():
         {"🏖️ Sandboxes": "integrations/sandboxes.md"},
         {"📊 Observability": "integrations/observability.md"},
         {"📱 Remote Interfaces": "integrations/remote-interfaces.md"},
+        {"🖥️ Herdr": "integrations/herdr.md"},
         {"🧩 Dependency Compatibility": "integrations/dependency-compatibility.md"},
     ]
 

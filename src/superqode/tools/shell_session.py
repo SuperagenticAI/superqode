@@ -150,7 +150,9 @@ def _spawn(command: str, cwd: Path) -> _Session:
     from .env_policy import build_shell_env
 
     session_id = uuid.uuid4().hex[:8]
-    env = build_shell_env() or dict(os.environ)
+    env = build_shell_env()
+    if env is None:
+        env = dict(os.environ)
     env.setdefault("TERM", "dumb")  # discourage full-screen redraws in REPLs
     master_fd: Optional[int] = None
 

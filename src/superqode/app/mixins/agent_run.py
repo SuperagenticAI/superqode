@@ -43,6 +43,8 @@ from superqode.app.recipes import LocalRecipe
 from superqode.app.async_utils import _AsyncLoopThread
 from superqode.app.session_state import get_session
 
+from superqode.herdr import child_env
+
 _ACP_AGENT_SHORT_NAMES: frozenset[str] | None = None
 
 
@@ -1703,7 +1705,7 @@ class AgentRunMixin:
                 cwd=os.getcwd(),
                 text=True,
                 bufsize=1,
-                env=env,
+                env=child_env(env),
             )
 
             # Store process reference for cancellation
@@ -1850,6 +1852,7 @@ class AgentRunMixin:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                env=child_env(),
             )
             self._agent_process = process
 
@@ -3064,7 +3067,7 @@ class AgentRunMixin:
                     cwd=os.getcwd(),
                     text=True,
                     bufsize=1,
-                    env=env,
+                    env=child_env(env),
                 )
                 self._claude_process = process
                 self._claude_session_id = ""
@@ -3660,7 +3663,7 @@ class AgentRunMixin:
                 cwd=os.getcwd(),
                 text=True,
                 bufsize=1,
-                env=env,
+                env=child_env(env),
             )
 
             # Store process reference for cancellation

@@ -16,6 +16,8 @@ from __future__ import annotations
 import os
 from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 
+from superqode.herdr import child_env
+
 #: Vendor key -> environment variables that would divert that vendor onto
 #: metered API billing. Keys are matched against a connection profile id, an
 #: ACP agent short_name, or a runtime name, so callers can pass whichever they
@@ -106,7 +108,7 @@ def subscription_child_env(
     stripped = diverting_api_keys(vendor, source)
     for name in stripped:
         source.pop(name, None)
-    return source, stripped
+    return child_env(source), stripped
 
 
 _VENDOR_KEY_AFTER_AUTH = frozenset({"vendor-key-acp", "vendor-key-cli"})

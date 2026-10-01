@@ -53,6 +53,9 @@ class HelperPermissionsMixin:
             return
         if not pending:
             return
+        from superqode.app.herdr import sync
+
+        sync(self)
         card = Text()
         card.append("🔐 Tool approval needed\n\n", style=f"bold {THEME['warning']}")
         card.append(f"{len(pending)} pending item(s)\n", style=THEME["text"])

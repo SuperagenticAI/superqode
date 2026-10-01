@@ -154,3 +154,6 @@ class HelperInteractionModeMixin:
             persist=False,
             dedupe_key=f"interaction-mode:{mode}",
         )
+        from superqode.app.herdr import sync
+
+        sync(self)

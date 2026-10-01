@@ -412,6 +412,9 @@ class HelpersMixin(
             getattr(self, "_permission_pending", False)
             or getattr(self, "_awaiting_agent_question", False)
         )
+        from superqode.app.herdr import sync
+
+        sync(self)
         self._set_composer_working_state(new, interactive=interactive)
         self._sync_navigation_controls()
         if not new:
@@ -763,6 +766,9 @@ class HelpersMixin(
             self.query_one("#status-bar", ColorfulStatusBar).active_runtime = display
         except Exception:  # noqa: BLE001
             pass
+        from superqode.app.herdr import sync
+
+        sync(self)
 
     def _sync_self_contained_status(self, runtime_name: str, *, tokens: int = 0) -> None:
         """Replace stale provider state with runtime-owned identity."""

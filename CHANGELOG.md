@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.38] - 2026-10-01
+
+### Added
+
+- Run SuperQode inside Herdr with automatic working, idle, approval and question
+  status reporting, plus harness, model and session details.
+- Restore durable interactive conversations after a Herdr server restart,
+  preserving the harness, model, runtime, approval policy and plan/build mode.
+  Update restore commands when switching or forking sessions, and replace stale
+  commands with a fresh launch when the active backend cannot resume.
+- Open saved conversations with `superqode --resume <session-id>` or fork them
+  with `superqode --fork <session-id>`. Set startup decisions with
+  `--approval-mode ask|auto|deny` and `--interaction-mode build|plan`.
+- Document setup, status semantics, pane input, restoration and troubleshooting
+  in the Herdr integration guide and CLI reference. Add Herdr checks to the
+  Linux, macOS and Windows CI matrix.
+
+### Fixed
+
+- Prevent nested coding agents, SDKs and shell tools from claiming their
+  parent's Herdr pane. Keep reporting bounded and release pane authority when
+  SuperQode exits.
+
+### Known limitations
+
+- Herdr's built-in agent registry does not yet include SuperQode. Launch it
+  normally inside a pane and use pane input; `agent start --kind`,
+  `agent prompt` and `agent send-keys` require an upstream registry entry.
+- Conversation restoration requires a durable SuperQode session and Herdr
+  0.9.2 or later. Unsupported backends reopen a fresh TUI. Native lifecycle
+  and restart tests passed with Herdr 0.9.3 on macOS; Linux and Windows checks
+  are configured in CI.
+
 ## [2.4.37] - 2026-10-01
 
 ### Added

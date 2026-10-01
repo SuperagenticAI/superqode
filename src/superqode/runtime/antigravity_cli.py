@@ -18,6 +18,8 @@ from ..agent.loop import AgentConfig, AgentMessage, AgentResponse
 from .antigravity_status import MINIMUM_ANTIGRAVITY_CLI_VERSION, version_tuple
 from .errors import RuntimeNotInstalledError
 
+from superqode.herdr import child_env
+
 _MINIMUM_VERSION = MINIMUM_ANTIGRAVITY_CLI_VERSION
 _version_tuple = version_tuple
 
@@ -165,6 +167,7 @@ class AntigravityCLIRuntime:
             process = await asyncio.create_subprocess_exec(
                 *self._command(prompt),
                 cwd=str(self.config.working_directory),
+                env=child_env(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

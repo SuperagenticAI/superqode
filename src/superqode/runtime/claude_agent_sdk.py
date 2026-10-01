@@ -23,6 +23,8 @@ from ..harness.events import HarnessEvent
 from ..tools.permissions import Permission, PermissionManager
 from .errors import RuntimeNotInstalledError
 
+from superqode.herdr import sdk_env_overrides
+
 # Curated Claude model catalog — the SDK exposes no model_list(); "" defers to
 # Claude Code's configured default.
 CLAUDE_MODELS: list[tuple[str, str]] = [
@@ -224,6 +226,9 @@ class ClaudeAgentSDKRuntime:
             "cwd": str(self.config.working_directory),
             "can_use_tool": self._approval_handler,
         }
+        overrides = sdk_env_overrides()
+        if overrides:
+            opts["env"] = overrides
         if self.config.model:
             opts["model"] = self.config.model
         if self._permission_mode:

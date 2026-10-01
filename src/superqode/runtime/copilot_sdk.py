@@ -22,6 +22,8 @@ from ..harness.events import HarnessEvent
 from ..tools.permissions import Permission, PermissionManager
 from .errors import RuntimeNotInstalledError
 
+from superqode.herdr import child_env
+
 
 def _require_sdk() -> None:
     try:
@@ -280,10 +282,10 @@ class CopilotSDKRuntime:
             # tokens, so do not let them silently replace a working subscription
             # login on the SDK route. Headless callers have the unambiguous
             # COPILOT_GITHUB_TOKEN escape hatch below.
-            child_env = dict(os.environ)
-            child_env.pop("GH_TOKEN", None)
-            child_env.pop("GITHUB_TOKEN", None)
-            kwargs["env"] = child_env
+            process_env = child_env()
+            process_env.pop("GH_TOKEN", None)
+            process_env.pop("GITHUB_TOKEN", None)
+            kwargs["env"] = process_env
             # Reuse the user's installed and authenticated official CLI when it
             # exists. This avoids the SDK's first-use runtime download and keeps
             # both SuperQode routes on the same `copilot login` state.

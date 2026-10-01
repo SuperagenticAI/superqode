@@ -134,6 +134,9 @@ class EventHandlerMixin:
                 pass
 
     def on_unmount(self) -> None:
+        from superqode.app.herdr import close
+
+        close(self)
         self._stop_wave_bursts()
         self._flush_draft_recovery()
 

@@ -111,15 +111,20 @@ def _print_launch_splash() -> None:
         pass
 
 
-def run_textual_app():
+def run_textual_app(**startup):
     """Run the SuperQode Textual TUI application."""
     _print_launch_splash()
 
     # Import from parent module to avoid duplication
     from superqode.app_main import SuperQodeApp
 
-    app = SuperQodeApp()
-    app.run()
+    app = SuperQodeApp(**startup)
+    try:
+        app.run()
+    finally:
+        from superqode.app.herdr import close
+
+        close(app)
 
 
 __all__ = [

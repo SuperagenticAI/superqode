@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+
 import select
 import signal
 import struct
@@ -32,6 +33,8 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.timer import Timer
 from textual import events
+
+from superqode.herdr import child_env
 
 try:
     import pty
@@ -102,7 +105,7 @@ class PTYShell:
     ):
         self.working_directory = working_directory or Path.cwd()
         self.shell = shell or self.DEFAULT_SHELL
-        self.env = env or dict(os.environ)
+        self.env = child_env(env)
 
         # PTY state
         self._master_fd: Optional[int] = None

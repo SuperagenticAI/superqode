@@ -31,6 +31,8 @@ from ..agent.loop import AgentConfig, AgentMessage, AgentResponse
 from .devin_status import INSTALL_HINT
 from .errors import RuntimeNotInstalledError
 
+from superqode.herdr import child_env
+
 # Modes documented at https://docs.devin.ai/cli/reference/permissions
 # ``dangerous`` is the CLI's own alias for ``bypass``.
 PERMISSION_MODES = frozenset(
@@ -129,6 +131,7 @@ class DevinCLIRuntime:
                 "--format",
                 "json",
                 cwd=str(self.config.working_directory),
+                env=child_env(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -165,6 +168,7 @@ class DevinCLIRuntime:
             process = await asyncio.create_subprocess_exec(
                 *self._command(prompt),
                 cwd=str(self.config.working_directory),
+                env=child_env(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

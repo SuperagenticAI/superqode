@@ -608,7 +608,21 @@ class SuperQodeGroup(click.Group):
     default=None,
     help="Harness name or HarnessSpec YAML/JSON path (default: core)",
 )
-@click.option("--resume", help="Resume a stored session by id or unique prefix")
+@click.option(
+    "--resume", help="Resume a stored session; opens the TUI unless a headless prompt is supplied"
+)
+@click.option(
+    "--approval-mode",
+    type=click.Choice(["ask", "auto", "deny"]),
+    default=None,
+    help="Tool approval policy for the interactive TUI",
+)
+@click.option(
+    "--interaction-mode",
+    type=click.Choice(["build", "plan"]),
+    default=None,
+    help="Initial interactive task mode",
+)
 @click.option("--fork", "fork_from", help="Fork a stored session by id or unique prefix")
 @click.option(
     "--sandbox",
@@ -694,6 +708,8 @@ def cli_main(
     model_name,
     harness_path,
     resume,
+    approval_mode,
+    interaction_mode,
     fork_from,
     sandbox_backend,
     changes,
@@ -717,9 +733,7 @@ def cli_main(
 
     # A prompt/output flag means this invocation will not enter the TUI. This is
     # needed while resolving dynamic connection profiles below.
-    headless_intent = bool(
-        print_mode or output_mode == "json" or _headless_messages or ctx.args or resume or fork_from
-    )
+    headless_intent = bool(print_mode or output_mode == "json" or _headless_messages or ctx.args)
 
     # Runtime precedence: CLI flag > superqode.yaml > env > default. We resolve
     # the YAML value here (best-effort: ignore failures so a broken config
@@ -805,12 +819,15 @@ def cli_main(
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
     """
 
+    if resume and fork_from:
+        raise click.UsageError("Use either --resume or --fork, not both.")
+    if connect_name and (resume or fork_from):
+        raise click.UsageError("A saved session restores its connection; omit --connect.")
+
     messages = tuple(_headless_messages or ()) or tuple(ctx.args)
     if plan_only:
         profile = "plan"
-    headless_requested = (
-        print_mode or output_mode == "json" or bool(messages) or resume or fork_from
-    )
+    headless_requested = print_mode or output_mode == "json" or bool(messages)
 
     # If no command is provided, launch Textual app (default behavior)
     if ctx.invoked_subcommand is None or tui or messages:
@@ -935,7 +952,16 @@ def cli_main(
         _os.environ["SUPERQODE_MODEL"] = model_name
         from superqode.app import run_textual_app
 
-        run_textual_app()
+        startup = {}
+        if resume:
+            startup["resume"] = resume
+        if fork_from:
+            startup["fork_from"] = fork_from
+        if approval_mode is not None:
+            startup["approval_mode"] = approval_mode
+        if interaction_mode is not None:
+            startup["interaction_mode"] = interaction_mode
+        run_textual_app(**startup)
         return
 
 

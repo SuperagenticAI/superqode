@@ -23,6 +23,8 @@ from .base import AgentTool, AgentToolResult, ToolUpdateCallback
 from .paths import json_schema
 from .truncate import DEFAULT_MAX_BYTES, TruncationResult, format_size, truncate_tail
 
+from superqode.herdr import child_env
+
 #: Minimum gap between streamed output updates, so a chatty command does not
 #: flood the event stream.
 UPDATE_THROTTLE_SECONDS = 0.1
@@ -147,7 +149,7 @@ def create_bash_tool(
         if on_update is not None:
             on_update(AgentToolResult(content=[], details=None))
 
-        env = {**os.environ, **(session_env or {})}
+        env = child_env({**os.environ, **(session_env or {})})
         if os.name != "posix" and shell == DEFAULT_POSIX_SHELL:
             # pragma: no cover - Windows has no /bin/bash and no -c flag. Only
             # the untouched default is redirected, so an explicitly passed shell

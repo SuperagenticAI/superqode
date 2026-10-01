@@ -59,6 +59,8 @@ from acp.schema import (
     WriteTextFileResponse,
 )
 
+from superqode.herdr import child_env
+
 
 class SuperQodeACPClient(Client):
     """ACP client implementation for SuperQode."""
@@ -191,7 +193,7 @@ class ACPAgentManager:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 cwd=cwd or os.getcwd(),
-                env={**os.environ, **extra_env} if extra_env else None,
+                env=child_env({**os.environ, **(extra_env or {})}),
             )
 
             if proc.stdin is None or proc.stdout is None:

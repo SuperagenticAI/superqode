@@ -29,6 +29,7 @@ readiness, provenance, setup guidance, and project-owned HarnessSpecs.
 | [Sandboxes](sandboxes.md) | Local OS isolation, containers, E2B, Daytona, Modal, Vercel, Runloop, AgentCore, and LangSmith |
 | [Observability](observability.md) | OpenTelemetry, MLflow, LangSmith, Logfire, and Arize Phoenix |
 | [Remote interfaces](remote-interfaces.md) | Telegram, Slack, Discord, and the browser-hosted TUI |
+| [Herdr](herdr.md) | Terminal panes, lifecycle status, and approval notifications |
 | [Dependency compatibility](dependency-compatibility.md) | Optional-extra conflicts and environment isolation requirements |
 
 ## Integration status

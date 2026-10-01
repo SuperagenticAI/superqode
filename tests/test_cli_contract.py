@@ -146,7 +146,8 @@ EXPECTED_COMMAND_COUNT = 298
 # alternatives. Only the registry-derived --connect choices change.
 # Gauge gate adds --require-ship to enforce recorded approval and L2 readiness.
 # No command is added or removed.
-EXPECTED_HELP_TREE_SHA256 = "6d9c8b1a3b29b878a4fe0c597355f37c7245da0d5864767bc795c1514b780d65"
+# Rebaselined for interactive resume/fork and startup approval/interaction options.
+EXPECTED_HELP_TREE_SHA256 = "924133e9e1d889830df4cf8ee7ac4d5020f0f11ed38940b124f4112ab163f050"
 
 
 def _render_help_tree() -> tuple[int, str]:

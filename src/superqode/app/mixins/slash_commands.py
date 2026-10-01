@@ -1914,6 +1914,10 @@ class SlashCommandMixin:
             guidance="Other sessions remain saved.",
             dedupe_key=f"session-resume:{resolved_id}",
         )
+        from superqode.app.herdr import sync
+
+        self._herdr_restore_error = ""
+        sync(self)
         return True
 
     def _handle_fork_session(self, args: str, log: ConversationLog):
@@ -1937,6 +1941,9 @@ class SlashCommandMixin:
             log=log,
             dedupe_key=f"session-fork:{fork_id}",
         )
+        from superqode.app.herdr import sync
+
+        sync(self)
 
     def _handle_compact(self, log: ConversationLog):
         """Compact or enable compaction for the active local provider session."""

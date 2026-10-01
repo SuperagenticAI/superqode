@@ -73,6 +73,10 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `--profile` | superqode | Select a legacy task profile such as `plan` or `review` |
 | `--provider` | superqode | Override provider for headless mode |
 | `--model` | superqode | Override model for headless mode |
+| `--resume` | superqode | Reopen a stored session interactively, or continue it with a headless prompt |
+| `--fork` | superqode | Fork a stored session interactively, or continue the fork with a headless prompt |
+| `--approval-mode` | superqode | Set the startup TUI approval policy: `ask`, `auto`, or `deny` |
+| `--interaction-mode` | superqode | Set the startup TUI interaction mode: `build` or `plan` |
 | `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
 
 ### Headless SuperQode

@@ -23,6 +23,8 @@ from ..harness.events import HarnessEvent
 from ..tools.permissions import Permission, PermissionManager
 from .errors import RuntimeNotInstalledError
 
+from superqode.herdr import sdk_env_overrides
+
 
 def _require_sdk():
     try:
@@ -349,6 +351,9 @@ class CodexSDKRuntime:
             "client_title": "SuperQode Codex SDK Runtime",
             "client_version": self._sdk_client_version(),
         }
+        overrides = sdk_env_overrides()
+        if overrides:
+            kwargs["env"] = overrides
         if config_overrides:
             kwargs["config_overrides"] = config_overrides
         prefer_local_setting = os.getenv("SUPERQODE_CODEX_PREFER_LOCAL_CLI", "1").strip().lower()

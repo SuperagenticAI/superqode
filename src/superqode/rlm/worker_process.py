@@ -16,6 +16,8 @@ from .identity import SandboxIdentity, process_alive
 from .sandbox import RLMSandboxConfig
 from .supervisor import AgentRecord, AgentSupervisor
 
+from superqode.herdr import child_env
+
 
 async def run_durable_child(
     record: AgentRecord,
@@ -70,6 +72,7 @@ async def run_durable_child(
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
+                env=child_env(),
                 start_new_session=True,
                 close_fds=True,
             )

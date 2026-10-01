@@ -31,6 +31,8 @@ from superqode.harness.events import HarnessEvent
 from .config import agent_dir
 from .identity import process_alive
 
+from superqode.herdr import child_env
+
 ROOT_RUNTIME_PROTOCOL = "1.0"
 _TERMINAL_RECORD = "runtime.command_completed"
 _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -157,6 +159,7 @@ class RootRuntimeClient:
                     stdin=subprocess.DEVNULL,
                     stdout=log,
                     stderr=subprocess.STDOUT,
+                    env=child_env(),
                     start_new_session=True,
                     close_fds=True,
                 )
