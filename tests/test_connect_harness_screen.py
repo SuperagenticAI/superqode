@@ -1272,6 +1272,9 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
         assert profile.connector == "plan-guidance"
         assert "Partner integration in progress" in profile.label
         assert "Partner integration in progress" in profile.unavailable_hint
+        assert "Subscription connection is not available yet." in profile.unavailable_hint
+        assert "adapter" not in profile.unavailable_hint
+        assert "credentials" not in profile.unavailable_hint
         assert not profile.available
         assert "claude" not in profile.label.casefold()
         assert "anthropic" not in profile.label.casefold()

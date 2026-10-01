@@ -230,7 +230,6 @@ class PermissionManager:
             r"rm\s+-[^-]*r",
             r"sudo\s+",
             r"chmod\s+777",
-            r">\s*/dev/",
             r"mkfs\.",
             r"dd\s+if=",
             r":(){ :|:& };:",  # Fork bomb

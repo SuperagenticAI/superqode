@@ -9,6 +9,73 @@ from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("code", list(LiteLLMGateway._QUOTA_ERROR_HINTS))
+async def test_permanent_quota_errors_are_not_retried(monkeypatch, code):
+    from superqode.providers.gateway.base import RateLimitError
+
+    class ProviderQuotaError(Exception):
+        body = {"error": {"code": code, "type": "insufficient_quota"}}
+
+    class ProviderAuthError(Exception):
+        pass
+
+    error = ProviderQuotaError("API quota unavailable")
+    gateway = LiteLLMGateway()
+    attempts = []
+
+    async def reject(**kwargs):
+        attempts.append(kwargs)
+        raise error
+
+    fake_litellm = SimpleNamespace(
+        acompletion=reject,
+        RateLimitError=ProviderQuotaError,
+        AuthenticationError=ProviderAuthError,
+    )
+    monkeypatch.setattr(gateway, "_get_litellm", lambda: fake_litellm)
+    with pytest.raises(ProviderQuotaError):
+        await gateway._acompletion_with_retry({"model": "openai/gpt-4.1"})
+    assert len(attempts) == 1
+    with pytest.raises(RateLimitError) as caught:
+        gateway._handle_litellm_error(error, "openai", "gpt-4.1")
+    assert caught.value.error_type == code
+    assert code in str(caught.value)
+    assert "Retrying will not restore access" in str(caught.value)
+
+
+def test_quota_detection_handles_adapter_message_and_response_body():
+    gateway = LiteLLMGateway()
+    assert not gateway._is_transient_overload_error(
+        RuntimeError("OpenAIException 429 insufficient_quota")
+    )
+    error = RuntimeError("429")
+    error.response = SimpleNamespace(
+        json=lambda: {"error": {"code": "project_spend_limit_exceeded"}}
+    )
+    assert gateway._quota_error_code(error) == "project_spend_limit_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_temporary_rate_limit_still_retries(monkeypatch):
+    class ProviderRateLimitError(Exception):
+        body = {"error": {"code": "rate_limit_exceeded", "type": "rate_limit_error"}}
+
+    gateway = LiteLLMGateway()
+    attempts = []
+
+    async def transient(**kwargs):
+        attempts.append(kwargs)
+        if len(attempts) == 1:
+            raise ProviderRateLimitError("Too many requests")
+        return "recovered"
+
+    monkeypatch.setattr(gateway, "_get_litellm", lambda: SimpleNamespace(acompletion=transient))
+    monkeypatch.setattr(gateway, "_rate_limit_delay", lambda *args: 0)
+    assert await gateway._acompletion_with_retry({"model": "openai/gpt-4.1"}) == "recovered"
+    assert len(attempts) == 2
+
+
+@pytest.mark.asyncio
 async def test_litellm_completion_skips_optional_proxy_mcp_handler(monkeypatch):
     """Tool calls must not require FastAPI in a standard SuperQode install."""
     gateway = LiteLLMGateway()

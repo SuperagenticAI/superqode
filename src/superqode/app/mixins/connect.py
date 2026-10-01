@@ -1898,7 +1898,6 @@ class ConnectMixin:
             self._reset_connect_selection_states()
             self._open_connect_screen(log)
             log.add_info(profile.unavailable_hint)
-            log.add_info("Your current harness and model have been kept.")
             return
         self._connection_retry_target = ("profile", (profile.id,))
         self._connection_attempt_state = "Setup"

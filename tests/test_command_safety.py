@@ -145,3 +145,42 @@ def test_permission_manager_auto_allows_safe_and_denies_destructive():
     assert manager.check_permission("bash", {"command": "git commit -m x"}) == Permission.ASK
     # ... and destructive commands are blocked outright.
     assert manager.check_permission("bash", {"command": "rm -rf /"}) == Permission.DENY
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls README* 2>/dev/null",
+        "ls README* 2>>/dev/null",
+        "git status >/dev/null",
+        'ls README* 2>"/dev/null"',
+        'ls -la && echo "---" && find . -maxdepth 2 -type d -not -path \'*/.*\' | head -80 && echo "---README---" && ls -la README* 2>/dev/null; ls *.md 2>/dev/null | head -20',
+    ],
+)
+def test_output_suppression_remains_read_only(command):
+    from superqode.tools.permissions import Permission, PermissionManager
+
+    assert classify_command(command) == CommandSafety.SAFE
+    assert PermissionManager().check_permission("bash", {"command": command}) == Permission.ALLOW
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x >/dev/disk0",
+        "echo x >'/dev/sda'",
+        "echo x >/dev/random",
+        "echo x >/dev/null.log",
+        "echo x >/dev/null/disk",
+    ],
+)
+def test_output_suppression_exception_cannot_bypass_device_guard(command):
+    from superqode.tools.permissions import Permission, PermissionManager
+
+    assert classify_command(command) == CommandSafety.DESTRUCTIVE
+    assert PermissionManager().check_permission("bash", {"command": command}) == Permission.DENY
+
+
+def test_null_suppression_does_not_hide_other_writes():
+    assert classify_command("ls 2>/dev/null >listing.txt") == CommandSafety.WRITE
+    assert classify_command("ls 2>/dev/null; rm -rf project") == CommandSafety.DESTRUCTIVE

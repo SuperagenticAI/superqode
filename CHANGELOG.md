@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.42] - 2026-10-02
+
+### Fixed
+
+- Distinguish exhausted API quota from temporary rate limits, skip futile quota
+  retries, and avoid repeating rate-limited streams as non-streaming requests.
+- Route GPT-6.1 Sol and GPT-6 Astra through OpenAI Responses for Core tool calls,
+  preserve native streaming and reasoning effort with older LiteLLM catalogs,
+  omit unsupported sampling controls, and report invalid requests immediately
+  instead of repeating them without streaming.
+- Allow read-only shell commands to discard output through `/dev/null` while
+  continuing to block device writes and require approval for file writes.
+- Keep experimental subscription guidance concise and remove internal adapter
+  and testing details from the connection picker.
+- Explain that a denied tool call does not imply all repository access is blocked.
+
 ## [2.4.41] - 2026-10-01
 
 ### Fixed

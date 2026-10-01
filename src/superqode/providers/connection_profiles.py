@@ -697,9 +697,7 @@ _PLAN_PROFILES = [
         detect=lambda: False,
         unavailable_hint=(
             f"{profile.label.split(' (')[0].split(' —')[0]}: Partner integration in progress. "
-            "Subscription access is not enabled through this experimental entry. "
-            "Provider access, adapter implementation and live testing must be confirmed "
-            "before it can connect. No credentials are requested or API-credit fallback used."
+            "Subscription connection is not available yet."
         ),
     )
     for profile in _PLAN_PROFILES
@@ -1634,7 +1632,7 @@ CONNECT_MENU_TITLES = {
     ),
     CONNECT_MENU_PLAN: (
         "Use your subscription (Experimental)",
-        "Keeps your selected SuperQode harness. Partner integration in progress for all providers. Information only; no subscription connection is enabled here.",
+        "Partner integration in progress. Subscription connections are not available yet.",
     ),
     CONNECT_MENU_BUILD: (
         "Build your own harness (Advanced)",

@@ -203,7 +203,7 @@ _DESTRUCTIVE_PATTERNS = [
     r"\bmkfs\.",
     r"\bdd\b[^|]*\bof=",
     r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",  # fork bomb
-    r">\s*/dev/(sd|nvme|disk|hd)",
+    r">\s*/dev/(?!null(?:\s|[;&|)]|$))",
     r"\bchmod\s+(-R\s+)?0?777\b",
     r"\bchown\s+-R\b",
     r"\b(shutdown|reboot|halt|poweroff)\b",
@@ -286,8 +286,10 @@ def _classify_segment(segment: str) -> CommandSafety:
     if not cmd:
         return CommandSafety.WRITE
 
-    # Redirection to a file in this segment implies a write at minimum.
-    has_file_redirect = bool(re.search(r">>?\s*[^&\s]", segment))
+    # Discarding output does not modify a file. Other destinations still
+    # require write permission, including lookalikes such as /dev/null.log.
+    targets = re.findall(r">>?\s*([^&\s]+)", segment)
+    has_file_redirect = any(target != "/dev/null" for target in targets)
 
     first_arg = next((a for a in args if not a.startswith("-")), "")
 

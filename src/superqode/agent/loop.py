@@ -36,7 +36,15 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from ..tools.permissions import Permission, PermissionConfig, PermissionManager
-from ..providers.gateway.base import GatewayInterface, Message, ToolDefinition
+from ..providers.gateway.base import (
+    AuthenticationError,
+    GatewayInterface,
+    InvalidRequestError,
+    Message,
+    ModelNotFoundError,
+    RateLimitError,
+    ToolDefinition,
+)
 from .system_prompts import (
     SystemPromptLevel,
     get_system_prompt,
@@ -1584,7 +1592,10 @@ class AgentLoop:
             return ToolResult(
                 success=False,
                 output="",
-                error=f"Permission denied for tool: {name}",
+                error=(
+                    f"Permission policy blocked this {name} tool call. "
+                    "This does not mean repository access is unavailable; try an allowed read tool or a simpler read-only command."
+                ),
                 metadata={"permission": "deny", "tool": name},
             )
 
@@ -3268,6 +3279,13 @@ class AgentLoop:
                     thinking_buffer = ""
 
             except Exception as e:
+                if isinstance(
+                    e,
+                    (InvalidRequestError, AuthenticationError, ModelNotFoundError, RateLimitError),
+                ):
+                    self.last_stream_error = str(e)
+                    yield f"\n\n[Error: {type(e).__name__}] {e}"
+                    return
                 # Flush thinking buffer before handling error
                 if thinking_buffer.strip() and self.on_thinking:
                     await self.on_thinking(thinking_buffer.strip())

@@ -98,6 +98,41 @@ def _loop(gateway: ScriptedGateway, *, require_confirmation: bool = False) -> Ag
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_name",
+    ["InvalidRequestError", "AuthenticationError", "ModelNotFoundError", "RateLimitError"],
+)
+async def test_streaming_terminal_provider_error_is_not_repeated(error_name):
+    from superqode.providers.gateway import base
+
+    class RejectedGateway(ScriptedGateway):
+        async def stream_completion(self, *args, **kwargs):
+            raise getattr(base, error_name)("request rejected")
+            yield  # Keep the async iterator interface.
+
+    gateway = RejectedGateway([])
+    loop = _loop(gateway)
+    output = "".join([chunk async for chunk in loop.run_streaming("read README")])
+    assert error_name in output
+    assert loop.last_stream_error == "request rejected"
+    assert gateway.calls == []  # No second, non-streaming provider request.
+
+
+@pytest.mark.asyncio
+async def test_streaming_transport_error_still_uses_nonstreaming_fallback():
+    class InterruptedGateway(ScriptedGateway):
+        async def stream_completion(self, *args, **kwargs):
+            raise ConnectionError("stream disconnected")
+            yield
+
+    gateway = InterruptedGateway([GatewayResponse(content="Recovered answer")])
+    loop = _loop(gateway)
+    output = "".join([chunk async for chunk in loop.run_streaming("hi")])
+    assert output == "Recovered answer"
+    assert len(gateway.calls) == 1
+
+
 def test_agent_loop_loads_parent_and_local_project_instructions(tmp_path):
     root = tmp_path / "repo"
     nested = root / "src" / "pkg"
@@ -139,7 +174,8 @@ async def test_agent_loop_blocks_dangerous_shell_commands_before_execution():
 
     assert result.content == "saw denial"
     assert result.tool_calls_made == 1
-    assert "Permission denied for tool: bash" in result.messages[-1].content
+    assert "Permission policy blocked this bash tool call" in result.messages[-1].content
+    assert "try an allowed read tool" in result.messages[-1].content
 
 
 @pytest.mark.asyncio

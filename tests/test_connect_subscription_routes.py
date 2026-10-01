@@ -49,7 +49,8 @@ def test_unsupported_native_plan_preserves_current_model(profile):
     assert app.current_harness == "pipy"
     assert app.current_model == "existing-model"
     assert app.calls == []
-    assert any("kept" in message for message in log.messages)
+    assert len(log.messages) == 1
+    assert not any("have been kept" in message for message in log.messages)
 
 
 @pytest.mark.parametrize("credential", [None, "ordinary-api-key"])

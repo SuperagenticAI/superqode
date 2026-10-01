@@ -221,6 +221,8 @@ class LiteLLMGateway(GatewayInterface):
             # OpenAI models should always be provider-qualified for LiteLLM
             # to avoid "LLM Provider NOT provided" on newer model IDs.
             if provider == "openai":
+                if self._requires_openai_responses(provider, model):
+                    return f"openai/responses/{model.split('/')[-1]}"
                 if model.startswith("openai/"):
                     return model
                 return f"openai/{model}"
@@ -233,6 +235,38 @@ class LiteLLMGateway(GatewayInterface):
 
         # Unknown provider - try as-is
         return model
+
+    @staticmethod
+    def _requires_openai_responses(provider: str, model: str) -> bool:
+        """These models require Responses for the agent's function calls."""
+        model_id = model.split("/")[-1]
+        return provider == "openai" and any(
+            model_id == name or model_id.startswith(f"{name}-")
+            for name in ("gpt-6.1-sol", "gpt-6-astra")
+        )
+
+    @classmethod
+    def _apply_openai_responses_shaping(
+        cls, provider: str, model: str, request_kwargs: Dict[str, Any]
+    ) -> None:
+        if not cls._requires_openai_responses(provider, model):
+            return
+        # These models always reason and reject sampling controls.
+        for key in ("temperature", "top_p", "top_logprobs", "logprobs"):
+            request_kwargs.pop(key, None)
+        extra_body = dict(request_kwargs.get("extra_body") or {})
+        if request_kwargs.get("stream"):
+            # Preserve streaming through LiteLLM's Chat-to-Responses bridge.
+            extra_body["stream"] = True
+        effort = request_kwargs.pop("reasoning_effort", None)
+        if effort is not None:
+            if effort in ("none", "minimal", "off"):
+                effort = "low"
+            # Older LiteLLM model tables drop reasoning_effort for new IDs.
+            # Its Responses bridge accepts the native shape through extra_body.
+            extra_body["reasoning"] = {"effort": effort}
+        if extra_body:
+            request_kwargs["extra_body"] = extra_body
 
     def _get_model_candidates(self, provider: str, model: str) -> List[str]:
         """Return model candidates to try in order for provider/model pair."""
@@ -287,9 +321,43 @@ class LiteLLMGateway(GatewayInterface):
     # the error instead of silently hanging an interactive session.
     _RATE_LIMIT_MAX_HONORED_RETRY_AFTER = 60.0
 
-    @staticmethod
-    def _is_transient_overload_error(error: Exception) -> bool:
+    _QUOTA_ERROR_HINTS = {
+        "insufficient_quota": "Check API credits and the usage limits for this key's project and organization.",
+        "credit_balance_exhausted": "The API credit balance is exhausted. Check API billing.",
+        "organization_usage_limit_exceeded": "The organization API usage limit was reached. Check its limits.",
+        "organization_spend_limit_exceeded": "The organization API spend limit was reached. Check its limits.",
+        "project_spend_limit_exceeded": "The project API spend limit was reached. Check its limits.",
+    }
+
+    @classmethod
+    def _quota_error_code(cls, error: Exception) -> Optional[str]:
+        """Identify permanent quota failures without displaying raw response data."""
+        body = getattr(error, "body", None)
+        if not isinstance(body, dict):
+            response = getattr(error, "response", None)
+            try:
+                body = response.json() if response is not None else None
+            except Exception:
+                body = None
+        if isinstance(body, dict):
+            details = body.get("error", body)
+            if isinstance(details, dict):
+                for field in ("code", "type"):
+                    code = details.get(field)
+                    if isinstance(code, str) and code in cls._QUOTA_ERROR_HINTS:
+                        return code
+        # Some LiteLLM adapters retain the provider code only in the message.
+        message = str(error).lower()
+        for code in cls._QUOTA_ERROR_HINTS:
+            if code in message:
+                return code
+        return None
+
+    @classmethod
+    def _is_transient_overload_error(cls, error: Exception) -> bool:
         """Rate limits / momentary overload: the same request can succeed shortly."""
+        if cls._quota_error_code(error) is not None:
+            return False
         if "ratelimit" in type(error).__name__.lower():
             return True
         msg = str(error).lower()
@@ -368,6 +436,25 @@ class LiteLLMGateway(GatewayInterface):
         # sends ordinary model tool definitions here, so bypass that handler.
         request_kwargs.setdefault("_skip_mcp_handler", True)
         litellm = self._get_litellm()
+        routed_model = request_kwargs.get("model", "")
+        if routed_model.startswith("openai/responses/") and self._requires_openai_responses(
+            "openai", routed_model
+        ):
+            # Unknown models are fake-streamed by older LiteLLM catalogs.
+            # Register capabilities only, retaining any existing pricing metadata.
+            model_id = routed_model.split("/")[-1]
+            model_key = f"openai/{model_id}"
+            info = dict(litellm.model_cost.get(model_key, litellm.model_cost.get(model_id, {})))
+            capabilities = dict(
+                llm_provider="openai",
+                mode="responses",
+                supports_native_streaming=True,
+                supports_function_calling=True,
+                supports_reasoning=True,
+            )
+            if any(info.get(key) != value for key, value in capabilities.items()):
+                info.update(capabilities)
+                litellm.register_model({model_key: info})
         retries = self._rate_limit_retries()
         attempt = 0
         while True:
@@ -713,6 +800,8 @@ class LiteLLMGateway(GatewayInterface):
             return {"reasoning_effort": "max"}
 
         model_lower = (model or "").lower()
+        if self._requires_openai_responses(provider, model):
+            return {"reasoning_effort": "low" if level == "off" else level}
         is_anthropic_shape = (
             provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
         )
@@ -1148,12 +1237,23 @@ class LiteLLMGateway(GatewayInterface):
             ) from e
 
         if isinstance(e, litellm.RateLimitError):
+            quota_code = self._quota_error_code(e)
+            if quota_code:
+                message = (
+                    f"API quota blocked '{provider}' ({quota_code}). "
+                    f"{self._QUOTA_ERROR_HINTS[quota_code]} Retrying will not restore access."
+                )
+            else:
+                message = (
+                    f"Rate limit reached for '{provider}/{model}'. "
+                    "Wait before retrying and check this model's API request/token limits."
+                )
             raise RateLimitError(
-                f"Rate limit exceeded for provider '{provider}'. "
-                "Wait and retry, or upgrade your API plan.",
+                message,
                 provider=provider,
                 model=model,
-                error_type="rate_limit",
+                error_type=quota_code or "rate_limit",
+                status_code=429,
             ) from e
 
         if isinstance(e, litellm.NotFoundError):
@@ -2422,6 +2522,7 @@ class LiteLLMGateway(GatewayInterface):
         # Applied after kwargs merge so user overrides via extra kwargs win.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
         self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
+        self._apply_openai_responses_shaping(provider, model, request_kwargs)
 
         try:
             model_candidates = self._get_model_candidates(provider, model)
@@ -2706,6 +2807,7 @@ class LiteLLMGateway(GatewayInterface):
         # Local-model tuning. Same rationale as in chat_completion.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
         self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
+        self._apply_openai_responses_shaping(provider, model, request_kwargs)
 
         try:
             model_candidates = self._get_model_candidates(provider, model)
