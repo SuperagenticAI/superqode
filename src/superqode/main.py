@@ -751,6 +751,7 @@ def cli_main(
         yaml_runtime = None
         yaml_harness = None
     effective_runtime = runtime_name or yaml_runtime
+    requested_billing = "agent-managed"
     # A connection profile (e.g. --connect codex) can imply a runtime backend.
     if connect_name:
         try:
@@ -761,13 +762,20 @@ def cli_main(
             _profile = None
         if _profile is not None:
             if headless_intent and (
-                _profile.menu == "plan"
-                or _profile.connector in {"plan-agent", "plan-guidance", "harness-account"}
+                _profile.id.startswith("plan-")
+                or _profile.connector
+                in {"plan-picker", "plan-agent", "plan-guidance", "harness-account"}
             ):
                 raise click.UsageError(
                     f"--connect {_profile.id} is an interactive account/setup route. "
                     "Use the TUI, or choose an explicit --runtime/--provider for headless use."
                 )
+            if headless_intent and _profile.auth_mode == "subscription":
+                requested_billing = "subscription"
+                if runtime_name and runtime_name != _profile.runtime:
+                    raise click.UsageError(
+                        "A subscription connection cannot override its runtime. Choose an explicit runtime without --connect instead."
+                    )
             # Runtime-connector profiles (Codex) map to a runtime backend; an
             # explicit --runtime still wins.
             if _profile.connector == "runtime" and _profile.runtime and not runtime_name:
@@ -869,6 +877,11 @@ def cli_main(
                         fork_from=fork_from,
                         sandbox_backend=sandbox_backend,
                         runtime=effective_runtime,
+                        **(
+                            {"billing_requested": requested_billing}
+                            if requested_billing == "subscription"
+                            else {}
+                        ),
                         output_schema=output_schema,
                         rubric=rubric_text,
                     )

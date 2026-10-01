@@ -427,3 +427,21 @@ async def test_pure_mode_streams_a_failed_turn_to_the_user(fake_copilot_sdk, tmp
             type="turn_complete", data={"status": status, "error": None, "usage": {}}
         )
         assert pure._handle_runtime_harness_event(quiet) == ""
+
+
+@pytest.mark.asyncio
+async def test_copilot_identity_cannot_enable_provider_override(
+    fake_copilot_sdk, tmp_path, monkeypatch
+):
+    from superqode.runtime.copilot_sdk import CopilotSDKRuntime
+    from superqode.providers.subscription_env import VENDOR_API_KEY_ENVS
+
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "explicit-identity")
+    for key in VENDOR_API_KEY_ENVS["copilot"]:
+        monkeypatch.setenv(key, "redirect-value")
+    runtime = CopilotSDKRuntime(config=_config(tmp_path))
+    await runtime._ensure_started()
+    launch = _FakeClient.instances[-1].kwargs
+    assert launch["github_token"] == "explicit-identity"
+    assert all(key not in launch["env"] for key in VENDOR_API_KEY_ENVS["copilot"])
+    await runtime.aclose()

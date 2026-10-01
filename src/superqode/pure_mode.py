@@ -455,6 +455,10 @@ class PureMode:
         )
 
         runtime_kwargs: dict[str, Any] = {}
+        if self.runtime_name == "codex-sdk":
+            runtime_kwargs["billing_requested"] = getattr(
+                self, "billing_requested", "agent-managed"
+            )
         if self.runtime_name in (
             "codex-sdk",
             "copilot-sdk",

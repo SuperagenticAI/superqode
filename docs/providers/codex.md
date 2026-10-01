@@ -37,7 +37,18 @@ superqode --connect codex --print "review the current repository"
 ```
 
 SuperQode selects the `codex-sdk` runtime automatically. The profile is ready
-when the `openai_codex` package is installed and `~/.codex/auth.json` exists.
+when the `openai_codex` package is installed. This indicates that connection
+can be attempted, not that plan access is verified. The SDK app-server checks
+actual ChatGPT authentication before creating a thread and before each prompt.
+An API-key login, signed-out account or unverifiable provider stops the request;
+SuperQode does not switch this route to API billing. Account files, OS keyring
+storage and custom `CODEX_HOME` are handled by Codex itself.
+
+`:runtime codex-sdk` selects the runtime with agent-managed authentication;
+its billing depends on the user's Codex configuration. Use `:connect codex`
+for the guarded ChatGPT account route, or BYOK for explicit API billing.
+The connection panel shows verification pending, then the reported ChatGPT
+plan when available. A reported plan is not a guarantee of remaining quota.
 
 The runtime already drives the official Codex app-server lifecycle through the
 Python SDK. For applications that supply their own experimental app-server
@@ -95,7 +106,7 @@ Check the SDK package and local login:
 
 ```bash
 codex --version
-test -f ~/.codex/auth.json
+codex login status
 superqode runtime doctor codex-sdk
 ```
 

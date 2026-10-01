@@ -165,6 +165,7 @@ async def run_headless(
     runtime: Optional[str] = None,
     output_schema: Optional[Path] = None,
     rubric: Optional[str] = None,
+    billing_requested: str = "agent-managed",
 ) -> AgentResponse:
     """Run a single non-interactive SuperQode request.
 
@@ -329,6 +330,8 @@ async def run_headless(
 
     runtime_name = resolve_runtime_name(cli=runtime)
     runtime_kwargs: dict[str, Any] = {}
+    if runtime_name == "codex-sdk":
+        runtime_kwargs["billing_requested"] = billing_requested
     if runtime_name == "builtin":
         runtime_kwargs["hooks"] = extension_runtime.build_hooks()
     runtime_obj = create_runtime(

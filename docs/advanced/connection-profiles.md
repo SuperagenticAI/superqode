@@ -86,7 +86,7 @@ define the external-agent setup requirements. Native MiniMax routing follows
 its [Token Plan guidance](https://platform.minimax.io/subscribe/token-plan) and
 [OpenAI-compatible API](https://platform.minimax.io/docs/api-reference/text-openai-api).
 
-OpenCode, fast-agent, Pi and omp also offer an **agent subscription / account**
+OpenCode, fast-agent, Pi and omp also offer an **configured agent account**
 row after selecting their Open harness. Their own configuration supplies the
 account and model. For fast-agent, run `fast-agent auth provider login codex`;
 SuperQode launches the account route with `FAST_AGENT_MODEL=codexplan`, including
@@ -99,11 +99,34 @@ native model run, supply the provider and model explicitly, for example
 The same plan credential is required; an interactive shortcut cannot silently
 fall through to a default API provider.
 
+## Billing and reconnect status
+
+ACP is a transport, not an authentication or billing method. Pi, OpenCode and
+omp account connections use the agent's configured provider; SuperQode shows
+billing as **agent-managed, unverified**. Installing an agent or finding a
+credential does not verify a subscription plan. Fast-agent's account route
+keeps the explicit `codexplan` configuration.
+
+Saved connections store transport, authentication, requested billing and
+verification separately. Old `auth_mode="acp"` values become agent-managed,
+with billing unverified. Verification is checked again on reconnect. Runtime
+and model choices are preserved, and an unsupported saved route stops instead
+of reconnecting to an older BYOK route.
+
+Copilot account launches ignore provider overrides such as
+`COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL` and
+`COPILOT_PROVIDERS_CONFIG`. An explicit `COPILOT_GITHUB_TOKEN` supplies identity;
+it does not opt into BYOK. Account quota and billing remain unverified when
+GitHub does not expose them. Expired login and quota errors are returned to the
+user without a SuperQode API-billing fallback.
+
 ## Vendor agents (`:connect subscriptions`)
 
 ### Codex Subscription (connector: runtime, runtime: codex-sdk)
 
-Self-contained: brings its own model and auth via Codex login. Requires openai_codex package and ~/.codex/auth.json. Auto-connects on selection.
+Self-contained: brings its own model and auth via Codex login. Requires the
+`openai_codex` package; live ChatGPT authentication is checked on connection
+and before each prompt. Credential-file existence does not verify access.
 
 ### Claude Agent SDK (API key)
 

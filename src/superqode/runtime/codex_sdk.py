@@ -265,6 +265,10 @@ def _start_stream_reader(stream, loop, queue: asyncio.Queue) -> threading.Thread
     return thread
 
 
+class _SubscriptionVerificationError(RuntimeError):
+    """A failed billing check must not trigger another app-server route."""
+
+
 class CodexSDKRuntime:
     """Official Codex Python SDK-backed runtime."""
 
@@ -277,6 +281,7 @@ class CodexSDKRuntime:
         permission_manager: PermissionManager | None = None,
         approval_callback: Callable[[str, dict[str, Any]], bool] | None = None,
         sandbox_backend: str | None = None,
+        billing_requested: str = "agent-managed",
         **_unused: Any,
     ) -> None:
         _require_sdk()
@@ -284,6 +289,11 @@ class CodexSDKRuntime:
             raise ValueError("CodexSDKRuntime requires 'config'")
 
         self.config = config
+        self.billing_requested = billing_requested
+        self.subscription_status: dict[str, str] = {
+            "auth_method": "unknown",
+            "billing_verified": "unknown",
+        }
         self.session_id = config.session_id or f"codex-{uuid.uuid4().hex[:8]}"
         self.sandbox_backend = sandbox_backend
         self._uses_default_permission_manager = permission_manager is None
@@ -352,6 +362,17 @@ class CodexSDKRuntime:
             "client_version": self._sdk_client_version(),
         }
         overrides = sdk_env_overrides()
+        if self.billing_requested == "subscription":
+            from superqode.providers.subscription_env import VENDOR_API_KEY_ENVS
+
+            # The SDK overlays os.environ, rather than replacing it. Empty
+            # values mask inherited keys without mutating the parent process.
+            overrides = {**overrides, **{key: "" for key in VENDOR_API_KEY_ENVS["codex"]}}
+            config_overrides = (
+                *config_overrides,
+                'forced_login_method="chatgpt"',
+                'model_provider="openai"',
+            )
         if overrides:
             kwargs["env"] = overrides
         if config_overrides:
@@ -442,7 +463,9 @@ class CodexSDKRuntime:
         params: dict[str, Any] = {"cwd": str(self.config.working_directory)}
         if self.config.model:
             params["model"] = self.config.model
-        if self.config.provider and self.config.provider != "openai":
+        if self.billing_requested == "subscription":
+            params["modelProvider"] = "openai"
+        elif self.config.provider and self.config.provider != "openai":
             params["modelProvider"] = self.config.provider
         if self.config.custom_system_prompt:
             params["developerInstructions"] = self.config.custom_system_prompt
@@ -457,11 +480,68 @@ class CodexSDKRuntime:
         try:
             client.start()
             init = client.initialize()
+            self._verify_subscription_account(client)
             started = client.thread_start(thread_params)
+            self._verify_subscription_provider(started)
         except Exception:
             client.close()
             raise
         return client, init, started
+
+    def _verify_subscription_account(self, client) -> None:
+        if self.billing_requested != "subscription":
+            return
+        self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
+        response = client.account_read({"refreshToken": False})
+        account = (
+            response.get("account")
+            if isinstance(response, dict)
+            else getattr(response, "account", None)
+        )
+        account = getattr(account, "root", account)
+
+        def field(value, snake, camel):
+            return (
+                value.get(camel, value.get(snake))
+                if isinstance(value, dict)
+                else getattr(value, snake, getattr(value, camel, None))
+            )
+
+        method = str(field(account, "type", "type") or "")
+        if method not in {"chatgpt", "chatgptAuthTokens"}:
+            raise _SubscriptionVerificationError(
+                "Codex subscription access is not verified. Sign in with ChatGPT using `codex login`. No API billing fallback was attempted."
+            )
+        if field(response, "requires_openai_auth", "requiresOpenaiAuth") is not True:
+            raise _SubscriptionVerificationError(
+                "Codex subscription route requires OpenAI account authentication. No API billing fallback was attempted."
+            )
+        self.subscription_status = {
+            "auth_method": "chatgpt",
+            "billing_verified": "chatgpt-account",
+            "plan": str(
+                getattr(
+                    field(account, "plan_type", "planType"),
+                    "value",
+                    field(account, "plan_type", "planType"),
+                )
+                or "unavailable"
+            ),
+        }
+
+    def _verify_subscription_provider(self, response) -> None:
+        if self.billing_requested != "subscription":
+            return
+        provider = (
+            response.get("modelProvider")
+            if isinstance(response, dict)
+            else getattr(response, "model_provider", None)
+        )
+        if provider != "openai":
+            self.subscription_status["billing_verified"] = "unknown"
+            raise _SubscriptionVerificationError(
+                "Codex subscription route resolved a different model provider. No API billing fallback was attempted."
+            )
 
     def _ensure_started_sync(self) -> None:
         if self._client is not None and self._thread is not None:
@@ -484,6 +564,8 @@ class CodexSDKRuntime:
                 source = primary_source
                 overrides: tuple[str, ...] = ()
             except Exception as primary_error:
+                if isinstance(primary_error, _SubscriptionVerificationError):
+                    raise
                 if primary_source.startswith("local Codex CLI "):
                     # A newer standalone CLI is preferred for its live model
                     # catalogue. If it cannot start, preserve the previous
@@ -592,6 +674,7 @@ class CodexSDKRuntime:
         return Thread
 
     def _set_thread_from_response(self, response: Any) -> None:
+        self._verify_subscription_provider(response)
         thread = getattr(response, "thread", response)
         thread_id = getattr(thread, "id", "")
         if not thread_id:
@@ -750,6 +833,7 @@ class CodexSDKRuntime:
         with self._turn_lock:
             self.reset_cancellation()
             self._ensure_started_sync()
+            self._verify_subscription_account(self._client)
             turn = self._thread.turn(prompt, **self._turn_kwargs())
             self._active_turn = turn
             try:
@@ -798,6 +882,7 @@ class CodexSDKRuntime:
         try:
             self.reset_cancellation()
             await asyncio.to_thread(self._ensure_started_sync)
+            await asyncio.to_thread(self._verify_subscription_account, self._client)
             yield HarnessEvent(type="model_request", data={"runtime": self.name})
             turn = await asyncio.to_thread(lambda: self._thread.turn(prompt, **self._turn_kwargs()))
             self._active_turn = turn
@@ -1126,6 +1211,7 @@ class CodexSDKRuntime:
             thread_id,
             {
                 "cwd": str(self.config.working_directory),
+                **({"modelProvider": "openai"} if self.billing_requested == "subscription" else {}),
                 **({"model": self.config.model} if self.config.model else {}),
             },
         )
@@ -1138,6 +1224,7 @@ class CodexSDKRuntime:
             thread_id,
             {
                 "cwd": str(self.config.working_directory),
+                **({"modelProvider": "openai"} if self.billing_requested == "subscription" else {}),
                 **({"model": self.config.model} if self.config.model else {}),
             },
         )

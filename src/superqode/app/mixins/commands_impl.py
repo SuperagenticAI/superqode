@@ -2048,47 +2048,20 @@ class CommandImplMixin:
             log.add_error(f"Runtime '{sub}' is not ready: {info.status_detail or 'check setup'}")
             return
 
-        # A friendly setup path for the Codex subscription: someone without
-        # the product installed should get install steps, not a stack trace
-        # from a missing ~/.codex login.
-        if sub == "codex-sdk":
-            codex_auth = Path.home() / ".codex" / "auth.json"
-            has_env_key = bool(
-                _os.environ.get("OPENAI_API_KEY") or _os.environ.get("CODEX_API_KEY")
-            )
-            if not codex_auth.exists() and not has_env_key:
-                if shutil.which("codex") is None:
-                    if getattr(self, "_prompts", None) is not None:
-                        self._show_external_cli_setup(
-                            name="Codex",
-                            binary="codex",
-                            command="npm i -g @openai/codex",
-                            log=log,
-                            resume=lambda: self._runtime_cmd("codex-sdk", log),
-                        )
-                        return
-                    log.add_error(
-                        "The Codex CLI is not installed, so the Codex "
-                        "subscription route is unavailable."
-                    )
-                    log.add_info("Install it:  npm i -g @openai/codex")
-                    log.add_info("Sign in with `codex login`, then re-run :connect codex.")
-                    log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
-                    return
-                # Codex is installed but signed out: launch `codex login`
-                # (device auth) and auto-resume the connect once it lands.
-                started = self._begin_subscription_login(
-                    "codex",
-                    log,
-                    on_success=lambda: self._runtime_cmd("codex-sdk", log),
-                    reason="Codex is installed but not signed in (~/.codex/auth.json missing).",
-                )
-                if started:
-                    return
-                log.add_error("Codex is installed but not signed in (~/.codex/auth.json missing).")
-                log.add_info("Sign in with `codex login`, then re-run :connect codex.")
-                log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
-                return
+        requested_target = getattr(self, "_requested_runtime_target", sub)
+        requested_billing = (
+            getattr(self, "_requested_runtime_billing", "agent-managed")
+            if requested_target == sub
+            else "agent-managed"
+        )
+        self._requested_runtime_target = ""
+        self._requested_runtime_billing = "agent-managed"
+        requested_model = (
+            getattr(self, "_requested_runtime_model", "") if requested_target == sub else ""
+        )
+        self._requested_runtime_model = ""
+        # Credential files cannot distinguish API keys, keyring login or custom
+        # CODEX_HOME. The app-server performs the actual account check.
 
         if sub == "muse":
             from superqode.providers.connection_profiles import _muse_signed_in
@@ -2107,7 +2080,11 @@ class CommandImplMixin:
                 and Path(getattr(existing.session, "working_directory", Path.cwd())).resolve()
                 == Path.cwd().resolve()
                 and getattr(existing, "_runtime", None) is not None
+                and getattr(existing, "billing_requested", "agent-managed") == requested_billing
             ):
+                if requested_model:
+                    existing._runtime.set_model(requested_model)
+                    existing.session.model = requested_model
                 self._install_pure_permission_bridge(existing, log)
                 _os.environ["SUPERQODE_RUNTIME"] = sub
                 self._sync_self_contained_status(sub)
@@ -2148,6 +2125,7 @@ class CommandImplMixin:
                 pure = self._ensure_pure_mode()
                 self._install_pure_permission_bridge(pure, log)
                 pure.runtime_name = sub
+                pure.billing_requested = requested_billing
                 provider = {
                     "copilot-sdk": "github-copilot",
                     "claude-agent-sdk": "anthropic",
@@ -2157,7 +2135,7 @@ class CommandImplMixin:
                     "devin-cli": "devin",
                     "muse": "meta",
                 }.get(sub, "openai")
-                pure.connect(provider=provider, model="", working_directory=Path.cwd())
+                pure.connect(provider=provider, model=requested_model, working_directory=Path.cwd())
                 self._announce_self_contained_connection(sub, log)
             except Exception as exc:  # noqa: BLE001
                 log.add_error(f"Switched to {sub} but auto-connect failed: {exc}")
@@ -2909,6 +2887,9 @@ class CommandImplMixin:
             if getattr(self, "_pure_mode", None) is not None:
                 self._pure_mode.session.model = model
             self._set_status_model(model)
+            save_model = getattr(self, "_save_runtime_model_choice", None)
+            if save_model:
+                save_model("copilot-sdk", model)
             log.add_success(f"GitHub Copilot model set to {model}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set GitHub Copilot model: {exc}")

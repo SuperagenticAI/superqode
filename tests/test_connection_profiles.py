@@ -1248,6 +1248,9 @@ def test_antigravity_connection_announcement_never_mentions_codex():
         def _mark_onboarding_complete(self):
             pass
 
+        def _save_connection_config(self, **fields):
+            self.saved_connection = fields
+
         _teach = SuperQodeApp._teach
 
         def run_worker(self, *_args, **_kwargs):
@@ -1278,6 +1281,9 @@ def test_managed_connection_announcement_uses_managed_route_commands():
 
         def _mark_onboarding_complete(self):
             pass
+
+        def _save_connection_config(self, **fields):
+            self.saved_connection = fields
 
         _teach = SuperQodeApp._teach
 

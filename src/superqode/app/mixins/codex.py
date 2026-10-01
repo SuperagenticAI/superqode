@@ -333,6 +333,7 @@ class CodexMixin:
         app-server can have a stale catalogue while still honoring a newer
         configured model.
         """
+        runtime = None
         try:
             pure = getattr(self, "_pure_mode", None)
             runtime = getattr(pure, "_runtime", None) if pure is not None else None
@@ -354,10 +355,24 @@ class CodexMixin:
                     model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
             if not model_id:
                 return
+            # A switch while this worker was starting must not change the new route.
+            if getattr(getattr(self, "_pure_mode", None), "_runtime", None) is not runtime:
+                return
             self._set_status_model(model_id)
+            status = getattr(runtime, "subscription_status", {})
+            if status.get("billing_verified") == "chatgpt-account":
+                self._sync_self_contained_status("codex-sdk")
+                self._set_status_model(model_id)
+                log.add_info(
+                    f"Codex ChatGPT login verified · plan: {status.get('plan', 'unavailable')} · quota unavailable"
+                )
+            save_model = getattr(self, "_save_runtime_model_choice", None)
+            if save_model:
+                save_model("codex-sdk", model_id)
             log.add_info(f"Active Codex model: {model_id}  ·  switch with :codex model")
-        except Exception:  # noqa: BLE001 — best-effort, never fatal
-            pass
+        except Exception as exc:  # noqa: BLE001 — background connection feedback
+            if getattr(runtime, "billing_requested", "") == "subscription":
+                log.add_error(f"Codex subscription verification failed: {exc}")
 
     def _codex_cmd(self, args: str, log) -> None:
         """Handle :codex and Codex SDK runtime subcommands."""
@@ -366,6 +381,8 @@ class CodexMixin:
         sub = parts[0].lower() if parts else "connect"
         rest = parts[1].strip() if len(parts) > 1 else ""
         if sub in {"", "connect", "start"}:
+            self._requested_runtime_target = "codex-sdk"
+            self._requested_runtime_billing = "subscription"
             self._runtime_cmd("codex-sdk", log)
             return
         status_expr = f"{sub} {rest}".strip()
@@ -434,6 +451,8 @@ class CodexMixin:
             and getattr(getattr(pure, "session", None), "connected", False)
         ):
             return runtime
+        self._requested_runtime_target = "codex-sdk"
+        self._requested_runtime_billing = "subscription"
         self._runtime_cmd("codex-sdk", log)
         pure = getattr(self, "_pure_mode", None)
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
@@ -817,6 +836,9 @@ class CodexMixin:
                 self._pure_mode.session.model = model
             label = model or "Codex default"
             self._set_status_model(model)  # reflect in the status-bar badge
+            save_model = getattr(self, "_save_runtime_model_choice", None)
+            if save_model:
+                save_model("codex-sdk", model)
             log.add_success(f"Codex model set to {label}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex model: {exc}")

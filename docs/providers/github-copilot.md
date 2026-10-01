@@ -47,8 +47,12 @@ export COPILOT_GITHUB_TOKEN=...
 
 `COPILOT_GITHUB_TOKEN` is the only token variable SuperQode explicitly forwards
 to the SDK. This prevents unrelated `GH_TOKEN` or `GITHUB_TOKEN` values from
-silently overriding a working local OAuth login. The CLI fallback retains
-GitHub's normal credential precedence. Use `COPILOT_GITHUB_TOKEN` for
+silently overriding a working local OAuth login. Account launches also remove the known `COPILOT_PROVIDER_*`,
+`COPILOT_PROVIDERS_CONFIG` and offline-provider overrides, so a GitHub login
+cannot silently redirect this route to a configured BYOK provider. Supplying
+`COPILOT_GITHUB_TOKEN` does not bypass that guard. GitHub identity alone does
+not prove included quota or how an organization bills usage; status remains
+unverified when the agent does not expose that information. Use `COPILOT_GITHUB_TOKEN` for
 non-interactive SuperQode SDK runs.
 
 Inside the TUI, `:copilot login` runs the official OAuth device flow after an

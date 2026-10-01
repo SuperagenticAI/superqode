@@ -248,10 +248,10 @@ class ConnectionProfile:
 
 
 def _codex_ready() -> bool:
-    """codex-sdk extra installed AND a local Codex login present."""
+    """SDK installed; the live app-server verifies the login on connection."""
     if importlib.util.find_spec("openai_codex") is None:
         return False
-    return (Path.home() / ".codex" / "auth.json").exists()
+    return True
 
 
 def _codex_product_present() -> bool:
@@ -600,7 +600,7 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="byok",
         label="BYOK (use your own API key)",
-        description="OpenAI, Anthropic, Google, Z.AI and 40 more providers",
+        description="Use your API key with API billing; OpenAI, Anthropic, Google and more",
         connector="byok",
         runtime="builtin",
         menu=CONNECT_MENU_MODELS,
@@ -1123,7 +1123,7 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
 # Installation does not establish account sign-in. Vendor processes perform
 # that check on first connection; tell the user before selecting a route.
 _AGENT_PROFILES = [
-    replace(p, verify_on_connect=True)
+    replace(p, verify_on_connect=True, auth_mode="subscription")
     if p.connector in {"acp", "prime-rpc", "runtime", "copilot"}
     else p
     for p in _AGENT_PROFILES
@@ -1884,7 +1884,7 @@ def _catalog_account_profiles() -> List[ConnectionProfile]:
         ConnectionProfile(
             id=f"account-{entry.id}",
             label=f"{entry.label} (use agent account)",
-            description="Use the account and model configured in this agent",
+            description="Use this agent’s configured account and model; billing is unverified",
             connector="harness-account",
             runtime=entry.id,
             acp_agent=entry.acp_agent,

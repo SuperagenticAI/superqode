@@ -277,3 +277,124 @@ def test_interactive_account_route_cannot_answer_as_default_vendor(profile, monk
     result = CliRunner().invoke(cli_main, ["-p", "--connect", profile, "hello"])
     assert result.exit_code == 2
     assert "interactive account/setup route" in result.output
+
+
+def test_legacy_acp_persistence_does_not_infer_plan_verification():
+    app = AccountApp()
+    app._read_user_config = lambda: {
+        "connection": {
+            "auth_mode": "acp",
+            "acp_agent": "pi",
+            "profile_id": "account-pi",
+            "billing_verified": "subscription",
+        }
+    }
+    saved = app._load_connection_config()
+    assert saved["transport"] == "ACP"
+    assert saved["auth_mode"] == "agent-managed"
+    assert saved["billing_requested"] == "agent-managed"
+    assert saved["billing_verified"] == "unknown"
+    assert saved["fallback_policy"] == "stop"
+
+
+def test_invalid_saved_route_cannot_fall_back_to_previous_byok():
+    app = AccountApp()
+    app._load_connection_config = lambda: {
+        "profile_id": "no-longer-supported",
+        "auth_mode": "subscription",
+    }
+    app._load_byok_config = lambda: pytest.fail("must not inspect BYOK fallback")
+    log = Log()
+    app._connect_last(log)
+    assert any("will not fall back" in message for message in log.messages)
+
+
+def test_runtime_reconnect_restores_exact_billing_and_model():
+    app = AccountApp()
+    app._load_connection_config = lambda: {
+        "runtime_name": "codex-sdk",
+        "model": "chosen-model",
+        "billing_requested": "subscription",
+    }
+
+    def connect(name, log):
+        app.calls.append((name, app._requested_runtime_billing, app._requested_runtime_model))
+
+    app._runtime_cmd = connect
+    app._connect_last(Log())
+    assert app.calls == [("codex-sdk", "subscription", "chosen-model")]
+
+
+@pytest.mark.parametrize("agent", ["pi", "opencode", "omp"])
+def test_configured_agent_account_never_claims_verified_subscription(monkeypatch, agent):
+    profile = get_connection_profile(f"account-{agent}")
+    if profile is None:
+        pytest.skip("not a catalog account route")
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda _: True)
+    app = AccountApp()
+    log = Log()
+    app._dispatch_connection_profile(profile, log)
+    assert app._acp_subscription_vendor is None
+    assert any("agent-managed, unverified" in message for message in log.messages)
+
+
+def test_empty_connection_config_allows_legacy_reconnect():
+    app = AccountApp()
+    app._read_user_config = lambda: {}
+    assert app._load_connection_config() == {}
+
+
+def test_saved_runtime_model_update_preserves_route():
+    app = AccountApp()
+    saved = {
+        "runtime_name": "codex-sdk",
+        "auth_mode": "subscription",
+        "billing_requested": "subscription",
+        "model": "before",
+    }
+    app._load_connection_config = lambda: saved
+    app._save_connection_config = lambda **fields: app.calls.append(fields)
+    app._save_runtime_model_choice("copilot-sdk", "wrong")
+    assert not app.calls
+    app._save_runtime_model_choice("codex-sdk", "after")
+    assert app.calls[0]["billing_requested"] == "subscription"
+    assert app.calls[0]["model"] == "after"
+
+
+def test_headless_codex_preserves_requested_subscription_billing(monkeypatch):
+    from click.testing import CliRunner
+    from superqode.main import cli_main
+    from superqode.agent.loop import AgentResponse
+
+    captured = []
+
+    async def run(**kwargs):
+        captured.append(kwargs)
+        return AgentResponse(
+            content="mock answer",
+            messages=[],
+            tool_calls_made=0,
+            iterations=1,
+            stopped_reason="complete",
+        )
+
+    monkeypatch.setattr("superqode.headless.run_headless", run)
+    result = CliRunner().invoke(cli_main, ["-p", "--connect", "codex", "hello"])
+    assert result.exit_code == 0, result.output
+    assert captured[0]["runtime"] == "codex-sdk"
+    assert captured[0]["billing_requested"] == "subscription"
+
+
+def test_headless_subscription_cannot_override_runtime(monkeypatch):
+    from click.testing import CliRunner
+    from superqode.main import cli_main
+
+    async def run(**kwargs):
+        pytest.fail("conflicting subscription route must stop before a model call")
+
+    monkeypatch.setattr("superqode.headless.run_headless", run)
+    result = CliRunner().invoke(
+        cli_main, ["-p", "--connect", "codex", "--runtime", "builtin", "hello"]
+    )
+    assert result.exit_code == 2
+    assert "cannot override its runtime" in result.output

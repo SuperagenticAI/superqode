@@ -71,6 +71,11 @@ _CONNECTION_KEYS = (
     "model",
     "transport",
     "after_auth",
+    "runtime_name",
+    "auth_method",
+    "billing_requested",
+    "billing_verified",
+    "fallback_policy",
 )
 
 
@@ -140,12 +145,24 @@ class ConnectMixin:
             CONNECT_MENU_SUBSCRIPTIONS,
         )
 
+        pure = getattr(self, "_pure_mode", None)
+        if (
+            pure is not None
+            and getattr(pure, "runtime_name", "") in {"codex-sdk", "copilot-sdk"}
+            and getattr(getattr(pure, "session", None), "connected", False)
+        ):
+            runtime = getattr(pure, "_runtime", None)
+            verified = getattr(runtime, "subscription_status", {}).get("billing_verified")
+            if getattr(pure, "billing_requested", "agent-managed") == "subscription":
+                return "subscription" if verified == "chatgpt-account" else "subscription requested"
+            return "agent-managed"
         profile = get_connection_profile(str(getattr(self, "_connecting_profile_id", "") or ""))
         if profile is not None:
-            return profile.auth_mode or (
+            auth = profile.auth_mode or (
                 "subscription" if profile.menu == CONNECT_MENU_SUBSCRIPTIONS else ""
             )
-        return "subscription" if getattr(self, "_acp_subscription_vendor", None) else ""
+            return "subscription requested" if auth == "subscription" else auth
+        return "subscription requested" if getattr(self, "_acp_subscription_vendor", None) else ""
 
     def _begin_connection_view(self, log: ConversationLog) -> None:
         """Isolate inline setup from the conversation and its prompt draft."""
@@ -530,8 +547,8 @@ class ConnectMixin:
                 offered.append(
                     ConnectionProfile(
                         id=f"account-{entry.id}",
-                        label="Use this agent's subscription / account",
-                        description="Use the model and account configured in this agent; keeps its coding loop",
+                        label="Use this agent's configured account",
+                        description="Use its configured model and account; billing is unverified",
                         connector="harness-account",
                         runtime=entry.id,
                         menu=menu,
@@ -1986,6 +2003,9 @@ class ConnectMixin:
             self._connect_prime_rpc("", log)
         elif conn == "runtime":
             # Self-contained runtime (e.g. Codex) — auto-connects in _runtime_cmd.
+            self._requested_runtime_target = profile.runtime or ""
+            self._requested_runtime_billing = getattr(profile, "auth_mode", "") or "agent-managed"
+            ConnectMixin._apply_subscription_billing_policy(self, profile, log)
             self._runtime_cmd(profile.runtime or "", log)
         elif conn == "acp":
             # A specific ACP agent by short_name (Claude, Grok Build, …).
@@ -2110,6 +2130,10 @@ class ConnectMixin:
                 spec.notes
                 or "Using the agent's configured account and model; sign-in is checked by the agent."
             )
+            if self._acp_subscription_vendor is None:
+                log.add_info(
+                    "Billing: agent-managed, unverified. Check the provider and billing route in the agent."
+                )
             self._connect_acp_cmd(entry.acp_agent, log)
             self._set_acp_extra_env(dict(spec.account_env), entry.acp_agent)
         elif conn == "vendor-picker":
@@ -2577,7 +2601,12 @@ class ConnectMixin:
             subscription_notice,
         )
 
-        if getattr(profile, "menu", "") != CONNECT_MENU_SUBSCRIPTIONS:
+        if (
+            getattr(profile, "auth_mode", "")
+            or (
+                "subscription" if getattr(profile, "menu", "") == CONNECT_MENU_SUBSCRIPTIONS else ""
+            )
+        ) != "subscription":
             self._acp_subscription_vendor = None
             return
 
@@ -2607,6 +2636,7 @@ class ConnectMixin:
         )
 
         self._apply_subscription_billing_policy(profile, log)
+        self._requested_runtime_billing = "subscription"
 
         if _copilot_sdk_ready():
             # Choosing silently taught the user nothing. Connecting on the best
@@ -2622,15 +2652,17 @@ class ConnectMixin:
                     alternative="Copilot CLI",
                     alternative_command=":connect copilot-cli",
                 )
+            self._requested_runtime_target = profile.runtime or "copilot-sdk"
             self._runtime_cmd(profile.runtime or "copilot-sdk", log)
             return
         if _copilot_acp_ready():
             if log is not None:
                 log.add_info(
-                    "Using the installed GitHub Copilot CLI on your subscription. "
+                    "Using the installed GitHub Copilot CLI with your account. "
                     "Install the SDK extra for per-tool approval prompts and "
                     "resumable sessions."
                 )
+            self._requested_runtime_target = "copilot-cli"
             self._runtime_cmd("copilot-cli", log)
             # Whether the vendor CLI is signed in cannot be read from a file:
             # the token lives in the OS credential store. Probe it in the
@@ -2882,7 +2914,12 @@ class ConnectMixin:
         self._workspace_intro_visible = True
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
-        t.append("Connected: ", style=f"bold {THEME['text']}")
+        pending = (
+            runtime_name == "codex-sdk"
+            and getattr(getattr(self, "_pure_mode", None), "billing_requested", "")
+            == "subscription"
+        )
+        t.append("Selected: " if pending else "Connected: ", style=f"bold {THEME['text']}")
         t.append(f"{label}\n\n", style=f"bold {THEME['success']}")
         t.append("    Runtime   ", style=THEME["muted"])
         t.append(f"{runtime_name}\n", style=THEME["text"])
@@ -2902,7 +2939,7 @@ class ConnectMixin:
         announce = getattr(self, "_announce_transition", None)
         if announce is not None:
             announce(
-                title="Connected",
+                title="Verifying login" if pending else "Connected",
                 primary=label,
                 detail=f"{runtime_name} · {details['model']}",
                 severity="success",
@@ -2920,6 +2957,28 @@ class ConnectMixin:
             model=details.get("model", ""),
         )
         self._mark_onboarding_complete()
+        pure = getattr(self, "_pure_mode", None)
+        billing = str(getattr(pure, "billing_requested", "agent-managed"))
+        self._save_connection_config(
+            category="subscriptions" if billing == "subscription" else "runtime",
+            auth_mode=billing,
+            runtime_name=runtime_name,
+            profile_id="codex" if runtime_name == "codex-sdk" and billing == "subscription" else "",
+            acp_agent="",
+            harness_id="",
+            provider="",
+            model=str(getattr(getattr(pure, "session", None), "model", "") or ""),
+            transport="SDK" if runtime_name.endswith("-sdk") else "CLI",
+            openness="",
+            after_auth="",
+            billing_requested=billing,
+        )
+        if runtime_name == "codex-sdk" and billing == "subscription":
+            log.add_info("ChatGPT login: verification pending; remaining quota is unverified.")
+        elif runtime_name == "copilot-sdk":
+            log.add_info(
+                "Account billing: unverified. Copilot checks sign-in and available usage on request."
+            )
         if runtime_name == "codex-sdk":
             self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
 
@@ -3883,6 +3942,16 @@ class ConnectMixin:
         provider = str(connection.get("provider") or "")
         model = str(connection.get("model") or "")
 
+        runtime_name = str(connection.get("runtime_name") or "")
+        if runtime_name:
+            self._requested_runtime_target = runtime_name
+            self._requested_runtime_billing = str(
+                connection.get("billing_requested") or "agent-managed"
+            )
+            self._requested_runtime_model = model
+            self._runtime_cmd(runtime_name, log)
+            return
+
         # Restore the agent/account route before considering any stale model
         # fields from a previous native connection. This also restores account
         # launch defaults (for example fast-agent's codexplan).
@@ -3891,11 +3960,15 @@ class ConnectMixin:
 
             profile = get_connection_profile(profile_id)
             if profile and profile.connector in {"acp", "harness-account"}:
+                self._pending_acp_model_hint = model
                 self._dispatch_connection_profile(profile, log)
                 return
 
-        if category == "acp" or (auth_mode == "acp" and not after_auth):
+        if category == "acp" or (
+            auth_mode in {"acp", "agent-managed"} and acp_agent and not after_auth
+        ):
             if acp_agent:
+                self._pending_acp_model_hint = model
                 self._connect_acp_cmd(acp_agent, log)
                 return
         elif (
@@ -3939,6 +4012,11 @@ class ConnectMixin:
                     self._dispatch_connection_profile(profile, log)
                 return
 
+        if connection:
+            log.add_error(
+                "The saved connection cannot be restored. Choose a route with :connect; billing will not fall back to BYOK."
+            )
+            return
         config = self._load_byok_config()
         if config.get("last_provider") and config.get("last_model"):
             self._connect_byok_mode(config["last_provider"], config["last_model"], log)
@@ -4694,7 +4772,18 @@ class ConnectMixin:
         raw = self._read_user_config().get("connection", {})
         if not isinstance(raw, dict):
             return {}
-        return {key: raw[key] for key in _CONNECTION_KEYS if key in raw}
+        saved = {key: raw[key] for key in _CONNECTION_KEYS if key in raw}
+        if not saved:
+            return {}
+        if saved.get("auth_mode") == "acp":
+            saved["auth_mode"] = "agent-managed"
+            saved.setdefault("transport", "ACP")
+        saved.setdefault("auth_method", "agent-managed" if saved.get("acp_agent") else "unknown")
+        saved.setdefault("billing_requested", saved.get("auth_mode") or "agent-managed")
+        # A saved login or old menu category is not proof of current entitlement.
+        saved["billing_verified"] = "unknown"
+        saved.setdefault("fallback_policy", "stop")
+        return saved
 
     def _save_connection_config(self, **fields: str) -> None:
         """Persist connection.* via the same RMW helper as byok.*. No secrets."""
@@ -4703,6 +4792,20 @@ class ConnectMixin:
             current = data.get("connection")
             if not isinstance(current, dict):
                 current = {}
+            # Reset evidence when saving a route; never carry another connection's status.
+            current.update(
+                runtime_name="",
+                auth_method="api-key"
+                if fields.get("auth_mode") == "byok"
+                else "none"
+                if fields.get("auth_mode") == "local"
+                else "agent-managed"
+                if fields.get("acp_agent")
+                else "unknown",
+                billing_requested=fields.get("auth_mode", "agent-managed"),
+                billing_verified="unknown",
+                fallback_policy="stop",
+            )
             for key in _CONNECTION_KEYS:
                 if key in fields:
                     current[key] = str(fields[key] or "")
@@ -4725,6 +4828,12 @@ class ConnectMixin:
         except OSError:
             pass  # A read-only project must not prevent connecting.
 
+    def _save_runtime_model_choice(self, runtime_name: str, model: str) -> None:
+        """Update the chosen model only for the matching saved runtime route."""
+        saved = self._load_connection_config()
+        if saved.get("runtime_name") == runtime_name:
+            self._save_connection_config(**{**saved, "model": model})
+
     def _persist_acp_connection(self, acp_agent: str) -> None:
         """Write connection.* for an ACP attach. Subscriptions keep their category."""
         from superqode.providers.connection_profiles import get_connection_profile
@@ -4735,7 +4844,7 @@ class ConnectMixin:
         if vendor:
             category, auth_mode, profile_id = "subscriptions", "subscription", connecting_id
         else:
-            category, auth_mode = "acp", "acp"
+            category, auth_mode = "acp", "agent-managed"
             known = get_connection_profile(connecting_id) if connecting_id else None
             profile_id = known.id if known is not None else ""
         self._save_connection_config(
@@ -4909,6 +5018,8 @@ class ConnectMixin:
         parts = args.split(maxsplit=1)
         agent_name = parts[0]
         model_hint = parts[1] if len(parts) > 1 else None
+        model_hint = model_hint or getattr(self, "_pending_acp_model_hint", None) or None
+        self._pending_acp_model_hint = ""
         self._connect_agent(agent_name, model_hint)
 
     @work(exclusive=True)

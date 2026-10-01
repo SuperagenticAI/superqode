@@ -42,6 +42,7 @@ class _FakeApprovalMode:
 
 @dataclass
 class _FakeCodexConfig:
+    env: dict[str, str] | None = None
     config_overrides: tuple[str, ...] = ()
     codex_bin: str | None = None
     cwd: str | None = None
@@ -53,6 +54,7 @@ class _FakeCodexConfig:
 @dataclass
 class _FakeThreadStart:
     thread: Any
+    model_provider: str = "openai"
     model: str | None = None
 
 
@@ -1179,3 +1181,81 @@ def test_successful_turn_with_no_error_is_unchanged(fake_codex_sdk, tmp_path):
     import asyncio
 
     assert asyncio.run(collect()) == ["hello"]
+
+
+@pytest.mark.parametrize("account", [None, {"type": "apiKey"}, {"type": "chatgpt"}])
+def test_subscription_requires_verified_chatgpt_account(
+    fake_codex_sdk, tmp_path, monkeypatch, account
+):
+    from superqode.runtime.codex_sdk import CodexSDKRuntime
+
+    monkeypatch.setattr(
+        _FakeCodexClient,
+        "account_read",
+        lambda self, params=None: {
+            "account": account,
+            "requiresOpenaiAuth": account != {"type": "chatgpt"},
+        },
+    )
+    runtime = CodexSDKRuntime(config=_config(tmp_path), billing_requested="subscription")
+    with pytest.raises(RuntimeError, match="No API billing fallback"):
+        runtime._ensure_started_sync()
+    assert runtime._thread is None
+    assert runtime.subscription_status["billing_verified"] == "unknown"
+
+
+def test_subscription_masks_keys_and_checks_each_turn(fake_codex_sdk, tmp_path, monkeypatch):
+    from superqode.runtime.codex_sdk import CodexSDKRuntime
+    from superqode.providers.subscription_env import VENDOR_API_KEY_ENVS
+
+    monkeypatch.setenv("OPENAI_API_KEY", "leave-parent-key-alone")
+    account = {"account": {"type": "chatgpt", "planType": "plus"}, "requiresOpenaiAuth": True}
+    monkeypatch.setattr(_FakeCodexClient, "account_read", lambda self, params=None: account)
+    runtime = CodexSDKRuntime(config=_config(tmp_path), billing_requested="subscription")
+    cfg, _ = runtime._sdk_config(_FakeCodexConfig)
+    assert all(cfg.env[key] == "" for key in VENDOR_API_KEY_ENVS["codex"])
+    assert 'forced_login_method="chatgpt"' in cfg.config_overrides
+    runtime.config.provider = "unrelated-provider"
+    assert runtime._thread_start_params()["modelProvider"] == "openai"
+    runtime._run_sync("hello")
+    assert runtime.subscription_status["plan"] == "plus"
+    account["account"] = {"type": "apiKey"}
+    with pytest.raises(RuntimeError, match="No API billing fallback"):
+        runtime._run_sync("must not run")
+    assert os.environ["OPENAI_API_KEY"] == "leave-parent-key-alone"
+    runtime.close()
+
+
+def test_subscription_accepts_sdk_root_account(fake_codex_sdk, tmp_path):
+    from superqode.runtime.codex_sdk import CodexSDKRuntime
+
+    runtime = CodexSDKRuntime(config=_config(tmp_path), billing_requested="subscription")
+    client = types.SimpleNamespace(
+        account_read=lambda params: types.SimpleNamespace(
+            account=types.SimpleNamespace(
+                root=types.SimpleNamespace(
+                    type="chatgpt", plan_type=types.SimpleNamespace(value="pro")
+                )
+            ),
+            requires_openai_auth=True,
+        )
+    )
+    runtime._verify_subscription_account(client)
+    assert runtime.subscription_status == {
+        "auth_method": "chatgpt",
+        "billing_verified": "chatgpt-account",
+        "plan": "pro",
+    }
+
+
+def test_subscription_cannot_resume_a_different_provider(fake_codex_sdk, tmp_path):
+    from superqode.runtime.codex_sdk import CodexSDKRuntime
+
+    runtime = CodexSDKRuntime(config=_config(tmp_path), billing_requested="subscription")
+    with pytest.raises(RuntimeError, match="different model provider"):
+        runtime._set_thread_from_response(
+            types.SimpleNamespace(
+                model_provider="custom-api", thread=types.SimpleNamespace(id="bad-thread")
+            )
+        )
+    assert runtime._thread is None

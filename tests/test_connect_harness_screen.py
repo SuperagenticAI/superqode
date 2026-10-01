@@ -1070,7 +1070,7 @@ def test_acp_subscription_persist_uses_subscriptions_category(tmp_path, monkeypa
     stub._persist_acp_connection("opencode")
     saved = stub._load_connection_config()
     assert saved["category"] == "acp"
-    assert saved["auth_mode"] == "acp"
+    assert saved["auth_mode"] == "agent-managed"
     assert saved["profile_id"] == ""
     assert saved["acp_agent"] == "opencode"
 

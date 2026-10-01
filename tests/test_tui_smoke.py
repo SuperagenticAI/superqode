@@ -7883,49 +7883,69 @@ def test_grok_connect_without_cli_shows_install_steps(monkeypatch):
     assert ":connect byok xai grok-4.5" in joined
 
 
-def test_codex_connect_without_cli_shows_install_steps(tmp_path, monkeypatch):
-    """:connect codex without the Codex CLI must explain how to install it."""
+@pytest.mark.parametrize("cli_installed", [False, True])
+def test_codex_connect_uses_live_sdk_login_verification(tmp_path, monkeypatch, cli_installed):
+    """No CLI or auth.json is not proof of sign-out: the SDK can use a keyring."""
+    from types import SimpleNamespace
     import superqode.app_main as am
     import superqode.runtime as rt
     from superqode.runtime import RuntimeInfo
 
-    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.codex/auth.json
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("CODEX_API_KEY", raising=False)
-    monkeypatch.setattr(am.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        am.shutil,
+        "which",
+        lambda name: "/usr/bin/codex" if cli_installed and name == "codex" else None,
+    )
     monkeypatch.setattr(
         rt,
         "list_runtimes",
         lambda: [
             RuntimeInfo(
                 name="codex-sdk",
-                description="Codex SDK runtime",
+                description="Codex SDK",
                 installed=True,
-                install_hint=None,
                 implemented=True,
+                install_hint=None,
             )
         ],
     )
 
-    class _Log:
-        def __init__(self):
-            self.lines = []
+    class Pure:
+        def connect(self, **kwargs):
+            self.connection = kwargs
 
-        def add_error(self, msg):
-            self.lines.append(msg)
+    class Stub:
+        _SELF_CONTAINED_RUNTIMES = am.SuperQodeApp._SELF_CONTAINED_RUNTIMES
+        _pure_mode = None
+        _requested_runtime_billing = "subscription"
 
-        def add_info(self, msg):
-            self.lines.append(msg)
+        def _ensure_pure_mode(self):
+            self._pure_mode = Pure()
+            return self._pure_mode
 
-    class _Stub:
-        pass
+        def _install_pure_permission_bridge(self, pure, log):
+            pass
 
-    log = _Log()
-    am.SuperQodeApp._runtime_cmd(_Stub(), "codex-sdk", log)
-    joined = " ".join(log.lines)
-    assert "npm i -g @openai/codex" in joined
-    assert "codex login" in joined
-    assert ":connect byok openai" in joined
+        def _set_status_runtime(self, name):
+            pass
+
+        def _announce_self_contained_connection(self, name, log):
+            self.announced = name
+
+        def _begin_subscription_login(self, *args, **kwargs):
+            pytest.fail("file existence must not decide authentication")
+
+    stub = Stub()
+    log = SimpleNamespace(
+        add_info=lambda message: None, add_error=lambda message: pytest.fail(message)
+    )
+    am.SuperQodeApp._runtime_cmd(stub, "codex-sdk", log)
+    assert stub.announced == "codex-sdk"
+    assert stub._pure_mode.billing_requested == "subscription"
+    assert stub._pure_mode.connection["provider"] == "openai"
 
 
 def test_vendor_runtime_setup_shows_bundle_and_authentication():
@@ -7947,60 +7967,6 @@ def test_vendor_runtime_setup_shows_bundle_and_authentication():
     assert "[vendor-sdks]" in rendered
     assert "npm i -g @openai/codex" in rendered
     assert "grok login" in rendered
-
-
-def test_codex_connect_when_installed_but_signed_out_launches_login(tmp_path, monkeypatch):
-    """:connect codex with the CLI installed but no auth should launch login."""
-    import superqode.app_main as am
-    import superqode.runtime as rt
-    from superqode.runtime import RuntimeInfo
-
-    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.codex/auth.json
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("CODEX_API_KEY", raising=False)
-    monkeypatch.setattr(
-        am.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None
-    )
-    monkeypatch.setattr(
-        rt,
-        "list_runtimes",
-        lambda: [
-            RuntimeInfo(
-                name="codex-sdk",
-                description="Codex SDK runtime",
-                installed=True,
-                install_hint=None,
-                implemented=True,
-            )
-        ],
-    )
-
-    class _Log:
-        def __init__(self):
-            self.lines = []
-
-        def add_error(self, msg):
-            self.lines.append(msg)
-
-        def add_info(self, msg):
-            self.lines.append(msg)
-
-    class _Stub:
-        def __init__(self):
-            self.login_launched = []
-
-        def _begin_subscription_login(
-            self, product, log, *, on_success=None, reason="", force=False
-        ):
-            self.login_launched.append({"product": product, "reason": reason})
-            return True
-
-    stub, log = _Stub(), _Log()
-    am.SuperQodeApp._runtime_cmd(stub, "codex-sdk", log)
-
-    # Installed + signed out → interactive login launched, connect not attempted.
-    assert len(stub.login_launched) == 1
-    assert stub.login_launched[0]["product"] == "codex"
 
 
 def test_calm_mode_skips_partial_tool_output_chunks():

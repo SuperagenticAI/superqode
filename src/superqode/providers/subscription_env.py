@@ -1,7 +1,7 @@
 """Keep subscription connections on the subscription, never on metered API keys.
 
-A subscription connection means the user is spending a plan they already pay
-for. Most vendor CLIs and SDKs prefer an API key over their own OAuth login
+A subscription connection requests the vendor account route; installation
+and login alone do not verify its billing or quota. Most vendor CLIs and SDKs prefer an API key over their own OAuth login
 when one happens to be exported, so an unrelated key left in a shell can
 silently move the session onto per-token billing. That is never what a
 subscription connection asked for: SuperQode has a separate, dedicated BYOK
@@ -18,13 +18,23 @@ from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 
 from superqode.herdr import child_env
 
-#: Vendor key -> environment variables that would divert that vendor onto
-#: metered API billing. Keys are matched against a connection profile id, an
+#: Vendor -> credential/provider overrides that can redirect inference or
+#: replace the intended login. GitHub PATs are identity, not API billing. Keys are matched against a connection profile id, an
 #: ACP agent short_name, or a runtime name, so callers can pass whichever they
 #: have. Values are deliberately explicit rather than pattern-matched: removing
 #: an unrelated variable would be its own bug.
 VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
-    "copilot": ("GH_TOKEN", "GITHUB_TOKEN"),
+    "copilot": (
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "COPILOT_PROVIDER_BASE_URL",
+        "COPILOT_PROVIDER_TYPE",
+        "COPILOT_PROVIDER_API_KEY",
+        "COPILOT_PROVIDER_BEARER_TOKEN",
+        "COPILOT_PROVIDER_API_KEY_COMMAND",
+        "COPILOT_PROVIDERS_CONFIG",
+        "COPILOT_OFFLINE",
+    ),
     "grok": ("GROK_CODE_XAI_API_KEY", "XAI_API_KEY"),
     "cursor": ("CURSOR_API_KEY",),
     "devin": ("DEVIN_API_KEY",),
@@ -36,7 +46,7 @@ VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
     "glm": (),
     "qwen": ("DASHSCOPE_API_KEY", "QWEN_API_KEY"),
     "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
-    "codex": ("OPENAI_API_KEY",),
+    "codex": ("OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"),
     "antigravity": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"),
     # Muse Code documents this precedence explicitly: META_API_KEY wins over a
@@ -90,10 +100,12 @@ def diverting_api_keys(vendor: str, env: Optional[Mapping[str, str]] = None) -> 
     if resolved is None:
         return []
     source = os.environ if env is None else env
+    names = VENDOR_API_KEY_ENVS[resolved]
     if resolved == "copilot" and any(source.get(name) for name in EXPLICIT_OPT_IN_ENVS):
         # The user explicitly supplied a token for this route; respect it.
-        return []
-    return [name for name in VENDOR_API_KEY_ENVS[resolved] if source.get(name)]
+        # An explicit GitHub identity never opts into model-provider billing.
+        names = tuple(name for name in names if name not in {"GH_TOKEN", "GITHUB_TOKEN"})
+    return [name for name in names if source.get(name)]
 
 
 def subscription_child_env(
@@ -166,6 +178,14 @@ def subscription_notice(
             f"This is a subscription connection, so these API credentials and billing "
             f"overrides are ignored and {vendor_label} uses your Google sign-in instead.",
             "Use :connect acp gemini to use Gemini CLI with API-key or Vertex AI authentication.",
+        ]
+    if resolve_vendor(vendor) == "copilot" or any(
+        name.startswith("COPILOT_PROVIDER") for name in names
+    ):
+        return [
+            f"Ignored account/provider overrides: {joined}.",
+            f"{vendor_label} will use its Copilot account route. GitHub identity does not verify included quota or billing.",
+            "Use :connect byok for API billing.",
         ]
     plural = "keys are" if len(names) > 1 else "key is"
     entry = _vendor_key_entry(vendor) if vendor else None

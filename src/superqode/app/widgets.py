@@ -258,6 +258,8 @@ class ColorfulStatusBar(Static):
             auth_mode = (self.connection_auth or default).strip().lower()
             label = {
                 "subscription": "SUBSCRIPTION" if medium else "SUB",
+                "subscription requested": "PLAN CHECK" if medium else "PLAN?",
+                "agent-managed": "AGENT ACCOUNT" if medium else "ACCOUNT",
                 "local": "LOCAL",
                 "byok": "BYOK",
             }.get(auth_mode, auth_mode.upper())

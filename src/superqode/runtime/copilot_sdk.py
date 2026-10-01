@@ -282,7 +282,9 @@ class CopilotSDKRuntime:
             # tokens, so do not let them silently replace a working subscription
             # login on the SDK route. Headless callers have the unambiguous
             # COPILOT_GITHUB_TOKEN escape hatch below.
-            process_env = child_env()
+            from superqode.providers.subscription_env import subscription_child_env
+
+            process_env, _ = subscription_child_env("copilot", child_env())
             process_env.pop("GH_TOKEN", None)
             process_env.pop("GITHUB_TOKEN", None)
             kwargs["env"] = process_env

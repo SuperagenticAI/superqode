@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.41] - 2026-10-01
+
+### Fixed
+
+- Guard Copilot account connections against model-provider environment overrides,
+  including when an explicit GitHub identity token is supplied.
+- Require a live ChatGPT account check for Codex subscription connections before
+  creating a thread and before each prompt; mask inherited API keys and restrict
+  the app-server login method. Explicit runtime connections retain agent-managed
+  authentication.
+- Keep transport, authentication, requested billing and verification separate in
+  saved routes. Migrate old ACP authentication values without implying plan
+  verification, restore runtime/model choices, and stop unsupported reconnects
+  instead of falling back to a previously used BYOK route.
+- Describe external harness accounts as agent-managed with unverified billing.
+  Reject legacy interactive plan routes in headless commands before any model call.
+
 ## [2.4.40] - 2026-10-01
 
 ### Changed
