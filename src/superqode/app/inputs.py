@@ -177,11 +177,16 @@ class SelectionAwareInput(TextArea):
 
     def _resize_to_content(self) -> None:
         """Grow the prompt until the configured maximum, then scroll internally."""
-        # Match the text area's usable inner width. The prompt has a fixed
-        # symbol column and border, so using the full widget width overestimates
-        # how much text fits on a visual line.
-        width = max(12, (self.content_size.width or self.size.width or 80) - 1)
-        height = self._height_for_text(self.text, width)
+        # TextArea already wraps using terminal-cell widths, word boundaries,
+        # tabs and its gutter/scrollbars. Reuse that layout instead of a second
+        # character-count estimate, which clips wide text and oversizes accents.
+        if self.wrap_width:
+            height = max(
+                self.MIN_PROMPT_HEIGHT,
+                min(self.MAX_PROMPT_HEIGHT, self.wrapped_document.height),
+            )
+        else:
+            height = self._height_for_text(self.text, 80)
         self.styles.height = height
         try:
             input_box = self.app.query_one("#input-box")
@@ -215,7 +220,9 @@ class SelectionAwareInput(TextArea):
             schedule()
 
     def on_resize(self, event: events.Resize) -> None:
-        self._resize_to_content()
+        # Inherited TextArea handling rewraps after this handler. Size from the
+        # completed layout so a wider/narrower terminal uses the new line count.
+        self.call_after_refresh(self._resize_to_content)
 
     def _submit_current_value(self, event: events.Key) -> None:
         value = self.value

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.39] - 2026-10-01
+
+### Fixed
+
+- Size the prompt composer from its rendered wrapping, including wide and
+  combining characters, and update its height after terminal resizes.
+- Retrieve background runtime-cleanup failures and await previously detached
+  runtimes even when the active runtime fails to close. Keep connection switching
+  usable when asynchronous cleanup fails outside a running UI loop.
+
 ## [2.4.38] - 2026-10-01
 
 ### Added

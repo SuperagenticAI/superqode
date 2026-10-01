@@ -304,3 +304,28 @@ def test_responsiveness_gate_fails_on_stalls_and_missing_measurements():
     )
     results[0]["rendered_lines"] = 100000
     assert any("4,000-line" in failure for failure in module.budget_failures({"results": results}))
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["a" * 140, "界" * 140, "e\u0301" * 140, "abcdefghij " * 30],
+    ids=["ascii", "wide", "combining", "word-wrap"],
+)
+async def test_composer_height_matches_rendered_wrapping_through_resize(text):
+    """Prompt height follows terminal cells and actual word wrapping."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(50, 30)) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = text
+        prompt.cursor_position = len(text)
+        await pilot.pause()
+        for size in [(50, 30), (80, 30), (45, 30)]:
+            await pilot.resize_terminal(*size)
+            await pilot.pause()
+            expected = max(
+                prompt.MIN_PROMPT_HEIGHT,
+                min(prompt.MAX_PROMPT_HEIGHT, prompt.wrapped_document.height),
+            )
+            assert prompt.size.height == expected
+            assert prompt.value == text
+            assert prompt.cursor_position == len(text)

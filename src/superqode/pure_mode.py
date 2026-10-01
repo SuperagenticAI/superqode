@@ -573,26 +573,42 @@ class PureMode:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            asyncio.run(result)
+            try:
+                asyncio.run(result)
+            except Exception:  # noqa: BLE001 - same best-effort cleanup without a UI loop
+                pass
             return
         task = loop.create_task(result)
         self._runtime_close_tasks.add(task)
-        task.add_done_callback(self._runtime_close_tasks.discard)
+
+        def finished(task: asyncio.Task) -> None:
+            self._runtime_close_tasks.discard(task)
+            if not task.cancelled():
+                # Switching is best-effort, like synchronous cleanup above.
+                # Retrieve failures before discarding the task so they do not
+                # surface as unhandled errors after the UI has moved on.
+                task.exception()
+
+        task.add_done_callback(finished)
 
     async def aclose(self) -> None:
         """Close the active runtime and await any cleanup scheduled by switching."""
         self.cancel()
         runtime, self._runtime = self._runtime, None
         self._agent = None
-        if runtime is not None:
-            closer = getattr(runtime, "aclose", None) or getattr(runtime, "close", None)
-            if closer is not None:
-                result = closer()
-                if inspect.isawaitable(result):
-                    await result
-        pending = list(self._runtime_close_tasks)
-        if pending:
-            await asyncio.gather(*pending, return_exceptions=True)
+        try:
+            if runtime is not None:
+                closer = getattr(runtime, "aclose", None) or getattr(runtime, "close", None)
+                if closer is not None:
+                    result = closer()
+                    if inspect.isawaitable(result):
+                        await result
+        finally:
+            # A failing active host must not skip cleanup of older hosts that
+            # were detached while switching connections.
+            pending = list(self._runtime_close_tasks)
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
 
     def set_system_level(self, level: SystemPromptLevel):
         """Change the system prompt level."""

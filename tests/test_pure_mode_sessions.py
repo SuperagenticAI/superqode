@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 
 from superqode.agent.session_manager import SessionManager
@@ -388,3 +389,65 @@ def test_structured_runtime_events_are_capability_based(monkeypatch):
     assert thinking == ["checking"]
     assert calls == [("read", {"path": "README.md"})]
     assert results == [("read", "contents")]
+
+
+def test_failed_cleanup_without_event_loop_does_not_block_switching():
+    from types import SimpleNamespace
+
+    pure = PureMode()
+
+    async def fail():
+        raise RuntimeError("vendor host already exited")
+
+    pure._runtime = SimpleNamespace(aclose=fail)
+    pure._dispose_runtime()
+    assert pure._runtime is None
+    assert not pure._runtime_close_tasks
+
+
+async def test_failed_background_cleanup_is_retrieved_without_loop_errors():
+    from types import SimpleNamespace
+
+    pure = PureMode()
+    failures = []
+    loop = asyncio.get_running_loop()
+    previous = loop.get_exception_handler()
+
+    async def fail():
+        raise RuntimeError("vendor host already exited")
+
+    try:
+        loop.set_exception_handler(lambda _loop, context: failures.append(context))
+        pure._runtime = SimpleNamespace(aclose=fail)
+        pure._dispose_runtime()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert not pure._runtime_close_tasks
+        assert not failures
+    finally:
+        loop.set_exception_handler(previous)
+
+
+async def test_active_cleanup_failure_still_awaits_previous_runtime_cleanup():
+    from types import SimpleNamespace
+
+    pure = PureMode()
+    closed = []
+
+    async def previous_close():
+        await asyncio.sleep(0.01)
+        closed.append(True)
+
+    async def fail():
+        raise RuntimeError("active cleanup failed")
+
+    pending = asyncio.create_task(previous_close())
+    pure._runtime_close_tasks.add(pending)
+    pure._runtime = SimpleNamespace(aclose=fail, cancel=lambda: None)
+    try:
+        with pytest.raises(RuntimeError, match="active cleanup failed"):
+            await pure.aclose()
+        assert closed == [True]
+    finally:
+        await pending
