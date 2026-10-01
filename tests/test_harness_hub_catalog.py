@@ -199,7 +199,7 @@ def test_headlong_has_no_task_contract_unlike_jcode(monkeypatch):
     assert "buildable once" not in headlong["support_note"]
 
 
-def test_letta_and_warp_are_open_ecosystem_clis(monkeypatch):
+def test_letta_is_open_and_warp_has_a_closed_harness(monkeypatch):
     monkeypatch.setattr(
         "superqode.harness.hub.harness_picker_items",
         lambda *_args, **_kwargs: [_item()],
@@ -212,8 +212,8 @@ def test_letta_and_warp_are_open_ecosystem_clis(monkeypatch):
     assert letta["license"] == "Apache-2.0"
     assert letta["repository"] == "https://github.com/letta-ai/letta-code"
     assert "npm install -g @letta-ai/letta-code" in letta["install_command"]
-    assert warp["openness"] == "open"
-    assert warp["license"] == "AGPL-3.0"
+    assert warp["openness"] == "closed"
+    assert warp["license"] == "Proprietary (harness); AGPL-3.0 (client)"
     assert warp["repository"] == "https://github.com/warpdotdev/warp"
     assert "agent-cli" in warp["install_command"]
 

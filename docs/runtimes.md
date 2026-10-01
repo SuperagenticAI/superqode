@@ -671,3 +671,6 @@ response = await runtime.run("write hello.txt with the text 'hi'")
 ```
 
 The constructor signature is identical across backends. Each runtime ignores args it does not use when that is safe. When a runtime cannot honor a harness policy, it should report a clear error.
+
+The native `muse` runtime drives Muse Code through MSP and uses its own
+account login. Connect with `:connect muse`; the vendor owns the coding loop.

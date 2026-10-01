@@ -1875,6 +1875,14 @@ class ConnectMixin:
         still know which harness they belong to. Any other connector ends that
         flow so a later Core switch does not inherit KEY_MODELS / persist.
         """
+        if profile.connector == "plan-guidance":
+            # Information cards do not start a connection attempt or discard
+            # the active harness's model-selection state.
+            self._reset_connect_selection_states()
+            self._open_connect_screen(log)
+            log.add_info(profile.unavailable_hint)
+            log.add_info("Your current harness and model have been kept.")
+            return
         self._connection_retry_target = ("profile", (profile.id,))
         self._connection_attempt_state = "Setup"
         self._reset_connect_selection_states()
@@ -2058,11 +2066,6 @@ class ConnectMixin:
             from superqode.providers.connection_profiles import CONNECT_MENU_PLAN
 
             self._show_connect_type_picker(log, menu=CONNECT_MENU_PLAN)
-        elif conn == "plan-guidance":
-            log.add_info(profile.unavailable_hint)
-            log.add_info(
-                "Your current harness and model have been kept. Choose the agent route explicitly to switch."
-            )
         elif conn == "plan-agent":
             from superqode.providers.connection_profiles import get_connection_profile
 

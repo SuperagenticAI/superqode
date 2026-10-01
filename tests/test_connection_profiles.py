@@ -183,36 +183,11 @@ _FLAT_PROFILE_IDS_V1 = [
     "local",
     "byok",
     "plan",
-    "plan-minimax",
-    "plan-grok",
-    "plan-zai",
-    "plan-moonshot",
-    "plan-qwen",
-    "plan-copilot",
-    "plan-opencode",
-    "plan-ollama-cloud",
-    "plan-deepseek",
-    *[
-        f"plan-agent-{pid}"
-        for pid in (
-            "codex",
-            "grok",
-            "cursor",
-            "amp",
-            "antigravity",
-            "muse",
-            "prime-agent",
-            "gemini-cli",
-            "devin",
-            "droid",
-            "kiro",
-            "glm-cli",
-            "qwen-code",
-            "deepagents-code",
-            "junie",
-            "fx",
-        )
-    ],
+    "plan-minimax-experimental",
+    "plan-grok-experimental",
+    "plan-chatgpt",
+    "plan-kimi-models",
+    "plan-alibaba-models",
     "build-import",
     "build-preset",
     "build-wizard",
@@ -241,12 +216,12 @@ _FLAT_PROFILE_IDS_V1 = [
     "mistral-vibe-key",
     "hermes-key",
     "letta",
-    "warp",
     "kimi-code-key",
     "open-browse-acp",
     "droid-key",
     "junie-key",
     "muse-key",
+    "warp",
     "qoder-key",
     "poolside-key",
     "account-opencode-key",
@@ -516,13 +491,16 @@ def test_v2_open_menu_lists_tau_dsh_and_deepagents_sdk(monkeypatch):
         "cline-key",
         "openhands-key",
         "letta",
-        "warp",
         "zcode",
         "exoharness",
     ):
         assert required in ids
     assert get_connection_profile("letta").connector == "key-harness"
     assert get_connection_profile("warp").connector == "key-harness"
+    from superqode.providers.connection_profiles import CONNECT_MENU_CLOSED
+
+    assert "warp" in {p.id for p in list_connection_profiles(CONNECT_MENU_CLOSED)}
+    assert "warp" not in ids
     hidden = {
         "opencode",
         "prime-agent",

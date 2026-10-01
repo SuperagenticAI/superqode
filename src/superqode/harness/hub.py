@@ -254,7 +254,9 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     ),
     "ecosystem:jcode": HubOpenness("open", "MIT", "https://github.com/1jehuang/jcode"),
     "ecosystem:letta": HubOpenness("open", "Apache-2.0", "https://github.com/letta-ai/letta-code"),
-    "ecosystem:warp": HubOpenness("open", "AGPL-3.0", "https://github.com/warpdotdev/warp"),
+    "ecosystem:warp": HubOpenness(
+        "closed", "Proprietary (harness); AGPL-3.0 (client)", "https://github.com/warpdotdev/warp"
+    ),
     "ecosystem:qm": HubOpenness("open", "MIT", "https://github.com/yc-software/qm"),
     "ecosystem:headlong": HubOpenness(
         "open", "Apache-2.0", "https://github.com/laude-institute/headlong"
@@ -1178,7 +1180,7 @@ _ECOSYSTEM_DETAILS: dict[str, dict[str, Any]] = {
             "Model routing",
             "Cloud handoff (Oz)",
         ),
-        "based_on": "Warp Agent (AGPL-3.0)",
+        "based_on": "Warp Agent (proprietary harness; AGPL-3.0 client)",
         "popularity_rank": 70,
         "setup_steps": (
             HubSetupStep(
@@ -1744,7 +1746,7 @@ def _supplemental_records() -> list[HubRecord]:
         (
             "ecosystem:warp",
             "Warp Agent",
-            "Warp's AGPL-3.0 Agent CLI, the same harness as Warp Terminal, runnable in any terminal with a Warp account or WARP_API_KEY.",
+            "Warp's proprietary server-side agent harness with an AGPL-3.0 client, runnable in any terminal with a Warp account or WARP_API_KEY.",
             "https://www.warp.dev/agent-cli",
             ("warp", "warp agent cli", "warp terminal agent"),
         ),

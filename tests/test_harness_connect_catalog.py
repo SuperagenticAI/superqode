@@ -35,7 +35,6 @@ def test_visible_open_rows_include_the_full_key_set():
         "mistral-vibe-key",
         "hermes-key",
         "letta",
-        "warp",
         "kimi-code-key",
         "zcode",
         "exoharness",
@@ -219,16 +218,18 @@ def test_droid_key_is_closed_not_vendors():
     assert "open" not in droid_key.connect_menus()
 
 
-def test_letta_and_warp_are_visible_open_setup_cards():
+def test_letta_and_warp_setup_cards_use_harness_openness():
     letta = get_entry("letta")
     warp = get_entry("warp")
     assert letta is not None
     assert warp is not None
     assert letta in list_entries("open")
-    assert warp in list_entries("open")
-    assert letta.openness == warp.openness == "open"
+    assert warp in list_entries("closed")
+    assert warp not in list_entries("open")
+    assert letta.openness == "open"
+    assert warp.openness == "closed"
     assert letta.license == "Apache-2.0"
-    assert warp.license == "AGPL-3.0"
+    assert warp.license == "Proprietary (harness); AGPL-3.0 (client)"
     assert letta.hub_id == "ecosystem:letta"
     assert warp.hub_id == "ecosystem:warp"
     assert letta.auth[0].after_auth == "setup-card"
@@ -236,7 +237,7 @@ def test_letta_and_warp_are_visible_open_setup_cards():
     assert "LETTA_API_KEY" in letta.auth[0].env_vars
     assert "WARP_API_KEY" in warp.auth[0].env_vars
     assert "closed" not in letta.connect_menus()
-    assert "closed" not in warp.connect_menus()
+    assert "open" not in warp.connect_menus()
 
 
 def test_gemini_cli_is_not_an_open_row():

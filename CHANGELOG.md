@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.40] - 2026-10-01
+
+### Changed
+
+- Add Use your subscription (Experimental) to the SuperQode model-source
+  picker. All provider cards say Partner integration in progress and show
+  information only, preserving the current connection. Claude/Anthropic is
+  excluded. Existing native plan shortcuts remain compatible.
+- Classify Warp Agent under Closed harnesses: its server-side agent harness
+  is proprietary, while its client remains open source under AGPL-3.0.
+- Alphabetize Subscription, Open harnesses and Closed harnesses connection
+  lists by their displayed names, keeping the Browse ACP shortcut last.
+
 ## [2.4.39] - 2026-10-01
 
 ### Fixed

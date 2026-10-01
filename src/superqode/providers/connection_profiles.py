@@ -609,8 +609,8 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="plan",
-        label="Subscription",
-        description="Model plans and account subscriptions; agent routes name the harness switch",
+        label="Use your subscription (Experimental)",
+        description="Model access for your selected harness; integration status shown per provider",
         connector="plan-picker",
         runtime="builtin",
         menu=CONNECT_MENU_MODELS,
@@ -618,8 +618,8 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# Native model plans and explicit vendor-agent alternatives. Unsupported
-# native account endpoints remain discoverable without misrouting billing.
+# Experimental model subscriptions. Pending integrations only show guidance;
+# they never switch to a vendor agent or fall back to API-credit billing.
 _PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="plan-minimax",
@@ -642,6 +642,72 @@ _PLAN_PROFILES: List[ConnectionProfile] = [
         detect=_grok_cli_ready,
         unavailable_hint="install Grok CLI and run `grok login`",
     ),
+    ConnectionProfile(
+        id="plan-chatgpt",
+        label="OpenAI / ChatGPT — Partner integration in progress",
+        description="Experimental subscription model access; not available in SuperQode yet",
+        connector="plan-guidance",
+        auth_mode="subscription",
+        menu=CONNECT_MENU_PLAN,
+        unavailable_hint=(
+            "OpenAI / ChatGPT: Partner integration in progress. "
+            "SuperQode access and integration are not confirmed. "
+            "ChatGPT sign-in is not available here yet; no credentials are requested."
+        ),
+    ),
+    ConnectionProfile(
+        id="plan-kimi-models",
+        label="Kimi Code models — Integration in progress",
+        description="Experimental model access for your selected harness; not a Kimi agent switch",
+        connector="plan-guidance",
+        auth_mode="subscription",
+        menu=CONNECT_MENU_PLAN,
+        unavailable_hint=(
+            "Kimi Code models: Integration in progress. "
+            "A dedicated membership-key model adapter needs implementation and live testing. "
+            "This option does not connect Kimi's agent or use Moonshot API credits."
+        ),
+    ),
+    ConnectionProfile(
+        id="plan-alibaba-models",
+        label="Alibaba Token Plan — Integration in progress",
+        description="Experimental interactive coding model access; eligibility and adapter pending",
+        connector="plan-guidance",
+        auth_mode="subscription",
+        menu=CONNECT_MENU_PLAN,
+        unavailable_hint=(
+            "Alibaba Token Plan: Integration in progress. "
+            "SuperQode workflow eligibility and the dedicated plan adapter need verification. "
+            "No subscription connection or API-credit fallback is enabled here yet."
+        ),
+    ),
+]
+
+# Keep the existing native shortcuts separate from the experimental cards.
+_NATIVE_PLAN_SHORTCUTS = _PLAN_PROFILES[:2]
+_PLAN_PROFILES = [
+    replace(
+        profile,
+        id=f"{profile.id}-experimental"
+        if profile.id in {"plan-minimax", "plan-grok"}
+        else profile.id,
+        label=f"{profile.label.split(' (')[0].split(' —')[0]} — Partner integration in progress",
+        description="Experimental model subscription; partner integration in progress",
+        connector="plan-guidance",
+        detect=lambda: False,
+        unavailable_hint=(
+            f"{profile.label.split(' (')[0].split(' —')[0]}: Partner integration in progress. "
+            "Subscription access is not enabled through this experimental entry. "
+            "Provider access, adapter implementation and live testing must be confirmed "
+            "before it can connect. No credentials are requested or API-credit fallback used."
+        ),
+    )
+    for profile in _PLAN_PROFILES
+]
+
+# Older direct shortcuts remain resolvable, but are not model-source choices.
+# Agent subscriptions live under Existing harnesses; API credits use BYOK.
+_LEGACY_PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="plan-zai",
         label="GLM Coding Plan (supported agent required)",
@@ -1062,7 +1128,7 @@ _AGENT_PROFILES = [
     else p
     for p in _AGENT_PROFILES
 ]
-_PLAN_PROFILES.extend(
+_LEGACY_PLAN_PROFILES.extend(
     ConnectionProfile(
         id=f"plan-agent-{p.id}",
         label=f"{p.label} (use agent harness)",
@@ -1431,6 +1497,8 @@ _SUBSCRIPTION_PROFILES = _AGENT_PROFILES
 # Compatibility-only profiles remain directly resolvable without appearing in
 # the Connect picker or its completion list.
 _LEGACY_PROFILES: List[ConnectionProfile] = [
+    *[replace(profile, menu="") for profile in _NATIVE_PLAN_SHORTCUTS],
+    *[replace(profile, menu="") for profile in _LEGACY_PLAN_PROFILES],
     ConnectionProfile(
         id="copilot-cli",
         label="GitHub Copilot CLI",
@@ -1565,8 +1633,8 @@ CONNECT_MENU_TITLES = {
         "Local, your API key, or the agent’s own authenticated account.",
     ),
     CONNECT_MENU_PLAN: (
-        "Subscription",
-        "Model routes keep your harness. Agent routes explicitly switch the coding loop.",
+        "Use your subscription (Experimental)",
+        "Keeps your selected SuperQode harness. Partner integration in progress for all providers. Information only; no subscription connection is enabled here.",
     ),
     CONNECT_MENU_BUILD: (
         "Build your own harness (Advanced)",
@@ -1750,16 +1818,34 @@ def list_connection_profiles(menu: Optional[str] = None) -> List[ConnectionProfi
     if menu == CONNECT_MENU_AGENTS:
         return _agent_category_profiles()
     if menu == CONNECT_MENU_OPEN:
-        return _catalog_harness_profiles("open")
+        profiles = _catalog_harness_profiles("open")
+        # Keep the navigation shortcut after the alphabetized products.
+        return sorted(
+            profiles,
+            key=lambda profile: (
+                profile.id == "open-browse-acp",
+                profile.label.casefold(),
+                profile.id,
+            ),
+        )
     if menu == CONNECT_MENU_CLOSED:
-        return _catalog_harness_profiles("closed")
+        return sorted(
+            _catalog_harness_profiles("closed"),
+            key=lambda profile: (profile.label.casefold(), profile.id),
+        )
+    if menu == CONNECT_MENU_PLAN:
+        return sorted(_PLAN_PROFILES, key=lambda profile: (profile.label.casefold(), profile.id))
+    if menu == CONNECT_MENU_VENDORS:
+        return sorted(
+            _BY_MENU.get(menu, ()),
+            key=lambda profile: (profile.label.casefold(), profile.id),
+        )
     if menu == CONNECT_MENU_LANGUAGE:
         return _language_index_profiles()
     if str(menu).startswith(CONNECT_MENU_LANGUAGE_PREFIX):
         return _profiles_for_language(str(menu)[len(CONNECT_MENU_LANGUAGE_PREFIX) :])
     if menu == CONNECT_MENU_KEY_MODELS:
-        # A derived list. Never mutate _MODEL_PROFILES; Plan stays on the
-        # native SuperQode-harness path.
+        # A derived list of supported model sources.
         return [
             replace(profile, menu=CONNECT_MENU_KEY_MODELS)
             for profile in _MODEL_PROFILES
@@ -1873,8 +1959,8 @@ def group_profiles_by_readiness(
 def grouped_menu_profiles(menu: str) -> List[tuple[str, List[ConnectionProfile]]]:
     """Return one screen's profiles in the order they are drawn.
 
-    Screens are flat and in registry order, so a product keeps the same
-    position regardless of what is installed. Navigation and rendering both
+    Screens are flat, with product lists alphabetized, so a product keeps the
+    same position regardless of what is installed. Navigation and rendering both
     read this, so the highlight always matches the row on screen.
     """
     name = normalize_menu(menu)

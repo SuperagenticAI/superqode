@@ -136,7 +136,7 @@ model routes, and `jev` opens Jev Tool Routing setup. See the
 | Root option | What it asks | What it opens |
 | --- | --- | --- |
 | `:connect agents` | Use an agent you already have | Vendor coding agents, the full ACP catalog, and optional harness integrations |
-| `:connect models` | Run a SuperQode harness on a model you choose | `:connect local`, `:connect byok`, and `:connect plan` |
+| `:connect models` | Run a SuperQode harness on a model you choose | `:connect local` and `:connect byok` |
 | `:connect build` | Build your own harness for this repository (Advanced) | Import, preset, wizard, and blank HarnessSpec routes |
 
 Above the options, the root screen lists what it detected on this machine:
@@ -181,23 +181,28 @@ When SuperQode owns the loop, the harness step is also directly addressable:
 :connect harness-repo
 ```
 
-The models screen holds the three routes where SuperQode owns the tool loop:
+The model-source screen offers Local, BYOK and an experimental subscription
+information menu for your selected SuperQode harness:
 
 ```text
 :connect local
 :connect byok
-:connect plan
 ```
 
-`:connect plan` lists native model subscriptions and named vendor-agent
-alternatives. MiniMax Token Plan and the Grok CLI account proxy keep the selected
-SuperQode harness. Vendor-agent alternatives explicitly change the coding loop.
-Z.AI and Alibaba Coding Plan rows explain supported-agent setup and keep your
-current connection; their general APIs remain BYOK. Kimi and Copilot plan rows
-explicitly select their vendor harness. API-credit rows retain BYOK billing.
-Its direct routes are `plan-zai`, `plan-grok`, `plan-copilot`, `plan-moonshot`,
-`plan-qwen`, `plan-opencode`, `plan-ollama-cloud`, `plan-deepseek`, and
-`plan-minimax`, each used as `:connect <route>`.
+The **Use your subscription (Experimental)** option labels all providers
+**Partner integration in progress**. Selecting a card shows information and
+keeps your current connection. Claude/Anthropic subscriptions are excluded.
+Experimental information cards are directly reachable as
+`:connect plan-alibaba-models`, `:connect plan-grok-experimental`,
+`:connect plan-kimi-models`, `:connect plan-minimax-experimental` and
+`:connect plan-chatgpt`. All say Partner integration in progress and keep
+connection state unchanged.
+
+Vendor subscriptions remain under **Existing harnesses → Subscriptions**. Older direct
+plan shortcuts remain compatible with saved configurations. `:connect plan`
+opens the experimental information menu. Existing native MiniMax and Grok
+shortcuts preserve the selected harness. Older agent shortcuts explicitly select the vendor harness,
+and API-credit shortcuts retain BYOK billing.
 
 ```text
 :connect plan-zai
@@ -217,8 +222,8 @@ in `MINIMAX_TOKEN_PLAN_API_KEY` or local auth storage, and
 See the [connection setup guide](../advanced/connection-profiles.md) for
 plan-specific instructions and upstream references.
 
-Every existing vendor-agent choice is also reachable from the model-source
-screen as a named harness switch:
+Older vendor-agent shortcuts remain directly reachable for compatibility.
+They are omitted from the model-source screen:
 
 | Account alternative | Direct profile |
 | --- | --- |

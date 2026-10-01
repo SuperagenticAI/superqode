@@ -426,29 +426,29 @@ def test_the_muse_key_row_gates_on_the_key_instead_of_erroring(monkeypatch):
     assert stub.cards == [("setup", "muse-key")]
 
 
-def test_the_subscriptions_category_holds_every_plan_codex_first():
-    """Plan order is fixed, so a product sits in the same place everywhere."""
+def test_the_subscriptions_category_holds_every_plan_alphabetically():
+    """Plan order follows visible names, regardless of installation status."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     assert [p.id for p in list_connection_profiles(CONNECT_MENU_VENDORS)] == [
-        "codex",
-        "grok",
-        "cursor",
         "amp",
         "antigravity",
-        "muse",
-        "prime-agent",
-        "copilot",
-        "gemini-cli",
+        "codex",
+        "cursor",
+        "deepagents-code",
         "devin",
         "droid",
-        "kiro",
-        "glm-cli",
-        "qwen-code",
-        "kimi-code",
-        "deepagents-code",
-        "junie",
         "fx",
+        "gemini-cli",
+        "copilot",
+        "glm-cli",
+        "grok",
+        "junie",
+        "kimi-code",
+        "kiro",
+        "muse",
+        "prime-agent",
+        "qwen-code",
     ]
 
 
@@ -565,12 +565,12 @@ def test_v2_normalizes_other_harnesses_to_the_open_menu(monkeypatch):
     assert normalize_menu("other-harnesses") == CONNECT_MENU_ROOT
 
 
-def test_model_step_offers_local_key_and_subscription():
+def test_model_step_offers_local_key_and_experimental_subscriptions():
     # BYOK is the term people search for; the parenthetical is what it means.
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
         ("local", "Local"),
         ("byok", "BYOK (use your own API key)"),
-        ("plan", "Subscription"),
+        ("plan", "Use your subscription (Experimental)"),
     ]
 
 
@@ -581,7 +581,7 @@ def test_key_models_menu_is_local_and_byok_without_plan():
         ("local", "Local"),
         ("byok", "BYOK (use your own API key)"),
     ]
-    # Native model list is untouched: Plan stays on SuperQode's own harness path.
+    # Native SuperQode model sources also expose experimental information cards.
     assert [p.id for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
         "local",
         "byok",
@@ -1258,12 +1258,24 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
     """Subscriptions is a menu, so it inherits the shared picker machinery."""
     profiles = list_connection_profiles(CONNECT_MENU_PLAN)
 
-    assert len(profiles) > 3
+    assert [profile.id for profile in profiles] == [
+        "plan-alibaba-models",
+        "plan-grok-experimental",
+        "plan-kimi-models",
+        "plan-minimax-experimental",
+        "plan-chatgpt",
+    ]
     assert CONNECT_MENU_PLAN in CONNECT_MENUS
     for profile in profiles:
         assert profile.menu == CONNECT_MENU_PLAN
         # Every row has to lead somewhere the dispatcher understands.
-        assert profile.connector in {"byok", "grok-api", "plan-agent", "plan-guidance"}
+        assert profile.connector == "plan-guidance"
+        assert "Partner integration in progress" in profile.label
+        assert "Partner integration in progress" in profile.unavailable_hint
+        assert not profile.available
+        assert "claude" not in profile.label.casefold()
+        assert "anthropic" not in profile.label.casefold()
+        assert profile.auth_mode == "subscription"
         if profile.connector == "byok":
             assert profile.byok_provider
         if profile.connector == "copilot":
@@ -1271,6 +1283,24 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
             # list the whole catalogue, which is not plan specific.
             assert profile.runtime
             assert not profile.byok_provider
+
+
+def test_experimental_subscription_cards_preserve_connection_state():
+    from superqode.app_main import SuperQodeApp
+
+    for profile in list_connection_profiles(CONNECT_MENU_PLAN):
+        stub = DispatchStub()
+        session = object()
+        stub._key_harness_session = session
+        stub._connection_attempt_state = "Connected"
+        stub._connection_retry_target = ("existing", ())
+        log = FakeLog()
+        SuperQodeApp._dispatch_connection_profile(stub, profile, log)
+        assert stub._key_harness_session is session
+        assert stub._connection_attempt_state == "Connected"
+        assert stub._connection_retry_target == ("existing", ())
+        assert not stub.harness_commands
+        assert any("Partner integration in progress" in item for item in log.items)
 
 
 def test_choosing_a_plan_connects_that_provider():
@@ -1654,17 +1684,21 @@ def test_a_longer_harness_name_is_not_the_one_the_session_holds():
 def test_the_open_list_states_the_licence_on_the_row():
     """Openness is the point of the list, and AGPL against MIT is the answer."""
     from superqode.providers.connection_profiles import (
+        CONNECT_MENU_CLOSED,
         CONNECT_MENU_OPEN,
         list_connection_profiles,
     )
 
     badges = {p.id: p.badges for p in list_connection_profiles(CONNECT_MENU_OPEN)}
 
-    assert "AGPL-3.0" in badges["warp"]
     assert "MIT" in badges["tau"]
     assert "Apache-2.0" in badges["goose-key"]
     # Openness leads, then the licence that qualifies it.
-    assert badges["warp"][:2] == ["open harness", "AGPL-3.0"]
+    closed = {p.id: p.badges for p in list_connection_profiles(CONNECT_MENU_CLOSED)}
+    assert closed["warp"][:2] == [
+        "closed harness",
+        "Proprietary (harness); AGPL-3.0 (client)",
+    ]
 
 
 # --- the Open row that ends in Prime's Python RPC ------------------------------

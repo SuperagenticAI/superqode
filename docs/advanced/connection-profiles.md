@@ -47,30 +47,38 @@ agents, with Hugging Face Tau shown alongside its live installation status.
   Connect with a provider key or a local model. Includes Tau, DeepSeek
   Harness, DeepAgents SDK, OpenCode, Prime Agent, jcode, Grok Build, Qwen
   Code, fast-agent, Pi, Goose, Cline, OpenHands, Mistral Vibe, Hermes Agent,
-  Letta Code, Warp Agent, Kimi Code, and fx.
+  Letta Code, Kimi Code, and fx.
 - **Closed harnesses** (`:connect closed-harnesses`): proprietary harnesses
   on that vendor's key. Includes Factory Droid, Junie, Muse Code, Qoder CLI,
-  Poolside, and ZCode (inspect only).
+  Poolside, and Warp Agent (setup guidance only).
 
 `:connect other-harnesses` still works; it opens the Open list.
 
-## Native model subscriptions and account alternatives
+## Native model subscriptions
 
-The **Subscriptions / accounts** model screen shows both native model routes
-and explicit **Use … harness** alternatives. Native routes keep Core/PiPy;
-agent alternatives switch to the named agent's coding loop and transport.
-Selecting a plan that needs an external agent shows setup guidance and keeps
-the current connection until you choose that agent.
+The SuperQode model-source picker offers **Local**, **BYOK** and
+**Use your subscription (Experimental)**. Every experimental provider card
+is labelled **Partner integration in progress**. Alibaba Token Plan, Grok,
+Kimi Code models, MiniMax Token Plan and OpenAI/ChatGPT are information-only
+entries: selecting one does not authenticate, switch harnesses or connect a
+model. Provider access and integration still need confirmation and testing.
+Claude/Anthropic subscription access is excluded.
+
+Vendor agent accounts remain under **Existing harnesses → Subscriptions**.
+Existing native model-plan shortcuts below remain directly available for
+compatibility; they are separate from the experimental cards.
 
 | Source | Route |
 | --- | --- |
 | MiniMax Token Plan | `:connect plan-minimax`: native model access using `MINIMAX_TOKEN_PLAN_API_KEY` with an `sk-cp` key, or `superqode auth login minimax-token-plan`. Uses `https://api.minimax.io/v1`; ordinary MiniMax/OpenAI keys cannot substitute. |
 | Grok account | `:connect plan-grok` / `:grok api`: native model access using the Grok CLI session. |
-| Codex, Gemini, Copilot and other vendor agents | Explicit named harness alternatives; these accounts do not become generic native model credentials. |
-| Kimi Code | `:connect plan-moonshot` explicitly selects the Kimi Code agent. Moonshot platform API credits remain BYOK. |
-| Z.AI GLM Coding Plan | `:connect plan-zai` explains supported-agent setup; the general `zai` API is BYOK. Use `:connect glm-cli` for the GLM agent. |
-| Alibaba Coding Plan | `:connect plan-qwen` explains the separate `sk-sp` credential and coding endpoint. Qwen OAuth is `:connect qwen-code`; general DashScope is BYOK. |
-| OpenCode, Ollama Cloud, DeepSeek API credits | API-key routes with BYOK billing identity; menu placement does not turn credits into a subscription. |
+
+Codex, Copilot, Kimi Code and other vendor agents retain their own coding
+loops. Select them under Existing harnesses. OpenCode Zen, Ollama Cloud and
+DeepSeek API credits use BYOK. GLM and Alibaba Coding Plans require their
+supported-agent setup rather than appearing as native Core/RLM model sources.
+Older direct `plan-*` shortcuts remain supported for existing configurations;
+they are omitted from the model-source picker and its completion list.
 
 The [Z.AI supported-tool guidance](https://docs.z.ai/devpack/tool/others) and
 [Alibaba Coding Plan instructions](https://www.alibabacloud.com/help/en/model-studio/coding-plan)
