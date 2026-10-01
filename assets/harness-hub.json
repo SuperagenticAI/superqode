@@ -1,6 +1,6 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-09-30T22:30:41.046322+00:00",
+  "generated_at": "2026-10-01T05:44:26.358114+00:00",
   "count": 99,
   "categories": [
     "SuperQode harnesses",
@@ -1109,8 +1109,8 @@
       "description": "Use Meta's Muse Code agent with your Meta account sign-in",
       "category": "Coding agents",
       "kind": "connection",
-      "runtime": "external-cli",
-      "source": "connection:external-cli",
+      "runtime": "muse",
+      "source": "connection:runtime",
       "readiness": "setup-required",
       "integration_level": "managed",
       "continuity": "fresh-session",
