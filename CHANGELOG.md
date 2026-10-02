@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Lock optional `a2a-sdk` to **1.2.1** (PyPI 2026-09-30): includes 1.2.0 features plus ListTasks
+  keyset-cursor pagination fix (#1282). Extra pin is now `>=1.2.0,<2.0.0`.
+
 ## [2.4.42] - 2026-10-02
 
 ### Fixed

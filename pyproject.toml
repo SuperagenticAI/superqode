@@ -117,7 +117,7 @@ extras = [
     "exa-py>=1.0.0",
 ]
 a2a = [
-    "a2a-sdk[fastapi,sqlite]>=1.1.2,<2.0.0",
+    "a2a-sdk[fastapi,sqlite]>=1.2.0,<2.0.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
 ]
