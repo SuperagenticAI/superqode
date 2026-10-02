@@ -24,6 +24,22 @@ The harness validates and redacts state, calls the selected client, binds the
 answers to their question types, and produces typed outputs. It executes no
 model-selected commands.
 
+## Code simulates, Jev evaluates
+
+Jev is strongest when each call **scores or chooses among options that already
+describe the world**. It is weaker when one call must also invent missing
+outcomes (for example, what an opponent does next, or whether a side effect
+already happened). Prefer this split in SystemOne packs and harness glue:
+
+1. Let **code or a simulator** expand state: run the tool, compute the lookahead,
+   or fill in concrete option descriptions.
+2. Ask **Jev** only to Choice, Score, or Noul over that enriched state.
+
+That matches how SuperQode already uses Jev for tool gates, routing, and rubric
+verdicts: the coding loop and harness supply evidence; Jev returns typed
+decisions. Avoid packing simulation and selection into a single underspecified
+question when a small amount of code can materialize the options first.
+
 ## Choose an integration
 
 | Workflow | Entry point | Result |
