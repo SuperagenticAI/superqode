@@ -14,8 +14,8 @@ SuperQode changes nothing until you select PiPy.
 superqode --harness pipy
 ```
 
-In the TUI, open `:connect` and select **PiPy** from the harness step, or
-address it directly:
+In the TUI, open `:connect` and select **PiPy**. The row is labelled
+**Pi-inspired Pythonic version**. You can also address it directly:
 
 ```text
 :connect harness-pipy
@@ -67,8 +67,8 @@ checkpoint inspection and the standalone WorkOrder execution route.
 | Sessions | Append-only JSONL tree with branch, resume, fork and compaction |
 | Steering | Messages injected mid-run, and follow-ups that wait for the agent to settle |
 
-Behaviour is checked against pi's source by the suite in `tests/pipy/`, with a
-test named for each behaviour.
+The table is the tested behaviour. PiPy does not reproduce every pi extension,
+provider, or session feature.
 
 ## Sessions
 
@@ -221,9 +221,9 @@ Monty extra and `runtime.config.monty.enabled` for program composition.
   submit a normal prompt to send it through PiPy. Existing attachment and model
   capability limits still apply.
 - `:pipy session`, `:pipy fork`, `:pipy tree` and `:pipy export` show continuity.
-- `:work programs WORK_ID --json` and `:work invocations WORK_ID --json` run
-  the CLI-backed inspection commands inside the TUI. An actual WorkOrder with
-  recovery enabled is required for coding checkpoints; ordinary chat is separate.
+- `:work programs`, `:work program-run`, `:work invocations` and `:work reconcile`
+  run the same WorkOrder commands as `sq work`.
+- `:benchmark compare` runs the same comparison command as `sq benchmark compare`.
 
-Benchmark execution remains deferred. The local composer-image follow-up has
-not completed regression verification and is not part of the existing 2.4.43 tag.
+Recovery applies only inside an active WorkOrder with recovery enabled. Ordinary
+chat does not create coding checkpoints.

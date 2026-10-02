@@ -44,10 +44,6 @@
   <img src="assets/superqode-banner.png" alt="" width="760">
 </p>
 
-<p align="center">
-  <a href="https://www.producthunt.com/products/superqode?utm_source=badge-follow&utm_medium=badge&utm_source=badge-superqode" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=1155543&theme=light" alt="SuperQode on Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-</p>
-
 ## What is SuperQode?
 
 Picking a capable model does not give you a reliable code production system. The

@@ -15,6 +15,10 @@ repo_name: SuperagenticAI/superqode
 repo_url: https://github.com/SuperagenticAI/superqode
 edit_uri: edit/main/docs/
 
+# Engineering notes stay in the repository and are not part of the public site.
+exclude_docs: |
+  advanced/tui-experience-review.md
+
 copyright: Copyright &copy; 2026 <a href="https://super-agentic.ai" target="_blank">Superagentic AI</a>
 
 theme:

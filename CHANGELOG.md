@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-02
+
+### Highlights
+
+- This release focuses on a polished TUI and the developer experience around it: themes, the multiline composer, connect menus, tool controls, and sessions. SuperQode remains the harness layer for coding agents.
+- PiPy is SuperQode's Pi-inspired Pythonic harness, and it is separate from the Pi coding agent. Connect PiPy with `:connect harness-pipy`. Connect the Pi coding agent with `:connect acp pi`. PiPy includes shared MCP, images through the provider gateway, and OAuth identity and refresh hardening. Monty programs and coding WorkOrder recovery stay opt-in.
+- When the SuperQode TUI runs inside a Herdr pane, Herdr shows idle, working, and blocked status for approvals and questions. SuperQode detects Herdr automatically. Outside Herdr, that reporter stays inactive.
+
+### Notes
+
+- PiPy covers a tested subset of pi behaviour. It is not a universal replacement for the pi product.
+- A live Pi cost or speed comparison is not part of this release.
+- Session resume keeps the selected harness and model. Local model connect and warmup, and `sq mcp list`, `login`, `logout`, and `reconnect`, are unchanged.
+
 ## [2.4.44] - 2026-10-02
 
 ### Fixed

@@ -72,6 +72,8 @@ criterion is ungraded.
 sq benchmark compare comparison.json --repetitions 3 --output results.json
 ```
 
+In the TUI, `:benchmark compare` accepts the same arguments.
+
 The manifest includes `tasks` as above and at least two distinct `targets`:
 
 ```json

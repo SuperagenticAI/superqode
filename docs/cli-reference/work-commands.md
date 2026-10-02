@@ -1,6 +1,8 @@
 # WorkOrder Commands
 
 `sq work` is the terminal control surface for durable multi-harness work.
+In the TUI, the same subcommands are available as `:work`, including
+`:work programs`, `:work program-run`, `:work invocations`, and `:work reconcile`.
 
 ```bash
 sq work --help

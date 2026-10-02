@@ -363,8 +363,8 @@ with a 4 MB limit per image. Image bytes are sent as image content, never read
 as text files.
 
 Image input is supported in direct Chat with a vision-capable model, the built-in
-coding loop, and ACP agents that advertise image input. Other harness/runtime
-routes currently report that composer image input is unavailable. Rejected
+coding loop, ACP agents that advertise image input, and PiPy. Other harness and
+runtime routes report that composer image input is unavailable. Rejected
 requests restore the images and draft so you can change connections and retry.
 Saved coding sessions retain prompt text; reattach images when resuming a session.
 
