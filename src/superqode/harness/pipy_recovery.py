@@ -77,7 +77,7 @@ class PiPyRunRecovery:
                 invocation_id=identity,
             )
 
-    async def prepare(self, prompt):
+    async def prepare(self, prompt, images=None):
         try:
             workspace = await check_recovery_workspace(self.scope)
             identity = "pipy.run.start"
@@ -85,6 +85,7 @@ class PiPyRunRecovery:
             fingerprint = input_fingerprint(
                 {
                     "prompt": prompt,
+                    **({"images": [asdict(image) for image in images]} if images else {}),
                     "config": self.config,
                     "model": asdict(self.coding.harness.get_model()),
                     "tools": {t.name: dict(t.parameters) for t in self.coding.harness.get_tools()},

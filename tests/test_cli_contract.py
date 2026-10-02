@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 298
+EXPECTED_COMMAND_COUNT = 307
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -147,7 +147,13 @@ EXPECTED_COMMAND_COUNT = 298
 # Gauge gate adds --require-ship to enforce recorded approval and L2 readiness.
 # No command is added or removed.
 # Rebaselined for interactive resume/fork and startup approval/interaction options.
-EXPECTED_HELP_TREE_SHA256 = "924133e9e1d889830df4cf8ee7ac4d5020f0f11ed38940b124f4112ab163f050"
+# Rebaselined for the command surface shipped after 2.4.38: `mcp list`,
+# `mcp login`, `mcp logout`, `mcp reconnect`, `work programs`,
+# `work program-run`, `work invocations`, `work reconcile`, and
+# `benchmark compare` (298 -> 307). The same releases added
+# `harness eval --recovery-store` and refreshed the registry-derived
+# `--connect` choice list. No previously shipped command was removed.
+EXPECTED_HELP_TREE_SHA256 = "d7ab559cc090732ed1347229b50436f407b542cb1e01ff5f806d07da34694a90"
 
 
 def _render_help_tree() -> tuple[int, str]:

@@ -7459,7 +7459,7 @@ class CommandImplMixin:
         except ValueError as exc:
             log.add_error(f"Could not parse :benchmark arguments: {exc}")
             return
-        if tokens and tokens[0] == "run":
+        if tokens and tokens[0] in {"run", "compare"}:
             self._run_cli_passthrough(["benchmark", *tokens], log, "Benchmark command")
             return
 
@@ -7478,6 +7478,10 @@ class CommandImplMixin:
         t.append("\n  CLI run:\n", style=THEME["muted"])
         t.append(
             "    superqode benchmark run tasks.json --target superqode --target opencode --target pi --target deepagents\n",
+            style=THEME["cyan"],
+        )
+        t.append(
+            "    superqode benchmark compare manifest.json\n",
             style=THEME["cyan"],
         )
         if args.strip():

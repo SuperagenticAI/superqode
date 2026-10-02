@@ -190,6 +190,15 @@ class PiPyHarnessProtocolAdapter:
         message: HarnessMessage,
     ) -> AsyncIterator[HarnessEvent]:
         coding_session = await self._require(session)
+        from superqode.pipy.messages import ImageContent
+        from superqode.pipy.ai.gateway import _gateway_content
+
+        images = [
+            ImageContent(data=entry["data"], mime_type=entry["mime_type"])
+            for entry in message.metadata.get("images", [])
+        ]
+        if images:
+            _gateway_content(images)  # Apply shared bounds before storing the prompt.
         model = coding_session.harness.get_model()
         yield HarnessEvent(
             type="model.requested",
@@ -211,10 +220,14 @@ class PiPyHarnessProtocolAdapter:
             from .pipy_recovery import PiPyRunRecovery
 
             recovery = PiPyRunRecovery(scope, coding_session, config)
-            await recovery.prepare(message.content)
+            await recovery.prepare(message.content, images=images)
         try:
             with recovery_scope(recovery.scope if recovery else scope):
-                stream = coding_session.prompt_events(message.content)
+                stream = (
+                    coding_session.prompt_events(message.content, images)
+                    if images
+                    else coding_session.prompt_events(message.content)
+                )
                 async for event in stream:
                     for translated in translate_event(event):
                         yield translated

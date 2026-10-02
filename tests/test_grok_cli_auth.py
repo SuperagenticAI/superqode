@@ -419,6 +419,11 @@ def test_direct_grok_byok_connection_imports_cli_session_first():
             calls.append(on_login_success)
             return False
 
+        _connect_byok_mode_impl = SuperQodeApp._connect_byok_mode_impl
+
+        def _connection_attempt_failed(self, log, detail):
+            raise AssertionError(detail)
+
     SuperQodeApp._connect_byok_mode(_Stub(), "grok-cli", "grok-4.5", _Log())
 
     assert len(calls) == 1

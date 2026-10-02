@@ -136,6 +136,9 @@ def test_return_to_agent_restores_transcript_and_focus():
         def _reset_connect_selection_states(self):
             self.reset_connect = True
 
+        def _end_connection_view(self, _log):
+            return False
+
         def query_one(self, *_args, **_kwargs):
             return self.log
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.44] - 2026-10-02
+
+### Fixed
+
+- Show `:work programs`, `:work program-run`, `:work invocations`, `:work reconcile`, and `:benchmark compare` in the TUI command list.
+- Run `:benchmark compare` through the same CLI path as `:benchmark run`.
+
 ## [2.4.43] - 2026-10-02
 
 ### Added

@@ -20,7 +20,6 @@ from superqode.mcp.auth_storage import (
     MCPAuthStorage,
     TokenStorage,
     _FileTokenStorageAdapter,
-    _has_keyring,
     make_default_token_storage,
 )
 from superqode.mcp.hf_auth import (
@@ -307,46 +306,66 @@ def test_file_storage_adapter_satisfies_protocol(tmp_path, monkeypatch):
     assert adapter.delete_tokens("https://example.com") is True
 
 
-def test_make_default_token_storage_returns_a_storage():
+def test_make_default_token_storage_returns_a_storage(monkeypatch, tmp_path):
     """Whichever backend is preferred, the helper must return
     *something* — fallback chain is the whole point."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("superqode.mcp.auth_storage._has_keyring", lambda: False)
     storage = make_default_token_storage()
     assert hasattr(storage, "save_tokens")
     assert hasattr(storage, "load_tokens")
     assert hasattr(storage, "delete_tokens")
 
+    pytest.importorskip("keyring")
+    monkeypatch.setattr("superqode.mcp.auth_storage._has_keyring", lambda: True)
+    keyed = make_default_token_storage()
+    assert isinstance(keyed, KeyringTokenStorage)
 
-@pytest.mark.skipif(not _has_keyring(), reason="OS keyring backend not available")
-def test_keyring_storage_round_trip():
-    """When keyring is available, save/load/delete must round-trip.
-    Uses a unique service name per run so we don't trample real
-    user data if the test is run in a desktop session."""
-    import uuid
 
-    service = f"superqode-mcp-test-{uuid.uuid4().hex[:8]}"
-    storage = KeyringTokenStorage(service=service)
+def test_keyring_storage_round_trip(monkeypatch):
+    """Save, load, and delete must round-trip through the keyring adapter.
+
+    The OS keychain is not part of this contract. A desktop session can
+    deny or hang `SecItemAdd` for the test runner, and collection must
+    not write probe passwords into the login keychain.
+    """
+    pytest.importorskip("keyring")
+
+    class _FakeKeyring:
+        def __init__(self):
+            self.store: dict[tuple[str, str], str] = {}
+
+        def set_password(self, service, identity, payload):
+            self.store[(service, identity)] = payload
+
+        def get_password(self, service, identity):
+            return self.store.get((service, identity))
+
+        def delete_password(self, service, identity):
+            self.store.pop((service, identity), None)
+
+    storage = KeyringTokenStorage(service="superqode-mcp-test")
+    monkeypatch.setattr(storage, "_keyring", _FakeKeyring())
 
     tokens = OAuthTokens(
         access_token="kr-access",
         refresh_token="kr-refresh",
         scope="read",
     )
-    try:
-        storage.save_tokens("https://example.com/mcp", tokens)
-        loaded = storage.load_tokens("https://example.com/mcp")
-        assert loaded is not None
-        assert loaded.access_token == "kr-access"
-        assert loaded.refresh_token == "kr-refresh"
-        assert loaded.scope == "read"
+    storage.save_tokens("https://example.com/mcp", tokens)
+    loaded = storage.load_tokens("https://example.com/mcp")
+    assert loaded is not None
+    assert loaded.access_token == "kr-access"
+    assert loaded.refresh_token == "kr-refresh"
+    assert loaded.scope == "read"
 
-        # Different URL = different entry — no cross-talk.
-        other = storage.load_tokens("https://other.example/mcp")
-        assert other is None
-    finally:
-        storage.delete_tokens("https://example.com/mcp")
+    other = storage.load_tokens("https://other.example/mcp")
+    assert other is None
+
+    assert storage.delete_tokens("https://example.com/mcp") is True
+    assert storage.load_tokens("https://example.com/mcp") is None
 
 
-@pytest.mark.skipif(not _has_keyring(), reason="OS keyring backend not available")
 def test_keyring_storage_identity_is_url_independent_per_server():
     """Two URLs must produce different identity slots — otherwise one
     server's token would shadow another's."""

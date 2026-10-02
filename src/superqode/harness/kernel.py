@@ -41,6 +41,7 @@ class HarnessRunRequest:
     system_level: SystemPromptLevel | None = None
     result_schema: Any | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    images: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,7 @@ class HarnessSession:
         system_level: SystemPromptLevel | None = None,
         result: Any | None = None,
         metadata: dict[str, Any] | None = None,
+        images: tuple[Any, ...] = (),
     ) -> HarnessRunResult:
         """Run one prompt through this harness session."""
         request = HarnessRunRequest(
@@ -168,6 +170,7 @@ class HarnessSession:
             system_level=system_level,
             result_schema=result,
             metadata=dict(metadata or {}),
+            images=tuple(images),
         )
         return await self.run(request)
 
@@ -182,6 +185,7 @@ class HarnessSession:
         sandbox_backend: str = "local",
         system_level: SystemPromptLevel | None = None,
         metadata: dict[str, Any] | None = None,
+        images: tuple[Any, ...] = (),
     ) -> AsyncIterator[HarnessEvent]:
         """Stream one prompt through this harness session as normalized events."""
         from superqode.governance import active_governance, governance_scope, load_governance
@@ -198,6 +202,7 @@ class HarnessSession:
                     sandbox_backend=sandbox_backend,
                     system_level=system_level,
                     metadata=metadata,
+                    images=images,
                 ):
                     yield event
             return
@@ -230,6 +235,7 @@ class HarnessSession:
             runtime=runtime,
             sandbox_backend=sandbox_backend,
             system_level=system_level,
+            images=tuple(images),
             metadata={
                 **dict(metadata or {}),
                 "_harness_store": self.kernel.store,
@@ -396,6 +402,7 @@ class HarnessSession:
             runtime=request.runtime,
             sandbox_backend=request.sandbox_backend,
             system_level=request.system_level,
+            images=request.images,
             metadata={
                 **request.metadata,
                 "_harness_store": self.kernel.store,

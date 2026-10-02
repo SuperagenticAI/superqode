@@ -625,9 +625,12 @@ class PureMode:
         self, prompt: str, plan_mode: Optional[bool] = None, *, images=None
     ) -> AgentResponse:
         """Run a task in Pure Mode."""
-        if images and (self._harness_spec is not None or self._agent is None):
+        if images and (
+            (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
+            or (self._harness_spec is None and self._agent is None)
+        ):
             raise ValueError(
-                "This runtime does not support composer image input. Use built-in coding or direct Chat."
+                "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
             )
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
@@ -638,6 +641,7 @@ class PureMode:
                 model=model,
                 working_directory=self.session.working_directory,
                 runtime=self._harness_spec.runtime.backend,
+                **({"images": tuple(images)} if images else {}),
             )
             self.session.total_tool_calls += result.tool_calls_made
             self.session.total_iterations += result.iterations
@@ -689,9 +693,12 @@ class PureMode:
         # Never let a provider/runtime without usage metadata display figures
         # left over from the previous turn.
         self._last_stats = {}
-        if images and (self._harness_spec is not None or self._agent is None):
+        if images and (
+            (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
+            or (self._harness_spec is None and self._agent is None)
+        ):
             raise ValueError(
-                "This runtime does not support composer image input. Use built-in coding or direct Chat."
+                "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
             )
         self._cancel_requested = False
         if self._harness_spec is not None:
@@ -711,6 +718,7 @@ class PureMode:
                     model=model,
                     working_directory=self.session.working_directory,
                     runtime=self._harness_spec.runtime.backend,
+                    **({"images": tuple(images)} if images else {}),
                 ):
                     if self._cancel_requested:
                         break

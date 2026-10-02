@@ -104,6 +104,7 @@ class HarnessBackendRequest:
     sandbox_backend: str = "local"
     system_level: SystemPromptLevel | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    images: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)

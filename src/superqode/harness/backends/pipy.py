@@ -107,7 +107,19 @@ class PiPyHarnessBackend:
         ref = await self.adapter.resume(_session_ref(request))
         self._active_ref = ref
         try:
-            async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
+            message = HarnessMessage(
+                "user",
+                request.prompt,
+                metadata={
+                    "images": [
+                        {"data": image.data, "mime_type": image.mime_type}
+                        for image in request.images
+                    ]
+                }
+                if request.images
+                else {},
+            )
+            async for event in self.adapter.send(ref, message):
                 yield event
         except Exception as exc:
             from ..pipy_recovery import PiPyRecoveryRequired

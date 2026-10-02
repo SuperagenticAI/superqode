@@ -38,16 +38,16 @@ class _StatusStub(ModelCatalogMixin):
 
 
 def test_the_registry_refreshes_on_the_same_schedule_as_models_dev():
-    """Both catalogues refresh on the same launch and interval timers."""
+    """Both catalogues refresh once per launch, not on an hourly interval."""
     source = pathlib.Path("src/superqode/app_main.py").read_text(encoding="utf-8")
 
     for call in (
         "self.set_timer(0.5, self._start_models_dev_refresh)",
-        "self.set_interval(60 * 60, self._start_models_dev_refresh)",
         "self.set_timer(0.5, self._start_acp_registry_refresh)",
-        "self.set_interval(60 * 60, self._start_acp_registry_refresh)",
     ):
         assert call in source, call
+    assert "set_interval(60 * 60, self._start_models_dev_refresh)" not in source
+    assert "set_interval(60 * 60, self._start_acp_registry_refresh)" not in source
 
 
 def test_refreshes_run_as_background_workers():

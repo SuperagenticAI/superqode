@@ -207,3 +207,23 @@ process-recovery integration, not a power-loss or remote exactly-once guarantee.
 `examples/pipy/session.py` demonstrates session creation and events with an offline
 provider by default. `examples/pipy/custom_tool.py` demonstrates a typed custom
 tool and cancellation. Both use the independent `superqode.pipy` library.
+
+## Demo from the TUI
+
+Select a PiPy spec with `:harness use ./pipy-demo.yaml`; enable the optional
+Monty extra and `runtime.config.monty.enabled` for program composition.
+
+- `:mcp reload`, `:mcp status` and `:mcp tools` inspect shared integrations.
+- `:mcp login SERVER` and `:mcp logout SERVER` control a configured OAuth account.
+- Ask PiPy to use `python_program` to batch native reads, filter results and
+  store a small value. Ask it to load that value on the next turn.
+- With a vision model, `:paste /absolute/path/screenshot.png` stages an image;
+  submit a normal prompt to send it through PiPy. Existing attachment and model
+  capability limits still apply.
+- `:pipy session`, `:pipy fork`, `:pipy tree` and `:pipy export` show continuity.
+- `:work programs WORK_ID --json` and `:work invocations WORK_ID --json` run
+  the CLI-backed inspection commands inside the TUI. An actual WorkOrder with
+  recovery enabled is required for coding checkpoints; ordinary chat is separate.
+
+Benchmark execution remains deferred. The local composer-image follow-up has
+not completed regression verification and is not part of the existing 2.4.43 tag.

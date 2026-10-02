@@ -566,3 +566,130 @@ async def test_coding_worker_restores_images_after_provider_rejection(screenshot
         assert app.query_one("#prompt-input", SelectionAwareInput).value == "Review screenshot"
         assert not app.is_busy
         app._pure_mode = None
+
+
+async def _pipy_image_mode(tmp_path, monkeypatch, seen):
+    """Real kernel/backend/PiPy loop with an offline provider boundary."""
+    from superqode.pure_mode import PureMode
+    from superqode.harness.kernel import HarnessKernel
+    from superqode.harness.store import MemoryHarnessStore
+    from superqode.harness.templates import pipy_template
+    from superqode.harness.backends.pipy import PiPyHarnessBackend
+    from superqode.harness.pipy_adapter import PiPyHarnessProtocolAdapter
+    from superqode.pipy import CodingSessionOptions, PiPyCodingSession, Model
+    from superqode.pipy.ai import FakeStream, text_response
+    from superqode.pipy.ai.gateway import _gateway_messages
+
+    async def stream(model, context, options):
+        seen.extend(_gateway_messages(context.system_prompt, context.messages))
+        return FakeStream([text_response("Image reviewed")])(model, context, options)
+
+    async def factory(request, cwd, path):
+        return await PiPyCodingSession.create(
+            CodingSessionOptions(
+                cwd=cwd,
+                model=Model(id="vision", provider="fixture"),
+                stream_fn=stream,
+                session_root=tmp_path / "sessions",
+            )
+        )
+
+    monkeypatch.setattr("superqode.harness.pipy_adapter._record_session_path", lambda *a: None)
+    adapter = PiPyHarnessProtocolAdapter(session_factory=factory)
+    monkeypatch.setattr(
+        "superqode.harness.kernel.create_harness_backend",
+        lambda *a: PiPyHarnessBackend(adapter=adapter),
+    )
+    pure = PureMode()
+    pure._harness_spec = pipy_template()
+    pure._harness_session = await HarnessKernel(
+        pure._harness_spec, store=MemoryHarnessStore()
+    ).session()
+    pure.session.connected = True
+    pure.session.provider = "fixture"
+    pure.session.model = "vision"
+    pure.session.working_directory = tmp_path
+    return pure
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_pipy_harness_images_reach_provider_without_metadata_copy(
+    screenshot, tmp_path, monkeypatch, streaming
+):
+    seen = []
+    pure = await _pipy_image_mode(tmp_path, monkeypatch, seen)
+    image = load_image(screenshot)
+    if streaming:
+        text = "".join([chunk async for chunk in pure.run_streaming("Review", images=[image])])
+    else:
+        text = (await pure.run("Review", images=[image])).content
+    assert text == "Image reviewed"
+    user = next(message for message in seen if message.role == "user")
+    assert user.content == image_message("Review", [image])
+    store = pure._harness_session.kernel.store
+    runs = store.list_runs()
+    assert all("images" not in run.metadata for run in runs)
+
+
+@pytest.mark.asyncio
+async def test_pipy_composer_paste_sends_image_through_real_harness(
+    screenshot, tmp_path, monkeypatch
+):
+    seen = []
+    pure = await _pipy_image_mode(tmp_path, monkeypatch, seen)
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        app._pure_mode = pure
+        app._model_supports_vision = lambda model: True
+        log = app.query_one("#log", ConversationLog)
+        app._handle_paste_image(str(screenshot), log)
+        assert app._prepare_image_input(log)[0].path == screenshot.resolve()
+        deliveries = []
+        send = app._send_to_pure_mode
+        monkeypatch.setattr(
+            app, "_send_to_pure_mode", lambda text, log: deliveries.append(send(text, log))
+        )
+        app._handle_message("Review this screenshot", log)
+        await deliveries[-1].wait()
+        await pilot.pause()
+        user = next(message for message in seen if message.role == "user")
+        assert user.content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+        assert not app._staged_images
+        assert not app.is_busy
+        app._pure_mode = None
+
+
+@pytest.mark.asyncio
+async def test_other_harness_still_rejects_composer_images(screenshot):
+    from superqode.pure_mode import PureMode
+    from superqode.harness.templates import rlm_template
+
+    pure = PureMode()
+    pure._harness_spec = rlm_template()
+    with pytest.raises(ValueError, match="does not support composer image"):
+        await pure.run("Review", images=[load_image(screenshot)])
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ":work programs example --json",
+        ":work invocations example --json",
+        ':work program-run example --code "read files.py"',
+        ':work reconcile example task call --actor operator --reason "Verified result"',
+        ':benchmark compare "example manifest.json" --repetitions 1',
+    ],
+)
+@pytest.mark.asyncio
+async def test_tui_work_and_benchmark_commands_dispatch_cli_arguments(monkeypatch, command):
+    import shlex
+
+    app = SuperQodeApp()
+    dispatched = []
+    async with app.run_test():
+        monkeypatch.setattr(
+            app, "_run_cli_passthrough", lambda parts, log, label: dispatched.append(parts)
+        )
+        app._handle_command(command, app.query_one("#log", ConversationLog))
+        assert dispatched == [shlex.split(command.removeprefix(":"))]

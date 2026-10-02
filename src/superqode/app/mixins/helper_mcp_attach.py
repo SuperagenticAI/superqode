@@ -363,12 +363,15 @@ class HelperMcpAttachMixin:
             return None
         pure = getattr(self, "_pure_mode", None)
         if pure is not None and pure.session.connected:
-            if not getattr(self, "_chat_mode", False) and (
-                getattr(pure, "_harness_spec", None) is not None
-                or not getattr(pure, "_agent", None)
+            spec = getattr(pure, "_harness_spec", None)
+            pipy = getattr(getattr(spec, "runtime", None), "backend", None) == "pipy"
+            if (
+                not getattr(self, "_chat_mode", False)
+                and not pipy
+                and (spec is not None or not getattr(pure, "_agent", None))
             ):
                 log.add_error(
-                    "Image input is available in direct Chat, built-in coding, and image-capable ACP agents. Your attachments are still staged."
+                    "Image input is available in PiPy, direct Chat, built-in coding, and image-capable ACP agents. Your attachments are still staged."
                 )
                 return None
             if not self._model_supports_vision(pure.session.model):
