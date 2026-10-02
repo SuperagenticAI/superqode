@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from ..messages import AgentMessage, ImageContent, TextContent, Usage
+from ..messages import AgentMessage, ImageContent, SystemMessage, TextContent, Usage
 from ..types import JSONValue
 
 
@@ -55,6 +55,23 @@ class ActiveToolsChangeEntry(_EntryBase):
 
 
 @dataclass(slots=True)
+class ContextEditEntry(_EntryBase):
+    target_id: str
+    replacement: dict[str, Any] | None
+    type: Literal["context_edit"] = "context_edit"
+
+
+@dataclass(slots=True)
+class UsageEntry(_EntryBase):
+    kind: str
+    provider: str
+    model: str
+    usage: Usage
+    note: str | None = None
+    type: Literal["usage"] = "usage"
+
+
+@dataclass(slots=True)
 class CompactionEntry(_EntryBase):
     summary: str
     tokens_before: int
@@ -67,6 +84,7 @@ class CompactionEntry(_EntryBase):
     details: JSONValue = None
     usage: Usage | None = None
     from_hook: bool = False
+    system_message: SystemMessage | None = None
     type: Literal["compaction"] = "compaction"
 
 
@@ -126,6 +144,8 @@ SessionTreeEntry = (
     | ThinkingLevelChangeEntry
     | ModelChangeEntry
     | ActiveToolsChangeEntry
+    | ContextEditEntry
+    | UsageEntry
     | CompactionEntry
     | BranchSummaryEntry
     | CustomEntry
@@ -159,6 +179,7 @@ class SessionContext:
     thinking_level: str = "off"
     model: SessionModelRef | None = None
     active_tool_names: list[str] | None = None
+    usage: Usage = field(default_factory=Usage)
 
 
 @dataclass(slots=True)
@@ -171,6 +192,7 @@ __all__ = [
     "ActiveToolsChangeEntry",
     "BranchSummaryEntry",
     "CompactionEntry",
+    "ContextEditEntry",
     "CustomEntry",
     "CustomMessageEntry",
     "LabelEntry",
@@ -184,5 +206,6 @@ __all__ = [
     "SessionStats",
     "SessionTreeEntry",
     "ThinkingLevelChangeEntry",
+    "UsageEntry",
     "current_timestamp",
 ]

@@ -23,17 +23,18 @@ class PiPyHarnessBackend:
         supports_no_tool=False,
         supports_streaming=True,
         # PiPy runs with the permissions of the process, matching pi. There is
-        # no approval, sandbox or MCP path on this harness by design.
+        # no approval or sandbox path on this harness.
         supports_approvals=False,
         supports_sandbox=False,
         supports_shell=True,
-        supports_mcp=False,
+        supports_mcp=True,
         supports_typed_output=False,
         supports_workflow_children=False,
         event_detail="rich",
         notes=(
             "PiPy executes tools with the permissions of the process that "
-            "launched SuperQode. Use core or workbench for the policy stack.",
+            "launched SuperQode. Hosted contextual policy is enforced; use core "
+            "or workbench for approval and sandbox support.",
         ),
     )
 
@@ -62,7 +63,9 @@ class PiPyHarnessBackend:
                 if isinstance(raw, dict) and raw:
                     usage = _accumulate(usage, raw)
             elif event.type == "error":
-                stopped_reason = "error"
+                stopped_reason = (
+                    "recovery_required" if event.data.get("recovery_required") else "error"
+                )
                 error = str(event.data.get("error") or "PiPy run failed")
 
         response = AgentResponse(
@@ -106,7 +109,16 @@ class PiPyHarnessBackend:
         try:
             async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
                 yield event
+        except Exception as exc:
+            from ..pipy_recovery import PiPyRecoveryRequired
+
+            if not isinstance(exc, PiPyRecoveryRequired):
+                raise
+            yield HarnessEvent(type="error", data={"error": str(exc), "recovery_required": True})
         finally:
+            close = getattr(self.adapter, "close", None)
+            if close is not None:
+                await close(ref)
             if self._active_ref is ref:
                 self._active_ref = None
 
@@ -127,6 +139,7 @@ def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
             "provider": request.provider,
             "model": request.model,
             "working_directory": str(request.working_directory),
+            "runtime_config": dict(request.spec.runtime.config),
         },
     )
 

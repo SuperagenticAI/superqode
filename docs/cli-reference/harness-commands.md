@@ -464,6 +464,7 @@ superqode harness eval --spec base.yaml --variant candidate.yaml --tasks tasks.y
 | `--tasks PATH` | Task file to score against (required) |
 | `--provider` / `--model` / `--runtime` / `--sandbox` | Execution overrides |
 | `--split {all,held-in,held-out}` | Run all tasks or only one eval split |
+| `--recovery-store PATH` | Opt into WorkOrder case checkpoints and reuse committed matching results. Unknown interrupted outcomes require reconciliation |
 | `--live` | Execute tasks against the model endpoint |
 | `--allow-regressions` | Do not exit non-zero when a variant regresses (override the seesaw gate) |
 | `--json` | Emit JSON |

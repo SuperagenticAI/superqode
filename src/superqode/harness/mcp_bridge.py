@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+import json
 
 from superqode.mcp.client import MCPClientManager
-from superqode.mcp.config import MCPHttpConfig, MCPSSEConfig, MCPServerConfig, MCPStdioConfig
+from superqode.mcp.config import MCPServerConfig, _parse_server_config, resolve_mcp_config
+from pathlib import Path
 from superqode.providers.gateway.base import ToolDefinition
 from superqode.tools.base import ToolResult
 
@@ -39,10 +41,16 @@ class HarnessMCPRuntime:
             )
         return ToolResult(
             success=True,
-            output=_format_mcp_content(result.content),
+            output=_format_mcp_content(result.content)
+            or (
+                json.dumps(result.structured_content)
+                if result.structured_content is not None
+                else ""
+            ),
             metadata={
                 "mcp_server": server_id,
                 "mcp_tool": tool_name,
+                "content": result.content,
                 **(
                     {"structured_content": result.structured_content}
                     if result.structured_content is not None
@@ -57,14 +65,17 @@ class HarnessMCPRuntime:
             self.manager = None
 
 
-async def create_harness_mcp_runtime(spec: HarnessSpec) -> HarnessMCPRuntime:
+async def create_harness_mcp_runtime(
+    spec: HarnessSpec, *, cwd: Path | None = None
+) -> HarnessMCPRuntime:
     """Create connected MCP runtime support from ``spec.runtime.config``."""
-    servers = harness_mcp_server_configs(spec)
+    resolution = resolve_mcp_config(spec.runtime.config, cwd=cwd)
+    servers = resolution.servers
     if not servers:
-        return HarnessMCPRuntime()
+        return HarnessMCPRuntime(errors=resolution.errors)
 
     manager = MCPClientManager()
-    runtime = HarnessMCPRuntime(manager=manager)
+    runtime = HarnessMCPRuntime(manager=manager, errors=list(resolution.errors))
     try:
         await manager.__aenter__()
         for server in servers.values():
@@ -88,59 +99,15 @@ async def create_harness_mcp_runtime(spec: HarnessSpec) -> HarnessMCPRuntime:
         return runtime
 
 
-def harness_mcp_server_configs(spec: HarnessSpec) -> dict[str, MCPServerConfig]:
-    """Return inline MCP servers declared on a HarnessSpec."""
-    runtime_config = spec.runtime.config
-    raw = runtime_config.get("mcp_servers") or runtime_config.get("mcp") or {}
-    if not isinstance(raw, dict):
-        return {}
-    servers: dict[str, MCPServerConfig] = {}
-    for server_id, data in raw.items():
-        if isinstance(data, dict):
-            servers[str(server_id)] = _server_config_from_dict(str(server_id), data)
-    return servers
+def harness_mcp_server_configs(
+    spec: HarnessSpec, *, cwd: Path | None = None
+) -> dict[str, MCPServerConfig]:
+    """Return shared configuration plus this harness's explicit overrides."""
+    return resolve_mcp_config(spec.runtime.config, cwd=cwd).servers
 
 
 def _server_config_from_dict(server_id: str, data: dict[str, Any]) -> MCPServerConfig:
-    transport = str(data.get("transport") or ("http" if data.get("url") else "stdio"))
-    if transport == "sse":
-        transport_config = MCPSSEConfig(
-            url=str(data.get("url") or ""),
-            headers=_str_dict(data.get("headers")),
-            timeout=float(data.get("timeout", 5.0)),
-            sse_read_timeout=float(data.get("sse_read_timeout", 300.0)),
-        )
-    elif transport == "http":
-        transport_config = MCPHttpConfig(
-            url=str(data.get("url") or ""),
-            headers=_str_dict(data.get("headers")),
-            timeout=float(data.get("timeout", 30.0)),
-            sse_read_timeout=float(data.get("sse_read_timeout", 300.0)),
-        )
-    else:
-        transport_config = MCPStdioConfig(
-            command=str(data.get("command") or ""),
-            args=[str(item) for item in data.get("args", [])]
-            if isinstance(data.get("args"), list)
-            else [],
-            env=_str_dict(data.get("env")),
-            cwd=str(data["cwd"]) if data.get("cwd") else None,
-            timeout=float(data.get("timeout", 30.0)),
-        )
-    return MCPServerConfig(
-        id=server_id,
-        name=str(data.get("name") or server_id),
-        description=str(data.get("description") or ""),
-        enabled=bool(data.get("enabled", not data.get("disabled", False))),
-        auto_connect=bool(data.get("autoConnect", data.get("auto_connect", True))),
-        config=transport_config,
-    )
-
-
-def _str_dict(value: Any) -> dict[str, str]:
-    if not isinstance(value, dict):
-        return {}
-    return {str(key): str(item) for key, item in value.items()}
+    return _parse_server_config(server_id, data)
 
 
 def _format_mcp_content(content: list[Any]) -> str:
@@ -149,8 +116,8 @@ def _format_mcp_content(content: list[Any]) -> str:
         if isinstance(item, dict):
             if "text" in item:
                 parts.append(str(item["text"]))
-            elif "data" in item:
-                parts.append(str(item["data"]))
+            elif item.get("type") in {"image", "audio"}:
+                parts.append(f"[{item['type']}: {item.get('mimeType', 'unknown')}]")
             else:
                 parts.append(str(item))
         else:

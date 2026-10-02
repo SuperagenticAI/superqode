@@ -19,6 +19,7 @@ from superqode.mcp.config import (
     MCPHttpConfig,
     MCPSSEConfig,
     load_mcp_config,
+    resolve_mcp_config,
 )
 from superqode.mcp.types import (
     MCPTool,
@@ -124,6 +125,8 @@ class MCPClientManager:
         """Initialize the MCP client manager."""
         self._connections: dict[str, MCPConnection] = {}
         self._server_configs: dict[str, MCPServerConfig] = {}
+        self.config_sources: dict[str, str] = {}
+        self.config_errors: list[str] = []
         self._exit_stack: contextlib.AsyncExitStack | None = None
 
         # Callbacks
@@ -136,6 +139,12 @@ class MCPClientManager:
         self._log_callbacks: list[LogCallback] = []
 
         self._initialized = False
+        # Each transport's anyio scopes must enter and exit in the same task.
+        self._owners: dict[str, asyncio.Task[None]] = {}
+        self._ready: dict[str, asyncio.Future[bool]] = {}
+        self._stops: dict[str, asyncio.Event] = {}
+        self._refresh_tasks: dict[str, set[asyncio.Task]] = {}
+        self._catalog_locks: dict[str, asyncio.Lock] = {}
 
     async def __aenter__(self) -> "MCPClientManager":
         """Enter async context."""
@@ -153,8 +162,20 @@ class MCPClientManager:
 
     def load_config(self, config_path: Any = None) -> None:
         """Load MCP server configurations from file."""
-        self._server_configs = load_mcp_config(config_path)
+        resolution = resolve_mcp_config({"mcp_config": str(config_path)} if config_path else {})
+        self._server_configs = resolution.servers
+        self.config_sources, self.config_errors = resolution.sources, resolution.errors
         logger.info(f"Loaded {len(self._server_configs)} MCP server configurations")
+
+    async def reload_config(self, runtime_config=None, *, cwd=None):
+        """Close changed/removed transports before replacing their declarations."""
+        resolution = resolve_mcp_config(runtime_config, cwd=cwd)
+        for sid, old in list(self._server_configs.items()):
+            if resolution.servers.get(sid) != old:
+                await self.disconnect(sid)
+        self._server_configs = resolution.servers
+        self.config_sources, self.config_errors = resolution.sources, resolution.errors
+        return resolution
 
     def add_server(self, config: MCPServerConfig) -> None:
         """Add a server configuration."""
@@ -165,7 +186,9 @@ class MCPClientManager:
         """Remove a server configuration."""
         if server_id in self._server_configs:
             del self._server_configs[server_id]
-        if server_id in self._connections:
+        if server_id in self._stops:
+            self._stops[server_id].set()
+        elif server_id in self._connections:
             del self._connections[server_id]
         logger.debug(f"Removed MCP server config: {server_id}")
 
@@ -292,6 +315,34 @@ class MCPClientManager:
 
     async def connect(self, server_id: str) -> bool:
         """Connect to an MCP server."""
+        owner = self._owners.get(server_id)
+        if owner is None or owner.done():
+            ready = asyncio.get_running_loop().create_future()
+            stop = asyncio.Event()
+            self._ready[server_id] = ready
+            self._stops[server_id] = stop
+
+            async def own_connection() -> None:
+                try:
+                    ok = await self._connect_owned(server_id)
+                    if not ready.done():
+                        ready.set_result(ok)
+                    if ok:
+                        await stop.wait()
+                finally:
+                    if not ready.done():
+                        ready.set_result(False)
+                    failed = self._connections.get(server_id)
+                    preserve_error = failed is not None and failed.state == MCPConnectionState.ERROR
+                    await self._disconnect_owned(server_id)
+                    if preserve_error:
+                        failed.state = MCPConnectionState.ERROR
+                        self._notify_state_change(server_id, MCPConnectionState.ERROR)
+
+            self._owners[server_id] = asyncio.create_task(own_connection(), name=f"mcp:{server_id}")
+        return await asyncio.shield(self._ready[server_id])
+
+    async def _connect_owned(self, server_id: str) -> bool:
         if server_id not in self._server_configs:
             logger.error(f"Unknown MCP server: {server_id}")
             return False
@@ -315,7 +366,8 @@ class MCPClientManager:
         self._notify_state_change(server_id, MCPConnectionState.CONNECTING)
 
         try:
-            await self._establish_connection(connection)
+            async with asyncio.timeout(getattr(config.config, "timeout", 30.0)):
+                await self._establish_connection(connection)
             connection.state = MCPConnectionState.CONNECTED
             self._notify_state_change(server_id, MCPConnectionState.CONNECTED)
             logger.info(f"Connected to MCP server: {server_id}")
@@ -359,7 +411,7 @@ class MCPClientManager:
             elif isinstance(config, MCPSSEConfig):
                 transport = sse_client(
                     url=config.url,
-                    headers=config.headers if config.headers else None,
+                    headers={**await self.get_auth_headers(server_id), **(config.headers or {})},
                     timeout=config.timeout,
                     sse_read_timeout=config.sse_read_timeout,
                 )
@@ -371,7 +423,7 @@ class MCPClientManager:
                 from mcp.shared._httpx_utils import create_mcp_http_client
 
                 http_client = create_mcp_http_client(
-                    headers=config.headers if config.headers else None,
+                    headers={**await self.get_auth_headers(server_id), **(config.headers or {})},
                     timeout=httpx.Timeout(config.timeout, read=config.sse_read_timeout),
                 )
                 await connection._exit_stack.enter_async_context(http_client)
@@ -393,6 +445,7 @@ class MCPClientManager:
                         name="SuperQode",
                         version="0.1.0",
                     ),
+                    message_handler=lambda message: self._handle_notification(connection, message),
                 )
             )
 
@@ -417,7 +470,7 @@ class MCPClientManager:
             # Set up notification handlers
             self._setup_notification_handlers(connection, server_id)
 
-        except Exception:
+        except BaseException:
             if connection._exit_stack:
                 await connection._exit_stack.aclose()
                 connection._exit_stack = None
@@ -463,6 +516,37 @@ class MCPClientManager:
         # Note: The MCP Python SDK handles notifications through callbacks
         # This is a placeholder for when we need to handle specific notifications
         pass
+
+    async def _handle_notification(self, connection: MCPConnection, message: Any) -> None:
+        """Schedule refresh outside the SDK reader; awaiting it there can deadlock."""
+        root = getattr(message, "root", None)
+        method = getattr(root, "method", "")
+        callbacks = {
+            "notifications/tools/list_changed": self._notify_tools_changed,
+            "notifications/resources/list_changed": self._notify_resources_changed,
+            "notifications/prompts/list_changed": self._notify_prompts_changed,
+        }
+        notify = callbacks.get(method)
+        if notify is None:
+            return
+        sid = connection.server_config.id
+
+        async def refresh():
+            async with self._catalog_locks.setdefault(sid, asyncio.Lock()):
+                if connection.session is not None:
+                    await self._discover_capabilities(connection)
+                    notify(sid)
+
+        task = asyncio.create_task(refresh(), name=f"mcp-catalog:{sid}")
+        tasks = self._refresh_tasks.setdefault(sid, set())
+        tasks.add(task)
+
+        def finished(task):
+            tasks.discard(task)
+            if not task.cancelled() and task.exception():
+                logger.warning("MCP catalog refresh failed for %s: %s", sid, task.exception())
+
+        task.add_done_callback(finished)
 
     async def _discover_capabilities(self, connection: MCPConnection) -> None:
         """Discover tools, resources, and prompts from a connected server."""
@@ -568,6 +652,32 @@ class MCPClientManager:
 
     async def disconnect(self, server_id: str) -> None:
         """Disconnect from an MCP server."""
+        owner = self._owners.get(server_id)
+        if owner is not None:
+            self._stops[server_id].set()
+            # Interrupt a hung handshake, but let an established transport
+            # close normally in its owner task.
+            if not self._ready[server_id].done():
+                owner.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.shield(owner)
+            if self._owners.get(server_id) is owner:
+                self._owners.pop(server_id, None)
+                self._ready.pop(server_id, None)
+                self._stops.pop(server_id, None)
+            connection = self._connections.get(server_id)
+            if connection is not None and connection.state == MCPConnectionState.ERROR:
+                connection.state = MCPConnectionState.DISCONNECTED
+                self._notify_state_change(server_id, MCPConnectionState.DISCONNECTED)
+            return
+        await self._disconnect_owned(server_id)
+
+    async def _disconnect_owned(self, server_id: str) -> None:
+        refreshes = list(self._refresh_tasks.pop(server_id, set()))
+        for task in refreshes:
+            task.cancel()
+        if refreshes:
+            await asyncio.gather(*refreshes, return_exceptions=True)
         connection = self._connections.get(server_id)
         if not connection:
             return
@@ -579,10 +689,8 @@ class MCPClientManager:
 
         if connection._exit_stack:
             try:
-                # Give the exit stack a chance to clean up with a timeout
-                import asyncio
-
-                await asyncio.wait_for(connection._exit_stack.aclose(), timeout=5.0)
+                # wait_for creates another task and violates anyio ownership.
+                await connection._exit_stack.aclose()
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout closing connection to {server_id}")
             except asyncio.CancelledError:
@@ -610,17 +718,14 @@ class MCPClientManager:
 
     async def connect_all(self) -> dict[str, bool]:
         """Connect to all enabled servers with auto_connect=True."""
-        results = {}
-        for server_id, config in self._server_configs.items():
-            if config.enabled and config.auto_connect:
-                results[server_id] = await self.connect(server_id)
-        return results
+        ids = [sid for sid, cfg in self._server_configs.items() if cfg.enabled and cfg.auto_connect]
+        return dict(zip(ids, await asyncio.gather(*(self.connect(sid) for sid in ids))))
 
     async def disconnect_all(self) -> None:
         """Disconnect from all connected servers."""
         # Must disconnect sequentially - anyio cancel scopes must be exited
         # in the same task they were entered
-        for server_id in list(self._connections.keys()):
+        for server_id in set(self._connections) | set(self._owners):
             try:
                 await self.disconnect(server_id)
             except Exception as e:
@@ -683,12 +788,25 @@ class MCPClientManager:
             )
 
         try:
-            result = await connection.session.call_tool(tool_name, arguments)
+            import jsonschema
+
+            tool = self.get_tool(server_id, tool_name)
+            if tool is None:
+                return MCPToolResult(
+                    content=[],
+                    is_error=True,
+                    error_message=f"Unknown MCP tool: {server_id}/{tool_name}",
+                )
+            jsonschema.validate(arguments, tool.input_schema)
+            async with asyncio.timeout(timeout):
+                result = await connection.session.call_tool(tool_name, arguments)
 
             # Convert content to dict format
             content = []
             for item in result.content:
-                if hasattr(item, "text"):
+                if hasattr(item, "model_dump"):
+                    content.append(item.model_dump(mode="json", by_alias=True, exclude_none=True))
+                elif hasattr(item, "text"):
                     content.append({"type": "text", "text": item.text})
                 elif hasattr(item, "data") and hasattr(item, "mimeType"):
                     if "image" in getattr(item, "mimeType", ""):
@@ -719,12 +837,6 @@ class MCPClientManager:
                     content.append({"type": "unknown", "data": str(item)})
 
             is_error = getattr(result, "isError", False) or getattr(result, "is_error", False)
-
-            # Check if content contains error messages
-            if not is_error and content:
-                first_text = content[0].get("text", "") if isinstance(content[0], dict) else ""
-                if "Access denied" in first_text or "Error" in first_text:
-                    is_error = True
 
             return MCPToolResult(
                 content=content,
@@ -1080,7 +1192,9 @@ class MCPClientManager:
     # OAuth Support Methods
     # ========================================================================
 
-    async def authenticate_server(self, server_id: str) -> bool:
+    async def authenticate_server(
+        self, server_id: str, *, required_scopes: str = "", interactive: bool = True
+    ) -> bool:
         """
         Perform OAuth authentication for a server.
 
@@ -1109,30 +1223,60 @@ class MCPClientManager:
                 return True  # Non-HTTP doesn't need OAuth
 
             # Check for existing valid tokens
-            storage = get_auth_storage()
+            storage = get_auth_storage().for_server(server_id)
             existing_tokens = storage.load_tokens(server_url)
-            if existing_tokens and not existing_tokens.is_expired():
+            required = set(required_scopes.split())
+            if (
+                existing_tokens
+                and not existing_tokens.is_expired()
+                and required <= set(existing_tokens.scope.split())
+            ):
                 logger.debug(f"Using existing tokens for {server_id}")
                 return True
 
             # Try to refresh if we have a refresh token
             if existing_tokens and existing_tokens.refresh_token:
                 try:
-                    provider = MCPOAuthProvider()
-                    new_tokens = await provider.refresh_tokens(
-                        existing_tokens.refresh_token,
-                        server_url,
-                    )
-                    storage.save_tokens(server_url, new_tokens)
-                    logger.info(f"Refreshed tokens for {server_id}")
-                    return True
+                    async with storage.refresh_lock(server_url):
+                        current = storage.load_tokens(server_url)
+                        if (
+                            current
+                            and not current.is_expired()
+                            and required <= set(current.scope.split())
+                        ):
+                            return True
+                        if (
+                            current
+                            and current.refresh_token
+                            and required <= set(current.scope.split())
+                        ):
+                            provider = MCPOAuthProvider()
+                            new_tokens = await provider.refresh_tokens(
+                                current.refresh_token, server_url
+                            )
+                            new_tokens.refresh_token = (
+                                new_tokens.refresh_token or current.refresh_token
+                            )
+                            new_tokens.scope = new_tokens.scope or current.scope
+                            storage.save_tokens(server_url, new_tokens)
+                            if required <= set(new_tokens.scope.split()):
+                                return True
                 except Exception as e:
                     logger.debug(f"Token refresh failed: {e}")
 
             # Start OAuth flow
+            if not interactive:
+                return False
             callback_server = await get_callback_server()
             oauth_config = OAuthConfig(
                 redirect_uri=callback_server.get_redirect_uri(),
+                scope=" ".join(
+                    sorted(
+                        required
+                        | set(existing_tokens.scope.split() if existing_tokens else [])
+                        | {"mcp"}
+                    )
+                ),
             )
             provider = MCPOAuthProvider(oauth_config)
 
@@ -1146,8 +1290,6 @@ class MCPClientManager:
                 self._notify_state_change(server_id, MCPConnectionState.NEEDS_AUTH)
 
             # Open browser for authentication
-            logger.info(f"Opening browser for {server_id} authentication")
-            webbrowser.open(auth_url)
 
             # Wait for callback
             # Extract state from URL
@@ -1161,7 +1303,18 @@ class MCPClientManager:
                 logger.error("Failed to extract state from auth URL")
                 return False
 
-            result = await callback_server.wait_for_callback(state, timeout=300)
+            pending_callback = asyncio.create_task(
+                callback_server.wait_for_callback(state, timeout=300)
+            )
+            try:
+                await asyncio.sleep(0)  # register state before a fast redirect arrives
+                logger.info(f"Opening browser for {server_id} authentication")
+                webbrowser.open(auth_url)
+                result = await pending_callback
+            finally:
+                pending_callback.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pending_callback
 
             if result.error:
                 logger.error(f"OAuth error: {result.error} - {result.error_description}")
@@ -1172,13 +1325,13 @@ class MCPClientManager:
                 return False
 
             # Exchange code for tokens
-            tokens = await provider.handle_callback(result.code, result.state)
+            tokens = await provider.handle_callback(result.code, result.state, issuer=result.issuer)
 
             # Store tokens
             storage.save_tokens(server_url, tokens)
             logger.info(f"OAuth authentication successful for {server_id}")
 
-            return True
+            return required <= set(tokens.scope.split())
 
         except ImportError as e:
             logger.warning(f"OAuth dependencies not available: {e}")
@@ -1209,10 +1362,13 @@ class MCPClientManager:
             else:
                 return {}
 
-            storage = get_auth_storage()
+            storage = get_auth_storage().for_server(server_id)
 
             # Try OAuth tokens first
             tokens = storage.load_tokens(server_url)
+            if tokens and tokens.is_expired() and tokens.refresh_token:
+                if await self.authenticate_server(server_id, interactive=False):
+                    tokens = storage.load_tokens(server_url)
             if tokens and not tokens.is_expired():
                 return {"Authorization": f"{tokens.token_type} {tokens.access_token}"}
 
@@ -1249,7 +1405,7 @@ class MCPClientManager:
             from superqode.mcp.auth_storage import get_auth_storage
 
             if isinstance(config.config, (MCPHttpConfig, MCPSSEConfig)):
-                storage = get_auth_storage()
+                storage = get_auth_storage().for_server(server_id)
                 storage.clear_tokens(config.config.url)
                 logger.info(f"Cleared credentials for {server_id}")
         except ImportError:

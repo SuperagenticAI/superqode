@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import hashlib
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,7 @@ async def run_harness_eval(
     sandbox_backend: str = "local",
     live: bool = False,
     eval_split: str = "all",
+    recovery_store: str | Path | None = None,
 ) -> dict[str, Any]:
     task_file = load_eval_tasks(tasks_path)
     split = _normalize_eval_filter(eval_split)
@@ -132,6 +134,7 @@ async def run_harness_eval(
                 working_dir=working_dir,
                 sandbox_backend=sandbox_backend,
                 live=live,
+                **({"recovery_store": recovery_store} if recovery_store is not None else {}),
             )
         )
     baseline = variant_results[0]
@@ -199,6 +202,7 @@ async def _run_variant_eval(
     working_dir: str | Path,
     sandbox_backend: str,
     live: bool,
+    recovery_store: str | Path | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     spec = load_harness_spec(spec_path)
@@ -207,9 +211,28 @@ async def _run_variant_eval(
     if live:
         store = create_harness_store("memory")
         kernel = await init_harness(spec, store=store)
+    recovery = None
+    if recovery_store is not None and live:
+        from superqode.evaluation.recovery import EvaluationRecovery
+        from superqode.workorders.store import WorkOrderStore
+
+        recovery = EvaluationRecovery(
+            WorkOrderStore(recovery_store),
+            configuration={
+                "spec": asdict(spec),
+                "provider": provider,
+                "model": model,
+                "runtime": runtime,
+                "sandbox": sandbox_backend,
+                "format_version": 1,
+            },
+            tasks=tasks,
+            working_directory=Path(working_dir),
+        )
     for task in tasks:
-        task_results.append(
-            await _run_eval_task(
+
+        async def execute_case(task=task):
+            return await _run_eval_task(
                 spec=spec,
                 kernel=kernel,
                 task=task,
@@ -220,6 +243,11 @@ async def _run_variant_eval(
                 sandbox_backend=sandbox_backend,
                 live=live,
             )
+
+        task_results.append(
+            await recovery.run_case(str(task["id"]), execute_case)
+            if recovery
+            else await execute_case()
         )
     passed = sum(1 for item in task_results if item["status"] == "passed")
     failed = sum(1 for item in task_results if item["status"] == "failed")
@@ -228,6 +256,22 @@ async def _run_variant_eval(
     status = "error" if unresolved or (failed and passed == 0) else "passed"
     duration_seconds = round(time.monotonic() - started, 3)
     usage = _aggregate_task_usage(task_results)
+    if recovery:
+        recovered_usage = recovery.store.usage_summary(recovery.order_id)
+        usage = {
+            **usage,
+            "tokens_in": None if recovered_usage.unknown_token_runs else recovered_usage.tokens_in,
+            "tokens_out": None
+            if recovered_usage.unknown_token_runs
+            else recovered_usage.tokens_out,
+            "total_tokens": None
+            if recovered_usage.unknown_token_runs
+            else recovered_usage.total_tokens,
+            "cost_usd": None if recovered_usage.unknown_cost_runs else recovered_usage.cost_usd,
+            "observed_cost_usd": recovered_usage.cost_usd,
+            "usage_complete": not recovered_usage.unknown_cost_runs
+            and not recovered_usage.unknown_token_runs,
+        }
     return {
         "harness": spec.name,
         "spec": str(spec_path),
@@ -252,6 +296,7 @@ async def _run_variant_eval(
         "cost_per_success": _per_success(usage["cost_usd"], passed, digits=8),
         "latency_ms_per_success": _per_success(duration_seconds * 1000, passed),
         "tasks": task_results,
+        **({"recovery_work_order": recovery.order_id} if recovery else {}),
     }
 
 
@@ -408,47 +453,23 @@ def _usage_from_result(result: Any) -> dict[str, Any]:
 
 
 def _aggregate_run_usage(results: list[Any] | tuple[Any, ...]) -> dict[str, Any]:
-    tokens_in = 0
-    tokens_out = 0
-    total_tokens = 0
-    cost_usd = 0.0
-    currency = ""
-    usage_seen = False
-    cost_seen = False
+    rows = []
     for result in results:
-        in_value = getattr(result, "tokens_in", None)
-        out_value = getattr(result, "tokens_out", None)
-        total_value = getattr(result, "total_tokens", None)
-        cost_value = getattr(result, "cost_usd", None)
         response = getattr(result, "response", None)
-        if in_value is None and response is not None:
-            in_value = getattr(response, "input_tokens", None)
-        if out_value is None and response is not None:
-            out_value = getattr(response, "output_tokens", None)
-        if total_value is None and response is not None:
-            total_value = getattr(response, "total_tokens", None)
-        if cost_value is None and response is not None:
-            cost_value = getattr(response, "cost_usd", None)
-        if in_value is not None or out_value is not None or total_value is not None:
-            in_tokens = int(in_value or 0)
-            out_tokens = int(out_value or 0)
-            total = int(total_value or (in_tokens + out_tokens))
-            tokens_in += in_tokens
-            tokens_out += out_tokens
-            total_tokens += total
-            usage_seen = True
-        if cost_value is not None:
-            cost_usd += float(cost_value)
-            cost_seen = True
-            if response is not None:
-                currency = getattr(response, "cost_currency", None) or currency
-    return {
-        "tokens_in": tokens_in if usage_seen else None,
-        "tokens_out": tokens_out if usage_seen else None,
-        "total_tokens": total_tokens if usage_seen else None,
-        "cost_usd": round(cost_usd, 12) if cost_seen else None,
-        "cost_currency": currency or ("USD" if cost_seen else None),
-    }
+        row = {}
+        for key, response_key in (
+            ("tokens_in", "input_tokens"),
+            ("tokens_out", "output_tokens"),
+            ("total_tokens", "total_tokens"),
+            ("cost_usd", "cost_usd"),
+        ):
+            value = getattr(result, key, None)
+            row[key] = value if value is not None else getattr(response, response_key, None)
+        row["cost_currency"] = getattr(result, "cost_currency", None) or getattr(
+            response, "cost_currency", None
+        )
+        rows.append(row)
+    return _aggregate_usage_dicts(rows)
 
 
 def _aggregate_task_usage(tasks: list[dict[str, Any]]) -> dict[str, Any]:
@@ -456,38 +477,30 @@ def _aggregate_task_usage(tasks: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _aggregate_usage_dicts(usages: list[dict[str, Any]]) -> dict[str, Any]:
-    tokens_in = 0
-    tokens_out = 0
-    total_tokens = 0
-    cost_usd = 0.0
-    currency = ""
-    usage_seen = False
-    cost_seen = False
-    for usage in usages:
-        if not isinstance(usage, dict):
-            continue
-        in_value = usage.get("tokens_in")
-        out_value = usage.get("tokens_out")
-        total_value = usage.get("total_tokens")
-        cost_value = usage.get("cost_usd")
-        if in_value is not None or out_value is not None or total_value is not None:
-            in_tokens = int(in_value or 0)
-            out_tokens = int(out_value or 0)
-            total = int(total_value or (in_tokens + out_tokens))
-            tokens_in += in_tokens
-            tokens_out += out_tokens
-            total_tokens += total
-            usage_seen = True
-        if cost_value is not None:
-            cost_usd += float(cost_value)
-            currency = str(usage.get("cost_currency") or currency or "USD")
-            cost_seen = True
+    rows = [dict(usage) if isinstance(usage, dict) else {} for usage in usages]
+    for row in rows:
+        if (
+            row.get("total_tokens") is None
+            and row.get("tokens_in") is not None
+            and row.get("tokens_out") is not None
+        ):
+            row["total_tokens"] = int(row["tokens_in"]) + int(row["tokens_out"])
+    totals = {
+        key: sum(int(row[key]) for row in rows)
+        if rows and all(row.get(key) is not None for row in rows)
+        else None
+        for key in ("tokens_in", "tokens_out", "total_tokens")
+    }
+    known_costs = [row for row in rows if row.get("cost_usd") is not None]
+    currencies = {str(row.get("cost_currency") or "USD") for row in known_costs}
+    observed_cost = round(sum(float(row["cost_usd"]) for row in known_costs), 12)
+    cost_complete = bool(rows) and len(known_costs) == len(rows) and currencies == {"USD"}
     return {
-        "tokens_in": tokens_in if usage_seen else None,
-        "tokens_out": tokens_out if usage_seen else None,
-        "total_tokens": total_tokens if usage_seen else None,
-        "cost_usd": round(cost_usd, 12) if cost_seen else None,
-        "cost_currency": currency or ("USD" if cost_seen else None),
+        **totals,
+        "cost_usd": observed_cost if cost_complete else None,
+        "cost_currency": next(iter(currencies)) if len(currencies) == 1 else None,
+        "observed_cost_usd": observed_cost if not currencies or currencies == {"USD"} else None,
+        "usage_complete": totals["total_tokens"] is not None and cost_complete,
     }
 
 

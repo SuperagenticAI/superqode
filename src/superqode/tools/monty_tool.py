@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 from typing import Any, Dict
 
 from .base import Tool, ToolContext, ToolResult
@@ -66,6 +67,7 @@ def run_monty_snippet(
     type_check: bool = False,
     max_duration_secs: float = DEFAULT_MAX_DURATION_SECS,
     max_memory: int = DEFAULT_MAX_MEMORY,
+    external_lookup: dict[str, Any] | None = None,
 ) -> str:
     """Execute a snippet in a fresh Monty sandbox and return captured output.
 
@@ -96,7 +98,8 @@ def run_monty_snippet(
             # call, name lookup and OS call as a snapshot for the caller to
             # answer, which for a plain REPL would silently complete as None.
             # It returns the final expression itself, not a wrapper.
-            value = session.feed_run(code, print_callback=_print_callback)
+            kwargs = {"external_lookup": external_lookup} if external_lookup else {}
+            value = session.feed_run(code, print_callback=_print_callback, **kwargs)
 
     printed = "".join(chunks).rstrip()
     parts = [p for p in (printed, repr(value) if value is not None else "") if p]
@@ -104,7 +107,7 @@ def run_monty_snippet(
 
 
 class MontyPythonReplTool(Tool):
-    """Run small Python snippets in a Monty sandbox (no host access)."""
+    """Run Monty snippets, optionally with the governed host-tool bridge."""
 
     @property
     def name(self) -> str:
@@ -112,14 +115,23 @@ class MontyPythonReplTool(Tool):
 
     @property
     def description(self) -> str:
-        return (
+        description = (
             "Execute a small Python snippet in a Monty sandbox: a fast, "
-            "resource-limited Python interpreter with NO access to the host "
+            "resource-limited Python interpreter with NO direct access to the host "
             "filesystem, environment, or network. Prefer this over running "
             "`python -c` through bash for quick calculations, data shaping, or "
             "logic checks - it is safer and isolated. Each call runs fresh. Note: "
             "Monty supports a subset of Python (no third-party imports)."
         )
+        if os.environ.get("SUPERQODE_RLM_TOOLS", "").lower() in {"1", "true", "on"}:
+            description += (
+                " Host tools are available through tool_search(query), tool_call(name, arguments), "
+                'and tool_parallel([{"name": ..., "arguments": ...}]). '
+                "Calls retain normal policy; parallel calls require read-only native tools. "
+                "Use tool_evidence(invocation_id) to inspect retained results (24h, bounded and redacted). "
+                "Filter results in Python and return a concise answer."
+            )
+        return description
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -169,6 +181,16 @@ class MontyPythonReplTool(Tool):
         type_check = bool(args.get("type_check", False))
         max_duration_secs = float(args.get("max_duration_secs", DEFAULT_MAX_DURATION_SECS))
         max_memory = int(args.get("max_memory", DEFAULT_MAX_MEMORY))
+        if not 0 < max_duration_secs <= 30 or not 1024 * 1024 <= max_memory <= 128 * 1024 * 1024:
+            return ToolResult(
+                success=False, output="", error="Limits require 0 < duration <= 30s and 1–128 MiB"
+            )
+
+        bridge = None
+        if os.environ.get("SUPERQODE_RLM_TOOLS", "").lower() in {"1", "true", "on"}:
+            from .composition import ToolComposition
+
+            bridge = ToolComposition(ctx, deadline_seconds=max_duration_secs)
 
         try:
             output = await asyncio.to_thread(
@@ -178,14 +200,22 @@ class MontyPythonReplTool(Tool):
                 type_check=type_check,
                 max_duration_secs=max_duration_secs,
                 max_memory=max_memory,
+                external_lookup=bridge.externals() if bridge else None,
             )
         except Exception as exc:  # noqa: BLE001 - Monty raises package-specific exceptions.
             return ToolResult(
                 success=False,
                 output="",
                 error=str(exc),
-                metadata={"runtime": "monty", "exception": type(exc).__name__},
+                metadata={
+                    "runtime": "monty",
+                    "exception": type(exc).__name__,
+                    **({"composition": bridge.receipt()} if bridge else {}),
+                },
             )
+        finally:
+            if bridge:
+                await bridge.close()
 
         return ToolResult(
             success=True,
@@ -194,5 +224,6 @@ class MontyPythonReplTool(Tool):
                 "runtime": "monty",
                 "version": str(getattr(module, "__version__", "unknown")),
                 "filesystem": "blocked",
+                **({"composition": bridge.receipt()} if bridge else {}),
             },
         )

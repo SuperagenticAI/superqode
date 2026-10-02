@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import sqlite3
 import time
 from contextlib import closing
@@ -37,8 +39,9 @@ class WorkOrderStore:
 
     def __init__(self, path: str | Path = ".superqode/workorders/store.sqlite3") -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._initialize()
+        self.path.chmod(0o600)
 
     def create(self, order: WorkOrder) -> WorkOrder:
         self._validate_order(order)
@@ -65,6 +68,266 @@ class WorkOrderStore:
     def get(self, reference: str) -> WorkOrder:
         with closing(self._connect()) as conn:
             return self._load_tx(conn, reference)
+
+    def begin_invocation(
+        self,
+        reference: str,
+        task_id: str,
+        *,
+        worker_id: str,
+        attempt: int,
+        invocation_id: str,
+        operation: str,
+        fingerprint: str,
+        replay_safe: bool = False,
+        workspace: str = "",
+    ) -> dict[str, Any]:
+        """Commit intent before dispatch, or reuse a committed matching outcome.
+
+        A caller must declare replay safety explicitly. Unknown side effects
+        require reconciliation; lease recovery never infers success or safety.
+        """
+        if not invocation_id or not fingerprint:
+            raise ValueError("Invocation identity and input fingerprint are required")
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            task = _find_task(order, task_id)
+            self._assert_running_owner(task, worker_id, attempt=attempt)
+            return self._begin_invocation_tx(
+                conn,
+                order,
+                task_id,
+                worker_id=worker_id,
+                attempt=attempt,
+                invocation_id=invocation_id,
+                operation=operation,
+                fingerprint=fingerprint,
+                replay_safe=replay_safe,
+                workspace=workspace,
+            )
+
+    def _begin_invocation_tx(
+        self,
+        conn,
+        order,
+        task_id,
+        *,
+        worker_id,
+        attempt,
+        invocation_id,
+        operation,
+        fingerprint,
+        replay_safe=False,
+        workspace="",
+    ):
+        # The caller validates ownership. Also used by the Monty journal to
+        # publish a suspended checkpoint and its tool intent in one transaction.
+        key = (order.work_order_id, task_id, invocation_id)
+        row = conn.execute(
+            "select * from work_invocations where work_order_id=? and task_id=? and invocation_id=?",
+            key,
+        ).fetchone()
+        if row is not None:
+            if row["fingerprint"] != fingerprint:
+                raise ValueError(
+                    "Invocation inputs or configuration changed; reconciliation required"
+                )
+            if row["status"] == "completed":
+                if row["workspace"] and workspace != row["workspace"]:
+                    raise ValueError(
+                        "Workspace changed since the committed outcome; reconciliation required"
+                    )
+                return {"action": "reuse", "result": json.loads(row["result"])}
+            if row["status"] == "intent" and row["attempt"] == attempt:
+                raise ValueError("Invocation is already in flight in this attempt")
+            if row["status"] != "retry" and (not row["replay_safe"] or not replay_safe):
+                raise ValueError(
+                    "Uncertain invocation outcome; reconciliation required before retry"
+                )
+            self._check_pipy_tool_budget_tx(conn, order, operation)
+            conn.execute(
+                "update work_invocations set status='intent', worker_id=?, attempt=?, updated_at=? where work_order_id=? and task_id=? and invocation_id=?",
+                (worker_id, attempt, time.time(), *key),
+            )
+        else:
+            uncertain = conn.execute(
+                "select 1 from work_invocations where work_order_id=? and task_id=? and (status='uncertain' or (status='intent' and attempt<>?)) and replay_safe=0 limit 1",
+                (order.work_order_id, task_id, attempt),
+            ).fetchone()
+            if uncertain:
+                raise ValueError("An earlier tool outcome is uncertain; reconciliation required")
+            self._check_pipy_tool_budget_tx(conn, order, operation)
+            conn.execute(
+                "insert into work_invocations (work_order_id, task_id, invocation_id, operation, fingerprint, replay_safe, worker_id, attempt, status, workspace, result, updated_at) values (?,?,?,?,?,?,?,?, 'intent', ?, NULL, ?)",
+                (
+                    *key,
+                    operation,
+                    fingerprint,
+                    int(replay_safe),
+                    worker_id,
+                    attempt,
+                    workspace,
+                    time.time(),
+                ),
+            )
+        self._append_event_tx(
+            conn,
+            order.work_order_id,
+            "invocation.intent",
+            task_id=task_id,
+            actor=worker_id,
+            data={
+                "id": invocation_id,
+                "operation": operation,
+                "attempt": attempt,
+                "replay_safe": replay_safe,
+            },
+        )
+        return {"action": "execute", "result": None}
+
+    @staticmethod
+    def _check_pipy_tool_budget_tx(conn, order, operation):
+        if not operation.startswith("pipy.tool.") or order.budget.max_tool_calls is None:
+            return
+        count = conn.execute(
+            "select count(*) from work_order_events where work_order_id=? and type='invocation.intent' and "
+            "(json_extract(data,'$.operation') like 'pipy.tool.%' or json_extract(data,'$.operation')='pipy.program.host')",
+            (order.work_order_id,),
+        ).fetchone()[0]
+        extra = conn.execute(
+            "select coalesce(sum(json_extract(data,'$.extra_calls')),0) from work_order_events "
+            "where work_order_id=? and type='program.parallel_reserved'",
+            (order.work_order_id,),
+        ).fetchone()[0]
+        if count + extra >= order.budget.max_tool_calls:
+            raise ValueError("PiPy WorkOrder tool-call budget exhausted")
+
+    def finish_invocation(
+        self,
+        reference: str,
+        task_id: str,
+        *,
+        worker_id: str,
+        attempt: int,
+        invocation_id: str,
+        result: dict[str, Any],
+        workspace: str = "",
+    ) -> None:
+        payload = json.dumps(result, sort_keys=True)
+        if len(payload.encode()) > 8 * 1024 * 1024:
+            raise ValueError("Invocation outcome exceeds the 8 MiB store limit")
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            self._assert_running_owner(_find_task(order, task_id), worker_id, attempt=attempt)
+            changed = conn.execute(
+                "update work_invocations set status='completed', result=?, workspace=?, updated_at=? where work_order_id=? and task_id=? and invocation_id=? and status='intent' and worker_id=? and attempt=?",
+                (
+                    payload,
+                    workspace,
+                    time.time(),
+                    order.work_order_id,
+                    task_id,
+                    invocation_id,
+                    worker_id,
+                    attempt,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise ValueError("Invocation is not owned by this attempt")
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "invocation.completed",
+                task_id=task_id,
+                actor=worker_id,
+                data={
+                    "id": invocation_id,
+                    "attempt": attempt,
+                    "result_sha256": hashlib.sha256(payload.encode()).hexdigest(),
+                },
+            )
+
+    def invocations(self, reference: str, task_id: str = "") -> list[dict[str, Any]]:
+        with closing(self._connect()) as conn:
+            order = self._load_tx(conn, reference)
+            rows = conn.execute(
+                "select * from work_invocations where work_order_id=? order by updated_at",
+                (order.work_order_id,),
+            ).fetchall()
+            return [
+                {**dict(row), "result": json.loads(row["result"]) if row["result"] else None}
+                for row in rows
+                if not task_id or row["task_id"] == task_id
+            ]
+
+    def mark_invocation_uncertain(
+        self, reference: str, task_id: str, *, worker_id: str, attempt: int, invocation_id: str
+    ) -> None:
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            self._assert_running_owner(_find_task(order, task_id), worker_id, attempt=attempt)
+            changed = conn.execute(
+                "update work_invocations set status='uncertain', updated_at=? where work_order_id=? and task_id=? and invocation_id=? and status='intent' and worker_id=? and attempt=?",
+                (time.time(), order.work_order_id, task_id, invocation_id, worker_id, attempt),
+            ).rowcount
+            if changed:
+                self._append_event_tx(
+                    conn,
+                    order.work_order_id,
+                    "invocation.uncertain",
+                    task_id=task_id,
+                    actor=worker_id,
+                    data={"id": invocation_id, "attempt": attempt, "usage": None},
+                )
+
+    def reconcile_invocation(
+        self,
+        reference: str,
+        task_id: str,
+        invocation_id: str,
+        *,
+        actor: str,
+        reason: str,
+        result: dict[str, Any] | None = None,
+        allow_retry: bool = False,
+        workspace: str = "",
+    ) -> None:
+        """Record an explicit lookup/operator decision, never an automatic undo."""
+        if not actor or not reason or (result is None and not allow_retry):
+            raise ValueError(
+                "Reconciliation requires an actor, evidence/reason and outcome or explicit retry"
+            )
+        payload = json.dumps(result) if result is not None else None
+        if payload and len(payload.encode()) > 8 * 1024 * 1024:
+            raise ValueError("Reconciliation outcome exceeds the 8 MiB store limit")
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            task = _find_task(order, task_id)
+            if task.status == WorkTaskStatus.RUNNING:
+                raise ValueError("Stop the owning worker before reconciliation")
+            changed = conn.execute(
+                "update work_invocations set status=?, result=?, replay_safe=?, workspace=?, updated_at=? where work_order_id=? and task_id=? and invocation_id=?",
+                (
+                    "completed" if payload else "retry",
+                    payload,
+                    int(allow_retry),
+                    workspace,
+                    time.time(),
+                    order.work_order_id,
+                    task_id,
+                    invocation_id,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise ValueError("Unknown invocation")
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "invocation.reconciled",
+                task_id=task_id,
+                actor=actor,
+                data={"id": invocation_id, "reason": reason, "allow_retry": allow_retry},
+            )
 
     def list(self, *, status: WorkOrderStatus | str | None = None) -> list[WorkOrder]:
         query = "select payload from work_orders"
@@ -282,11 +545,12 @@ class WorkOrderStore:
         *,
         worker_id: str,
         lease_seconds: int = 300,
+        attempt: int | None = None,
     ) -> WorkOrderTask:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             task = _find_task(order, task_id)
-            self._assert_running_owner(task, worker_id)
+            self._assert_running_owner(task, worker_id, attempt=attempt)
             now = time.time()
             renewed = replace(
                 task,
@@ -317,11 +581,17 @@ class WorkOrderStore:
         run_id: str = "",
         session_id: str = "",
         metadata: dict[str, Any] | None = None,
+        attempt: int | None = None,
     ) -> WorkOrder:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             task = _find_task(order, task_id)
-            self._assert_running_owner(task, worker_id)
+            self._assert_running_owner(task, worker_id, attempt=attempt)
+            if conn.execute(
+                "select 1 from work_invocations where work_order_id=? and task_id=? and status in ('intent','uncertain') and replay_safe=0 limit 1",
+                (order.work_order_id, task_id),
+            ).fetchone():
+                raise ValueError("Cannot complete a task with an uncertain invocation outcome")
             now = time.time()
             completed = replace(
                 task,
@@ -366,16 +636,27 @@ class WorkOrderStore:
         error: str,
         retry: bool = True,
         run_id: str = "",
+        attempt: int | None = None,
     ) -> WorkOrder:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             task = _find_task(order, task_id)
-            self._assert_running_owner(task, worker_id)
+            self._assert_running_owner(task, worker_id, attempt=attempt)
             now = time.time()
-            will_retry = retry and task.attempts < task.max_attempts
+            uncertain = conn.execute(
+                "select 1 from work_invocations where work_order_id=? and task_id=? and status in ('intent','uncertain') and replay_safe=0 limit 1",
+                (order.work_order_id, task.task_id),
+            ).fetchone()
+            if uncertain:
+                order = self._unknown_attempt_usage_tx(conn, order, task)
+            will_retry = retry and task.attempts < task.max_attempts and not uncertain
             failed = replace(
                 task,
-                status=(WorkTaskStatus.PENDING if will_retry else WorkTaskStatus.FAILED),
+                status=(
+                    WorkTaskStatus.BLOCKED
+                    if uncertain
+                    else (WorkTaskStatus.PENDING if will_retry else WorkTaskStatus.FAILED)
+                ),
                 worker_id="",
                 lease_expires_at=None,
                 heartbeat_at=now,
@@ -391,7 +672,9 @@ class WorkOrderStore:
             self._append_event_tx(
                 conn,
                 updated.work_order_id,
-                "task.retry_scheduled" if will_retry else "task.failed",
+                "task.recovery_blocked"
+                if uncertain
+                else ("task.retry_scheduled" if will_retry else "task.failed"),
                 task_id=task.task_id,
                 actor=worker_id,
                 data={"error": error, "attempt": task.attempts, "run_id": run_id},
@@ -407,11 +690,12 @@ class WorkOrderStore:
         reason: str,
         run_id: str = "",
         session_id: str = "",
+        attempt: int | None = None,
     ) -> WorkOrder:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             task = _find_task(order, task_id)
-            self._assert_running_owner(task, worker_id)
+            self._assert_running_owner(task, worker_id, attempt=attempt)
             now = time.time()
             blocked = replace(
                 task,
@@ -525,18 +809,37 @@ class WorkOrderStore:
         usage: WorkOrderUsage,
         *,
         actor: str = "usage",
+        invocation_id: str = "",
     ) -> tuple[WorkArtifact, WorkOrderPolicyDecision]:
         """Persist one task-attempt usage record and apply completion gates."""
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             _find_task(order, usage.task_id)
+            if invocation_id:
+                existing = next(
+                    (
+                        a
+                        for a in order.artifacts
+                        if a.kind == "usage"
+                        and a.task_id == usage.task_id
+                        and a.metadata.get("invocation_id") == invocation_id
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    return existing, evaluate_work_order_policy(
+                        order, phase="completion", task=_find_task(order, usage.task_id)
+                    )
             now = time.time()
             artifact = WorkArtifact(
                 artifact_id=generate_artifact_id(),
                 kind="usage",
                 created_at=now,
                 task_id=usage.task_id,
-                metadata={"usage": usage.to_dict()},
+                metadata={
+                    "usage": usage.to_dict(),
+                    **({"invocation_id": invocation_id} if invocation_id else {}),
+                },
             )
             with_usage = replace(
                 order,
@@ -1044,23 +1347,37 @@ class WorkOrderStore:
                 tasks.append(task)
                 continue
             changed = True
-            retry = task.attempts < task.max_attempts
+            uncertain = conn.execute(
+                "select invocation_id from work_invocations where work_order_id=? and task_id=? and status in ('intent','uncertain') and replay_safe=0",
+                (order.work_order_id, task.task_id),
+            ).fetchall()
+            if uncertain:
+                order = self._unknown_attempt_usage_tx(conn, order, task)
+            retry = task.attempts < task.max_attempts and not uncertain
             recovered = replace(
                 task,
-                status=WorkTaskStatus.PENDING if retry else WorkTaskStatus.FAILED,
+                status=WorkTaskStatus.BLOCKED
+                if uncertain
+                else (WorkTaskStatus.PENDING if retry else WorkTaskStatus.FAILED),
                 worker_id="",
                 lease_expires_at=None,
                 heartbeat_at=None,
                 ended_at=None if retry else now,
                 updated_at=now,
-                error=f"Worker lease expired after attempt {task.attempts}",
+                error=(
+                    "Uncertain invocation outcome; reconcile before resuming"
+                    if uncertain
+                    else f"Worker lease expired after attempt {task.attempts}"
+                ),
                 metadata={**task.metadata, "recovered_from_worker": task.worker_id},
             )
             tasks.append(recovered)
             self._append_event_tx(
                 conn,
                 order.work_order_id,
-                "task.recovered" if retry else "task.lease_failed",
+                "task.recovery_blocked"
+                if uncertain
+                else ("task.recovered" if retry else "task.lease_failed"),
                 task_id=task.task_id,
                 actor=actor,
                 data={"worker_id": task.worker_id, "attempt": task.attempts},
@@ -1090,6 +1407,34 @@ class WorkOrderStore:
             status = WorkOrderStatus.QUEUED
             error = ""
         return replace(order, status=status, error=error)
+
+    def _unknown_attempt_usage_tx(self, conn, order, task):
+        receipt = f"uncertain-attempt:{task.attempts}"
+        if any(
+            a.kind == "usage"
+            and a.task_id == task.task_id
+            and a.metadata.get("invocation_id") == receipt
+            for a in order.artifacts
+        ):
+            return order
+        usage = WorkOrderUsage(task_id=task.task_id, attempt=task.attempts, observed_at=time.time())
+        artifact = WorkArtifact(
+            artifact_id=generate_artifact_id(),
+            kind="usage",
+            created_at=time.time(),
+            task_id=task.task_id,
+            metadata={"usage": usage.to_dict(), "invocation_id": receipt, "uncertain": True},
+        )
+        updated = replace(order, artifacts=(*order.artifacts, artifact))
+        self._append_event_tx(
+            conn,
+            order.work_order_id,
+            "usage.uncertain",
+            task_id=task.task_id,
+            actor="recovery",
+            data={"attempt": task.attempts, "usage": None},
+        )
+        return updated
 
     def _validate_order(self, order: WorkOrder) -> None:
         if not order.work_order_id.strip():
@@ -1137,13 +1482,19 @@ class WorkOrderStore:
             visit(task_id)
 
     @staticmethod
-    def _assert_running_owner(task: WorkOrderTask, worker_id: str) -> None:
+    def _assert_running_owner(
+        task: WorkOrderTask, worker_id: str, *, attempt: int | None = None
+    ) -> None:
         if task.status != WorkTaskStatus.RUNNING:
             raise ValueError(f"Task {task.task_id} is not running")
         if not worker_id or task.worker_id != worker_id:
             raise ValueError(
                 f"Task {task.task_id} is leased to {task.worker_id or '<nobody>'}, not {worker_id}"
             )
+        if attempt is not None and task.attempts != attempt:
+            raise ValueError("Stale worker attempt cannot commit to the current lease")
+        if task.lease_expires_at is not None and task.lease_expires_at <= time.time():
+            raise ValueError("Worker lease expired; recover ownership before committing")
 
     def _initialize(self) -> None:
         with closing(self._connect()) as conn:
@@ -1172,6 +1523,27 @@ class WorkOrderStore:
                 );
                 create index if not exists idx_work_order_events_order_sequence
                     on work_order_events(work_order_id, sequence);
+                create table if not exists work_programs (
+                    work_order_id text not null, task_id text not null,
+                    program_id text not null, fingerprint text not null,
+                    workspace text not null, revision integer not null,
+                    worker_id text not null, attempt integer not null,
+                    state text not null, checkpoint blob,
+                    checkpoint_sha256 text not null, metadata text not null,
+                    result text, updated_at real not null,
+                    primary key(work_order_id, task_id, program_id),
+                    foreign key(work_order_id) references work_orders(work_order_id)
+                );
+                create table if not exists work_invocations (
+                    work_order_id text not null, task_id text not null,
+                    invocation_id text not null, operation text not null,
+                    fingerprint text not null, replay_safe integer not null default 0,
+                    worker_id text not null, attempt integer not null,
+                    status text not null, workspace text not null default '',
+                    result text, updated_at real not null,
+                    primary key(work_order_id, task_id, invocation_id),
+                    foreign key(work_order_id) references work_orders(work_order_id)
+                );
                 """
             )
 
@@ -1180,6 +1552,7 @@ class WorkOrderStore:
         conn.row_factory = sqlite3.Row
         conn.execute("pragma foreign_keys = on")
         conn.execute("pragma journal_mode = wal")
+        conn.execute("pragma synchronous = full")
         return conn
 
     def _transaction(self):

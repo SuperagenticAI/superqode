@@ -10,6 +10,7 @@ from typing import Any, Literal
 import json
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,83 @@ class MCPServerConfig:
     config: MCPStdioConfig | MCPHttpConfig | MCPSSEConfig = field(default_factory=MCPStdioConfig)
 
 
+def mcp_config_paths(cwd: Path | str | None = None) -> list[Path]:
+    """Configuration layers, from lowest to highest precedence, resolved now."""
+    root = Path(cwd or Path.cwd()).expanduser().resolve()
+    return list(
+        dict.fromkeys(
+            [
+                Path.home() / ".config" / "superqode" / MCP_CONFIG_FILENAME,
+                Path.home() / ".superqode" / MCP_CONFIG_FILENAME,
+                root / ".superqode" / MCP_CONFIG_FILENAME,
+            ]
+        )
+    )
+
+
+@dataclass
+class MCPConfigResolution:
+    servers: dict[str, MCPServerConfig] = field(default_factory=dict)
+    sources: dict[str, str] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+
+
+def resolve_mcp_config(
+    runtime_config: dict[str, Any] | None = None, *, cwd: Path | str | None = None
+) -> MCPConfigResolution:
+    """Resolve the shared files and host overrides without starting any server.
+
+    ``mcp_config: false`` selects inline-only configuration; a path selects one
+    explicit file. Project entries and then inline entries replace whole server
+    declarations. An invalid higher-priority entry masks an earlier declaration
+    rather than silently launching the earlier server.
+    """
+    runtime = runtime_config or {}
+    root = Path(cwd or Path.cwd()).expanduser().resolve()
+    choice = runtime.get("mcp_config")
+    paths = mcp_config_paths(root)
+    if choice is False:
+        paths = []
+    elif isinstance(choice, (str, Path)):
+        path = Path(choice).expanduser()
+        paths = [path if path.is_absolute() else root / path]
+    elif choice not in (None, True):
+        raise ValueError("mcp_config requires a path or boolean")
+    resolved = MCPConfigResolution()
+
+    def merge(data, source, base):
+        if not isinstance(data, dict):
+            resolved.errors.append(f"{source}: MCP servers must be an object")
+            return
+        for sid, declaration in data.items():
+            resolved.servers.pop(sid, None)
+            resolved.sources[sid] = source
+            try:
+                if not isinstance(declaration, dict):
+                    raise ValueError("server declaration must be an object")
+                server = _parse_server_config(sid, declaration)
+                if isinstance(server.config, MCPStdioConfig):
+                    path = Path(server.config.cwd).expanduser() if server.config.cwd else root
+                    server.config.cwd = str(path if path.is_absolute() else base / path)
+                resolved.servers[sid] = server
+            except (TypeError, ValueError):
+                resolved.errors.append(f"{source}: invalid MCP server {sid!r}")
+
+    for path in paths:
+        if not path.exists():
+            if isinstance(choice, (str, Path)):
+                resolved.errors.append(f"MCP configuration file not found: {path}")
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            merge(data.get("mcpServers", data.get("servers", {})), str(path), root)
+        except (OSError, ValueError, AttributeError):
+            resolved.errors.append(f"Invalid MCP configuration file: {path}")
+    if "mcp_servers" in runtime or "mcp" in runtime:
+        merge(runtime.get("mcp_servers", runtime.get("mcp")), "runtime.config", root)
+    return resolved
+
+
 def find_mcp_config_file() -> Path | None:
     """Find the MCP configuration file.
 
@@ -110,8 +188,7 @@ def find_mcp_config_file() -> Path | None:
     Returns:
         Path to config file if found, None otherwise
     """
-    for config_dir in MCP_CONFIG_DIRS:
-        config_path = config_dir / MCP_CONFIG_FILENAME
+    for config_path in reversed(mcp_config_paths()):
         if config_path.exists():
             return config_path
     return None
@@ -127,7 +204,7 @@ def load_mcp_config(config_path: Path | None = None) -> dict[str, MCPServerConfi
         Dictionary mapping server IDs to their configurations
     """
     if config_path is None:
-        config_path = find_mcp_config_file()
+        return resolve_mcp_config().servers
 
     if config_path is None or not config_path.exists():
         return {}
@@ -142,7 +219,13 @@ def load_mcp_config(config_path: Path | None = None) -> dict[str, MCPServerConfi
     servers: dict[str, MCPServerConfig] = {}
 
     # Handle both formats: {"mcpServers": {...}} and {"servers": {...}}
+    if not isinstance(data, dict):
+        logger.error("MCP configuration must be an object")
+        return {}
     servers_data = data.get("mcpServers", data.get("servers", {}))
+    if not isinstance(servers_data, dict):
+        logger.error("MCP servers must be an object")
+        return {}
 
     for server_id, server_data in servers_data.items():
         try:
@@ -196,15 +279,27 @@ def get_acp_mcp_servers(config_path: Path | None = None) -> list[dict[str, Any]]
 
 def _parse_server_config(server_id: str, data: dict[str, Any]) -> MCPServerConfig:
     """Parse a single server configuration from JSON data."""
+    if not isinstance(data, dict) or not isinstance(server_id, str) or not server_id:
+        raise ValueError("Invalid server declaration")
     # Determine transport type
-    transport = data.get("transport", "stdio")
-
-    # Handle legacy format (command at top level = stdio)
-    if "command" in data and "transport" not in data:
-        transport = "stdio"
-    elif "url" in data and "transport" not in data:
-        # Determine if HTTP or SSE based on URL or other hints
-        transport = data.get("transport", "http")
+    transport = data.get("transport", data.get("type", "http" if "url" in data else "stdio"))
+    if transport == "streamable-http":
+        transport = "http"
+    if transport not in {"stdio", "http", "sse"}:
+        raise ValueError("Unknown MCP transport")
+    endpoint = data.get("command" if transport == "stdio" else "url", "")
+    if not isinstance(endpoint, str) or not endpoint.strip():
+        raise ValueError("MCP server requires command or URL")
+    for key in ("enabled", "disabled", "autoConnect", "auto_connect"):
+        if key in data and not isinstance(data[key], bool):
+            raise ValueError(f"{key} must be a boolean")
+    if not isinstance(data.get("args", []), list) or any(
+        not isinstance(arg, str) for arg in data.get("args", [])
+    ):
+        raise ValueError("args must be a list of strings")
+    for key in ("timeout", "sse_read_timeout"):
+        if key in data and (not isinstance(data[key], (int, float)) or data[key] <= 0):
+            raise ValueError(f"{key} must be positive")
 
     # Parse transport-specific config
     if transport == "stdio":
@@ -218,14 +313,14 @@ def _parse_server_config(server_id: str, data: dict[str, Any]) -> MCPServerConfi
     elif transport == "sse":
         config = MCPSSEConfig(
             url=data.get("url", ""),
-            headers=data.get("headers", {}),
+            headers=_resolve_env_vars(data.get("headers", {})),
             timeout=data.get("timeout", 5.0),
             sse_read_timeout=data.get("sse_read_timeout", 300.0),
         )
     else:  # http (streamable)
         config = MCPHttpConfig(
             url=data.get("url", ""),
-            headers=data.get("headers", {}),
+            headers=_resolve_env_vars(data.get("headers", {})),
             timeout=data.get("timeout", 30.0),
             sse_read_timeout=data.get("sse_read_timeout", 300.0),
         )
@@ -245,13 +340,15 @@ def _resolve_env_vars(env: dict[str, str]) -> dict[str, str]:
 
     Supports ${VAR} syntax for referencing environment variables.
     """
+    if not isinstance(env, dict):
+        raise ValueError("Environment and headers require an object")
     resolved = {}
     for key, value in env.items():
-        if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-            var_name = value[2:-1]
-            resolved[key] = os.environ.get(var_name, "")
-        else:
-            resolved[key] = value
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError("Environment and header values must be strings")
+        resolved[key] = re.sub(
+            r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", lambda match: os.environ.get(match[1], ""), value
+        )
     return resolved
 
 
@@ -267,7 +364,7 @@ def save_mcp_config(
     """
     if config_path is None:
         # Default to .superqode/mcp.json in current directory
-        config_path = MCP_CONFIG_DIRS[0] / MCP_CONFIG_FILENAME
+        config_path = mcp_config_paths()[-1]
 
     # Ensure directory exists
     config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -115,6 +115,7 @@ class OAuthState:
     code_verifier: str  # For PKCE
     server_url: str
     created_at: datetime = field(default_factory=datetime.now)
+    metadata: dict[str, Any] | None = None
 
     def is_expired(self) -> bool:
         """Check if the state has expired (10 minute timeout)."""
@@ -202,6 +203,10 @@ class MCPOAuthProvider:
                 except Exception:
                     as_meta = None
                 if as_meta:
+                    if as_meta.get("issuer") and as_meta["issuer"] != auth_server:
+                        raise OAuthMetadataError(
+                            "Authorization metadata issuer does not match the selected server"
+                        )
                     # AS fields take precedence — they have the actual
                     # endpoints we'll hit. PRM fields stay as hints.
                     merged.update(as_meta)
@@ -285,6 +290,7 @@ class MCPOAuthProvider:
             state=state,
             code_verifier=code_verifier,
             server_url=server_url,
+            metadata=dict(metadata),
         )
 
         # Build authorization URL
@@ -309,6 +315,8 @@ class MCPOAuthProvider:
         code: str,
         state: str,
         metadata: Optional[Dict[str, Any]] = None,
+        *,
+        issuer: str | None = None,
     ) -> OAuthTokens:
         """
         Handle the OAuth callback and exchange code for tokens.
@@ -330,8 +338,20 @@ class MCPOAuthProvider:
             raise ValueError("OAuth flow has expired")
 
         # Get OAuth metadata if not provided
-        if metadata is None:
-            metadata = await self.discover_oauth_metadata(flow_state.server_url)
+        selected_metadata = flow_state.metadata if flow_state.metadata is not None else metadata
+        if selected_metadata is None:
+            selected_metadata = await self.discover_oauth_metadata(flow_state.server_url)
+        expected_issuer = selected_metadata.get("issuer")
+        if issuer is not None and (not expected_issuer or issuer != expected_issuer):
+            raise ValueError(
+                "OAuth callback issuer does not match the selected authorization server"
+            )
+        if (
+            selected_metadata.get("authorization_response_iss_parameter_supported")
+            and issuer is None
+        ):
+            raise ValueError("OAuth callback is missing the required issuer")
+        metadata = selected_metadata
 
         # Get token endpoint
         token_endpoint = metadata.get("token_endpoint", f"{flow_state.server_url}/oauth/token")
@@ -358,7 +378,9 @@ class MCPOAuthProvider:
             None, lambda: self._request_tokens(token_endpoint, token_data)
         )
 
-        return self._parse_token_response(token_response)
+        tokens = self._parse_token_response(token_response)
+        tokens.scope = tokens.scope or self.config.scope
+        return tokens
 
     async def refresh_tokens(
         self,

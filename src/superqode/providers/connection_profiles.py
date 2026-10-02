@@ -544,7 +544,7 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="harness-pipy",
         label="PiPy",
-        description="Parallel tools, session tree, no approvals or sandbox",
+        description="Pi-inspired Pythonic version",
         connector="harness-use",
         runtime="pipy",
         menu=CONNECT_MENU_HARNESS,

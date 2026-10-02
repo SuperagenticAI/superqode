@@ -207,6 +207,15 @@ def harness_run(
                         "iterations": result.iterations,
                         "harness": result.spec.name,
                         "stopped_reason": result.response.stopped_reason,
+                        "provider": _observed_model_identity(result)[0],
+                        "model": _observed_model_identity(result)[1],
+                        "requested_provider": provider,
+                        "requested_model": model_name,
+                        "tokens_in": result.tokens_in,
+                        "tokens_out": result.tokens_out,
+                        "total_tokens": result.total_tokens,
+                        "cost_usd": result.cost_usd,
+                        "cost_currency": result.response.cost_currency,
                         "pending_approvals": pending_approvals,
                     },
                     indent=2,
@@ -390,3 +399,12 @@ def harness_runs(store_path, session_id, json_output):
             f"{run.run_id}  {run.status:<14}  {run.harness:<22}  "
             f"{run.runtime:<14}  {run.prompt_preview}{workflow}"
         )
+
+
+def _observed_model_identity(result):
+    identities = {
+        (str(e.data["provider"]), str(e.data["model"]))
+        for e in getattr(result, "events", ())
+        if "model" in e.type and e.data.get("provider") and e.data.get("model")
+    }
+    return next(iter(identities)) if len(identities) == 1 else (None, None)

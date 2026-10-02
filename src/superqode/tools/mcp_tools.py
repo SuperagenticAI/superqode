@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 from typing import Any, Dict, List, Optional
 
@@ -94,9 +95,8 @@ Example: Search for "web search" to find EXA or other search tools."""
 
     async def _load_tools(self) -> List[MCPToolMatch]:
         """Load and cache MCP tools from all servers."""
-        if self._cache_loaded:
-            return self._cache
-
+        # The manager owns the refreshed catalogue. Rebuild this inexpensive
+        # view so a list_changed notification cannot leave stale search results.
         mcp_manager = await self._get_mcp_manager()
         if not mcp_manager:
             return []
@@ -279,17 +279,15 @@ Example: Execute web_search on exa server with query argument."""
                     error=result.error_message or "MCP tool execution failed",
                 )
 
-            output_parts = []
-            for item in result.content:
-                if isinstance(item, dict):
-                    output_parts.append(item.get("text", str(item)))
-                else:
-                    output_parts.append(str(item))
-
             return ToolResult(
                 success=True,
-                output="\n".join(output_parts) if output_parts else "(no output)",
-                metadata={"server": server, "tool": tool},
+                output=_result_output(result),
+                metadata={
+                    "server": server,
+                    "tool": tool,
+                    "content": result.content,
+                    "structured_content": result.structured_content,
+                },
             )
 
         except Exception as e:
@@ -353,16 +351,30 @@ class MCPProxyTool(Tool):
                 error=result.error_message or "MCP tool execution failed",
                 metadata={"server": self.server, "tool": self.original_name},
             )
-        output_parts = []
-        for item in result.content:
-            output_parts.append(
-                item.get("text", str(item)) if isinstance(item, dict) else str(item)
-            )
         return ToolResult(
             success=True,
-            output="\n".join(output_parts) if output_parts else "(no output)",
-            metadata={"server": self.server, "tool": self.original_name},
+            output=_result_output(result),
+            metadata={
+                "server": self.server,
+                "tool": self.original_name,
+                "content": result.content,
+                "structured_content": result.structured_content,
+            },
         )
+
+
+def _result_output(result):
+    if result.structured_content is not None:
+        return json.dumps(result.structured_content)
+    parts = []
+    for item in result.content:
+        if isinstance(item, dict) and item.get("type") == "image":
+            parts.append(f"[MCP image: {item.get('mimeType', 'unknown')}]")
+        elif isinstance(item, dict):
+            parts.append(item.get("text", json.dumps(item)))
+        else:
+            parts.append(str(item))
+    return "\n".join(parts) or "(no output)"
 
 
 class MCPListResourcesTool(Tool):

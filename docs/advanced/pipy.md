@@ -24,26 +24,36 @@ address it directly:
 `:harness` lists it alongside the full catalogue. The aliases `pi` and
 `pi-python` resolve to the same harness.
 
-## Pure host permissions
+## Pure host permissions and contextual policy
 
 PiPy executes tools with the permissions of the process that launched
-SuperQode. There are no approval prompts, no sandbox, no execution policy and no
-network policy on this harness. That matches pi, where isolation is the user's
-job through a container or a VM.
+SuperQode. It has no interactive approval flow or OS sandbox. The hosting
+adapter enforces active contextual call/result policy, including when reusing
+an outcome from a WorkOrder. Selecting PiPy does not grant approval or sandbox
+support to the harness.
 
-This is the opposite posture to every other native SuperQode harness. Selecting
-PiPy is opting into it, and the harness picker says so before you do.
-
-If you want the policy stack, use `core` or `workbench`:
+Use `core` or `workbench` when those execution controls are required:
 
 ```bash
 superqode --harness core
 ```
 
-The PiPy code path does not import SuperQode's approval manager, permission
-manager or sandbox. A test walks the import graph of the whole package to keep
-it that way, and a second test asserts that a PiPy run which writes a file emits
-no approval event.
+The independent `superqode.pipy` library does not import the approval manager,
+permission manager, or sandbox. Its hosting adapter supplies policy checks;
+import-graph tests preserve the library boundary.
+
+Configured integrations use SuperQode's shared MCP manager. PiPy exposes
+`mcp_search` and `mcp_call` with deferred schemas, typed tool images and structured
+results. See [tool composition and recovery](tool-composition-and-recovery.md)
+for configuration and the capability limits.
+
+Hosted PiPy can also expose an optional `python_program` tool by setting
+`runtime.config.monty.enabled: true` in a harness spec and installing the
+`monty` extra. Programs compose active native read tools and explicit MCP
+capabilities using restricted Python. WorkOrder executions save a suspended
+program before each host call and commit results before resuming it. See
+[PiPy programs](tool-composition-and-recovery.md#pipy-programs) for activation,
+checkpoint inspection and the standalone WorkOrder execution route.
 
 ## What PiPy takes from pi
 
@@ -68,9 +78,11 @@ PiPy keeps its own session store, separate from every other harness:
 ~/.superqode/pipy/sessions/--Users-you-your-repo--/<timestamp>_<id>.jsonl
 ```
 
-One directory per working directory, one file per session. The file format is
-byte-compatible with pi's own version 3 session files, so a PiPy session opens
-in pi and a pi session opens in PiPy.
+One directory per working directory, one file per session. PiPy supports the
+tested version 3 record formats, including context edits, usage entries and
+system checkpoints. Original history remains intact when projecting context
+edits. Future entry types and executable extension/tool implementations require
+separate compatibility work; session import is not universal byte compatibility.
 
 Sessions are append-only. Compaction, branching and renaming all add entries
 rather than rewriting history, so navigating back to an earlier point is
@@ -92,7 +104,7 @@ without changes:
 - `.pi/prompts/*.md`
 - `AGENTS.md` or `CLAUDE.md`
 
-PiPy writes only under `~/.superqode/pipy/`. It never writes into `~/.pi/`, so a
+PiPy stores session metadata under `~/.superqode/pipy/`. It never writes into `~/.pi/`, so a
 real pi installation cannot be affected.
 
 ## Switching harnesses
@@ -127,8 +139,9 @@ PiPy runs through SuperQode's provider gateway, so every provider SuperQode
 supports is available. Stop reasons, token usage and cost are carried through to
 the session record.
 
-Image content is not yet passed to the model on the gateway path. Reading an
-image reports its type but does not attach it.
+Supported user and tool images pass through the provider gateway. Tool images
+retain their source attribution. MIME, size and known model capability checks
+run before dispatch; see [image limits](tool-composition-and-recovery.md#images-and-session-records).
 
 ## Extensions
 
@@ -151,3 +164,46 @@ PiPy is derived from pi, which is distributed under the MIT License, Copyright
 (c) 2025 Mario Zechner. Modules ported from pi name the upstream file they came
 from, and the full notice is in `NOTICE` at the repository root. PiPy is not
 affiliated with or endorsed by the pi project.
+
+## Shared MCP controls
+
+Hosted PiPy resolves the same user and project JSON configuration as the native
+MCP client. Inline `runtime.config.mcp_servers` declarations override file entries.
+`mcp_search` discovers enabled servers on demand, including servers without
+automatic connection. Automatic connection starts in the background.
+
+Use `sq mcp list`, `sq mcp login SERVER`, `sq mcp logout SERVER`, and
+`sq mcp reconnect SERVER` outside a session. In the TUI, use `:mcp list`,
+`:mcp reload`, `:mcp login SERVER`, and `:mcp logout SERVER`. These controls use
+shared transports and credentials; they are not model-callable administrative tools.
+See [MCP configuration](../configuration/mcp-config.md).
+
+## Opt-in coding WorkOrder recovery
+
+Enable recovery in a PiPy HarnessSpec:
+
+```yaml
+runtime:
+  backend: pipy
+  config:
+    recovery:
+      enabled: true
+```
+
+Within an active single-step WorkOrder, PiPy records the starting session branch,
+complete model responses and native tool outcomes before advancing. A retry
+replays committed responses with their original tool-call IDs, checks the current
+policy and committed workspace, and avoids repeating completed model or tool calls.
+Recovery uses sequential tool execution. Ordinary interactive session resume is unchanged.
+
+An interrupted model request or unsafe tool call with an unknown outcome requires
+reconciliation. Recovery verifies the workspace; it does not restore deleted
+files or reattach shell processes. New model requests with token or cost caps
+are blocked until provider spend reservation is supported. This is an opt-in
+process-recovery integration, not a power-loss or remote exactly-once guarantee.
+
+## Python SDK examples
+
+`examples/pipy/session.py` demonstrates session creation and events with an offline
+provider by default. `examples/pipy/custom_tool.py` demonstrates a typed custom
+tool and cancellation. Both use the independent `superqode.pipy` library.

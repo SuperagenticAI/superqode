@@ -11,9 +11,9 @@ superqode mcp [OPTIONS]
 This complements ACP and A2A. ACP connects to external coding agents. A2A
 connects agent services. MCP exposes your harness workflows as tools.
 
-This command is the **serving** side of SuperQode's MCP support. It is separate
-from configuring external MCP servers that SuperQode consumes as agent tools;
-see [MCP Configuration](../configuration/mcp-config.md) for that client path.
+Without a subcommand this remains the **serving** command. Client subcommands
+manage external MCP servers that SuperQode consumes as agent tools; see
+[MCP Configuration](../configuration/mcp-config.md).
 
 ## Examples
 
@@ -88,3 +88,20 @@ Related pages:
 - [Harness System](../advanced/harness-system.md)
 - [MCP Configuration](../configuration/mcp-config.md)
 - [Serve Commands](serve-commands.md)
+
+## Client controls
+
+```bash
+sq mcp list
+sq mcp list --connect --cwd ./project
+sq mcp login SERVER
+sq mcp logout SERVER
+sq mcp reconnect SERVER
+```
+
+All four subcommands accept `--cwd DIRECTORY` and `--config FILE`. They resolve
+the shared user/project files and use the same credentials as hosted PiPy.
+`list` reports configured state without launching servers; `--connect` checks
+live connections. Reports omit server URLs, command arguments and credential
+values. Invalid configuration, failed controls and failed requested connections
+return a nonzero exit status. Each command closes the transports it owns.

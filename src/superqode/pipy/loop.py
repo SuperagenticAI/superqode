@@ -45,7 +45,7 @@ from .provider_events import (
 from .signals import AbortSignal, is_aborted
 from .stream import Context, Model, StreamFn, StreamOptions
 from .tools.base import AgentTool, AgentToolResult
-from .types import JSONObject, ThinkingLevel, ToolExecutionMode
+from .types import JSONObject, JSONValue, ThinkingLevel, ToolExecutionMode
 from .validation import validate_tool_arguments
 
 AgentEventSink = Callable[[AgentEvent], Awaitable[None] | None]
@@ -66,6 +66,7 @@ class BeforeToolCallResult:
 
     block: bool = False
     reason: str | None = None
+    arguments: dict[str, JSONValue] | None = None
 
 
 @dataclass(slots=True)
@@ -704,6 +705,10 @@ async def _prepare_tool_call(
                 return _immediate(tool_call, "Operation aborted")
             if before is not None and before.block:
                 return _immediate(tool_call, before.reason or "Tool execution was blocked")
+            if before is not None and before.arguments is not None:
+                validated = validate_tool_arguments(
+                    tool.name, tool.parameters, dict(before.arguments)
+                )
 
         if is_aborted(signal):
             return _immediate(tool_call, "Operation aborted")

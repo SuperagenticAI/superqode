@@ -562,6 +562,10 @@ class AgentHarness:
         context = await self._session.build_context()
         metadata = await self._session.get_metadata()
         active_tools = self.get_active_tools()
+        if context.active_tool_names is not None:
+            active_tools = [
+                self._tools[name] for name in context.active_tool_names if name in self._tools
+            ]
 
         state = TurnState(
             messages=list(context.messages),
@@ -676,7 +680,9 @@ class AgentHarness:
             )
             if result is None:
                 return None
-            return BeforeToolCallResult(block=result.block, reason=result.reason)
+            return BeforeToolCallResult(
+                block=result.block, reason=result.reason, arguments=result.arguments
+            )
 
         async def after_tool_call(hook_context, signal):
             patch: ToolResultPatch | None = await self._emit_hook(
@@ -902,6 +908,8 @@ class AgentHarness:
         if not handlers:
             return None
         last: Any = None
+        denied: ToolCallResult | None = None
+        arguments: dict[str, Any] | None = None
         for handler in list(handlers):
             try:
                 result = await _maybe_await(handler(event))
@@ -909,7 +917,13 @@ class AgentHarness:
                 raise _normalize_error(to_error(error), "hook") from error
             if result is not None:
                 last = result
-        return last
+                if isinstance(result, ToolCallResult):
+                    if result.block:
+                        denied = denied or result
+                    elif result.arguments is not None and isinstance(event, ToolCallEvent):
+                        arguments = dict(result.arguments)
+                        event = replace(event, input=arguments)
+        return denied or (ToolCallResult(arguments=arguments) if arguments is not None else last)
 
     async def _emit_queue_update(self) -> None:
         await self._emit_own(self.queued_messages())

@@ -63,6 +63,7 @@ class PiPyHarnessProtocolAdapter:
         self._session_factory = session_factory
         self._sessions: dict[str, Any] = {}
         self._refs: dict[str, HarnessSessionRef] = {}
+        self._mcp: dict[str, Any] = {}
 
     # -- lifecycle -------------------------------------------------------- #
 
@@ -138,15 +139,48 @@ class PiPyHarnessProtocolAdapter:
 
         from superqode.pipy.ai.models import resolve_model
         from superqode.pipy.coding_session import CodingSessionOptions, PiPyCodingSession
+        from .pipy_governance import guard_pipy_tools, mark_policy_denial
 
         options = CodingSessionOptions(
             cwd=working_directory,
             model=resolve_model(request.model or "", provider=request.provider or ""),
             tool_names=tuple(request.metadata.get("tools") or DEFAULT_TOOLS),
+            tool_transform=guard_pipy_tools,
         )
-        if session_path and Path(session_path).is_file():
-            return await PiPyCodingSession.resume(options, session_path=session_path)
-        return await PiPyCodingSession.create(options)
+        from .pipy_mcp import PiPyMCPTools
+
+        runtime_config = request.metadata.get("runtime_config") or {}
+        program = None
+        if runtime_config.get("monty", {}).get("enabled") is True:
+            from .pipy_program import PiPyProgramHost
+
+            program = PiPyProgramHost(working_directory, runtime_config)
+        mcp = await PiPyMCPTools.create(runtime_config, cwd=working_directory)
+        options.extra_tools = mcp.tools
+        if program:
+            options.extra_tools += (program.tool(),)
+        try:
+            if session_path and Path(session_path).is_file():
+                session = await PiPyCodingSession.resume(options, session_path=session_path)
+            else:
+                session = await PiPyCodingSession.create(options)
+        except BaseException:
+            await mcp.close()
+            raise
+        self._mcp[str(session.session_path)] = mcp
+        if program:
+            program.harness = session.harness
+            program.mcp = mcp
+        session.harness.on("tool_result", mark_policy_denial)
+        return session
+
+    async def close(self, session: HarnessSessionRef) -> None:
+        """Release owned transports; the JSONL conversation remains resumable."""
+        coding = self._sessions.pop(session.session_id, None)
+        if coding is not None:
+            mcp = self._mcp.pop(str(coding.session_path), None)
+            if mcp is not None:
+                await mcp.close()
 
     # -- running ---------------------------------------------------------- #
 
@@ -168,10 +202,27 @@ class PiPyHarnessProtocolAdapter:
             data={"role": "user", "content": message.content},
         )
 
-        stream = coding_session.prompt_events(message.content)
-        async for event in stream:
-            for translated in translate_event(event):
-                yield translated
+        from superqode.execution_recovery import active_recovery, recovery_scope
+
+        scope = active_recovery()
+        config = session.metadata.get("runtime_config") or {}
+        recovery = None
+        if scope and config.get("recovery", {}).get("enabled") is True:
+            from .pipy_recovery import PiPyRunRecovery
+
+            recovery = PiPyRunRecovery(scope, coding_session, config)
+            await recovery.prepare(message.content)
+        try:
+            with recovery_scope(recovery.scope if recovery else scope):
+                stream = coding_session.prompt_events(message.content)
+                async for event in stream:
+                    for translated in translate_event(event):
+                        yield translated
+                if recovery and recovery.failure:
+                    raise recovery.failure
+        finally:
+            if recovery:
+                recovery.restore()
 
     async def steer(self, session: HarnessSessionRef, message: HarnessMessage) -> None:
         coding_session = await self._require(session)

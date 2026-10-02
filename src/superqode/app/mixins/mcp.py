@@ -24,7 +24,7 @@ class McpMixin:
         try:
             from superqode.mcp.config import load_mcp_config
 
-            servers = load_mcp_config(Path.cwd() / ".superqode" / "mcp.json")
+            servers = load_mcp_config()
         except Exception:
             return []
         candidates = []
@@ -166,6 +166,31 @@ class McpMixin:
             pass
 
         manager = await get_mcp_manager()
+
+        if subcommand == "reload":
+            resolution = await manager.reload_config(cwd=Path.cwd())
+            results = await manager.connect_all()
+            log.add_info(
+                f"Reloaded {len(resolution.servers)} MCP servers; {sum(results.values())} connected."
+            )
+            for error in resolution.errors:
+                log.add_error(error)
+            return
+
+        if subcommand in {"login", "logout"}:
+            if subargs not in manager.get_server_configs():
+                log.add_error("Specify a configured MCP server; use :mcp status.")
+                return
+            if subcommand == "login":
+                ok = await manager.authenticate_server(subargs)
+                if ok:
+                    ok = await manager.reconnect(subargs)
+                log.add_info(f"MCP login {subargs}: {'connected' if ok else 'failed'}")
+            else:
+                await manager.disconnect(subargs)
+                await manager.clear_server_credentials(subargs)
+                log.add_info(f"Signed out of MCP server {subargs}.")
+            return
 
         if subcommand in ("", "status"):
             configs = manager.get_server_configs()
@@ -385,5 +410,5 @@ class McpMixin:
             return
 
         log.add_info(
-            "Usage: :mcp status|add|connect|reconnect|disconnect|doctor|tools|resources|attach|prompts"
+            "Usage: :mcp status|add|connect|reconnect|reload|login|logout|disconnect|doctor|tools|resources|attach|prompts"
         )

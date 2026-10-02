@@ -1141,8 +1141,10 @@ async def test_work_order_cancel_stops_live_harness_coroutine(tmp_path, monkeypa
     store.create(order)
     store.queue(order.work_order_id)
     harness_cancelled = asyncio.Event()
+    harness_started = asyncio.Event()
 
     async def fake_execute(*args, **kwargs):
+        harness_started.set()
         try:
             await asyncio.Event().wait()
         finally:
@@ -1157,10 +1159,7 @@ async def test_work_order_cancel_stops_live_harness_coroutine(tmp_path, monkeypa
             isolation="none",
         )
     )
-    for _ in range(40):
-        if store.get(order.work_order_id).status == WorkOrderStatus.RUNNING:
-            break
-        await asyncio.sleep(0.025)
+    await asyncio.wait_for(harness_started.wait(), timeout=3)
     store.cancel(order.work_order_id, actor="operator", reason="stop now")
     result = await asyncio.wait_for(running, timeout=3)
 

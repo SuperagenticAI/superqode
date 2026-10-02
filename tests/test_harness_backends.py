@@ -341,7 +341,7 @@ async def test_runtime_harness_backend_passes_inline_mcp_tools(monkeypatch, tmp_
         ]
     )
 
-    async def fake_create_harness_mcp_runtime(spec):
+    async def fake_create_harness_mcp_runtime(spec, *, cwd=None):
         return mcp_runtime
 
     def fake_create_runtime(name, **kwargs):
@@ -382,10 +382,11 @@ async def test_runtime_harness_backend_passes_inline_mcp_tools(monkeypatch, tmp_
     assert "mcp_list_tools" in [event.type for event in result.metadata["events"]]
 
 
-def test_harness_mcp_server_configs_normalizes_inline_servers():
+def test_harness_mcp_server_configs_normalizes_inline_servers(monkeypatch):
     from superqode.harness import HarnessSpec
     from superqode.mcp.config import MCPHttpConfig, MCPStdioConfig
 
+    monkeypatch.setenv("TOKEN", "fixture-token")
     spec = HarnessSpec(
         name="mcp-harness",
         runtime=RuntimeSpec(
@@ -410,7 +411,7 @@ def test_harness_mcp_server_configs_normalizes_inline_servers():
     assert set(servers) == {"docs", "local"}
     assert isinstance(servers["docs"].config, MCPHttpConfig)
     assert servers["docs"].config.url == "https://example.com/mcp"
-    assert servers["docs"].config.headers == {"Authorization": "Bearer ${TOKEN}"}
+    assert servers["docs"].config.headers == {"Authorization": "Bearer fixture-token"}
     assert isinstance(servers["local"].config, MCPStdioConfig)
     assert servers["local"].config.command == "uvx"
     assert servers["local"].config.args == ["mcp-server-example"]

@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.4.42"
+version = "2.4.43"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -81,8 +81,8 @@ mlx = [
 ]
 monty = [
     # Monty 1.x is the supported research/eval and python_repl extra.
-    # Dump format is not cross-major compatible (v1 dumps will not load on
-    # older workers), so keep the upper bound under 2.
+    # Saved programs additionally pin API version and actual worker bytes;
+    # the major-version bound alone is not snapshot compatibility evidence.
     "pydantic-monty>=1.0.0,<2",
 ]
 semantic = [

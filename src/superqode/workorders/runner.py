@@ -8,12 +8,13 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from superqode.providers.model_specs import split_provider_model_ref
 from superqode.workspace.change_summary import (
+    FileChange,
     WorkspaceChangeSnapshot,
     capture_workspace_changes,
     summarize_workspace_changes,
@@ -22,6 +23,7 @@ from superqode.workspace.change_summary import (
 from .models import WorkOrder, WorkOrderStatus, WorkOrderTask, WorkTaskRole
 from .store import WorkOrderStore
 from .usage import usage_from_result
+from .recovery import RecoveryScope, input_fingerprint, recovery_scope, workspace_fingerprint
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,10 @@ class WorkTaskWorkspace:
 
 class _WorkOrderCancelled(Exception):
     """Raised after the durable WorkOrder cancellation signal is observed."""
+
+
+class _RecoveryRequired(ValueError):
+    """An existing invocation cannot safely advance without reconciliation."""
 
 
 _PATCH_ROLES = frozenset({WorkTaskRole.IMPLEMENTER, WorkTaskRole.SYNTHESIZER, WorkTaskRole.CUSTOM})
@@ -140,6 +146,7 @@ async def execute_claimed_task(
             worker_id=worker_id,
             lease_seconds=lease_seconds,
             stop=stop_heartbeat,
+            attempt=task.attempts,
         )
     )
     workspace: WorkTaskWorkspace | None = None
@@ -149,6 +156,24 @@ async def execute_claimed_task(
     try:
         workspace = await _prepare_task_workspace(store, order, task, isolation=isolation)
         baseline = await asyncio.to_thread(capture_workspace_changes, workspace.path)
+        prior_workspace = next(
+            (
+                artifact
+                for artifact in store.get(order.work_order_id).artifacts
+                if artifact.kind == "workspace"
+                and artifact.task_id == task.task_id
+                and artifact.path == str(workspace.path)
+                and "change_baseline" in artifact.metadata
+            ),
+            None,
+        )
+        if prior_workspace is not None:
+            baseline = WorkspaceChangeSnapshot(
+                files={
+                    path: FileChange(**value)
+                    for path, value in prior_workspace.metadata["change_baseline"].items()
+                }
+            )
         store.add_artifact(
             order.work_order_id,
             kind="workspace",
@@ -156,6 +181,7 @@ async def execute_claimed_task(
             path=str(workspace.path),
             metadata={
                 "isolation": workspace.isolation,
+                "change_baseline": {path: asdict(value) for path, value in baseline.files.items()},
                 "base_commit": workspace.base_commit,
                 "baseline_tree": workspace.baseline_tree,
                 "source_tree": workspace.source_tree,
@@ -166,15 +192,83 @@ async def execute_claimed_task(
             actor=worker_id,
         )
         timeout = _remaining_time_budget(order)
-        execution = _execute_harness_task(
-            order,
-            task,
-            provider=provider,
-            model=model,
-            runtime=runtime,
-            sandbox=sandbox,
-            working_directory=workspace.path,
+        from superqode.harness import resolve_harness
+
+        resolved_spec = resolve_harness(task.harness or order.harness, root=workspace.path).spec
+        fingerprint = input_fingerprint(
+            {
+                "goal": task.goal,
+                "role": task.role.value,
+                "harness": task.harness or order.harness,
+                "provider": provider or task.provider,
+                "model": model or task.model,
+                "runtime": runtime or task.runtime,
+                "sandbox": sandbox,
+                "environment": {
+                    key: os.getenv(key, "") for key in ("SUPERQODE_PROVIDER", "SUPERQODE_MODEL")
+                },
+                "order_goal": order.goal,
+                "acceptance_tests": order.acceptance_tests,
+                "resolved_spec": asdict(resolved_spec),
+                "recovery_contract": 1,
+            }
         )
+        guard = await asyncio.to_thread(
+            workspace_fingerprint, workspace.path, exclude_paths=(store.path,)
+        )
+        if store.get(order.work_order_id).status == WorkOrderStatus.CANCELLED:
+            raise _WorkOrderCancelled()
+        try:
+            admission = store.begin_invocation(
+                order.work_order_id,
+                task.task_id,
+                worker_id=worker_id,
+                attempt=task.attempts,
+                invocation_id="harness-task",
+                operation="harness.task",
+                fingerprint=fingerprint,
+                replay_safe=(
+                    resolved_spec.runtime.backend == "pipy"
+                    and resolved_spec.runtime.config.get("recovery", {}).get("enabled") is True
+                    and resolved_spec.workflow.mode.value == "single"
+                ),
+                workspace=guard,
+            )
+        except ValueError as exc:
+            raise _RecoveryRequired(str(exc)) from exc
+
+        async def execute_or_reuse():
+            if admission["action"] == "reuse":
+                return admission["result"]
+            with recovery_scope(
+                RecoveryScope(store, order.work_order_id, task.task_id, worker_id, task.attempts)
+            ):
+                outcome = await _execute_harness_task(
+                    order,
+                    task,
+                    provider=provider,
+                    model=model,
+                    runtime=runtime,
+                    sandbox=sandbox,
+                    working_directory=workspace.path,
+                )
+                if outcome.get("stopped_reason") == "recovery_required":
+                    raise _RecoveryRequired(outcome.get("error") or "PiPy requires reconciliation")
+            end_guard = await asyncio.to_thread(
+                workspace_fingerprint, workspace.path, exclude_paths=(store.path,)
+            )
+            store.finish_invocation(
+                order.work_order_id,
+                task.task_id,
+                worker_id=worker_id,
+                attempt=task.attempts,
+                invocation_id="harness-task",
+                result=outcome,
+                workspace=end_guard,
+            )
+            return outcome
+
+        execution = execute_or_reuse()
         execution_started = time.monotonic()
         result = await _await_harness_or_cancellation(
             store,
@@ -193,6 +287,7 @@ async def execute_claimed_task(
             order.work_order_id,
             usage,
             actor=worker_id,
+            invocation_id="harness-task",
         )
         policy_payload = policy_decision.to_dict()
         await _record_workspace_evidence(
@@ -208,6 +303,7 @@ async def execute_claimed_task(
                 order.work_order_id,
                 task.task_id,
                 worker_id=worker_id,
+                attempt=task.attempts,
                 reason=policy_decision.reason,
                 run_id=run_id,
                 session_id=session_id,
@@ -237,6 +333,7 @@ async def execute_claimed_task(
                 order.work_order_id,
                 task.task_id,
                 worker_id=worker_id,
+                attempt=task.attempts,
                 reason="Harness run needs approval",
                 run_id=run_id,
                 session_id=session_id,
@@ -275,6 +372,7 @@ async def execute_claimed_task(
                 order.work_order_id,
                 task.task_id,
                 worker_id=worker_id,
+                attempt=task.attempts,
                 error=error,
                 retry=retry,
                 run_id=run_id,
@@ -323,6 +421,7 @@ async def execute_claimed_task(
                 order.work_order_id,
                 task.task_id,
                 worker_id=worker_id,
+                attempt=task.attempts,
                 reason=role_error,
                 run_id=run_id,
                 session_id=session_id,
@@ -365,6 +464,7 @@ async def execute_claimed_task(
                     order.work_order_id,
                     task.task_id,
                     worker_id=worker_id,
+                    attempt=task.attempts,
                     reason=reason,
                     run_id=run_id,
                     session_id=session_id,
@@ -385,6 +485,7 @@ async def execute_claimed_task(
             order.work_order_id,
             task.task_id,
             worker_id=worker_id,
+            attempt=task.attempts,
             run_id=run_id,
             session_id=session_id,
             metadata={
@@ -403,6 +504,21 @@ async def execute_claimed_task(
             content=content,
             usage=usage_payload,
             policy=policy_payload,
+        )
+    except _RecoveryRequired as exc:
+        store.block_task(
+            order.work_order_id,
+            task.task_id,
+            worker_id=worker_id,
+            attempt=task.attempts,
+            reason=str(exc),
+        )
+        return WorkTaskExecution(
+            work_order_id=order.work_order_id,
+            task_id=task.task_id,
+            status="blocked",
+            worker_id=worker_id,
+            error=str(exc),
         )
     except _WorkOrderCancelled:
         await _record_workspace_evidence(
@@ -432,17 +548,18 @@ async def execute_claimed_task(
             workspace=workspace,
             baseline=baseline,
         )
-        store.fail_task(
+        failed_order = store.fail_task(
             order.work_order_id,
             task.task_id,
             worker_id=worker_id,
             error=error,
             retry=False,
+            attempt=task.attempts,
         )
         return WorkTaskExecution(
             work_order_id=order.work_order_id,
             task_id=task.task_id,
-            status="failed",
+            status="blocked" if failed_order.status == WorkOrderStatus.BLOCKED else "failed",
             worker_id=worker_id,
             error=error,
             usage=usage_payload,
@@ -458,17 +575,18 @@ async def execute_claimed_task(
             workspace=workspace,
             baseline=baseline,
         )
-        store.fail_task(
+        failed_order = store.fail_task(
             order.work_order_id,
             task.task_id,
             worker_id=worker_id,
             error=error,
             retry=retry,
+            attempt=task.attempts,
         )
         return WorkTaskExecution(
             work_order_id=order.work_order_id,
             task_id=task.task_id,
-            status="failed",
+            status="blocked" if failed_order.status == WorkOrderStatus.BLOCKED else "failed",
             worker_id=worker_id,
             error=error,
             usage=usage_payload,
@@ -663,6 +781,7 @@ async def _execute_harness_task(
     )
     return {
         "content": result.content,
+        "error": result.response.error or "",
         "session_id": result.session_id,
         "run_id": result.run_id,
         "stopped_reason": result.response.stopped_reason,
@@ -722,6 +841,7 @@ async def _heartbeat_loop(
     worker_id: str,
     lease_seconds: int,
     stop: asyncio.Event,
+    attempt: int | None = None,
 ) -> None:
     interval = max(1.0, min(30.0, lease_seconds / 3))
     while True:
@@ -735,6 +855,7 @@ async def _heartbeat_loop(
                 task_id,
                 worker_id=worker_id,
                 lease_seconds=lease_seconds,
+                attempt=attempt,
             )
 
 
@@ -901,6 +1022,37 @@ async def _prepare_task_workspace(
         raise ValueError(f"WorkOrder repository does not exist: {repository}")
     if requested == "none" and (order.budget.max_workers or 1) > 1:
         raise ValueError("Parallel WorkOrders require Git worktree isolation")
+
+    # An outcome belongs to its original workspace. Creating a new attempt's
+    # worktree would discard uncommitted work and invalidate its evidence.
+    if task.attempts > 1 and store.invocations(order.work_order_id, task.task_id):
+        previous = next(
+            (
+                a
+                for a in reversed(store.get(order.work_order_id).artifacts)
+                if a.kind == "workspace" and a.task_id == task.task_id
+            ),
+            None,
+        )
+        if previous is not None:
+            path = Path(previous.path)
+            if not path.is_dir():
+                raise _RecoveryRequired(
+                    "Recovery workspace is missing; restoration/reconciliation required"
+                )
+            data = previous.metadata
+            return WorkTaskWorkspace(
+                path=path,
+                isolation=str(data.get("isolation", "none")),
+                base_commit=str(data.get("base_commit", "")),
+                baseline_tree=str(data.get("baseline_tree", "")),
+                source_tree=str(data.get("source_tree", "")),
+                workspace_id=str(data.get("workspace_id", "")),
+                scope=str(data.get("scope", "task")),
+                integration_path=Path(data["integration_workspace"])
+                if data.get("integration_workspace")
+                else None,
+            )
 
     integration = await _ensure_integration_workspace(store, order, requested=requested)
     if integration.isolation == "none":

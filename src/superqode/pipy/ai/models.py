@@ -47,6 +47,7 @@ def resolve_model(
     *,
     api: str | None = None,
     supports_reasoning: bool | None = None,
+    supports_images: bool | None = None,
     context_window: int | None = None,
 ) -> Model:
     """Build the descriptor a run is sent with.
@@ -60,10 +61,19 @@ def resolve_model(
         resolved_provider, resolved_id = model_id.split("/", 1)
 
     normalized = resolved_provider.strip().lower()
+    if supports_images is None:
+        try:
+            from superqode.providers.models import get_model_info
+
+            info = get_model_info(normalized, resolved_id)
+            supports_images = info.supports_vision if info is not None else None
+        except Exception:
+            pass
     return Model(
         id=resolved_id,
         provider=normalized,
         api=api or _PROVIDER_APIS.get(normalized, "openai-completions"),
+        supports_images=supports_images,
         supports_reasoning=(
             normalized in _REASONING_PROVIDERS if supports_reasoning is None else supports_reasoning
         ),

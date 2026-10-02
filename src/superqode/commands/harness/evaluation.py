@@ -107,6 +107,12 @@ def harness_test(
     help="Do not fail when a variant regresses a task the baseline solved (seesaw gate)",
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+@click.option(
+    "--recovery-store",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Checkpoint live evaluation cases in a WorkOrder SQLite store",
+)
 def harness_eval(
     spec_paths,
     tasks_path,
@@ -120,6 +126,7 @@ def harness_eval(
     live,
     allow_regressions,
     json_output,
+    recovery_store,
 ):
     """Run a HarnessSpec eval scorecard across tasks and variants.
 
@@ -141,6 +148,7 @@ def harness_eval(
             sandbox_backend=sandbox_backend,
             live=live,
             eval_split=eval_split,
+            **({"recovery_store": recovery_store} if recovery_store is not None else {}),
         )
     )
     if json_output:

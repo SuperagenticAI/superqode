@@ -34,6 +34,8 @@ class Model:
     #: Tokens the model accepts. Zero means unknown, which disables
     #: automatic compaction rather than guessing a limit.
     context_window: int = 0
+    #: None means unknown; explicit False rejects images instead of dropping them.
+    supports_images: bool | None = None
 
 
 @dataclass(slots=True)

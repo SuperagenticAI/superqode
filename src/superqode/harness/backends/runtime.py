@@ -31,7 +31,7 @@ class RuntimeHarnessBackend:
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         runtime_events: list[HarnessEvent] = []
-        mcp_runtime = await create_harness_mcp_runtime(request.spec)
+        mcp_runtime = await create_harness_mcp_runtime(request.spec, cwd=request.working_directory)
         keep_mcp_runtime = False
         try:
             runtime_name, runtime_obj = _create_runtime_for_request(
@@ -81,7 +81,7 @@ class RuntimeHarnessBackend:
 
     async def stream(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         """Stream normalized harness delta events from the wrapped runtime."""
-        mcp_runtime = await create_harness_mcp_runtime(request.spec)
+        mcp_runtime = await create_harness_mcp_runtime(request.spec, cwd=request.working_directory)
         keep_mcp_runtime = False
         try:
             _runtime_name, runtime_obj = _create_runtime_for_request(

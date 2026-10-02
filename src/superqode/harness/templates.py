@@ -184,13 +184,13 @@ def no_tool_template(*, name: str = "superqode-no-tool", backend: str = "builtin
 def pipy_template(*, name: str = "pipy") -> HarnessSpec:
     """Native Python harness. Runs with the permissions of the process.
 
-    Deliberately the opposite posture to every other native harness: no
-    approvals, no sandbox, no MCP. Selecting PiPy is opting into that, which is
-    why the metadata says so loudly enough for a picker to warn on it.
+    Pi-inspired execution with shared MCP support. The hosting adapter supplies
+    contextual policy; tools run without approval prompts or an OS sandbox.
+    Selection metadata retains that permission notice for the picker.
     """
     return HarnessSpec(
         name=name,
-        description=("Event-first loop, parallel tools, session tree, pure host permissions."),
+        description="Pi-inspired Pythonic version",
         flavor=HarnessFlavor.CODING,
         runtime=RuntimeSpec(backend="pipy"),
         model_policy=ModelPolicySpec(

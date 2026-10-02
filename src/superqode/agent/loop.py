@@ -1417,11 +1417,33 @@ class AgentLoop:
             delegation_depth=self.config.harness_delegation_depth,
             mcp_allowed=self.config.loop_policy.mcp,
             on_discovery=self._record_discovery_event,
+            execute_tool=self._execute_tool,
         )
 
     def _record_discovery_event(self, event: Dict[str, Any]) -> None:
         """Expose the latest sanitized discovery lifecycle to local UX."""
         self.last_discovery_event = dict(event)
+
+    def _record_request_payload(self, messages, tools) -> None:
+        from ..providers.request_metrics import measure_request_payload
+
+        metrics = measure_request_payload(messages, tools)
+        self.last_request_payload = metrics
+        if self.config.harness_store is not None and self.config.harness_run_id:
+            from ..harness.events import HarnessEvent
+
+            self.config.harness_store.append_event(
+                self.config.harness_run_id,
+                HarnessEvent(
+                    type="model.payload",
+                    data={
+                        **metrics,
+                        "provider": self.config.provider,
+                        "model": self.config.model,
+                        "catalog_version": self.tools.version,
+                    },
+                ),
+            )
 
     def _context_status(self) -> Dict[str, Any]:
         """Live context-budget snapshot for the get_context_remaining tool."""
@@ -1668,6 +1690,15 @@ class AgentLoop:
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finalize(result: ToolResult) -> ToolResult:
+            import hashlib
+
+            result.metadata = {
+                **(result.metadata or {}),
+                "invocation_id": tool_call_id,
+                "effective_arguments_sha256": hashlib.sha256(
+                    json.dumps(arguments, sort_keys=True, default=str).encode()
+                ).hexdigest(),
+            }
             origin = (
                 self.tools.activation_origin(name)
                 if hasattr(self.tools, "activation_origin")
@@ -1702,6 +1733,16 @@ class AgentLoop:
                     output="",
                     error=f"Plan mode blocked tool execution: {name}",
                     metadata={"permission": "plan_mode_denied", "tool": name},
+                )
+            )
+
+        if name.startswith("mcp_") and not self.config.loop_policy.mcp:
+            return await _finalize(
+                ToolResult(
+                    success=False,
+                    output="",
+                    error="This execution profile disables MCP tools",
+                    metadata={"permission": "profile_denied", "tool": name},
                 )
             )
 
@@ -1743,7 +1784,21 @@ class AgentLoop:
                     server_id = parts[1]
                     tool_name = parts[2]
                     try:
-                        result = await self.mcp_executor(server_id, tool_name, arguments)
+                        from superqode.execution_recovery import recoverable_call
+
+                        result = await recoverable_call(
+                            identity=tool_call_id or "",
+                            operation=f"mcp.{server_id}.{tool_name}",
+                            inputs=arguments,
+                            execute=lambda: self.mcp_executor(server_id, tool_name, arguments),
+                            encode=lambda r: {
+                                "success": r.success,
+                                "output": r.output,
+                                "error": r.error,
+                                "metadata": r.metadata,
+                            },
+                            decode=lambda r: ToolResult(**r),
+                        )
                         return await _finalize(result)
                     except Exception as e:
                         return await _finalize(
@@ -1753,11 +1808,23 @@ class AgentLoop:
                 ToolResult(success=False, output="", error=f"Unknown tool: {name}")
             )
 
+        try:
+            import jsonschema
+
+            jsonschema.validate(arguments, tool.parameters)
+        except jsonschema.ValidationError as exc:
+            return await _finalize(
+                ToolResult(
+                    success=False, output="", error=f"Invalid arguments for {name}: {exc.message}"
+                )
+            )
+
         denied = await self._check_tool_permission(name, arguments, tool_call_id)
         if denied:
             return await _finalize(denied)
 
         ctx = self._create_tool_context()
+        ctx.invocation_id = tool_call_id or ""
 
         try:
             from ..tools.governed import execute_governed_tool
@@ -2691,6 +2758,7 @@ class AgentLoop:
             lifecycle_ctx = self._lifecycle_context()
             await self.hooks.fire(BEFORE_LLM_CALL, lifecycle_ctx, messages, tools_to_send)
             try:
+                self._record_request_payload(gateway_messages, tools_to_send)
                 response = await self.gateway.chat_completion(
                     messages=gateway_messages,
                     model=self.config.model,
@@ -3207,6 +3275,7 @@ class AgentLoop:
             last_thinking_emit = _time.time()
 
             try:
+                self._record_request_payload(gateway_messages, tools_to_send)
                 async for chunk in self.gateway.stream_completion(
                     messages=gateway_messages,
                     model=self.config.model,

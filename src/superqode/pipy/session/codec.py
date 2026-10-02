@@ -1,12 +1,13 @@
 """Wire format for session files.
 
-PiPy writes pi's exact JSON shape, so a PiPy session file is a valid pi session
-file and vice versa. That means camelCase keys on the wire and snake_case
-attributes in Python, with omitted rather than null optionals, matching what
-``JSON.stringify`` produces for an undefined field.
+Supported records use Pi's camelCase wire keys, with snake_case attributes
+in Python. Compatibility is tested against the supported v3 fixture corpus;
+arbitrary future records, extension implementations and executable tool
+definitions are not interchangeable. Newer context edits, usage records and
+system checkpoints are preserved without rewriting original history.
 
-Field names verified against ``packages/agent/src/harness/`` of
-earendil-works/pi (MIT).
+Field names verified against ``packages/coding-agent/src/core/session-manager.ts``
+and ``packages/ai/src/types.ts`` of earendil-works/pi (MIT).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from ..messages import (
     BranchSummaryMessage,
     CompactionSummaryMessage,
     ImageContent,
+    SystemMessage,
     TextContent,
     ThinkingContent,
     ToolCall,
@@ -31,6 +33,7 @@ from .entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
+    ContextEditEntry,
     CustomEntry,
     CustomMessageEntry,
     LabelEntry,
@@ -40,6 +43,7 @@ from .entries import (
     SessionInfoEntry,
     SessionTreeEntry,
     ThinkingLevelChangeEntry,
+    UsageEntry,
 )
 
 
@@ -184,6 +188,17 @@ def decode_usage(payload: Any) -> Usage | None:
 
 
 def encode_message(message: AgentMessage) -> dict[str, Any]:
+    if isinstance(message, SystemMessage):
+        return _prune(
+            {
+                "role": "system",
+                "content": _encode_content(message.content),
+                "timestamp": message.timestamp,
+                "sections": message.sections,
+                "toolsAdded": message.tools_added,
+                "toolsRemoved": message.tools_removed,
+            }
+        )
     if isinstance(message, UserMessage):
         return {
             "role": "user",
@@ -240,6 +255,30 @@ def decode_message(payload: Any) -> AgentMessage:
         raise SessionCodecError(f"Message is not an object: {payload!r}")
     role = payload.get("role")
     timestamp = int(payload.get("timestamp") or 0)
+    if role == "system":
+        sections = payload.get("sections")
+        if sections is not None and (
+            not isinstance(sections, dict)
+            or any(
+                not isinstance(k, str) or (v is not None and not isinstance(v, str))
+                for k, v in sections.items()
+            )
+        ):
+            raise SessionCodecError("System sections must map names to text or null")
+        for field in ("toolsAdded", "toolsRemoved"):
+            tools = payload.get(field)
+            if tools is not None and (
+                not isinstance(tools, list)
+                or any(not isinstance(t, dict) or not isinstance(t.get("name"), str) for t in tools)
+            ):
+                raise SessionCodecError(f"{field} must contain named tool definitions")
+        return SystemMessage(
+            content=_decode_content(payload.get("content")),
+            timestamp=timestamp,
+            sections=sections,
+            tools_added=payload.get("toolsAdded"),
+            tools_removed=payload.get("toolsRemoved"),
+        )
     if role == "user":
         return UserMessage(content=_decode_content(payload.get("content")), timestamp=timestamp)
     if role == "assistant":
@@ -293,6 +332,30 @@ def encode_entry(entry: SessionTreeEntry) -> dict[str, Any]:
     }
     if isinstance(entry, MessageEntry):
         return {**base, "message": encode_message(entry.message)}
+    if isinstance(entry, ContextEditEntry):
+        replacement = entry.replacement
+        return {
+            **base,
+            "targetId": entry.target_id,
+            "replacement": (
+                {"content": _encode_content(replacement["content"])}
+                if replacement is not None
+                else None
+            ),
+        }
+    if isinstance(entry, UsageEntry):
+        return {
+            **base,
+            **_prune(
+                {
+                    "kind": entry.kind,
+                    "provider": entry.provider,
+                    "model": entry.model,
+                    "usage": encode_usage(entry.usage),
+                    "note": entry.note,
+                }
+            ),
+        }
     if isinstance(entry, ThinkingLevelChangeEntry):
         return {**base, "thinkingLevel": entry.thinking_level}
     if isinstance(entry, ModelChangeEntry):
@@ -315,6 +378,9 @@ def encode_entry(entry: SessionTreeEntry) -> dict[str, Any]:
                     "details": entry.details,
                     "usage": encode_usage(entry.usage),
                     "fromHook": entry.from_hook or None,
+                    "systemMessage": encode_message(entry.system_message)
+                    if entry.system_message
+                    else None,
                 }
             ),
         }
@@ -374,6 +440,34 @@ def decode_entry(payload: Any) -> SessionTreeEntry:
 
     if kind == "message":
         return MessageEntry(**base, message=decode_message(payload.get("message")))
+    if kind == "context_edit":
+        target = payload.get("targetId")
+        replacement = payload.get("replacement")
+        if not isinstance(target, str) or not target:
+            raise SessionCodecError("context_edit has invalid targetId")
+        if "replacement" not in payload or (
+            replacement is not None
+            and (not isinstance(replacement, dict) or "content" not in replacement)
+        ):
+            raise SessionCodecError("context_edit requires replacement content or null")
+        return ContextEditEntry(
+            **base,
+            target_id=target,
+            replacement=(
+                {"content": _decode_content(replacement["content"])}
+                if replacement is not None
+                else None
+            ),
+        )
+    if kind == "usage":
+        return UsageEntry(
+            **base,
+            kind=str(payload.get("kind") or ""),
+            provider=str(payload.get("provider") or ""),
+            model=str(payload.get("model") or ""),
+            usage=decode_usage(payload.get("usage")) or Usage(),
+            note=payload.get("note"),
+        )
     if kind == "thinking_level_change":
         return ThinkingLevelChangeEntry(
             **base, thinking_level=str(payload.get("thinkingLevel") or "off")
@@ -390,6 +484,9 @@ def decode_entry(payload: Any) -> SessionTreeEntry:
         )
     if kind == "compaction":
         tail = payload.get("retainedTail")
+        system = decode_message(payload["systemMessage"]) if payload.get("systemMessage") else None
+        if system is not None and not isinstance(system, SystemMessage):
+            raise SessionCodecError("compaction systemMessage must have role system")
         return CompactionEntry(
             **base,
             summary=str(payload.get("summary") or ""),
@@ -399,6 +496,7 @@ def decode_entry(payload: Any) -> SessionTreeEntry:
             details=payload.get("details"),
             usage=decode_usage(payload.get("usage")),
             from_hook=bool(payload.get("fromHook", False)),
+            system_message=system,
         )
     if kind == "branch_summary":
         return BranchSummaryEntry(

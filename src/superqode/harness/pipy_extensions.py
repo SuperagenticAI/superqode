@@ -73,6 +73,8 @@ def attach_extension_hooks(
         # that as "not allowed" would block every tool call the moment any
         # extension registered an observer here.
         if not outcome.denied:
+            if outcome.modified:
+                return ToolCallResult(arguments=dict(outcome.arguments))
             return None
         return ToolCallResult(
             block=True,

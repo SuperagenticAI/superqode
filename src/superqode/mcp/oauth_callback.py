@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import urllib.parse
+import html
 from dataclasses import dataclass, field
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Optional
@@ -150,6 +151,7 @@ class CallbackResult:
     state: Optional[str] = None
     error: Optional[str] = None
     error_description: Optional[str] = None
+    issuer: Optional[str] = None
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -174,7 +176,13 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             return
 
         # Parse query parameters
-        params = urllib.parse.parse_qs(parsed.query)
+        params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        if any(len(params.get(key, [])) > 1 for key in ("state", "code", "iss", "error")):
+            self.send_error(400, "Ambiguous OAuth callback parameters")
+            return
+        if not params.get("state", [""])[0] or ("code" in params and "error" in params):
+            self.send_error(400, "Invalid OAuth callback")
+            return
 
         # Extract OAuth parameters
         code = params.get("code", [None])[0]
@@ -188,19 +196,21 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             state=state,
             error=error,
             error_description=error_description,
+            issuer=params.get("iss", [None])[0],
         )
 
         # Store result and notify waiting future
         with self.server_lock:
-            if state and state in self.callback_results:
-                future = self.callback_results[state]
-                if not future.done():
-                    # Use call_soon_threadsafe to set result from HTTP thread
-                    try:
-                        loop = future.get_loop()
-                        loop.call_soon_threadsafe(future.set_result, result)
-                    except Exception as e:
-                        logger.error(f"Error setting callback result: {e}")
+            future = self.callback_results.pop(state, None)
+        if future is None or future.done():
+            self.send_error(400, "Unknown or consumed OAuth state")
+            return
+
+        def deliver():
+            if not future.done():
+                future.set_result(result)
+
+        future.get_loop().call_soon_threadsafe(deliver)
 
         product = "A2A agent" if parsed.path.startswith("/a2a/") else "MCP server"
         if error:
@@ -226,7 +236,9 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             error_msg = f"{error}: {description}"
 
         content = (
-            ERROR_HTML.replace("__PRODUCT__", product).replace("{error}", error_msg).encode("utf-8")
+            ERROR_HTML.replace("__PRODUCT__", product)
+            .replace("{error}", html.escape(error_msg))
+            .encode("utf-8")
         )
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -284,6 +296,7 @@ class OAuthCallbackServer:
                 OAuthCallbackHandler,
             )
             self._server.timeout = 1  # Allow periodic checks
+            self.port = self._server.server_address[1]
 
             # Start server in background thread
             self._running = True
@@ -309,15 +322,15 @@ class OAuthCallbackServer:
 
     def _serve_forever(self) -> None:
         """Server loop running in background thread."""
-        while self._running:
-            self._server.handle_request()
+        self._server.serve_forever(poll_interval=0.1)
 
     async def stop(self) -> None:
         """Stop the callback server."""
         self._running = False
 
         if self._server:
-            self._server.shutdown()
+            await asyncio.to_thread(self._server.shutdown)
+            self._server.server_close()
             self._server = None
 
         if self._server_thread:

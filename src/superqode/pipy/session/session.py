@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -19,12 +20,17 @@ from ..messages import (
     TextContent,
     UserMessage,
     Usage,
+    AssistantMessage,
+    ToolResultMessage,
+    SystemMessage,
 )
 from ..types import JSONValue
 from .entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
+    ContextEditEntry,
+    UsageEntry,
     CustomEntry,
     CustomMessageEntry,
     LabelEntry,
@@ -50,6 +56,16 @@ CustomEntryProjector = Callable[[CustomEntry], Sequence[AgentMessage]]
 def derive_session_state(path: Sequence[SessionTreeEntry]) -> SessionContext:
     """Replay a branch to recover the model, thinking level and active tools."""
     state = SessionContext()
+
+    def apply_tools(message: SystemMessage) -> None:
+        if message.tools_added is not None or message.tools_removed is not None:
+            names = dict.fromkeys(state.active_tool_names or [])
+            for tool in message.tools_removed or []:
+                names.pop(tool["name"], None)
+            for tool in message.tools_added or []:
+                names[tool["name"]] = None
+            state.active_tool_names = list(names)
+
     for entry in path:
         if isinstance(entry, ThinkingLevelChangeEntry):
             state.thinking_level = entry.thinking_level
@@ -59,6 +75,10 @@ def derive_session_state(path: Sequence[SessionTreeEntry]) -> SessionContext:
             message = entry.message
             if getattr(message, "role", "") == "assistant":
                 state.model = SessionModelRef(provider=message.provider, model_id=message.model)
+            if isinstance(message, SystemMessage):
+                apply_tools(message)
+        elif isinstance(entry, CompactionEntry) and entry.system_message is not None:
+            apply_tools(entry.system_message)
         elif isinstance(entry, ActiveToolsChangeEntry):
             state.active_tool_names = list(entry.active_tool_names)
     return state
@@ -117,7 +137,11 @@ def entry_to_context_messages(
             summary=entry.summary,
             tokens_before=entry.tokens_before,
         )
-        return [summary, *(entry.retained_tail or [])]
+        return [
+            *([entry.system_message] if entry.system_message else []),
+            summary,
+            *(entry.retained_tail or []),
+        ]
     if isinstance(entry, BranchSummaryEntry) and entry.summary:
         return [BranchSummaryMessage(summary=entry.summary, from_id=entry.from_id)]
     if isinstance(entry, CustomEntry):
@@ -133,9 +157,51 @@ def build_session_context(
     """Build the full model-visible context from a branch."""
     state = derive_session_state(path)
     entries = default_context_entry_transform(path)
+    edits = {entry.target_id: entry for entry in entries if isinstance(entry, ContextEditEntry)}
     messages: list[AgentMessage] = []
-    for entry in entries:
-        messages.extend(entry_to_context_messages(entry, projectors))
+    for index, entry in enumerate(entries):
+        # Retained ranges can include an older compaction; only the latest
+        # boundary supplies its summary and checkpoint.
+        if isinstance(entry, CompactionEntry) and index > 0:
+            continue
+        projected = entry_to_context_messages(entry, projectors)
+        edit = edits.get(entry.id)
+        if edit is not None:
+            if edit.replacement is None:
+                projected = []
+            else:
+                content = edit.replacement["content"]
+                projected = [
+                    replace(
+                        message,
+                        content=(
+                            [TextContent(text=content)]
+                            if isinstance(content, str)
+                            and isinstance(message, (AssistantMessage, ToolResultMessage))
+                            else content
+                        ),
+                    )
+                    if isinstance(message, (UserMessage, AssistantMessage, ToolResultMessage))
+                    else message
+                    for message in projected
+                ]
+        messages.extend(projected)
+    # Usage is accounting over the original branch, not edited model context.
+    for entry in path:
+        usage = getattr(entry, "usage", None)
+        if isinstance(entry, MessageEntry):
+            usage = getattr(entry.message, "usage", None)
+        if usage is not None:
+            for name in ("input", "output", "cache_read", "cache_write", "total_tokens"):
+                setattr(state.usage, name, getattr(state.usage, name) + getattr(usage, name))
+            if usage.reasoning is not None:
+                state.usage.reasoning = (state.usage.reasoning or 0) + usage.reasoning
+            for name in ("input", "output", "cache_read", "cache_write", "total"):
+                setattr(
+                    state.usage.cost,
+                    name,
+                    getattr(state.usage.cost, name) + getattr(usage.cost, name),
+                )
     state.messages = messages
     return state
 
@@ -211,6 +277,35 @@ class Session:
         return await self._append(
             lambda entry_id, parent, ts: MessageEntry(
                 id=entry_id, parent_id=parent, timestamp=ts, message=message
+            )
+        )
+
+    async def append_context_edit(self, target_id: str, replacement: dict[str, Any] | None) -> str:
+        if await self._storage.read_entry(target_id) is None:
+            raise SessionError("unknown_entry", f"Unknown context edit target: {target_id}")
+        return await self._append(
+            lambda ident, parent, ts: ContextEditEntry(
+                id=ident,
+                parent_id=parent,
+                timestamp=ts,
+                target_id=target_id,
+                replacement=replacement,
+            )
+        )
+
+    async def append_usage(
+        self, *, kind: str, provider: str, model: str, usage: Usage, note: str | None = None
+    ) -> str:
+        return await self._append(
+            lambda ident, parent, ts: UsageEntry(
+                id=ident,
+                parent_id=parent,
+                timestamp=ts,
+                kind=kind,
+                provider=provider,
+                model=model,
+                usage=usage,
+                note=note,
             )
         )
 

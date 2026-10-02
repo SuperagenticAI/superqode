@@ -94,18 +94,32 @@ class PiPyCommandMixin:
                 session_id=session_id,
                 harness_id="pipy",
                 external_session_id=session_id,
-                metadata={"working_directory": str(working_directory)},
+                metadata={
+                    "working_directory": str(working_directory),
+                    "runtime_config": dict(
+                        getattr(
+                            getattr(getattr(pure, "_harness_spec", None), "runtime", None),
+                            "config",
+                            {},
+                        )
+                        or {}
+                    ),
+                },
             )
         )
         return adapter, ref
 
     async def _pipy_run(self, sub: str, rest: str, log) -> None:
+        adapter = ref = None
         try:
             adapter, ref = await self._pipy_open_session()
             session = adapter._sessions[ref.session_id]
             await self._pipy_dispatch(session, sub, rest, log)
         except Exception as error:  # noqa: BLE001 - surfaced to the user
             log.add_error(f":pipy {sub} failed: {error}")
+        finally:
+            if adapter is not None and ref is not None:
+                await adapter.close(ref)
 
     async def _pipy_dispatch(self, session: Any, sub: str, rest: str, log) -> None:
         if sub == "session":

@@ -12,6 +12,8 @@ free of the provider stack.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import inspect
 import json
 from collections.abc import AsyncIterator
@@ -29,6 +31,7 @@ from ..messages import (
     Usage,
     UsageCost,
     UserMessage,
+    SystemMessage,
     content_text,
 )
 from ..provider_events import (
@@ -101,17 +104,69 @@ def _tool_definitions(tools: list[AgentTool] | None) -> list[Any]:
     ]
 
 
+def _gateway_content(content: Any) -> str | list[dict[str, Any]]:
+    """Keep multimodal blocks intact and bound attachments before transport."""
+    if isinstance(content, str):
+        return content
+    if not any(isinstance(block, ImageContent) for block in content):
+        return content_text(content)
+    from superqode.image_input import MAX_IMAGE_BYTES, MAX_IMAGES
+
+    parts: list[dict[str, Any]] = []
+    count = 0
+    for block in content:
+        if isinstance(block, TextContent):
+            parts.append({"type": "text", "text": block.text})
+        elif isinstance(block, ImageContent):
+            count += 1
+            if count > MAX_IMAGES:
+                raise ValueError(f"At most {MAX_IMAGES} images are supported per message")
+            if block.mime_type not in {"image/png", "image/jpeg", "image/gif", "image/webp"}:
+                raise ValueError(f"Unsupported image MIME type: {block.mime_type}")
+            if len(block.data) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+                raise ValueError("Image exceeds the shared attachment size limit")
+            try:
+                decoded = base64.b64decode(block.data, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError("Image content is not valid base64") from exc
+            if len(decoded) > MAX_IMAGE_BYTES:
+                raise ValueError("Image exceeds the shared attachment size limit")
+            parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{block.mime_type};base64,{block.data}"},
+                }
+            )
+    return parts
+
+
 def _gateway_messages(system_prompt: str, messages: list[Message]) -> list[Any]:
     """Convert a pi transcript into the gateway's chat message shape."""
     from superqode.providers.gateway.base import Message as GatewayMessage
 
     converted: list[Any] = []
-    if system_prompt:
-        converted.append(GatewayMessage(role="system", content=system_prompt))
+    prompts = [system_prompt] if system_prompt else []
+    sections: dict[str, str] = {}
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            if message.text:
+                prompts.append(message.text)
+            for name, value in (message.sections or {}).items():
+                if value is None:
+                    sections.pop(name, None)
+                else:
+                    sections[name] = value
+    prompts.extend(sections.values())
+    if prompts:
+        converted.append(GatewayMessage(role="system", content="\n\n".join(prompts)))
 
+    pending_images = []
     for message in transform_messages(messages):
+        if not isinstance(message, ToolResultMessage) and pending_images:
+            converted.extend(pending_images)
+            pending_images = []
         if isinstance(message, UserMessage):
-            converted.append(GatewayMessage(role="user", content=content_text(message.content)))
+            converted.append(GatewayMessage(role="user", content=_gateway_content(message.content)))
         elif isinstance(message, AssistantMessage):
             tool_calls = [
                 {
@@ -133,13 +188,33 @@ def _gateway_messages(system_prompt: str, messages: list[Message]) -> list[Any]:
                 )
             )
         elif isinstance(message, ToolResultMessage):
+            content = _gateway_content(message.content)
+            if isinstance(content, list):
+                images = [part for part in content if part["type"] == "image_url"]
+                text = "\n".join(part["text"] for part in content if part["type"] == "text")
+                if images:
+                    pending_images.append(
+                        GatewayMessage(
+                            role="user",
+                            content=[
+                                {
+                                    "type": "text",
+                                    "text": f"Images returned by {message.tool_name} (call {message.tool_call_id}).",
+                                },
+                                *images,
+                            ],
+                        )
+                    )
+                    text += f"\n[{len(images)} image attachments follow the tool result batch]"
+                content = text
             converted.append(
                 GatewayMessage(
                     role="tool",
-                    content=message.text or "(no output)",
+                    content=content or "(no output)",
                     tool_call_id=message.tool_call_id,
                 )
             )
+    converted.extend(pending_images)
     return converted
 
 
@@ -341,16 +416,29 @@ class GatewayStream:
 
         yield AssistantStartEvent(partial=snapshot([]))
 
-        stream = self._resolve_gateway().stream_completion(
-            messages=_gateway_messages(context.system_prompt, context.messages),
-            model=model.id,
-            provider=model.provider or None,
-            temperature=options.temperature,
-            max_tokens=options.max_tokens,
-            tools=_tool_definitions(context.tools) or None,
-            tool_choice="auto" if context.tools else None,
-        )
+        stream = None
         try:
+            messages = _gateway_messages(context.system_prompt, context.messages)
+            if model.supports_images is False and any(
+                isinstance(m.content, list)
+                and any(block.get("type") == "image_url" for block in m.content)
+                for m in messages
+            ):
+                raise ValueError(f"Model {model.id} does not support image input")
+            from superqode.providers.request_metrics import measure_request_payload
+
+            self.last_request_payload = measure_request_payload(
+                messages, _tool_definitions(context.tools)
+            )
+            stream = self._resolve_gateway().stream_completion(
+                messages=messages,
+                model=model.id,
+                provider=model.provider or None,
+                temperature=options.temperature,
+                max_tokens=options.max_tokens,
+                tools=_tool_definitions(context.tools) or None,
+                tool_choice="auto" if context.tools else None,
+            )
             async for chunk in _iter_until_abort(stream, options.signal):
                 if is_aborted(options.signal):
                     aborted = snapshot(content, "aborted")

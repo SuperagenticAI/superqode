@@ -33,6 +33,10 @@ sq work watch --help
 | `work check ID` | Run deterministic acceptance commands in the target repository. |
 | `work artifact-add ID` | Attach typed evidence. |
 | `work artifacts ID` | List evidence attached to the WorkOrder. |
+| `work invocations ID` | Inspect committed and uncertain invocation outcomes; filter with `--task` or use `--json`. |
+| `work programs ID` | Inspect saved Monty checkpoint status, revision and size; use `--task` or `--json`. |
+| `work program-run ID --code FILE` | Run one ready PiPy task as a restricted Python tool program without an LLM request; repeat the same command to recover safe interrupted work. |
+| `work reconcile ID TASK INVOCATION` | Record verified `--result` or explicit `--allow-retry`, with required actor and reason, before resuming. |
 | `work events ID` | Show the append-only decision timeline. |
 | `work prepare ID` | Build the exact candidate patch and check source drift and conflicts. |
 | `work diff ID` | Print the content-addressed patch awaiting approval. |
@@ -103,3 +107,5 @@ sq work policy work_... --task primary --risk high
 `work policy` is read-only. It projects the supplied counters and risk against the saved WorkOrder, prints every denial reason, and does not claim a task or modify evidence.
 
 See [WorkOrders](../advanced/workorders.md) for the lifecycle, scheduler model, and end-to-end examples.
+
+For process-interruption guarantees, workspace verification and reconciliation examples, see [tool composition and WorkOrder recovery](../advanced/tool-composition-and-recovery.md).

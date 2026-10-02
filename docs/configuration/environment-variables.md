@@ -24,6 +24,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_FORMAT_ON_EDIT` | `0`/`1` | off | Auto-format files after agent edits. |
 | `SUPERQODE_SEARCH_ROOTS` | paths (`:`-sep) | unset | Extra read-only roots for read/search tools (cloned repos outside the project). |
 | `SUPERQODE_ALLOW_EXTERNAL_SEARCH` | `0`/`1` | off | Permission-gate for absolute search paths outside the workspace. |
+| `SUPERQODE_RLM_TOOLS` | `0`/`1`/`true`/`on` | off | Add governed host functions to the standalone Monty `python_repl` tool; does not modify the resident RLM research kernel. |
 | `SUPERQODE_MCP_SEARCH` | `0`/`1` | off | Inject MCP search/execute tools into the registry. |
 | `SUPERQODE_TOOL_DISCOVERY` | `0`/`1`/`legacy`/`shadow`/`unified` | per harness | Enable portable progressive discovery or select its rollout mode. |
 | `SUPERQODE_TOOL_DISCOVERY_MODE` | `legacy`/`shadow`/`unified` | per harness | Override the configured discovery mode. |

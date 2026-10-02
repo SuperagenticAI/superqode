@@ -4,6 +4,8 @@ Enables parallel execution of up to 10 tools. Recursive batch calls are blocked.
 """
 
 import asyncio
+from dataclasses import replace
+from uuid import uuid4
 from typing import Any, Dict, List
 
 from .base import Tool, ToolResult, ToolContext
@@ -22,7 +24,7 @@ class BatchTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Execute multiple tool calls in parallel (up to 10). "
+            "Execute up to 10 tool calls; read-only tools run in parallel, mutations run in order. "
             "Provide a list of {tool, parameters} objects. "
             "Useful for parallel reads, searches, or independent operations. "
             "Cannot include batch itself. Results are returned together."
@@ -87,7 +89,9 @@ class BatchTool(Tool):
                 error="Batch tool requires a tool registry in context",
             )
 
-        async def run_one(tc: Dict[str, Any]) -> ToolResult:
+        parent = ctx.invocation_id or uuid4().hex
+
+        async def run_one(index: int, tc: Dict[str, Any]) -> ToolResult:
             name = tc.get("tool") or tc.get("tool_name", "")
             params = tc.get("parameters") or tc.get("params") or {}
             tool = registry.get(name)
@@ -96,12 +100,21 @@ class BatchTool(Tool):
             try:
                 from .governed import execute_governed_tool
 
-                return await execute_governed_tool(tool, params, ctx)
+                identity = f"{parent}/batch-{index + 1}"
+                if ctx.execute_tool is not None:
+                    return await ctx.execute_tool(name, params, identity)
+                return await execute_governed_tool(
+                    tool, params, replace(ctx, invocation_id=identity)
+                )
             except Exception as e:
                 return ToolResult(success=False, output="", error=f"Tool error: {str(e)}")
 
-        tasks = [run_one(t) for t in tool_calls]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        if all(registry.get(name) is not None and registry.get(name).read_only for name in names):
+            results = await asyncio.gather(
+                *(run_one(i, t) for i, t in enumerate(tool_calls)), return_exceptions=True
+            )
+        else:
+            results = [await run_one(i, t) for i, t in enumerate(tool_calls)]
 
         # Convert exceptions to ToolResult
         out_results: List[ToolResult] = []

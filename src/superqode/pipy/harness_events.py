@@ -125,6 +125,7 @@ class ToolCallEvent:
 class ToolCallResult:
     block: bool = False
     reason: str | None = None
+    arguments: dict[str, JSONValue] | None = None
 
 
 @dataclass(slots=True)

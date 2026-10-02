@@ -48,6 +48,72 @@ def work(ctx: click.Context, store_path: Path) -> None:
     ctx.obj["work_store_path"] = store_path
 
 
+@work.command("programs")
+@click.argument("work_order_id")
+@click.option("--task", "task_id", default="")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_programs(ctx, work_order_id, task_id, json_output):
+    """Inspect saved Monty program checkpoints without exposing their contents."""
+    from superqode.workorders.programs import inspect_programs
+
+    try:
+        rows = inspect_programs(_store(ctx), work_order_id, task_id)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+    else:
+        for row in rows:
+            click.echo(
+                f"{row['task_id']} {row['program_id']} {row['state']} revision={row['revision']} bytes={row['checkpoint_bytes'] or 0}"
+            )
+
+
+@work.command("program-run")
+@click.argument("work_order_id")
+@click.option(
+    "--code",
+    "code_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option("--program-id", default="primary", show_default=True)
+@click.option("--worker", "worker_id", default="")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_program_run(ctx, work_order_id, code_path, program_id, worker_id, json_output):
+    """Run a read-only PiPy tool program as a leased WorkOrder task."""
+    import asyncio
+    import os
+    from superqode.workorders.program_runner import run_next_program
+
+    try:
+        if code_path.stat().st_size > 64_000:
+            raise ValueError("Program code exceeds 64,000 bytes")
+        result = asyncio.run(
+            run_next_program(
+                _store(ctx),
+                reference=work_order_id,
+                code=code_path.read_text(),
+                program_id=program_id,
+                worker_id=worker_id or f"program-{os.getpid()}",
+            )
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if result is None:
+        raise click.ClickException(
+            "No claimable program task; inspect WorkOrder recovery and reconciliation state"
+        )
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(result.get("output") or result.get("error") or result["status"])
+    if result["status"] != "succeeded":
+        raise click.ClickException(result.get("error") or result["status"])
+
+
 @work.command("create")
 @click.argument("goal")
 @click.option(
@@ -948,6 +1014,69 @@ def work_events(
         task = f" [{event.task_id}]" if event.task_id else ""
         actor = f" @{event.actor}" if event.actor else ""
         click.echo(f"{event.created_at:.3f}  {event.type}{task}{actor}")
+
+
+@work.command("invocations")
+@click.argument("work_order_id")
+@click.option("--task", "task_id", default="")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_invocations(ctx, work_order_id, task_id, json_output):
+    """Inspect committed and uncertain execution outcomes."""
+    try:
+        rows = _store(ctx).invocations(work_order_id, task_id)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+    else:
+        for row in rows:
+            click.echo(
+                f"{row['task_id']}  {row['invocation_id']}  {row['status']}  attempt={row['attempt']}  replay_safe={bool(row['replay_safe'])}"
+            )
+
+
+@work.command("reconcile")
+@click.argument("work_order_id")
+@click.argument("task_id")
+@click.argument("invocation_id")
+@click.option("--actor", required=True)
+@click.option("--reason", required=True, help="External lookup evidence or operator decision")
+@click.option(
+    "--result", "result_file", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.option(
+    "--allow-retry", is_flag=True, help="Explicitly authorize retry of this uncertain invocation"
+)
+@click.option(
+    "--workspace", default="", help="Verified workspace fingerprint for a recovered harness outcome"
+)
+@click.pass_context
+def work_reconcile(
+    ctx, work_order_id, task_id, invocation_id, actor, reason, result_file, allow_retry, workspace
+):
+    """Record a verified outcome or an explicit retry decision, then use resume."""
+    try:
+        result = json.loads(result_file.read_text()) if result_file else None
+        if result is not None and not isinstance(result, dict):
+            raise ValueError(
+                "Recovered outcome must be a JSON object in the operation's result format"
+            )
+        _store(ctx).reconcile_invocation(
+            work_order_id,
+            task_id,
+            invocation_id,
+            actor=actor,
+            reason=reason,
+            result=result,
+            allow_retry=allow_retry,
+            workspace=workspace,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"Recorded reconciliation for {invocation_id}. Use work resume when all uncertain outcomes are resolved."
+    )
 
 
 @work.command("prepare")

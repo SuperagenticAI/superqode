@@ -96,6 +96,22 @@ ToolResultContent = TextContent | ImageContent
 
 
 @dataclass(slots=True)
+class SystemMessage:
+    """Persisted prompt/tool-state delta, including named section updates."""
+
+    content: str | list[TextContent]
+    role: Literal["system"] = "system"
+    sections: dict[str, str | None] | None = None
+    tools_added: list[dict[str, Any]] | None = None
+    tools_removed: list[dict[str, Any]] | None = None
+    timestamp: int = field(default_factory=current_timestamp_ms)
+
+    @property
+    def text(self) -> str:
+        return content_text(self.content)
+
+
+@dataclass(slots=True)
 class UserMessage:
     content: UserContent
     role: Literal["user"] = "user"
@@ -187,12 +203,13 @@ class CompactionSummaryMessage:
 
 
 #: The message roles a provider can be sent directly.
-Message = UserMessage | AssistantMessage | ToolResultMessage
+Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage
 
 #: Everything the transcript can hold, including entries that only exist for the
 #: UI or for session bookkeeping and must be projected before a provider call.
 AgentMessage = (
-    UserMessage
+    SystemMessage
+    | UserMessage
     | AssistantMessage
     | ToolResultMessage
     | BranchSummaryMessage
@@ -221,7 +238,7 @@ def default_convert_to_llm(messages: list[AgentMessage]) -> list[Message]:
     """
     converted: list[Message] = []
     for message in messages:
-        if isinstance(message, (UserMessage, AssistantMessage, ToolResultMessage)):
+        if isinstance(message, (SystemMessage, UserMessage, AssistantMessage, ToolResultMessage)):
             converted.append(message)
         elif isinstance(message, BranchSummaryMessage):
             text = BRANCH_SUMMARY_PREFIX + message.summary + BRANCH_SUMMARY_SUFFIX
@@ -243,7 +260,7 @@ def content_text(content: str | list[Any]) -> str:
 
 
 def message_text(message: AgentMessage) -> str:
-    if isinstance(message, (UserMessage, AssistantMessage, ToolResultMessage)):
+    if isinstance(message, (SystemMessage, UserMessage, AssistantMessage, ToolResultMessage)):
         return message.text
     if isinstance(message, (BranchSummaryMessage, CompactionSummaryMessage)):
         return message.summary

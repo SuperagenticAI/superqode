@@ -87,6 +87,9 @@ class ToolContext:
     mcp_allowed: bool = True
     # Receives a sanitized discovery lifecycle event for live TUI inspection.
     on_discovery: Optional[DiscoveryCallback] = None
+    # Nested calls must use the same hooks, approvals and policy as direct calls.
+    execute_tool: Optional[Callable[[str, Dict[str, Any], str], Awaitable["ToolResult"]]] = None
+    invocation_id: str = ""
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -149,6 +152,8 @@ class Tool(ABC):
     # call is read-only; anything else runs sequentially in call order so
     # concurrent mutations can never race. Unknown tools default to False.
     read_only: bool = False
+    # Independent of read_only: paid/external reads may still be unsafe to replay.
+    replay_safe: bool = False
 
     @property
     @abstractmethod

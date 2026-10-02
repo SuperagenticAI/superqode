@@ -11,13 +11,13 @@ MCP servers using HTTP or SSE transports can require OAuth 2.0 authentication. S
 3. Local callback server on localhost:19876/mcp/oauth/callback
 4. Token exchange (authorization code for access + refresh tokens)
 5. Automatic token refresh with 5-minute expiry buffer
-6. Secure storage in OS keychain (via keyring package) or ~/.superqode/mcp-auth/ with 0600 permissions
+6. Native manager storage in ~/.superqode/mcp-auth/ with 0600 permissions, scoped by configured server ID and exact URL
 
 ## Token Storage
 
 - KeyringTokenStorage: OS-native keychain (macOS Keychain, Windows Credential Manager, GNOME Secret Service / KWallet)
-- MCPAuthStorage: file-based fallback at ~/.superqode/mcp-auth/, files named <sha256(url)[:16]>.json, 0600 permissions
-- Auto-selection: trying keyring first, falling back to filesystem
+- MCPAuthStorage: file-based fallback at ~/.superqode/mcp-auth/, named credentials use <sha256(server_id + NUL + url)[:16]>.json, 0600 permissions
+- The optional TokenStorage factory tries keyring first; the native MCP manager uses named MCPAuthStorage scopes. Legacy URL-only credentials require explicit adoption to one account or a new login.
 
 ## Hugging Face Auto-Auth
 
@@ -30,3 +30,5 @@ Server auth is configured via headers in MCPHttpConfig or MCPSSEConfig. Environm
 ## Configuration
 
 Servers can be configured in .superqode/mcp.json, ~/.superqode/mcp.json, or ~/.config/superqode/mcp.json. Both {"mcpServers": {...}} and {"servers": {...}} top-level keys are accepted.
+
+Authorization metadata is pinned to each pending flow. Callback issuer validation, single-use state, duplicate-parameter rejection, serialized refresh, and explicit scope-preserving step-up are covered by the authentication regression suite. See [the operating guide](tool-composition-and-recovery.md#oauth-identity) for migration and headless behaviour.

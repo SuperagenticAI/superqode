@@ -14,6 +14,9 @@ Security Features:
 from __future__ import annotations
 
 import hashlib
+import asyncio
+import tempfile
+from contextlib import asynccontextmanager
 import json
 import logging
 import os
@@ -40,12 +43,14 @@ class ServerCredentials:
     bearer_token: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    server_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
         result: Dict[str, Any] = {
             "server_url": self.server_url,
             "server_url_hash": self.server_url_hash,
+            "server_id": self.server_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -84,6 +89,7 @@ class ServerCredentials:
             bearer_token=data.get("bearer_token"),
             created_at=created_at,
             updated_at=updated_at,
+            server_id=str(data.get("server_id") or ""),
         )
 
 
@@ -109,9 +115,78 @@ class MCPAuthStorage:
 
     DEFAULT_DIR = Path.home() / ".superqode" / "mcp-auth"
 
-    def __init__(self, storage_dir: Optional[Path] = None):
+    def __init__(self, storage_dir: Optional[Path] = None, *, server_id: str = ""):
         self.storage_dir = storage_dir or (Path.home() / ".superqode" / "mcp-auth")
+        self.server_id = server_id
         self._ensure_storage_dir()
+
+    def for_server(self, server_id: str) -> MCPAuthStorage:
+        """Isolate named configurations even when their endpoints are identical.
+
+        Legacy URL-only credentials are not silently assigned to an account.
+        Users may explicitly migrate them with ``adopt_legacy_credentials``.
+        """
+        if not server_id:
+            raise ValueError("MCP credential scope requires a server identity")
+        return MCPAuthStorage(self.storage_dir, server_id=server_id)
+
+    @asynccontextmanager
+    async def refresh_lock(self, server_url: str, *, timeout: float = 30):
+        """OS-owned lock: crashes release it; rotating refreshes are serialized."""
+        import time
+
+        path = self._get_credentials_path(server_url).with_suffix(".lock")
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        acquired = False
+        deadline = time.monotonic() + timeout
+        try:
+            while not acquired:
+                try:
+                    if os.name == "nt":
+                        import msvcrt
+
+                        if os.fstat(fd).st_size == 0:
+                            os.write(fd, b"0")
+                        os.lseek(fd, 0, os.SEEK_SET)
+                        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                except (BlockingIOError, OSError):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("Timed out waiting for MCP credential refresh") from None
+                    await asyncio.sleep(0.05)
+            yield
+        finally:
+            os.close(fd)
+
+    def adopt_legacy_credentials(self, server_url: str) -> bool:
+        """Explicitly move unscoped credentials to this named account once."""
+        if not self.server_id:
+            raise ValueError("Select a named server before migrating credentials")
+        legacy = MCPAuthStorage(self.storage_dir)
+        source = legacy._get_credentials_path(server_url)
+        credentials = legacy._load_credentials(server_url)
+        if credentials is None:
+            return False
+        if self._get_credentials_path(server_url).exists():
+            raise ValueError("Named credentials already exist; migration would overwrite them")
+        # Claim the old file atomically so two named accounts cannot adopt it.
+        claimed = source.with_suffix(".migrating")
+        try:
+            source.rename(claimed)
+        except FileNotFoundError:
+            return False
+        try:
+            credentials.server_id = self.server_id
+            self._save_credentials(credentials)
+        except BaseException:
+            claimed.rename(source)
+            raise
+        claimed.unlink()
+        return True
 
     def _ensure_storage_dir(self) -> None:
         """Ensure storage directory exists with proper permissions."""
@@ -125,7 +200,8 @@ class MCPAuthStorage:
 
     def _url_hash(self, url: str) -> str:
         """Generate a safe hash from a URL for use as filename."""
-        return hashlib.sha256(url.encode()).hexdigest()[:16]
+        identity = f"{self.server_id}\0{url}" if self.server_id else url
+        return hashlib.sha256(identity.encode()).hexdigest()[:16]
 
     def _get_credentials_path(self, server_url: str) -> Path:
         """Get the path to the credentials file for a server."""
@@ -285,7 +361,9 @@ class MCPAuthStorage:
             try:
                 with open(creds_file, "r") as f:
                     data = json.load(f)
-                    if "server_url" in data:
+                    if "server_url" in data and (
+                        not self.server_id or data.get("server_id") == self.server_id
+                    ):
                         servers.append(data["server_url"])
             except Exception:
                 pass
@@ -295,6 +373,11 @@ class MCPAuthStorage:
         """Clear all stored credentials."""
         for creds_file in self.storage_dir.glob("*.json"):
             try:
+                if (
+                    self.server_id
+                    and json.loads(creds_file.read_text()).get("server_id") != self.server_id
+                ):
+                    continue
                 creds_file.unlink()
             except Exception as e:
                 logger.warning(f"Failed to delete {creds_file}: {e}")
@@ -330,7 +413,10 @@ class MCPAuthStorage:
                 data = json.load(f)
 
             # Verify URL matches (security check)
-            if data.get("server_url") != server_url:
+            if (
+                data.get("server_url") != server_url
+                or str(data.get("server_id") or "") != self.server_id
+            ):
                 logger.warning(f"URL mismatch in credentials file: {creds_path}")
                 return None
 
@@ -344,18 +430,18 @@ class MCPAuthStorage:
         """Save credentials to file with secure permissions."""
         creds_path = self._get_credentials_path(credentials.server_url)
 
-        # Write to temp file first
-        temp_path = creds_path.with_suffix(".tmp")
+        credentials.server_id = self.server_id
+        fd, temp_name = tempfile.mkstemp(
+            dir=self.storage_dir, prefix=".credentials-", suffix=".tmp"
+        )
+        temp_path = Path(temp_name)
 
         try:
             # Create file with restricted permissions
-            fd = os.open(
-                temp_path,
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                0o600,
-            )
             with os.fdopen(fd, "w") as f:
                 json.dump(credentials.to_dict(), f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
 
             # Atomic rename
             temp_path.rename(creds_path)

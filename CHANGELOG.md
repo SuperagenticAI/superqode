@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.43] - 2026-10-02
+
+### Added
+
+- Share MCP configuration and client controls with hosted PiPy, including
+  deferred discovery, background connections and shared OAuth credentials.
+- Add optional Monty tool programs with bounded native read batches and
+  branch-local values, plus opt-in PiPy coding WorkOrder process recovery.
+- Add offline PiPy SDK examples and repeated, independently graded benchmark
+  comparisons. Live competitor benchmarking remains deferred.
+
+### Changed
+
+- Describe PiPy as a Pi-inspired Pythonic version in the TUI harness pickers.
+
+### Fixed
+
+- Preserve supported PiPy input and tool images through the provider gateway.
+- Validate MCP OAuth identity and callbacks, serialize credential refresh, and
+  check current policy and workspace state before reusing saved outcomes.
+
 ## [2.4.42] - 2026-10-02
 
 ### Fixed

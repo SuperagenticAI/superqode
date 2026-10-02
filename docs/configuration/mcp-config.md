@@ -43,7 +43,27 @@ MCP servers can be configured in two ways:
    }
    ```
 
-**Priority**: YAML configuration takes precedence over JSON for SuperQode-managed MCP servers. ACP sessions read enabled MCP servers from the JSON MCP config locations and pass them to the ACP agent when a new session is created.
+The shared resolver merges files in this order, from lowest to highest priority:
+
+1. `~/.config/superqode/mcp.json`
+2. `~/.superqode/mcp.json`
+3. `<working-directory>/.superqode/mcp.json`
+4. Harness `runtime.config.mcp_servers` (or `runtime.config.mcp`) entries
+
+A higher-priority server declaration replaces the whole earlier declaration.
+Disabled or invalid overrides do not silently enable an older entry. Working
+directories are resolved when configuration is loaded. Stdio servers default to
+the harness working directory. `${NAME}` references are substituted in environment
+values and HTTP headers; commands are not shell-expanded.
+
+Set `runtime.config.mcp_config: false` for inline-only harness configuration,
+or set it to a file path to use one explicit JSON file plus inline overrides.
+Relative paths resolve against the harness working directory. This resolver is
+shared by hosted PiPy, native MCP clients and SuperQode's harness MCP bridge;
+vendor SDKs can retain their own configuration paths.
+
+ACP sessions receive enabled JSON definitions when a new session is created.
+Top-level YAML definitions remain available to native client sessions.
 
 ### Web Fetch for ACP Agents
 
@@ -287,7 +307,7 @@ MCP ownership depends on the selected runtime:
 
 | Runtime path | How MCP servers are attached |
 | --- | --- |
-| `builtin` HarnessSpec | `runtime.config.mcp_servers` uses the SuperQode bridge |
+| Hosted PiPy, `builtin` HarnessSpec | Shared JSON files plus inline runtime declarations |
 | `openai-agents` HarnessSpec | SuperQode bridges discovered MCP tools as SDK function tools |
 | PydanticAI | Uses its native MCP configuration path |
 | Codex, Claude, and Copilot SDKs | Uses the runtime's local MCP configuration |
@@ -363,7 +383,7 @@ mcp_servers:
     auto_connect: true   # Connect on startup
   github:
     enabled: true
-    auto_connect: false  # Manual connection only
+    auto_connect: false  # Connect on demand
 ```
 
 ---
@@ -503,7 +523,7 @@ MCP servers can also be configured in JSON format:
 }
 ```
 
-**Note**: YAML configuration in `superqode.yaml` takes precedence over JSON configuration.
+**Note**: Hosted harness inline declarations override shared JSON entries as described above.
 
 ---
 
@@ -555,3 +575,18 @@ mcp_servers:
 ## Next Steps
 
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
+
+## Inspect and refresh connections
+
+```bash
+sq mcp list --cwd ./project
+sq mcp list --connect --cwd ./project
+sq mcp login SERVER
+sq mcp logout SERVER
+sq mcp reconnect SERVER
+```
+
+In the TUI, `:mcp reload` reloads configuration and disconnects removed or changed
+servers before reconnecting. `:mcp login SERVER` and `:mcp logout SERVER` use the
+shared OAuth store. Login may open an authorization browser when the server
+requires OAuth. Configuration reports omit credentials and endpoint URLs.

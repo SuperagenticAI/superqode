@@ -70,7 +70,43 @@ async def execute_governed_tool(
                 error=str(exc),
                 metadata={"governance": call_decision.to_dict()},
             )
-    result = await tool.execute(execution_args, ctx)
+    from superqode.execution_recovery import recoverable_call
+
+    def encode_outcome(result):
+        storage_decision = evaluate_active_policy(
+            "tool_result",
+            tool=tool.name,
+            tool_group=group_name,
+            arguments={
+                "success": result.success,
+                "error": result.error or "",
+                "output": result.output,
+                "output_length": len(str(result.output or "")),
+            },
+        )
+        if storage_decision.action != "allow":
+            return {
+                "success": False,
+                "output": "",
+                "error": "Contextual policy suppressed tool result",
+                "metadata": {"governance": storage_decision.to_dict()},
+            }
+        return {
+            "success": result.success,
+            "output": result.output,
+            "error": result.error,
+            "metadata": result.metadata,
+        }
+
+    result = await recoverable_call(
+        identity=ctx.invocation_id,
+        operation=f"tool.{tool.name}",
+        inputs=original,
+        execute=lambda: tool.execute(execution_args, ctx),
+        encode=encode_outcome,
+        decode=lambda result: ToolResult(**result),
+        replay_safe=tool.replay_safe,
+    )
     result_decision = evaluate_active_policy(
         "tool_result",
         tool=tool.name,

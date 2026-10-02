@@ -140,7 +140,7 @@ def usage_from_result(
     tokens_in = _first_int(result, nested, "tokens_in", "input_tokens", "prompt_tokens")
     tokens_out = _first_int(result, nested, "tokens_out", "output_tokens", "completion_tokens")
     total_tokens = _first_int(result, nested, "total_tokens")
-    if total_tokens is None and (tokens_in is not None or tokens_out is not None):
+    if total_tokens is None and tokens_in is not None and tokens_out is not None:
         total_tokens = int(tokens_in or 0) + int(tokens_out or 0)
     cost_usd = _first_float(result, nested, "cost_usd", "total_cost_usd", "cost")
     return WorkOrderUsage(

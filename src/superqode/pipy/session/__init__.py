@@ -9,6 +9,7 @@ from .entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
+    ContextEditEntry,
     CustomEntry,
     CustomMessageEntry,
     LabelEntry,
@@ -22,6 +23,7 @@ from .entries import (
     SessionStats,
     SessionTreeEntry,
     ThinkingLevelChangeEntry,
+    UsageEntry,
 )
 from .codec import SessionCodecError, decode_entry, decode_message, encode_entry, encode_message
 from .jsonl import (
@@ -54,6 +56,7 @@ __all__ = [
     "ActiveToolsChangeEntry",
     "BranchSummaryEntry",
     "CompactionEntry",
+    "ContextEditEntry",
     "CustomEntry",
     "CustomEntryProjector",
     "CustomMessageEntry",
@@ -76,6 +79,7 @@ __all__ = [
     "SessionStorage",
     "SessionTreeEntry",
     "ThinkingLevelChangeEntry",
+    "UsageEntry",
     "build_session_context",
     "create_session",
     "decode_entry",

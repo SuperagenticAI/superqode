@@ -12,7 +12,7 @@ user drives it with.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -72,6 +72,8 @@ class CodingSessionOptions:
     #: building the options does not import the provider stack.
     stream_fn: StreamFn | None = None
     tool_names: tuple[str, ...] = CODING_TOOL_NAMES
+    extra_tools: tuple[AgentTool, ...] = ()
+    tool_transform: Callable[[list[AgentTool]], list[AgentTool]] | None = None
     thinking_level: ThinkingLevel = "off"
     #: Overrides where sessions are stored. Defaults to the PiPy root.
     session_root: Path | None = None
@@ -170,6 +172,9 @@ class PiPyCodingSession:
     ) -> PiPyCodingSession:
         cwd = Path(options.cwd).expanduser().resolve()
         tools = create_tools(options.tool_names, cwd)
+        tools.extend(options.extra_tools)
+        if options.tool_transform is not None:
+            tools = options.tool_transform(tools)
         context_files = load_context_files(cwd)
         skills = load_skills(cwd=cwd).skills
         templates = load_prompt_templates(cwd=cwd).templates

@@ -6,7 +6,7 @@ Ported from ``packages/agent/src/types.ts`` of earendil-works/pi (MIT). See NOTI
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from typing import Protocol
 
 from ..messages import ImageContent, TextContent, Usage
@@ -86,6 +86,10 @@ class AgentTool:
     #: Per-tool override of the loop's execution mode. ``sequential`` forces the
     #: whole batch to run one at a time.
     execution_mode: ToolExecutionMode | None = None
+    replay_safe: bool = False
+    #: Host-only tools that journal their own sub-operations must re-enter
+    #: their recovery driver, including on a completed-result policy check.
+    manages_recovery: bool = False
 
     @property
     def input_schema(self) -> Mapping[str, JSONValue]:
@@ -99,7 +103,38 @@ class AgentTool:
         on_update: ToolUpdateCallback | None = None,
     ) -> AgentToolResult:
         """Run the tool. Raise on failure rather than encoding errors in content."""
-        return await self.execute_fn(tool_call_id, args, signal, on_update)
+        if self.manages_recovery:
+            return await self.execute_fn(tool_call_id, args, signal, on_update)
+        from superqode.execution_recovery import recoverable_call
+
+        def decode(payload):
+            from ..session.codec import decode_content_block
+
+            payload = dict(payload)
+            payload["content"] = [
+                ImageContent(data=b["data"], mime_type=b["mime_type"])
+                if b["type"] == "image"
+                else decode_content_block(b)
+                for b in payload["content"]
+            ]
+            if payload.get("usage") is not None:
+                from ..messages import UsageCost
+
+                usage = dict(payload["usage"])
+                usage["cost"] = UsageCost(**usage["cost"])
+                payload["usage"] = Usage(**usage)
+            return AgentToolResult(**payload)
+
+        value = await recoverable_call(
+            identity=tool_call_id,
+            operation=f"pipy.tool.{self.name}",
+            inputs=args,
+            execute=lambda: self.execute_fn(tool_call_id, args, signal, on_update),
+            encode=asdict,
+            decode=decode,
+            replay_safe=self.replay_safe,
+        )
+        return value
 
 
 __all__ = [
