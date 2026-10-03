@@ -146,7 +146,7 @@ def _format_jsonrpc_error(error: Any) -> str:
     detail: str | None = None
     if isinstance(data, dict):
         raw = data.get("details") or data.get("message") or data.get("error")
-        detail = str(raw) if raw else None
+        detail = str(raw) if raw else json.dumps(data, ensure_ascii=False) if data else None
     elif isinstance(data, str) and data.strip():
         detail = data
 
@@ -248,6 +248,7 @@ class ACPClient:
     _usage: Dict[str, Any] = field(default_factory=dict, repr=False)
     _session_info_updates: List[dict] = field(default_factory=list, repr=False)
     _last_stop_reason: str = field(default="", repr=False)
+    last_startup_error: str = field(default="", init=False)
     _traffic_log_resolved_path: Optional[Path] = field(default=None, repr=False)
 
     # Agent-advertised capabilities from the initialize response.
@@ -305,6 +306,7 @@ class ACPClient:
 
     async def start(self) -> bool:
         """Start the ACP agent subprocess."""
+        self.last_startup_error = ""
         try:
             await self._initialize_traffic_log()
 
@@ -360,8 +362,9 @@ class ACPClient:
             return True
 
         except Exception as e:
+            self.last_startup_error = str(e) or type(e).__name__
             if self.on_thinking:
-                await self.on_thinking(f"[startup error] {e}")
+                await self.on_thinking(f"[startup error] {self.last_startup_error}")
             return False
 
     async def stop(self) -> None:
@@ -965,8 +968,10 @@ class ACPClient:
             response = await asyncio.wait_for(future, timeout=timeout or self.request_timeout)
             return response
         except asyncio.TimeoutError:
-            del self._pending_requests[request_id]
-            raise
+            self._pending_requests.pop(request_id, None)
+            raise TimeoutError(f"{method}: timed out waiting for the ACP agent") from None
+        except Exception as exc:
+            raise RuntimeError(f"{method}: {exc}") from exc
 
     async def _send_notification(self, method: str, **params) -> None:
         """Send a JSON-RPC notification (no response expected)."""

@@ -1252,3 +1252,29 @@ class TestToolUpdateMerging:
         assert merged["status"] == "completed"
         assert merged["title"] == "Run tests"  # from the original call
         assert merged["rawInput"] == {"command": "pytest -q"}
+
+
+@pytest.mark.asyncio
+async def test_rejected_request_identifies_method_and_validation_details(tmp_path, monkeypatch):
+    client = ACPClient(project_root=tmp_path, command="opencode acp")
+
+    async def reject(request):
+        await client._handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "error": {
+                    "code": -32602,
+                    "message": "Invalid params",
+                    "data": {
+                        "issues": [{"path": ["mcpServers", 0, "env"], "message": "Expected array"}]
+                    },
+                },
+            }
+        )
+
+    monkeypatch.setattr(client, "_send_json", reject)
+    with pytest.raises(RuntimeError, match="session/new: Invalid params") as exc:
+        await client._call_method("session/new", cwd=str(tmp_path), mcpServers=[])
+    assert "mcpServers" in str(exc.value)
+    assert "Expected array" in str(exc.value)

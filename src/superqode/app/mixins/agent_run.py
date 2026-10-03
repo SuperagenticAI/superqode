@@ -2745,7 +2745,9 @@ class AgentRunMixin:
                                 log.add_error,
                                 "Could not create a fresh ACP session. Retry; no prompt was sent to the old session.",
                             )
-                            return None, {}
+                            raise RuntimeError(
+                                "Could not create a fresh ACP session; no prompt was sent."
+                            )
                         self._pending_acp_fresh_target = None
                         self._call_ui(
                             log.add_info,
@@ -2779,7 +2781,10 @@ class AgentRunMixin:
                                 log.add_info,
                                 "If Grok is not signed in, run `grok login` or `grok login --device-auth`, then retry.",
                             )
-                        return None, {}
+                        detail = getattr(client, "last_startup_error", "") or "session setup failed"
+                        raise RuntimeError(
+                            f"{display_name} ACP startup failed: {detail}. No prompt was sent."
+                        )
 
                 if getattr(self, "_pending_acp_fresh_target", None) == agent_type:
                     self._pending_acp_fresh_target = None

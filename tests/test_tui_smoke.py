@@ -6210,6 +6210,59 @@ def test_opencode_acp_empty_turn_retries_once_in_fresh_session(monkeypatch):
     assert "Retrying once in a fresh ACP session" in rendered
 
 
+def test_opencode_acp_startup_failure_preserves_error_without_prompt_or_retry(monkeypatch):
+    class SessionLog(FakeLog):
+        def start_agent_session(self, *args):
+            pass
+
+        def end_agent_session(self, success, text="", *args):
+            self.items.append(("end", success, text))
+
+    class FailedClient:
+        instance = None
+        last_startup_error = "session/new: Invalid params: env must be an array"
+
+        def __init__(self, **kwargs):
+            type(self).instance = self
+            self.stopped = False
+
+        def is_running(self):
+            return False
+
+        async def start(self):
+            return False
+
+        async def send_prompt(self, *_args):
+            raise AssertionError("Prompt must not be sent after startup failure")
+
+        async def reset_session(self):
+            raise AssertionError("Startup failures must not trigger the empty-turn retry")
+
+        async def stop(self):
+            self.stopped = True
+
+    app = make_app()
+    log = SessionLog()
+    app._acp_loop_runner = FakeACPLoopRunner()
+    app._call_ui = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    app._stop_thinking = lambda: None
+    app._start_stream_animation = lambda *_args: None
+    app._stop_stream_animation = lambda: None
+    monkeypatch.setattr("superqode.acp.client.ACPClient", FailedClient)
+
+    app._run_acp_jsonrpc_client(
+        "hello", "opencode", "muse-spark-1.3-contributor-free", "OpenCode", log
+    )
+
+    assert FailedClient.instance.stopped
+    assert app._acp_client is None
+    rendered = " ".join(str(item) for item in log.items)
+    assert "ACP startup failed" in rendered
+    assert FailedClient.last_startup_error in rendered
+    assert "No prompt was sent" in rendered
+    assert "empty turn" not in rendered
+
+
 def test_cleanup_on_exit_cancels_and_tears_down_local_runtime():
     app = make_app()
     pure = FakePureMode()

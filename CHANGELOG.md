@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-10-03
+
+### Fixed
+
+- Send configured MCP servers in the ACP protocol format, including required
+  argument, environment, and header lists, so OpenCode accepts session setup.
+- Report ACP startup failures with the failed method and validation details,
+  close the failed process, and avoid misleading connected or empty-turn messages
+  when no prompt was sent.
+
 ## [2.5.1] - 2026-10-03
 
 ### Fixed

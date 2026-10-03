@@ -90,9 +90,9 @@ class TestMCPConfig:
         assert get_acp_mcp_servers(config_file) == [
             {
                 "name": "fetch",
-                "transport": "stdio",
                 "command": "uvx",
                 "args": ["mcp-server-fetch"],
+                "env": [],
             }
         ]
 
@@ -360,3 +360,41 @@ class TestMCPConnection:
         assert conn.resources == []
         assert conn.prompts == []
         assert conn.error_message is None
+
+
+@pytest.mark.parametrize(
+    "server,expected",
+    [
+        ({"command": "uvx"}, {"name": "test", "command": "uvx", "args": [], "env": []}),
+        (
+            {"command": "uvx", "env": {"TEST_VAR": "value"}},
+            {
+                "name": "test",
+                "command": "uvx",
+                "args": [],
+                "env": [{"name": "TEST_VAR", "value": "value"}],
+            },
+        ),
+        (
+            {"url": "https://example.com/mcp", "headers": {"X-Test": "value"}},
+            {
+                "name": "test",
+                "type": "http",
+                "url": "https://example.com/mcp",
+                "headers": [{"name": "X-Test", "value": "value"}],
+            },
+        ),
+        (
+            {"transport": "sse", "url": "https://example.com/sse"},
+            {"name": "test", "type": "sse", "url": "https://example.com/sse", "headers": []},
+        ),
+    ],
+)
+def test_acp_mcp_servers_validate_against_protocol_schema(tmp_path, server, expected):
+    from acp.schema import NewSessionRequest
+
+    config_file = tmp_path / "mcp.json"
+    config_file.write_text(json.dumps({"mcpServers": {"test": server}}))
+    servers = get_acp_mcp_servers(config_file)
+    assert servers == [expected]
+    NewSessionRequest.model_validate({"cwd": str(tmp_path), "mcpServers": servers})

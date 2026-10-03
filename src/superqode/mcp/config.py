@@ -247,30 +247,20 @@ def get_acp_mcp_servers(config_path: Path | None = None) -> list[dict[str, Any]]
             continue
 
         config = server.config
-        server_data: dict[str, Any] = {
-            "name": server_id,
-            "transport": config.transport,
-        }
-
-        if server.description:
-            server_data["description"] = server.description
+        server_data: dict[str, Any] = {"name": server_id}
 
         if isinstance(config, MCPStdioConfig):
             server_data["command"] = config.command
-            if config.args:
-                server_data["args"] = config.args
-            if config.env:
-                server_data["env"] = config.env
-            if config.cwd:
-                server_data["cwd"] = config.cwd
-        elif isinstance(config, MCPSSEConfig):
-            server_data["url"] = config.url
-            if config.headers:
-                server_data["headers"] = config.headers
+            server_data["args"] = config.args
+            server_data["env"] = [
+                {"name": name, "value": value} for name, value in config.env.items()
+            ]
         else:
+            server_data["type"] = config.transport
             server_data["url"] = config.url
-            if config.headers:
-                server_data["headers"] = config.headers
+            server_data["headers"] = [
+                {"name": name, "value": value} for name, value in config.headers.items()
+            ]
 
         acp_servers.append(server_data)
 
