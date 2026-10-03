@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.4] - 2026-10-03
+
+### Fixed
+
+- Preserve Core's baseline tool-output bounding in context shadow mode while
+  retaining durable evidence references. Only enforce mode substitutes excerpts.
+- Reuse Jev context selections across small assistant continuations and restart.
+  Align cache validity with selection triggers; changed tasks, instructions,
+  evidence, errors and tool calls invalidate prior decisions.
+
+### Notes
+
+- Context selection remains opt-in and defaults to `off`. Shadow mode records
+  proposed excerpts; only enforce mode applies them. Jev selection remains
+  experimental, with bounded calls and conservative fallback.
+
 ## [2.5.3] - 2026-10-03
 
 ### Highlights

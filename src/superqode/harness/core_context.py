@@ -61,6 +61,8 @@ def core_items(messages):
         if message.role == "tool" and call_id not in calls:
             call_id = ""
         identity = f"{index}:{call_id}:{hashlib.sha256(text.encode()).hexdigest()}"
+        if message.role == "assistant" and getattr(message, "tool_calls", None):
+            arguments = {"tool_calls": message.tool_calls}
         items.append(
             ContextItem(
                 identity,

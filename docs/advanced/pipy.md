@@ -275,6 +275,12 @@ a per-run call ceiling. It retains evidence when unavailable or uncertain.
 `scorer_version` can pin an evaluation configuration. Selector calls with
 unreserved spend are disabled inside cost/token-capped WorkOrders.
 
+Decisions persist across restart and small plain assistant additions while
+existing history remains unchanged. Changes to tasks, instructions, evidence,
+errors or tool calls, and increases in context pressure, trigger selection
+again within the call ceiling. Shadow mode preserves the baseline tool output
+and records proposed excerpts; only enforce mode applies them.
+
 Original permitted text is stored in the host's SQLite context store, outside
 the model prompt. `SUPERQODE_CONTEXT_STORE` overrides its location; the default
 is `~/.superqode/context/artifacts.sqlite3`. `read_context_chunk` accepts a

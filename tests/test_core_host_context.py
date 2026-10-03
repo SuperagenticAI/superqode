@@ -68,8 +68,48 @@ def test_complete_output_captured_before_core_cap(tmp_path, monkeypatch):
         arguments={"path": "app.py"},
     )
     assert len(result.output) < len(original)
-    assert "secret" not in result.output
     reference = result.metadata["context_reference"]
     artifact = ContextArtifactStore(tmp_path / "context.sqlite").describe("session", reference)
     assert artifact.chars > 29_000
     assert "secret" not in core._context_page(reference).text
+
+
+@pytest.mark.parametrize(
+    "original",
+    ["x" * 4000, "x" * 4600, "x" * 7000, "漢字🙂" * 2400],
+    ids=["at-cap", "within-slack", "over-slack", "unicode"],
+)
+def test_shadow_capture_preserves_baseline_bounding(tmp_path, monkeypatch, original):
+    from superqode.tools.base import ToolResult
+
+    monkeypatch.setenv("SUPERQODE_CONTEXT_STORE", str(tmp_path / "context.sqlite"))
+    # Use a fixed spill destination so the actual baseline previews compare
+    # exactly, without different random filenames masking a behavioral change.
+    monkeypatch.setattr(
+        "superqode.tools.output_spill.spill_output",
+        lambda *_args, **_kwargs: tmp_path / "spill.txt",
+    )
+    results = {}
+    for mode in ("off", "shadow", "enforce"):
+        core = loop(tmp_path)
+        core.config.harness_spec = SimpleNamespace(
+            runtime=SimpleNamespace(config={"context": {"mode": mode}})
+        )
+        results[mode] = core._bound_tool_result(
+            "read_file",
+            ToolResult(True, original, metadata={"invocation_id": "call"}),
+            arguments={"path": "app.py"},
+        )
+    assert results["shadow"].output == results["off"].output
+    assert results["shadow"].success == results["off"].success
+    assert results["shadow"].error == results["off"].error
+    assert results["shadow"].metadata.get("loop_truncated") == results["off"].metadata.get(
+        "loop_truncated"
+    )
+    assert results["shadow"].metadata.get("spilled_to") == results["off"].metadata.get("spilled_to")
+    reference = results["shadow"].metadata["context_reference"]
+    assert ContextArtifactStore(tmp_path / "context.sqlite").describe(
+        "session", reference
+    ).chars == len(original)
+    if len(original.encode()) > 4000:
+        assert results["enforce"].output != results["off"].output

@@ -2407,8 +2407,11 @@ class AgentLoop:
                 )
                 self._context_artifact_store = store
                 self._ensure_context_chunk_tool()
+                result = replace(
+                    result, metadata={**result.metadata, "context_reference": record.reference}
+                )
                 cap = self._tool_output_byte_cap or 100_000
-                if len(output.encode()) > cap:
+                if policy.mode == "enforce" and len(output.encode()) > cap:
                     excerpt = reference_excerpt(
                         ContextCandidate(
                             0,

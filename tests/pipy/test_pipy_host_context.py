@@ -14,6 +14,80 @@ from superqode.harness.pipy_context import PiPyContextHost
 from superqode.pipy.harness_events import ContextEvent
 
 
+@pytest.mark.parametrize("adapter", ["core", "pipy"])
+async def test_host_small_steps_reuse_selection_but_tool_calls_rescore(tmp_path, adapter):
+    from superqode.agent.loop import AgentMessage
+    from superqode.harness.core_context import core_items
+    from superqode.harness.pipy_context import pipy_items
+    from superqode.harness.context_artifacts import ContextArtifactStore
+    from superqode.harness.context_policy import ContextPolicy, ContextPolicyEngine
+
+    class Client:
+        calls = 0
+
+        async def evaluate(self, state, questions):
+            from types import SimpleNamespace
+
+            self.calls += 1
+            return SimpleNamespace(noul=lambda _: 0.01)
+
+    body = "evidence\n" * 3000
+    if adapter == "core":
+
+        def call(identity):
+            return AgentMessage(
+                "assistant",
+                "",
+                tool_calls=[
+                    {
+                        "id": identity,
+                        "function": {"name": "read_file", "arguments": '{"path":"app.py"}'},
+                    }
+                ],
+            )
+
+        messages = [
+            AgentMessage("user", "Investigate"),
+            call("old"),
+            AgentMessage("tool", body, name="read_file", tool_call_id="old"),
+            call("recent"),
+            AgentMessage("tool", body, name="read_file", tool_call_id="recent"),
+        ]
+        step = AgentMessage("assistant", "Continue")
+        convert = core_items
+    else:
+
+        def call(identity):
+            return AssistantMessage([ToolCall(identity, "read", {"path": "app.py"})])
+
+        messages = [
+            UserMessage("Investigate"),
+            call("old"),
+            ToolResultMessage("old", "read", [TextContent(body)], timestamp=1),
+            call("recent"),
+            ToolResultMessage("recent", "read", [TextContent(body)], timestamp=2),
+        ]
+        step = AssistantMessage([TextContent("Continue")])
+        convert = pipy_items
+    store = ContextArtifactStore(tmp_path / "e.sqlite")
+    client = Client()
+    policy = ContextPolicy(mode="enforce", selector="jev", recent_messages=1)
+    first = await ContextPolicyEngine(store, adapter, policy, client=client).prepare(
+        convert(messages)
+    )
+    assert set(first.replacements) == {2}
+    messages.insert(-1, step)
+    # Core creates a new engine on each preparation; PiPy reuses its engine.
+    engine = ContextPolicyEngine(store, adapter, policy, client=client)
+    second = await engine.prepare(convert(messages))
+    assert second.replacements == first.replacements
+    assert second.trace["cache_hit"] and client.calls == 1
+    messages.insert(-1, call("new"))
+    third = await engine.prepare(convert(messages))
+    assert third.replacements == first.replacements
+    assert not third.trace["cache_hit"] and client.calls == 2
+
+
 async def open_session(tmp_path, host, stream):
     session = await PiPyCodingSession.create(
         CodingSessionOptions(

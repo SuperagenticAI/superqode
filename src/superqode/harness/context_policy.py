@@ -16,7 +16,7 @@ from .context_artifacts import ContextArtifactStore
 from superqode.systemone.state import redact_evidence, prepare_decision_state
 from superqode.systemone.types import NoulQuestion
 
-POLICY_VERSION = "1"
+POLICY_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -128,9 +128,6 @@ class ContextPolicyEngine:
             db.execute("""CREATE TABLE IF NOT EXISTS context_scorer_attempts (
                 scope TEXT NOT NULL, run_key TEXT NOT NULL, count INTEGER NOT NULL,
                 PRIMARY KEY(scope,run_key))""")
-            db.execute("""CREATE TABLE IF NOT EXISTS context_selection_triggers (
-                scope TEXT NOT NULL, run_key TEXT NOT NULL, signature TEXT NOT NULL,
-                PRIMARY KEY(scope,run_key))""")
 
     async def prepare(
         self,
@@ -200,31 +197,49 @@ class ContextPolicyEngine:
         trace["candidate_count"] = len(candidates)
         if not candidates:
             return self._finish((), {}, trace)
-        # Include all native context hashes so a changed instruction, step, result
-        # or unresolved error cannot reuse an earlier relevance decision.
-        key = hashlib.sha256(
+        # Keep the full input digest for diagnostics. Cache validity and selector
+        # triggers share one key; small plain assistant additions can reuse a
+        # decision only if the previous history is otherwise unchanged.
+        fingerprints = [self._item_fingerprint(item) for item in items]
+        cache_inputs = {
+            "policy": asdict(p),
+            "version": POLICY_VERSION,
+            "scorer_identity": f"{type(self.client).__module__}.{type(self.client).__name__}:{getattr(self.client, 'model', '')}",
+            "branch": branch,
+            "instructions": instruction_version,
+            "pressure_bucket": before // p.pressure_chars,
+            "items": [
+                fingerprint
+                for item, fingerprint in zip(items, fingerprints)
+                if not self._small_step(item)
+            ],
+            "candidates": [
+                {k: v for k, v in asdict(c).items() if k != "index"} for c in candidates
+            ],
+        }
+        key = hashlib.sha256(json.dumps(cache_inputs, sort_keys=True).encode()).hexdigest()
+        trace["input_sha256"] = hashlib.sha256(
             json.dumps(
                 {
-                    "policy": asdict(p),
-                    "version": POLICY_VERSION,
-                    "scorer_identity": f"{type(self.client).__module__}.{type(self.client).__name__}:{getattr(self.client, 'model', '')}",
-                    "branch": branch,
-                    "instructions": instruction_version,
+                    **cache_inputs,
                     "items": [asdict(item) for item in items],
                     "candidates": [asdict(c) for c in candidates],
                 },
                 sort_keys=True,
             ).encode()
         ).hexdigest()
-        trace["input_sha256"] = key
         with sqlite3.connect(self.store.path) as db:
             cached = db.execute(
                 "SELECT value FROM context_decisions WHERE scope=? AND key=?", (self.scope, key)
             ).fetchone()
         decisions: tuple[ContextDecision, ...] = ()
-        if cached:
-            decisions = tuple(ContextDecision(**v) for v in json.loads(cached[0]))
+        cached_state = json.loads(cached[0]) if cached else None
+        if cached_state and not self._unchanged_continuation(cached_state["history"], items):
+            cached_state = None
+        if cached_state:
+            decisions = tuple(ContextDecision(**v) for v in cached_state["decisions"])
             trace["cache_hit"] = True
+            trace["fallback"] = trace["fallback"] or cached_state["fallback"]
         elif p.selector == "rules":
             decisions = tuple(
                 ContextDecision(c.reference, "excerpt_with_reference", "old_large_output")
@@ -242,10 +257,6 @@ class ContextPolicyEngine:
                 trace["fallback"] = "scorer_unavailable"
             elif capped:
                 trace["fallback"] = "selector_spend_not_reserved"
-            elif not self._selection_trigger(
-                run_key or "session", task, candidates, before, instruction_version
-            ):
-                trace["fallback"] = "no_selection_trigger"
             elif not self._reserve_call(run_key or hashlib.sha256(task.encode()).hexdigest()):
                 trace["fallback"] = "scorer_call_limit"
             else:
@@ -310,12 +321,23 @@ class ContextPolicyEngine:
                 ContextDecision(c.reference, "keep", trace["fallback"] or "retain_evidence")
                 for c in candidates
             )
-        if not cached:
-            with sqlite3.connect(self.store.path) as db:
-                db.execute(
-                    "INSERT OR REPLACE INTO context_decisions VALUES (?,?,?)",
-                    (self.scope, key, json.dumps([asdict(v) for v in decisions])),
-                )
+        # Advance the history anchor on reuse too: subsequent edits or removal
+        # of any accepted step must invalidate the decision, including restart.
+        with sqlite3.connect(self.store.path) as db:
+            db.execute(
+                "INSERT OR REPLACE INTO context_decisions VALUES (?,?,?)",
+                (
+                    self.scope,
+                    key,
+                    json.dumps(
+                        {
+                            "decisions": [asdict(v) for v in decisions],
+                            "history": fingerprints,
+                            "fallback": trace["fallback"],
+                        }
+                    ),
+                ),
+            )
         chosen = {d.reference for d in decisions if d.action == "excerpt_with_reference"}
         proposed = {c.index: reference_excerpt(c) for c in candidates if c.reference in chosen}
         after = before - sum(len(items[i].text) - len(text) for i, text in proposed.items())
@@ -346,29 +368,28 @@ class ContextPolicyEngine:
             )
         return True
 
-    def _selection_trigger(self, run_key, task, candidates, chars, instruction_version):
-        signature = hashlib.sha256(
-            json.dumps(
-                {
-                    "task": hashlib.sha256(task.encode()).hexdigest(),
-                    "evidence": sorted(c.digest for c in candidates),
-                    "pressure_bucket": chars // self.policy.pressure_chars,
-                    "policy": asdict(self.policy),
-                    "instructions": instruction_version,
-                },
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
-        with sqlite3.connect(self.store.path, timeout=10) as db:
-            db.execute("BEGIN IMMEDIATE")
-            previous = db.execute(
-                "SELECT signature FROM context_selection_triggers WHERE scope=? AND run_key=?",
-                (self.scope, run_key),
-            ).fetchone()
-            if previous and previous[0] == signature:
+    def _small_step(self, item: ContextItem) -> bool:
+        return (
+            item.role == "assistant"
+            and not item.is_error
+            and not item.tool
+            and not item.call_id
+            and not item.arguments
+            and len(item.text) <= self.policy.excerpt_chars
+        )
+
+    @staticmethod
+    def _item_fingerprint(item: ContextItem) -> str:
+        # Core identities contain message positions, which shift on insertion.
+        # Candidate references separately bind eligible evidence to provenance.
+        value = {k: v for k, v in asdict(item).items() if k != "identity"}
+        return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+    def _unchanged_continuation(self, previous: list[str], items: list[ContextItem]) -> bool:
+        position = 0
+        for item in items:
+            if position < len(previous) and self._item_fingerprint(item) == previous[position]:
+                position += 1
+            elif not self._small_step(item):
                 return False
-            db.execute(
-                "INSERT OR REPLACE INTO context_selection_triggers VALUES (?,?,?)",
-                (self.scope, run_key, signature),
-            )
-        return True
+        return position == len(previous)

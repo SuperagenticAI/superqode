@@ -59,6 +59,14 @@ def pipy_items(messages):
             else ""
         )
         identity = f"{getattr(message, 'timestamp', 0)}:{call_id}:{hashlib.sha256(text.encode()).hexdigest()}"
+        arguments = call.arguments if call else {}
+        if role == "assistant" and getattr(message, "tool_calls", ()):
+            arguments = {
+                "tool_calls": [
+                    {"id": c.id, "name": c.name, "arguments": c.arguments}
+                    for c in message.tool_calls
+                ]
+            }
         items.append(
             ContextItem(
                 identity,
@@ -66,7 +74,7 @@ def pipy_items(messages):
                 text,
                 getattr(message, "tool_name", ""),
                 call_id,
-                call.arguments if call else {},
+                arguments,
                 bool(getattr(message, "is_error", False)),
             )
         )
