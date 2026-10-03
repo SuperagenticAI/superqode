@@ -14,6 +14,55 @@ from superqode.mcp.oauth import MCPOAuthProvider, OAuthTokens
 from superqode.harness.pipy_mcp import PiPyMCPTools
 
 
+@pytest.mark.asyncio
+async def test_local_mcp_banner_is_captured_without_terminal_output(tmp_path, capfd):
+    server = tmp_path / "noisy_server.py"
+    server.write_text("""import sys
+from fastmcp import FastMCP
+print("FAST_MCP_BANNER_FIXTURE", file=sys.stderr, flush=True)
+m = FastMCP("noisy-fixture")
+@m.tool()
+def echo(value: str) -> str:
+    return value
+if __name__ == "__main__": m.run(transport="stdio")
+""")
+    async with MCPClientManager() as manager:
+        manager.add_server(
+            MCPServerConfig(
+                id="noisy",
+                name="noisy",
+                config=MCPStdioConfig(
+                    command=sys.executable,
+                    args=[str(server)],
+                    timeout=10,
+                ),
+            )
+        )
+        assert await manager.connect("noisy")
+        connection = manager.get_connection("noisy")
+        result = await manager.execute_tool("noisy", "echo", {"value": "still working"})
+        assert not result.is_error
+        assert "still working" in str(result.content)
+        assert "FAST_MCP_BANNER_FIXTURE" in manager.get_server_stderr("noisy")
+        assert "FAST_MCP_BANNER_FIXTURE" not in capfd.readouterr().err
+    assert connection._stderr_log.closed
+    assert "FAST_MCP_BANNER_FIXTURE" in connection.stderr_tail()
+
+
+def test_mcp_diagnostic_tail_is_bounded_and_retained_after_close():
+    import tempfile
+    from superqode.mcp.client import MCPConnection
+
+    connection = MCPConnection(MCPServerConfig(id="noisy", name="noisy"))
+    with tempfile.TemporaryFile(mode="a+b") as log:
+        connection._stderr_log = log
+        log.write(b"x" * 10000 + b"last line")
+        log.flush()
+        assert len(connection.stderr_tail().encode()) == 4096
+        assert connection.stderr_tail().endswith("last line")
+    assert connection.stderr_tail().endswith("last line")
+
+
 def test_named_credentials_are_isolated_and_legacy_migration_is_explicit(tmp_path):
     root = MCPAuthStorage(tmp_path)
     url = "https://same.example/mcp"

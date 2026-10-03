@@ -8,6 +8,7 @@ Implements full MCP protocol support aligned with Zed editor's implementation.
 import asyncio
 import contextlib
 import logging
+import tempfile
 import webbrowser
 from dataclasses import dataclass, field
 from enum import Enum
@@ -87,6 +88,17 @@ class MCPConnection:
     subscribed_resources: set[str] = field(default_factory=set)
     error_message: str | None = None
     _exit_stack: Any = None  # contextlib.AsyncExitStack
+    _stderr_log: Any = field(default=None, repr=False)
+    _stderr_tail: str = field(default="", repr=False)
+
+    def stderr_tail(self) -> str:
+        """Read only the last 4 KiB of subprocess diagnostics, on demand."""
+        if self._stderr_log is not None and not self._stderr_log.closed:
+            self._stderr_log.seek(0, 2)
+            end = self._stderr_log.tell()
+            self._stderr_log.seek(max(0, end - 4096))
+            self._stderr_tail = self._stderr_log.read(4096).decode("utf-8", errors="replace")
+        return self._stderr_tail
 
 
 # Type aliases for callbacks
@@ -204,6 +216,11 @@ class MCPClientManager:
         """Get connection state for a server."""
         conn = self._connections.get(server_id)
         return conn.state if conn else MCPConnectionState.DISCONNECTED
+
+    def get_server_stderr(self, server_id: str) -> str:
+        """Return captured local-server diagnostics without writing to the terminal."""
+        connection = self._connections.get(server_id)
+        return connection.stderr_tail() if connection else ""
 
     # Callback registration methods
     def on_state_change(self, callback: StateChangeCallback) -> None:
@@ -404,7 +421,14 @@ class MCPClientManager:
                     env=config.env if config.env else None,
                     cwd=config.cwd,
                 )
-                transport = stdio_client(server_params)
+                # Server banners and logs must never overwrite Textual's screen.
+                # Keep stderr separate from JSON-RPC stdout without another
+                # background task or an unbounded in-memory log buffer.
+                connection._stderr_log = connection._exit_stack.enter_context(
+                    tempfile.TemporaryFile(mode="a+b")
+                )
+                connection._exit_stack.callback(connection.stderr_tail)
+                transport = stdio_client(server_params, errlog=connection._stderr_log)
                 read_stream, write_stream = await connection._exit_stack.enter_async_context(
                     transport
                 )

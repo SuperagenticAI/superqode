@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-10-03
+
+### Fixed
+
+- Capture local MCP server stderr so FastMCP startup banners and logs cannot
+  overwrite the TUI during agent runs. Preserve a diagnostic tail and keep tool
+  connections active.
+
 ## [2.5.0] - 2026-10-02
 
 ### Highlights
