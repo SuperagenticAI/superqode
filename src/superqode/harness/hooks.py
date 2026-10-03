@@ -26,6 +26,8 @@ from typing import Any, Callable
 from ..agent.hooks import (
     AFTER_COMPACT,
     AFTER_TOOL_CALL,
+    CONTEXT_SELECTION,
+    CONTEXT_RETRIEVAL,
     BEFORE_COMPACT,
     BEFORE_TOOL_CALL,
     PERMISSION_REQUEST,
@@ -200,6 +202,16 @@ def register_store_forwarders(
     registry.register(BEFORE_COMPACT, on_before_compact, name="store_before_compact")
     registry.register(AFTER_COMPACT, on_after_compact, name="store_after_compact")
     registry.register(STOP, on_stop, name="store_stop")
+    registry.register(
+        CONTEXT_SELECTION,
+        lambda ctx, trace: emit("context.selection", dict(trace)),
+        name="store_context_selection",
+    )
+    registry.register(
+        CONTEXT_RETRIEVAL,
+        lambda ctx, trace: emit("context.retrieval", dict(trace)),
+        name="store_context_retrieval",
+    )
 
 
 def build_hook_registry(

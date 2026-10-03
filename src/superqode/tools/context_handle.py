@@ -71,6 +71,21 @@ class ContextHandleTool(Tool):
             return ToolResult(success=False, output="", error="handle is required")
 
         try:
+            if handle.startswith("artifact:"):
+                if action not in {"peek", "info"} or ctx.context_page is None:
+                    raise ValueError("Artifact handles support authorized info and paged peek")
+                page = ctx.context_page(
+                    handle.removeprefix("artifact:"),
+                    offset=args.get("offset", 0),
+                    limit=args.get("limit", 4000),
+                )
+                return ToolResult(
+                    success=True,
+                    output=page.text
+                    if action == "peek"
+                    else f"Immutable evidence: {page.reference}; characters: {page.total_chars}; sha256: {page.digest}",
+                    metadata=page.to_dict(),
+                )
             if action == "info":
                 text = resolve_context_handle(handle, ctx.working_directory)
                 return ToolResult(

@@ -60,7 +60,7 @@ checkpoint inspection and the standalone WorkOrder execution route.
 | Area | Behaviour |
 | --- | --- |
 | Loop | Parallel tool execution by default, with per-tool sequential opt out. `tool_execution_end` in completion order, tool results in assistant order |
-| Streaming | Tool output reaches the model while a tool is still running |
+| Streaming | Tool progress reaches event subscribers while a tool is running; completed results enter the next model request |
 | Tools | `read`, `bash`, `edit`, `write` by default; `grep`, `find` and `ls` selectable |
 | Editing | `edit` takes an array of replacements, all matched against the original file, with fuzzy matching through smart quotes and Unicode dashes |
 | Prompt | Tool list built from each tool's own snippet, deduplicated guidelines, project context, skills, working directory last |
@@ -103,6 +103,23 @@ without changes:
 - `.pi/skills/**/SKILL.md`
 - `.pi/prompts/*.md`
 - `AGENTS.md` or `CLAUDE.md`
+
+Instructions load from the PiPy agent directory (`~/.superqode/pipy/`), then
+ancestor directories from filesystem root to the working directory. Within each
+directory, `AGENTS.override.md` takes precedence over `AGENTS.md` and `CLAUDE.md`.
+An override affects only that directory. Canonical paths prevent duplicate loads.
+
+`SYSTEM.md` replaces the default system prompt and `APPEND_SYSTEM.md` adds to it.
+For each filename, PiPy selects the first nonempty readable file from `.pi/`,
+`.superqode/pipy/` in the working directory, then the PiPy agent directory.
+Explicit SDK prompts take precedence, including an empty append string. Resource
+reload rereads these files. PiPy does not implicitly load the real pi user's
+global instructions or execute TypeScript extensions.
+
+SDK callers can set `include_context_files=False` and
+`include_system_prompt_files=False`. Hosted HarnessSpecs expose these as
+`runtime.config.context_files: false` and `system_prompt_files: false`; explicit
+prompts use `system_prompt` and `append_system_prompt`.
 
 PiPy stores session metadata under `~/.superqode/pipy/`. It never writes into `~/.pi/`, so a
 real pi installation cannot be affected.
@@ -207,6 +224,72 @@ process-recovery integration, not a power-loss or remote exactly-once guarantee.
 `examples/pipy/session.py` demonstrates session creation and events with an offline
 provider by default. `examples/pipy/custom_tool.py` demonstrates a typed custom
 tool and cancellation. Both use the independent `superqode.pipy` library.
+
+### Typed Python tools
+
+`create_typed_tool` derives a tool schema from a Pydantic model and passes a
+validated model instance to an async executor. It runs through the existing
+tool, event and WorkOrder recovery paths:
+
+```python
+from pydantic import BaseModel, ConfigDict, Field
+from superqode.pipy import AgentToolResult, ToolContext, create_typed_tool
+
+class Lookup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1)
+    limit: int = Field(default=3, ge=1, le=10)
+
+async def lookup(args: Lookup, context: ToolContext) -> AgentToolResult:
+    context.check_cancelled()
+    context.emit(AgentToolResult(content="Looking up records"))
+    return AgentToolResult(content=f"Found {args.key}", details=args.model_dump())
+
+tool = create_typed_tool("lookup", "Read records", Lookup, lookup, replay_safe=True)
+```
+
+Field and model validators run before executor code, including direct SDK calls.
+An executor returns `AgentToolResult` to preserve images, usage, structured
+details and termination hints. Replay safety defaults to false and must reflect
+the executor's actual effects. Validators should be deterministic and have no
+external effects. The offline example is `examples/pipy/typed_tool.py`.
+
+## Hosted context and evidence
+
+Hosted context selection is opt-in through `runtime.config.context`. The same
+policy is available to Core. Start with shadow mode to inspect proposals:
+
+```yaml
+runtime:
+  backend: pipy
+  config:
+    context:
+      mode: shadow
+      selector: rules
+      conditional_instructions: true
+```
+
+Modes are `off`, `shadow` and `enforce`; selectors are `rules` and `jev`. Jev
+uses the configured System One client, bounded evidence previews, a timeout and
+a per-run call ceiling. It retains evidence when unavailable or uncertain.
+`scorer_version` can pin an evaluation configuration. Selector calls with
+unreserved spend are disabled inside cost/token-capped WorkOrders.
+
+Original permitted text is stored in the host's SQLite context store, outside
+the model prompt. `SUPERQODE_CONTEXT_STORE` overrides its location; the default
+is `~/.superqode/context/artifacts.sqlite3`. `read_context_chunk` accepts a
+reference, character offset and bounded limit. Retrieval rechecks current host
+policy. Missing evidence returns an explicit error and never replays a tool.
+The PiPy session archive and original usage accounting remain intact.
+
+`conditional_instructions: true` enables explicit `sq:when` project blocks with
+path, tool or task conditions. Unmarked instructions remain present. Matching
+uses PiPy's own loaded resources and preserves their precedence. The standalone
+library does not import the host's context policy.
+
+Persisted `context.selection` and `context.retrieval` events expose decisions,
+fallbacks and reference IDs. Size fields count characters, not provider tokens;
+shadow proposals do not represent actual savings.
 
 ## Demo from the TUI
 

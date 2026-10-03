@@ -1391,6 +1391,50 @@ class AgentLoop:
 
         return context_original(self, chunk_id)
 
+    def _context_page(self, chunk_id: str, *, offset: int = 0, limit: int = 4000):
+        from ..harness.context_artifacts import ContextArtifactStore, originating_tool
+
+        store = getattr(self, "_context_artifact_store", None)
+        if store is None:
+            spec = getattr(self.config, "harness_spec", None)
+            settings = (getattr(getattr(spec, "runtime", None), "config", None) or {}).get(
+                "context", {}
+            )
+            store = ContextArtifactStore(settings.get("store_path"))
+        if not chunk_id.startswith("ctx_"):
+            chunk_id = store.resolve_alias(self.session_id, chunk_id)
+        try:
+            record = store.describe(self.session_id, chunk_id)
+            manager = getattr(self, "permission_manager", None)
+            if manager is not None:
+                from ..tools.permissions import Permission
+
+                if (
+                    manager.check_permission(
+                        originating_tool(record.metadata), record.metadata.get("arguments", {})
+                    )
+                    == Permission.DENY
+                ):
+                    raise PermissionError("Originating resource permission revoked")
+            return store.read_page(self.session_id, chunk_id, offset=offset, limit=limit)
+        except LookupError:
+            from superqode.execution_recovery import active_recovery
+            from ..workorders.evidence import read_workorder_evidence
+
+            return read_workorder_evidence(
+                active_recovery(),
+                chunk_id,
+                self.config.working_directory,
+                offset=offset,
+                limit=limit,
+                permission_manager=getattr(self, "permission_manager", None),
+            )
+
+    async def _prepare_host_context(self, messages):
+        from ..harness.core_context import prepare_core_context
+
+        return await prepare_core_context(self, messages)
+
     def _create_tool_context(self) -> ToolContext:
         """Create context for tool execution."""
         return ToolContext(
@@ -1404,6 +1448,7 @@ class AgentLoop:
             permission_manager=self.permission_manager,
             context_status=self._context_status,
             context_chunk=self._context_chunk,
+            context_page=self._context_page,
             systemone=self.config.systemone,
             systemone_client=self._systemone_client,
             harness_store=self.config.harness_store,
@@ -1685,16 +1730,18 @@ class AgentLoop:
         hooks see every attempted call.
         """
         from ..acp.tool_call_context import acp_tool_call_context
-        from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL
+        from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL, CONTEXT_RETRIEVAL
 
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finalize(result: ToolResult) -> ToolResult:
             import hashlib
+            from ..systemone.state import redact_evidence
 
             result.metadata = {
                 **(result.metadata or {}),
                 "invocation_id": tool_call_id,
+                "source_arguments": redact_evidence(arguments),
                 "effective_arguments_sha256": hashlib.sha256(
                     json.dumps(arguments, sort_keys=True, default=str).encode()
                 ).hexdigest(),
@@ -1722,7 +1769,20 @@ class AgentLoop:
                         }
                     )
                     self.last_discovery_event = {**current, "executions": executions[-10:]}
-            result = self._bound_tool_result(name, result)
+            result = self._bound_tool_result(name, result, arguments=arguments)
+            if name == "read_context_chunk":
+                await self.hooks.fire(
+                    CONTEXT_RETRIEVAL,
+                    lifecycle_ctx,
+                    {
+                        "kind": "context_retrieval",
+                        "success": result.success,
+                        "reference": str(arguments.get("chunk_id", ""))[:128],
+                        "offset": (result.metadata or {}).get("offset"),
+                        "next_offset": (result.metadata or {}).get("next_offset"),
+                        "chars": len(result.output),
+                    },
+                )
             await self.hooks.fire(AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result)
             return result
 
@@ -2302,7 +2362,7 @@ class AgentLoop:
         )
         return result_messages
 
-    def _bound_tool_result(self, name: str, result: ToolResult) -> ToolResult:
+    def _bound_tool_result(self, name: str, result: ToolResult, *, arguments=None) -> ToolResult:
         """Last-resort output bound for tools that don't self-limit.
 
         Bash and read_file already size themselves to the model; this guard
@@ -2313,6 +2373,68 @@ class AgentLoop:
         notice after their own truncation aren't truncated twice.
         """
         output = result.output or ""
+        from ..harness.core_context import configured_context_policy
+
+        spec = getattr(self.config, "harness_spec", None)
+        context_config = (getattr(getattr(spec, "runtime", None), "config", None) or {}).get(
+            "context", {}
+        )
+        policy = configured_context_policy(context_config)
+        if policy and len(output) >= policy.min_chars:
+            try:
+                import hashlib
+                from ..harness.context_artifacts import ContextArtifactStore
+                from ..harness.context_policy import (
+                    ContextCandidate,
+                    evidence_preview,
+                    reference_excerpt,
+                )
+                from ..systemone.state import redact_evidence
+
+                store = getattr(self, "_context_artifact_store", None) or ContextArtifactStore(
+                    context_config.get("store_path")
+                )
+                record = store.put(
+                    self.session_id,
+                    f"invocation:{result.metadata.get('invocation_id', '')}:{hashlib.sha256(output.encode()).hexdigest()}",
+                    output,
+                    metadata={
+                        "tool": name,
+                        "arguments": arguments or {},
+                        "success": result.success,
+                        "upstream_truncated": bool(result.metadata.get("truncated")),
+                    },
+                )
+                self._context_artifact_store = store
+                self._ensure_context_chunk_tool()
+                cap = self._tool_output_byte_cap or 100_000
+                if len(output.encode()) > cap:
+                    excerpt = reference_excerpt(
+                        ContextCandidate(
+                            0,
+                            record.reference,
+                            record.digest,
+                            evidence_preview(
+                                redact_evidence(output),
+                                "",
+                                min(policy.excerpt_chars, max(100, cap // 4)),
+                            ),
+                            record.chars,
+                            name,
+                        )
+                    )
+                    return ToolResult(
+                        result.success,
+                        excerpt,
+                        result.error,
+                        {
+                            **result.metadata,
+                            "context_reference": record.reference,
+                            "loop_truncated": True,
+                        },
+                    )
+            except Exception:
+                pass  # Existing bounded-output behavior remains available.
         cap = self._tool_output_byte_cap or 100_000
         limit = int(cap * 1.25) + 512
         if len(output) <= limit:  # cheap pre-check; chars <= bytes
@@ -2710,6 +2832,7 @@ class AgentLoop:
                     f"Steering: picked up {len(drained)} queued user message(s)."
                 )
             messages = self._refresh_opt_in_instructions(messages)
+            model_messages = await self._prepare_host_context(messages)
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
@@ -2726,9 +2849,9 @@ class AgentLoop:
 
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
-            request_messages = messages
+            request_messages = model_messages
             if not fast_chat:
-                request_messages = messages + self._collect_reminder_messages(
+                request_messages = model_messages + self._collect_reminder_messages(
                     iterations, user_message
                 )
             gateway_messages = self._convert_messages(request_messages)
@@ -3222,6 +3345,7 @@ class AgentLoop:
                     f"Steering: picked up {len(drained)} queued user message(s)."
                 )
             messages = self._refresh_opt_in_instructions(messages)
+            model_messages = await self._prepare_host_context(messages)
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
@@ -3236,9 +3360,9 @@ class AgentLoop:
 
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
-            request_messages = messages
+            request_messages = model_messages
             if not fast_chat:
-                request_messages = messages + self._collect_reminder_messages(
+                request_messages = model_messages + self._collect_reminder_messages(
                     iterations, user_message
                 )
             gateway_messages = self._convert_messages(request_messages)

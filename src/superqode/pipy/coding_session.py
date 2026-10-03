@@ -26,7 +26,7 @@ from .prompt_templates import (
     format_prompt_template_invocation,
     load_prompt_templates,
 )
-from .resources import ContextFile, load_context_files
+from .resources import ContextFile, load_context_files, load_system_prompt_files
 from .session import Session, SessionRecord, SessionRepository
 from .skills import Skill, format_skill_invocation, load_skills
 from .stream import Model, StreamFn
@@ -79,6 +79,9 @@ class CodingSessionOptions:
     session_root: Path | None = None
     custom_prompt: str | None = None
     append_system_prompt: str | None = None
+    include_context_files: bool = True
+    include_system_prompt_files: bool = True
+    context_file_transform: Callable[[list[ContextFile]], list[ContextFile]] | None = None
     self_docs: SelfDocs = field(default_factory=SelfDocs)
     steering_mode: QueueMode = "one-at-a-time"
     follow_up_mode: QueueMode = "one-at-a-time"
@@ -124,6 +127,11 @@ class PiPyCodingSession:
         self._context_files = context_files
         self._skills = skills
         self._templates = templates
+        self._system_prompt_files = (
+            load_system_prompt_files(self.cwd)
+            if options.include_system_prompt_files
+            else (None, None)
+        )
 
     # -- construction ----------------------------------------------------- #
 
@@ -175,7 +183,7 @@ class PiPyCodingSession:
         tools.extend(options.extra_tools)
         if options.tool_transform is not None:
             tools = options.tool_transform(tools)
-        context_files = load_context_files(cwd)
+        context_files = load_context_files(cwd) if options.include_context_files else []
         skills = load_skills(cwd=cwd).skills
         templates = load_prompt_templates(cwd=cwd).templates
 
@@ -205,14 +213,31 @@ class PiPyCodingSession:
         return instance
 
     def _build_prompt(self, state: TurnState) -> str:
+        replacement, append = self._system_prompt_files
         return build_system_prompt(
             SystemPromptOptions(
                 cwd=self.cwd,
                 tools=state.active_tools,
-                context_files=self._context_files,
+                context_files=(
+                    self.options.context_file_transform(list(self._context_files))
+                    if self.options.context_file_transform
+                    else self._context_files
+                ),
                 skills=self._skills,
-                custom_prompt=self.options.custom_prompt,
-                append_system_prompt=self.options.append_system_prompt,
+                custom_prompt=(
+                    self.options.custom_prompt
+                    if self.options.custom_prompt is not None
+                    else replacement.content
+                    if replacement
+                    else None
+                ),
+                append_system_prompt=(
+                    self.options.append_system_prompt
+                    if self.options.append_system_prompt is not None
+                    else append.content
+                    if append
+                    else None
+                ),
                 self_docs=self.options.self_docs,
             )
         )
@@ -241,7 +266,14 @@ class PiPyCodingSession:
 
     def reload_resources(self) -> None:
         """Re-read project instructions, skills and templates from disk."""
-        self._context_files = load_context_files(self.cwd)
+        self._context_files = (
+            load_context_files(self.cwd) if self.options.include_context_files else []
+        )
+        self._system_prompt_files = (
+            load_system_prompt_files(self.cwd)
+            if self.options.include_system_prompt_files
+            else (None, None)
+        )
         self._skills = load_skills(cwd=self.cwd).skills
         self._templates = load_prompt_templates(cwd=self.cwd).templates
 

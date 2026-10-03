@@ -62,6 +62,8 @@ SESSION_START = "session_start"
 USER_PROMPT_SUBMIT = "user_prompt_submit"
 BEFORE_LLM_CALL = "before_llm_call"
 AFTER_LLM_CALL = "after_llm_call"
+CONTEXT_SELECTION = "context_selection"
+CONTEXT_RETRIEVAL = "context_retrieval"
 PERMISSION_REQUEST = "permission_request"
 BEFORE_TOOL_CALL = "before_tool_call"
 AFTER_TOOL_CALL = "after_tool_call"
@@ -75,6 +77,8 @@ ALL_HOOK_POINTS = (
     USER_PROMPT_SUBMIT,
     BEFORE_LLM_CALL,
     AFTER_LLM_CALL,
+    CONTEXT_SELECTION,
+    CONTEXT_RETRIEVAL,
     PERMISSION_REQUEST,
     BEFORE_TOOL_CALL,
     AFTER_TOOL_CALL,
@@ -300,6 +304,8 @@ __all__ = [
     "USER_PROMPT_SUBMIT",
     "BEFORE_LLM_CALL",
     "AFTER_LLM_CALL",
+    "CONTEXT_SELECTION",
+    "CONTEXT_RETRIEVAL",
     "PERMISSION_REQUEST",
     "BEFORE_TOOL_CALL",
     "AFTER_TOOL_CALL",

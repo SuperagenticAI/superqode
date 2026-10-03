@@ -41,6 +41,20 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_core_tool_history.py tests/test_tool_call_repair.py tests/test_streaming_tool_calls.py tests/test_adaptive_compaction.py -q
+      - name: Native context and WorkOrder release contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/pipy/test_pipy_ship_gate.py
+          tests/pipy/test_pipy_host_context.py
+          tests/pipy/test_pipy_resource_inheritance.py
+          tests/pipy/test_pipy_typed_tools.py
+          tests/test_context_artifacts.py tests/test_context_policy.py
+          tests/test_core_host_context.py tests/test_workorder_submissions.py
+          tests/test_workorder_event_replay.py tests/test_workorder_evidence.py
+          tests/test_benchmark_comparison.py
+          tests/test_tui_smoke.py::test_tui_static_commands_cover_cli_surface_except_tui_launcher -q
       - name: TUI real-terminal input and rendering
         run: uv run --frozen python scripts/check_tui_terminal.py --output tui-terminal.json
       - name: TUI responsiveness budget

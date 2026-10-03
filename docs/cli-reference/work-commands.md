@@ -14,7 +14,7 @@ sq work watch --help
 
 | Command | Purpose |
 | --- | --- |
-| `work create GOAL` | Create a draft WorkOrder and primary task; pass `--queue` to enqueue it immediately. |
+| `work create GOAL` | Create a draft WorkOrder and primary task; pass `--queue` to enqueue atomically and `--request-id KEY` for retry-safe creation. |
 | `work add-task ID GOAL` | Add a dependency-aware task while the WorkOrder is a draft. |
 | `work list` | List WorkOrders, optionally filtered with `--status`. |
 | `work status ID` | Show the complete WorkOrder contract and current task states. |
@@ -39,7 +39,8 @@ sq work watch --help
 | `work programs ID` | Inspect saved Monty checkpoint status, revision and size; use `--task` or `--json`. |
 | `work program-run ID --code FILE` | Run one ready PiPy task as a restricted Python tool program without an LLM request; repeat the same command to recover safe interrupted work. |
 | `work reconcile ID TASK INVOCATION` | Record verified `--result` or explicit `--allow-retry`, with required actor and reason, before resuming. |
-| `work events ID` | Show the append-only decision timeline. |
+| `work events ID` | Show the append-only decision timeline; `--after-sequence N --limit K --json` resumes and pages committed evidence. |
+| `work evidence ID --task TASK` | Inspect assigned predecessor references, verification levels and current source validity; `--read REF --offset N --limit K --json` reads a bounded page. |
 | `work prepare ID` | Build the exact candidate patch and check source drift and conflicts. |
 | `work diff ID` | Print the content-addressed patch awaiting approval. |
 | `work approve ID` | Approve completed work or the exact prepared candidate. |

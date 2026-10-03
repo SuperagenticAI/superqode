@@ -2,6 +2,12 @@
 
 Run coding harness benchmarks across multiple agent targets.
 
+Harness JSON reports include context diagnostic events when available. Comparison
+rows distinguish actual character reductions from shadow proposals, count
+retrieval failures and selector calls, and mark usage incomplete when selector
+spend is unknown. Character measurements do not establish provider token savings
+or coding-quality improvements; matched grading remains required.
+
 ---
 
 ## benchmark run
@@ -100,6 +106,13 @@ cost per solved trial, including failed-attempt spend. Unknown or partial usage
 remains unknown; reported cost is an estimate, not billing evidence. A comparison
 is eligible only with executable grading, isolated workspaces, matching reported
 model identity, revision declarations and complete usage.
+
+The scorecard also requires the same unique task/repetition pairs for every
+target, matching source and grading-contract hashes, and one revision and command
+per target. `comparison_blockers` explains missing or inconsistent evidence.
+Protected graders are checked before and after grading. These checks validate
+report consistency; revision declarations still need independent verification,
+and ordinary subprocess workspaces do not isolate global settings or credentials.
 
 A live Pi comparison is deferred. The included regression fixtures test the
 runner and scorecard without paid model requests; they do not establish a

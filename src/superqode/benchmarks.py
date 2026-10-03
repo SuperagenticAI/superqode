@@ -89,6 +89,15 @@ def _protected(root, paths):
     return hashes
 
 
+def _valid_cost(value):
+    if not isinstance(value, (float, int)) or isinstance(value, bool) or value < 0:
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _metrics(stdout, target, *, completed):
     """Read reported usage from SQ JSON or Pi JSON message-end events.
 
@@ -110,12 +119,17 @@ def _metrics(stdout, target, *, completed):
             continue
         if value.get("type") == "message_end":
             message = value.get("message", {})
+            if not isinstance(message, dict):
+                continue
             if message.get("role") != "assistant":
                 continue
             usage = message.get("usage", {})
+            usage = usage if isinstance(usage, dict) else {}
+            cost = usage.get("cost", {})
+            cost = cost if isinstance(cost, dict) else {}
             measurements.append(
                 {
-                    "cost": usage.get("cost", {}).get("total"),
+                    "cost": cost.get("total"),
                     "tokens": usage.get("totalTokens"),
                     "provider": message.get("provider"),
                     "model": message.get("model"),
@@ -133,14 +147,7 @@ def _metrics(stdout, target, *, completed):
                     not in {"error", "failed", "recovery_required", "needs_approval"},
                 }
             )
-    valid = [
-        m
-        for m in measurements
-        if isinstance(m["cost"], (float, int))
-        and not isinstance(m["cost"], bool)
-        and math.isfinite(m["cost"])
-        and m["cost"] >= 0
-    ]
+    valid = [m for m in measurements if _valid_cost(m["cost"])]
     complete = (
         bool(measurements)
         and len(valid) == len(measurements)
@@ -173,12 +180,26 @@ def run_benchmark_task(task: BenchmarkTask, target: BenchmarkTarget) -> dict[str
         "configuration_verified": False,
         "cost_usd": None,
         "usage_complete": False,
+        "task_sha256": hashlib.sha256(
+            json.dumps(
+                {
+                    "prompt": task.prompt,
+                    "checks": task.checks,
+                    "expected_text": task.expected_text,
+                    "protected_paths": task.protected_paths,
+                    "timeout_seconds": task.timeout_seconds,
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest(),
+        "command_sha256": hashlib.sha256(json.dumps(target.command).encode()).hexdigest(),
+        "revision_provenance": "manifest-declared; not runtime-verified",
     }
     if not is_target_available(target):
         return {
             **identity,
             "status": "skipped",
-            "reason": f"executable not found: {target.command[0]}",
+            "reason": f"executable not found: {target.command[0] if target.command else '<empty>'}",
         }
     try:
         protected = _protected(task.cwd, task.protected_paths)
@@ -199,6 +220,7 @@ def run_benchmark_task(task: BenchmarkTask, target: BenchmarkTarget) -> dict[str
                         "timed_out": timeout,
                     }
                 )
+            unchanged = _protected(task.cwd, task.protected_paths) == protected
         graded = task.expected_text is not None or bool(task.checks)
         correct = (
             unchanged
@@ -214,6 +236,16 @@ def run_benchmark_task(task: BenchmarkTask, target: BenchmarkTarget) -> dict[str
                 else ("passed" if graded else "completed")
             )
         )
+        usage = _metrics(stdout, target, completed=code == 0 and not timed_out)
+        context = context_benchmark_metrics(stdout)
+        details = context.get("context_metrics", {})
+        if details.get("scorer_calls"):
+            selector_cost = details.get("selector_cost_usd")
+            if details.get("selector_usage_complete") and _valid_cost(usage["cost_usd"]):
+                usage["cost_usd"] += selector_cost
+                usage["cost_provenance"] = "harness-reported estimate including context selector"
+            else:
+                usage["usage_complete"] = False
         return {
             **identity,
             "status": status,
@@ -226,7 +258,8 @@ def run_benchmark_task(task: BenchmarkTask, target: BenchmarkTarget) -> dict[str
             "stdout_chars": len(stdout),
             "stderr_chars": len(stderr),
             "output_sha256": hashlib.sha256(stdout.encode()).hexdigest(),
-            **_metrics(stdout, target, completed=code == 0 and not timed_out),
+            **usage,
+            **context,
         }
     except (OSError, ValueError) as error:
         return {
@@ -235,6 +268,71 @@ def run_benchmark_task(task: BenchmarkTask, target: BenchmarkTarget) -> dict[str
             "reason": type(error).__name__,
             "duration_seconds": round(time.monotonic() - started, 3),
         }
+
+
+def context_benchmark_metrics(stdout: str) -> dict[str, Any]:
+    """Read context diagnostics without treating projected savings as actual usage."""
+    events = []
+    try:
+        payload = json.loads(stdout)
+        if isinstance(payload, dict):
+            nested = payload.get("context_events", [])
+            if isinstance(nested, list):
+                events.extend(nested)
+            if payload.get("type") or payload.get("kind"):
+                events.append(payload)
+        elif isinstance(payload, list):
+            events.extend(payload)
+    except ValueError:
+        for line in stdout.splitlines():
+            try:
+                events.append(json.loads(line))
+            except ValueError:
+                continue
+    selections, retrievals = [], []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        data = event.get("data", event)
+        if not isinstance(data, dict):
+            continue
+        kind = data.get("kind", event.get("type"))
+        if kind in {"context_selection", "context.selection"}:
+            selections.append(data)
+        elif kind in {"context_retrieval", "context.retrieval"}:
+            retrievals.append(data)
+    if not selections and not retrievals:
+        return {}
+
+    def numeric(value):
+        return _valid_cost(value)
+
+    calls = sum(v.get("scorer_calls", 0) for v in selections if numeric(v.get("scorer_calls", 0)))
+    known = all(numeric(v.get("spend_usd")) for v in selections if v.get("scorer_calls"))
+    return {
+        "context_metrics": {
+            "selection_events": len(selections),
+            "retrieval_events": len(retrievals),
+            "retrieval_failures": sum(v.get("success") is not True for v in retrievals),
+            "scorer_calls": calls,
+            "selector_usage_complete": known,
+            "selector_cost_usd": (
+                sum(v["spend_usd"] for v in selections if v.get("scorer_calls")) if known else None
+            ),
+            "actual_chars_saved": sum(
+                max(0, v["chars_before"] - v["chars_after"])
+                for v in selections
+                if numeric(v.get("chars_before")) and numeric(v.get("chars_after"))
+            ),
+            "proposed_chars_saved": sum(
+                max(0, v["chars_before"] - v["proposed_chars_after"])
+                for v in selections
+                if numeric(v.get("chars_before")) and numeric(v.get("proposed_chars_after"))
+            ),
+            "measurement": "reported characters, not provider tokens",
+        },
+        **({"usage_complete": False} if calls and not known else {}),
+    }
 
 
 def run_benchmark_suite(
@@ -341,9 +439,11 @@ def benchmark_scorecard(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
         executed = [row for row in attempts if row.get("status") != "skipped"]
         complete = bool(executed) and all(
-            row.get("cost_usd") is not None and row.get("usage_complete", True) for row in executed
+            _valid_cost(row.get("cost_usd")) and row.get("usage_complete", True) for row in executed
         )
-        measured = sum(float(row.get("cost_usd") or 0) for row in executed)
+        measured = sum(
+            float(row["cost_usd"]) for row in executed if _valid_cost(row.get("cost_usd"))
+        )
         durations = sorted(row["duration_seconds"] for row in executed if "duration_seconds" in row)
         targets[name] = {
             "attempts": len(attempts),
@@ -355,7 +455,8 @@ def benchmark_scorecard(rows: list[dict[str, Any]]) -> dict[str, Any]:
             else None,
             "skipped": len(attempts) - len(executed),
             "unknown_cost_attempts": sum(
-                not row.get("usage_complete", row.get("cost_usd") is not None) for row in executed
+                not _valid_cost(row.get("cost_usd")) or not row.get("usage_complete", True)
+                for row in executed
             ),
             "observed_cost_usd": measured,
             "total_cost_usd": measured if complete else None,
@@ -366,20 +467,63 @@ def benchmark_scorecard(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "p95_seconds": durations[math.ceil(len(durations) * 0.95) - 1] if durations else None,
             "ungraded": sum(row.get("quality_status") == "ungraded" for row in attempts),
         }
-    ready = (
-        len(targets) >= 2
-        and bool(rows)
-        and all(
-            row.get("quality_status") == "graded"
-            and row.get("configuration_verified")
-            and row.get("revision")
-            and row.get("workspace_isolated")
-            and row.get("usage_complete")
-            for row in rows
-        )
-    )
+    blockers = _comparison_blockers(rows)
     return {
         "targets": targets,
-        "comparison_ready": ready,
+        "comparison_ready": not blockers,
+        "comparison_blockers": blockers,
         "comparison_claim": "Matched graded evidence is required; harness-reported costs are estimates, not billing verification",
     }
+
+
+def _comparison_blockers(rows: list[dict[str, Any]]) -> list[str]:
+    """Require the same unique trials, source and grading contract per target.
+
+    The scorecard can be called on merged or edited reports without going
+    through load_comparison, so per-row validity alone cannot establish parity.
+    """
+    blockers = []
+    names = {str(row["target"]) for row in rows}
+    if len(names) < 2:
+        blockers.append("At least two targets are required")
+    if not rows or any(
+        row.get("quality_status") != "graded"
+        or not row.get("configuration_verified")
+        or not row.get("revision")
+        or not row.get("workspace_isolated")
+        or not row.get("usage_complete")
+        or row.get("status") == "skipped"
+        or not _valid_cost(row.get("cost_usd"))
+        for row in rows
+    ):
+        blockers.append(
+            "Every trial requires grading, verified configuration, isolation, revision and complete cost"
+        )
+    configurations = {(row.get("provider"), row.get("model")) for row in rows}
+    if len(configurations) != 1 or any(
+        not provider or not model for provider, model in configurations
+    ):
+        blockers.append("All targets must use the same provider and model")
+    trials_by_target = {}
+    for name in sorted(names):
+        attempts = [row for row in rows if str(row["target"]) == name]
+        trials = [(row["task_id"], row.get("repetition", 1)) for row in attempts]
+        if len(set(trials)) != len(trials):
+            blockers.append(f"Duplicate trials for target {name}")
+        trials_by_target[name] = set(trials)
+        if len({row.get("revision") for row in attempts}) != 1:
+            blockers.append(f"Target {name} changes revision between trials")
+        commands = {row.get("command_sha256") for row in attempts}
+        if len(commands) != 1 or None in commands or "" in commands:
+            blockers.append(f"Target {name} requires one recorded command across trials")
+    if trials_by_target and any(
+        trials != next(iter(trials_by_target.values())) for trials in trials_by_target.values()
+    ):
+        blockers.append("Targets must have identical task and repetition sets")
+    for task_id in sorted({row["task_id"] for row in rows}):
+        attempts = [row for row in rows if row["task_id"] == task_id]
+        for key in ("source_sha256", "task_sha256"):
+            fingerprints = {row.get(key) for row in attempts}
+            if len(fingerprints) != 1 or None in fingerprints or "" in fingerprints:
+                blockers.append(f"Task {task_id} requires matching {key} evidence")
+    return blockers

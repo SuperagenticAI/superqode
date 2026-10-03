@@ -4,6 +4,45 @@ A WorkOrder is SuperQode's durable finish-line contract for coding-agent work. I
 
 Session graphs answer "which agents are active?" A WorkOrder answers "did the work finish, under which policy, and was it accepted?"
 
+## Evidence reuse
+
+Enable predecessor evidence publication with `sq work create GOAL --reuse-evidence`.
+Dependent tasks can inspect their assigned findings with
+`sq work evidence ID --task TASK`, then retrieve bounded pages with `--read REF`.
+For SDK-created orders, set `metadata.evidence_reuse` to `true` or an object with
+`enabled: true`, an optional `store_path`, and explicit `env_names` to fingerprint.
+
+Evidence records contain immutable text references, source hashes, repository
+identity and predecessor lineage. Freshness is `current`, `stale` or `unknown`.
+Verification is recorded separately; published agent reports start as `reported`.
+Supporting tool receipts are labelled `observed_output`; their existence proves
+which bytes were returned, while their freshness remains unknown until validated.
+Changed tracked/untracked source inputs, project configuration, registered
+environment inputs or predecessor evidence invalidate reuse. Inventories are
+bounded; incomplete manifests remain unknown. Historical evidence stays readable
+with its validity label. Current candidate review and acceptance checks still run.
+
+Core and hosted PiPy expose a policy-controlled `read_context_chunk` for assigned
+WorkOrder evidence. Other worker runtimes receive the bounded prose/catalog
+fallback unless their host implements retrieval. Evidence reuse never replays
+arbitrary tools or MCP operations.
+
+### Offline hardening demo
+
+From a SuperQode source checkout, run:
+
+```bash
+uv run --frozen python examples/workorders/hardening_demo.py
+```
+
+The demo makes no model calls. It shows retry-safe admission, cursor replay after
+reopening the store, assigned evidence retrieval, and source freshness changing
+from `current` to `stale`. It also compares shadow context selection with explicit
+rule-based enforcement and retrieves the original evidence after reopening its
+store. The synthetic finding remains labelled `reported`; the output is a
+mechanics demonstration, not a coding-quality or cost benchmark. The final lines
+provide commands to inspect the persisted WorkOrder.
+
 ## Where WorkOrders fit
 
 WorkOrders are the durable delivery unit inside SuperQode's [terminal-first Software Factory](software-factory.md):
@@ -100,7 +139,46 @@ sq work create "Implement the smallest safe authentication fix" \
   --queue
 ```
 
-The command prints a time-sortable `work_...` id. Run dependency-ready tasks through their assigned harnesses:
+The command prints a time-sortable `work_...` id.
+
+For CI, webhooks or clients that retry after losing a response, supply a stable
+request key:
+
+```bash
+sq work create "Fix the authentication regression" --repo . --harness pipy \
+  --acceptance-test "pytest -q tests/test_auth.py" --request-id incident-42 --queue
+```
+
+The key belongs to the selected WorkOrder store. Repeating the same declared
+contract and queue choice returns the existing order in its current state,
+including after completion or cancellation. It does not restart or requeue work.
+A changed goal, task definition, repository, harness, budget, metadata or queue
+choice fails with a conflict. Creation, the key binding, queueing and lifecycle
+events commit in one transaction. Generated order IDs and timestamps are excluded
+from the input fingerprint. Reusing a key is not a guarantee about external tool
+side effects. SDK callers use `store.create(order, request_id="incident-42", queue=True)`.
+
+Request bindings do not expire automatically. Use a new key for new work.
+
+### Replay the decision timeline
+
+Every persisted event includes a monotonically increasing `sequence` within the
+store. A client can checkpoint the last processed sequence and resume after a
+disconnect or process restart:
+
+```bash
+sq work events work_... --after-sequence 0 --limit 100 --json
+sq work events work_... --after-sequence 123 --limit 100 --json
+```
+
+With a cursor, `--limit` returns the earliest next events, so paging cannot skip
+a backlog. Without a cursor, it retains the latest-events behavior. Sequences
+may have gaps because other WorkOrders share the store. Cursors belong to this
+database and are not portable to another store. This replays committed lifecycle
+and decision evidence; token streams and partial tool output are separate.
+SDK callers use `store.events(id, after_sequence=cursor, limit=100)`.
+
+Run dependency-ready tasks through their assigned harnesses:
 
 ```bash
 sq work run work_...

@@ -26,6 +26,11 @@ class _FakeContextManager:
         return sum(max(1, len(str(m.get("content", ""))) // 4) for m in messages)
 
 
+@pytest.fixture(autouse=True)
+def isolated_artifacts(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_CONTEXT_STORE", str(tmp_path / "context.sqlite"))
+
+
 def _loop(window=4096):
     loop = AgentLoop.__new__(AgentLoop)
     loop.config = AgentConfig(provider="x", model="y", context_window=window)

@@ -40,6 +40,19 @@ def allow_all(ctx, name, arguments):
     return True
 
 
+@pytest.mark.asyncio
+async def test_context_diagnostics_are_forwarded_without_evidence_bodies():
+    from superqode.agent.hooks import CONTEXT_SELECTION, CONTEXT_RETRIEVAL
+
+    events = []
+    registry, errors = build_hook_registry(HarnessSpec(name="context"), event_sink=events)
+    assert not errors
+    await registry.fire(CONTEXT_SELECTION, None, {"candidate_count": 1, "scorer_calls": 0})
+    await registry.fire(CONTEXT_RETRIEVAL, None, {"reference": "ctx_test", "success": False})
+    assert [event.type for event in events] == ["context.selection", "context.retrieval"]
+    assert events[1].data == {"reference": "ctx_test", "success": False}
+
+
 # ---------------------------------------------------------------------------
 # Loader round-trip
 # ---------------------------------------------------------------------------

@@ -703,6 +703,7 @@ COMMANDS = [
     ":work check",
     ":work artifact-add",
     ":work artifacts",
+    ":work evidence",
     ":work events",
     ":work programs",
     ":work program-run",

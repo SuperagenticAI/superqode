@@ -110,7 +110,9 @@ class ReadContextChunkTool(Tool):
                 "chunk_id": {
                     "type": "string",
                     "description": "Id from the stub, such as tool-call-1.",
-                }
+                },
+                "offset": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 12000},
             },
             "required": ["chunk_id"],
         }
@@ -119,6 +121,41 @@ class ReadContextChunkTool(Tool):
         chunk_id = str(args.get("chunk_id") or "").strip()
         if not chunk_id:
             return ToolResult(success=False, output="", error="chunk_id is required.")
+        offset, requested = args.get("offset", 0), args.get("limit", 4000)
+        if (
+            isinstance(offset, bool)
+            or not isinstance(offset, int)
+            or offset < 0
+            or isinstance(requested, bool)
+            or not isinstance(requested, int)
+            or requested < 1
+        ):
+            return ToolResult(success=False, output="", error="Invalid page offset or limit")
+        page_reader = getattr(ctx, "context_page", None)
+        if getattr(ctx, "max_output_bytes", None):
+            requested = min(requested, max(1, ctx.max_output_bytes // 4))
+        if chunk_id.startswith("ctx_"):
+            if page_reader is None:
+                return ToolResult(
+                    success=False, output="", error="Durable context retrieval unavailable"
+                )
+            try:
+                page = page_reader(chunk_id, offset=offset, limit=min(requested, 12000))
+                return ToolResult(success=True, output=page.text, metadata=page.to_dict())
+            except Exception:
+                return ToolResult(
+                    success=False, output="", error="Context evidence unavailable or denied"
+                )
+        if page_reader is not None:
+            try:
+                page = page_reader(chunk_id, offset=offset, limit=min(requested, 12000))
+                return ToolResult(success=True, output=page.text, metadata=page.to_dict())
+            except LookupError:
+                pass  # Legacy in-memory references remain readable.
+            except Exception:
+                return ToolResult(
+                    success=False, output="", error="Context evidence unavailable or denied"
+                )
         lookup = getattr(ctx, "context_chunk", None)
         if lookup is None:
             return ToolResult(
@@ -136,15 +173,23 @@ class ReadContextChunkTool(Tool):
                 output="",
                 error=f"No retained output for chunk {chunk_id}.",
             )
-        limit = int(getattr(ctx, "max_output_bytes", None) or 100_000)
-        if limit > 0 and len(text) > limit:
-            shown = text[:limit]
+        limit = min(requested, 12000, int(getattr(ctx, "max_output_bytes", None) or 100_000))
+        if offset > len(text):
+            return ToolResult(success=False, output="", error="Offset exceeds context length")
+        if offset or len(text) > limit:
+            shown = text[offset : offset + limit]
             return ToolResult(
                 success=True,
                 output=(
                     f"{shown}\n[chunk {chunk_id}: showing {limit:,} of {len(text):,} characters]"
                 ),
-                metadata={"chunk_id": chunk_id, "chars": len(text), "truncated": True},
+                metadata={
+                    "chunk_id": chunk_id,
+                    "chars": len(text),
+                    "truncated": True,
+                    "offset": offset,
+                    "next_offset": offset + len(shown),
+                },
             )
         return ToolResult(
             success=True,

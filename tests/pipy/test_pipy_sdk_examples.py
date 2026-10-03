@@ -36,3 +36,14 @@ def test_custom_tool_sdk_example():
     )
     assert result.returncode == 0, result.stderr
     assert "Custom tool completed" in result.stdout
+
+
+def test_typed_tool_sdk_example():
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "examples/pipy/typed_tool.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Typed tool completed" in result.stdout

@@ -144,6 +144,7 @@ class AgentLoopConfig:
     transform_context: (
         Callable[[list[AgentMessage], AbortSignal | None], Awaitable[list[AgentMessage]]] | None
     ) = None
+    transform_system_prompt: Callable[[str, list[AgentMessage]], str | Awaitable[str]] | None = None
     #: Resolves an API key per request, for short-lived OAuth tokens that can
     #: expire during a long tool phase.
     get_api_key: Callable[[str], str | None | Awaitable[str | None]] | None = None
@@ -432,8 +433,11 @@ async def _stream_assistant_response(
 
     llm_messages = await _maybe_await(config.convert_to_llm(messages))
 
+    system_prompt = context.system_prompt
+    if config.transform_system_prompt is not None:
+        system_prompt = await _maybe_await(config.transform_system_prompt(system_prompt, messages))
     llm_context = Context(
-        system_prompt=context.system_prompt,
+        system_prompt=system_prompt,
         messages=list(llm_messages),
         tools=context.tools,
     )

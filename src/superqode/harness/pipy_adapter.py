@@ -64,6 +64,7 @@ class PiPyHarnessProtocolAdapter:
         self._sessions: dict[str, Any] = {}
         self._refs: dict[str, HarnessSessionRef] = {}
         self._mcp: dict[str, Any] = {}
+        self._context_hosts: dict[str, Any] = {}
 
     # -- lifecycle -------------------------------------------------------- #
 
@@ -141,15 +142,29 @@ class PiPyHarnessProtocolAdapter:
         from superqode.pipy.coding_session import CodingSessionOptions, PiPyCodingSession
         from .pipy_governance import guard_pipy_tools, mark_policy_denial
 
+        runtime_config = request.metadata.get("runtime_config") or {}
+        from .pipy_context import PiPyContextHost
+
+        context_config = dict(runtime_config.get("context") or {})
+        context_config.setdefault(
+            "conditional_instructions", runtime_config.get("conditional_instructions", False)
+        )
+        context_host = PiPyContextHost(context_config)
         options = CodingSessionOptions(
             cwd=working_directory,
             model=resolve_model(request.model or "", provider=request.provider or ""),
             tool_names=tuple(request.metadata.get("tools") or DEFAULT_TOOLS),
             tool_transform=guard_pipy_tools,
+            include_context_files=runtime_config.get("context_files") is not False,
+            include_system_prompt_files=runtime_config.get("system_prompt_files") is not False,
+            custom_prompt=runtime_config.get("system_prompt"),
+            append_system_prompt=runtime_config.get("append_system_prompt"),
+            context_file_transform=context_host.transform_files
+            if context_host.conditional
+            else None,
         )
         from .pipy_mcp import PiPyMCPTools
 
-        runtime_config = request.metadata.get("runtime_config") or {}
         program = None
         if runtime_config.get("monty", {}).get("enabled") is True:
             from .pipy_program import PiPyProgramHost
@@ -157,6 +172,8 @@ class PiPyHarnessProtocolAdapter:
             program = PiPyProgramHost(working_directory, runtime_config)
         mcp = await PiPyMCPTools.create(runtime_config, cwd=working_directory)
         options.extra_tools = mcp.tools
+        if context_host.reader_enabled:
+            options.extra_tools += (context_host.reader_tool(),)
         if program:
             options.extra_tools += (program.tool(),)
         try:
@@ -168,6 +185,8 @@ class PiPyHarnessProtocolAdapter:
             await mcp.close()
             raise
         self._mcp[str(session.session_path)] = mcp
+        context_host.attach(session)
+        self._context_hosts[str(session.session_path)] = context_host
         if program:
             program.harness = session.harness
             program.mcp = mcp
@@ -178,6 +197,7 @@ class PiPyHarnessProtocolAdapter:
         """Release owned transports; the JSONL conversation remains resumable."""
         coding = self._sessions.pop(session.session_id, None)
         if coding is not None:
+            self._context_hosts.pop(str(coding.session_path), None)
             mcp = self._mcp.pop(str(coding.session_path), None)
             if mcp is not None:
                 await mcp.close()
@@ -222,6 +242,9 @@ class PiPyHarnessProtocolAdapter:
             recovery = PiPyRunRecovery(scope, coding_session, config)
             await recovery.prepare(message.content, images=images)
         try:
+            context_host = self._context_hosts.get(str(coding_session.session_path))
+            if context_host:
+                context_host.run_key = uuid4().hex
             with recovery_scope(recovery.scope if recovery else scope):
                 stream = (
                     coding_session.prompt_events(message.content, images)
@@ -229,6 +252,22 @@ class PiPyHarnessProtocolAdapter:
                     else coding_session.prompt_events(message.content)
                 )
                 async for event in stream:
+                    if context_host:
+                        while context_host.diagnostics:
+                            diagnostic = context_host.diagnostics.pop(0)
+                            yield HarnessEvent(
+                                type="context."
+                                + diagnostic.get("kind", "selection").removeprefix("context_"),
+                                data=diagnostic,
+                            )
+                            if diagnostic.get("candidate_count"):
+                                yield HarnessEvent(
+                                    type="thinking",
+                                    data={
+                                        "text": f"Context {diagnostic.get('mode')}: {diagnostic['candidate_count']} evidence references; "
+                                        f"{diagnostic.get('chars_before')} -> {diagnostic.get('proposed_chars_after')} proposed characters"
+                                    },
+                                )
                     for translated in translate_event(event):
                         yield translated
                 if recovery and recovery.failure:

@@ -43,9 +43,60 @@ class WorkOrderStore:
         self._initialize()
         self.path.chmod(0o600)
 
-    def create(self, order: WorkOrder) -> WorkOrder:
+    def create(
+        self,
+        order: WorkOrder,
+        *,
+        request_id: str | None = None,
+        queue: bool = False,
+        actor: str = "",
+    ) -> WorkOrder:
+        """Admit a contract, optionally deduplicating a retried submission.
+
+        Request IDs are scoped to this store and bind the original contract,
+        including its queue choice. A matching retry returns the current order;
+        changed inputs fail. Creation, receipt, events and queueing commit
+        together, so a client can retry after losing the response.
+        """
         self._validate_order(order)
+        fingerprint = None
+        if request_id is not None:
+            if not isinstance(request_id, str) or not request_id.strip() or len(request_id) > 512:
+                raise ValueError("request_id must be a nonempty string of at most 512 characters")
+            fingerprint = _submission_fingerprint(order, queue=queue)
+        if request_id is not None or queue:
+            if (
+                order.status != WorkOrderStatus.DRAFT
+                or order.artifacts
+                or order.decision
+                or order.error
+                or any(
+                    task.status != WorkTaskStatus.PENDING
+                    or task.attempts
+                    or task.worker_id
+                    or task.lease_expires_at is not None
+                    or task.heartbeat_at is not None
+                    or task.started_at is not None
+                    or task.ended_at is not None
+                    or task.run_id
+                    or task.session_id
+                    or task.error
+                    for task in order.tasks
+                )
+            ):
+                raise ValueError("Submission requires a fresh draft with pending tasks")
+            if queue and not order.tasks:
+                raise ValueError("A WorkOrder needs at least one task before it can be queued")
         with self._transaction() as conn:
+            if request_id is not None:
+                receipt = conn.execute(
+                    "select work_order_id, fingerprint from work_submissions where request_id=?",
+                    (request_id,),
+                ).fetchone()
+                if receipt is not None:
+                    if receipt["fingerprint"] != fingerprint:
+                        raise ValueError("Request ID already binds a different WorkOrder contract")
+                    return self._load_tx(conn, receipt["work_order_id"])
             try:
                 conn.execute(
                     """
@@ -61,8 +112,18 @@ class WorkOrderStore:
                 conn,
                 order.work_order_id,
                 "work.created",
+                actor=actor,
                 data={"status": order.status.value, "goal": order.goal},
             )
+            if request_id is not None:
+                conn.execute(
+                    "insert into work_submissions (request_id, work_order_id, fingerprint) values (?,?,?)",
+                    (request_id, order.work_order_id, fingerprint),
+                )
+            if queue:
+                order = replace(order, status=WorkOrderStatus.QUEUED, updated_at=time.time())
+                self._save_tx(conn, order)
+                self._append_event_tx(conn, order.work_order_id, "work.queued", actor=actor)
         return order
 
     def get(self, reference: str) -> WorkOrder:
@@ -128,7 +189,7 @@ class WorkOrderStore:
             key,
         ).fetchone()
         if row is not None:
-            if row["fingerprint"] != fingerprint:
+            if row["fingerprint"] != fingerprint or row["operation"] != operation:
                 raise ValueError(
                     "Invocation inputs or configuration changed; reconciliation required"
                 )
@@ -343,13 +404,37 @@ class WorkOrderStore:
                 for row in conn.execute(query, params)
             ]
 
-    def events(self, reference: str, *, limit: int | None = None) -> list[WorkOrderEvent]:
+    def events(
+        self, reference: str, *, limit: int | None = None, after_sequence: int | None = None
+    ) -> list[WorkOrderEvent]:
+        """Read committed lifecycle events, optionally paging after a cursor.
+
+        Without a cursor, limit retains the existing latest-events behavior.
+        With a cursor, limit returns the earliest next events so paging cannot
+        skip a backlog. Cursors belong to this database, not a session stream.
+        """
+        if after_sequence is not None and (
+            not isinstance(after_sequence, int)
+            or isinstance(after_sequence, bool)
+            or after_sequence < 0
+        ):
+            raise ValueError("after_sequence requires a nonnegative integer")
+        count = max(0, int(limit)) if limit is not None else None
         with closing(self._connect()) as conn:
             order = self._load_tx(conn, reference)
             query = """
-                select event_id, work_order_id, type, created_at, task_id, actor, data
-                from work_order_events where work_order_id = ? order by sequence
+                select sequence, event_id, work_order_id, type, created_at, task_id, actor, data
+                from work_order_events where work_order_id = ?
             """
+            params: list[Any] = [order.work_order_id]
+            if after_sequence is not None:
+                query += " and sequence > ? order by sequence asc"
+                params.append(after_sequence)
+            else:
+                query += " order by sequence desc"
+            if count is not None:
+                query += " limit ?"
+                params.append(count)
             events = [
                 WorkOrderEvent(
                     event_id=str(row["event_id"]),
@@ -359,13 +444,11 @@ class WorkOrderStore:
                     task_id=str(row["task_id"] or ""),
                     actor=str(row["actor"] or ""),
                     data=json.loads(row["data"] or "{}"),
+                    sequence=int(row["sequence"]),
                 )
-                for row in conn.execute(query, (order.work_order_id,))
+                for row in conn.execute(query, params)
             ]
-            if limit is None:
-                return events
-            count = max(0, int(limit))
-            return events[-count:] if count else []
+            return events if after_sequence is not None else list(reversed(events))
 
     def add_task(self, reference: str, task: WorkOrderTask, *, actor: str = "") -> WorkOrder:
         with self._transaction() as conn:
@@ -1510,6 +1593,12 @@ class WorkOrderStore:
                 );
                 create index if not exists idx_work_orders_status_created
                     on work_orders(status, created_at);
+                create table if not exists work_submissions (
+                    request_id text primary key,
+                    work_order_id text not null unique,
+                    fingerprint text not null,
+                    foreign key(work_order_id) references work_orders(work_order_id)
+                );
                 create table if not exists work_order_events (
                     sequence integer primary key autoincrement,
                     event_id text not null unique,
@@ -1638,7 +1727,7 @@ class WorkOrderStore:
             actor=actor,
             data=dict(data or {}),
         )
-        conn.execute(
+        cursor = conn.execute(
             """
             insert into work_order_events
                 (event_id, work_order_id, type, created_at, task_id, actor, data)
@@ -1654,7 +1743,7 @@ class WorkOrderStore:
                 json.dumps(event.data, sort_keys=True),
             ),
         )
-        return event
+        return replace(event, sequence=cursor.lastrowid)
 
 
 class _ImmediateTransaction:
@@ -1673,6 +1762,45 @@ class _ImmediateTransaction:
                 self.conn.rollback()
         finally:
             self.conn.close()
+
+
+def _submission_fingerprint(order: WorkOrder, *, queue: bool) -> str:
+    """Hash declared inputs, excluding generated IDs, timestamps and run state."""
+    payload = order.to_dict()
+    for key in (
+        "work_order_id",
+        "created_at",
+        "updated_at",
+        "status",
+        "artifacts",
+        "decision",
+        "error",
+    ):
+        payload.pop(key)
+    for task in payload["tasks"]:
+        for key in (
+            "created_at",
+            "updated_at",
+            "status",
+            "attempts",
+            "worker_id",
+            "lease_expires_at",
+            "heartbeat_at",
+            "started_at",
+            "ended_at",
+            "session_id",
+            "run_id",
+            "error",
+        ):
+            task.pop(key)
+    return hashlib.sha256(
+        json.dumps(
+            {"contract": payload, "queue": queue},
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
 
 
 def _find_task(order: WorkOrder, task_id: str) -> WorkOrderTask:

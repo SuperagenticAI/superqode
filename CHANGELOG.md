@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.3] - 2026-10-03
+
+### Highlights
+
+- Harden WorkOrder submission, lifecycle replay and predecessor evidence reuse.
+  Add opt-in context controls compatible with Jev's bounded decision approach,
+  shared by Core and hosted PiPy. Core remains the default harness.
+- Context selection defaults to `off`; predecessor evidence reuse requires
+  `--reuse-evidence`. Start with `mode: shadow` and `selector: rules` to inspect
+  proposed excerpts without changing the prompt or calling a selector service.
+
+### Added
+
+- Retry-safe WorkOrder admission with `--request-id`: matching requests return
+  the existing order, while changed contracts fail. Creation and queueing commit
+  atomically. Persisted event sequences support restartable cursor replay.
+- Durable, sanitized context references with bounded retrieval, integrity
+  checks, owner isolation and current permission checks. Context projections
+  preserve original session history and protected instructions and evidence.
+- Opt-in predecessor evidence catalogs with source and lineage freshness checks,
+  exposed through `sq work evidence` and assigned worker retrieval.
+- Optional bounded Jev context selection with evidence previews, decision reuse,
+  local triggers, timeouts and call limits. Failures retain evidence; unreserved
+  selector calls are disabled in cost/token-capped WorkOrders.
+- Typed Pydantic tools for the PiPy SDK, inherited project resources and opt-in
+  conditional instruction matching in hosted PiPy.
+- An offline hardening demo at `examples/workorders/hardening_demo.py` and
+  context diagnostics in run history and matched benchmark reports.
+
+### Fixed
+
+- Validate recovery operation identity before reusing saved outcomes. Strengthen
+  matched benchmark grading, protected graders, model identity and accounting.
+- Include `:work evidence` in TUI completion and run native context and WorkOrder
+  contract checks before publishing. Align commit-hook formatting with locked CI.
+
+### Notes
+
+- Jev selection is experimental and requires a working System One connection.
+  The rule-based demo requires no model key and makes no inference calls.
+- Evidence freshness and reported findings do not replace acceptance tests or
+  candidate review. Character reductions are not measured provider-token savings.
+- This release does not claim complete Pi parity or live Pi/Jev superiority.
+
 ## [2.5.2] - 2026-10-03
 
 ### Fixed

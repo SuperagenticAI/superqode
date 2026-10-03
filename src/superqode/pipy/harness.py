@@ -670,6 +670,12 @@ class AgentHarness:
                 result.messages if result is not None and result.messages is not None else messages
             )
 
+        async def transform_system_prompt(prompt, messages):
+            from .harness_events import SystemPromptEvent
+
+            result = await self._emit_hook(SystemPromptEvent(prompt, list(messages)))
+            return result.system_prompt if result is not None else prompt
+
         async def before_tool_call(hook_context, signal):
             result: ToolCallResult | None = await self._emit_hook(
                 ToolCallEvent(
@@ -730,6 +736,7 @@ class AgentHarness:
             convert_to_llm=default_convert_to_llm,
             reasoning=None if state.thinking_level == "off" else state.thinking_level,
             transform_context=transform_context,
+            transform_system_prompt=transform_system_prompt,
             before_tool_call=before_tool_call,
             after_tool_call=after_tool_call,
             prepare_next_turn=prepare_next_turn,

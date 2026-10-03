@@ -157,6 +157,12 @@ def work_program_run(ctx, work_order_id, code_path, program_id, worker_id, json_
     help="Highest task risk the WorkOrder may admit",
 )
 @click.option("--queue/--draft", default=False, help="Queue immediately instead of leaving a draft")
+@click.option("--request-id", default=None, help="Stable key for retry-safe creation in this store")
+@click.option(
+    "--reuse-evidence",
+    is_flag=True,
+    help="Publish predecessor evidence with source validity checks",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.pass_context
 def work_create(
@@ -181,6 +187,8 @@ def work_create(
     max_tool_calls: int | None,
     max_risk: str | None,
     queue: bool,
+    request_id: str | None,
+    reuse_evidence: bool,
     json_output: bool,
 ) -> None:
     """Create a WorkOrder with one primary implementation task."""
@@ -214,12 +222,11 @@ def work_create(
             max_risk=(max_risk or "").strip(),
         ),
         tasks=(task,),
+        metadata={"evidence_reuse": True} if reuse_evidence else {},
     )
     try:
         store = _store(ctx)
-        created = store.create(order)
-        if queue:
-            created = store.queue(created.work_order_id, actor="cli")
+        created = store.create(order, request_id=request_id, queue=queue, actor="cli")
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     _emit_order(created, json_output=json_output)
@@ -991,20 +998,78 @@ def work_artifacts(ctx: click.Context, work_order_id: str, json_output: bool) ->
         click.echo(f"{artifact.artifact_id}  {artifact.kind:<14} {target}")
 
 
+@work.command("evidence")
+@click.argument("work_order_id")
+@click.option(
+    "--task", "task_id", required=True, help="Dependent task whose assigned evidence to inspect"
+)
+@click.option("--read", "reference", default="", help="Read one assigned evidence reference")
+@click.option("--offset", type=click.IntRange(min=0), default=0)
+@click.option("--limit", type=click.IntRange(min=1, max=12000), default=4000)
+@click.option(
+    "--workspace", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None
+)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_evidence(ctx, work_order_id, task_id, reference, offset, limit, workspace, json_output):
+    """Inspect predecessor evidence, current source validity and bounded content."""
+    from types import SimpleNamespace
+    from superqode.workorders.evidence import dependency_catalog, read_workorder_evidence
+
+    try:
+        store = _store(ctx)
+        order = store.get(work_order_id)
+        task = next(t for t in order.tasks if t.task_id == task_id)
+        root = workspace or Path(order.repository)
+        from superqode.governance import governance_scope, load_governance
+
+        with governance_scope(load_governance(root, work_order=order)):
+            if reference:
+                page = read_workorder_evidence(
+                    SimpleNamespace(
+                        store=store, work_order_id=order.work_order_id, task_id=task_id
+                    ),
+                    reference,
+                    root,
+                    offset=offset,
+                    limit=limit,
+                )
+                click.echo(json.dumps(page.to_dict(), indent=2) if json_output else page.text)
+            else:
+                catalog = dependency_catalog(order, task, root)
+                if json_output:
+                    click.echo(json.dumps(catalog, indent=2))
+                else:
+                    for item in catalog:
+                        click.echo(
+                            f"{item['reference']}  {item['task_id']}  {item['freshness']}  "
+                            f"{item['verification']}  {item['reason']}"
+                        )
+    except Exception as exc:
+        raise click.ClickException("Evidence unavailable or denied") from exc
+
+
 @work.command("events")
 @click.argument("work_order_id")
 @click.option("--limit", type=click.IntRange(min=1), default=None)
+@click.option(
+    "--after-sequence",
+    type=click.IntRange(min=0),
+    default=None,
+    help="Page committed events after a store-local cursor",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.pass_context
 def work_events(
     ctx: click.Context,
     work_order_id: str,
     limit: int | None,
+    after_sequence: int | None,
     json_output: bool,
 ) -> None:
     """Show the append-only WorkOrder decision timeline."""
     try:
-        events = _store(ctx).events(work_order_id, limit=limit)
+        events = _store(ctx).events(work_order_id, limit=limit, after_sequence=after_sequence)
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     if json_output:

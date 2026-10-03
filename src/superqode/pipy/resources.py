@@ -12,9 +12,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .config import agent_dir
+
 #: Checked in order. Case variants exist because case-insensitive filesystems
 #: report whichever name was used at creation.
-CONTEXT_FILE_NAMES: tuple[str, ...] = ("AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD")
+CONTEXT_FILE_NAMES: tuple[str, ...] = (
+    "AGENTS.override.md",
+    "AGENTS.md",
+    "AGENTS.MD",
+    "CLAUDE.md",
+    "CLAUDE.MD",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,18 +46,59 @@ def load_context_file(directory: str | Path) -> ContextFile | None:
         if not candidate.is_file():
             continue
         try:
-            content = candidate.read_text(encoding="utf-8")
-        except OSError:
+            content = candidate.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
             continue
         if content.strip():
-            return ContextFile(path=str(candidate), content=content)
+            return ContextFile(path=str(candidate.resolve()), content=content)
     return None
 
 
 def load_context_files(cwd: str | Path) -> list[ContextFile]:
-    """Load project instruction files for a working directory."""
-    found = load_context_file(cwd)
-    return [found] if found is not None else []
+    """Load PiPy global rules, then ancestors from root to working directory.
+
+    A local override replaces only that directory's rules. Canonical paths
+    prevent a symlinked global directory from loading the same file twice.
+    The real pi user directory is never read implicitly.
+    """
+    root = Path(cwd).expanduser().resolve()
+    result: list[ContextFile] = []
+    seen: set[str] = set()
+    for directory in (agent_dir(), *reversed(root.parents), root):
+        found = load_context_file(directory)
+        if found is not None and found.path not in seen:
+            seen.add(found.path)
+            result.append(found)
+    return result
 
 
-__all__ = ["CONTEXT_FILE_NAMES", "ContextFile", "load_context_file", "load_context_files"]
+def load_system_prompt_files(cwd: str | Path) -> tuple[ContextFile | None, ContextFile | None]:
+    """Select one replacement and one append file, project before global.
+
+    Match the existing skill/template precedence: .pi, .superqode/pipy,
+    then the PiPy agent directory. These are text resources, never code.
+    """
+    root = Path(cwd).expanduser().resolve()
+    directories = (root / ".pi", root / ".superqode" / "pipy", agent_dir())
+
+    def first(name: str) -> ContextFile | None:
+        for directory in directories:
+            path = directory / name
+            try:
+                content = path.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if content.strip():
+                return ContextFile(str(path.resolve()), content)
+        return None
+
+    return first("SYSTEM.md"), first("APPEND_SYSTEM.md")
+
+
+__all__ = [
+    "CONTEXT_FILE_NAMES",
+    "ContextFile",
+    "load_context_file",
+    "load_context_files",
+    "load_system_prompt_files",
+]

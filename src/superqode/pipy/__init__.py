@@ -74,6 +74,7 @@ from .messages import (
 from .signals import AbortController, AbortError, AbortSignal
 from .stream import Context, Model, StreamFn, StreamOptions
 from .tools.base import AgentTool, AgentToolResult
+from .tools.typed import ToolContext, create_typed_tool
 from .validation import ToolArgumentError, validate_tool_arguments
 
 __all__ = [
@@ -122,6 +123,7 @@ __all__ = [
     "ThinkingContent",
     "ToolArgumentError",
     "ToolCall",
+    "ToolContext",
     "ToolExecutionEndEvent",
     "ToolExecutionStartEvent",
     "ToolExecutionUpdateEvent",
@@ -136,6 +138,7 @@ __all__ = [
     "agent_loop_continue",
     "build_system_prompt",
     "create_session",
+    "create_typed_tool",
     "default_convert_to_llm",
     "event_type",
     "format_prompt_template_invocation",

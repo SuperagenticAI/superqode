@@ -150,6 +150,17 @@ def test_attempt_fences_same_worker_identity_and_committed_result_reused(tmp_pat
             fingerprint="different",
             workspace="unchanged",
         )
+    with pytest.raises(ValueError, match="configuration"):
+        store.begin_invocation(
+            "work",
+            "task",
+            worker_id="same",
+            attempt=current.attempts,
+            invocation_id="read",
+            operation="write",
+            fingerprint="same",
+            workspace="unchanged",
+        )
 
 
 def test_real_process_exit_after_intent_never_replays_unknown_side_effect(tmp_path):

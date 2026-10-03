@@ -25,9 +25,9 @@ repos:
         args: [--fix=lf]
 
   # CI runs `ruff check .` and `ruff format --check .`. Keep this rev in step
-  # with the ruff pin in pyproject.toml, or the hook and CI can disagree.
+  # with the ruff version in uv.lock, or the hook and CI can disagree.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.14.14
     hooks:
       - id: ruff
         args: [--fix]

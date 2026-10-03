@@ -61,6 +61,13 @@ def context_mode(environ: Mapping[str, str] | None = None) -> str:
 
 def context_original(loop: Any, chunk_id: str) -> str | None:
     """Return tool output retained when a stub replaced it in the live prompt."""
+    artifacts = getattr(loop, "_context_artifact_store", None)
+    if artifacts is not None:
+        try:
+            reference = artifacts.resolve_alias(loop.session_id, chunk_id)
+            return artifacts.read_page(loop.session_id, reference, limit=12000).text
+        except (ValueError, LookupError, PermissionError):
+            return None
     store = getattr(loop, "_context_originals", None)
     if not isinstance(store, dict):
         return None
@@ -628,6 +635,27 @@ async def apply_context_prune(
         fallback = "still_over_budget"
     else:
         fallback = ""
+    if applied:
+        try:
+            from ..harness.context_artifacts import ContextArtifactStore
+
+            artifacts = getattr(loop, "_context_artifact_store", None) or ContextArtifactStore()
+            for candidate, _ in chosen:
+                original = originals[candidate.chunk_id]
+                record = artifacts.put(
+                    loop.session_id,
+                    candidate.chunk_id,
+                    original,
+                    metadata={
+                        "tool": candidate.name,
+                        "arguments": json.loads(candidate.arguments or "{}"),
+                    },
+                )
+                artifacts.bind_alias(loop.session_id, candidate.chunk_id, record.reference)
+            loop._context_artifact_store = artifacts
+        except Exception:
+            applied = False
+            fallback = "artifact_unavailable"
     if applied:
         ensure = getattr(loop, "_ensure_context_chunk_tool", None)
         if callable(ensure):

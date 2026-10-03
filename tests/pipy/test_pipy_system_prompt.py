@@ -33,7 +33,13 @@ from superqode.pipy.tools import create_tools
 
 
 def test_context_file_names_match_pi():
-    assert CONTEXT_FILE_NAMES == ("AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD")
+    assert CONTEXT_FILE_NAMES == (
+        "AGENTS.override.md",
+        "AGENTS.md",
+        "AGENTS.MD",
+        "CLAUDE.md",
+        "CLAUDE.MD",
+    )
 
 
 def test_loads_agents_md(tmp_path):

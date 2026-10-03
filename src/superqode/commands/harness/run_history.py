@@ -217,6 +217,11 @@ def harness_run(
                         "cost_usd": result.cost_usd,
                         "cost_currency": result.response.cost_currency,
                         "pending_approvals": pending_approvals,
+                        "context_events": [
+                            event.to_dict()
+                            for event in result.events
+                            if event.type in {"context.selection", "context.retrieval"}
+                        ],
                     },
                     indent=2,
                 )

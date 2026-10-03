@@ -114,6 +114,18 @@ class ContextResult:
 
 
 @dataclass(slots=True)
+class SystemPromptEvent:
+    system_prompt: str
+    messages: list[AgentMessage] = field(default_factory=list)
+    type: Literal["system_prompt"] = "system_prompt"
+
+
+@dataclass(slots=True)
+class SystemPromptResult:
+    system_prompt: str
+
+
+@dataclass(slots=True)
 class ToolCallEvent:
     tool_call_id: str
     tool_name: str
@@ -173,6 +185,7 @@ HarnessOwnEvent = (
     | AfterProviderResponseEvent
     | BeforeAgentStartEvent
     | ContextEvent
+    | SystemPromptEvent
     | ToolCallEvent
     | ToolResultEvent
     | BeforeProviderRequestEvent
@@ -214,6 +227,8 @@ __all__ = [
     "BeforeProviderRequestResult",
     "ContextEvent",
     "ContextResult",
+    "SystemPromptEvent",
+    "SystemPromptResult",
     "HarnessOwnEvent",
     "ModelUpdateEvent",
     "QueueUpdateEvent",

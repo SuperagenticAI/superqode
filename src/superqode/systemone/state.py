@@ -78,6 +78,11 @@ def _cap_arguments(arguments: Any) -> Any:
     return {"_truncated": True, "preview": blob[: ARG_CHARS - 1] + "…"}
 
 
+def redact_evidence(value: Any) -> Any:
+    """Sanitize local evidence without imposing a remote decision-state limit."""
+    return _redact(value)
+
+
 def prepare_decision_state(state: Any, schema: dict[str, Any] | None = None) -> Any:
     if not isinstance(state, (str, dict, list)):
         raise ValueError("Decision state must be text, an object, or an array")

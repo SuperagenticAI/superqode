@@ -72,6 +72,7 @@ class ToolContext:
     context_status: Optional[Callable[[], Dict[str, Any]]] = None
     # Retained tool output for read_context_chunk. Set by the agent loop.
     context_chunk: Optional[Callable[[str], Optional[str]]] = None
+    context_page: Optional[Callable[..., Any]] = None
     # Harness run context, populated when tools execute inside HarnessKernel.
     systemone: Optional[Any] = None
     systemone_client: Optional[Any] = None

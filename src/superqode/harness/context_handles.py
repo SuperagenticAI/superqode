@@ -40,7 +40,14 @@ class ContextChunk:
         }
 
 
-def resolve_context_handle(handle: str, cwd: Path, *, store_path: Path | None = None) -> str:
+def resolve_context_handle(
+    handle: str,
+    cwd: Path,
+    *,
+    store_path: Path | None = None,
+    artifact_scope: str = "",
+    artifact_store=None,
+) -> str:
     """Resolve a local context handle into bounded text."""
     raw = str(handle or "").strip()
     if not raw:
@@ -51,6 +58,18 @@ def resolve_context_handle(handle: str, cwd: Path, *, store_path: Path | None = 
         kind, value = "file", raw
     kind = kind.strip().lower()
     value = value.strip()
+
+    if kind == "artifact":
+        if not artifact_scope or artifact_store is None:
+            raise PermissionError("Artifact handles require a trusted owner scope and store")
+        parts, offset = [], 0
+        while True:
+            page = artifact_store.read_page(artifact_scope, value, offset=offset, limit=12000)
+            parts.append(page.text)
+            offset = page.next_offset
+            if page.eof:
+                break
+        return "".join(parts)
 
     if kind == "file":
         return _read_file(_safe_path(value, root))

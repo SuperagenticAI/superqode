@@ -7,6 +7,7 @@ import contextlib
 import json
 import os
 import re
+import sqlite3
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -407,6 +408,29 @@ async def execute_claimed_task(
             },
             actor=worker_id,
         )
+        from .evidence import evidence_config, publish_evidence
+
+        if evidence_config(order).get("enabled") is True:
+            try:
+                await asyncio.to_thread(
+                    publish_evidence,
+                    store,
+                    order,
+                    task,
+                    content,
+                    workspace.path,
+                    actor=worker_id,
+                    supporting=result.get("supporting_evidence", ()),
+                )
+            except (OSError, ValueError, PermissionError, sqlite3.Error):
+                # A failed optional publication cannot establish reusable evidence.
+                store.add_artifact(
+                    order.work_order_id,
+                    kind="evidence_unavailable",
+                    task_id=task.task_id,
+                    metadata={"reason": "publication_failed"},
+                    actor=worker_id,
+                )
         role_error, role_metadata = await _enforce_role_contract(
             store,
             order,
@@ -732,7 +756,26 @@ async def _execute_harness_task(
         session_root / "store.sqlite3" if store_kind == "sqlite" else session_root,
     )
     kernel = await init_harness(spec, store=harness_store)
-    prompt = _task_prompt(order, task)
+    prompt = _task_prompt(order, task, working_directory=repository)
+    from .evidence import collect_supporting_evidence
+    from superqode.governance import governance_scope
+
+    async def supporting_receipts(results):
+        receipts = []
+        with governance_scope(governance):
+            for result in results:
+                if len(receipts) >= 32:
+                    break
+                items = await asyncio.to_thread(
+                    collect_supporting_evidence,
+                    order,
+                    task,
+                    result.events,
+                    invocation_namespace=result.run_id,
+                )
+                receipts.extend(items[: 32 - len(receipts)])
+        return receipts
+
     if spec.workflow.mode != WorkflowMode.SINGLE:
         workflow_result = await _await_with_governance(
             governance,
@@ -750,6 +793,7 @@ async def _execute_harness_task(
         stopped_reason = "failed" if workflow_result.failures else "complete"
         usage = _aggregate_harness_usage(workflow_result.results)
         return {
+            "supporting_evidence": await supporting_receipts(workflow_result.results),
             "content": workflow_result.content,
             "session_id": workflow_result.session_id,
             "run_id": workflow_result.run_id,
@@ -780,6 +824,7 @@ async def _execute_harness_task(
         ),
     )
     return {
+        "supporting_evidence": await supporting_receipts([result]),
         "content": result.content,
         "error": result.response.error or "",
         "session_id": result.session_id,
@@ -1253,7 +1298,9 @@ def _remaining_time_budget(order: WorkOrder) -> float | None:
     return remaining
 
 
-def _task_prompt(order: WorkOrder, task: WorkOrderTask) -> str:
+def _task_prompt(
+    order: WorkOrder, task: WorkOrderTask, *, working_directory: Path | None = None
+) -> str:
     parts = [
         f"WorkOrder: {order.work_order_id}",
         f"Overall goal:\n{order.goal}",
@@ -1265,6 +1312,17 @@ def _task_prompt(order: WorkOrder, task: WorkOrderTask) -> str:
         evidence = _dependency_evidence(order, task)
         if evidence:
             parts.append("Dependency evidence:\n" + evidence)
+        from .evidence import dependency_catalog, evidence_config
+
+        if evidence_config(order).get("enabled") is True:
+            catalog = dependency_catalog(order, task, working_directory or Path(order.repository))
+            if catalog:
+                parts.append(
+                    "Addressable dependency evidence (freshness is separate from verification):\n"
+                    + json.dumps(catalog, sort_keys=True)
+                    + "\nUse read_context_chunk with a reference and bounded offset/limit when available. "
+                    "Stale/unknown evidence needs revalidation. All current candidate acceptance checks still run."
+                )
     acceptance = task.acceptance_tests or order.acceptance_tests
     if acceptance:
         parts.append(

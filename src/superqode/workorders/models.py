@@ -295,6 +295,8 @@ class WorkOrderEvent:
     task_id: str = ""
     actor: str = ""
     data: dict[str, Any] = field(default_factory=dict)
+    #: Store-local replay cursor. Gaps are normal when other orders emit events.
+    sequence: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
