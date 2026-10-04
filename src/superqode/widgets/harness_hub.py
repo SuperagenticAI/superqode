@@ -306,6 +306,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         with Horizontal(id="hub-actions"):
             yield Button("Build your own", id="hub-build")
             yield Button("Jev routing", id="hub-jev-routing")
+            yield Button("Optional A2A", id="hub-a2a")
             yield Button("Inspect", id="hub-inspect")
             yield Button("Improve decisions", id="hub-tune")
             yield Button("Use", id="hub-use", variant="primary")
@@ -418,6 +419,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             option_list.add_option(Option(self._option_label(item), id=item.id))
 
         if not self.filtered_items:
+            self.query_one("#hub-a2a", Button).display = False
             self.query_one("#hub-tune", Button).display = False
             option_list.add_option(
                 Option("No harnesses match this view", id="hub-empty", disabled=True)
@@ -591,6 +593,12 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         if item.provider or item.model:
             text.append(f"{'Model route':<13}", style="#71717a")
             text.append(f"{item.provider}/{item.model}\n", style="#e4e4e7")
+        if item.runtime == "rlm":
+            routing = next(
+                (value for value in record.capabilities if value.startswith("Optional A2A:")),
+                "Optional A2A",
+            )
+            text.append(f"\n{routing} · configure with Optional A2A or :rlm a2a\n", style="#c4b5fd")
         # The launcher. "Use" is only meaningful for something SuperQode can
         # drive, so an entry it cannot run shows the vendor's own command
         # instead of a button that would do nothing.
@@ -763,6 +771,10 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             self.action_build()
         elif button_id == "hub-jev-routing":
             self.action_jev_routing()
+        elif button_id == "hub-a2a":
+            item = self._selected_item()
+            if item and item.runtime == "rlm":
+                self.dismiss(HarnessHubResult("a2a", item.id))
         elif button_id == "hub-tune":
             item = self._selected_item()
             if item and item.id == "systemone":
@@ -796,6 +808,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self.dismiss(HarnessHubResult("use", item.id))
 
     def _update_primary_action(self, item: HarnessPickerItem) -> None:
+        self.query_one("#hub-a2a", Button).display = item.runtime == "rlm"
         self.query_one("#hub-tune", Button).display = item.id == "systemone"
         button = self.query_one("#hub-use", Button)
         button.disabled = False

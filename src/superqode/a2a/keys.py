@@ -286,7 +286,7 @@ def decide_access(
     if verdict.valid and verdict.claims is not None:
         return AccessDecision(
             True,
-            verdict.claims.tier,
+            "keyed" if verdict.claims.tier == OPERATOR_TIER else verdict.claims.tier,
             customer=verdict.claims.customer,
             key_id=verdict.claims.key_id,
             reason="ok",

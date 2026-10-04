@@ -35,7 +35,9 @@ from pathlib import Path
 from typing import Any, Sequence, cast
 
 PROTOCOL_VERSION = 1
-RESERVED_NAMES = frozenset({"workspace", "shell", "rlm"})
+RESERVED_NAMES = frozenset(
+    {"workspace", "shell", "rlm", "a2a", "context", "llm_query", "llm_query_batched"}
+)
 _COMPOUND_PATTERN = re.compile(r"[;&|]|\$\(|`|\n")
 
 
@@ -287,6 +289,24 @@ class RLMProxy:
     def send(self, agent: Any, message: str) -> Any:
         return self._call("rlm.send", {"agent": _agent_id(agent), "message": message})
 
+    def message(self, agent, message, delivery_id=None):
+        return self._call(
+            "rlm.message",
+            {"agent": _agent_id(agent), "message": message, "delivery_id": delivery_id},
+        )
+
+    def inbox(self, limit=50):
+        return self._call("rlm.inbox", {"limit": limit})
+
+    def ack_inbox(self, identity):
+        return self._call("rlm.ack_inbox", {"id": identity})
+
+    def parent_id(self):
+        return self._call("rlm.parent_id", {})
+
+    def follow_up(self, agent, prompt):
+        return self._call("rlm.follow_up", {"agent": _agent_id(agent), "prompt": prompt})
+
     def steer(self, agent: Any, instruction: str) -> Any:
         return self._call("rlm.steer", {"agent": _agent_id(agent), "instruction": instruction})
 
@@ -305,6 +325,99 @@ class RLMProxy:
             "rlm.run_batch for live child agents. Agent handles support status, send, steer, "
             "wait, cancel, and delete."
         )
+
+
+class A2AProxy:
+    """Plain identity proxies; all authority is on the host."""
+
+    def __init__(self, call):
+        self._call = call
+
+    def peers(self):
+        return self._call("a2a.peers", {})
+
+    def tasks(self):
+        return self._call("a2a.tasks", {})
+
+    def start(self, peer, task, context="", required=True, deadline_seconds=None, request_id=None):
+        return _revive(
+            self._call(
+                "a2a.start",
+                {
+                    "peer": peer,
+                    "task": task,
+                    "context": context,
+                    "required": required,
+                    "deadline_seconds": deadline_seconds,
+                    "request_id": request_id,
+                },
+            ),
+            self._call,
+        )
+
+    def handle(self, identifier):
+        # status is an ownership check before returning a restored handle.
+        status = self._call("a2a.status", {"id": identifier})
+        return DelegationProxy(self._call, identifier, status)
+
+
+class DelegationProxy:
+    def __init__(self, call, identifier, status=None):
+        self._call, self.id, self._status = call, identifier, status or {}
+
+    def __getstate__(self):
+        return {"id": self.id}
+
+    def __setstate__(self, value):
+        self.id, self._call, self._status = value["id"], None, {}
+
+    def _ask(self, name, **payload):
+        if self._call is None:
+            raise RuntimeError("Restore this delegation with a2a.handle(id)")
+        return self._call(name, {"id": self.id, **payload})
+
+    def status(self):
+        self._status = self._ask("a2a.status")
+        return self._status
+
+    def poll(self):
+        return self._ask("a2a.poll")
+
+    def wait(self, timeout=20):
+        return self._ask("a2a.wait", timeout=timeout)
+
+    def reply(self, message):
+        return self._ask("a2a.reply", message=message)
+
+    def cancel(self):
+        return self._ask("a2a.cancel")
+
+    def follow_up(self, task, *, request_id=None):
+        return _revive(self._ask("a2a.follow_up", task=task, request_id=request_id), self._call)
+
+    def read(self, artifact=None, *, start=0, size=4000):
+        return self._ask("a2a.read", artifact=artifact, start=start, size=size)
+
+    def summary(self, max_chars=1200):
+        return self.read(size=min(20000, max(0, int(max_chars))))
+
+    def __repr__(self):
+        return f"A2ATask(id={self.id!r}, state={self._status.get('state')!r})"
+
+
+def rebind_delegations(value, call, seen=None):
+    seen = set() if seen is None else seen
+    if id(value) in seen:
+        return
+    seen.add(id(value))
+    if isinstance(value, DelegationProxy):
+        value._call = call
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            rebind_delegations(item, call, seen)
+    elif isinstance(value, dict):
+        for item in value.values():
+            rebind_delegations(item, call, seen)
 
 
 class AgentProxy:
@@ -515,6 +628,7 @@ class SandboxKernel:
             "workspace": Workspace(self.cwd, policy),
             "shell": Shell(self.cwd, policy),
             "rlm": RLMProxy(self.host_call, kernel_id),
+            "a2a": A2AProxy(self.host_call),
             # Subcalls run on the host: they need provider credentials, and a
             # quota the sandbox could reach would not be a quota.
             "llm_query": self._llm_query,
@@ -660,12 +774,15 @@ class SandboxKernel:
                 self.globals[name] = pickle.loads(serialized)  # noqa: S301 - sandbox-local state
             except Exception:  # noqa: BLE001 - restore what can be restored
                 continue
+            rebind_delegations(self.globals[name], self.host_call)
             restored.append(name)
         return {"restored": sorted(restored)}
 
 
 def _revive(value: Any, call: Any) -> Any:
     """Rebuild the handles the host described, so they behave like objects."""
+    if isinstance(value, dict) and value.get("__rlm__") == "delegation":
+        return DelegationProxy(call, value["id"], value.get("status"))
     if isinstance(value, dict) and value.get("__rlm__") == "agent":
         return AgentProxy(call, str(value.get("id") or ""), value.get("status"))
     if isinstance(value, dict) and value.get("__rlm__") == "response":

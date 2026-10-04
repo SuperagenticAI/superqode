@@ -53,6 +53,9 @@ class RLMHarnessProtocolAdapter:
                 "durable_children": True,
                 "resident_root": True,
                 "global_recursive_tree": True,
+                "optional_a2a": True,
+                "retained_inboxes": True,
+                "root_subcall_allowance": True,
                 "pure_permissions": True,
             },
         )
@@ -66,6 +69,9 @@ class RLMHarnessProtocolAdapter:
         self._runtime_clients: dict[str, Any] = {}
 
     async def create(self, request: HarnessCreateRequest) -> HarnessSessionRef:
+        from superqode.rlm.delegation_policy import DelegationPolicy
+
+        DelegationPolicy.from_config(dict(request.metadata.get("rlm_config") or {}).get("a2a"))
         if request.harness_id != self.descriptor.id:
             raise ValueError(f"RLM adapter cannot create harness {request.harness_id!r}")
         session_id = request.session_id or f"rlm-{uuid4().hex[:12]}"
@@ -95,6 +101,9 @@ class RLMHarnessProtocolAdapter:
         return ref
 
     async def resume(self, session: HarnessSessionRef) -> HarnessSessionRef:
+        from superqode.rlm.delegation_policy import DelegationPolicy
+
+        DelegationPolicy.from_config(dict(session.metadata.get("rlm_config") or {}).get("a2a"))
         if session.harness_id != self.descriptor.id:
             raise ValueError(f"RLM adapter cannot resume harness {session.harness_id!r}")
         if session.session_id in self._sessions:
@@ -226,6 +235,7 @@ class RLMHarnessProtocolAdapter:
             sandbox=sandbox,
             subcall_policy=SubcallPolicy.from_config(limits),
             context_policy=ContextPolicy.from_config(limits),
+            a2a_config=limits.get("a2a"),
         )
         if session_path and Path(session_path).is_file():
             return await RLMCodingSession.resume(options, session_path=session_path)
@@ -263,11 +273,58 @@ class RLMHarnessProtocolAdapter:
         for round_number in range(1, rounds + 1):
             stream = coding_session.prompt_events(prompt)
             async for event in stream:
+                if getattr(event, "type", "") == "agent_end":
+                    continue
                 for translated in translate_event(event, runtime="rlm"):
                     yield translated
-            await stream.result()
+            result = await stream.result()
+            if getattr(result, "stop_reason", "") in {"error", "aborted"}:
+                yield HarnessEvent(
+                    type="run.failed",
+                    data={"error": getattr(result, "error_message", "") or "RLM model turn failed"},
+                )
+                return
+            from superqode.rlm.coding_session import supervisor_for_session
+
+            supervisor = supervisor_for_session(coding_session.session_path)
+            active = (
+                [r["id"] for r in supervisor.snapshots() if r["status"] in {"queued", "running"}]
+                if supervisor
+                else []
+            )
+            if active:
+                yield HarnessEvent(
+                    type="run.failed",
+                    data={
+                        "error": "Local child work is still active: " + ", ".join(active),
+                        "error_type": "RequiredChildIncomplete",
+                    },
+                )
+                return
+            manager = getattr(coding_session, "delegation_manager", None)
+            if manager is not None:
+                for evidence in manager.evidence():
+                    yield HarnessEvent(
+                        type="artifact.created",
+                        data={
+                            "kind": "remote_agent_evidence",
+                            "artifact_id": evidence["id"],
+                            "metadata": evidence,
+                        },
+                    )
+                errors = manager.completion_errors()
+                if errors:
+                    yield HarnessEvent(
+                        type="run.failed",
+                        data={
+                            "error": "; ".join(errors),
+                            "error_type": "RequiredDelegationIncomplete",
+                        },
+                    )
+                    return
             policy = coding_session.policy
             if not policy.autonomous or not policy.gates:
+                yield HarnessEvent(type="run_end", data={"status": "completed"})
                 return
             yield HarnessEvent(
                 type="autonomous_gates_start",
@@ -291,6 +348,7 @@ class RLMHarnessProtocolAdapter:
                 },
             )
             if passed:
+                yield HarnessEvent(type="run_end", data={"status": "completed"})
                 return
             if round_number == rounds:
                 yield HarnessEvent(
@@ -316,6 +374,19 @@ class RLMHarnessProtocolAdapter:
             return
         coding_session = await self._require(session)
         await coding_session.abort()
+        manager = getattr(coding_session, "delegation_manager", None)
+        if manager is not None:
+            await manager.cancel_required()
+
+    async def close(self, session: HarnessSessionRef) -> None:
+        coding = self._sessions.pop(session.session_id, None)
+        if coding is not None:
+            manager = getattr(coding, "delegation_manager", None)
+            if manager is not None:
+                await manager.close()
+            backend = getattr(coding, "sandbox_backend", None)
+            if backend is not None:
+                await backend.close()
 
     async def checkpoint(self, session: HarnessSessionRef) -> HarnessCheckpoint:
         if self._resident:

@@ -15,6 +15,7 @@ class TaskStatusValue(str, Enum):
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input_required"
+    AUTH_REQUIRED = "auth_required"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELED = "canceled"
@@ -47,6 +48,7 @@ class FilePart:
     url: Optional[str] = None
     mime_type: Optional[str] = None
     filename: Optional[str] = None
+    raw: Optional[str] = None
 
 
 @dataclass
@@ -75,6 +77,27 @@ class Message:
     role: MessageRole
     parts: List[Part] = field(default_factory=list)
     message_id: Optional[str] = None
+    context_id: Optional[str] = None
+    remote_task_id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Read-only compatibility for existing one-shot consumers. A direct reply
+    # is completed, but it never invents a remote task ID for get/cancel.
+    @property
+    def task_id(self) -> str:
+        return self.remote_task_id or ""
+
+    @property
+    def status(self) -> TaskStatus:
+        return TaskStatus(TaskStatusValue.COMPLETED)
+
+    @property
+    def history(self) -> List[Message]:
+        return [self]
+
+    @property
+    def artifacts(self) -> List[Artifact]:
+        return []
 
 
 @dataclass
@@ -95,6 +118,8 @@ class TaskStatus:
     state: TaskStatusValue
     message: Optional[str] = None
     agent_name: Optional[str] = None
+    message_details: Optional[Message] = None
+    timestamp: Optional[str] = None
 
 
 @dataclass

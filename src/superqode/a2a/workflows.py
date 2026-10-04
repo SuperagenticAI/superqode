@@ -326,17 +326,9 @@ Return a JSON dict mapping agent names to their specific tasks."""
         )
 
     def _extract_result(self, task: Task) -> str:
-        """Extract text result from task."""
-        if not task.history:
-            return ""
+        from .reply import task_reply
 
-        # Get last agent message
-        for msg in reversed(task.history):
-            if msg.role == MessageRole.AGENT:
-                if msg.parts and msg.parts[0].text:
-                    return msg.parts[0].text
-
-        return ""
+        return task_reply(task)
 
     def _aggregate_results(self, results: List[Dict[str, Any]]) -> str:
         """Aggregate multiple results into single summary."""
@@ -367,7 +359,7 @@ class A2ATool:
 
 Use this to delegate tasks to specialized external agents:
 - Security testing agents
-- Specialized code review agents  
+- Specialized code review agents
 - External testing frameworks
 - Other A2A-compliant agents
 
@@ -408,10 +400,6 @@ Arguments:
             await client.close()
 
     def _extract_result(self, task: Task) -> str:
-        if not task.history:
-            return ""
-        for msg in reversed(task.history):
-            if msg.role == MessageRole.AGENT:
-                if msg.parts and msg.parts[0].text:
-                    return msg.parts[0].text
-        return ""
+        from .reply import task_reply
+
+        return task_reply(task)

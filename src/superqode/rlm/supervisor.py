@@ -58,6 +58,9 @@ class AgentRecord:
     result: str | None = None
     error: str | None = None
     session_id: str | None = None
+    session_path: str = ""
+    resume_path: str = ""
+    continuation_of: str = ""
     worker_pid: int | None = None
     worker_request_path: str | None = None
     worker_result_path: str | None = None
@@ -98,6 +101,11 @@ class AgentRecord:
             "result": self.result,
             "error": self.error,
             "session_id": self.session_id,
+            "session_path": self.session_path,
+            "resume_path": self.resume_path,
+            "continuation_of": self.continuation_of,
+            "pending_messages": list(self.pending_messages),
+            "pending_steering": list(self.pending_steering),
             "worker_pid": self.worker_pid,
             "worker_request_path": self.worker_request_path,
             "worker_result_path": self.worker_result_path,
@@ -172,6 +180,8 @@ class AgentSupervisor:
         self._lock = threading.RLock()
         self._capacity = asyncio.Semaphore(self.max_parallel)
         self._recoverable_ids: list[str] = []
+        self.mailbox = None
+        self.base_id = "root"
         self._recover()
 
     def set_runner(self, runner: AgentRunner) -> None:
@@ -222,11 +232,28 @@ class AgentSupervisor:
             if parent is not None:
                 parent.children.append(agent_id)
         self._emit("agent.spawned", record)
+        if self.mailbox is not None:
+            self.mailbox.register(agent_id, parent_id)
         if threading.get_ident() == self._loop_thread:
             self._start(agent_id)
         else:
             self.loop.call_soon_threadsafe(self._start, agent_id)
         return AgentHandle(self, agent_id)
+
+    def follow_up(self, agent_id, prompt, *, parent_id="root"):
+        with self._lock:
+            original = self._record(agent_id)
+            if original.status != "completed" or not original.session_path:
+                raise ValueError("Follow-up requires a retained completed child session")
+            if parent_id not in {"root", original.parent_id, original.id}:
+                raise PermissionError("Only a child or its parent may continue its session")
+            # Spawn schedules drive on the next event-loop turn; set the
+            # retained session before it can run. The old record stays terminal.
+            handle = self.spawn(prompt, parent_id=parent_id, model=original.model)
+            self._record(handle.id).resume_path = original.session_path
+            self._record(handle.id).continuation_of = original.continuation_of or original.id
+            self._emit("agent.continuation_admitted", self._record(handle.id))
+            return handle
 
     def spawn_batch(
         self,
@@ -254,7 +281,7 @@ class AgentSupervisor:
         with self._lock:
             depth = 0
             cursor = agent_id
-            while cursor != "root":
+            while cursor not in {"root", self.base_id}:
                 record = self._record(cursor)
                 depth += 1
                 cursor = record.parent_id
@@ -281,10 +308,12 @@ class AgentSupervisor:
             record = self._record(agent_id)
             record.session = session
             record.session_id = str((await session.info()).id)
+            record.session_path = str(getattr(session, "session_path", ""))
             messages = list(record.pending_messages)
             steering = list(record.pending_steering)
             record.pending_messages.clear()
             record.pending_steering.clear()
+        self._emit("agent.session_attached", record)
         for message in steering:
             await session.steer(message)
         for message in messages:
@@ -445,7 +474,7 @@ class AgentSupervisor:
     def _validate_depth(self, parent_id: str) -> None:
         depth = 1
         cursor = parent_id
-        while cursor != "root":
+        while cursor not in {"root", self.base_id}:
             parent = self._records.get(cursor)
             if parent is None:
                 raise KeyError(f"Unknown parent RLM agent: {cursor}")
@@ -562,6 +591,11 @@ class AgentSupervisor:
                     dict(data.get("usage") or {}) if isinstance(data.get("usage"), dict) else {}
                 ),
                 children=[str(item) for item in data.get("children") or []],
+                session_path=str(data.get("session_path") or ""),
+                resume_path=str(data.get("resume_path") or ""),
+                continuation_of=str(data.get("continuation_of") or ""),
+                pending_messages=[str(item) for item in data.get("pending_messages") or []],
+                pending_steering=[str(item) for item in data.get("pending_steering") or []],
             )
             self._records[agent_id] = record
         for record in self._records.values():
@@ -577,6 +611,10 @@ class AgentSupervisor:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(event, separators=(",", ":"), default=str) + "\n")
+                handle.flush()
+                import os
+
+                os.fsync(handle.fileno())
         except OSError:
             return
 

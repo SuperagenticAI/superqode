@@ -1,7 +1,7 @@
 """
 A2A Client - Client for communicating with A2A-compliant agents.
 
-Implements HTTP/gRPC client for Agent2Agent Protocol.
+Implements JSON-RPC and HTTP+JSON bindings for Agent2Agent Protocol.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from .types import (
     Artifact,
     Message,
     MessageRole,
+    FilePart,
     Part,
     StreamResponse,
     Task,
@@ -63,6 +64,9 @@ class A2AClient:
         extra_headers: Optional[dict[str, str]] = None,
         client_cert: Optional[str] = None,
         client_key: Optional[str] = None,
+        strict_origin: bool = False,
+        max_response_bytes: int = 4 * 1024 * 1024,
+        subscription_method: str = "GET",
     ):
         """Initialize A2A client.
 
@@ -78,6 +82,11 @@ class A2AClient:
         self._agent_card: AgentCard | None = None
         self._card_data: dict | None = None
         self.timeout = timeout
+        self.strict_origin = strict_origin
+        self.max_response_bytes = max_response_bytes
+        if subscription_method not in {"GET", "POST"}:
+            raise ValueError("REST subscription_method must be GET or POST")
+        self.subscription_method = subscription_method
         self._owns_http = http_client is None
         self._tls_cert = (client_cert or "").strip()
         self._tls_key = (client_key or "").strip()
@@ -132,7 +141,9 @@ class A2AClient:
                 headers={str(key): str(value) for key, value in self._http.headers.items()},
             )
             try:
-                response = await self._http.get(url, follow_redirects=True)
+                response = await self._bounded_request(
+                    "GET", url, follow_redirects=not self.strict_origin
+                )
             except httpx.RequestError as e:
                 summary = f"Cannot connect to agent: {e}"
                 self.inspect.error(summary, url=url)
@@ -156,7 +167,7 @@ class A2AClient:
                 "Discovery is protected; pass a Bearer if you have one.",
                 inspect=self.inspect,
             )
-        if response.status_code >= 400:
+        if response.status_code >= 300:
             raise A2AClientError(
                 f"Failed to get agent card: {response.status_code} {url}",
                 inspect=self.inspect,
@@ -224,6 +235,15 @@ class A2AClient:
         if selected is None:
             raise A2AClientError(_reject_message(skipped), inspect=self.inspect)
         interface_url, binding, version = selected
+        if self.strict_origin and _origin(interface_url) != _origin(self.agent_url):
+            raise A2AClientError("Agent Card changed the configured peer origin")
+        interface = urlsplit(interface_url)
+        if self.strict_origin and (
+            interface.username or interface.password or interface.query or interface.fragment
+        ):
+            raise A2AClientError(
+                "Agent Card interface contains unsupported URL credentials/query/fragment"
+            )
 
         card = AgentCard(
             name=data.get("name", "Unknown"),
@@ -277,9 +297,10 @@ class A2AClient:
     def _version_headers(self, version: str) -> dict[str, str]:
         # A 1.0 method under a missing header is negotiated as 0.3 and rejected.
         # A 0.3 client sends no version header.
-        if version == "1.0":
-            return {"A2A-Version": "1.0"}
-        return {}
+        return {
+            **({"A2A-Version": "1.0"} if version == "1.0" else {}),
+            **({"Accept-Encoding": "identity"} if self.strict_origin else {}),
+        }
 
     async def _operation_url(self, path: str) -> str:
         """Resolve a REST path against the selected HTTP+JSON interface."""
@@ -291,10 +312,22 @@ class A2AClient:
         message: str,
         session_id: Optional[str] = None,
         task_id: Optional[str] = None,
-    ) -> Task:
+        *,
+        message_id: str | None = None,
+        nonblocking: bool = False,
+        metadata: dict | None = None,
+    ) -> Task | Message:
         """Send a message on the binding advertised first on the card."""
         interface_url, binding, version = await self._ensure_interface()
-        params = _message_params(message, version, session_id=session_id, task_id=task_id)
+        params = _message_params(
+            message,
+            version,
+            session_id=session_id,
+            task_id=task_id,
+            message_id=message_id,
+            nonblocking=nonblocking,
+            metadata=metadata,
+        )
         try:
             if binding == "JSONRPC":
                 method = "SendMessage" if version == "1.0" else "message/send"
@@ -307,13 +340,43 @@ class A2AClient:
                     headers=self._version_headers(version),
                     note=f"HTTP+JSON {version}",
                 )
-            return self._parse_task(data)
+            return self._parse_response(data)
         except A2AClientError:
             raise
         except httpx.HTTPStatusError as e:
             raise TaskFailedError(f"Task failed: {e}", inspect=self.inspect) from e
         except httpx.RequestError as e:
             raise A2AClientError(f"Request failed: {e}", inspect=self.inspect) from e
+
+    async def _bounded_request(self, method, url, **kwargs):
+        # Enforce the allowance while consuming the body, before JSON parsing
+        # or inspect logging can retain an unbounded peer response.
+        if self.strict_origin:
+            kwargs["headers"] = {**dict(kwargs.get("headers") or {}), "Accept-Encoding": "identity"}
+        async with self._http.stream(method, url, **kwargs) as response:
+            if (
+                self.strict_origin
+                and response.headers.get("content-encoding", "identity") != "identity"
+            ):
+                raise A2AClientError(
+                    "Compressed A2A responses are unsupported under bounded peer policy"
+                )
+            chunks, size = [], 0
+            async for chunk in response.aiter_bytes(65536):
+                size += len(chunk)
+                if size > self.max_response_bytes:
+                    raise TaskFailedError("A2A response exceeds the configured size limit")
+                chunks.append(chunk)
+            return httpx.Response(
+                response.status_code,
+                headers={
+                    k: v
+                    for k, v in response.headers.items()
+                    if k.lower() not in {"content-encoding", "content-length"}
+                },
+                content=b"".join(chunks),
+                request=response.request,
+            )
 
     async def _rest(
         self,
@@ -336,18 +399,20 @@ class A2AClient:
         try:
             request_kwargs: dict = {
                 "headers": headers,
-                "follow_redirects": follow_redirects,
+                "follow_redirects": follow_redirects and not self.strict_origin,
             }
             if json_body is not None:
                 request_kwargs["json"] = json_body
-            response = await self._http.request(method, url, **request_kwargs)
+            response = await self._bounded_request(method, url, **request_kwargs)
         except httpx.RequestError as e:
             self.inspect.error(f"Request failed: {e}", url=url)
             raise A2AClientError(f"Request failed: {e}", inspect=self.inspect) from e
         self.inspect.response(
             response.status_code, method, str(response.request.url), body=response.text
         )
-        if response.status_code >= 400:
+        if len(response.content) > self.max_response_bytes:
+            raise TaskFailedError("A2A response exceeds the configured size limit")
+        if response.status_code >= 300:
             raise TaskFailedError(
                 f"Task failed: {response.status_code} {url}",
                 inspect=self.inspect,
@@ -422,19 +487,11 @@ class A2AClient:
                 url,
                 json=body,
                 headers=self._version_headers(version),
-                follow_redirects=True,
+                follow_redirects=not self.strict_origin,
             ) as response:
                 response.raise_for_status()
-                async for line in response.aiter_lines():
-                    data = line.strip()
-                    if not data.startswith("data:"):
-                        continue
-                    data = data[5:].lstrip()
-                    try:
-                        parsed = json.loads(data)
-                    except json.JSONDecodeError:
-                        parsed = data
-                    yield StreamResponse(type="message", data=parsed)
+                async for event in self._events(response):
+                    yield event
         except httpx.HTTPStatusError as e:
             yield StreamResponse(type="error", data=str(e))
         except httpx.RequestError as e:
@@ -505,7 +562,7 @@ class A2AClient:
         try:
             stream_headers = self._version_headers(version)
             if binding == "JSONRPC":
-                method = "TaskResubscription" if version == "1.0" else "tasks/resubscribe"
+                method = "SubscribeToTask" if version == "1.0" else "tasks/resubscribe"
                 async with self._http.stream(
                     "POST",
                     url,
@@ -516,105 +573,189 @@ class A2AClient:
                         "params": {"id": task_id},
                     },
                     headers=stream_headers,
-                    follow_redirects=True,
+                    follow_redirects=not self.strict_origin,
                 ) as response:
                     response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        data = line.strip()
-                        if not data.startswith("data:"):
-                            continue
-                        data = data[5:].lstrip()
-                        try:
-                            parsed = json.loads(data)
-                        except json.JSONDecodeError:
-                            parsed = data
-                        yield StreamResponse(type="task_update", data=parsed)
+                    async for event in self._events(response):
+                        yield event
                 return
-            async with self._http.stream("GET", url, headers=stream_headers) as response:
+            async with self._http.stream(
+                self.subscription_method,
+                url,
+                headers=stream_headers,
+                follow_redirects=not self.strict_origin,
+            ) as response:
                 response.raise_for_status()
-                async for line in response.aiter_lines():
-                    data = line.strip()
-                    if not data.startswith("data:"):
-                        continue
-                    data = data[5:].lstrip()
-                    try:
-                        parsed = json.loads(data)
-                    except json.JSONDecodeError:
-                        parsed = data
-                    yield StreamResponse(type="task_update", data=parsed)
+                async for event in self._events(response):
+                    yield event
         except httpx.HTTPStatusError as e:
             yield StreamResponse(type="error", data=str(e))
 
+    def _parse_response(self, data: dict) -> Task | Message:
+        value = _unwrap_body(data)
+        if "message" in value:
+            return _parse_message(value["message"])
+        if "role" in value and "parts" in value:
+            return _parse_message(value)
+        return self._parse_task(value)
+
     def _parse_task(self, data: dict) -> Task:
-        """Parse JSON response into Task."""
-        if not isinstance(data, dict):
-            data = {}
-        status_data = data.get("status", {})
-        state_str = status_data.get("state", "submitted")
-        normalized_state = {
-            "TASK_STATE_SUBMITTED": "submitted",
-            "TASK_STATE_WORKING": "working",
-            "TASK_STATE_INPUT_REQUIRED": "input_required",
-            "TASK_STATE_COMPLETED": "completed",
-            "TASK_STATE_FAILED": "failed",
-            "TASK_STATE_CANCELED": "canceled",
-            "TASK_STATE_REJECTED": "rejected",
-            "TASK_STATE_AUTH_REQUIRED": "input_required",
-        }.get(str(state_str), str(state_str).lower())
-
-        try:
-            state = TaskStatusValue(normalized_state)
-        except ValueError:
-            state = TaskStatusValue.SUBMITTED
-
-        status = TaskStatus(
-            state=state,
-            message=_message_text(status_data.get("message")),
-            agent_name=status_data.get("agentName"),
-        )
-
-        # Parse history
-        history = []
-        for msg in data.get("history", []):
-            role_value = str(msg.get("role", "user"))
-            role = MessageRole.AGENT if role_value in {"agent", "ROLE_AGENT"} else MessageRole.USER
-            parts = []
-            for p in msg.get("parts", []):
-                if "text" in p:
-                    text = p["text"]
-                    parts.append(Part(text=text if isinstance(text, str) else text.get("text", "")))
-                elif "data" in p:
-                    parts.append(Part(data=p["data"]))
-            history.append(Message(role=role, parts=parts))
-
-        artifacts = []
-        for item in data.get("artifacts", []):
-            parts = [
-                Part(
-                    text=p.get("text") if isinstance(p.get("text"), str) else None,
-                    data=p.get("data"),
-                    mime_type=p.get("mediaType"),
-                    filename=p.get("filename"),
-                )
-                for p in item.get("parts", [])
-            ]
-            artifacts.append(
-                Artifact(
-                    artifact_id=item.get("artifactId"),
-                    name=item.get("name"),
-                    parts=parts,
-                    metadata=item.get("metadata", {}),
-                )
-            )
-
+        data = _unwrap_body(data)
+        if not isinstance(data, dict) or not (data.get("id") or data.get("taskId")):
+            raise A2AClientError("A2A task response has no task ID")
         return Task(
-            task_id=data.get("id", data.get("taskId", "")),
-            status=status,
-            history=history,
-            artifacts=artifacts,
+            task_id=str(data.get("id") or data["taskId"]),
+            status=_parse_status(data.get("status", {})),
+            history=[_parse_message(m) for m in data.get("history", [])],
+            artifacts=[_parse_artifact(a) for a in data.get("artifacts", [])],
             metadata=data.get("metadata", {}),
             context_id=data.get("contextId"),
         )
+
+    def _parse_event(self, data: dict) -> StreamResponse:
+        if data.get("error"):
+            return StreamResponse("error", data["error"])
+        value = _unwrap_body(data)
+        if "statusUpdate" in value:
+            value = value["statusUpdate"]
+        if "artifactUpdate" in value:
+            value = value["artifactUpdate"]
+        if value.get("kind") == "status-update" or ("status" in value and "taskId" in value):
+            return StreamResponse(
+                "status_update", {**value, "status": _parse_status(value["status"])}
+            )
+        if "artifact" in value:
+            return StreamResponse(
+                "artifact_update", {**value, "artifact": _parse_artifact(value["artifact"])}
+            )
+        parsed = self._parse_response(value)
+        return StreamResponse("task" if isinstance(parsed, Task) else "message", parsed)
+
+    async def _events(self, response: httpx.Response) -> AsyncIterator[StreamResponse]:
+        response.raise_for_status()
+        fields: list[str] = []
+        size = 0
+        async for line in self._bounded_lines(response):
+            if not line:
+                if fields:
+                    payload = "\n".join(fields)
+                    fields, size = [], 0
+                    if payload == "[DONE]":
+                        yield StreamResponse("done", None)
+                    else:
+                        try:
+                            yield self._parse_event(json.loads(payload))
+                        except (ValueError, TypeError, KeyError, A2AClientError) as error:
+                            raise A2AClientError(f"Invalid A2A stream event: {error}") from error
+                continue
+            if line.startswith("data:"):
+                text = line[5:].removeprefix(" ")
+                size += len(text.encode())
+                if size > self.max_response_bytes:
+                    raise A2AClientError("A2A stream event exceeds size limit")
+                fields.append(text)
+        if fields:
+            yield self._parse_event(json.loads("\n".join(fields)))
+
+    async def _bounded_lines(self, response):
+        if (
+            self.strict_origin
+            and response.headers.get("content-encoding", "identity") != "identity"
+        ):
+            raise A2AClientError("Compressed A2A streams are unsupported under bounded peer policy")
+        pending = bytearray()
+        async for chunk in response.aiter_bytes(65536):
+            pending.extend(chunk)
+            while b"\n" in pending:
+                raw, _, rest = pending.partition(b"\n")
+                if len(raw) > self.max_response_bytes:
+                    raise A2AClientError("A2A stream line exceeds size limit")
+                pending = bytearray(rest)
+                yield raw.rstrip(b"\r").decode("utf-8")
+            if len(pending) > self.max_response_bytes:
+                raise A2AClientError("A2A stream line exceeds size limit")
+        if pending:
+            yield pending.rstrip(b"\r").decode("utf-8")
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    value = urlsplit(url)
+    return (
+        value.scheme.lower(),
+        (value.hostname or "").lower(),
+        value.port or (443 if value.scheme == "https" else 80),
+    )
+
+
+def _parse_status(value: dict) -> TaskStatus:
+    state = str(value.get("state", "submitted"))
+    normalized = state.removeprefix("TASK_STATE_").lower().replace("-", "_")
+    try:
+        parsed = TaskStatusValue(normalized)
+    except ValueError as error:
+        raise A2AClientError(f"Unknown A2A task state: {state}") from error
+    return TaskStatus(
+        parsed,
+        _message_text(value.get("message")),
+        value.get("agentName"),
+        _parse_message(value["message"]) if isinstance(value.get("message"), dict) else None,
+        value.get("timestamp"),
+    )
+
+
+def _parse_part(value: dict) -> Part:
+    file = value.get("file")
+    if not file and ("url" in value or "raw" in value):
+        file = {
+            "uri": value.get("url"),
+            "bytes": value.get("raw"),
+            "mimeType": value.get("mediaType"),
+            "name": value.get("filename"),
+        }
+    text = value.get("text")
+    return Part(
+        text=text
+        if isinstance(text, str)
+        else text.get("text")
+        if isinstance(text, dict)
+        else None,
+        data=value.get("data"),
+        file=FilePart(
+            url=file.get("uri") or file.get("url"),
+            raw=file.get("bytes") or file.get("raw"),
+            mime_type=file.get("mimeType") or file.get("mediaType"),
+            filename=file.get("name") or file.get("filename"),
+        )
+        if file
+        else None,
+        mime_type=value.get("mediaType") or value.get("mimeType"),
+        filename=value.get("filename"),
+        metadata=value.get("metadata", {}),
+    )
+
+
+def _parse_message(value: dict) -> Message:
+    role = str(value.get("role", "agent")).removeprefix("ROLE_").lower()
+    if role not in {"user", "agent"}:
+        raise A2AClientError(f"Unknown A2A message role: {role}")
+    return Message(
+        MessageRole(role),
+        [_parse_part(p) for p in value.get("parts", [])],
+        value.get("messageId"),
+        value.get("contextId"),
+        value.get("taskId"),
+        value.get("metadata", {}),
+    )
+
+
+def _parse_artifact(value: dict) -> Artifact:
+    return Artifact(
+        parts=[_parse_part(p) for p in value.get("parts", [])],
+        artifact_id=value.get("artifactId"),
+        name=value.get("name"),
+        mime_type=value.get("mediaType"),
+        metadata=value.get("metadata", {}),
+    )
 
 
 def _httpx_cert(cert: str, key: str) -> str | tuple[str, str] | None:
@@ -718,16 +859,19 @@ def _message_params(
     *,
     session_id: Optional[str] = None,
     task_id: Optional[str] = None,
+    message_id: str | None = None,
+    nonblocking: bool = False,
+    metadata: dict | None = None,
 ) -> dict:
     if version == "0.3":
         message_obj: dict = {
-            "messageId": str(uuid.uuid4()),
+            "messageId": message_id or str(uuid.uuid4()),
             "role": "user",
             "parts": [{"kind": "text", "text": message}],
         }
     else:
         message_obj = {
-            "messageId": str(uuid.uuid4()),
+            "messageId": message_id or str(uuid.uuid4()),
             "role": "ROLE_USER",
             "parts": [{"text": message}],
         }
@@ -735,9 +879,16 @@ def _message_params(
         message_obj["contextId"] = session_id
     if task_id:
         message_obj["taskId"] = task_id
+    if metadata:
+        message_obj["metadata"] = metadata
+    configuration = {"acceptedOutputModes": ["text/plain"]}
+    if nonblocking:
+        configuration.update(
+            {"blocking": False} if version == "0.3" else {"returnImmediately": True}
+        )
     return {
         "message": message_obj,
-        "configuration": {"acceptedOutputModes": ["text/plain"]},
+        "configuration": configuration,
     }
 
 

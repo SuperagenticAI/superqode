@@ -17,8 +17,9 @@ Or switch from the TUI:
 :connect harness-rlm
 ```
 
-This opens the model picker after activating RLM. You can also switch the
-active harness directly:
+This opens RLM options for host, Docker, Monty and optional A2A setup. Select
+an execution profile to activate RLM and continue to the model picker. You can
+also switch the active harness directly:
 
 ```text
 :harness switch rlm
@@ -466,3 +467,9 @@ RLM Code dependency.
 - `pipy` is the native Python Pi-style harness with four default model tools.
 
 These routes keep independent sessions and can remain installed together.
+
+## Optional remote agents and retained inboxes
+
+See [A2A inside RLM](rlm-a2a.md) for explicit routing, task recovery, hosted
+credits, retained local messages, and Monty resource limits. Routing is disabled
+by default and keeps the single Python tool and context-as-data computation.

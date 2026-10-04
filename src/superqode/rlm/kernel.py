@@ -229,6 +229,25 @@ class RLMNamespace:
         supervisor = self._require_supervisor()
         supervisor.call(supervisor.send(str(getattr(agent, "id", agent)), message))
 
+    def message(self, agent, message, delivery_id=None):
+        return self._require_supervisor().mailbox.send(
+            self._agent_id, str(getattr(agent, "id", agent)), message, delivery_id
+        )
+
+    def inbox(self, limit=50):
+        return self._require_supervisor().mailbox.read(self._agent_id, limit)
+
+    def ack_inbox(self, identity):
+        return self._require_supervisor().mailbox.acknowledge(self._agent_id, identity)
+
+    def parent_id(self):
+        return self._require_supervisor().mailbox.parent(self._agent_id)
+
+    def follow_up(self, agent, prompt):
+        return self._require_supervisor().follow_up(
+            str(getattr(agent, "id", agent)), prompt, parent_id=self._agent_id
+        )
+
     def steer(self, agent: Any, instruction: str) -> None:
         supervisor = self._require_supervisor()
         supervisor.call(supervisor.steer(str(getattr(agent, "id", agent)), instruction))
@@ -584,7 +603,7 @@ def create_python_tool(kernel: PersistentPythonKernel) -> AgentTool:
 
 
 _RESERVED_NAMES = frozenset(
-    {"workspace", "shell", "rlm", "llm_query", "llm_query_batched", "context"}
+    {"workspace", "shell", "rlm", "a2a", "llm_query", "llm_query_batched", "context"}
 )
 
 

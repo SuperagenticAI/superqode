@@ -17,9 +17,13 @@ async def run_worker(request_path: str | Path) -> int:
         from superqode.pipy.ai.models import resolve_model
         from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
         from superqode.rlm.sandbox import RLMSandboxConfig
+        from superqode.rlm.subcalls import SubcallPolicy
 
         options = RLMCodingSessionOptions(
             cwd=Path(str(request["cwd"])),
+            agent_id=str(request["agent_id"]),
+            parent_agent_id=str(request.get("parent_agent_id") or "root"),
+            subcall_policy=SubcallPolicy.from_config(request.get("subcall_policy")),
             model=resolve_model(
                 str(request.get("model") or ""), provider=str(request.get("provider") or "")
             ),
@@ -31,8 +35,16 @@ async def run_worker(request_path: str | Path) -> int:
             durable_children=True,
             sandbox=RLMSandboxConfig.from_config(request.get("sandbox")),
             sandbox_session=str(request.get("sandbox_session") or ""),
+            a2a_config=request.get("a2a_config"),
+            delegation_root=str(request.get("delegation_root") or ""),
+            delegation_path=str(request.get("delegation_path") or ""),
+            delegation_owner=str(request.get("delegation_owner") or request["agent_id"]),
         )
-        session = await RLMCodingSession.create(options)
+        session = (
+            await RLMCodingSession.resume(options, session_path=request["resume_path"])
+            if request.get("resume_path")
+            else await RLMCodingSession.create(options)
+        )
         backend = getattr(session, "sandbox_backend", None)
         if backend is not None:
             identity = await backend.start()
@@ -48,6 +60,16 @@ async def run_worker(request_path: str | Path) -> int:
         )
         try:
             message = await prompt_task
+            manager = getattr(session, "delegation_manager", None)
+            errors = (
+                manager.completion_errors(
+                    str(request.get("delegation_owner") or request["agent_id"])
+                )
+                if manager is not None
+                else []
+            )
+            if errors:
+                raise RuntimeError("; ".join(errors))
         finally:
             control_task.cancel()
             await asyncio.gather(control_task, return_exceptions=True)
@@ -55,6 +77,7 @@ async def run_worker(request_path: str | Path) -> int:
             result_path,
             {
                 "status": "completed",
+                "session_path": str(getattr(session, "session_path", "")),
                 "result": message.text,
                 "usage": _usage_dict(getattr(message, "usage", None)),
                 "completed_at": time.time(),

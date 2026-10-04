@@ -19,6 +19,14 @@ _COMMANDS = (
     ("sandbox", "Show the execution boundary: sandbox [doctor]"),
     ("usage", "Show subcall, child-agent and context accounting"),
     ("agents", "List live recursive child agents"),
+    ("a2a", "Open optional A2A setup, peer keys and credit limits"),
+    ("routing", "Show the active worker's A2A policy"),
+    ("peers", "Show explicitly enabled A2A routes"),
+    ("delegations", "Show durable A2A tasks and unknown usage"),
+    ("inbox", "Read retained root messages without waking a model"),
+    ("message", "Deliver an inbox message: message <agent-id> <text>"),
+    ("follow-up", "Continue a retained child: follow-up <agent-id> <prompt>"),
+    ("reconcile", "Attach verified remote work: reconcile <handle> <task-id> <reason>"),
     ("send", "Queue a follow-up for a child: send <id> <message>"),
     ("steer", "Steer a running child: steer <id> <instruction>"),
     ("cancel", "Cancel a running child: cancel <id>"),
@@ -47,7 +55,111 @@ class RLMCommandMixin:
             log.add_error("RLM is not the active harness.")
             log.add_info("Use :harness switch rlm, then try again.")
             return
+        if sub == "a2a":
+            self._open_rlm_routing(log)
+            return
         getattr(self, "run_worker")(self._rlm_run(sub, rest, log), exclusive=False)
+
+    def _open_rlm_routing(self, log, *, spec=None, on_back=None) -> None:
+        from superqode.widgets.rlm_routing import RLMRoutingScreen
+
+        pure = getattr(self, "_pure_mode", None)
+        spec = spec or getattr(pure, "_harness_spec", None)
+        config = dict(getattr(getattr(spec, "runtime", None), "config", None) or {})
+        try:
+            screen = RLMRoutingScreen(
+                config.get("a2a"),
+                status="Editing a profile for a new session. Inspecting the current worker separately.",
+                inspect_enabled=self._rlm_is_active(),
+            )
+        except ValueError as error:
+            log.add_error(f"Invalid A2A profile: {error}")
+            log.add_info("Correct runtime.config.a2a in the harness spec, then reopen setup.")
+            return
+
+        def selected(result):
+            if result is None and on_back is not None:
+                on_back()
+                return
+            self._rlm_routing_result(result, spec, log)
+
+        self.push_screen(screen, callback=selected)
+        if self._rlm_is_active() and getattr(pure, "_harness_session_id", ""):
+            self.run_worker(self._rlm_routing_status(screen), exclusive=False)
+        else:
+            screen.status = "No active RLM root. Settings apply when you start a new session."
+
+    async def _rlm_routing_status(self, screen) -> None:
+        from superqode.rlm.root_runtime import RootRuntimeClient
+        from superqode.rlm.delegation_policy import DelegationPolicy
+        import json
+        from textual.widgets import Static
+        from rich.text import Text
+
+        pure = self._pure_mode
+        client = RootRuntimeClient(
+            pure._harness_session_id,
+            {
+                "working_directory": str(pure.session.working_directory),
+            },
+        )
+        try:
+            status = client.status()
+            if status.alive:
+                # The startup manifest owns this immutable worker policy.
+                # Inspect it without launching a worker or queuing a command
+                # behind a model turn; the form may describe a different spec.
+                manifest = json.loads(client.manifest_path.read_text())
+                config = dict(manifest.get("metadata", {}).get("rlm_config") or {})
+                policy = DelegationPolicy.from_config(config.get("a2a"))
+                message = (
+                    f"Active worker A2A: {'on' if policy.enabled else 'off'}; "
+                    f"paid: {'on' if policy.hosted_enabled else 'off'}; "
+                    f"credit limit: {policy.max_hosted_credits}\n"
+                    f"Allowed peers: {', '.join(p['name'] for p in policy.inventory()) or 'none'}"
+                )
+            else:
+                message = "RLM worker is stopped. Profile edits apply to a new session."
+            if screen.is_mounted:
+                screen.query_one("#routing-status", Static).update(Text(message))
+        except Exception as error:  # noqa: BLE001 - inspection does not alter policy
+            if screen.is_mounted:
+                screen.query_one("#routing-status", Static).update(
+                    Text(f"Worker inspection unavailable: {error}")
+                )
+
+    def _rlm_routing_result(self, result, spec, log) -> None:
+        if result is None:
+            return
+        if result.action in {"tasks", "usage"}:
+            self._rlm_cmd("delegations" if result.action == "tasks" else "usage", log)
+            return
+        try:
+            if result.action == "start" and getattr(self, "is_busy", False):
+                raise ValueError(
+                    "Wait for the current turn to finish before starting a new session."
+                )
+            from superqode.app.rlm_routing import save_routing_profile
+            import shlex
+
+            pure = getattr(self, "_pure_mode", None) or self._ensure_pure_mode()
+            root = Path(getattr(pure.session, "working_directory", None) or Path.cwd())
+            path = save_routing_profile(spec, result.config, root)
+            log.add_success(f"A2A profile saved: {path}")
+            if result.action == "start":
+                # A new durable session ID is essential: resuming an existing
+                # worker would retain the old policy even with the new spec.
+                fork = " --fork" if pure.get_current_session_id() else ""
+                self._harness_cmd(f"switch {shlex.quote(str(path))}{fork}", log)
+            else:
+                log.add_info(
+                    "Profile saved for a new session; current worker settings are unchanged."
+                )
+                log.add_info(
+                    f"Activate with :harness switch {shlex.quote(str(path))} --fork after starting a session."
+                )
+        except Exception as error:  # noqa: BLE001 - report persistence/activation failures
+            log.add_error(f"A2A setup failed: {error}")
 
     def _show_rlm_help(self, log) -> None:
         from rich.text import Text
@@ -174,6 +286,10 @@ class RLMCommandMixin:
         from superqode.rlm.coding_session import supervisor_for_session
 
         supervisor = supervisor_for_session(session.session_path)
+        from superqode.rlm.admin import retained_admin
+
+        if await retained_admin(session, sub, rest, log):
+            return
         if sub == "sandbox":
             self._rlm_sandbox(session, rest, log)
             return
@@ -289,15 +405,27 @@ class RLMCommandMixin:
         """
         subcalls = getattr(session, "subcall_usage", None)
         if subcalls:
-            usage = subcalls["usage"]
+            usage = subcalls.get("root_usage", subcalls["usage"])
             limit = subcalls["policy"]["max_calls"]
             log.add_info(
                 f"subcalls   {usage['calls']} of {limit} calls, "
                 f"{usage['total_tokens']} tokens, ${usage['cost_usd']:.4f}"
                 + (f", {usage['failures']} failed" if usage["failures"] else "")
+                + (
+                    f", {usage['unknown_usage_calls']} with unknown usage"
+                    if usage.get("unknown_usage_calls")
+                    else ""
+                )
             )
         else:
             log.add_info("subcalls   none yet")
+        manager = getattr(session, "delegation_manager", None)
+        if manager is not None:
+            records = manager.store.records(manager.root)
+            if records:
+                log.add_info(
+                    f"a2a        {len(records)} tasks, {sum(r['credits'] for r in records)} admitted credits; remote usage unknown"
+                )
 
         snapshots = supervisor.snapshots() if supervisor is not None else []
         if snapshots:

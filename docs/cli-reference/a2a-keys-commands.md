@@ -111,3 +111,28 @@ The same group is available as `:a2a-keys` inside the TUI, defaulting to
 - [A2A Agents](../providers/a2a.md)
 - [Serve Commands](serve-commands.md)
 - [Environment Variables](../configuration/environment-variables.md)
+
+## Hosted skill credits
+
+Use `superqode a2a-keys credits --store credits.sqlite3` with `grant`, `show`,
+or `reconcile`. Grants authorize a customer, skill, finite integer credit
+allowance, expiry and concurrency. Signed keys authenticate separately.
+Reconciliation requires `--charged` and `--reason` and persists an audit record.
+See [hosted task credits](../advanced/rlm-a2a.md#hosted-task-credits) for examples.
+
+### `superqode a2a-keys credits grant`
+
+Pass the group's `--store`, a customer, `--credits`, repeatable `--skill`,
+`--days`, and `--max-parallel`. Grants add to the balance and set current
+entitlements.
+
+### `superqode a2a-keys credits show`
+
+Pass the group's `--store` and customer to display the balance, reserved credits,
+expiry, skill list, and available allowance.
+
+### `superqode a2a-keys credits reconcile`
+
+Pass the group's `--store`, customer and task ID, plus `--charged` and a
+nonempty `--reason`. The charge must fit the original reservation. Repeating the
+same settlement is idempotent; a conflicting amount is rejected.

@@ -1460,6 +1460,18 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
         capabilities.append("Parallel tool calls")
     if getattr(recursion, "enabled", False) or item.runtime == "rlm":
         capabilities.append("Recursive child agents")
+    if item.runtime == "rlm":
+        from superqode.rlm.delegation_policy import DelegationPolicy
+
+        try:
+            routing = DelegationPolicy.from_config(spec.runtime.config.get("a2a"))
+            capabilities.append(f"Optional A2A: {'on' if routing.enabled else 'off'}")
+            policies += (
+                f"Paid A2A: {'on' if routing.hosted_enabled else 'off'}; credit limit {routing.max_hosted_credits}",
+            )
+        except ValueError as error:
+            capabilities.append("Optional A2A: invalid configuration")
+            policies += (f"A2A setup: {error}",)
     if getattr(getattr(spec, "observability", None), "events", False):
         capabilities.append("Structured run events")
     metadata = getattr(spec, "metadata", {}) or {}
@@ -1483,6 +1495,8 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
         ),
         **_spec_lifecycle_commands(item_reference),
     }
+    if item.runtime == "rlm":
+        details["tui_commands"] += (":rlm a2a", ":rlm routing", ":rlm delegations")
     if item.id == "uhp":
         details.update(
             install_command=":connect uhp",

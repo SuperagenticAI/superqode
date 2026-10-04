@@ -212,3 +212,16 @@ def test_every_shipped_example_spec_matches_its_own_declarations():
             offenders[path.name] = [check.name for check in portable]
 
     assert not offenders, f"example specs contradict themselves: {offenders}"
+
+
+def test_native_rlm_tool_contract_is_checked_against_its_runtime():
+    native = _spec(
+        runtime=RuntimeSpec(backend="rlm"),
+        agents=(AgentSpec(id="rlm", role="analysis", tools=("python",)),),
+    )
+    assert _check(detect_drift(native), "tools").status == DRIFT_OK
+    invalid = _spec(
+        runtime=RuntimeSpec(backend="rlm"),
+        agents=(AgentSpec(id="rlm", role="analysis", tools=("python", "bash")),),
+    )
+    assert _check(detect_drift(invalid), "tools").status == DRIFT_DRIFT

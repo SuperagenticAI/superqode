@@ -52,7 +52,7 @@ class RLMHarnessBackend:
                 raw = event.data.get("usage")
                 if isinstance(raw, dict):
                     usage = _accumulate(usage, raw)
-            elif event.type == "error":
+            elif event.type in {"error", "run.failed"}:
                 stopped_reason = "error"
                 error = str(event.data.get("error") or "RLM run failed")
         response = AgentResponse(

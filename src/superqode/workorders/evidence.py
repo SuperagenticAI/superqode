@@ -134,16 +134,16 @@ def publish_evidence(store, order, task, content, workspace: Path, *, actor="", 
             observation = artifacts.describe(order.work_order_id, source["reference"])
         except (OSError, ValueError, LookupError, PermissionError, sqlite3.Error):
             continue
-        if (
-            observation.metadata.get("task_id") != task.task_id
-            or observation.metadata.get("verification") != "observed_output"
-        ):
+        if observation.metadata.get("task_id") != task.task_id or observation.metadata.get(
+            "verification"
+        ) not in {"observed_output", "remote_unverified"}:
             continue
         receipts.append(
             {
                 "reference": observation.reference,
                 "digest": observation.digest,
                 "tool": observation.metadata.get("tool", ""),
+                "verification": observation.metadata.get("verification", "observed_output"),
             }
         )
     current_order = store.get(order.work_order_id)
@@ -235,7 +235,7 @@ def dependency_catalog(order, task, workspace: Path):
                         "artifact_id": artifact.artifact_id,
                         "reference": source["reference"],
                         "tool": source.get("tool", ""),
-                        "verification": "observed_output",
+                        "verification": source.get("verification", "observed_output"),
                         "freshness": "unknown",
                         "reason": "historical_tool_output_requires_source_validation",
                     }
@@ -260,7 +260,38 @@ def collect_supporting_evidence(order, task, events, *, invocation_namespace="")
         return []
     calls, supporting = {}, []
     for event in events:
+        if len(supporting) >= 32:
+            break
         data = event.data
+        if event.type == "artifact.created" and data.get("kind") == "remote_agent_evidence":
+            meta = data.get("metadata") or {}
+            output = json.dumps(meta, sort_keys=True, default=str)
+            try:
+                record = artifacts.put(
+                    order.work_order_id,
+                    f"remote:{task.task_id}:{task.attempts}:{data.get('artifact_id')}:{hashlib.sha256(output.encode()).hexdigest()}",
+                    output,
+                    metadata={
+                        "tool": "a2a",
+                        "verification": "remote_unverified",
+                        "task_id": task.task_id,
+                        "peer": meta.get("peer"),
+                        "bundle_sha256": meta.get("bundle_sha256"),
+                    },
+                )
+                supporting.append(
+                    redact_evidence(
+                        {
+                            "reference": record.reference,
+                            "tool": "a2a",
+                            "digest": record.digest,
+                            "verification": "remote_unverified",
+                        }
+                    )
+                )
+            except (OSError, ValueError, PermissionError, sqlite3.Error):
+                pass
+            continue
         if event.type == "tool_call" and data.get("tool_call_id"):
             calls[data["tool_call_id"]] = data.get("args", data.get("arguments", {}))
         if event.type != "tool_result" or len(supporting) >= 32:

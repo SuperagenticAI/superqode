@@ -77,8 +77,38 @@ jobs:
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
 
+  rlm-contracts:
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install RLM test dependencies
+        run: uv sync --frozen --extra dev --extra a2a --extra monty
+      - name: Require Docker for boundary checks
+        run: |
+          docker info
+          docker pull python:3.12-slim
+      - name: Native RLM, A2A and mounted TUI release contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/rlm tests/test_a2a_hosted_credits.py
+          tests/test_tui_rlm_routing.py tests/test_harness_hub_screen.py
+          tests/test_connect_harness_screen.py tests/test_connection_profiles.py
+          tests/test_harness_drift.py tests/test_workorder_evidence.py -q
+
   publish:
-    needs: [resolve, verify]
+    needs: [resolve, verify, rlm-contracts]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tag

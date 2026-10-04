@@ -79,7 +79,9 @@ class SubcallPolicy:
             timeout=max(1.0, float(number("timeout", default.timeout))),
             token_budget=max(0, int(number("token_budget", default.token_budget))),
             models=tuple(
-                str(item) for item in data.get("subcall_models") or () if str(item).strip()
+                str(item)
+                for item in data.get("subcall_models", data.get("models")) or ()
+                if str(item).strip()
             ),
         )
 
@@ -198,6 +200,7 @@ class SubcallExecutor:
         policy: SubcallPolicy | None = None,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         state_path: str | Path | None = None,
+        ledger: Any = None,
     ) -> None:
         self.model = model
         self.stream_fn = stream_fn
@@ -206,6 +209,7 @@ class SubcallExecutor:
         self.state_path = Path(state_path) if state_path is not None else None
         self.usage, self._counter = self._restore()
         self._lock = asyncio.Lock()
+        self.ledger = ledger
 
     async def query(
         self,
@@ -242,18 +246,50 @@ class SubcallExecutor:
 
         async def run(index: int) -> RLMResponse:
             async with semaphore:
-                return await self._one(start + index, requests[index], supplied[index], selected)
+                number = start + index
+                if self.ledger is not None:
+                    try:
+                        async with asyncio.timeout(self.policy.timeout):
+                            while not self.ledger.claim(number, self.policy.max_concurrency):
+                                await asyncio.sleep(0.05)
+                    except TimeoutError:
+                        self.ledger.finish(number, {}, failed=True)
+                        return RLMResponse(
+                            id=f"query-{number}",
+                            text="",
+                            error="Root semantic concurrency wait expired",
+                        )
+                result = await self._one(number, requests[index], supplied[index], selected)
+                if self.ledger is not None:
+                    self.ledger.finish(number, result.usage, failed=not result.ok)
+                return result
 
         # gather preserves input order, which a caller zipping prompts to
         # answers depends on.
         return list(await asyncio.gather(*(run(index) for index in range(len(requests)))))
 
     def snapshot(self) -> dict[str, Any]:
-        return {"policy": self.policy.to_dict(), "usage": self.usage.to_dict()}
+        return {
+            "policy": self.policy.to_dict(),
+            "usage": self.usage.to_dict(),
+            **({"root_usage": self.ledger.snapshot()} if self.ledger is not None else {}),
+        }
 
     async def _reserve(self, count: int) -> int:
         """Claim ``count`` calls against the quota and return the first number."""
         async with self._lock:
+            from .capabilities import check_admission
+
+            check_admission()
+            if self.ledger is not None:
+                try:
+                    start = self.ledger.reserve(count, self.policy)
+                except ValueError as error:
+                    raise SubcallLimitError(str(error)) from error
+                self._counter += count
+                self.usage.calls = self._counter
+                self._persist()
+                return start
             if self.policy.max_calls and self._counter + count > self.policy.max_calls:
                 raise SubcallLimitError(
                     f"Subcall limit reached: {self._counter} of {self.policy.max_calls} used, "
@@ -303,6 +339,9 @@ class SubcallExecutor:
                 ),
             )
         try:
+            from .capabilities import check_admission
+
+            check_admission()
             message = await asyncio.wait_for(self._stream(body, model), timeout=self.policy.timeout)
         except TimeoutError:
             self.usage.failures += 1

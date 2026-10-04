@@ -74,6 +74,14 @@ def test_rlm_commands_are_offered_for_completion():
         ":rlm sandbox",
         ":rlm usage",
         ":rlm agents",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm peers",
+        ":rlm delegations",
+        ":rlm inbox",
+        ":rlm message",
+        ":rlm follow-up",
+        ":rlm reconcile",
         ":rlm send",
         ":rlm steer",
         ":rlm cancel",
@@ -121,6 +129,16 @@ async def test_session_and_empty_agent_list_are_visible(tmp_path):
     assert any("python (serializable state checkpointed)" in message for message in log.infos)
     assert any("detached Python processes" in message for message in log.infos)
     assert any("No recursive child agents" in message for message in log.infos)
+
+
+async def test_routing_inspects_authoritative_session_policy(tmp_path):
+    session = await _session(tmp_path)
+    app = App(active=True)
+    log = RecordingLog()
+    await app._rlm_dispatch(session, "routing", "", log)
+    assert any("Active worker A2A: off" in line for line in log.infos)
+    assert any("Paid routing: off" in line for line in log.infos)
+    assert any("Allowed peers: none" in line for line in log.infos)
 
 
 async def test_sandbox_status_states_the_boundary_without_overclaiming(tmp_path):

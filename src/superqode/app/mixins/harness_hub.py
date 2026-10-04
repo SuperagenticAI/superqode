@@ -221,6 +221,9 @@ class HarnessHubMixin:
         if action == "inspect":
             self._present_harness_hub_detail(item, log)
             return
+        if action == "a2a":
+            self._open_rlm_routing(log, spec=getattr(item.target, "spec", None))
+            return
         if action == "use":
             self._activate_harness_hub_item(item, log)
 

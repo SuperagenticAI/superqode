@@ -2148,7 +2148,36 @@ class ConnectMixin:
             self._show_connect_type_picker(log, menu=CONNECT_MENU_HARNESS)
         elif conn == "harness-use":
             # Switching confirms the harness, then prompts for the model.
-            self._harness_cmd(f"switch {profile.runtime or 'core'}", log)
+            from superqode.providers.connection_profiles import CONNECT_MENU_RLM
+
+            pure = getattr(self, "_pure_mode", None)
+            # An existing resident worker keeps its sandbox and routing policy.
+            # RLM options must use a new root to apply the selected boundary.
+            fork = (
+                " --fork"
+                if profile.menu == CONNECT_MENU_RLM
+                and pure is not None
+                and pure.get_current_session_id()
+                else ""
+            )
+            self._harness_cmd(f"switch {profile.runtime or 'core'}{fork}", log)
+        elif conn == "rlm-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_RLM
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_RLM)
+        elif conn == "rlm-routing":
+            from superqode.harness.templates import get_harness_template
+            from superqode.providers.connection_profiles import CONNECT_MENU_RLM
+
+            pure = getattr(self, "_pure_mode", None)
+            spec = getattr(pure, "_harness_spec", None)
+            if getattr(getattr(spec, "runtime", None), "backend", "") != "rlm":
+                spec = get_harness_template("rlm")
+            self._open_rlm_routing(
+                log,
+                spec=spec,
+                on_back=lambda: self._show_connect_type_picker(log, menu=CONNECT_MENU_RLM),
+            )
         elif conn == "harness-catalog":
             # Remember the entry point so Esc returns to the harness step.
             self._harness_picker_from_connect = True

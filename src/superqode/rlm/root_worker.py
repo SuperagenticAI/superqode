@@ -189,6 +189,20 @@ class ResidentRootWorker:
         def emit(text: str, level: str = "info") -> None:
             lines.append({"level": level, "text": text})
 
+        from superqode.rlm.admin import retained_admin
+
+        class Output:
+            def add_info(self, text):
+                emit(text)
+
+            def add_success(self, text):
+                emit(text, "success")
+
+            def add_error(self, text):
+                emit(text, "error")
+
+        if await retained_admin(session, command, argument, Output()):
+            return {"lines": lines}
         if command in {"session", "status"}:
             info = await session.info()
             sandbox = session.options.sandbox
@@ -280,15 +294,27 @@ class ResidentRootWorker:
         elif command == "usage":
             subcalls = session.subcall_usage
             if subcalls:
-                usage = subcalls["usage"]
+                usage = subcalls.get("root_usage", subcalls["usage"])
                 limit = subcalls["policy"]["max_calls"]
                 emit(
                     f"subcalls   {usage['calls']} of {limit} calls, "
                     f"{usage['total_tokens']} tokens, ${usage['cost_usd']:.4f}"
                     + (f", {usage['failures']} failed" if usage["failures"] else "")
+                    + (
+                        f", {usage['unknown_usage_calls']} with unknown usage"
+                        if usage.get("unknown_usage_calls")
+                        else ""
+                    )
                 )
             else:
                 emit("subcalls   none yet")
+            manager = getattr(session, "delegation_manager", None)
+            if manager is not None:
+                remote = manager.store.records(manager.root)
+                if remote:
+                    emit(
+                        f"a2a        {len(remote)} tasks, {sum(r['credits'] for r in remote)} admitted credits; remote usage unknown"
+                    )
             records = supervisor.snapshots() if supervisor is not None else []
             tokens = sum(int((item.get("usage") or {}).get("total_tokens", 0)) for item in records)
             cost = sum(float((item.get("usage") or {}).get("cost_usd", 0.0)) for item in records)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -99,3 +100,74 @@ def status(secret: str | None) -> None:
             "\n[yellow]Without a secret this server refuses every key rather than "
             "accepting them.[/yellow]\nGenerate one with: superqode a2a-keys secret"
         )
+
+
+@a2a_keys.group("credits")
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Authoritative hosted credit database",
+)
+@click.pass_context
+def credits(ctx, store):
+    """Manage hosted skill entitlements independently of signed keys."""
+    from superqode.a2a.billing import CreditLedger
+
+    ctx.obj = CreditLedger(store)
+
+
+@credits.command("grant")
+@click.argument("customer")
+@click.option("--credits", "allowance", required=True, type=click.IntRange(min=0))
+@click.option("--skill", "skills", multiple=True, required=True)
+@click.option("--days", default=30, type=click.IntRange(min=1, max=365))
+@click.option("--max-parallel", default=1, type=click.IntRange(min=1, max=64))
+@click.pass_obj
+def grant_credits(ledger, customer, allowance, skills, days, max_parallel):
+    """Add credits and set CUSTOMER's explicit skill entitlement."""
+    import json
+    import time
+
+    click.echo(
+        json.dumps(
+            ledger.grant(
+                customer,
+                allowance,
+                skills=skills,
+                expires_at=time.time() + days * 86400,
+                max_parallel=max_parallel,
+            ),
+            sort_keys=True,
+        )
+    )
+
+
+@credits.command("show")
+@click.argument("customer")
+@click.pass_obj
+def show_credits(ledger, customer):
+    """Inspect available credits and outstanding reservations."""
+    import json
+
+    try:
+        click.echo(json.dumps(ledger.account(customer), sort_keys=True))
+    except PermissionError as error:
+        raise click.ClickException(str(error)) from error
+
+
+@credits.command("reconcile")
+@click.argument("customer")
+@click.argument("job")
+@click.option("--charged", required=True, type=click.IntRange(min=0))
+@click.option("--reason", required=True)
+@click.pass_obj
+def reconcile_credits(ledger, customer, job, charged, reason):
+    """Settle an uncertain JOB after externally verifying its outcome."""
+    if not reason.strip():
+        raise click.ClickException("Reconciliation requires a reason")
+    try:
+        ledger.settle(customer, job, charged, reason=reason)
+    except (PermissionError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"Reconciled {job}: {charged} credits; {reason}")

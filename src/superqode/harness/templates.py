@@ -252,6 +252,7 @@ def rlm_template(*, name: str = "rlm") -> HarnessSpec:
                 "max_depth": 3,
                 "max_children": 8,
                 "max_parallel": 4,
+                "a2a": {"enabled": False, "hosted_enabled": False, "max_hosted_credits": 0},
                 # The resident root worker owns every descendant. Spawning a
                 # second worker per child would split the tree-wide limits.
                 "resident_root": True,

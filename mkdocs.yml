@@ -215,6 +215,7 @@ nav:
     - π PiPy: advanced/pipy.md
     - Tool Composition and Recovery: advanced/tool-composition-and-recovery.md
     - 🐍 Native RLM: advanced/rlm.md
+    - 🔗 RLM A2A Routing: advanced/rlm-a2a.md
     - 🐍 Prime Agent Python Client: prime-agent-python-client.md
     - 🐋 DeepSeek Harness: advanced/deepseek-harness.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md

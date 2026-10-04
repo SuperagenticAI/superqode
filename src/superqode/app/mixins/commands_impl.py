@@ -5010,6 +5010,24 @@ class CommandImplMixin:
                 )
             )
             rows.append(("Sandbox", str(getattr(policy, "sandbox", "") or "local"), THEME["text"]))
+            if entry.runtime == "rlm":
+                from superqode.rlm.delegation_policy import DelegationPolicy
+
+                routing = DelegationPolicy.from_config(spec.runtime.config.get("a2a"))
+                rows.append(
+                    (
+                        "A2A",
+                        f"{'on' if routing.enabled else 'off'} · optional · :rlm a2a",
+                        THEME["cyan"],
+                    )
+                )
+                rows.append(
+                    (
+                        "Paid A2A",
+                        f"{'on' if routing.hosted_enabled else 'off'} · credit limit {routing.max_hosted_credits}",
+                        THEME["text"],
+                    )
+                )
 
             # The picker shows this before activation, but `:harness switch` and
             # `:connect harness-*` never open it. This card runs on every switch,

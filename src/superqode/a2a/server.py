@@ -117,6 +117,13 @@ class A2AServerConfig(BaseModel):
     #: coding template allows shell and writes with no sandbox isolation.  The
     #: CLI therefore turns this off for remote binds unless asked otherwise.
     harness_skill_enabled: bool = True
+    credit_store_path: Path | None = None
+    require_harness_entitlement: bool = False
+    harness_credit_cost: int = Field(default=1, ge=1, le=1_000_000)
+    hosted_task_timeout: float = Field(default=120, gt=0, le=3600)
+    hosted_max_turns: int = Field(default=8, ge=1, le=128)
+    hosted_max_input_bytes: int = Field(default=128000, ge=1, le=4000000)
+    hosted_max_output_bytes: int = Field(default=1000000, ge=1, le=16000000)
     #: How long a fetched Agent Card may be reused, in seconds.
     #:
     #: Registries and gateways poll the card. Without a freshness window they
@@ -206,6 +213,11 @@ class SuperQodeA2AExecutor:
         self._task_sessions: dict[str, HarnessSessionRef] = {}
         self._owners = ContextOwnerStore()
         self._session_lock = asyncio.Lock()
+        from .billing import CreditLedger
+
+        self._credits = CreditLedger(config.credit_store_path) if config.credit_store_path else None
+        if config.require_harness_entitlement and self._credits is None:
+            raise ValueError("Paid harness execution requires an authoritative credit_store_path")
 
     async def execute(self, context: Any, event_queue: Any) -> None:
         sdk = _a2a_sdk()
@@ -265,10 +277,81 @@ class SuperQodeA2AExecutor:
             )
             return
 
+        customer = ""
+        credit_job = task_id
+        if self.config.require_harness_entitlement:
+            import hashlib
+
+            call_state = getattr(getattr(context, "call_context", None), "state", None) or {}
+            customer = str(call_state.get("customer") or "")
+            if len(user_input.encode()) > self.config.hosted_max_input_bytes:
+                await updater.failed(
+                    updater.new_agent_message(
+                        [sdk["Part"](text="Hosted task input allowance exceeded")]
+                    )
+                )
+                return
+            if not customer or caller_tier(context) in {"anonymous", "operator"}:
+                await updater.failed(
+                    updater.new_agent_message(
+                        [
+                            sdk["Part"](
+                                text="This hosted skill requires an entitled customer account"
+                            )
+                        ]
+                    )
+                )
+                return
+            metadata = _request_metadata(context)
+            if "superqodeMaxCredits" in metadata:
+                import math
+
+                ceiling = metadata["superqodeMaxCredits"]
+                if (
+                    metadata.get("superqodeBudgetVersion") != 1
+                    or isinstance(ceiling, bool)
+                    or not isinstance(ceiling, (int, float))
+                    or not math.isfinite(ceiling)
+                    or ceiling != int(ceiling)
+                    or ceiling < self.config.harness_credit_cost
+                ):
+                    await updater.failed(
+                        updater.new_agent_message(
+                            [
+                                sdk["Part"](
+                                    text="Hosted tariff exceeds the caller's admitted credit ceiling"
+                                )
+                            ]
+                        )
+                    )
+                    return
+            fingerprint = hashlib.sha256(
+                json.dumps(
+                    {"input": user_input, "context": context_id, "skill": self.config.skill_id},
+                    sort_keys=True,
+                ).encode()
+            ).hexdigest()
+            try:
+                _, admitted = self._credits.reserve(
+                    customer,
+                    credit_job,
+                    fingerprint,
+                    skill=self.config.skill_id,
+                    credits=self.config.harness_credit_cost,
+                )
+                if not admitted:
+                    raise PermissionError(
+                        "This computation was already admitted; retrieve its task or reconcile it"
+                    )
+            except (PermissionError, ValueError) as error:
+                await updater.failed(updater.new_agent_message([sdk["Part"](text=str(error))]))
+                return
         try:
             session = await self._session_for(context_id, principal)
         except ContextOwnershipError as exc:
             await updater.failed(updater.new_agent_message([sdk["Part"](text=str(exc))]))
+            if customer:
+                self._credits.settle(customer, credit_job, 0)
             return
         self._task_sessions[task_id] = session
         artifact_id = f"superqode-{task_id}"
@@ -276,11 +359,28 @@ class SuperQodeA2AExecutor:
         artifact_started = False
         pending_chunk: str | None = None
 
+        turns = 0
+        output_bytes = 0
         try:
-            async for event in self.controller.send(session, user_input):
+            async for event in self._bounded_events(session, user_input):
+                if event.type == "model.response":
+                    turns += 1
+                    if (
+                        self.config.require_harness_entitlement
+                        and turns > self.config.hosted_max_turns
+                    ):
+                        await self.controller.cancel(session)
+                        raise RuntimeError("Hosted task turn allowance exhausted")
                 if event.type == "message.delta":
                     chunk = str(event.data.get("text") or "")
                     if chunk:
+                        output_bytes += len(chunk.encode())
+                        if (
+                            self.config.require_harness_entitlement
+                            and output_bytes > self.config.hosted_max_output_bytes
+                        ):
+                            await self.controller.cancel(session)
+                            raise RuntimeError("Hosted task output allowance exceeded")
                         content.append(chunk)
                         if pending_chunk is not None:
                             await updater.add_artifact(
@@ -295,6 +395,11 @@ class SuperQodeA2AExecutor:
                 elif event.type == "message.created" and event.data.get("role") == "assistant":
                     final_text = str(event.data.get("content") or "")
                     if final_text and not content:
+                        if (
+                            self.config.require_harness_entitlement
+                            and len(final_text.encode()) > self.config.hosted_max_output_bytes
+                        ):
+                            raise RuntimeError("Hosted task output allowance exceeded")
                         content.append(final_text)
                 elif event.type == "run.failed":
                     await updater.failed(
@@ -343,8 +448,27 @@ class SuperQodeA2AExecutor:
                     metadata={"superqodeSessionId": session.session_id},
                 )
             )
+        except Exception as error:
+            await updater.failed(updater.new_agent_message([sdk["Part"](text=str(error))]))
         finally:
+            if customer:
+                # Bounded task tariff, charged once after execution. A process
+                # crash leaves the reservation outstanding for reconciliation.
+                self._credits.settle(customer, credit_job, self.config.harness_credit_cost)
             self._task_sessions.pop(task_id, None)
+
+    async def _bounded_events(self, session, user_input):
+        if not self.config.require_harness_entitlement:
+            async for event in self.controller.send(session, user_input):
+                yield event
+            return
+        try:
+            async with asyncio.timeout(self.config.hosted_task_timeout):
+                async for event in self.controller.send(session, user_input):
+                    yield event
+        except TimeoutError:
+            await self.controller.cancel(session)
+            raise RuntimeError("Hosted task deadline expired") from None
 
     def _wants_shortlist(self, context: Any, user_input: str) -> bool:
         """Decide whether this turn is a shortlist question.
@@ -406,7 +530,11 @@ class SuperQodeA2AExecutor:
 
         constraints = None
         understood = False
-        if tier != ANONYMOUS_TIER and self.config.understand_requests:
+        if (
+            tier != ANONYMOUS_TIER
+            and self.config.understand_requests
+            and not self.config.require_harness_entitlement
+        ):
             from superqode.a2a.understand import understand_request
 
             constraints, understood = await asyncio.to_thread(
@@ -736,6 +864,9 @@ async def create_a2a_server(
     anonymous_per_minute: int | None = None,
     keyed_per_minute: int | None = None,
     global_per_day: int | None = None,
+    credit_store_path: str | Path | None = None,
+    require_harness_entitlement: bool = False,
+    harness_credit_cost: int = 1,
 ) -> A2AServer:
     """Create an A2A server over a real HarnessSpec or supplied controller.
 
@@ -765,6 +896,8 @@ async def create_a2a_server(
                 loaded_spec,
                 runtime=replace(loaded_spec.runtime, backend=runtime),
             )
+        if require_harness_entitlement and loaded_spec.runtime.backend == "rlm":
+            loaded_spec = _hosted_rlm_specialist(loaded_spec)
         adapter = CoreHarnessProtocolAdapter(loaded_spec, adapter_id="superqode")
         controller = HarnessProtocolController(
             [adapter], store=create_harness_store("sqlite", store_path)
@@ -786,6 +919,9 @@ async def create_a2a_server(
             bearer_token=bearer_token,
             key_secret=key_secret,
             harness_skill_enabled=harness_skill_enabled,
+            credit_store_path=Path(credit_store_path) if credit_store_path else None,
+            require_harness_entitlement=require_harness_entitlement,
+            harness_credit_cost=harness_credit_cost,
             **{
                 name: value
                 for name, value in (
@@ -797,6 +933,42 @@ async def create_a2a_server(
             },
         ),
     )
+
+
+def _hosted_rlm_specialist(spec):
+    """The paid pilot is a bounded leaf, with no hosted recursive fan-out."""
+    from dataclasses import replace
+    from superqode.rlm.sandbox import RLMSandboxConfig
+    from superqode.rlm.subcalls import SubcallPolicy
+
+    sandbox = RLMSandboxConfig.from_config(
+        spec.runtime.config, execution_policy=spec.execution_policy
+    )
+    if (
+        not sandbox.isolated
+        or spec.execution_policy.allow_write
+        or spec.execution_policy.allow_shell
+    ):
+        raise ValueError(
+            "Paid native RLM specialists require an isolated, read-only spec with shell disabled"
+        )
+    policy = SubcallPolicy.from_config(spec.runtime.config)
+    config = {
+        **spec.runtime.config,
+        "max_depth": 0,
+        "max_children": 1,
+        "max_parallel": 1,
+        "durable_children": False,
+        "autonomous": False,
+        "subcall_max_calls": min(policy.max_calls or 16, 16),
+        "subcall_max_batch": min(policy.max_batch, 4),
+        "subcall_max_concurrency": min(policy.max_concurrency, 2),
+        "subcall_max_prompt_chars": min(policy.max_prompt_chars, 32000),
+        "subcall_max_response_chars": min(policy.max_response_chars, 4000),
+        "subcall_timeout": min(policy.timeout, 30),
+        "a2a": {"enabled": False, "hosted_enabled": False, "max_hosted_credits": 0},
+    }
+    return replace(spec, runtime=replace(spec.runtime, config=config))
 
 
 def _agent_card(
@@ -966,6 +1138,15 @@ def _requested_skill(context: Any) -> str:
         if value:
             return str(value).strip()
     return ""
+
+
+def _request_metadata(context):
+    result = dict(getattr(context, "metadata", None) or {})
+    message = getattr(context, "message", None)
+    metadata = getattr(message, "metadata", None)
+    if metadata is not None:
+        result.update(sdk_message_to_dict(metadata))
+    return result
 
 
 def _required_id(value: str | None, label: str) -> str:

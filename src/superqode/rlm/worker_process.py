@@ -46,6 +46,12 @@ async def run_durable_child(
             model_id = selected_model if separator else selected_provider
         request = {
             "agent_id": record.id,
+            "parent_agent_id": record.parent_id,
+            "resume_path": record.resume_path,
+            "delegation_owner": record.continuation_of or record.id,
+            "subcall_policy": getattr(options, "subcall_policy", None).to_dict()
+            if getattr(options, "subcall_policy", None)
+            else {},
             "prompt": record.prompt,
             "cwd": str(Path(options.cwd).expanduser().resolve()),
             "provider": provider,
@@ -64,6 +70,9 @@ async def run_durable_child(
             # Names the root's boundary so an isolated child joins it rather
             # than starting a second one.
             "sandbox_session": _session_key(supervisor),
+            "a2a_config": getattr(options, "a2a_config", None),
+            "delegation_root": getattr(options, "delegation_root", ""),
+            "delegation_path": getattr(options, "delegation_path", ""),
         }
         _atomic_json(request_path, request)
         with log_path.open("ab") as log:
@@ -102,6 +111,7 @@ async def run_durable_child(
                 except subprocess.TimeoutExpired:
                     pass
             record.worker_pid = None
+            record.session_path = str(result.get("session_path") or "")
             record.usage = (
                 dict(result.get("usage") or {}) if isinstance(result.get("usage"), dict) else {}
             )

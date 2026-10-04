@@ -181,6 +181,10 @@ When SuperQode owns the loop, the harness step is also directly addressable:
 :connect harness-repo
 ```
 
+The RLM entry opens host, Docker, Monty and optional A2A choices. Use
+`:connect rlm-a2a` to open peer and credit setup directly. A2A and paid routing
+remain disabled until explicitly configured.
+
 The model-source screen offers Local, BYOK and an experimental subscription
 information menu for your selected SuperQode harness:
 

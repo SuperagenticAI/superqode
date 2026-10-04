@@ -242,7 +242,7 @@ def _tool_checks(spec: HarnessSpec) -> list[DriftCheck]:
             )
         ]
     try:
-        known = _known_tool_names()
+        known = {"python"} if spec.runtime.backend == "rlm" else _known_tool_names()
     except Exception as exc:  # noqa: BLE001 - reporting beats crashing
         return [
             DriftCheck(
@@ -256,7 +256,9 @@ def _tool_checks(spec: HarnessSpec) -> list[DriftCheck]:
 
     # Tools published by an MCP server are registered when the server connects,
     # so a static check cannot see them. Absence is not evidence of drift.
-    runtime_provided = tuple(tool for tool in declared if tool.startswith("mcp_"))
+    runtime_provided = tuple(
+        tool for tool in declared if tool.startswith("mcp_") and spec.runtime.backend != "rlm"
+    )
     missing = [tool for tool in declared if tool not in known and tool not in runtime_provided]
     if missing:
         return [

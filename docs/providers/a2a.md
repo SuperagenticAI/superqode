@@ -687,3 +687,10 @@ drop the original caller. Do not forward an operator token or customer key to
 a downstream agent.
 
 See also [ACP Agents](acp.md), [MCP Tools](../configuration/mcp-config.md), and [Harness Protocol](../advanced/harness-protocol.md).
+
+## A2A inside native RLM
+
+Native RLM can delegate selected context through an optional `a2a` Python
+namespace. See [the routing and hosted credits guide](../advanced/rlm-a2a.md).
+Existing connections and the public shortlist pilot continue to work. Stored
+credentials alone do not enable automatic or paid RLM delegation.

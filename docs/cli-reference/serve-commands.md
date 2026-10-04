@@ -345,10 +345,13 @@ superqode serve a2a \
 | `--harness-store` / `--store` | SQLite harness sessions, runs, evidence |
 | `--task-store` | SQLite A2A task records (survives restart) |
 | `--no-task-store` | Keep A2A task records in memory |
-| `--token` | Operator token (env: `SUPERQODE_A2A_TOKEN`). Required with `--expose-harness` |
+| `--token` | Operator token (env: `SUPERQODE_A2A_TOKEN`). Required with `--expose-harness` unless paid customer-key admission is configured |
 | `--allow-remote` | Allow binding outside localhost |
-| `--expose-harness` | Serve the harness skill on a remote bind. Requires `--spec` and a token |
+| `--expose-harness` | Serve the harness skill on a remote bind. Requires `--spec` and a token, or paid customer-key admission |
 | `--export-agent-card` | Write the runtime Agent Card JSON and exit |
+| `--paid-harness` | Require explicit customer skill entitlement and credit admission |
+| `--credit-store` | Authoritative durable hosted credit database |
+| `--task-credits` | Positive integer task tariff (default 1) |
 
 See [A2A Protocol](../providers/a2a.md) for durability, publishing, and the experimental multiplayer-computer packaging notes.
 

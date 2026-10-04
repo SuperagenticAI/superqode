@@ -154,7 +154,7 @@ def serve_jev(host: str, port: int, jev_timeout_ms: int, allow_remote: bool) -> 
     try:
         coordinator = RoutingCoordinator(timeout_ms=jev_timeout_ms)
         app = create_jev_service_app(coordinator=coordinator, token=token)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
     console.print(f"[cyan]Jev Tool Routing API: http://{host}:{port}/v1/route-tools[/cyan]")
     console.print(f"[cyan]Jev Tool Routing MCP: http://{host}:{port}/mcp[/cyan]")
@@ -356,6 +356,22 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
     default=None,
     help="Requests per day across every caller (default 5000). Zero removes the ceiling.",
 )
+@click.option(
+    "--credit-store",
+    type=click.Path(path_type=Path),
+    help="Authoritative hosted task credit database",
+)
+@click.option(
+    "--paid-harness",
+    is_flag=True,
+    help="Require customer skill entitlement and durable credit admission",
+)
+@click.option(
+    "--task-credits",
+    default=1,
+    type=click.IntRange(min=1),
+    help="Bounded hosted task credit tariff",
+)
 def serve_a2a(
     spec_path: Optional[Path],
     provider: str,
@@ -374,6 +390,9 @@ def serve_a2a(
     anonymous_per_minute: Optional[int],
     keyed_per_minute: Optional[int],
     global_per_day: Optional[int],
+    credit_store: Optional[Path],
+    paid_harness: bool,
+    task_credits: int,
 ):
     """Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent."""
     import asyncio
@@ -386,6 +405,10 @@ def serve_a2a(
     if not is_loopback and not allow_remote:
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
     key_secret = resolve_key_secret()
+    if paid_harness and (credit_store is None or not key_secret):
+        raise click.ClickException(
+            "--paid-harness requires --credit-store and SUPERQODE_A2A_KEY_SECRET."
+        )
 
     # A remote endpoint shares one token among every caller, so the harness
     # skill would hand all of them the same working directory with whatever
@@ -402,7 +425,7 @@ def serve_a2a(
                 "sandbox isolation."
             )
         harness_skill_enabled = expose_harness
-        if harness_skill_enabled and not token:
+        if harness_skill_enabled and not token and not (paid_harness and key_secret):
             # The harness runs work and spends money, so it is never anonymous.
             raise click.ClickException(
                 "Serving the harness remotely requires --token or SUPERQODE_A2A_TOKEN."
@@ -444,9 +467,12 @@ def serve_a2a(
                 anonymous_per_minute=anonymous_per_minute,
                 keyed_per_minute=keyed_per_minute,
                 global_per_day=global_per_day,
+                credit_store_path=credit_store,
+                require_harness_entitlement=paid_harness,
+                harness_credit_cost=task_credits,
             )
         )
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
     if export_agent_card is not None:

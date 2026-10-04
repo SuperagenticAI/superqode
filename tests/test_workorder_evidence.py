@@ -311,3 +311,40 @@ async def test_runner_publishes_evidence_and_passes_addressable_dependencies(tmp
     assert len(receipts) == 2
     assert receipts[0].metadata["reference"] in prompts[1]
     assert "reported" in prompts[1] and "read_context_chunk" in prompts[1]
+
+
+def test_remote_agent_receipt_preserves_unverified_origin(tmp_path, monkeypatch):
+    from superqode.harness.events import HarnessEvent
+    from superqode.workorders.evidence import collect_supporting_evidence
+
+    root, store, order, task, dependent = setup(tmp_path, monkeypatch)
+    receipts = collect_supporting_evidence(
+        order,
+        task,
+        [
+            HarnessEvent(
+                type="artifact.created",
+                data={
+                    "kind": "remote_agent_evidence",
+                    "artifact_id": "delegation-1",
+                    "metadata": {
+                        "peer": "reviewer",
+                        "state": "completed",
+                        "bundle_sha256": "selected-digest",
+                        "response": {"parts": [{"text": "Remote claims tests passed"}]},
+                        "verification": "remote_unverified",
+                    },
+                },
+            )
+        ],
+    )
+    assert len(receipts) == 1 and receipts[0]["verification"] == "remote_unverified"
+    publish_evidence(
+        store, order, task, "Remote finding requires local verification", root, supporting=receipts
+    )
+    scope = SimpleNamespace(
+        store=store, work_order_id=order.work_order_id, task_id=dependent.task_id
+    )
+    observation = read_workorder_evidence(scope, receipts[0]["reference"], root)
+    assert "remote_unverified" in observation.text
+    assert store.get(order.work_order_id).status.value != "accepted"

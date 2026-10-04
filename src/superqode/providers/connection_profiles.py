@@ -69,6 +69,7 @@ CONNECT_MENU_LANGUAGE_PREFIX = "by-language:"
 UNKNOWN_LANGUAGE_LABEL = "Unknown"
 CONNECT_MENU_CLOSED = "closed-harnesses"
 CONNECT_MENU_HARNESS = "harness"
+CONNECT_MENU_RLM = "rlm-options"
 CONNECT_MENU_MODELS = "models"
 CONNECT_MENU_KEY_MODELS = "key-models"
 CONNECT_MENU_PLAN = "plan"
@@ -86,6 +87,7 @@ CONNECT_MENUS = (
     CONNECT_MENU_CLOSED,
     CONNECT_MENU_LANGUAGE,
     CONNECT_MENU_HARNESS,
+    CONNECT_MENU_RLM,
     CONNECT_MENU_MODELS,
     CONNECT_MENU_KEY_MODELS,
     CONNECT_MENU_PLAN,
@@ -103,6 +105,7 @@ _LEGACY_MENUS = {
 #: Each screen's parent, so Esc walks back the way the user came.
 #: KEY_MODELS is omitted: its parent is KeyHarnessSession.return_menu.
 _MENU_PARENTS = {
+    CONNECT_MENU_RLM: CONNECT_MENU_HARNESS,
     CONNECT_MENU_VENDORS: CONNECT_MENU_AGENTS,
     CONNECT_MENU_ACP: CONNECT_MENU_AGENTS,
     CONNECT_MENU_PROTOCOLS: CONNECT_MENU_AGENTS,
@@ -485,7 +488,7 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="models",
         label="Connect a harness with your model",
-        description="Core, RLM, PiPy, Workbench or a preset, running the model you choose",
+        description="Connect with Native SuperQode harnesses like Core, RLM, PiPy, Workbench or Build Your own",
         connector="harness-picker-menu",
         detect=lambda: True,
     ),
@@ -535,8 +538,8 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="harness-rlm",
         label="RLM",
-        description="One persistent Python tool with recursive child agents",
-        connector="harness-use",
+        description="Recursive Python harness. Choose host, Docker, Monty or optional A2A",
+        connector="rlm-picker",
         runtime="rlm",
         menu=CONNECT_MENU_HARNESS,
         detect=lambda: True,
@@ -582,6 +585,46 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
         description="A harness.yaml or .superqode/harnesses spec in this project",
         connector="harness-catalog",
         menu=CONNECT_MENU_HARNESS,
+        detect=lambda: True,
+    ),
+]
+
+# RLM remains a native harness; remote routing is a separate explicit choice.
+_RLM_PROFILES: List[ConnectionProfile] = [
+    ConnectionProfile(
+        id="rlm-host",
+        label="Use RLM on host",
+        description="Persistent Python and local recursion. Runs on your host; A2A off",
+        connector="harness-use",
+        runtime="rlm",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-docker",
+        label="Use RLM with Docker",
+        description="Container boundary for Python, repository edits and tests. Requires Docker; A2A off",
+        connector="harness-use",
+        runtime="rlm-docker",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-monty",
+        label="Use RLM with Monty",
+        description="Restricted Python. Requires the Monty extra; no shell or repository writes. A2A off",
+        connector="harness-use",
+        runtime="rlm-monty",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-a2a",
+        label="Configure optional A2A",
+        description="Peer URLs, key references, paid opt-in and credit limits. Keeps the current RLM sandbox",
+        connector="rlm-routing",
+        runtime="rlm",
+        menu=CONNECT_MENU_RLM,
         detect=lambda: True,
     ),
 ]
@@ -1483,6 +1526,7 @@ _PROFILES: List[ConnectionProfile] = [
     *_AGENT_PROFILES,
     *_ACP_MENU_PROFILES,
     *_HARNESS_PROFILES,
+    *_RLM_PROFILES,
     *_MODEL_PROFILES,
     *_PLAN_PROFILES,
     *_BUILD_PROFILES,
@@ -1578,6 +1622,7 @@ _BY_MENU = {
     CONNECT_MENU_OPEN: (),
     CONNECT_MENU_CLOSED: (),
     CONNECT_MENU_HARNESS: _HARNESS_PROFILES,
+    CONNECT_MENU_RLM: _RLM_PROFILES,
     CONNECT_MENU_MODELS: _MODEL_PROFILES,
     CONNECT_MENU_KEY_MODELS: (),
     CONNECT_MENU_PLAN: _PLAN_PROFILES,
@@ -1621,6 +1666,10 @@ CONNECT_MENU_TITLES = {
     CONNECT_MENU_HARNESS: (
         "Select a harness",
         "Step 1 of 2. You choose the model next.",
+    ),
+    CONNECT_MENU_RLM: (
+        "RLM options",
+        "Choose an execution boundary, then your model. Remote and paid routing are optional.",
     ),
     CONNECT_MENU_MODELS: (
         "Select a model",
@@ -2070,6 +2119,7 @@ __all__ = [
     "CONNECT_MENU_LANGUAGE_PREFIX",
     "CONNECT_MENU_CLOSED",
     "CONNECT_MENU_HARNESS",
+    "CONNECT_MENU_RLM",
     "CONNECT_MENU_KEY_MODELS",
     "CONNECT_MENU_MODELS",
     "CONNECT_MENU_OPEN",

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.6] - 2026-10-04
+
+### Added
+
+- Optional A2A delegation inside native RLM's existing Python tool, with durable
+  task handles, bounded context and results, restart reconciliation and explicit
+  hosted credit admission. Routes and paid fallback remain off by default.
+- Open **Optional A2A** in the Harness Hub or `:rlm a2a` to configure peers,
+  key environment references and credit limits. Save project profiles or branch
+  into a new session; inspect the active worker policy, remote tasks and usage.
+- Choose RLM from `:connect` to see host, Docker and Monty execution choices
+  alongside optional A2A setup before continuing the model connection flow.
+- Retained agent inboxes and explicit child continuations, root-wide semantic
+  subcall admission, and Monty resource limits and persistent checkpoints.
+- Hosted specialist entitlements, durable customer credit reservations and
+  unverified remote evidence receipts in the existing WorkOrder acceptance flow.
+
+### Notes
+
+- Paid hosted execution remains disabled on the public Cloud Run catalogue.
+  The hosted specialist implementation supports a single durable host pilot;
+  multi-instance Cloud Run execution requires a shared durable backend.
+- Hosted service setup requires a signing secret, customer credits, durable
+  task and credit stores, and an isolated read-only specialist harness.
+- Native RLM and WorkOrders retain their existing execution and acceptance paths.
+  Real workload cost and coding-quality measurements remain outstanding.
+
 ## [2.5.5] - 2026-10-04
 
 ### Added

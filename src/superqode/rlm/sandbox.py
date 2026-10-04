@@ -82,6 +82,10 @@ class RLMSandboxConfig:
     python_timeout: float = 120.0
     max_output_chars: int = 1_000_000
     max_checkpoint_bytes: int = 64 * 1024 * 1024
+    monty_max_workers: int = 4
+    monty_memory_bytes: int = 64 * 1024 * 1024
+    monty_recursion_depth: int = 256
+    monty_suspensions: int = 512
 
     @property
     def isolated(self) -> bool:
@@ -109,6 +113,12 @@ class RLMSandboxConfig:
             )
         backend = _resolve_backend(data, execution_policy)
         return cls(
+            monty_max_workers=max(1, min(64, int(data.get("monty_max_workers", 4)))),
+            monty_memory_bytes=max(
+                1_048_576, min(1_073_741_824, int(data.get("monty_memory_bytes", 64 * 1024 * 1024)))
+            ),
+            monty_recursion_depth=max(16, min(1000, int(data.get("monty_recursion_depth", 256)))),
+            monty_suspensions=max(1, min(10000, int(data.get("monty_suspensions", 512)))),
             backend=backend,
             granularity=granularity,
             policy=_resolve_policy(data, execution_policy),
@@ -149,6 +159,10 @@ class RLMSandboxConfig:
         the way back in; it is present for journals and status output.
         """
         return {
+            "monty_max_workers": self.monty_max_workers,
+            "monty_memory_bytes": self.monty_memory_bytes,
+            "monty_recursion_depth": self.monty_recursion_depth,
+            "monty_suspensions": self.monty_suspensions,
             "sandbox": self.backend,
             "sandbox_granularity": self.granularity,
             "sandbox_image": self.image,

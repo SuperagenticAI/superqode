@@ -7,6 +7,7 @@ import pytest
 from superqode.providers.connection_profiles import (
     CONNECT_MENU_BUILD,
     CONNECT_MENU_HARNESS,
+    CONNECT_MENU_RLM,
     CONNECT_MENU_MODELS,
     CONNECT_MENU_PLAN,
     CONNECT_MENU_ROOT,
@@ -107,10 +108,15 @@ def test_root_offers_the_ways_to_get_a_harness():
     ]
 
 
-def test_root_copy_never_names_the_product_at_the_user():
-    """Root copy does not name the product."""
+def test_root_names_native_superqode_harnesses_in_the_model_route():
+    """The model route identifies the native harnesses the user can choose."""
     profiles = list_connection_profiles(CONNECT_MENU_ROOT)
-    copy = " ".join(f"{p.label} {p.description}" for p in profiles).lower()
+    model_route = next(p for p in profiles if p.id == "models")
+    assert (
+        model_route.description
+        == "Connect with Native SuperQode harnesses like Core, RLM, PiPy, Workbench or Build Your own"
+    )
+    copy = " ".join(f"{p.label} {p.description}" for p in profiles if p.id != "models").lower()
 
     assert "superqode" not in copy
 
@@ -142,9 +148,63 @@ def test_the_second_root_choice_opens_the_harness_step():
 def test_choosing_a_harness_activates_it():
     """Selecting a harness switches to it."""
     assert dispatch("harness-core").harness_commands == ["switch core"]
-    assert dispatch("harness-rlm").harness_commands == ["switch rlm"]
+    assert dispatch("harness-rlm").menus == [CONNECT_MENU_RLM]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
     assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
+
+
+def test_rlm_options_offer_local_boundaries_and_explicit_routing():
+    from superqode.providers.connection_profiles import parent_menu
+
+    profiles = list_connection_profiles(CONNECT_MENU_RLM)
+    assert [p.id for p in profiles] == ["rlm-host", "rlm-docker", "rlm-monty", "rlm-a2a"]
+    assert parent_menu(CONNECT_MENU_RLM) == CONNECT_MENU_HARNESS
+    assert CONNECT_MENU_RLM in CONNECT_MENUS
+    assert "optional" in CONNECT_MENU_TITLES[CONNECT_MENU_RLM][1]
+    for profile_id, runtime in (
+        ("rlm-host", "rlm"),
+        ("rlm-docker", "rlm-docker"),
+        ("rlm-monty", "rlm-monty"),
+    ):
+        assert dispatch(profile_id).harness_commands == [f"switch {runtime}"]
+
+
+@pytest.mark.parametrize("profile_id", ["rlm-host", "rlm-docker", "rlm-monty"])
+def test_rlm_execution_choice_branches_existing_worker_to_apply_sandbox(profile_id):
+    from types import SimpleNamespace
+    from superqode.app_main import SuperQodeApp
+
+    stub = DispatchStub()
+    stub._pure_mode = SimpleNamespace(get_current_session_id=lambda: "existing-root")
+    profile = get_connection_profile(profile_id)
+    SuperQodeApp._dispatch_connection_profile(stub, profile, FakeLog())
+    assert stub.harness_commands == [f"switch {profile.runtime} --fork"]
+
+
+@pytest.mark.parametrize("active_template", ["core", "rlm-monty"])
+def test_connect_optional_a2a_opens_shared_setup_without_enabling_routes(active_template):
+    from types import SimpleNamespace
+    from superqode.app_main import SuperQodeApp
+    from superqode.harness.templates import get_harness_template
+
+    class Stub(DispatchStub):
+        _pure_mode = SimpleNamespace(_harness_spec=get_harness_template(active_template))
+
+        def _open_rlm_routing(self, log, **kwargs):
+            self.routing = kwargs
+
+    stub = Stub()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("rlm-a2a"), FakeLog())
+    spec = stub.routing["spec"]
+    assert spec.runtime.backend == "rlm"
+    assert spec.runtime.config.get("sandbox", "host") == (
+        "monty" if active_template == "rlm-monty" else "host"
+    )
+    assert not spec.runtime.config["a2a"]["enabled"]
+    assert not spec.runtime.config["a2a"]["hosted_enabled"]
+    assert stub.harness_commands == []
+    stub.routing["on_back"]()
+    assert stub.menus == [CONNECT_MENU_RLM]
 
 
 def test_systemone_selection_switches_to_the_coding_harness():

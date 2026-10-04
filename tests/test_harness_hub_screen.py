@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import replace
+from types import SimpleNamespace
 from textual.app import App, ComposeResult
 from textual.widgets import Button
 
@@ -56,6 +58,34 @@ class _HubApp(App):
 
     def _selected(self, result: HarnessHubResult | None) -> None:
         self.selection = result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("size", [(80, 24), (110, 34)])
+async def test_native_rlm_has_discoverable_optional_a2a_setup(size):
+    from superqode.harness.templates import get_harness_template
+    from textual.widgets import Static
+
+    item = replace(
+        _item("rlm", "RLM"), runtime="rlm", target=SimpleNamespace(spec=get_harness_template("rlm"))
+    )
+
+    class RLMHubApp(App):
+        selection = None
+
+        def on_mount(self):
+            self.push_screen(
+                HarnessHubScreen([item]), callback=lambda result: setattr(self, "selection", result)
+            )
+
+    app = RLMHubApp()
+    async with app.run_test(size=size) as pilot:
+        await pilot.pause()
+        assert "Optional A2A: off" in str(app.screen.query_one("#hub-detail", Static).render())
+        assert app.screen.query_one("#hub-a2a", Button).display
+        assert await pilot.click("#hub-a2a")
+        await pilot.pause()
+        assert app.selection == HarnessHubResult("a2a", "rlm")
 
 
 def test_outcome_store_caps_history_and_tracks_unread() -> None:

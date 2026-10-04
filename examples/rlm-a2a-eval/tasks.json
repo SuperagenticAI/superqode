@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "conditions": ["flat", "native-rlm-local", "native-rlm-a2a", "loopback-a2a-same-specialist"],
+  "profiles": ["host", "monty", "docker"],
+  "tasks": [
+    {"id": "auth-audit", "prompt": "Find the authentication defect and cite its location.", "source": "def authenticated(token):\n    return bool(token)  # accepts an unverified token\n", "expected": ["unverified token"], "evidence": "auth.py:2"},
+    {"id": "ci-log", "prompt": "Find the CI failure cause among repeated unrelated messages.", "source": "INFO cached dependency\n", "noise_repetitions": 10000, "selected": "ERROR migration failed: missing schema version 7\n", "expected": ["missing schema version 7"], "evidence": "ci.log:10001"},
+    {"id": "migration-review", "prompt": "Review a proposed migration and require fresh local tests before acceptance.", "source": "def migrate(row):\n    return {'name': row['name']}  # drops the id\n", "expected": ["drops the id"], "evidence": "migration.py:2", "local_gate": "assert migrate({'id': 1, 'name': 'A'})['id'] == 1"}
+  ],
+  "metrics": ["gate_success", "evidence_precision", "evidence_coverage", "input_tokens", "output_tokens", "known_cost_usd", "unknown_cost_tasks", "wall_seconds", "root_prompt_bytes", "payload_bytes", "remote_submissions", "duplicate_submissions", "recovery_outcome", "verification_origin"]
+}
