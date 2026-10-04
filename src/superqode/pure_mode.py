@@ -104,6 +104,7 @@ class PureMode:
         self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
         self._last_stats: dict[str, int | float] = {}
+        self.last_context_selection = None
         self._last_resume_descriptor = None
         self._cancel_requested = False
 
@@ -143,6 +144,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self.last_context_selection = None
         self._dispose_runtime()
         self._sync_harness_session_fields()
         return definition
@@ -172,6 +174,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self.last_context_selection = None
         self._sync_harness_session_fields()
 
     def connect_decision(self, pack: str = "factory_route", *, spec=None) -> None:
@@ -523,6 +526,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self.last_context_selection = None
         self._sync_harness_session_fields()
 
     def _permission_manager_for_runtime(self):
@@ -722,7 +726,7 @@ class PureMode:
                 ):
                     if self._cancel_requested:
                         break
-                    if rich_events or event.type == "systemone.decision":
+                    if rich_events or event.type in {"systemone.decision", "context.selection"}:
                         chunk = self._handle_runtime_harness_event(event)
                     elif event.type in {"delta", "model_delta"}:
                         chunk = str(event.data.get("text", ""))
@@ -791,6 +795,10 @@ class PureMode:
 
     def _handle_runtime_harness_event(self, event) -> str:
         """Forward runtime harness events into PureMode callbacks."""
+        if event.type == "context.selection":
+            if self._harness_spec is not None and self._harness_spec.runtime.backend == "pipy":
+                self.last_context_selection = dict(event.data)
+            return ""
         if event.type == "systemone.decision":
             if self.on_systemone:
                 self.on_systemone(event.data)

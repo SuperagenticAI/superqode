@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.5] - 2026-10-04
+
+### Added
+
+- Open `:work view ID` for live task dependencies, assigned predecessor evidence,
+  recovery outcomes, acceptance output and candidate review in the TUI.
+- Run existing WorkOrder actions without leaving the inspector. An explicit
+  Interrupt control stops its own worker process; stale leases and unknown
+  outcomes still require recovery and, when necessary, reconciliation.
+- Open `:context evidence` to inspect native Core/hosted PiPy decisions,
+  proposed excerpts, bounded originals and persisted cache reuse after a new step.
+- Add a small real coding WorkOrder demo with an investigator dependency and
+  deterministic acceptance test. Setup is offline; Execute uses the chosen
+  provider. Recovery requires the explicit `--recovery` flag.
+
+### Hardened
+
+- Record reuse admissions only after invocation identity, current ownership,
+  configuration and workspace checks. Recovery views exclude private outcomes.
+- Require a complete, integrity-checked candidate preview and a human reason
+  for TUI approval. Atomically check both candidate identity and digest to reject
+  approval races, including replacement candidates with identical patch bytes.
+- Recheck current permissions on each evidence page. Bound previews, preserve
+  keyboard focus and draft text, and support 80-column terminal layouts.
+- Gate releases on mounted TUI workflows and real PiPy process interruption,
+  restart and committed-call reuse tests with deterministic model responses.
+
+### Notes
+
+- Recovery, evidence reuse and context/Jev selection remain opt-in. Context
+  selection defaults to `off`; shadow mode preserves baseline output. No model
+  routing, price optimization or external harness context-parity claim is added.
+- Live Pi/Jev coding-quality comparisons and net-benefit measurements remain
+  outstanding. These changes expose and harden the existing execution contracts.
+
 ## [2.5.4] - 2026-10-03
 
 ### Fixed

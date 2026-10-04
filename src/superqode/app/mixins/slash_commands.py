@@ -526,7 +526,9 @@ class SlashCommandMixin:
         elif c == "optimize":
             self._jev_optimize_cmd(args, log)
         elif c == "context":
-            if args.strip().lower() == "next":
+            if args.strip().lower() == "evidence":
+                self._open_context_evidence(log)
+            elif args.strip().lower() == "next":
                 self._preview_next_context(log)
             else:
                 self._show_context(log)
@@ -543,7 +545,8 @@ class SlashCommandMixin:
         elif c in ("session", "sessions-current"):
             self._session_cmd(args, log)
         elif c == "work" and args.strip():
-            self._run_cli_group("work", args, log, "WorkOrder")
+            if not self._open_work_inspector(args, log):
+                self._run_cli_group("work", args, log, "WorkOrder")
         elif c in ("work", "summary"):
             self._work_cmd(args, log)
         elif c == "files":

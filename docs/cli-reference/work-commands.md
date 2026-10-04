@@ -112,3 +112,14 @@ sq work policy work_... --task primary --risk high
 See [WorkOrders](../advanced/workorders.md) for the lifecycle, scheduler model, and end-to-end examples.
 
 For process-interruption guarantees, workspace verification and reconciliation examples, see [tool composition and WorkOrder recovery](../advanced/tool-composition-and-recovery.md).
+
+## Candidate approval guards
+
+`work approve ID --candidate-id ARTIFACT --candidate-digest SHA256` rejects
+approval if the latest prepared candidate changed. Both guards are optional
+for existing CLI workflows; the TUI inspector supplies both automatically
+after the human opens the complete current diff and enters a review reason.
+
+Inside the TUI, `:work view ID [--store PATH] [--lease SECONDS]` opens the
+[delivery inspector](../advanced/workorders.md#tui-delivery-and-recovery-review).
+`view` is a TUI command; CLI automation can continue using `work watch`.

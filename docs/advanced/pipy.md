@@ -281,6 +281,13 @@ errors or tool calls, and increases in context pressure, trigger selection
 again within the call ceiling. Shadow mode preserves the baseline tool output
 and records proposed excerpts; only enforce mode applies them.
 
+In the interactive TUI, `:context evidence` shows the last native context
+selection, proposed excerpt and bounded original retrieval. After continuation
+or session restart, run a new step and reopen the view to inspect whether the
+persisted decision was reused. External harness loops do not provide this
+native inspection. WorkOrder recovery and evidence are visible through
+`:work view ID`; see the [TUI delivery workflow](workorders.md#tui-delivery-and-recovery-review).
+
 Original permitted text is stored in the host's SQLite context store, outside
 the model prompt. `SUPERQODE_CONTEXT_STORE` overrides its location; the default
 is `~/.superqode/context/artifacts.sqlite3`. `read_context_chunk` accepts a

@@ -43,6 +43,79 @@ store. The synthetic finding remains labelled `reported`; the output is a
 mechanics demonstration, not a coding-quality or cost benchmark. The final lines
 provide commands to inspect the persisted WorkOrder.
 
+## TUI delivery and recovery review
+
+In the project TUI, open `:work view ID`. An alternate store is supported with
+`:work view ID --store /path/to/store.sqlite3`. The view refreshes committed
+state every two seconds and preserves the chat draft when closed.
+
+- **Overview** shows task dependencies, attempts, acceptance commands and approval.
+- **Evidence** selects a dependent task and shows its assigned predecessor
+  references. Freshness and verification remain separate. Open and Next page
+  retrieve bounded evidence under current project policy.
+- **Recovery** distinguishes committed outcomes, reuse admissions, active calls,
+  retry eligibility, authorized retries and operations needing reconciliation.
+  Private model and tool outcomes are excluded from this view.
+- **Review** shows acceptance output and the candidate diff. Approval requires
+  opening the complete current candidate, passing the existing acceptance gates,
+  and entering a human review reason. Candidate identity and digest are checked
+  again atomically; approval does not merge changes.
+
+Choose an action, then Execute. Queue, run, stale-lease recovery, resume,
+acceptance checks and candidate preparation use the existing public commands.
+The view stays open while the action runs. Interrupt stops only the action
+process launched by this inspector, including its process group on POSIX.
+An unknown model request or unsafe tool outcome still requires explicit
+reconciliation. Closing the view keeps the worker running; exiting the TUI
+stops an inspector-owned action. Other workers are not controlled by Interrupt.
+
+The run lease remains 300 seconds by default. For a short recovery demo, use
+`:work view ID --lease 10`; heartbeats renew the lease while the worker is alive.
+After interruption, wait for the lease to expire before recovering it. Retry
+eligibility is not a guarantee: ownership, workspace, configuration and current
+permissions must still allow the operation.
+
+### A real coding demo in the TUI
+
+From a source checkout, prepare a new small repository without making model calls:
+
+```bash
+python examples/workorders/tui_demo.py /tmp/sq-tui-demo --provider openai --model gpt-4o-mini --recovery
+cd /tmp/sq-tui-demo
+sq
+```
+
+Use your configured provider credentials and choose your fixed model explicitly.
+The setup refuses existing directories. Recovery is enabled only by the explicit
+`--recovery` flag. Context selection remains off. The worker uses process
+permissions; this example does not configure an OS sandbox.
+
+1. Open `:work view tui-demo --lease 10`. Show the investigator dependency and
+   acceptance command in Overview.
+2. Select **Run ready tasks**, then **Execute**. This starts real provider calls
+   and may incur cost; the setup itself is offline.
+3. Select the implementer in Evidence. Open the investigator's report and show
+   its freshness and `reported` verification label.
+4. In Recovery, deliberately Interrupt while a worker is active. Restart `sq`,
+   reopen the same view, wait for lease expiry, and choose Recover stale leases.
+   The exact interruption point determines which operations are committed,
+   retry eligible or reconcile needed. Do not promise a predetermined outcome.
+5. If reconciliation is required, inspect the invocation ID and external effect.
+   Close the view and use `:work reconcile ID TASK INVOCATION --actor human
+   --reason "verified operator decision" --allow-retry` only when repeating that
+   operation is appropriate and the old worker is stopped. A verified outcome
+   can instead be supplied through the existing `--result` option. Resume blocked
+   work after all unknown outcomes are resolved, then run ready tasks.
+6. Show **reuse admitted** records after continuation. Run Acceptance checks,
+   then Prepare candidate. In Review, open the candidate and the acceptance
+   result. Approve with your review reason; merging remains a separate action.
+
+A fast run may finish before you interrupt it. Repeat in a new demo directory
+if needed. This demonstrates observable execution and recovery, not comparative
+coding quality or live Jev benefits. Automated tests interrupt a real PiPy
+coding process with deterministic model responses and verify that restart
+reuses committed calls without repeating the completed write.
+
 ## Where WorkOrders fit
 
 WorkOrders are the durable delivery unit inside SuperQode's [terminal-first Software Factory](software-factory.md):

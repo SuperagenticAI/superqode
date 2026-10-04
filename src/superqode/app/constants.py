@@ -521,6 +521,8 @@ COMMANDS = [
     ":connect protocols",
     ":context",
     ":context next",
+    ":context evidence",
+    ":work view",
     ":chat",
     ":chat off",
     ":chat clear",

@@ -1466,6 +1466,151 @@ class CommandImplMixin:
             return
         self.run_worker(self._superqode_cli_cmd(["skillopt", *tokens], log, "SkillOpt command"))
 
+    def _open_work_inspector(self, args, log):
+        from superqode.commands.work import DEFAULT_WORK_STORE
+        from superqode.widgets.workorder_inspector import WorkOrderInspector, parse_inspector_args
+
+        try:
+            parsed = parse_inspector_args(args, DEFAULT_WORK_STORE)
+        except ValueError as exc:
+            log.add_error(str(exc))
+            return True
+        if parsed is None:
+            return False
+        path, reference, lease = parsed
+        if not path.is_file():
+            log.add_error("WorkOrder store does not exist. Create a WorkOrder first.")
+            return True
+
+        def running():
+            process = getattr(self, "_work_inspector_processes", {}).get((str(path), reference))
+            return process is not None and process.returncode is None
+
+        def dispatch(parts):
+            self.run_worker(self._work_inspector_action(parts, path, reference, log))
+
+        self.push_screen(
+            WorkOrderInspector(
+                path, reference, on_action=dispatch, worker_running=running, lease_seconds=lease
+            ),
+            callback=lambda _: self._ensure_input_focus(),
+        )
+        return True
+
+    async def _work_inspector_action(self, parts, path, reference, log):
+        import os
+        import signal
+        import sys
+        import tempfile
+
+        processes = getattr(self, "_work_inspector_processes", None)
+        if processes is None:
+            processes = self._work_inspector_processes = {}
+        key = (str(path), reference)
+        process = processes.get(key)
+        if parts == ["interrupt"]:
+            if process is not None and process.returncode is None:
+                try:
+                    if os.name == "posix":
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                    log.add_info(
+                        "WorkOrder worker interrupted. Recover only after its lease becomes stale; reconcile unknown outcomes explicitly."
+                    )
+                except ProcessLookupError:
+                    pass
+            return
+        if process is not None and process.returncode is None:
+            log.add_info(
+                "A WorkOrder action is already running. Inspect progress or interrupt it first."
+            )
+            return
+        # Reserve before awaiting spawn so repeated clicks cannot start two actions.
+        processes[key] = None
+        pending = getattr(self, "_work_inspector_pending", set())
+        self._work_inspector_pending = pending
+        if key in pending:
+            return
+        pending.add(key)
+        try:
+            log.add_info("Starting WorkOrder action: " + " ".join(shlex.quote(p) for p in parts))
+            with tempfile.TemporaryFile() as output_file:
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    "-m",
+                    "superqode.main",
+                    *parts,
+                    cwd=Path.cwd(),
+                    stdout=output_file,
+                    stderr=asyncio.subprocess.STDOUT,
+                    start_new_session=os.name == "posix",
+                )
+                processes[key] = process
+                await process.wait()
+                output_file.seek(0, os.SEEK_END)
+                output_file.seek(max(0, output_file.tell() - 16000))
+                output = output_file.read(16000)
+            if process.returncode == 0:
+                log.add_success("WorkOrder action completed.")
+            else:
+                log.add_error(f"WorkOrder action stopped with exit code {process.returncode}.")
+            if output:
+                log.write(Text(output.decode(errors="replace")[-16000:], overflow="fold"))
+        except asyncio.CancelledError:
+            if process is not None and process.returncode is None:
+                try:
+                    if os.name == "posix":
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                except ProcessLookupError:
+                    pass
+                await process.wait()
+            raise
+        except Exception as exc:
+            log.add_error(f"WorkOrder action failed: {exc}")
+        finally:
+            pending.discard(key)
+            processes.pop(key, None)
+            from superqode.widgets.workorder_inspector import WorkOrderInspector
+
+            screen = self.screen if self.screen_stack else None
+            if (
+                self.is_running
+                and isinstance(screen, WorkOrderInspector)
+                and screen.path == path
+                and screen.reference == reference
+            ):
+                await screen.reload()
+                screen._notice(
+                    "Action finished. Inspect state and acceptance results before the next action."
+                )
+
+    def _open_context_evidence(self, log):
+        from superqode.widgets.context_evidence import ContextEvidenceScreen
+
+        pure = getattr(self, "_pure_mode", None)
+        agent = self._active_agent_loop()
+        spec = getattr(pure, "_harness_spec", None)
+        native_pipy = spec is not None and spec.runtime.backend == "pipy"
+        trace = getattr(pure if native_pipy else agent, "last_context_selection", None)
+        if not trace or not trace.get("artifact_store_path"):
+            log.add_info(
+                "No native context decisions yet. Enable context selection explicitly, run a step, then use :context evidence."
+            )
+            return
+        root = getattr(getattr(pure, "session", None), "working_directory", Path.cwd())
+        manager = (
+            pure._permission_manager_for_runtime()
+            if native_pipy
+            else getattr(agent, "permission_manager", None)
+        )
+        self.push_screen(
+            ContextEvidenceScreen(trace, Path(root), permission_manager=manager),
+            callback=lambda _: self._ensure_input_focus(),
+        )
+
     async def _superqode_cli_cmd(
         self,
         command_parts: list[str],

@@ -31,6 +31,19 @@ superqode --harness harness.yaml
 
 ```
 
+## WorkOrder and context inspectors
+
+Open `:work view ID` for task dependencies, evidence, recovery and candidate
+review. Actions execute while the view remains open, and an explicit Interrupt
+control stops its own worker process. See the [coding demo](workorders.md#a-real-coding-demo-in-the-tui)
+for interruption, restart, checks and human approval.
+
+Use `:context evidence` after a native Core or hosted PiPy context decision.
+The separate screen shows mode, selector, character counts, cache reuse and
+actual proposed excerpts. Open original and Next page retrieve bounded text
+with current permission checks. Shadow proposals remain distinct from applied
+excerpts. This command does not enable recovery or context enforcement.
+
 ## Common TUI Workflow
 
 Use this flow for a normal coding session:

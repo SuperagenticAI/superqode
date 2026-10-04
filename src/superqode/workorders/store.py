@@ -198,7 +198,20 @@ class WorkOrderStore:
                     raise ValueError(
                         "Workspace changed since the committed outcome; reconciliation required"
                     )
-                return {"action": "reuse", "result": json.loads(row["result"])}
+                result = json.loads(row["result"])
+                self._append_event_tx(
+                    conn,
+                    order.work_order_id,
+                    "invocation.reused",
+                    task_id=task_id,
+                    actor=worker_id,
+                    data={
+                        "id": invocation_id,
+                        "attempt": attempt,
+                        "source_attempt": row["attempt"],
+                    },
+                )
+                return {"action": "reuse", "result": result}
             if row["status"] == "intent" and row["attempt"] == attempt:
                 raise ValueError("Invocation is already in flight in this attempt")
             if row["status"] != "retry" and (not row["replay_safe"] or not replay_safe):
@@ -319,6 +332,30 @@ class WorkOrderStore:
                 {**dict(row), "result": json.loads(row["result"]) if row["result"] else None}
                 for row in rows
                 if not task_id or row["task_id"] == task_id
+            ]
+
+    def invocation_records(self, reference: str, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Bounded recovery metadata for UI inspection, without private outcomes."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("Invocation record limit must be between 1 and 500")
+        with closing(self._connect()) as conn:
+            order = self._load_tx(conn, reference)
+            rows = conn.execute(
+                "select task_id,invocation_id,operation,fingerprint,replay_safe,worker_id,"
+                "attempt,status,workspace,updated_at from work_invocations "
+                "where work_order_id=? order by updated_at desc limit ?",
+                (order.work_order_id, limit),
+            ).fetchall()
+            reuse = conn.execute(
+                "select task_id,json_extract(data,'$.id') as id,count(*) as n "
+                "from work_order_events where work_order_id=? and type='invocation.reused' "
+                "group by task_id,id",
+                (order.work_order_id,),
+            ).fetchall()
+            counts = {(r["task_id"], r["id"]): r["n"] for r in reuse}
+            return [
+                {**dict(r), "reuse_count": counts.get((r["task_id"], r["invocation_id"]), 0)}
+                for r in rows
             ]
 
     def mark_invocation_uncertain(
@@ -1238,8 +1275,17 @@ class WorkOrderStore:
         *,
         actor: str = "human",
         reason: str = "",
+        expected_candidate_digest: str = "",
+        expected_candidate_id: str = "",
     ) -> WorkOrder:
-        return self._decide(reference, "accepted", actor=actor, reason=reason)
+        return self._decide(
+            reference,
+            "accepted",
+            actor=actor,
+            reason=reason,
+            expected_candidate_digest=expected_candidate_digest,
+            expected_candidate_id=expected_candidate_id,
+        )
 
     def reject(
         self,
@@ -1356,11 +1402,38 @@ class WorkOrderStore:
             )
             return updated
 
-    def _decide(self, reference: str, verdict: str, *, actor: str, reason: str) -> WorkOrder:
+    def _decide(
+        self,
+        reference: str,
+        verdict: str,
+        *,
+        actor: str,
+        reason: str,
+        expected_candidate_digest: str = "",
+        expected_candidate_id: str = "",
+    ) -> WorkOrder:
         target = WorkOrderStatus(verdict)
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             if verdict == "accepted":
+                if expected_candidate_digest or expected_candidate_id:
+                    candidate = next(
+                        (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"),
+                        None,
+                    )
+                    if (
+                        candidate is None
+                        or (
+                            expected_candidate_digest
+                            and candidate.digest != expected_candidate_digest
+                        )
+                        or (
+                            expected_candidate_id and candidate.artifact_id != expected_candidate_id
+                        )
+                    ):
+                        raise ValueError(
+                            "Review candidate changed; inspect the current diff before approving"
+                        )
                 if not order.tasks or any(
                     task.status != WorkTaskStatus.SUCCEEDED for task in order.tasks
                 ):

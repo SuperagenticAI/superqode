@@ -156,6 +156,8 @@ class ContextPolicyEngine:
             "spend_usd": 0 if p.selector == "rules" else None,
             "size_provenance": "character count",
             "decisions": [],
+            "artifact_scope": self.scope,
+            "artifact_store_path": str(self.store.path.resolve()),
         }
         candidates = []
         tail = max(0, len(items) - p.recent_messages)
@@ -344,7 +346,19 @@ class ContextPolicyEngine:
         trace.update(
             proposed_chars_after=after,
             chars_after=after if p.mode == "enforce" else before,
-            decisions=[asdict(d) for d in decisions],
+            decisions=[
+                {
+                    **asdict(d),
+                    **(
+                        {"excerpt": reference_excerpt(c)}
+                        if d.action == "excerpt_with_reference"
+                        else {}
+                    ),
+                }
+                for d in decisions
+                for c in candidates
+                if d.reference == c.reference
+            ],
         )
         return self._finish(decisions, proposed if p.mode == "enforce" else {}, trace)
 

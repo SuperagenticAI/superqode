@@ -1204,6 +1204,8 @@ def work_diff(ctx: click.Context, work_order_id: str, json_output: bool) -> None
 @click.argument("work_order_id")
 @click.option("--actor", default="human", show_default=True)
 @click.option("--reason", default="")
+@click.option("--candidate-digest", default="", help="Require the exact inspected candidate digest")
+@click.option("--candidate-id", default="", help="Require the exact inspected candidate artifact")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.pass_context
 def work_approve(
@@ -1211,11 +1213,19 @@ def work_approve(
     work_order_id: str,
     actor: str,
     reason: str,
+    candidate_digest: str,
+    candidate_id: str,
     json_output: bool,
 ) -> None:
     """Approve completed work or the exact prepared merge candidate."""
     try:
-        order = _store(ctx).accept(work_order_id, actor=actor, reason=reason)
+        order = _store(ctx).accept(
+            work_order_id,
+            actor=actor,
+            reason=reason,
+            expected_candidate_digest=candidate_digest,
+            expected_candidate_id=candidate_id,
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     _emit_order(order, json_output=json_output)

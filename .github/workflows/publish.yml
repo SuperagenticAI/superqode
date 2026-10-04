@@ -71,7 +71,8 @@ jobs:
           tests/test_context_artifacts.py tests/test_context_policy.py
           tests/test_core_host_context.py tests/test_workorder_submissions.py
           tests/test_workorder_event_replay.py tests/test_workorder_evidence.py
-          tests/test_benchmark_comparison.py
+          tests/test_benchmark_comparison.py tests/test_tui_workorder_inspection.py
+          tests/test_pipy_run_recovery.py
           tests/test_tui_smoke.py::test_tui_static_commands_cover_cli_surface_except_tui_launcher -q
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
