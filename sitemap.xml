@@ -197,6 +197,10 @@
          <lastmod>2026-10-04</lastmod>
     </url>
     <url>
+         <loc>https://docs.superqode.dev/advanced/rlm-a2a/</loc>
+         <lastmod>2026-10-04</lastmod>
+    </url>
+    <url>
          <loc>https://docs.superqode.dev/advanced/rlm-code/</loc>
          <lastmod>2026-10-04</lastmod>
     </url>
@@ -622,6 +626,18 @@
     </url>
     <url>
          <loc>https://docs.superqode.dev/providers/zai/</loc>
+         <lastmod>2026-10-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.superqode.dev/research/a2a-cost-routing-and-monty-2026-10-04/</loc>
+         <lastmod>2026-10-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.superqode.dev/research/a2a-in-native-rlm-2026-10-04/</loc>
+         <lastmod>2026-10-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.superqode.dev/research/pi-durable-vs-workorders-2026-10-04/</loc>
          <lastmod>2026-10-04</lastmod>
     </url>
 </urlset>
