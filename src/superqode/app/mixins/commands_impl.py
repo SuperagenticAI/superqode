@@ -1584,7 +1584,9 @@ class CommandImplMixin:
             ):
                 await screen.reload()
                 screen._notice(
-                    "Action finished. Inspect state and acceptance results before the next action."
+                    "Action completed. Inspect state and acceptance results before the next action."
+                    if process is not None and process.returncode == 0
+                    else "Action stopped or failed. Inspect task errors; Back opens the transcript with command output."
                 )
 
     def _open_context_evidence(self, log):

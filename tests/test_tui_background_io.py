@@ -158,7 +158,17 @@ async def test_escape_discards_pending_completion(monkeypatch):
         assert prompt.value == "@slow"
 
 
-async def test_tab_accepts_single_file_completion_after_background_load(tmp_path):
+async def test_tab_accepts_single_file_completion_after_background_load(tmp_path, monkeypatch):
+    import time
+
+    original = SuperQodeApp._prompt_completion_candidates_for
+
+    def candidates(self, value):
+        if value == "@uniq":
+            time.sleep(0.2)
+        return original(self, value)
+
+    monkeypatch.setattr(SuperQodeApp, "_prompt_completion_candidates_for", candidates)
     (tmp_path / "unique.py").write_text("x")
     app = SuperQodeApp()
     async with app.run_test() as pilot:
@@ -166,7 +176,15 @@ async def test_tab_accepts_single_file_completion_after_background_load(tmp_path
         prompt.value = "@uniq"
         prompt.focus()
         app._complete_prompt_input(prompt)
-        await pilot.pause(0.15)
+        await pilot.pause()
+        await asyncio.wait_for(
+            asyncio.gather(
+                *(worker.wait() for worker in app.workers if worker.group == "prompt-completion"),
+                return_exceptions=True,
+            ),
+            timeout=2,
+        )
+        await pilot.pause()
         assert prompt.value == "@unique.py"
 
 
