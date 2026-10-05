@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-01T08:55:32.268921+00:00",
-  "count": 99,
+  "generated_at": "2026-10-04T23:04:36.879305+00:00",
+  "count": 102,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -108,7 +108,15 @@
       "tui_commands": [
         ":harness switch rlm",
         ":harness show rlm",
-        ":harness status"
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
       ],
       "cli_commands": [
         "superqode harness run rlm \"Describe your task\"",
@@ -132,11 +140,13 @@
         "Approvals: none",
         "Shell: allowed",
         "Network: allowed",
-        "Checks: not required"
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
       ],
       "capabilities": [
         "single workflow",
         "Recursive child agents",
+        "Optional A2A: off",
         "Structured run events"
       ],
       "based_on": "rlm",
@@ -151,7 +161,7 @@
     {
       "id": "pipy",
       "name": "PiPy",
-      "description": "Event-first loop, parallel tools, session tree, pure host permissions.",
+      "description": "Pi-inspired Pythonic version",
       "category": "SuperQode harnesses",
       "kind": "harness",
       "runtime": "pipy",
@@ -4501,7 +4511,15 @@
       "tui_commands": [
         ":harness switch rlm-docker",
         ":harness show rlm-docker",
-        ":harness status"
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
       ],
       "cli_commands": [
         "superqode harness run rlm-docker \"Describe your task\"",
@@ -4525,11 +4543,13 @@
         "Approvals: none",
         "Shell: allowed",
         "Network: blocked",
-        "Checks: not required"
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
       ],
       "capabilities": [
         "single workflow",
         "Recursive child agents",
+        "Optional A2A: off",
         "Structured run events"
       ],
       "based_on": "rlm-docker",
@@ -4540,6 +4560,239 @@
       "language": "Python",
       "language_confidence": "confirmed",
       "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
+    },
+    {
+      "id": "rlm-hybrid",
+      "name": "rlm-hybrid",
+      "description": "Experimental native RLM with persistent Python, explicit Bash jobs and shared history. Host execution; A2A off.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Host Python permissions: RLM Python runs with the permissions of the SuperQode process, with no approval prompts or sandbox.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm-hybrid",
+        ":harness show rlm-hybrid",
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-hybrid \"Describe your task\"",
+        "superqode harness show rlm-hybrid"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Optional A2A: off",
+        "Structured run events"
+      ],
+      "based_on": "rlm-hybrid",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Native SuperQode RLM with Python and Bash tool surfaces."
+    },
+    {
+      "id": "rlm-hybrid-docker",
+      "name": "rlm-hybrid-docker",
+      "description": "Experimental Python+Bash RLM inside Docker. Networking off; A2A off.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Docker Python: the kernel runs inside a container with networking disabled. Requires a running Docker daemon.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm-hybrid-docker",
+        ":harness show rlm-hybrid-docker",
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-hybrid-docker \"Describe your task\"",
+        "superqode harness show rlm-hybrid-docker"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: docker",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: blocked",
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Optional A2A: off",
+        "Structured run events"
+      ],
+      "based_on": "rlm-hybrid-docker",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Native SuperQode RLM with Python and Bash inside Docker."
+    },
+    {
+      "id": "rlm-selective",
+      "name": "rlm-selective",
+      "description": "Experimental native RLM with selective stored observations and branch-scoped history. Host execution; A2A off.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "rlm",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "Host Python permissions: RLM Python runs with the permissions of the SuperQode process, with no approval prompts or sandbox.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch rlm-selective",
+        ":harness show rlm-selective",
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
+      ],
+      "cli_commands": [
+        "superqode harness run rlm-selective \"Describe your task\"",
+        "superqode harness show rlm-selective"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "python"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Recursive child agents",
+        "Optional A2A: off",
+        "Structured run events"
+      ],
+      "based_on": "rlm-selective",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Native SuperQode RLM with selective observations."
     },
     {
       "id": "rlm-monty",
@@ -4568,7 +4821,15 @@
       "tui_commands": [
         ":harness switch rlm-monty",
         ":harness show rlm-monty",
-        ":harness status"
+        ":harness status",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm a2a",
+        ":rlm routing",
+        ":rlm delegations"
       ],
       "cli_commands": [
         "superqode harness run rlm-monty \"Describe your task\"",
@@ -4592,11 +4853,13 @@
         "Approvals: none",
         "Shell: blocked",
         "Network: blocked",
-        "Checks: not required"
+        "Checks: not required",
+        "Paid A2A: off; credit limit 0"
       ],
       "capabilities": [
         "single workflow",
         "Recursive child agents",
+        "Optional A2A: off",
         "Structured run events"
       ],
       "based_on": "rlm-monty",
