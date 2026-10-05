@@ -6575,7 +6575,7 @@ def test_connect_picker_explains_every_choice():
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Grok, Devin and more" in first
-    assert "Core, RLM, PiPy, Workbench or a preset" in first
+    assert "Connect with Native SuperQode harnesses like Core, RLM, PiPy," in first
     assert "Import existing config" in first
     assert "ACP, A2A, or UHP" in first
     assert "Use an agent you already have ↗" in first
@@ -6586,7 +6586,7 @@ def test_connect_picker_explains_every_choice():
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Grok, Devin and more" in second
-    assert "Core, RLM, PiPy, Workbench or a preset" in second
+    assert "Core, RLM, PiPy, Workbench or Build Your own" in " ".join(second.split())
     assert "Import existing config" in second
     assert "Connect a harness with your model ↗" in second
     assert second.count("●") >= 1

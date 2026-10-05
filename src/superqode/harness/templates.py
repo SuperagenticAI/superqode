@@ -350,6 +350,60 @@ def rlm_docker_template(*, name: str = "rlm-docker") -> HarnessSpec:
     )
 
 
+def rlm_hybrid_template(*, name: str = "rlm-hybrid") -> HarnessSpec:
+    """Experimental Python+Bash surface over the native RLM core."""
+    from dataclasses import replace
+
+    base = rlm_template(name=name)
+    return replace(
+        base,
+        description="Experimental native RLM with persistent Python, explicit Bash jobs and shared history. Host execution; A2A off.",
+        runtime=replace(
+            base.runtime, config={**base.runtime.config, "tool_surface": "python-bash"}
+        ),
+        agents=(AgentSpec(id="rlm", role="recursive-coding", tools=("python", "bash")),),
+        metadata={
+            **base.metadata,
+            "template": "rlm-hybrid",
+            "experimental": True,
+            "model_tool_count": 2,
+        },
+    )
+
+
+def rlm_hybrid_docker_template(*, name: str = "rlm-hybrid-docker") -> HarnessSpec:
+    from dataclasses import replace
+
+    base = rlm_docker_template(name=name)
+    hybrid = rlm_hybrid_template(name=name)
+    return replace(
+        base,
+        description="Experimental Python+Bash RLM inside Docker. Networking off; A2A off.",
+        agents=hybrid.agents,
+        runtime=replace(
+            base.runtime, config={**base.runtime.config, "tool_surface": "python-bash"}
+        ),
+        metadata={
+            **base.metadata,
+            "template": "rlm-hybrid-docker",
+            "experimental": True,
+            "model_tool_count": 2,
+        },
+    )
+
+
+def rlm_selective_template(*, name: str = "rlm-selective") -> HarnessSpec:
+    from dataclasses import replace
+
+    base = rlm_template(name=name)
+    return replace(
+        base,
+        description="Experimental native RLM with selective stored observations and branch-scoped history. Host execution; A2A off.",
+        runtime=replace(base.runtime, config={**base.runtime.config, "observations": "selective"}),
+        metadata={**base.metadata, "template": "rlm-selective", "experimental": True},
+    )
+
+
 def rlm_monty_template(*, name: str = "rlm-monty") -> HarnessSpec:
     """Native RLM restricted to read-only analysis under Pydantic Monty."""
     base = rlm_template(name=name)
@@ -968,6 +1022,9 @@ BUILTIN_TEMPLATES = {
     "pipy": pipy_template,
     "rlm": rlm_template,
     "rlm-docker": rlm_docker_template,
+    "rlm-hybrid": rlm_hybrid_template,
+    "rlm-hybrid-docker": rlm_hybrid_docker_template,
+    "rlm-selective": rlm_selective_template,
     "rlm_docker": rlm_docker_template,
     "rlm-monty": rlm_monty_template,
     "rlm_monty": rlm_monty_template,

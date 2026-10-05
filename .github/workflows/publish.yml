@@ -103,7 +103,7 @@ jobs:
         run: >-
           uv run --frozen pytest -p pytest_asyncio.plugin
           tests/rlm tests/test_a2a_hosted_credits.py
-          tests/test_tui_rlm_routing.py tests/test_harness_hub_screen.py
+          tests/test_tui_rlm_routing.py tests/test_tui_rlm_settings.py tests/test_harness_hub_screen.py
           tests/test_connect_harness_screen.py tests/test_connection_profiles.py
           tests/test_harness_drift.py tests/test_workorder_evidence.py -q
 

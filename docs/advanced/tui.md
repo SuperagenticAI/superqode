@@ -191,7 +191,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:eval` - Explain or run repository harness evaluation
 - `:tau` - Select, configure, inspect, and retry the optional Tau harness
 - `:pipy` (alias `:pi`) - Session commands for the PiPy harness: tree, fork, compact, export, skills and prompt templates
-- `:rlm` - Native one-tool RLM session, recursive agents, goals, completion gates, compaction, forks and export
+- `:rlm` - Native RLM sessions, optional Python+Bash, history, shared budgets, durable jobs and recursive agents. Open `:rlm settings` or see [RLM profiles](rlm-profiles.md) for configuration and recovery.
 - `:runtime list` - Show available runtime backends
 - `:runtime <name>` - Switch runtime where available
 - `:approve` - Approve a pending tool call

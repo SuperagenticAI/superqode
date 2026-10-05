@@ -442,6 +442,35 @@ class DockerKernelBackend:
         )
         return ShellResult(display, code, out, err)
 
+    async def command(self, payload, *, agent="root"):
+        """Inspect/cancel command jobs without waiting for the model's kernel channel."""
+        if payload.get("action") not in {"list", "status", "read", "wait", "cancel", "reconcile"}:
+            raise ValueError("Operational command channel cannot start jobs")
+        await self.start()
+        script = (
+            "import json,sys; sys.path.insert(0,sys.argv[1]); from commands import CommandBroker; "
+            "broker=CommandBroker('/workspace','/state/commands.sqlite3',policy=json.loads(sys.argv[2]),agent=sys.argv[4]); "
+            "print(json.dumps(broker.dispatch(json.loads(sys.argv[3]))))"
+        )
+        code, out, err = await self._docker(
+            [
+                "docker",
+                "exec",
+                self._require_container(),
+                "python3",
+                "-c",
+                script,
+                SERVER_MOUNT,
+                json.dumps(self.config.to_dict()),
+                json.dumps(payload),
+                str(agent),
+            ],
+            timeout=70,
+        )
+        if code:
+            raise RuntimeError(err.strip() or "Command inspection failed")
+        return json.loads(out)
+
     async def checkpoint(self, kernel_id: str) -> CheckpointReference:
         """Capture state inside the boundary and describe it to the host."""
         channel = await self._channel(kernel_id)
@@ -529,6 +558,7 @@ class DockerKernelBackend:
         server_dir.mkdir(parents=True, exist_ok=True)
         source = Path(__file__).with_name("kernel_server.py")
         shutil.copyfile(source, server_dir / "kernel_server.py")
+        shutil.copyfile(Path(__file__).with_name("commands.py"), server_dir / "commands.py")
         return server_dir.resolve()
 
     async def _find_container(self) -> str:
@@ -563,8 +593,12 @@ class DockerKernelBackend:
         )
         try:
             out, err = await asyncio.wait_for(process.communicate(), timeout)
-        except TimeoutError:
-            process.kill()
+        except (TimeoutError, asyncio.CancelledError) as error:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            await process.communicate()
+            if isinstance(error, asyncio.CancelledError):
+                raise
             return 124, "", f"docker timed out after {timeout}s"
         return (
             process.returncode or 0,

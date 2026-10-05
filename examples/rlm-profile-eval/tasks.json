@@ -1,0 +1,137 @@
+{
+  "description": "Toy coding pilot. Scripted smoke mode does not evaluate model quality. Extend held-out tasks before broader claims.",
+  "tasks": [
+    {
+      "id": "clamp",
+      "prompt": "Fix clamp so values stay within inclusive bounds. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def clamp(x, low, high):\n    return max(high, min(low, x))\n"
+      },
+      "smoke_solution": {
+        "target.py": "def clamp(x, low, high):\n    return max(low, min(high, x))\n"
+      },
+      "grader": "from target import clamp; assert [clamp(x,0,10) for x in (-2,5,12)] == [0,5,10]"
+    },
+    {
+      "id": "stable-unique",
+      "prompt": "Make unique preserve first-occurrence order. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def unique(xs):\n    return sorted(set(xs))\n"
+      },
+      "smoke_solution": {
+        "target.py": "def unique(xs):\n    return list(dict.fromkeys(xs))\n"
+      },
+      "grader": "from target import unique; assert unique([3,1,3,2,1]) == [3,1,2]; assert unique([])==[]"
+    },
+    {
+      "id": "csv-integers",
+      "prompt": "Parse comma-separated integers, ignoring blank fields and surrounding whitespace. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def numbers(s):\n    return [int(x) for x in s.split(',')]\n"
+      },
+      "smoke_solution": {
+        "target.py": "def numbers(s):\n    return [int(x.strip()) for x in s.split(',') if x.strip()]\n"
+      },
+      "grader": "from target import numbers; assert numbers(' 1,, -2, ,3,') == [1,-2,3]; assert numbers('') == []"
+    },
+    {
+      "id": "half-open-ranges",
+      "prompt": "Correct overlap for half-open intervals. Empty and touching intervals do not overlap. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def overlap(a,b):\n    return a[0] <= b[1] and b[0] <= a[1]\n"
+      },
+      "smoke_solution": {
+        "target.py": "def overlap(a,b):\n    return max(a[0],b[0]) < min(a[1],b[1])\n"
+      },
+      "grader": "from target import overlap; assert overlap((0,3),(2,4)); assert not overlap((0,2),(2,4)); assert not overlap((1,1),(0,3))"
+    },
+    {
+      "id": "nested-count",
+      "prompt": "Count integer leaves in nested lists, excluding booleans. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def count(x):\n    return int(isinstance(x,int))\n"
+      },
+      "smoke_solution": {
+        "target.py": "def count(x):\n    if isinstance(x,list):\n        return sum(count(v) for v in x)\n    return int(isinstance(x,int) and not isinstance(x,bool))\n"
+      },
+      "grader": "from target import count; assert count([1,[2,True,[3]],False,\"4\"])==3"
+    },
+    {
+      "id": "empty-average",
+      "prompt": "Return None for an empty input and arithmetic mean otherwise. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def average(xs):\n    return sum(xs)/len(xs)\n"
+      },
+      "smoke_solution": {
+        "target.py": "def average(xs):\n    return sum(xs)/len(xs) if xs else None\n"
+      },
+      "grader": "from target import average; assert average([]) is None; assert average([2,4,9])==5"
+    },
+    {
+      "id": "migration-id",
+      "prompt": "Preserve id and name when migrating a record. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def migrate(row):\n    return {'name':row['name']}\n"
+      },
+      "smoke_solution": {
+        "target.py": "def migrate(row):\n    return {'id':row['id'], 'name':row['name']}\n"
+      },
+      "grader": "from target import migrate; assert migrate({'id':7,'name':'A'}) == {'id':7,'name':'A'}"
+    },
+    {
+      "id": "casefold-search",
+      "prompt": "Perform Unicode caseless substring search. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def contains(text, query):\n    return query.lower() in text.lower()\n"
+      },
+      "smoke_solution": {
+        "target.py": "def contains(text, query):\n    return query.casefold() in text.casefold()\n"
+      },
+      "grader": "from target import contains; assert contains('Stra\u00dfe','STRASSE'); assert not contains('abc','z')"
+    },
+    {
+      "id": "first-success",
+      "prompt": "Return the first non-None value, including zero and False. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def first(xs):\n    return next((x for x in xs if x),None)\n"
+      },
+      "smoke_solution": {
+        "target.py": "def first(xs):\n    return next((x for x in xs if x is not None),None)\n"
+      },
+      "grader": "from target import first; assert first([None,0,2])==0; assert first([None,False,2]) is False; assert first([]) is None"
+    },
+    {
+      "id": "pipeline-errors",
+      "prompt": "Apply pipeline functions in order and propagate errors instead of suppressing them. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def pipeline(x, functions):\n    for fn in functions:\n        try:\n            x=fn(x)\n        except Exception:\n            pass\n    return x\n"
+      },
+      "smoke_solution": {
+        "target.py": "def pipeline(x, functions):\n    for fn in functions:\n        x=fn(x)\n    return x\n"
+      },
+      "grader": "from target import pipeline; assert pipeline(3,[lambda x:x+1,lambda x:x*2])==8\ntry:\n    pipeline(0,[lambda x:1/x])\nexcept ZeroDivisionError:\n    pass\nelse:\n    raise AssertionError(\"exception swallowed\")"
+    },
+    {
+      "id": "jsonl-blanks",
+      "prompt": "Parse JSONL and ignore blank lines, including whitespace-only lines. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "import json\ndef records(text):\n    return [json.loads(line) for line in text.splitlines()]\n"
+      },
+      "smoke_solution": {
+        "target.py": "import json\ndef records(text):\n    return [json.loads(line) for line in text.splitlines() if line.strip()]\n"
+      },
+      "grader": "from target import records; assert records(' {\"a\":1}\\n\\n  \\n{\"b\":2}\\n') == [{\"a\":1},{\"b\":2}]"
+    },
+    {
+      "id": "chunk-tail",
+      "prompt": "Chunk a list into positive-size pieces, retaining the final partial piece. Reject nonpositive sizes. Inspect target.py, make the correction, and verify it.",
+      "files": {
+        "target.py": "def chunks(xs,size):\n    return [xs[i:i+size] for i in range(0,len(xs)-size+1,size)]\n"
+      },
+      "smoke_solution": {
+        "target.py": "def chunks(xs,size):\n    if size<=0:\n        raise ValueError(\"size must be positive\")\n    return [xs[i:i+size] for i in range(0,len(xs),size)]\n"
+      },
+      "grader": "from target import chunks; assert chunks([1,2,3,4,5],2)==[[1,2],[3,4],[5]]; assert chunks([],2)==[]\ntry:\n    chunks([1],0)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"invalid size accepted\")"
+    }
+  ]
+}

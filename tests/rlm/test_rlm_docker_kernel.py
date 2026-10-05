@@ -123,6 +123,68 @@ async def test_commands_and_completion_gates_run_inside_the_boundary(containers)
     assert socket.gethostname() not in gate.stdout
 
 
+async def test_hybrid_broker_has_durable_bounded_output_inside_docker(containers, tmp_path):
+    from superqode.rlm.bash_tool import dispatch_command
+
+    backend = containers("hybrid-jobs")
+    await backend.start()
+
+    def execute(code):
+        return backend.execute("root", code)
+
+    receipt = await dispatch_command(
+        execute,
+        {
+            "action": "run",
+            "command": "hostname; printf evidence > shared.txt",
+            "request_id": "one",
+            "wait": 5,
+        },
+    )
+    assert receipt["returncode"] == 0
+    output = await dispatch_command(execute, {"action": "read", "job_id": receipt["id"]})
+    assert output["text"].strip() != socket.gethostname()
+    assert (tmp_path / "repo" / "shared.txt").read_text() == "evidence"
+    await backend.close_kernel("root")
+    reopened = await dispatch_command(execute, {"action": "status", "job_id": receipt["id"]})
+    assert reopened["state"] == "complete"
+    duplicate = await dispatch_command(
+        execute,
+        {"action": "run", "command": "hostname; printf evidence > shared.txt", "request_id": "one"},
+    )
+    assert duplicate["id"] == receipt["id"]
+
+
+async def test_hybrid_cancellation_kills_docker_process_group(containers):
+    from superqode.rlm.bash_tool import dispatch_command
+
+    backend = containers("hybrid-cancel")
+    await backend.start()
+
+    def execute(code):
+        return backend.execute("root", code)
+
+    receipt = await dispatch_command(
+        execute, {"action": "start", "command": "sleep 30 & echo $!; wait"}
+    )
+    child = ""
+    for _ in range(100):
+        output = await dispatch_command(execute, {"action": "read", "job_id": receipt["id"]})
+        child = output["text"].strip()
+        if child:
+            break
+        await asyncio.sleep(0.01)
+    assert child
+    cancelled = await dispatch_command(execute, {"action": "cancel", "job_id": receipt["id"]})
+    assert cancelled["state"] == "cancelled"
+    state = await backend.execute("root", f"commands.status({receipt['id']!r})['state']")
+    assert state.value_repr == "'cancelled'"
+    alive = await backend.execute(
+        "root", f"from commands import fingerprint; fingerprint({int(child)})"
+    )
+    assert alive.value_repr == "''"
+
+
 async def test_root_and_children_get_separate_namespaces_in_one_container(containers, tmp_path):
     backend = containers("namespaces")
     await backend.start()
@@ -400,3 +462,94 @@ async def test_the_profile_can_close_the_network(containers):
 
     assert result.error is not None
     assert "Network is unreachable" in result.error or "Temporary failure" in result.error
+
+
+async def test_command_admin_channel_works_while_python_is_busy(containers):
+    import ast
+
+    backend = containers("command-admin")
+    await backend.start()
+    started = await backend.execute("root", "job = commands.start('sleep 30'); job.id")
+    identity = ast.literal_eval(started.value_repr)
+    busy = asyncio.create_task(backend.execute("root", "job.wait(timeout=20)"))
+    try:
+        await asyncio.sleep(0.2)
+        status = await asyncio.wait_for(
+            backend.command({"action": "status", "job_id": identity}), 5
+        )
+        assert status["state"] == "running"
+        cancelled = await asyncio.wait_for(
+            backend.command({"action": "cancel", "job_id": identity}), 5
+        )
+        assert cancelled["state"] == "cancelled"
+        assert (await asyncio.wait_for(busy, 5)).error is None
+        result = await backend.execute("root", "workspace.write('after.txt', 'clear')")
+        assert result.error is None
+    finally:
+        if not busy.done():
+            busy.cancel()
+        await asyncio.gather(busy, return_exceptions=True)
+
+
+async def test_history_proxy_dispatches_inside_docker(containers):
+    calls = []
+
+    async def host_call(name, payload):
+        calls.append((name, payload))
+        return [{"id": "branch-entry", "preview": "preserved"}]
+
+    backend = containers("history-proxy")
+    backend.host_call = host_call
+    await backend.start()
+    result = await backend.execute("root", "history.search('needle')")
+    assert result.error is None
+    assert "branch-entry" in result.value_repr
+    assert calls == [("history.search", {"query": "needle", "limit": 20})]
+
+
+async def test_coding_completion_detects_jobs_after_kernel_disconnect(tmp_path):
+    from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
+    from superqode.pipy.ai import FakeStream, text_response
+    from superqode.pipy.stream import Model
+
+    session = await RLMCodingSession.create(
+        RLMCodingSessionOptions(
+            cwd=tmp_path,
+            model=Model("fake", "fake"),
+            stream_fn=FakeStream([text_response("done")]),
+            session_root=tmp_path / "sessions",
+            sandbox=_config(),
+        )
+    )
+    backend = session.sandbox_backend
+    try:
+        await session._execute_kernel("job = commands.start('sleep 30')")
+        await backend.close_kernel("root")
+        assert not backend._channels
+        errors = await session.command_completion_errors()
+        assert len(errors) == 1 and "unknown" in errors[0]
+        await session.abort()
+    finally:
+        await backend.close(remove_container=True)
+        await session.delegation_manager.close()
+
+
+async def test_profile_pilot_grades_modified_code_inside_docker(tmp_path):
+    from superqode.rlm.evaluation import run_pilot
+
+    task = {
+        "id": "boundary",
+        "prompt": "Fix the value",
+        "files": {"target.py": "value = 1"},
+        "smoke_solution": {"target.py": "value = 2"},
+        "grader": "import sys; assert sys.platform == 'linux'; from target import value; assert value == 2",
+    }
+    report = await run_pilot(
+        [task],
+        output=tmp_path / "report",
+        sandbox="docker",
+        profiles=["python", "hybrid"],
+        repetitions=1,
+    )
+    assert report["profiles"]["python"]["passed"] == 1
+    assert report["profiles"]["hybrid"]["passed"] == 1

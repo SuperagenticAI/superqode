@@ -180,3 +180,17 @@ async def test_checkpoint_restore_round_trip_preserves_bindings(backend, tmp_pat
         assert result.value_repr == "99"
     finally:
         await fresh.close()
+
+
+async def test_monty_history_reads_use_the_host_bridge(backend):
+    calls = []
+
+    async def host_call(name, payload):
+        calls.append((name, payload))
+        return {"id": "obs-test", "text": "original evidence"}
+
+    backend.host_call = host_call
+    result = await backend.execute("root", "history.read('obs-test', size=100)")
+    assert result.error is None
+    assert "original evidence" in result.value_repr
+    assert calls == [("history.read", {"id": "obs-test", "start": 0, "size": 100})]

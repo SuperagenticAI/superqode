@@ -39,6 +39,7 @@ class RLMHarnessBackend:
         tool_calls = 0
         turns = 0
         usage: dict[str, Any] = {}
+        family_usage = None
         stopped_reason = "complete"
         error: str | None = None
         async for event in self._events(request):
@@ -55,6 +56,25 @@ class RLMHarnessBackend:
             elif event.type in {"error", "run.failed"}:
                 stopped_reason = "error"
                 error = str(event.data.get("error") or "RLM run failed")
+            elif event.type == "rlm.usage":
+                family_usage = event.data
+        if family_usage is not None:
+            total = family_usage["total"]
+            usage = {
+                "input_tokens": total.get("input_tokens")
+                if not total.get("unknown_token_calls")
+                else None,
+                "output_tokens": total.get("output_tokens")
+                if not total.get("unknown_token_calls")
+                else None,
+                "total_tokens": total.get("tokens")
+                if not total.get("unknown_token_calls")
+                else None,
+                "cost_usd": total.get("cost_usd")
+                if not total.get("unknown_cost_calls")
+                and family_usage.get("remote_usage_known", True)
+                else None,
+            }
         response = AgentResponse(
             content="".join(text),
             messages=[],
@@ -74,7 +94,8 @@ class RLMHarnessBackend:
             runtime=self.name,
             metadata={
                 "events": events,
-                "model_tools": ["python"],
+                "model_tools": _model_tools(request),
+                "rlm_usage": family_usage,
                 "persistent_python": True,
                 "pure_permissions": _pure_permissions(request),
             },
@@ -123,6 +144,12 @@ def _pure_permissions(request: HarnessBackendRequest) -> bool:
         request.spec.runtime.config,
         execution_policy=request.spec.execution_policy,
     ).isolated
+
+
+def _model_tools(request):
+    from superqode.rlm.profile import RLMProfile
+
+    return list(RLMProfile.from_config(request.spec.runtime.config).tools)
 
 
 def _accumulate(totals: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:

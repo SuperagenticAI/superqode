@@ -181,7 +181,23 @@ When SuperQode owns the loop, the harness step is also directly addressable:
 :connect harness-repo
 ```
 
-The RLM entry opens host, Docker, Monty and optional A2A choices. Use
+The RLM entry opens native execution, experimental profiles and optional A2A
+choices:
+
+| Shortcut | Choice |
+| --- | --- |
+| `rlm-host` | Persistent Python with host permissions |
+| `rlm-docker` | Persistent Python inside Docker |
+| `rlm-monty` | Restricted read-only analysis |
+| `rlm-hybrid` | Experimental Python+Bash on a POSIX host |
+| `rlm-hybrid-docker` | Experimental Python+Bash inside Docker |
+| `rlm-selective` | Experimental stored-observation projection |
+| `rlm-settings` | Tools, execution, observations and shared inference limits |
+| `rlm-a2a` | Explicit optional agent routing and hosted credit setup |
+
+Each shortcut accepts `:connect <shortcut>`. See
+[RLM profiles and budgets](../advanced/rlm-profiles.md) for settings and recovery.
+ Use
 `:connect rlm-a2a` to open peer and credit setup directly. A2A and paid routing
 remain disabled until explicitly configured.
 

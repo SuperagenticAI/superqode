@@ -2178,6 +2178,19 @@ class ConnectMixin:
                 spec=spec,
                 on_back=lambda: self._show_connect_type_picker(log, menu=CONNECT_MENU_RLM),
             )
+        elif conn == "rlm-settings":
+            from superqode.harness.templates import get_harness_template
+            from superqode.providers.connection_profiles import CONNECT_MENU_RLM
+
+            pure = getattr(self, "_pure_mode", None)
+            spec = getattr(pure, "_harness_spec", None)
+            if getattr(getattr(spec, "runtime", None), "backend", "") != "rlm":
+                spec = get_harness_template("rlm")
+            self._open_rlm_settings(
+                log,
+                spec=spec,
+                on_back=lambda: self._show_connect_type_picker(log, menu=CONNECT_MENU_RLM),
+            )
         elif conn == "harness-catalog":
             # Remember the entry point so Esc returns to the harness step.
             self._harness_picker_from_connect = True

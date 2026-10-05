@@ -8,6 +8,12 @@ from typing import Any
 from superqode.app.constants import THEME
 
 _COMMANDS = (
+    ("settings", "Configure tools, sandbox, observations and shared budgets for a new session"),
+    ("profile", "Show the active tool and observation profile"),
+    ("budget", "Show the shared inference allowance and unsettled usage"),
+    ("history", "Search branch history or read a handle: history read <id> [start] [size]"),
+    ("jobs", "List durable command jobs"),
+    ("job", "Inspect, read, wait, cancel or reconcile a command job"),
     ("status", "Show the resident root worker and active turn"),
     ("attach", "Attach to the active resident RLM turn"),
     ("detach", "Leave the worker running without cancelling it"),
@@ -58,7 +64,57 @@ class RLMCommandMixin:
         if sub == "a2a":
             self._open_rlm_routing(log)
             return
+        if sub == "settings":
+            self._open_rlm_settings(log)
+            return
         getattr(self, "run_worker")(self._rlm_run(sub, rest, log), exclusive=False)
+
+    def _open_rlm_settings(self, log, *, spec=None, on_back=None):
+        from superqode.widgets.rlm_settings import RLMSettingsScreen
+
+        pure = getattr(self, "_pure_mode", None)
+        spec = spec or getattr(pure, "_harness_spec", None)
+        config = dict(getattr(getattr(spec, "runtime", None), "config", None) or {})
+
+        def selected(result):
+            if result is None:
+                if on_back is not None:
+                    on_back()
+                return
+            try:
+                import shlex
+                from superqode.app.rlm_routing import save_runtime_profile
+
+                if result.action == "start" and getattr(self, "is_busy", False):
+                    raise ValueError(
+                        "Wait for the current turn to finish before starting a new session"
+                    )
+                mode = getattr(self, "_pure_mode", None) or self._ensure_pure_mode()
+                root = Path(getattr(mode.session, "working_directory", None) or Path.cwd())
+                path = save_runtime_profile(spec, result.config, root)
+                log.add_success(f"RLM profile saved: {path}")
+                if result.action == "start":
+                    fork = " --fork" if mode.get_current_session_id() else ""
+                    self._harness_cmd(f"switch {shlex.quote(str(path))}{fork}", log)
+                else:
+                    log.add_info(
+                        f"Activate in a new session with :harness switch {shlex.quote(str(path))} --fork"
+                    )
+            except Exception as error:
+                log.add_error(f"RLM setup failed: {error}")
+
+        try:
+            from superqode.rlm.sandbox import RLMSandboxConfig
+
+            config = {
+                **config,
+                **RLMSandboxConfig.from_config(
+                    config, execution_policy=getattr(spec, "execution_policy", None)
+                ).to_dict(),
+            }
+            self.push_screen(RLMSettingsScreen(config), callback=selected)
+        except ValueError as error:
+            log.add_error(f"Invalid RLM profile: {error}")
 
     def _open_rlm_routing(self, log, *, spec=None, on_back=None) -> None:
         from superqode.widgets.rlm_routing import RLMRoutingScreen
@@ -168,7 +224,7 @@ class RLMCommandMixin:
         text.append("\n  ◈ ", style=f"bold {THEME['purple']}")
         text.append("RLM\n", style=f"bold {THEME['text']}")
         text.append(
-            "  Native recursive coding with one persistent Python tool.\n\n",
+            "  Native recursive coding with persistent Python and optional Bash.\n\n",
             style=THEME["muted"],
         )
         width = max(len(name) for name, _ in _COMMANDS)
@@ -301,7 +357,9 @@ class RLMCommandMixin:
             log.add_info(f"id       {info.id}")
             log.add_info(f"path     {session.session_path}")
             log.add_info(f"messages {info.message_count}")
-            log.add_info("tools    python (serializable state checkpointed)")
+            log.add_info(
+                f"tools    {', '.join(getattr(getattr(session, 'profile', None), 'tools', ('python',)))} (serializable state checkpointed)"
+            )
             log.add_info("workers  detached Python processes with journal reattachment")
             log.add_info(f"sandbox  {self._rlm_sandbox_config(session).backend} (:rlm sandbox)")
             return

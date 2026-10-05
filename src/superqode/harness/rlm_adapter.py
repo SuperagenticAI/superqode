@@ -90,7 +90,7 @@ class RLMHarnessProtocolAdapter:
                 "model": request.model,
                 "working_directory": str(working_directory),
                 "session_path": str(coding_session.session_path),
-                "model_tools": list(DEFAULT_TOOLS),
+                "model_tools": list(_model_tools(request.metadata)),
                 "persistent_python": True,
                 "pure_permissions": pure_permissions,
             },
@@ -142,7 +142,7 @@ class RLMHarnessProtocolAdapter:
             metadata={
                 **metadata,
                 "session_path": str(coding_session.session_path),
-                "model_tools": list(DEFAULT_TOOLS),
+                "model_tools": list(_model_tools(metadata)),
                 "pure_permissions": _pure_permissions(metadata),
             },
         )
@@ -169,7 +169,7 @@ class RLMHarnessProtocolAdapter:
             "provider": request.provider,
             "model": request.model,
             "working_directory": str(working_directory),
-            "model_tools": list(DEFAULT_TOOLS),
+            "model_tools": list(_model_tools(request.metadata)),
             "persistent_python": True,
             "pure_permissions": _pure_permissions(request.metadata),
             "resident_root": True,
@@ -213,6 +213,8 @@ class RLMHarnessProtocolAdapter:
         from superqode.rlm.context import ContextPolicy
         from superqode.rlm.sandbox import RLMSandboxConfig
         from superqode.rlm.subcalls import SubcallPolicy
+        from superqode.rlm.profile import RLMProfile
+        from superqode.rlm.budget import BudgetPolicy
 
         limits = dict(request.metadata.get("rlm_config") or {})
         # The backend resolves the profile once, where the HarnessSpec and its
@@ -222,7 +224,7 @@ class RLMHarnessProtocolAdapter:
         options = RLMCodingSessionOptions(
             cwd=working_directory,
             model=resolve_model(request.model or "", provider=request.provider or ""),
-            tool_names=DEFAULT_TOOLS,
+            tool_names=RLMProfile.from_config(limits).tools,
             max_depth=int(limits.get("max_depth", 3)),
             max_children=int(limits.get("max_children", 8)),
             max_parallel=int(limits.get("max_parallel", 4)),
@@ -236,6 +238,8 @@ class RLMHarnessProtocolAdapter:
             subcall_policy=SubcallPolicy.from_config(limits),
             context_policy=ContextPolicy.from_config(limits),
             a2a_config=limits.get("a2a"),
+            profile=RLMProfile.from_config(limits),
+            budget_policy=BudgetPolicy.from_config(limits.get("budget")),
         )
         if session_path and Path(session_path).is_file():
             return await RLMCodingSession.resume(options, session_path=session_path)
@@ -256,6 +260,28 @@ class RLMHarnessProtocolAdapter:
                 yield event
             return
         coding_session = await self._require(session)
+        budget = getattr(coding_session, "budget", None)
+        before = budget.snapshot() if budget is not None else None
+        manager = getattr(coding_session, "delegation_manager", None)
+        remote_before = len(manager.store.records(manager.root)) if manager is not None else 0
+        async for event in self._send_inprocess(coding_session, message):
+            if event.type in {"run_end", "run.failed"} and budget is not None:
+                from superqode.rlm.budget import usage_delta
+
+                remote_after = (
+                    len(manager.store.records(manager.root)) if manager is not None else 0
+                )
+                yield HarnessEvent(
+                    type="rlm.usage",
+                    data={
+                        **usage_delta(before, budget.snapshot()),
+                        "remote_tasks": remote_after - remote_before,
+                        "remote_usage_known": remote_after == remote_before,
+                    },
+                )
+            yield event
+
+    async def _send_inprocess(self, coding_session, message):
         model = coding_session.harness.get_model()
         yield HarnessEvent(
             type="model.requested",
@@ -323,6 +349,17 @@ class RLMHarnessProtocolAdapter:
                     )
                     return
             policy = coding_session.policy
+            command_errors = (
+                await coding_session.command_completion_errors()
+                if hasattr(coding_session, "command_completion_errors")
+                else []
+            )
+            if command_errors:
+                yield HarnessEvent(
+                    type="run.failed",
+                    data={"error": "; ".join(command_errors), "error_type": "CommandIncomplete"},
+                )
+                return
             if not policy.autonomous or not policy.gates:
                 yield HarnessEvent(type="run_end", data={"status": "completed"})
                 return
@@ -512,6 +549,12 @@ def _read_index(index: Path) -> dict[str, str]:
     return (
         {str(key): str(value) for key, value in loaded.items()} if isinstance(loaded, dict) else {}
     )
+
+
+def _model_tools(metadata):
+    from superqode.rlm.profile import RLMProfile
+
+    return RLMProfile.from_config(metadata.get("rlm_config")).tools
 
 
 __all__ = ["DEFAULT_TOOLS", "RLMHarnessProtocolAdapter"]

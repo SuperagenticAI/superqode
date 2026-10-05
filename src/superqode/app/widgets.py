@@ -3529,10 +3529,10 @@ class ConversationLog(RichLog):
         self,
         success: bool = True,
         response_text: str = "",
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
+        prompt_tokens: int | None = 0,
+        completion_tokens: int | None = 0,
         thinking_tokens: int = 0,
-        cost: float = 0.0,
+        cost: float | None = 0.0,
     ):
         """
         End the agent output session with a rich Mission Report summary.
@@ -3591,7 +3591,7 @@ class ConversationLog(RichLog):
             tool_counts[name] = tool_counts.get(name, 0) + 1
 
         files_mod = getattr(self, "_files_modified", set())
-        total_tokens = prompt_tokens + completion_tokens
+        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
 
         stats_line = []
         if duration > 0:
@@ -3600,9 +3600,13 @@ class ConversationLog(RichLog):
             stats_line.append(f"{sum(tool_counts.values())} tools")
         if files_mod:
             stats_line.append(f"{len(files_mod)} changed")
-        if total_tokens > 0:
+        if prompt_tokens is None or completion_tokens is None:
+            stats_line.append("tokens unknown")
+        elif total_tokens > 0:
             stats_line.append(f"{total_tokens:,} toks")
-        if cost > 0:
+        if cost is None:
+            stats_line.append("cost unknown")
+        elif cost > 0:
             stats_line.append(f"${cost:.4f}")
 
         if stats_line:

@@ -24,6 +24,7 @@ import contextlib
 import hashlib
 import io
 import json
+from contextlib import nullcontext
 import os
 import pickle
 import re
@@ -36,7 +37,17 @@ from typing import Any, Sequence, cast
 
 PROTOCOL_VERSION = 1
 RESERVED_NAMES = frozenset(
-    {"workspace", "shell", "rlm", "a2a", "context", "llm_query", "llm_query_batched"}
+    {
+        "workspace",
+        "shell",
+        "commands",
+        "history",
+        "rlm",
+        "a2a",
+        "context",
+        "llm_query",
+        "llm_query_batched",
+    }
 )
 _COMPOUND_PATTERN = re.compile(r"[;&|]|\$\(|`|\n")
 
@@ -166,8 +177,9 @@ class Workspace:
         if not _policy_flag(self.policy, "allow_write"):
             raise SandboxPolicyError("Writing is disabled by the RLM sandbox policy")
         target = self._path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        with self.commands.mutation() if hasattr(self, "commands") else nullcontext():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
         return str(target.relative_to(self.root))
 
     def edit(self, path: str | Path, old: str, new: str, *, replace_all: bool = False) -> str:
@@ -176,14 +188,15 @@ class Workspace:
         if not _policy_flag(self.policy, "allow_write"):
             raise SandboxPolicyError("Writing is disabled by the RLM sandbox policy")
         target = self._path(path)
-        content = target.read_text(encoding="utf-8", errors="replace")
-        count = content.count(old)
-        if count == 0:
-            raise ValueError(f"Text not found in {path}")
-        target.write_text(
-            content.replace(old, new) if replace_all else content.replace(old, new, 1),
-            encoding="utf-8",
-        )
+        with self.commands.mutation() if hasattr(self, "commands") else nullcontext():
+            content = target.read_text(encoding="utf-8", errors="replace")
+            count = content.count(old)
+            if count == 0:
+                raise ValueError(f"Text not found in {path}")
+            target.write_text(
+                content.replace(old, new) if replace_all else content.replace(old, new, 1),
+                encoding="utf-8",
+            )
         return f"edited {target.relative_to(self.root)} ({count if replace_all else 1} replacement)"
 
     def glob(self, pattern: str) -> list[str]:
@@ -599,6 +612,20 @@ class ContextProxy:
         return self._ask("ctx.chunk", {"size": int(size), "overlap": int(overlap)})
 
 
+class HistoryProxy:
+    def __init__(self, call):
+        self._call = call
+
+    def search(self, query="", *, limit=20):
+        return self._call("history.search", {"query": query, "limit": limit})
+
+    def read(self, identity, *, start=0, size=4000):
+        return self._call("history.read", {"id": identity, "start": start, "size": size})
+
+    def stats(self):
+        return self._call("history.stats", {})
+
+
 def _agent_id(value: Any) -> str:
     return str(getattr(value, "id", value))
 
@@ -622,6 +649,22 @@ class SandboxKernel:
             1, int(self.policy.get("max_checkpoint_bytes") or 64 * 1024 * 1024)
         )
         self._call_id = 0
+        try:
+            from commands import CommandBroker
+        except ImportError:
+            from superqode.rlm.commands import CommandBroker
+        command_path = self.policy.get("command_path") or (
+            "/state/commands.sqlite3"
+            if Path("/state").is_dir()
+            else self.cwd / ".superqode" / "rlm-commands.sqlite3"
+        )
+        self.commands = CommandBroker(
+            self.cwd,
+            command_path,
+            policy=self.policy,
+            max_output_chars=self.max_output_chars,
+            agent=kernel_id,
+        )
         self.globals: dict[str, Any] = {
             "__name__": "__rlm__",
             "__builtins__": __builtins__,
@@ -634,7 +677,10 @@ class SandboxKernel:
             "llm_query": self._llm_query,
             "llm_query_batched": self._llm_query_batched,
             "context": ContextProxy(self.host_call),
+            "history": HistoryProxy(self.host_call),
+            "commands": self.commands,
         }
+        self.globals["workspace"].commands = self.commands
 
     def _llm_query(self, prompt: str, *, context: str = "", model: str | None = None) -> Any:
         return self.host_call(

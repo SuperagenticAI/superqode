@@ -133,3 +133,32 @@ async def test_released_adapter_starts_a_real_resident_process(tmp_path, monkeyp
     finally:
         await client.control("stop")
         await _wait_until(lambda: client.status().state == "stopped")
+
+
+async def test_operational_inspection_remains_available_during_model_turn(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_RLM_DIR", str(tmp_path / "agent"))
+    client = RootRuntimeClient(
+        "live-inspection",
+        {"session_id": "live-inspection", "working_directory": str(tmp_path), "metadata": {}},
+    )
+    client.directory.mkdir(parents=True)
+    _atomic_json(client.manifest_path, client.manifest)
+    adapter = _Adapter(tmp_path / "root.jsonl")
+    worker = ResidentRootWorker(client.manifest_path, "generation", adapter=adapter)
+
+    async def inspect(command, argument):
+        return {"lines": [{"level": "info", "text": "live job inspection"}]}
+
+    worker._admin = inspect
+    task = asyncio.create_task(worker.run())
+    await _wait_until(lambda: client.status().state == "ready")
+    try:
+        await client.submit("send", {"content": "long turn"})
+        await adapter.started.wait()
+        async with asyncio.timeout(2):
+            events = await client.request("admin", {"command": "jobs"})
+        assert events[0].data["lines"][0]["text"] == "live job inspection"
+        assert not adapter.release.is_set()
+    finally:
+        await client.control("stop")
+        assert await task == 0

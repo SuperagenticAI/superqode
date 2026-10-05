@@ -18,12 +18,18 @@ async def run_worker(request_path: str | Path) -> int:
         from superqode.rlm.coding_session import RLMCodingSession, RLMCodingSessionOptions
         from superqode.rlm.sandbox import RLMSandboxConfig
         from superqode.rlm.subcalls import SubcallPolicy
+        from superqode.rlm.profile import RLMProfile
+        from superqode.rlm.budget import BudgetPolicy
 
         options = RLMCodingSessionOptions(
             cwd=Path(str(request["cwd"])),
             agent_id=str(request["agent_id"]),
             parent_agent_id=str(request.get("parent_agent_id") or "root"),
             subcall_policy=SubcallPolicy.from_config(request.get("subcall_policy")),
+            profile=RLMProfile.from_config(request.get("profile")),
+            budget_policy=BudgetPolicy.from_config(request.get("budget_policy")),
+            budget_path=str(request.get("budget_path") or ""),
+            command_path=str(request.get("command_path") or ""),
             model=resolve_model(
                 str(request.get("model") or ""), provider=str(request.get("provider") or "")
             ),

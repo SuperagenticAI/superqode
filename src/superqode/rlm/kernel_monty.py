@@ -43,6 +43,16 @@ MONTY_BACKEND = "monty"
 #: Built inside Monty on top of the injected ``_rlm_*`` externals, so the
 #: namespace matches the other profiles rather than exposing bare functions.
 PREAMBLE = """
+class History:
+    def search(self, query="", limit=20):
+        return _rlm_host("history.search", {"query": query, "limit": limit})
+    def read(self, identity, start=0, size=4000):
+        return _rlm_host("history.read", {"id": identity, "start": start, "size": size})
+    def stats(self):
+        return _rlm_host("history.stats", {})
+
+history = History()
+
 class RLMResponse:
     def __init__(self, data):
         self.id = data["id"]

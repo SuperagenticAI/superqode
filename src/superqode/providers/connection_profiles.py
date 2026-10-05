@@ -627,6 +627,42 @@ _RLM_PROFILES: List[ConnectionProfile] = [
         menu=CONNECT_MENU_RLM,
         detect=lambda: True,
     ),
+    ConnectionProfile(
+        id="rlm-hybrid",
+        label="Try RLM Python + Bash",
+        description="Experimental two-tool profile. Persistent Python and durable Bash jobs on host; A2A off",
+        connector="harness-use",
+        runtime="rlm-hybrid",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-hybrid-docker",
+        label="Try RLM Python + Bash in Docker",
+        description="Experimental two-tool profile inside Docker. Networking off; A2A off",
+        connector="harness-use",
+        runtime="rlm-hybrid-docker",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-selective",
+        label="Try RLM selective context",
+        description="Experimental stored observations with bounded previews and branch-scoped history reads",
+        connector="harness-use",
+        runtime="rlm-selective",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="rlm-settings",
+        label="Configure RLM profile and budgets",
+        description="Choose tools, sandbox, observation mode and shared model-call/spend limits",
+        connector="rlm-settings",
+        runtime="rlm",
+        menu=CONNECT_MENU_RLM,
+        detect=lambda: True,
+    ),
 ]
 
 # Step two: where the model comes from. Each answers that one question.

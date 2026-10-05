@@ -157,7 +157,16 @@ def test_rlm_options_offer_local_boundaries_and_explicit_routing():
     from superqode.providers.connection_profiles import parent_menu
 
     profiles = list_connection_profiles(CONNECT_MENU_RLM)
-    assert [p.id for p in profiles] == ["rlm-host", "rlm-docker", "rlm-monty", "rlm-a2a"]
+    assert [p.id for p in profiles] == [
+        "rlm-host",
+        "rlm-docker",
+        "rlm-monty",
+        "rlm-a2a",
+        "rlm-hybrid",
+        "rlm-hybrid-docker",
+        "rlm-selective",
+        "rlm-settings",
+    ]
     assert parent_menu(CONNECT_MENU_RLM) == CONNECT_MENU_HARNESS
     assert CONNECT_MENU_RLM in CONNECT_MENUS
     assert "optional" in CONNECT_MENU_TITLES[CONNECT_MENU_RLM][1]

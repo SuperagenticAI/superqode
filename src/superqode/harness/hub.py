@@ -742,6 +742,15 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
     ),
+    "rlm-hybrid": HubLanguage(
+        "Python", "confirmed", "Native SuperQode RLM with Python and Bash tool surfaces."
+    ),
+    "rlm-hybrid-docker": HubLanguage(
+        "Python", "confirmed", "Native SuperQode RLM with Python and Bash inside Docker."
+    ),
+    "rlm-selective": HubLanguage(
+        "Python", "confirmed", "Native SuperQode RLM with selective observations."
+    ),
     "rlm-monty": HubLanguage(
         "Python",
         "confirmed",
@@ -1496,7 +1505,16 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
         **_spec_lifecycle_commands(item_reference),
     }
     if item.runtime == "rlm":
-        details["tui_commands"] += (":rlm a2a", ":rlm routing", ":rlm delegations")
+        details["tui_commands"] += (
+            ":rlm settings",
+            ":rlm profile",
+            ":rlm budget",
+            ":rlm history",
+            ":rlm jobs",
+            ":rlm a2a",
+            ":rlm routing",
+            ":rlm delegations",
+        )
     if item.id == "uhp":
         details.update(
             install_command=":connect uhp",

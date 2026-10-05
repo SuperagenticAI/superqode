@@ -170,8 +170,20 @@ class RootRuntimeClient:
     async def submit(self, operation: str, payload: Mapping[str, Any] | None = None) -> str:
         status = await self.ensure()
         command_id = f"cmd_{uuid4().hex}"
+        operational = operation == "admin" and dict(payload or {}).get("command") in {
+            "profile",
+            "budget",
+            "usage",
+            "history",
+            "jobs",
+            "job",
+            "routing",
+            "peers",
+            "delegations",
+            "inbox",
+        }
         _append_jsonl(
-            self.commands_path,
+            self.controls_path if operational else self.commands_path,
             {
                 "protocol": ROOT_RUNTIME_PROTOCOL,
                 "id": command_id,

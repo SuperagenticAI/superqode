@@ -120,8 +120,9 @@ class Workspace:
     def write(self, path: str | Path, content: str) -> str:
         ensure_write(self.sandbox)
         target = self._path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        with self._mutation():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
         return str(target.relative_to(self.root))
 
     def edit(self, path: str | Path, old: str, new: str, *, replace_all: bool = False) -> str:
@@ -129,13 +130,18 @@ class Workspace:
         ensure_read(self.sandbox)
         ensure_write(self.sandbox)
         target = self._path(path)
-        content = target.read_text(encoding="utf-8", errors="replace")
-        count = content.count(old)
-        if count == 0:
-            raise ValueError(f"Text not found in {path}")
-        updated = content.replace(old, new) if replace_all else content.replace(old, new, 1)
-        target.write_text(updated, encoding="utf-8")
+        with self._mutation():
+            content = target.read_text(encoding="utf-8", errors="replace")
+            count = content.count(old)
+            if count == 0:
+                raise ValueError(f"Text not found in {path}")
+            updated = content.replace(old, new) if replace_all else content.replace(old, new, 1)
+            target.write_text(updated, encoding="utf-8")
         return f"edited {target.relative_to(self.root)} ({count if replace_all else 1} replacement)"
+
+    def _mutation(self):
+        commands = getattr(self, "commands", None)
+        return commands.mutation() if commands is not None else contextlib.nullcontext()
 
     def glob(self, pattern: str) -> list[str]:
         ensure_read(self.sandbox)
@@ -371,6 +377,7 @@ class PersistentPythonKernel:
         checkpoint_path: str | Path | None = None,
         sandbox: RLMSandboxConfig | None = None,
         context_policy: ContextPolicy | None = None,
+        command_path: str | Path | None = None,
     ) -> None:
         self.cwd = Path(cwd).expanduser().resolve()
         self.sandbox = sandbox or RLMSandboxConfig()
@@ -383,6 +390,21 @@ class PersistentPythonKernel:
             Path(checkpoint_path).expanduser() if checkpoint_path is not None else None
         )
         self._agent_event_cursor = 0
+        from .commands import CommandBroker
+
+        self.commands = CommandBroker(
+            self.cwd,
+            command_path
+            or (
+                self.checkpoint_path.with_suffix(".commands.sqlite3")
+                if self.checkpoint_path
+                else self.cwd / ".superqode" / "rlm-commands.sqlite3"
+            ),
+            policy=self.sandbox.to_dict(),
+            max_output_chars=self.sandbox.max_output_chars,
+            agent=agent_id,
+        )
+        self.workspace.commands = self.commands
         self.globals: dict[str, Any] = {
             "__name__": "__rlm__",
             "__builtins__": __builtins__,
@@ -392,6 +414,7 @@ class PersistentPythonKernel:
             "llm_query": self.subcalls.query,
             "llm_query_batched": self.subcalls.query_batch,
             "context": self.context,
+            "commands": self.commands,
         }
         self._lock = threading.Lock()
         self._restored_names = self._restore_checkpoint()
@@ -537,6 +560,7 @@ def kernel_for(
     checkpoint_path: str | Path | None = None,
     sandbox: RLMSandboxConfig | None = None,
     context_policy: ContextPolicy | None = None,
+    command_path: str | Path | None = None,
 ) -> PersistentPythonKernel:
     """Return the process-local persistent kernel for a session."""
     with _KERNELS_LOCK:
@@ -549,6 +573,7 @@ def kernel_for(
                 checkpoint_path=checkpoint_path,
                 sandbox=sandbox,
                 context_policy=context_policy,
+                command_path=command_path,
             )
             _KERNELS[session_key] = kernel
         elif supervisor is not None:
@@ -603,7 +628,17 @@ def create_python_tool(kernel: PersistentPythonKernel) -> AgentTool:
 
 
 _RESERVED_NAMES = frozenset(
-    {"workspace", "shell", "rlm", "a2a", "llm_query", "llm_query_batched", "context"}
+    {
+        "workspace",
+        "shell",
+        "commands",
+        "history",
+        "rlm",
+        "a2a",
+        "llm_query",
+        "llm_query_batched",
+        "context",
+    }
 )
 
 

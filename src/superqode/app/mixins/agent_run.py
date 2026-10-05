@@ -1085,7 +1085,7 @@ class AgentRunMixin:
                     stats.get("prompt_tokens", 0),
                     stats.get("completion_tokens", 0),
                     stats.get("thinking_tokens", 0),
-                    stats.get("total_cost", 0.0),
+                    stats.get("cost_usd", stats.get("total_cost", 0.0)),
                 )
                 if hasattr(self._pure_mode, "get_pending_approvals"):
                     self._announce_pending_approvals(self._pure_mode, log)

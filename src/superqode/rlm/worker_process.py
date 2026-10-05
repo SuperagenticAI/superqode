@@ -73,6 +73,14 @@ async def run_durable_child(
             "a2a_config": getattr(options, "a2a_config", None),
             "delegation_root": getattr(options, "delegation_root", ""),
             "delegation_path": getattr(options, "delegation_path", ""),
+            "profile": getattr(options, "profile", None).to_dict()
+            if getattr(options, "profile", None)
+            else {},
+            "budget_policy": getattr(options, "budget_policy", None).to_dict()
+            if getattr(options, "budget_policy", None)
+            else {},
+            "budget_path": getattr(options, "budget_path", ""),
+            "command_path": getattr(options, "command_path", ""),
         }
         _atomic_json(request_path, request)
         with log_path.open("ab") as log:

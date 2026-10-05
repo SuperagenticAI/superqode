@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-05
+
+### Added
+
+- Durable branch-scoped RLM history with searchable, paged observations and
+  experimental selective context projection. Full session records remain intact.
+- One inference ledger and call allowance shared by root, recursive coding
+  children and semantic queries, with reported token and USD thresholds,
+  restart persistence and explicit unknown-usage reconciliation.
+- Experimental Python+Bash RLM profiles for host and Docker. Both tools share
+  the persistent environment and sandbox. Command jobs have bounded durable
+  output, idempotent admission, deadlines, process-group cancellation and
+  explicit recovery when the outcome is unknown.
+- RLM settings in `:connect`, with tool surface, sandbox, observations and
+  inference limits. Inspect profiles, family usage, history and command jobs
+  while the resident worker is running. A2A remains opt-in and retains its
+  separate hosted credit policy.
+- A coding profile pilot runner with fresh workspaces, independent graders,
+  per-attempt usage and offline execution fixtures. Experimental profiles have
+  no demonstrated model quality or cost improvement yet.
+
+### Changed
+
+- Native Python remains the default RLM surface. Monty stays a read-only
+  research profile; Python+Bash requires host POSIX process groups or Docker.
+- RLM run reports include recursive inference usage. Missing provider prices
+  and remote A2A usage are shown as unknown instead of zero cost.
+
 ## [2.5.6] - 2026-10-04
 
 ### Added

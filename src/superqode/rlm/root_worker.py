@@ -45,6 +45,7 @@ class ResidentRootWorker:
         self._adapter = adapter or RLMHarnessProtocolAdapter(resident=False)
         self._ref: HarnessSessionRef | None = None
         self._stopping = False
+        self._admin_tasks: set[asyncio.Task] = set()
 
     def _manifest(self) -> dict[str, Any]:
         value = _read_json(self.manifest_path)
@@ -82,7 +83,9 @@ class ResidentRootWorker:
             self._write_state("failed", error=f"{type(error).__name__}: {error}")
             return 1
         finally:
-            tasks = [task for task in (heartbeat, controls) if task is not None]
+            tasks = [task for task in (heartbeat, controls) if task is not None] + list(
+                self._admin_tasks
+            )
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -211,7 +214,9 @@ class ResidentRootWorker:
             emit(f"id       {info.id}")
             emit(f"path     {session.session_path}")
             emit(f"messages {info.message_count}")
-            emit("tools    python (serializable state checkpointed)")
+            emit(
+                f"tools    {', '.join(getattr(getattr(session, 'profile', None), 'tools', ('python',)))} (serializable state checkpointed)"
+            )
             emit("tree     one resident root worker owns every descendant")
             emit(f"sandbox  {getattr(sandbox, 'backend', 'host')}")
         elif command == "policy":
@@ -377,7 +382,28 @@ class ResidentRootWorker:
                 elif operation == "stop":
                     await self._adapter.cancel(ref)
                     self._stopping = True
+                elif operation == "admin":
+                    task = asyncio.create_task(self._admin_control(control))
+                    self._admin_tasks.add(task)
+                    task.add_done_callback(self._admin_tasks.discard)
             await asyncio.sleep(0.05)
+
+    async def _admin_control(self, control):
+        from superqode.harness.events import HarnessEvent
+
+        identity = str(control["id"])
+        body = dict(control.get("payload") or {})
+        try:
+            result = await self._admin(
+                str(body.get("command") or "status"), str(body.get("argument") or "")
+            )
+            append_runtime_event(
+                self.events_path, identity, HarnessEvent(type="runtime.result", data=result)
+            )
+        except Exception as error:
+            complete_runtime_command(self.events_path, identity, status="failed", error=str(error))
+        else:
+            complete_runtime_command(self.events_path, identity)
 
     async def _heartbeat(self) -> None:
         while not self._stopping:

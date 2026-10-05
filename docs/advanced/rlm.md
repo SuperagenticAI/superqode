@@ -1,6 +1,6 @@
 # Native RLM Harness
 
-SuperQode's `rlm` harness gives the coding model one executable tool: a
+SuperQode's default `rlm` harness gives the coding model one executable tool: a
 persistent Python environment. The model writes Python to inspect the
 repository, select context, edit files and run commands. It does not receive
 separate `read`, `grep`, `edit` or `bash` tools.
@@ -17,7 +17,9 @@ Or switch from the TUI:
 :connect harness-rlm
 ```
 
-This opens RLM options for host, Docker, Monty and optional A2A setup. Select
+This opens RLM options for host, Docker, Monty, experimental Python+Bash,
+selective observations, profile settings and optional A2A setup. See
+[RLM profiles and budgets](rlm-profiles.md) for the new choices. Select
 an execution profile to activate RLM and continue to the model picker. You can
 also switch the active harness directly:
 
@@ -25,7 +27,7 @@ also switch the active harness directly:
 :harness switch rlm
 ```
 
-The model-facing tool list contains only `python`. The persistent namespace
+The default model-facing tool list contains only `python`. The persistent namespace
 includes these objects:
 
 ```python
@@ -49,7 +51,8 @@ children[0].send("Pay particular attention to session recovery")
 results = rlm.wait_all(children)
 ```
 
-Every child receives the same single persistent `python` tool. Child records
+Every child inherits the root profile, including its tool surface and shared
+inference allowance. The default exposes one persistent `python` tool. Child records
 carry stable IDs, parent ancestry, status and results. Handles support
 `status()`, `send()`, `steer()`, `wait()`, `cancel()` and `delete()`.
 
@@ -158,7 +161,8 @@ len(finding)            # characters
 
 This is not `rlm.run`. A subcall asks a model one question about text you
 already hold: no tools, no session, no repository. `rlm.run` starts a full child
-coding session with its own kernel and budget. Both are useful and they are not
+coding session with its own kernel and the family
+inference allowance. Both are useful and they are not
 interchangeable.
 
 Limits belong to the host, not to the namespace, because the model writes the
@@ -185,9 +189,9 @@ runtime:
     context_exclude: []
 ```
 
-`:rlm usage` reports what the recursive work has cost: subcalls against their
-quota, child agents by status, and the size of the corpus in scope. Root
-conversation usage is the harness's to report and is not duplicated there.
+`:rlm usage` reports root, coding-child and semantic inference through one
+family ledger, alongside subcall quotas, child records and context size.
+Unknown provider usage stays explicit; A2A credits are separate.
 
 One quota covers a session, so single calls and batches draw on the same
 allowance rather than each getting a fresh one. A prompt over the limit comes
@@ -220,8 +224,7 @@ finishes. Add one or more gates before starting the task:
 If a gate fails, its exit status and bounded output are returned to the same
 RLM session for another turn. The default limit is three rounds. Gate activity
 is streamed as `autonomous_gates_start` and `autonomous_gates_result` evidence
-and appears in the TUI as an `rlm.gates` host-operation card. It does not add a
-second model-facing tool; the coding model still receives only `python`.
+and appears in the TUI as an `rlm.gates` host-operation card. Completion gates do not change the selected model-facing tool surface.
 
 Clear autonomous mode and its gates with:
 

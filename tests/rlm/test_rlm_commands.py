@@ -73,6 +73,12 @@ def test_rlm_commands_are_offered_for_completion():
         ":rlm autonomous",
         ":rlm sandbox",
         ":rlm usage",
+        ":rlm settings",
+        ":rlm profile",
+        ":rlm budget",
+        ":rlm history",
+        ":rlm jobs",
+        ":rlm job",
         ":rlm agents",
         ":rlm a2a",
         ":rlm routing",
@@ -100,7 +106,7 @@ def test_bare_rlm_renders_help():
     with console.capture() as capture:
         console.print(log.rendered[-1])
     rendered = capture.get()
-    assert "one persistent Python tool" in rendered
+    assert "persistent Python and optional Bash" in rendered
     assert ":rlm agents" in rendered
     assert ":rlm steer" in rendered
     assert ":rlm attach" in rendered
@@ -189,8 +195,7 @@ async def test_usage_reports_recursive_spend_and_says_what_it_omits(tmp_path):
     assert any("subcalls   0 of 64 calls" in message for message in log.infos)
     assert any("children   none" in message for message in log.infos)
     assert any("context    " in message for message in log.infos)
-    # Better to name the gap than to look complete.
-    assert any("reported by the harness" in message for message in log.infos)
+    assert any("included in the family ledger" in message for message in log.infos)
 
 
 async def test_usage_applies_the_sessions_context_policy(tmp_path):

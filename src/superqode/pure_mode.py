@@ -983,6 +983,26 @@ class PureMode:
             if error and str(event.data.get("status") or "") not in {"cancelled", "completed"}:
                 return f"\n\n⚠️  {error}\n"
             return ""
+        if event.type == "rlm.usage":
+            total = dict(event.data.get("total") or {})
+            self._last_stats = {
+                **(getattr(self, "_last_stats", None) or {}),
+                "prompt_tokens": max(0, total.get("tokens", 0) - total.get("output_tokens", 0))
+                if not total.get("unknown_token_calls")
+                else None,
+                "completion_tokens": total.get("output_tokens", 0)
+                if not total.get("unknown_token_calls")
+                else None,
+                "total_tokens": total.get("tokens", 0)
+                if not total.get("unknown_token_calls")
+                else None,
+                "cost_usd": total.get("cost_usd")
+                if not total.get("unknown_cost_calls")
+                and event.data.get("remote_usage_known", True)
+                else None,
+                "rlm_usage": dict(event.data),
+            }
+            return ""
         return ""
 
     def _buffer_runtime_tool_delta(self, name: str, text: str) -> None:
