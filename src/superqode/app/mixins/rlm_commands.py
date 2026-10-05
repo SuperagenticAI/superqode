@@ -248,6 +248,12 @@ class RLMCommandMixin:
         from superqode.harness.rlm_adapter import RLMHarnessProtocolAdapter
 
         pure = getattr(self, "_pure_mode", None)
+        if pure is not None and not getattr(pure, "_harness_session_id", ""):
+            # Inspection may precede the first model turn. Reserve the same
+            # durable identity the turn path uses instead of opening a shared
+            # "rlm-session" worker, whose retained profile can belong to a
+            # previous connection. This does not invoke a model.
+            await pure._ensure_harness_session()
         session_id = str(getattr(pure, "_harness_session_id", "") or "") or "rlm-session"
         working_directory = Path(
             str(getattr(getattr(pure, "session", None), "working_directory", "") or Path.cwd())

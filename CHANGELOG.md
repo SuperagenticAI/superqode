@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-10-05
+
+### Fixed
+
+- Inspecting RLM profiles, routing or peers before the first task now creates
+  a session for the selected harness. Switching profiles no longer reuses a
+  shared inspection worker or fails with "Changing an RLM profile requires a
+  new session" because of retained history from an earlier connection.
+- Inspection retains an existing session identity and does not call a model.
+
 ## [2.6.0] - 2026-10-05
 
 ### Added

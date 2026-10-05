@@ -147,6 +147,75 @@ async def test_routing_inspects_authoritative_session_policy(tmp_path):
     assert any("Allowed peers: none" in line for line in log.infos)
 
 
+async def test_inspection_before_first_turn_reserves_a_profile_scoped_session(
+    tmp_path, monkeypatch
+):
+    from dataclasses import replace
+
+    from superqode.harness import get_harness_template
+    from superqode.harness.rlm_adapter import RLMHarnessProtocolAdapter
+    from superqode.pure_mode import PureMode
+
+    monkeypatch.chdir(tmp_path)
+    pure = PureMode()
+    monkeypatch.setattr(pure, "_dual_write_harness_session_meta", lambda **_kwargs: None)
+    spec = get_harness_template("rlm")
+    spec = replace(spec, context=replace(spec.context, session_storage=str(tmp_path / "sessions")))
+    pure.set_harness(spec)
+    pure.session.working_directory = tmp_path
+    pure.session.provider = "fake"
+    pure.session.model = MODEL.id
+    app = App(active=True)
+    app._pure_mode = pure
+    refs = []
+
+    async def resume(_adapter, ref):
+        refs.append(ref)
+        return ref
+
+    monkeypatch.setattr(RLMHarnessProtocolAdapter, "resume", resume)
+    _, first = await app._rlm_open_session()
+    _, repeated = await app._rlm_open_session()
+    assert first.session_id != "rlm-session"
+    assert repeated.session_id == first.session_id == pure.get_current_session_id()
+    assert pure._harness_session.session_id == first.session_id
+
+    config = {
+        **spec.runtime.config,
+        "tool_surface": "python-bash",
+        "a2a": {"enabled": True, "peers": [{"name": "reviewer", "url": "http://localhost:8000"}]},
+    }
+    pure.set_harness(replace(spec, runtime=replace(spec.runtime, config=config)))
+    _, changed = await app._rlm_open_session()
+    assert changed.session_id != first.session_id
+    assert changed.session_id == pure.get_current_session_id()
+    assert changed.metadata["rlm_config"]["a2a"]["peers"][0]["name"] == "reviewer"
+    assert changed.metadata["rlm_config"]["tool_surface"] == "python-bash"
+    assert len(refs) == 3
+    assert pure.session.total_requests == 0
+
+
+async def test_inspection_preserves_existing_session_identity(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from superqode.harness import get_harness_template
+    from superqode.harness.rlm_adapter import RLMHarnessProtocolAdapter
+
+    app = App(active=True)
+    app._pure_mode = SimpleNamespace(
+        _harness_session_id="existing-branch",
+        _harness_spec=get_harness_template("rlm"),
+        session=SimpleNamespace(working_directory=tmp_path, provider="fake", model=MODEL.id),
+    )
+
+    async def resume(_adapter, ref):
+        return ref
+
+    monkeypatch.setattr(RLMHarnessProtocolAdapter, "resume", resume)
+    _, ref = await app._rlm_open_session()
+    assert ref.session_id == ref.external_session_id == "existing-branch"
+
+
 async def test_sandbox_status_states_the_boundary_without_overclaiming(tmp_path):
     session = await _session(tmp_path)
     app = App(active=True)
