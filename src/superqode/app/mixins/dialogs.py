@@ -1813,6 +1813,9 @@ class DialogsMixin:
         # Store the pending tool info for later use when approved
         self._pending_tool_name = tool_name
         self._pending_tool_input = tool_input
+        import uuid
+
+        self._inline_approval_id = uuid.uuid4().hex
         self._permission_pending = True
 
         # Calculate the reason for permission
@@ -1899,7 +1902,7 @@ class DialogsMixin:
                 height: auto;
                 max-height: 70%;
                 background: #000000;
-                border: tall #ffffff;
+                border: tall $primary;
                 padding: 0 1;
             }
 
@@ -1930,8 +1933,8 @@ class DialogsMixin:
             .permission-btn {
                 margin: 0 1;
                 min-width: 8;
-                background: #333333;
-                border: tall #ffffff;
+                background: $surface;
+                border: tall $primary;
                 color: #ffffff;
             }
 
@@ -2015,6 +2018,16 @@ class DialogsMixin:
                         "y allow once · n deny · a allow for session · Esc deny",
                         id="permission-hints",
                     )
+
+            def on_mount(self):
+                self.query_one("#permission-dialog").styles.background = THEME["surface2"]
+                self.query_one("#permission-dialog").styles.border = ("tall", THEME["purple"])
+                self.query_one("#permission-title").styles.color = THEME["magenta"]
+                self.query_one("#permission-hints").styles.color = THEME["muted"]
+                for button in self.query(Button):
+                    button.styles.background = THEME["surface"]
+                    button.styles.border = ("tall", THEME["purple"])
+                    button.styles.color = THEME["text"]
 
             def _format_permission_content(self):
                 """Format the permission request content."""

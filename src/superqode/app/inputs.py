@@ -207,6 +207,8 @@ class SelectionAwareInput(TextArea):
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._resize_to_content()
         self._sync_working_animation()
+        if getattr(self.app, "_composer_blocks", {}):
+            self.app._refresh_attachment_bar()
         schedule = getattr(self.app, "_schedule_draft_save", None)
         if callable(schedule):
             schedule()

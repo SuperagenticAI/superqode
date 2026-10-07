@@ -427,7 +427,9 @@ class WorkOrderStore:
                 data={"id": invocation_id, "reason": reason, "allow_retry": allow_retry},
             )
 
-    def list(self, *, status: WorkOrderStatus | str | None = None) -> list[WorkOrder]:
+    def list(
+        self, *, status: WorkOrderStatus | str | None = None, limit: int | None = None
+    ) -> list[WorkOrder]:
         query = "select payload from work_orders"
         params: tuple[Any, ...] = ()
         if status is not None:
@@ -435,6 +437,11 @@ class WorkOrderStore:
             query += " where status = ?"
             params = (value,)
         query += " order by created_at desc"
+        if limit is not None:
+            if limit < 1:
+                raise ValueError("WorkOrder list limit must be positive")
+            query += " limit ?"
+            params = (*params, limit)
         with closing(self._connect()) as conn:
             return [
                 WorkOrder.from_dict(json.loads(row["payload"]))

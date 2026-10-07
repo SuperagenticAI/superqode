@@ -470,6 +470,15 @@ class SlashCommandMixin:
             self._go_home(log)
         elif c == "activity":
             self._activity_cmd(log)
+        elif c == "blocks":
+            self.action_preview_composer_block(args.strip())
+        elif c == "output":
+            self.action_preview_shell_output()
+        elif c in {"runs", "approvals", "delivery"}:
+            try:
+                self._open_supervision(c, args)
+            except ValueError as exc:
+                log.add_error(str(exc))
         elif c == "disconnect":
             self._disconnect_everything(log)
         elif c == "acp":
@@ -3199,13 +3208,7 @@ class SlashCommandMixin:
             self._permission_response = "deny"
         elif result == "allow":
             self._permission_response = "allow"
-            # Add to approved tools to prevent duplicate prompts
-            approved_tools = self._ensure_approved_tools()
-            if hasattr(self, "_pending_tool_name") and hasattr(self, "_pending_tool_input"):
-                tool_sig = self._get_tool_signature(
-                    self._pending_tool_name, self._pending_tool_input or {}
-                )
-                approved_tools.add(tool_sig)
+            # Once authorizes this parked invocation, not later tool calls.
             # Show confirmation
             try:
                 log = self.query_one("#log", ConversationLog)
@@ -3254,13 +3257,7 @@ class SlashCommandMixin:
             event = getattr(self, "_permission_response_event", None)
             if event is not None:
                 event.set()
-            # Add to approved tools to prevent duplicate prompts
-            approved_tools = self._ensure_approved_tools()
-            if hasattr(self, "_pending_tool_name") and hasattr(self, "_pending_tool_input"):
-                tool_sig = self._get_tool_signature(
-                    self._pending_tool_name, self._pending_tool_input or {}
-                )
-                approved_tools.add(tool_sig)
+            # Once authorizes only this parked invocation.
             # Show confirmation in log
             try:
                 log = self.query_one("#log", ConversationLog)

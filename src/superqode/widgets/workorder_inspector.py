@@ -47,7 +47,14 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
     """
 
     def __init__(
-        self, path: Path, reference: str, *, on_action=None, worker_running=None, lease_seconds=300
+        self,
+        path: Path,
+        reference: str,
+        *,
+        on_action=None,
+        worker_running=None,
+        lease_seconds=300,
+        section="overview",
     ):
         super().__init__()
         self.path, self.reference = path, reference
@@ -62,14 +69,19 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
         self._generation = 0
         self._inspected_digest = ""
         self._inspected_id = ""
+        self.initial_section = section
+        self._confirmation = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="work-inspector"):
             yield Static("WorkOrder · loading…", id="work-title")
             with Horizontal(id="work-selectors"):
                 yield Select(
-                    [(v, v.lower()) for v in ("Overview", "Evidence", "Recovery", "Review")],
-                    value="overview",
+                    [
+                        (v, v.lower())
+                        for v in ("Overview", "Delivery", "Evidence", "Recovery", "Review")
+                    ],
+                    value=self.initial_section,
                     allow_blank=False,
                     id="work-section",
                 )
@@ -92,6 +104,8 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
                                 ("Resume blocked work", "resume"),
                                 ("Prepare candidate", "prepare"),
                                 ("Acceptance checks", "check"),
+                                ("Merge approved candidate", "merge"),
+                                ("Roll back integration", "rollback"),
                             )
                         ],
                         value="run",
@@ -118,6 +132,14 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
         self.call_after_refresh(self.reload)
         self.set_interval(2, self.reload)
         self.query_one("#work-rows", OptionList).focus()
+        self.refresh_theme_colors()
+
+    def refresh_theme_colors(self):
+        from superqode.app.constants import THEME
+
+        self.query_one("#work-inspector").styles.background = THEME["surface2"]
+        self.query_one("#work-inspector").styles.border = ("round", THEME["purple"])
+        self.query_one("#work-title").styles.color = THEME["magenta"]
 
     def on_resize(self, event):
         if self.is_mounted:
@@ -208,6 +230,22 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
             self.rows = [
                 (f"{a['kind']} · {a.get('task_id') or 'WorkOrder'}", a) for a in s["review"]
             ]
+            if section == "delivery":
+                self.rows.insert(0, ("Delivery · checks, review and integration", s["gates"]))
+                self.rows.append(
+                    (
+                        "Usage and budget · recorded provenance",
+                        {"usage": s["usage"], "budget": s["budget"]},
+                    )
+                )
+                self.rows.extend(
+                    (f"Integration · {event['type']}", event)
+                    for event in s["events"]
+                    if "integration" in event["type"]
+                    or "merge" in event["type"]
+                    or "rollback" in event["type"]
+                    or "rolled_back" in event["type"]
+                )
         listing = self.query_one("#work-rows", OptionList)
         old = listing.highlighted or 0
         # Avoid replacing the selected page or resetting scroll on every tick.
@@ -251,6 +289,10 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
             "resume": s["status"] == "blocked",
             "prepare": bool(s["tasks"]) and all(t["status"] == "succeeded" for t in s["tasks"]),
             "check": s["status"] in {"reviewing", "checking", "ready_to_merge", "blocked"},
+            "merge": s["status"] == "ready_to_merge"
+            and (s["gates"].get("decision") or {}).get("verdict") == "accepted"
+            and (not s["gates"]["acceptance_tests"] or s["gates"]["last_check_passed"]),
+            "rollback": s["status"] == "merged",
         }
         running = self.worker_running()
         self.query_one("#work-execute", Button).disabled = running or not permitted.get(
@@ -283,6 +325,7 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
             "evidence": "Freshness describes sources. Reported findings still need verification.\n\n",
             "recovery": "Committed ≠ reused. Retry eligibility still requires current policy, workspace and ownership checks. Private outcomes are not displayed.\n\n",
             "review": "Acceptance checks and human approval apply to the current candidate.\n\n",
+            "delivery": "Task completion, acceptance checks, human approval and merge are separate gates.\n\n",
         }.get(section, "")
         detail = description + self._detail(row, section)
         self.query_one("#work-detail", TextArea).load_text(detail)
@@ -303,13 +346,22 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
                 f"Run: {row['run_id'] or 'none'}\n"
                 f"{row['error'] or ''}"
             )
-        if section == "overview" and "acceptance_tests" in row:
+        if section in {"overview", "delivery"} and "acceptance_tests" in row:
+            check_status = (
+                "Not recorded"
+                if not row["check_results"]
+                else "passed"
+                if row["last_check_passed"]
+                else "failed"
+            )
             return (
                 "Acceptance commands\n"
                 + "\n".join(row["acceptance_tests"])
-                + f"\n\nLast checks: {'passed' if row['last_check_passed'] else 'not passed'}\n"
+                + f"\n\nLast checks: {check_status}\n"
                 f"Candidate: {row['candidate_id'] or 'not prepared'}\n"
                 f"Human decision: {row['decision'] or 'pending'}"
+                + f"\nDelivery state: {self.snapshot['status']}\n"
+                + "Open the integration candidate to inspect its diff. Approval authorizes that exact candidate; merging is a separate action."
             )
         if section == "evidence":
             return (
@@ -332,7 +384,7 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
             elif row["state"] == "retry eligible":
                 detail += "\nRecover the stale lease, then run ready work. Current ownership, workspace, configuration and policy are rechecked."
             return detail
-        if section == "review":
+        if section in {"review", "delivery"} and "kind" in row:
             if row["kind"] == "check_result":
                 try:
                     results = json.loads(row["content"])
@@ -467,6 +519,29 @@ class WorkOrderInspector(PanelShortcutMixin, ModalScreen[list[str] | None]):
             )
         elif action == "execute":
             operation = self.query_one("#work-operation", Select).value
+            if operation in {"merge", "rollback"}:
+                await self.reload()
+                if self.query_one("#work-execute", Button).disabled:
+                    self._notice(
+                        "Delivery state changed. Inspect the current gates before continuing."
+                    )
+                    return
+                key = (
+                    operation,
+                    self.snapshot["status"],
+                    self.snapshot["gates"].get("candidate_id"),
+                    self.snapshot["gates"].get("candidate_digest"),
+                    json.dumps(self.snapshot["gates"].get("decision"), sort_keys=True),
+                )
+                if self._confirmation != key:
+                    self._confirmation = key
+                    self._notice(
+                        "Merge applies the approved candidate to the target. Click Execute again to confirm."
+                        if operation == "merge"
+                        else "Rollback reverses this integration if the target has no conflicting later edits. Click Execute again to confirm."
+                    )
+                    return
+                self._confirmation = None
             parts = ["work", "--store", str(self.path), str(operation), self.reference]
             if operation == "run":
                 parts.extend(["--lease", str(self.lease_seconds)])

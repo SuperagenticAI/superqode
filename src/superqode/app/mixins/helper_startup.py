@@ -116,6 +116,46 @@ class HelperStartupMixin:
         """Build the command palette from the real TUI command surface."""
         commands = [
             PaletteCommand(
+                "blocks",
+                "Pasted blocks",
+                "Inspect or remove folded pasted text",
+                "◇",
+                ":blocks",
+                "workflow",
+            ),
+            PaletteCommand(
+                "output",
+                "Stage shell output",
+                "Preview local output before adding it to your next message",
+                "◇",
+                ":output",
+                "workflow",
+            ),
+            PaletteCommand(
+                "runs",
+                "Run Overview",
+                "Inspect live agents, blockers and WorkOrder tasks",
+                "◆",
+                ":runs",
+                "workflow",
+            ),
+            PaletteCommand(
+                "approvals",
+                "Approvals Inbox",
+                "Inspect and resolve the exact pending request",
+                "◇",
+                ":approvals",
+                "workflow",
+            ),
+            PaletteCommand(
+                "delivery",
+                "Delivery",
+                "Review task changes, checks and candidate integration",
+                "✦",
+                ":delivery",
+                "workflow",
+            ),
+            PaletteCommand(
                 "context_next",
                 "Inspect Next Prompt",
                 "Inspect context and remove staged references while keeping your draft",

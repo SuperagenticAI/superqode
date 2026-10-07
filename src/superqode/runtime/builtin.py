@@ -24,6 +24,8 @@ class BuiltinRuntime:
         # wrapper uses it for persistent approval memory.
         self._harness_spec = kwargs.pop("harness_spec", None)
         self._loop = AgentLoop(**kwargs)
+        if self._harness_spec is not None and self._loop.config.harness_spec is None:
+            self._loop.config.harness_spec = self._harness_spec
         self._loop.pause_on_approval = True
 
     @property
@@ -43,48 +45,16 @@ class BuiltinRuntime:
             return []
         return [
             {
-                "index": 0,
-                "tool_name": pending.get("tool_name"),
+                **pending,
                 "arguments": dict(pending.get("arguments") or {}),
-                "tool_call_id": pending.get("tool_call_id"),
             }
         ]
 
     async def approve_and_resume(self, index: int = 0, always: bool = False) -> AgentResponse:
-        if index != 0 or not self._loop._pending_approval:
-            raise RuntimeError("No pending approval to approve")
-        pending = dict(self._loop._pending_approval)
-        tool_name = str(pending.get("tool_name") or "")
-        arguments = dict(pending.get("arguments") or {})
-        tool_call_id = pending.get("tool_call_id")
-        if tool_call_id:
-            self._loop._approved_tool_call_ids.add(str(tool_call_id))
-        if always and self._harness_spec is not None:
-            from ..harness.approval_memory import remember_approval_decision
+        from ..agent.peer_agents import _approve_loop_pending
 
-            remember_approval_decision(
-                self._harness_spec,
-                tool_name=tool_name,
-                arguments=arguments,
-                action="allow",
-            )
-        self._loop._pending_approval = None
-        result = await self._loop._execute_tool(
-            tool_name,
-            arguments,
-            tool_call_id=str(tool_call_id) if tool_call_id else None,
-        )
-        if not always and tool_call_id:
-            self._loop._approved_tool_call_ids.discard(str(tool_call_id))
-        if self._loop.on_tool_result:
-            self._loop.on_tool_result(tool_name, result)
-        return AgentResponse(
-            content=result.to_message(),
-            messages=[],
-            tool_calls_made=1 if result.success else 0,
-            iterations=0,
-            stopped_reason="complete" if result.success else "error",
-            error=result.error,
+        return await _approve_loop_pending(
+            self._loop, index=index, always=always, harness_spec=self._harness_spec
         )
 
     async def reject_and_resume(

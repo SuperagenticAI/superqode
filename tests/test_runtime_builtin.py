@@ -199,7 +199,10 @@ async def test_builtin_runtime_pauses_and_approves_tool_call():
     response = await runtime.run("use echo")
 
     assert response.stopped_reason == "needs_approval"
-    assert runtime.get_pending_approvals() == [
+    assert [
+        {k: item[k] for k in ("index", "tool_name", "arguments", "tool_call_id")}
+        for item in runtime.get_pending_approvals()
+    ] == [
         {
             "index": 0,
             "tool_name": "echo",

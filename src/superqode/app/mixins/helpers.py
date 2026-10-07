@@ -579,7 +579,9 @@ class HelpersMixin(
         # Widget CSS is static, so overlays with brand chrome (slash
         # autocomplete) re-resolve their colors from the new palette.
         try:
-            for widget in self.query("SlashComplete, CommandPalette, HistorySearchModal"):
+            for widget in self.query(
+                "SlashComplete, CommandPalette, HistorySearchModal, SupervisionBar"
+            ):
                 refresh = getattr(widget, "refresh_theme_colors", None)
                 if callable(refresh):
                     refresh()

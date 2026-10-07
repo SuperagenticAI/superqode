@@ -30,6 +30,10 @@ PERFORMANCE_BUDGETS_MS = {
     "typing_two_keys_ms": 1500,
     "scroll_with_settle_ms": 750,
     "resize_with_settle_ms": 1500,
+    "folded_paste_ms": 1000,
+    "block_preview_ms": 1500,
+    "folded_draft_typing_ms": 1500,
+    "large_submission_render_ms": 1000,
 }
 
 
@@ -65,6 +69,7 @@ async def probe(size):
         setattr(app, name, lambda *a, **k: None)
     timings = []
     async with app.run_test(size=size) as pilot:
+        app._welcome_active = False
         log = app.query_one("#log", ConversationLog)
         log.replay_history(
             [
@@ -115,6 +120,32 @@ async def probe(size):
         stream_ms = await producer
         await monitor
         assert prompt.value == "hi"
+        # Exercise the new composer against the same long-history fixture.
+        from textual import events
+
+        prompt.focus()
+        pasted = "fixture line\n" * 80000
+        tick = perf_counter()
+        app.post_message(events.Paste(pasted))
+        await pilot.pause()
+        paste_ms = (perf_counter() - tick) * 1000
+        assert len(prompt.value) < 100
+        assert app._expand_composer_blocks(prompt.value) == "hi" + pasted
+        tick = perf_counter()
+        app.action_preview_composer_block()
+        await pilot.pause()
+        preview_ms = (perf_counter() - tick) * 1000
+        app.screen.action_close()
+        await pilot.pause()
+        tick = perf_counter()
+        await pilot.press("!")
+        folded_typing_ms = (perf_counter() - tick) * 1000
+        assert app._expand_composer_blocks(prompt.value) == "hi" + pasted + "!"
+        tick = perf_counter()
+        log.add_user(pasted)
+        await pilot.pause()
+        submission_ms = (perf_counter() - tick) * 1000
+        assert log._messages[-1][1] == pasted
         return {
             "size": list(size),
             "history_messages": 10000,
@@ -128,6 +159,11 @@ async def probe(size):
             "typing_two_keys_ms": round(typing_ms, 2),
             "scroll_with_settle_ms": round(scroll_ms, 2),
             "resize_with_settle_ms": round(resize_ms, 2),
+            "folded_paste_chars": len(pasted),
+            "folded_paste_ms": round(paste_ms, 2),
+            "block_preview_ms": round(preview_ms, 2),
+            "folded_draft_typing_ms": round(folded_typing_ms, 2),
+            "large_submission_render_ms": round(submission_ms, 2),
         }
 
 

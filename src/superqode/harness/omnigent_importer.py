@@ -146,6 +146,13 @@ def omnigent_agent_to_harness_spec(
         if key in data:
             metadata[metadata_key][key] = data[key]
 
+    if source_label == "omnigent":
+        from .import_compatibility import build_omnigent_compatibility_receipt
+
+        metadata[metadata_key]["compatibility_receipt"] = build_omnigent_compatibility_receipt(
+            data, _HARNESS_BACKEND_MAP
+        )
+
     return HarnessSpec(
         name=spec_name,
         description=str(data.get("description") or f"Imported from Omnigent agent {omnigent_name}"),

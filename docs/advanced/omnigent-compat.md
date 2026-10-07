@@ -11,7 +11,7 @@ event store, sandbox policy, checks, and workflow tooling.
 
 Use the importer when:
 
-- you have an Omnigent `agent.yaml` and want to run the equivalent workflow in SuperQode
+- you have an Omnigent `agent.yaml` and want to adapt its workflow for SuperQode
 - you want to evaluate Omnigent examples without adopting Omnigent's server model
 - you want a committed `harness.yaml` that your team can inspect, edit, validate, and run
 - you want SuperQode to remain the controlling harness while borrowing compatible spec ideas
@@ -62,6 +62,35 @@ Use `--force` only when you intentionally want to replace an existing output fil
 The importer preserves Omnigent-only fields in metadata instead of silently
 discarding them. This keeps the generated spec runnable today while leaving a
 clear upgrade path as SuperQode grows native equivalents.
+
+## Compatibility receipt
+
+Every new Omnigent import stores a versioned receipt under
+`metadata.omnigent.compatibility_receipt` and prints its limitations after the
+normal CLI success summary. Conversion and overwrite behavior are unchanged.
+The receipt describes field mapping, with runtime equivalence explicitly
+**unverified**:
+
+- **Translated:** fields mapped into the generated spec. Adapter support and
+  readiness still require validation.
+- **Preserved only:** data retained in metadata or config without established
+  equivalent enforcement. In particular, imported `policies` do not become
+  SuperQode governance rules.
+- **Unsupported:** ignored fields or semantics without an importer contract.
+- **Behavior changes:** substitutions such as `codex-native` to `codex-sdk`,
+  `claude-native` to `claude-agent-sdk`, coarse sandbox mapping, and a child's
+  `max_sessions` becoming a fallback iteration limit.
+
+Child findings use paths such as `tools.worker.policies`. Fields can have both
+a mapping and a behavior-change finding. The printed receipt includes field
+paths and explanations, rather than source credential or policy values.
+Existing imports are not rewritten. SuperQode's concise `import-agent` path
+keeps its existing metadata contract.
+
+Inspect the generated YAML, run `harness validate` and `harness doctor`, and
+review the receipt before depending on imported permissions, isolation,
+authentication, history or tool implementations. A converted tool name does not
+install its external Python callable or client-side implementation.
 
 ## Harness Name Mapping
 

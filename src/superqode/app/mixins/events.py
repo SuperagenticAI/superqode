@@ -38,6 +38,7 @@ class EventHandlerMixin:
         prompt = self.query_one("#prompt-input", SelectionAwareInput)
         if prompt.value:
             return
+        self._composer_blocks = state.get("blocks", {})
         self._attached_refs = state["refs"]
         self._attachment_prefill = state["prefill"]
         self._staged_images = {
@@ -76,6 +77,11 @@ class EventHandlerMixin:
         state = {
             "text": text,
             "cursor": cursor,
+            "blocks": {
+                key: block
+                for key, block in getattr(self, "_composer_blocks", {}).items()
+                if f"[Block {key}]" in text
+            },
             "refs": list(getattr(self, "_attached_refs", [])),
             "images": {
                 ref: str(image.path) for ref, image in getattr(self, "_staged_images", {}).items()
@@ -833,6 +839,15 @@ class EventHandlerMixin:
             )
             self._handle_command(text, log)
             return
+
+        # Expand payloads only for a model message, after command/shell routing.
+        try:
+            text = self._expand_composer_blocks(text)
+        except ValueError as exc:
+            event.input.value = event.value
+            log.add_error(str(exc))
+            return
+        self._refresh_attachment_bar()
 
         # Message - record and send
         self._history_manager.append_sync(

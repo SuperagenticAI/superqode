@@ -348,8 +348,9 @@ class HelperMcpAttachMixin:
                 len(line) - len(f"{index}. {label} ×"),
             )
             line.append("  ")
+        block_count = self._composer_block_chips(line)
         panel.update(line)
-        panel.set_class(bool(refs), "visible")
+        panel.set_class(bool(refs) or bool(block_count), "visible")
 
     def _prepare_image_input(self, log: ConversationLog) -> list | None:
         """Snapshot images for this turn, keeping the draft intact on failure."""

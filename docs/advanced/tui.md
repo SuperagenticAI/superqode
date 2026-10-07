@@ -31,6 +31,78 @@ superqode --harness harness.yaml
 
 ```
 
+## Folded pastes and shell-output staging
+
+Pastes of at least 20 lines or 2,000 characters become compact `[Block …]`
+markers at the current cursor position. Click a block chip to inspect it, or
+use `:blocks` through the command palette. Preview pages contain at most 32,768
+characters; the full original text, including whitespace and line endings, is
+expanded in place when you send a normal message. Remove a block with its **×**
+chip or the preview's **Remove** button. Back and Escape leave the draft intact.
+Small pastes and command-line pastes stay literal.
+
+After a local shell command (`>` or `!`) completes, click **Preview and stage for
+next message**, or open `:output` from the command palette. Select text or edit
+the current preview page, then choose **Stage excerpt**. This adds that excerpt,
+command and exit code to the composer; it does not send it. Type your question
+and press Enter when ready. Opening the palette lets you inspect output without
+replacing your existing draft. Only the latest completed local shell output is
+available through this action.
+
+Folded text is limited to 100 blocks, 2,097,152 characters per block, and
+4,194,304 characters per expanded message. Oversized
+pastes are rejected with a visible message. The shell-output handle retains at
+most 2,097,152 characters and labels any truncation. Each staged excerpt remains
+bounded by the preview page. Large pastes avoid rendering their full text, but
+sending their full content still increases model input size. Submitted message
+display is bounded to 8,000 characters and 80 lines while session history retains
+the complete message.
+
+Unsent folded payloads are included in the existing private workspace draft
+recovery file. Recovery is bounded to a 32 MiB serialized draft. Image bytes
+remain outside that file. Deleting a marker supports normal editor undo until
+a new block is staged; the explicit Remove action discards its payload.
+
+## Runs, approvals and delivery
+
+The persistent strip below the status bar shows **Runs**, **Approvals**,
+**Delivery**, and **Queue**. Open the overview with `Ctrl+O`, or use:
+
+| Command | View |
+| --- | --- |
+| `:runs` | Current session, child agents and project WorkOrder tasks |
+| `:approvals` | Pending tool requests and WorkOrders awaiting human review |
+| `:delivery` | Completed task evidence and WorkOrder delivery |
+| `:delivery ID --store PATH` | One WorkOrder in a specific existing store |
+
+The overview preserves your prompt draft and cursor. Use arrow keys to select,
+Enter to inspect, Tab to reach actions, and Escape to return. Escape from the
+overview leaves pending requests pending. The layout stacks the list above the
+details in narrower terminals. SuperQode's current theme and diamond branding
+are retained.
+
+Tool requests show their owner, arguments, reason and available invocation
+identity. **Approve once** applies to the selected request; a changed request
+requires a fresh decision. Contextual approvals bind the invocation, argument
+digest and policy revision, and never override DENY. If the original policy
+scope cannot be restored, resumption stops rather than dropping that scope.
+The inbox exposes requests reported by the active runtime and child manager;
+vendor prompts outside those interfaces remain in their vendor UI.
+
+For a WorkOrder, **Open** enters its Delivery inspector. Inspect the full
+current candidate and enter a review reason before approving. Approval and
+merge are separate actions. Merge requires an accepted candidate and applicable
+checks; merge and rollback each require a second Execute click to confirm.
+Existing backend checks still validate the repository state before changing it.
+Completed task reviews provide files and recorded checks; they are not accepted
+WorkOrder candidates. Missing checks and usage remain explicitly unrecorded.
+
+Observed state refreshes every two seconds while the overview is open. The
+persistent strip refreshes live counts every second and WorkOrder counts every
+three seconds. WorkOrder inspection reads up to the latest 100 orders in the
+selected store, then filters to the current project. It does not create a store
+when none exists.
+
 ## WorkOrder and context inspectors
 
 Open `:work view ID` for task dependencies, evidence, recovery and candidate

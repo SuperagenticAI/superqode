@@ -1466,7 +1466,7 @@ class CommandImplMixin:
             return
         self.run_worker(self._superqode_cli_cmd(["skillopt", *tokens], log, "SkillOpt command"))
 
-    def _open_work_inspector(self, args, log):
+    def _open_work_inspector(self, args, log, *, section="overview"):
         from superqode.commands.work import DEFAULT_WORK_STORE
         from superqode.widgets.workorder_inspector import WorkOrderInspector, parse_inspector_args
 
@@ -1491,7 +1491,12 @@ class CommandImplMixin:
 
         self.push_screen(
             WorkOrderInspector(
-                path, reference, on_action=dispatch, worker_running=running, lease_seconds=lease
+                path,
+                reference,
+                on_action=dispatch,
+                worker_running=running,
+                lease_seconds=lease,
+                section=section,
             ),
             callback=lambda _: self._ensure_input_focus(),
         )

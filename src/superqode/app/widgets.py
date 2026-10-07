@@ -1671,7 +1671,14 @@ class ConversationLog(RichLog):
         # A stable two-level turn shape is easier to scan than an inline
         # ``You <prompt>`` prefix once the transcript contains tools and status
         # output. Keep it minimal: identity line, then a purple input rail.
-        lines = (str(text).strip() or "(empty)").splitlines() or ["(empty)"]
+        # Keep full message evidence above; only its on-screen representation
+        # is bounded so sending a folded paste cannot freeze the transcript.
+        display_text = str(text)[:8000]
+        display_lines = (display_text.strip() or "(empty)").splitlines() or ["(empty)"]
+        clipped = len(str(text)) > 8000 or len(display_lines) > 80
+        lines = display_lines[:80]
+        if clipped:
+            lines.append("[Display limited; full message retained in session history]")
         question = Text()
         question.append("  › ", style=f"bold {THEME['purple']}")
         question.append("YOU", style=f"bold {THEME['purple']}")

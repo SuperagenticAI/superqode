@@ -173,7 +173,9 @@ async def test_uncertain_result_requires_approval_even_with_auto_allow(tmp_path)
         await loop._check_tool_permission("bash", {"command": "echo hi"}, "call-1")
     assert len(client.calls) == 1
     assert loop.last_systemone_decision["action"] == "ask"
-    loop._approved_tool_call_ids.add("call-1")
+    from superqode.tools.approval_receipts import issue_receipt
+
+    issue_receipt(loop, loop._pending_approval)
     assert await loop._check_tool_permission("bash", {"command": "echo hi"}, "call-1") is None
     assert pack.id == "tool_gate"
 

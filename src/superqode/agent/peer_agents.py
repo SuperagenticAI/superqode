@@ -359,42 +359,72 @@ def _pending_approvals(loop: Any) -> List[Dict[str, Any]]:
         return []
     return [
         {
-            "index": 0,
-            "tool_name": pending.get("tool_name"),
+            **pending,
             "arguments": dict(pending.get("arguments") or {}),
-            "tool_call_id": pending.get("tool_call_id"),
         }
     ]
 
 
-async def _approve_loop_pending(loop: Any, index: int = 0, always: bool = False) -> Any:
+async def _approve_loop_pending(
+    loop: Any, index: int = 0, always: bool = False, harness_spec: Any = None
+) -> Any:
+    from superqode.governance import active_governance, governance_scope, load_governance
+
+    if active_governance() is None:
+        spec = harness_spec or getattr(loop.config, "harness_spec", None)
+        bundle = load_governance(loop.config.working_directory, harness_spec=spec)
+        previous = getattr(loop, "_pending_governance", None)
+        if previous is not None:
+            restored_sources = {layer.source for layer in bundle.engine.layers}
+            missing = [
+                layer.name
+                for layer in previous.engine.layers
+                if layer.source not in restored_sources
+            ]
+            if missing:
+                raise RuntimeError(
+                    "Original approval policy scope is unavailable: " + ", ".join(missing)
+                )
+        with governance_scope(bundle):
+            return await _approve_loop_pending_inner(loop, index, always, spec)
+    return await _approve_loop_pending_inner(loop, index, always, harness_spec)
+
+
+async def _approve_loop_pending_inner(loop, index, always, harness_spec):
     if index != 0 or not getattr(loop, "_pending_approval", None):
         raise RuntimeError("No pending approval to approve")
     pending = dict(loop._pending_approval)
     tool_name = str(pending.get("tool_name") or "")
     arguments = dict(pending.get("arguments") or {})
     tool_call_id = pending.get("tool_call_id")
-    if tool_call_id:
-        loop._approved_tool_call_ids.add(str(tool_call_id))
-    if always and getattr(loop.config, "harness_spec", None) is not None:
-        from ..harness.approval_memory import remember_approval_decision
+    from ..tools.approval_receipts import issue_receipt
 
-        remember_approval_decision(
-            loop.config.harness_spec,
-            tool_name=tool_name,
-            arguments=arguments,
-            action="allow",
-        )
+    receipt = issue_receipt(loop, pending)
+    spec = harness_spec or getattr(loop.config, "harness_spec", None)
     loop._pending_approval = None
-    result = await loop._execute_tool(
-        tool_name,
-        arguments,
-        tool_call_id=str(tool_call_id) if tool_call_id else None,
-    )
-    if not always and tool_call_id:
+    from .loop import ToolApprovalRequired, AgentResponse
+
+    try:
+        result = await loop._execute_tool(
+            tool_name, arguments, tool_call_id=str(tool_call_id) if tool_call_id else None
+        )
+    except ToolApprovalRequired:
+        return AgentResponse(
+            content="The request changed. Inspect and approve the current invocation.",
+            messages=[],
+            tool_calls_made=0,
+            iterations=0,
+            stopped_reason="needs_approval",
+        )
+    finally:
+        loop._approval_receipts.pop(receipt.invocation_id, None)
         loop._approved_tool_call_ids.discard(str(tool_call_id))
     if loop.on_tool_result:
         loop.on_tool_result(tool_name, result)
+    if always and spec is not None and result.success:
+        from ..harness.approval_memory import remember_approval_decision
+
+        remember_approval_decision(spec, tool_name=tool_name, arguments=arguments, action="allow")
     from .loop import AgentResponse
 
     return AgentResponse(

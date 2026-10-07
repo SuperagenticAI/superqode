@@ -91,6 +91,8 @@ class ToolContext:
     # Nested calls must use the same hooks, approvals and policy as direct calls.
     execute_tool: Optional[Callable[[str, Dict[str, Any], str], Awaitable["ToolResult"]]] = None
     invocation_id: str = ""
+    # Supplied by host consent handling, never decoded from tool arguments.
+    approval_receipt: Optional[Any] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""

@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-10-07
+
+### Added
+
+- Live Runs, Approvals and Delivery overview with `Ctrl+O`, `:runs`,
+  `:approvals` and `:delivery`, plus a persistent navigation and queue strip.
+  Inspect reported main/child-agent state and project WorkOrders while retaining
+  the composer draft and cursor.
+- WorkOrder Delivery inspection connects candidate changes, recorded checks,
+  human review and separate, confirmed merge/rollback actions to existing
+  repository acceptance checks.
+- Large-paste folding with paged previews, removal and exact-content expansion
+  on send. Unsent folded text recovers through the existing private draft store.
+- Explicit local shell-output preview and excerpt staging through `:output`.
+  Staging adds context to the next draft without sending it.
+- Versioned Omnigent import compatibility receipts identifying mapped fields,
+  preservation without enforcement, unsupported fields and behavioral changes.
+- `harness drift --require-complete` returns exit code 2 for incomplete static
+  verification when no known drift already requires exit code 1.
+
+### Fixed
+
+- Contextual ASK approvals carry single-use receipts scoped to invocation,
+  arguments and policy revision. DENY remains final; changed requests require
+  fresh consent and unavailable original policy scope blocks resumption.
+- Dynamic MCP calls use the governed call/result boundary, including policy
+  suppression before disallowed result persistence or exposure.
+- Drift checks resolve harness backends through the execution registry and
+  distinguish unknown backends from missing dependencies or unknown readiness.
+  Unknown checks no longer produce a clean report or an all-matched summary.
+
+### Changed
+
+- Mark the model-to-harness route in `:connect` as Recommended.
+- Bound composer previews, queue previews and submitted-message rendering while
+  retaining full message evidence. Folded payloads and shell-output handles have
+  explicit size limits; serialized draft recovery is bounded to 32 MiB.
+- Drift JSON retains its existing fields and adds completeness, known drift and
+  static-verification indicators. Default exit behavior remains unchanged.
+
+### Notes
+
+- Overview telemetry depends on what each runtime reports. Vendor-native
+  prompts outside those interfaces remain in their vendor UI.
+- Import receipts and static drift checks do not certify runtime equivalence,
+  credential readiness or live behavioral capability support.
+
 ## [2.6.1] - 2026-10-05
 
 ### Fixed

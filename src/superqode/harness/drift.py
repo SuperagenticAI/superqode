@@ -58,12 +58,28 @@ class DriftReport:
     def drifted(self) -> tuple[DriftCheck, ...]:
         return tuple(check for check in self.checks if check.status == DRIFT_DRIFT)
 
+    @property
+    def has_drift(self) -> bool:
+        return self.status == DRIFT_DRIFT or bool(self.drifted)
+
+    @property
+    def complete(self) -> bool:
+        """Completeness of these static checks, not live certification."""
+        return (
+            bool(self.checks)
+            and self.status in {DRIFT_OK, DRIFT_DRIFT}
+            and all(check.status in {DRIFT_OK, DRIFT_DRIFT} for check in self.checks)
+        )
+
     def to_dict(self) -> dict[str, Any]:
         unknown = sum(1 for check in self.checks if check.status == DRIFT_UNKNOWN)
         return {
             "name": self.name,
             "status": self.status,
-            "clean": self.status != DRIFT_DRIFT,
+            "clean": self.complete and not self.has_drift,
+            "has_drift": self.has_drift,
+            "complete": self.complete,
+            "verification": "static",
             "summary": {
                 "checks": len(self.checks),
                 "drift": len(self.drifted),
@@ -101,39 +117,68 @@ def _check(
 
 
 def _runtime_check(spec: HarnessSpec) -> DriftCheck:
-    """A spec naming a runtime it cannot load is the most consequential drift."""
+    """Resolve the same backend catalog and availability used by execution."""
     declared = str(getattr(spec.runtime, "backend", "") or "builtin")
     try:
-        from superqode.runtime import list_runtimes
+        from .backends.registry import create_harness_backend, backend_capabilities
 
-        # Drift reports what actually resolves, so it pays for the deep probe.
-        runtimes = {item.name: item for item in list_runtimes(probe=True)}
+        backend = create_harness_backend(declared)
+    except ValueError as exc:
+        if str(exc).startswith("Unknown harness backend "):
+            return _check(
+                "runtime",
+                declared,
+                "unknown backend",
+                detail="The declared backend is not a harness backend SuperQode knows.",
+            )
+        return _check(
+            "runtime",
+            declared,
+            "unavailable",
+            detail=f"Could not resolve backend: {exc}",
+            unknown=True,
+        )
     except Exception as exc:  # noqa: BLE001 - reporting beats crashing
         return _check(
             "runtime",
             declared,
             "unavailable",
-            detail=f"Could not enumerate runtimes: {exc}",
+            detail=f"Could not resolve backend: {exc}",
             unknown=True,
         )
-
-    info = runtimes.get(declared)
-    if info is None:
+    try:
+        capabilities = backend_capabilities(declared)
+    except Exception as exc:  # noqa: BLE001
         return _check(
             "runtime",
             declared,
-            "unknown backend",
-            detail="The declared backend is not a runtime SuperQode knows.",
+            "readiness unknown",
+            detail=f"Known backend {backend.name}; availability probe failed: {exc}",
+            unknown=True,
         )
-    if not getattr(info, "installed", False):
+    if capabilities.availability == "missing":
         return _check(
             "runtime",
             declared,
             "not installed",
-            detail=str(getattr(info, "install_hint", "") or "The runtime is not installed here."),
+            detail=f"Known backend {backend.name}. "
+            + str(capabilities.install_hint or "Required backend dependencies are unavailable."),
         )
-    return _check(
-        "runtime", declared, declared, detail="Declared runtime resolves and is installed."
+    if capabilities.availability != "available":
+        return _check(
+            "runtime",
+            declared,
+            "readiness unknown",
+            detail=f"Known backend {backend.name}; availability is {capabilities.availability}. "
+            + str(capabilities.install_hint or ""),
+            unknown=True,
+        )
+    return DriftCheck(
+        "runtime",
+        DRIFT_OK,
+        declared,
+        backend.name,
+        detail="Declared harness backend resolves and its availability probe passes. Credentials and live behavior are not verified.",
     )
 
 
@@ -439,8 +484,15 @@ def render_drift(report: DriftReport) -> str:
     drifted = len(report.drifted)
     if drifted:
         lines.append(f"{drifted} declaration(s) do not match the resolved harness.")
-    else:
-        lines.append("Every declaration matches the resolved harness.")
+    elif report.has_drift:
+        lines.append("Drift was reported; no declaration details are available.")
+    elif report.complete:
+        lines.append("Every declaration matches the resolved harness (static checks only).")
+    if not report.complete:
+        unknown = sum(check.status == DRIFT_UNKNOWN for check in report.checks)
+        lines.append(
+            f"Verification incomplete: {unknown} unknown check(s). Unobserved declarations are not verified."
+        )
     return "\n".join(lines)
 
 

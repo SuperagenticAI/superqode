@@ -400,17 +400,31 @@ sandbox, every declared tool, the shell and write stances against the tools that
 need them, the event store behind declared observability, and whether a checks
 block that promises to fail a run has any step to fail on.
 
-Exits non-zero when a declaration does not hold, so it can gate a pipeline.
+Exit code 1 reports known drift. The default exit code remains zero for incomplete
+checks; add `--require-complete` to return exit code 2 when verification is
+incomplete and no drift is already known. A passing static report does not
+certify credentials, live model behavior or behavioral capability support.
+
+JSON preserves `name`, `status`, `clean`, `summary` and `checks`, and adds
+`has_drift`, `complete` and `verification: static`. `clean` is true only when all
+reported checks are complete and no drift was found. Unknown checks produce an
+incomplete summary rather than a claim that every declaration matches.
+
+Backend recognition and availability use the harness backend registry. A known
+backend with missing dependencies differs from an unknown backend; a failed or
+unavailable readiness probe remains unknown.
 
 ```bash
 superqode harness drift --spec harness.yaml
 superqode harness drift --spec harness.yaml --json
+superqode harness drift --spec harness.yaml --json --require-complete
 ```
 
 | Option | Description |
 | --- | --- |
 | `--spec PATH` | Spec file (required) |
 | `--json` | Emit JSON |
+| `--require-complete` | Exit 2 for incomplete static checks unless known drift already exits 1 |
 
 Tools published by an MCP server are registered when that server connects, so
 they are reported as supplied at run time rather than counted as drift.

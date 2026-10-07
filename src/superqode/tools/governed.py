@@ -14,6 +14,24 @@ from .base import Tool, ToolContext, ToolResult
 from .permissions import TOOL_GROUPS, PermissionManager
 
 
+class DynamicTool(Tool):
+    """Adapt a host executor to the same policy/storage boundary as local tools."""
+
+    description = "Dynamic host tool"
+    parameters = {"type": "object"}
+
+    def __init__(self, name, executor):
+        self._name = name
+        self._executor = executor
+
+    @property
+    def name(self):
+        return self._name
+
+    async def execute(self, args, ctx):
+        return await self._executor(args)
+
+
 async def execute_governed_tool(
     tool: Tool,
     arguments: Mapping[str, Any],
@@ -43,7 +61,15 @@ async def execute_governed_tool(
         risk=risk,
         arguments=original,
     )
-    if call_decision.action != "allow":
+    from .approval_receipts import ApprovalReceipt
+
+    receipt = ctx.approval_receipt
+    approved_ask = (
+        call_decision.action == "ask"
+        and isinstance(receipt, ApprovalReceipt)
+        and receipt.consume(ctx.invocation_id, tool.name, original)
+    )
+    if call_decision.action != "allow" and not approved_ask:
         verb = "requires approval" if call_decision.action == "ask" else "was denied"
         return ToolResult(
             success=False,
@@ -122,6 +148,11 @@ async def execute_governed_tool(
         "tool_call": call_decision.to_dict(),
         "tool_result": result_decision.to_dict(),
         **({"credential": credential_evidence} if credential_evidence else {}),
+        **(
+            {"approval": {"invocation_id": ctx.invocation_id, "scope": "once"}}
+            if approved_ask
+            else {}
+        ),
     }
     if result_decision.action != "allow":
         return ToolResult(

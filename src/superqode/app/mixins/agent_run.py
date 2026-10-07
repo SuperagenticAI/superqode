@@ -375,7 +375,9 @@ class AgentRunMixin:
                 cwd=os.getcwd(),
                 timeout=1200 if resume_harness else 60,
             )
-            output = (result.stdout + result.stderr).strip()
+            raw_output = result.stdout + result.stderr
+            self._call_ui(self._remember_shell_output, cmd, raw_output, result.returncode)
+            output = raw_output.strip()
             ok = result.returncode == 0
             self._call_ui(log.add_shell, cmd, output, ok)
 

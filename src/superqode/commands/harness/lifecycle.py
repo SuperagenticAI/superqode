@@ -467,6 +467,11 @@ def harness_import_omnigent(agent_yaml, output, name, force):
         f"(runtime={spec.runtime.backend}, workflow={spec.workflow.mode.value})"
     )
 
+    from superqode.harness.import_compatibility import render_import_compatibility
+
+    receipt = spec.metadata.get("omnigent", {}).get("compatibility_receipt", {})
+    click.echo(render_import_compatibility(receipt))
+
 
 @harness.command("import-agent")
 @click.argument("agent_yaml", type=click.Path(exists=True, path_type=Path))
@@ -669,7 +674,10 @@ def harness_diff(left, right, json_output):
 @harness.command("drift")
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def harness_drift(spec_path, json_output):
+@click.option(
+    "--require-complete", is_flag=True, help="Exit 2 when static verification is incomplete"
+)
+def harness_drift(spec_path, json_output, require_complete=False):
     """Check whether a harness does what its spec declares.
 
     ``doctor`` asks whether a harness can run. This asks whether the resolved
@@ -678,7 +686,7 @@ def harness_drift(spec_path, json_output):
     production. Exits non-zero on drift so it can gate a pipeline.
     """
     from superqode.harness import load_harness_spec
-    from superqode.harness.drift import DRIFT_DRIFT, detect_drift, render_drift
+    from superqode.harness.drift import detect_drift, render_drift
 
     spec = load_harness_spec(spec_path)
     report = detect_drift(spec)
@@ -686,8 +694,10 @@ def harness_drift(spec_path, json_output):
         click.echo(json.dumps(report.to_dict(), indent=2))
     else:
         click.echo(render_drift(report))
-    if report.status == DRIFT_DRIFT:
+    if report.has_drift:
         raise click.exceptions.Exit(1)
+    if require_complete and not report.complete:
+        raise click.exceptions.Exit(2)
 
 
 @harness.command("doctor")

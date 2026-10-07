@@ -1,4 +1,4 @@
-"""Bounded, private workspace drafts; attachment payloads are never persisted."""
+"""Bounded, private workspace drafts; image payloads are never persisted."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from threading import Lock
 
-MAX_DRAFT_BYTES = 1024 * 1024
+MAX_DRAFT_BYTES = 32 * 1024 * 1024
 
 
 class DraftStore:
@@ -39,7 +39,19 @@ class DraftStore:
                 ref in refs and isinstance(path, str) for ref, path in images.items()
             ):
                 return {}
+            blocks = state.get("blocks", {})
+            if not isinstance(blocks, dict) or len(blocks) > 100:
+                return {}
+            for key, block in blocks.items():
+                if not isinstance(key, str) or not isinstance(block, dict):
+                    return {}
+                if not isinstance(block.get("text"), str) or not isinstance(
+                    block.get("label"), str
+                ):
+                    return {}
+                block["lines"] = block["text"].count("\n") + 1
             return {
+                "blocks": blocks,
                 "text": text,
                 "cursor": max(0, min(cursor, len(text))),
                 "refs": list(dict.fromkeys(refs))[:100],

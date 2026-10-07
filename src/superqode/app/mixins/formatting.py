@@ -47,7 +47,7 @@ class FormattingMixin:
         t.append(":queue edit N · :queue drop N", style=f"bold {THEME['cyan']}")
         t.append("\n", style="")
         for index, msg in enumerate(queue[:5], 1):
-            preview = " ".join(str(msg).split())
+            preview = " ".join(str(msg)[:512].split())
             if len(preview) > 80:
                 preview = preview[:77].rstrip() + "..."
             t.append(f"    {index}. ", style=THEME["dim"])

@@ -46,6 +46,18 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/open", "Open a file or bookmark", category="files"),
     SlashCommand("/bookmark", "Manage bookmarks", category="files"),
     # Workflow commands
+    SlashCommand(":blocks", "Inspect or remove folded pasted text", category="workflow"),
+    SlashCommand(":output", "Preview local shell output and stage an excerpt", category="workflow"),
+    SlashCommand(
+        ":runs",
+        "Inspect live runs, child agents and WorkOrder tasks",
+        "Ctrl+O",
+        category="workflow",
+    ),
+    SlashCommand(":approvals", "Open pending tool approvals and human review", category="workflow"),
+    SlashCommand(
+        ":delivery", "Review task changes, checks and WorkOrder delivery", category="workflow"
+    ),
     SlashCommand("/a2a", "Show agent-to-agent workflow commands", category="workflow"),
     SlashCommand("/context", "View/update work context", "Ctrl+I", category="workflow"),
     SlashCommand("/approve", "Approve a pending tool call", category="workflow"),

@@ -958,6 +958,7 @@ class AgentLoop:
         self.pause_on_approval = False
         self._pending_approval: Optional[Dict[str, Any]] = None
         self._approved_tool_call_ids: set[str] = set()
+        self._approval_receipts: dict = {}
 
         # Per-model byte cap for tool output (computed once - same provider/model
         # for the lifetime of the loop). Passed into ToolContext so individual
@@ -1668,9 +1669,16 @@ class AgentLoop:
 
         from ..systemone.runtime import apply_systemone_gate
 
+        from ..tools.approval_receipts import ApprovalReceipt, policy_revision
+
+        receipt = getattr(self, "_approval_receipts", {}).get(tool_call_id or "")
+        invocation_approved = isinstance(receipt, ApprovalReceipt) and receipt.matches(
+            tool_call_id or "", name, arguments
+        )
+
         baseline_allowed = (
             (permission == Permission.ALLOW and not rule_ask)
-            or (tool_call_id and tool_call_id in self._approved_tool_call_ids)
+            or invocation_approved
             or ((verdict.allowed or rule_allow) and not rule_ask)
         )
         baseline = "allow" if baseline_allowed else "ask"
@@ -1682,26 +1690,59 @@ class AgentLoop:
 
         if permission == Permission.ALLOW and not rule_ask and not so_ask:
             return None
-        if tool_call_id and tool_call_id in self._approved_tool_call_ids:
+        if invocation_approved:
             return None
         if (verdict.allowed or rule_allow or so_allow) and not rule_ask and not so_ask:
             return None
 
         if self.pause_on_approval:
+            import uuid
+            from superqode.governance import active_governance, evaluate_active_policy
+            from ..tools.permissions import TOOL_GROUPS
+
+            group = TOOL_GROUPS.get(name)
+            policy = evaluate_active_policy(
+                "tool_call",
+                tool=name,
+                arguments=arguments,
+                tool_group=group.value if group is not None else "",
+                risk=self.permission_manager.get_risk_level(name, arguments),
+            )
+            self._pending_governance = active_governance()
+
             self._pending_approval = {
                 "index": 0,
                 "tool_name": name,
                 "arguments": dict(arguments),
-                "tool_call_id": tool_call_id,
+                "tool_call_id": tool_call_id or uuid.uuid4().hex,
+                "approval_id": uuid.uuid4().hex,
+                "policy_revision": policy_revision(),
+                "reason": policy.reason
+                if policy.enforced
+                else "Human approval required by execution permissions",
+                "risk": self.permission_manager.get_risk_level(name, arguments),
             }
             raise ToolApprovalRequired(name, arguments, tool_call_id)
 
+        consent_revision = policy_revision()
         approved = await self.permission_manager.request_permission(
             name,
             arguments,
             description=f"Agent requested tool `{name}`",
         )
         if approved:
+            from ..tools.approval_receipts import issue_receipt
+
+            if tool_call_id:
+                issue_receipt(
+                    self,
+                    {
+                        "tool_name": name,
+                        "arguments": arguments,
+                        "tool_call_id": tool_call_id,
+                        "policy_revision": consent_revision,
+                    },
+                )
             return None
         return ToolResult(
             success=False,
@@ -1732,11 +1773,32 @@ class AgentLoop:
         from ..acp.tool_call_context import acp_tool_call_context
         from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL, CONTEXT_RETRIEVAL
 
+        from superqode.governance import active_governance, governance_scope, load_governance
+
+        if active_governance() is None:
+            with governance_scope(
+                load_governance(
+                    self.config.working_directory, harness_spec=self.config.harness_spec
+                )
+            ):
+                return await self._execute_tool(name, arguments, tool_call_id)
+
+        import uuid
+
+        tool_call_id = tool_call_id or uuid.uuid4().hex
+
         lifecycle_ctx = self._lifecycle_context()
+        self._supervision_operation = name
+        self._supervision_last_event = f"Tool requested: {name}"
 
         async def _finalize(result: ToolResult) -> ToolResult:
             import hashlib
             from ..systemone.state import redact_evidence
+
+            self._supervision_operation = ""
+            self._supervision_last_event = (
+                f"Tool {'completed' if result.success else 'failed'}: {name}"
+            )
 
             result.metadata = {
                 **(result.metadata or {}),
@@ -1844,20 +1906,17 @@ class AgentLoop:
                     server_id = parts[1]
                     tool_name = parts[2]
                     try:
-                        from superqode.execution_recovery import recoverable_call
+                        from ..tools.governed import DynamicTool, execute_governed_tool
 
-                        result = await recoverable_call(
-                            identity=tool_call_id or "",
-                            operation=f"mcp.{server_id}.{tool_name}",
-                            inputs=arguments,
-                            execute=lambda: self.mcp_executor(server_id, tool_name, arguments),
-                            encode=lambda r: {
-                                "success": r.success,
-                                "output": r.output,
-                                "error": r.error,
-                                "metadata": r.metadata,
-                            },
-                            decode=lambda r: ToolResult(**r),
+                        ctx = self._create_tool_context()
+                        ctx.invocation_id = tool_call_id
+                        ctx.approval_receipt = self._approval_receipts.pop(tool_call_id, None)
+                        result = await execute_governed_tool(
+                            DynamicTool(
+                                name, lambda args: self.mcp_executor(server_id, tool_name, args)
+                            ),
+                            arguments,
+                            ctx,
                         )
                         return await _finalize(result)
                     except Exception as e:
@@ -1885,6 +1944,7 @@ class AgentLoop:
 
         ctx = self._create_tool_context()
         ctx.invocation_id = tool_call_id or ""
+        ctx.approval_receipt = self._approval_receipts.pop(tool_call_id, None)
 
         try:
             from ..tools.governed import execute_governed_tool

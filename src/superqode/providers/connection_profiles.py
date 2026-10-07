@@ -487,7 +487,7 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="models",
-        label="Connect a harness with your model",
+        label="Connect a harness with your model (Recommended)",
         description="Connect with Native SuperQode harnesses like Core, RLM, PiPy, Workbench or Build Your own",
         connector="harness-picker-menu",
         detect=lambda: True,

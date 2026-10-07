@@ -329,3 +329,116 @@ executor:
     assert result.exit_code == 0, result.output
     assert "Imported Omnigent agent" in result.output
     assert load_harness_spec(output).runtime.backend == "claude-agent-sdk"
+
+
+def test_receipt_separates_policy_preservation_and_native_substitution():
+    source = {
+        "name": "reviewer",
+        "prompt": "Review carefully.",
+        "executor": {
+            "harness": "codex-native",
+            "model": "coding-model",
+            "auth": {"token": "PRIVATE_TOKEN_MARKER"},
+        },
+        "policies": {"shell_gate": {"action": "deny"}},
+        "unknown_feature": "unmapped",
+    }
+    spec = omnigent_agent_to_harness_spec(source)
+    receipt = spec.metadata["omnigent"]["compatibility_receipt"]
+    assert receipt["scope"] == "field_mapping"
+    assert receipt["runtime_equivalence"] == "unverified"
+    preserved = {entry["field"]: entry["reason"] for entry in receipt["preserved_only"]}
+    assert "policies" in preserved and "not become SuperQode governance" in preserved["policies"]
+    assert "executor.auth" in preserved
+    assert any(
+        entry["field"] == "executor.harness" and "codex-sdk" in entry["reason"]
+        for entry in receipt["behavior_changes"]
+    )
+    assert any(entry["field"] == "unknown_feature" for entry in receipt["unsupported"])
+    assert spec.metadata["omnigent"]["policies"] == source["policies"]
+    assert "policies" not in spec.execution_policy.config
+    from superqode.harness.import_compatibility import render_import_compatibility
+
+    rendered = render_import_compatibility(receipt)
+    assert "PRIVATE_TOKEN_MARKER" not in rendered
+    assert "PRIVATE_TOKEN_MARKER" not in str(receipt)
+
+
+def test_receipt_covers_child_policies_and_changed_session_limits():
+    spec = omnigent_agent_to_harness_spec(
+        {
+            "name": "parent",
+            "tools": {
+                "worker": {
+                    "type": "agent",
+                    "prompt": "work",
+                    "executor": {"harness": "claude-native"},
+                    "max_sessions": 2,
+                    "policies": {"gate": "deny"},
+                    "tools": {"grandchild": {"type": "agent", "prompt": "nested"}},
+                }
+            },
+        }
+    )
+    receipt = spec.metadata["omnigent"]["compatibility_receipt"]
+    assert any(entry["field"] == "tools.worker.policies" for entry in receipt["preserved_only"])
+    changed = {entry["field"] for entry in receipt["behavior_changes"]}
+    assert {"tools.worker.executor.harness", "tools.worker.max_sessions"} <= changed
+    assert any(
+        entry["field"] == "tools.worker.tools.grandchild" for entry in receipt["unsupported"]
+    )
+    assert len(spec.agents) == 2
+
+
+def test_receipt_is_persisted_and_cli_reports_limits_without_source_values(tmp_path):
+    source = tmp_path / "agent.yaml"
+    output = tmp_path / "harness.yaml"
+    source.write_text(
+        "name: imported\nexecutor:\n  harness: claude-native\n  auth:\n    token: PRIVATE_AUTH_MARKER\npolicies:\n  gate: PRIVATE_POLICY_MARKER\n"
+    )
+    result = CliRunner().invoke(
+        cli_main, ["harness", "import-omnigent", str(source), "--output", str(output)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Compatibility receipt" in result.output
+    assert "Preserved only: policies" in result.output
+    assert "Behavior change: executor.harness" in result.output
+    assert "PRIVATE_AUTH_MARKER" not in result.output
+    assert "PRIVATE_POLICY_MARKER" not in result.output
+    restored = load_harness_spec(output)
+    assert restored.metadata["omnigent"]["compatibility_receipt"]["version"] == 1
+
+
+def test_receipt_identifies_sandbox_downgrade_and_ignored_prompt():
+    spec = omnigent_agent_to_harness_spec(
+        {
+            "name": "sandboxed",
+            "instructions": "Use these instructions",
+            "prompt": "Ignored prompt",
+            "os_env": {"sandbox": {"type": "linux_bwrap", "read_paths": ["."]}},
+        }
+    )
+    receipt = spec.metadata["omnigent"]["compatibility_receipt"]
+    assert spec.execution_policy.sandbox == "local"
+    assert spec.agents[0].system_prompt == "Use these instructions"
+    assert any(entry["field"] == "os_env.sandbox" for entry in receipt["behavior_changes"])
+    assert any(entry["field"] == "prompt" for entry in receipt["unsupported"])
+    assert not any(entry["field"] == "prompt" for entry in receipt["translated"])
+
+
+def test_receipt_flags_legacy_pi_backend_without_changing_mapping():
+    spec = omnigent_agent_to_harness_spec({"name": "pi-agent", "executor": {"harness": "pi"}})
+    assert spec.runtime.backend == "runtime"
+    assert any(
+        entry["field"] == "executor.harness"
+        for entry in spec.metadata["omnigent"]["compatibility_receipt"]["unsupported"]
+    )
+
+
+def test_receipt_does_not_claim_ignored_malformed_fields_were_preserved():
+    spec = omnigent_agent_to_harness_spec(
+        {"name": "invalid-shapes", "executor": "invalid", "tools": [], "os_env": "invalid"}
+    )
+    receipt = spec.metadata["omnigent"]["compatibility_receipt"]
+    assert {"executor", "tools", "os_env"} <= {entry["field"] for entry in receipt["unsupported"]}
+    assert not any(entry["field"] == "os_env" for entry in receipt["preserved_only"])

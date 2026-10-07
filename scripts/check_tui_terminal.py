@@ -168,6 +168,35 @@ def probe(term: str, size: tuple[int, int]):
                 "Escape restores draft and focus",
                 lambda s: s["focused"] == "prompt-input" and s["text"] == "keep this draft",
             )
+            send(b"\x0f")
+            wait_for(
+                "Ctrl+O opens run overview",
+                lambda s: s["screen"] == "RunOverviewScreen" and s["text"] == "keep this draft",
+            )
+            send(b"\x1b")
+            wait_for(
+                "overview Escape restores draft and focus",
+                lambda s: s["screen"] != "RunOverviewScreen"
+                and s["focused"] == "prompt-input"
+                and s["text"] == "keep this draft",
+            )
+            large_paste = "\n".join(f"paste line {n}" for n in range(30))
+            send(b"\x1b[200~" + large_paste.encode() + b"\x1b[201~")
+            state = wait_for(
+                "large paste folds without submitting", lambda s: "[Block " in s["text"]
+            )
+            folded_draft = state["text"]
+            send(b"\x0b")
+            wait_for("palette opens with folded draft", lambda s: s["focused"] != "prompt-input")
+            send(b"\x1b")
+            wait_for(
+                "folded draft survives inspection",
+                lambda s: s["text"] == folded_draft and s["focused"] == "prompt-input",
+            )
+            send(b"\x15")
+            wait_for("clear folded marker", lambda s: s["text"] == "")
+            send(b"keep this draft")
+            wait_for("clear folded draft", lambda s: s["text"] == "keep this draft")
             resized = [size[0] + 10, size[1] + 5]
             fcntl.ioctl(
                 master, termios.TIOCSWINSZ, struct.pack("HHHH", resized[1], resized[0], 0, 0)

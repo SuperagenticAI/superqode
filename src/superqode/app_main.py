@@ -174,9 +174,13 @@ from superqode.app.mixins.tour import TourMixin
 
 
 from superqode.app.mixins.harness_hub import HarnessHubMixin
+from superqode.app.mixins.supervision import SupervisionMixin
+from superqode.app.mixins.composer_blocks import ComposerBlocksMixin
 
 
 class SuperQodeApp(
+    ComposerBlocksMixin,
+    SupervisionMixin,
     HarnessHubMixin,
     ExploreMixin,
     BuildHarnessMixin,
@@ -215,6 +219,7 @@ class SuperQodeApp(
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
         Binding("ctrl+k", "command_palette", "Commands", show=True, priority=True),
+        Binding("ctrl+o", "run_overview", "Runs", show=False, priority=True),
         Binding("ctrl+r", "rewind", "Rewind", show=True),
         Binding("ctrl+f", "search_transcript", "Search", show=True, priority=True),
         Binding("f1", "show_help", "Help", show=True),
@@ -441,6 +446,9 @@ class SuperQodeApp(
             with Container(id="content"):
                 # Colorful status bar - ALWAYS visible at top
                 yield ColorfulStatusBar(id="status-bar")
+                from superqode.widgets.run_overview import SupervisionBar
+
+                yield SupervisionBar(id="supervision-bar")
                 yield Static("", id="install-progress")
 
                 # Prompt area stays usable while an agent is working.
@@ -495,6 +503,10 @@ class SuperQodeApp(
         from superqode.app.herdr import start
 
         start(self)
+        self.set_interval(1, self._refresh_supervision_bar)
+        self.set_interval(3, self._refresh_work_supervision_cache)
+        self.run_worker(self._refresh_work_supervision_cache())
+        self.call_after_refresh(self._refresh_supervision_bar)
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
         self._set_prompt_border_title()
@@ -797,8 +809,10 @@ class SuperQodeApp(
         # Inline permission prompt: while a permission decision is pending,
         # y/n/a resolve it and escape cancels. Intercepted before the Input
         # widget so the keystroke never lands in the prompt buffer.
-        if getattr(self, "_permission_pending", False) and not getattr(
-            self, "_awaiting_agent_question", False
+        if (
+            len(self.screen_stack) == 1
+            and getattr(self, "_permission_pending", False)
+            and not getattr(self, "_awaiting_agent_question", False)
         ):
             if event.key in ("y", "n", "a", "escape"):
                 event.stop()
@@ -1268,7 +1282,7 @@ class SuperQodeApp(
         event._image_paste_checked = True
         if not isinstance(self.focused, SelectionAwareInput):
             return
-        if self._stage_pasted_images(event.text):
+        if self._stage_pasted_images(event.text) or self._fold_composer_paste(event.text):
             event.stop()
             event.prevent_default()
 
