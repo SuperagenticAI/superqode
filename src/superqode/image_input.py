@@ -37,10 +37,10 @@ def parse_image_paths(text: str) -> list[ImagePathReference]:
     stripped = text.strip()
     # Finder's plain-text clipboard may contain an unquoted path with spaces.
     if stripped.startswith(("/", "~/", "./", "../")):
-        whole = Path(stripped).expanduser()
         try:
+            whole = Path(stripped).expanduser()
             is_image = whole.suffix.lower() in IMAGE_EXTENSIONS and whole.is_file()
-        except OSError:
+        except (OSError, RuntimeError, ValueError):
             is_image = False
         if is_image:
             start = len(text) - len(text.lstrip())
@@ -57,15 +57,20 @@ def parse_image_paths(text: str) -> list[ImagePathReference]:
         value = tokens[0]
         explicit = value.startswith(("@", "/", "~/", "./", "../", "file://"))
         value = value.removeprefix("@")
-        if value.startswith("file://"):
-            uri = urlparse(value)
-            if uri.netloc not in ("", "localhost"):
-                continue
-            value = unquote(uri.path)
-        path = Path(value).expanduser()
         try:
-            is_image = path.suffix.lower() in IMAGE_EXTENSIONS and (explicit or path.is_file())
-        except OSError:
+            if value.startswith("file://"):
+                uri = urlparse(value)
+                if uri.netloc not in ("", "localhost"):
+                    continue
+                value = unquote(uri.path)
+            path = Path(value)
+            # Output often contains tilde markers. Only resolve home directories
+            # for image candidates, never for arbitrary words in a pasted log.
+            if path.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            path = path.expanduser()
+            is_image = explicit or path.is_file()
+        except (OSError, RuntimeError, ValueError):
             is_image = False
         if is_image:
             refs.append(ImagePathReference(path, match.start(), match.end()))
@@ -100,13 +105,16 @@ class ImageAttachment:
 
 def load_image(path: Path) -> ImageAttachment:
     """Validate format and size before encoding; never decode image bytes as text."""
-    path = path.expanduser().resolve()
+    try:
+        path = path.expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"Cannot resolve image path: {path.name}") from exc
     if path.suffix.lower() not in IMAGE_EXTENSIONS:
         raise ValueError("Use a PNG, JPEG, GIF, or WebP image.")
     try:
         with path.open("rb") as stream:
             data = stream.read(MAX_IMAGE_BYTES + 1)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise ValueError(f"Cannot read image: {path.name}") from exc
     if len(data) > MAX_IMAGE_BYTES:
         raise ValueError("Image exceeds 4 MB. Resize or crop it before attaching.")

@@ -301,7 +301,7 @@ class SmartPrompt(Widget):
                 ]
                 return matches[:10]
 
-        except (OSError, PermissionError):
+        except (OSError, RuntimeError, ValueError):
             pass
 
         return []

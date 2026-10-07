@@ -61,6 +61,38 @@ async def test_small_paste_and_shell_commands_remain_literal():
         assert not app._fold_composer_paste("a" * 2500)
 
 
+@pytest.mark.parametrize(
+    "header",
+    [
+        "build output\n~~~~compiler_marker~~~~\nscreenshot.png\n",
+        "build output\nfile://[broken/screen.png\n",
+    ],
+)
+async def test_large_output_with_tilde_markers_and_image_names_pastes_safely(header):
+    payload = header + "log line\n" * 1000
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.focus()
+        await pilot.pause()
+        prompt.post_message(events.Paste(payload))
+        await pilot.pause()
+        assert prompt.value.startswith("[Block ")
+        assert app._expand_composer_blocks(prompt.value) == payload
+
+
+def test_image_scanning_ignores_unresolvable_home_directories(monkeypatch):
+    from pathlib import Path
+    from superqode.image_input import parse_image_paths
+
+    def unavailable_home(self):
+        raise RuntimeError("Could not determine home directory.")
+
+    monkeypatch.setattr(Path, "expanduser", unavailable_home)
+    assert parse_image_paths("~/screen.png") == []
+    assert parse_image_paths("output ~missing-user/screen.png") == []
+
+
 @pytest.mark.parametrize("size", [(80, 24), (120, 40)])
 async def test_preview_is_bounded_and_back_preserves_draft(size):
     app = SuperQodeApp()

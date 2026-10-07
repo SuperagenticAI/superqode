@@ -117,6 +117,32 @@ def test_path_completion_snapshot_reuses_metadata_and_refreshes(monkeypatch, tmp
     assert helper._path_token_candidates("fr") == [("fresh.py", "2 bytes")]
 
 
+@pytest.mark.parametrize("query", ["~superqode_missing_test_user_490a/", "bad\x00dir/file"])
+def test_invalid_paths_do_not_break_either_prompt_completer(query):
+    from superqode.app.mixins.helper_completion_helpers import HelperCompletionHelpersMixin
+    from superqode.widgets.prompt import SmartPrompt
+
+    assert HelperCompletionHelpersMixin._path_token_candidates(query) == []
+    assert SmartPrompt()._get_path_completions(query) == []
+
+
+@pytest.mark.parametrize("path", ["~superqode_missing_test_user_490a/", "bad\x00dir/file"])
+async def test_invalid_attachment_path_completion_keeps_composer_usable(path):
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = ":attach " + path
+        await pilot.pause()
+        workers = [worker for worker in app.workers if worker.group == "prompt-completion"]
+        await asyncio.gather(*(worker.wait() for worker in workers))
+        await pilot.pause()
+        assert not app._prompt_completion_visible
+        prompt.value = "continue writing"
+        prompt.focus()
+        await pilot.press("end", "!")
+        assert prompt.value == "continue writing!"
+
+
 async def test_directory_search_preserves_match_limits_and_line_numbers(tmp_path):
     (tmp_path / "match.py").write_text("skip\n" + "needle\n" * 100)
     app = SuperQodeApp()

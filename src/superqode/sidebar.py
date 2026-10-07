@@ -409,7 +409,7 @@ class ColorfulDirectoryTree(DirectoryTree):
                     path = self.root_path / path
                 path = path.resolve()
                 path.relative_to(self.root_path)
-            except (OSError, ValueError):
+            except (OSError, RuntimeError, ValueError):
                 continue
             resolved.add(path)
         self._session_modified_files = resolved
@@ -418,7 +418,7 @@ class ColorfulDirectoryTree(DirectoryTree):
     def _session_change_count(self, path: Path) -> int:
         try:
             resolved = path.resolve()
-        except OSError:
+        except (OSError, RuntimeError, ValueError):
             return 0
         if resolved in self._session_modified_files:
             return 1
@@ -2986,7 +2986,7 @@ class CollapsibleSidebar(Container):
                     path = self.root_path / path
                 path = path.resolve()
                 path.relative_to(self.root_path)
-            except (OSError, ValueError):
+            except (OSError, RuntimeError, ValueError):
                 continue
             self._session_modified_files.add(path)
 
@@ -3005,7 +3005,7 @@ class CollapsibleSidebar(Container):
                 current = self._current_file.resolve()
                 if current in self._session_modified_files:
                     self.query_one("#file-preview", FilePreview).set_file(current)
-            except (OSError, ValueError):
+            except (OSError, RuntimeError, ValueError):
                 pass
 
     def clear_session_modified(self) -> None:

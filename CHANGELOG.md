@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-10-07
+
+### Fixed
+
+- Pasting output with tilde markers and image filenames no longer triggers an
+  uncaught home-directory lookup. Malformed image URLs, unresolved home paths,
+  invalid completion paths and image symlink loops fail safely while retaining
+  the composer draft. The file sidebar also tolerates unresolvable entries.
+
 ## [2.7.0] - 2026-10-07
 
 ### Added

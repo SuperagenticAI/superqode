@@ -83,12 +83,12 @@ class HelperCompletionHelpersMixin:
     def _path_token_candidates(partial: str, *, files_only: bool = False) -> list[tuple[str, str]]:
         expanded = partial.replace("\\ ", " ")
         raw_dir, raw_name = os.path.split(expanded)
-        base = Path(raw_dir or ".").expanduser()
-        if not base.is_absolute():
-            base = Path.cwd() / base
         try:
+            base = Path(raw_dir or ".").expanduser()
+            if not base.is_absolute():
+                base = Path.cwd() / base
             entries = _directory_completion_snapshot(str(base), int(monotonic()))
-        except OSError:
+        except (OSError, RuntimeError, ValueError):
             return []
         candidates: list[tuple[str, str]] = []
         for name, directory, regular in entries:

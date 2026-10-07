@@ -81,6 +81,35 @@ def test_image_validation_rejects_invalid_and_large_files(tmp_path):
         load_image(path)
 
 
+async def test_image_symlink_loop_reports_error_and_keeps_draft(tmp_path):
+    path = tmp_path / "loop.png"
+    path.symlink_to(path.name)
+    with pytest.raises(ValueError, match="Cannot resolve image path"):
+        load_image(path)
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "Keep my draft"
+        log = app.query_one("#log", ConversationLog)
+        assert not app._stage_image_attachment(path, log)
+        await pilot.pause()
+        assert prompt.value == "Keep my draft"
+        assert not app._staged_images
+        assert "Cannot resolve image path" in "\n".join(line.text for line in log.lines)
+
+
+async def test_paste_command_unknown_home_reports_error_without_clearing_draft():
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "Keep my draft"
+        log = app.query_one("#log", ConversationLog)
+        app._handle_paste_image("~superqode_missing_test_user_490a/screen.png", log)
+        await pilot.pause()
+        assert prompt.value == "Keep my draft"
+        assert "Cannot resolve image path" in "\n".join(line.text for line in log.lines)
+
+
 @pytest.mark.asyncio
 async def test_attachment_limit_and_clear_keep_draft(tmp_path):
     app = SuperQodeApp()

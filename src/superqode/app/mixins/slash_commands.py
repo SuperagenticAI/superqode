@@ -1147,9 +1147,13 @@ class SlashCommandMixin:
             return
         value = (args or "").strip().strip("'\"")
         if value:
-            path = Path(value).expanduser()
-            if not path.is_absolute():
-                path = Path.cwd() / path
+            try:
+                path = Path(value).expanduser()
+                if not path.is_absolute():
+                    path = Path.cwd() / path
+            except (OSError, RuntimeError, ValueError):
+                log.add_error(f"Cannot resolve image path: {value}")
+                return
             if self._is_image_path(str(path)):
                 self._stage_image_attachment(path, log, source="path")
             else:
