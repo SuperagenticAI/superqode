@@ -90,10 +90,12 @@ class HarnessKernel:
         *,
         event_callback: Callable[[HarnessEvent], None] | None = None,
         store: HarnessStore | None = None,
+        evaluation_disposable: bool = False,
     ) -> None:
         self.spec = spec
         self.event_callback = event_callback
         self.store = store or create_harness_store(spec.observability.run_store)
+        self.evaluation_disposable = evaluation_disposable
 
     async def session(self, session_id: str | None = None) -> "HarnessSession":
         """Open a harness session."""
@@ -241,6 +243,7 @@ class HarnessSession:
                 "_harness_store": self.kernel.store,
                 "_harness_run_id": run_id,
                 "_harness_root_run_id": run_record.root_run_id or run_id,
+                **({"_evaluation_disposable": True} if self.kernel.evaluation_disposable else {}),
             },
         )
         started_at = time.monotonic()
@@ -408,6 +411,7 @@ class HarnessSession:
                 "_harness_store": self.kernel.store,
                 "_harness_run_id": run_id,
                 "_harness_root_run_id": run_record.root_run_id or run_id,
+                **({"_evaluation_disposable": True} if self.kernel.evaluation_disposable else {}),
             },
         )
         try:
@@ -698,6 +702,12 @@ async def init_harness(
     *,
     event_callback: Callable[[HarnessEvent], None] | None = None,
     store: HarnessStore | None = None,
+    evaluation_disposable: bool = False,
 ) -> HarnessKernel:
     """Create a HarnessKernel for a spec."""
-    return HarnessKernel(spec, event_callback=event_callback, store=store)
+    return HarnessKernel(
+        spec,
+        event_callback=event_callback,
+        store=store,
+        evaluation_disposable=evaluation_disposable,
+    )

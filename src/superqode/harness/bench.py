@@ -10,6 +10,7 @@ import statistics
 import sys
 import time
 from dataclasses import asdict, dataclass
+from contextlib import ExitStack, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -19,6 +20,7 @@ import yaml
 from superqode import __version__
 
 from .eval import run_harness_eval
+from .eval_workspace import snapshot_eval_workspace
 
 
 HARNESS_BENCH_SCHEMA_VERSION = 1
@@ -135,36 +137,51 @@ async def run_harness_bench(
         },
     }
     normalized_manifest = {**manifest.to_dict(), "live": effective_live}
-    fingerprint = _sha256_json({"manifest": normalized_manifest, "sources": source_digests})
     started_at = datetime.now(timezone.utc).isoformat()
     runs: list[dict[str, Any]] = []
-    for repetition in range(1, manifest.repetitions + 1):
-        result = await eval_runner(
-            spec_paths=list(manifest.specs),
-            tasks_path=manifest.tasks,
-            provider=manifest.provider,
-            model=manifest.model,
-            runtime=manifest.runtime,
-            working_dir=manifest.working_dir,
-            sandbox_backend=manifest.sandbox,
-            live=effective_live,
-            eval_split=manifest.split,
+    with ExitStack() as fixtures:
+        snapshot = (
+            fixtures.enter_context(
+                snapshot_eval_workspace(
+                    manifest.working_dir,
+                    exclude_paths=(root,),
+                )
+            )
+            if effective_live
+            else None
         )
-        result = _relativize_record(result, manifest.manifest_dir or ".")
-        envelope = {
-            "schema_version": HARNESS_BENCH_SCHEMA_VERSION,
-            "bench_id": manifest.bench_id,
-            "fingerprint": fingerprint,
-            "repetition": repetition,
-            "provider": manifest.provider,
-            "model": manifest.model,
-            "runtime": manifest.runtime,
-            "recorded_at": datetime.now(timezone.utc).isoformat(),
-            "result": result,
-        }
-        raw_path = raw_dir / f"run-{repetition:03d}.json"
-        _write_json(raw_path, envelope)
-        runs.append(envelope)
+        if snapshot:
+            source_digests["workspace_fixture"] = snapshot.evidence()
+        fingerprint = _sha256_json({"manifest": normalized_manifest, "sources": source_digests})
+        for repetition in range(1, manifest.repetitions + 1):
+            context = snapshot.case() if snapshot else nullcontext(Path(manifest.working_dir))
+            with context as repetition_directory:
+                result = await eval_runner(
+                    spec_paths=list(manifest.specs),
+                    tasks_path=manifest.tasks,
+                    provider=manifest.provider,
+                    model=manifest.model,
+                    runtime=manifest.runtime,
+                    working_dir=repetition_directory,
+                    sandbox_backend=manifest.sandbox,
+                    live=effective_live,
+                    eval_split=manifest.split,
+                )
+            result = _relativize_record(result, manifest.manifest_dir or ".")
+            envelope = {
+                "schema_version": HARNESS_BENCH_SCHEMA_VERSION,
+                "bench_id": manifest.bench_id,
+                "fingerprint": fingerprint,
+                "repetition": repetition,
+                "provider": manifest.provider,
+                "model": manifest.model,
+                "runtime": manifest.runtime,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                "result": result,
+            }
+            raw_path = raw_dir / f"run-{repetition:03d}.json"
+            _write_json(raw_path, envelope)
+            runs.append(envelope)
     scorecard = build_harness_bench_scorecard(
         manifest,
         runs,

@@ -905,6 +905,7 @@ COMMANDS = [
     ":harness diff",
     ":harness run",
     ":harness test",
+    ":harness certify",
     ":harness eval",
     ":harness decision-report",
     ":harness tune",

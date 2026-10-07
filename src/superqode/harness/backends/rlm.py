@@ -31,6 +31,7 @@ class RLMHarnessBackend:
     )
 
     def __init__(self, *, adapter: RLMHarnessProtocolAdapter | None = None) -> None:
+        self._default_adapter = adapter is None
         self.adapter = adapter or RLMHarnessProtocolAdapter()
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
@@ -106,9 +107,20 @@ class RLMHarnessBackend:
             yield event
 
     async def _events(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
-        ref = await self.adapter.resume(_session_ref(request))
-        async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
-            yield event
+        disposable = bool(request.metadata.get("_evaluation_disposable"))
+        adapter = (
+            RLMHarnessProtocolAdapter(resident=False)
+            if disposable and self._default_adapter
+            else self.adapter
+        )
+        ref = _session_ref(request)
+        try:
+            ref = await adapter.resume(ref)
+            async for event in adapter.send(ref, HarnessMessage("user", request.prompt)):
+                yield event
+        finally:
+            if disposable:
+                await adapter.close(ref)
 
 
 def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `harness certify builtin` runs eight observed local runtime probes with a
+  deterministic gateway and saves JSON evidence. Live provider behavior remains
+  unknown; `--require-complete` rejects incomplete verification.
+
+### Fixed
+
+- Live harness evaluation uses separate disposable workspaces and session state
+  for every task and variant. HarnessBench freezes one input snapshot across
+  repetitions; fixture digests bind benchmark and recovery identities. Inherited
+  Git repository overrides are rejected to preserve the source staging index.
+- Non-streaming built-in runs persist completed assistant answers for session
+  continuity, subject to the active response policy.
+
 ## [2.7.1] - 2026-10-07
 
 ### Fixed

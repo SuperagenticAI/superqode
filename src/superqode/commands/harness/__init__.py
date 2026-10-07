@@ -33,6 +33,7 @@ from .lifecycle import (
 )
 
 from .evaluation import (
+    harness_certify,
     harness_test,
     harness_eval,
     harness_eval_packs,

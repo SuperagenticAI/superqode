@@ -2775,6 +2775,25 @@ class AgentLoop:
                 )
             self.run_active = False
             await self.hooks.fire(STOP, self._lifecycle_context(), response)
+            if (
+                self._session_manager
+                and response.stopped_reason == "complete"
+                and not response.error
+                and response.content.strip()
+            ):
+                from superqode.governance import evaluate_active_policy
+
+                evidence = {"content": response.content, "stopped_reason": response.stopped_reason}
+                if (
+                    evaluate_active_policy(
+                        "response",
+                        provider=self.config.provider,
+                        runtime="builtin",
+                        arguments=evidence,
+                    ).action
+                    == "allow"
+                ):
+                    self._session_manager.add_assistant_message(response.content)
             # Opt-in automatic memory extraction, off the hot path.
             try:
                 from .auto_memory import auto_memory_enabled, extract_session_memories

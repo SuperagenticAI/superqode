@@ -173,5 +173,4 @@ small bug fixes; broader repository tasks and repeated live measurements are
 needed before claiming a quality or cost advantage.
 
 Continual harness refinement, speculative execution and persistent agency are
-outside this release. The [research notes](../research/rlm-harness-design-space-2026-10-04.md)
-record the design space that informed these changes.
+outside this release.

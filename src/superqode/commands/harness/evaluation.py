@@ -8,6 +8,34 @@ import click
 from ._group import harness
 
 
+@harness.command("certify")
+@click.argument("integration", type=click.Choice(["builtin"]))
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+@click.option(
+    "--output", type=click.Path(dir_okay=False, path_type=Path), help="Save the JSON evidence"
+)
+@click.option("--require-complete", is_flag=True, help="Exit 2 if any behavior remains unverified")
+def harness_certify(integration, json_output, output, require_complete):
+    """Observe built-in runtime boundaries offline, without provider calls."""
+    import asyncio
+
+    from superqode.harness.certification import (
+        run_builtin_certification,
+        render_builtin_certification,
+    )
+
+    report = asyncio.run(run_builtin_certification())
+    serialized = json.dumps(report.to_dict(), indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(serialized + "\n", encoding="utf-8")
+    click.echo(serialized if json_output else render_builtin_certification(report))
+    if report.has_drift:
+        raise click.exceptions.Exit(1)
+    if require_complete and not report.complete:
+        raise click.exceptions.Exit(2)
+
+
 @harness.command("test")
 @click.argument("spec_arg", required=False, type=click.Path(exists=True, path_type=Path))
 @click.option(

@@ -28,6 +28,7 @@ superqode harness COMMAND [OPTIONS]
 | `validate` | Validate a spec or emit its JSON Schema |
 | `inspect` | Spec plus backend capability compatibility |
 | `doctor` | Diagnose a spec before running it |
+| `certify` | Observe built-in runtime boundaries with an offline gateway |
 | `test` | Fast smoke test plus failure digest |
 | `eval` | Scorecard across tasks and harness variants |
 | `eval-packs` | List bundled eval task packs |
@@ -429,6 +430,41 @@ superqode harness drift --spec harness.yaml --json --require-complete
 Tools published by an MCP server are registered when that server connects, so
 they are reported as supplied at run time rather than counted as drift.
 
+### `harness certify`
+
+Run behavioral probes against the built-in runtime with real file tools in
+temporary workspaces and a deterministic gateway. No provider credentials are
+required.
+
+```bash
+sq harness certify builtin
+sq harness certify builtin --json --output results/builtin-certification.json
+sq harness certify builtin --json --require-complete
+```
+
+The eight probes observe file tool calling, contextual denial, approval once,
+changed-policy denial, dynamic MCP result suppression, cancellation of active
+stream output, model request forwarding and usage, and file-backed session
+continuity through a fresh runtime. MCP transport is mocked, and cancellation
+does not test interruption of blocking provider I/O.
+
+Each check reports `supported`, `drift`, or `unknown`. Live provider behavior
+remains `unknown`: this command does not certify provider authentication,
+provider-side model identity, native vendor controls or coding quality. The
+report is therefore incomplete even when all eight local checks pass. Static
+drift and protocol conformance remain separate commands.
+
+| Option | Description |
+| --- | --- |
+| `--json` | Emit the evidence report as JSON |
+| `--output PATH` | Save the same report as JSON |
+| `--require-complete` | Exit 2 when any behavior remains unverified |
+
+Exit codes: `0` no observed drift, `1` observed drift, `2` incomplete verification
+when `--require-complete` is requested. Known drift takes precedence over
+incomplete coverage. The offline command currently exits 2 with
+`--require-complete` because live provider behavior is unobserved.
+
 ### `harness test`
 
 Run a quick readiness probe. Without `--live`, this validates spec loading, doctor checks, and kernel initialization. With `--live`, it also sends a small prompt to the configured model and returns a compact failure digest.
@@ -463,6 +499,11 @@ It also acts as a **seesaw gate**: if any variant regresses a task the baseline 
 When a runtime exposes provider usage, eval JSON includes per-task and per-variant `usage` with `tokens_in`,
 `tokens_out`, `total_tokens`, `cost_usd`, plus `tokens_per_success`, `cost_per_success`, and
 `latency_ms_per_success`. Unknown provider usage remains `null` rather than estimated.
+
+Live tasks and variants run in separate temporary copies of one frozen input
+workspace, with fresh harness sessions. Results include fixture digests and
+requested execution settings. Dependencies and ignored files need explicit
+fixture preparation; see [Workspace isolation](../advanced/harnessbench.md#workspace-isolation).
 
 ```bash
 superqode harness eval --spec base.yaml --variant optimized.yaml --tasks tasks.yaml  # exits 2 on regression
