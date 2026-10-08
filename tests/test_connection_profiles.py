@@ -70,7 +70,7 @@ def test_agents_carry_openness_and_transport_badges():
     codex = get_connection_profile("codex")
     droid = get_connection_profile("droid")
 
-    assert codex.badges == ["open harness", "OpenAI models", "via SDK"]
+    assert codex.badges == ["open harness", "OpenAI models", "via CLI"]
     assert droid.harness_openness == "closed"
     assert "BYOK" in droid.model_openness
     assert droid.transport == "ACP"
@@ -155,6 +155,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "agent-acp",
     "other-harnesses",
     "codex",
+    "codex-sdk",
     "grok",
     "cursor",
     "amp",
@@ -370,7 +371,7 @@ def test_zai_profile_targets_first_party_byok_provider(monkeypatch):
 def test_codex_profile_is_runtime_connector():
     codex = get_connection_profile("codex")
     assert codex.connector == "runtime"
-    assert codex.runtime == "codex-sdk"
+    assert codex.runtime == "codex-cli"
     assert codex.self_contained is True
 
 
@@ -788,23 +789,25 @@ def test_vendor_labels_are_the_product_name_alone():
     labels = [profile.label for profile in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)]
 
     assert not [label for label in labels if "subscription" in label.lower()]
-    assert {"Codex", "Cursor", "Amp", "Grok", "Factory Droid", "Kiro"} <= set(labels)
+    assert {"Codex CLI", "Codex SDK", "Cursor", "Amp", "Grok", "Factory Droid", "Kiro"} <= set(
+        labels
+    )
 
 
-def test_codex_detect_uses_local_codex_auth(monkeypatch, tmp_path):
+def test_codex_readiness_checks_cli_without_reading_credentials(monkeypatch):
+    import superqode.runtime.codex_cli as cli
     import superqode.providers.connection_profiles as cp
 
-    # No SDK / no auth -> not ready.
-    monkeypatch.setattr(cp.importlib.util, "find_spec", lambda name: None)
+    monkeypatch.delenv("SUPERQODE_CODEX_BIN", raising=False)
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
     assert cp._codex_ready() is False
-
-    # SDK present + auth.json present -> ready.
-    monkeypatch.setattr(cp.importlib.util, "find_spec", lambda name: object())
-    home = tmp_path
-    (home / ".codex").mkdir()
-    (home / ".codex" / "auth.json").write_text("{}")
-    monkeypatch.setattr(cp.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(
+        cli.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None
+    )
     assert cp._codex_ready() is True
+    # An explicit executable is authoritative, even if PATH has another CLI.
+    monkeypatch.setenv("SUPERQODE_CODEX_BIN", "/missing/codex")
+    assert cp._codex_ready() is False
 
 
 def test_grok_detect_requires_cli_subscription_auth(monkeypatch, tmp_path):
@@ -943,7 +946,7 @@ def _dispatch():
 def test_dispatch_codex_routes_to_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("codex"), log=None)
-    assert ("runtime", "codex-sdk") in stub.calls
+    assert ("runtime", "codex-cli") in stub.calls
 
 
 def test_dispatch_droid_key_is_vendor_key_not_subscription(_dispatch):
@@ -1418,6 +1421,7 @@ def test_connect_profiles_in_commands_and_completion():
     from superqode.app_main import SuperQodeApp
 
     assert ":connect codex" in COMMANDS
+    assert ":connect codex-sdk" in COMMANDS
     assert ":copilot" in COMMANDS
     assert ":copilot login" in COMMANDS
     assert ":connect claude" not in COMMANDS
@@ -1428,6 +1432,7 @@ def test_connect_profiles_in_commands_and_completion():
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
     assert {
         "codex",
+        "codex-sdk",
         "copilot",
         "cursor",
         "amp",
@@ -1598,3 +1603,39 @@ def test_detected_chips_caches_results():
     clear_detected_chips_cache()
     third = detected_chips()
     assert third == first
+
+
+@pytest.mark.parametrize(
+    "profile_id,runtime,label,transport",
+    [("codex", "codex-cli", "Codex CLI", "CLI"), ("codex-sdk", "codex-sdk", "Codex SDK", "SDK")],
+)
+def test_codex_subscription_choices_keep_their_runtime_and_billing(
+    _dispatch, profile_id, runtime, label, transport
+):
+    profile = get_connection_profile(profile_id)
+    assert profile.label == label
+    assert profile.runtime == runtime
+    assert profile.transport == transport
+    assert profile.auth_mode == "subscription"
+    assert profile.verify_on_connect is True
+    assert profile in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)
+    stub = _DispatchStub()
+    _dispatch(stub, profile, log=None)
+    assert ("runtime", runtime) in stub.calls
+    assert stub._requested_runtime_billing == "subscription"
+
+
+def test_codex_sdk_readiness_is_independent_of_cli(monkeypatch):
+    import superqode.providers.connection_profiles as cp
+    import superqode.runtime.codex_cli as cli
+
+    monkeypatch.setattr(cli, "codex_binary", lambda explicit=None: None)
+    monkeypatch.setattr(
+        cp.importlib.util, "find_spec", lambda name: object() if name == "openai_codex" else None
+    )
+    assert get_connection_profile("codex-sdk").available is True
+    assert get_connection_profile("codex").available is False
+    monkeypatch.setattr(cli, "codex_binary", lambda explicit=None: "/usr/bin/codex")
+    monkeypatch.setattr(cp.importlib.util, "find_spec", lambda name: None)
+    assert get_connection_profile("codex-sdk").available is False
+    assert get_connection_profile("codex").available is True

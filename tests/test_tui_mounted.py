@@ -1110,7 +1110,7 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch, tmp_
 
 
 async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):
-    """Choosing the Codex profile without the SDK must show the install error.
+    """Choosing the Codex profile without the CLI must show the install error.
 
     Same regression class as the Grok picker: the error was written while the
     picker scroll helpers had left auto_scroll disabled, so the user saw
@@ -1122,10 +1122,10 @@ async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):
     def fake_list_runtimes():
         return [
             RuntimeInfo(
-                name="codex-sdk",
-                description="Codex SDK runtime",
+                name="codex-cli",
+                description="Codex CLI runtime",
                 installed=False,
-                install_hint='uv add "superqode[codex]"',
+                install_hint="Install Codex CLI, then run codex login",
                 implemented=True,
             )
         ]

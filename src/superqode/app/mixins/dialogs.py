@@ -3664,6 +3664,7 @@ class DialogsMixin:
                 add("SDK / CLI", "warn", f"check unavailable: {exc}", f":runtime {runtime}")
 
         subscription = {
+            "codex-cli": "codex",
             "codex-sdk": "codex",
             "grok": "grok",
             "copilot": "copilot",

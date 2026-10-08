@@ -1,6 +1,7 @@
 """Tool-permission requests, approval bridge, and permission pulse."""
 
 from __future__ import annotations
+import asyncio
 import os
 import threading
 from rich.text import Text
@@ -41,6 +42,44 @@ class HelperPermissionsMixin:
             return self._request_runtime_permission(tool_name, arguments, log)
 
         pure.on_permission_request = on_permission_request
+
+        async def on_permission_request_async(tool_name: str, arguments: dict) -> bool:
+            """Native runtimes must be able to cancel an unanswered prompt."""
+            if (
+                getattr(self, "_active_plan_mode_for_current_message", False)
+                or self.approval_mode == "deny"
+            ):
+                log.add_info(f"Denied {tool_name} by approval mode.")
+                return False
+            if self.approval_mode == "auto" or getattr(
+                self, "_runtime_permission_allow_all", False
+            ):
+                return True
+            if getattr(self, "_permission_pending", False):
+                log.add_error("Another approval prompt is already pending.")
+                return False
+            event = threading.Event()
+            self._permission_response = None
+            self._permission_response_event = event
+            try:
+                self._show_permission_prompt(tool_name, arguments, log)
+                async with asyncio.timeout(60):
+                    while not event.is_set():
+                        await asyncio.sleep(0.05)
+                response = self._permission_response
+                if response == "allow_all":
+                    self._runtime_permission_allow_all = True
+                return response in {"allow", "allow_all"}
+            except TimeoutError:
+                log.add_info(f"Approval timed out for {tool_name}.")
+                return False
+            finally:
+                if self._permission_response_event is event:
+                    self._permission_response_event = None
+                    self._permission_pending = False
+                    self._reset_input_placeholder()
+
+        pure.on_permission_request_async = on_permission_request_async
         from superqode.systemone.runtime import format_decision
 
         pure.on_systemone = lambda event: self._call_ui(log.add_system, format_decision(event))

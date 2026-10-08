@@ -64,6 +64,7 @@ _VENDOR_ALIASES: Dict[str, str] = {
     "copilot-sdk": "copilot",
     "copilot-cli": "copilot",
     "copilot-acp": "copilot",
+    "codex-cli": "codex",
     "codex-sdk": "codex",
     "antigravity-cli": "antigravity",
     "antigravity-sdk": "antigravity",

@@ -108,6 +108,7 @@ def readiness_label(readiness: str, *, local: bool = False) -> str:
 _DOCS_BY_ID = {
     "gemini-cli": "https://geminicli.com/docs/get-started/authentication/",
     "codex": f"{DOCS_BASE}providers/codex/",
+    "codex-sdk": f"{DOCS_BASE}providers/codex/",
     "claude": f"{DOCS_BASE}providers/anthropic-claude/",
     "antigravity": f"{DOCS_BASE}providers/antigravity/",
     "muse": f"{DOCS_BASE}providers/muse-code/",
@@ -133,6 +134,7 @@ _DOCS_BY_ID = {
 _HOMEPAGE_BY_ID = {
     "gemini-cli": "https://geminicli.com/",
     "codex": "https://openai.com/codex/",
+    "codex-sdk": "https://openai.com/codex/",
     "claude": "https://www.anthropic.com/claude-code",
     "cursor": "https://cursor.com/",
     "amp": "https://ampcode.com/",
@@ -156,6 +158,7 @@ _HOMEPAGE_BY_ID = {
 
 _COMMANDS_BY_ID = {
     "codex": (":connect codex", ":codex status", ":codex models", ":codex sessions"),
+    "codex-sdk": (":connect codex-sdk", ":codex status", ":codex models", ":codex sessions"),
     "copilot": (
         ":connect copilot",
         ":copilot status",
@@ -220,6 +223,7 @@ _OPENNESS_BY_ID: dict[str, HubOpenness] = {
     "muse": HubOpenness("closed"),
     "junie": HubOpenness("closed"),
     "codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
+    "codex-sdk": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:codex": HubOpenness("open", "Apache-2.0", "https://github.com/openai/codex"),
     "acp:gemini": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
     "acp:goose": HubOpenness("open", "Apache-2.0", "https://github.com/aaif-goose/goose"),
@@ -527,6 +531,11 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "openai/codex is Rust (96%); the npm package is a thin wrapper.",
     ),
+    "codex-sdk": HubLanguage(
+        "Python/Rust",
+        "confirmed",
+        "The Python SDK connects to the Rust Codex app-server.",
+    ),
     "copilot": HubLanguage(
         "TypeScript",
         "inferred",
@@ -799,10 +808,16 @@ _SETUP_STEPS_BY_ID = {
     ),
     "codex": (
         HubSetupStep(
-            "Install the SuperQode Codex integration",
-            'uv tool install "superqode[codex-sdk]"',
+            "Install Codex CLI",
+            "npm install -g @openai/codex",
         ),
         HubSetupStep("Authenticate with your OpenAI account", "codex login"),
+    ),
+    "codex-sdk": (
+        HubSetupStep(
+            "Install the Codex Python SDK integration", 'uv tool install "superqode[codex-sdk]"'
+        ),
+        HubSetupStep("Authenticate with your ChatGPT account", "codex login"),
     ),
     "cursor": (
         HubSetupStep("Install Cursor Agent", "curl https://cursor.com/install -fsS | bash"),
@@ -934,6 +949,7 @@ _SETUP_STEPS_BY_ID = {
 
 _POPULARITY_RANK = {
     "codex": 10,
+    "codex-sdk": 10,
     "claude": 20,
     "cursor": 30,
     "copilot": 40,

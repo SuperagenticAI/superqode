@@ -2158,7 +2158,7 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     picker_ids = [entry.id for entry in app._harness_selection_list]
     # RLM and PiPy sit with the other native coding harnesses, ahead of the
     # optional integrations.
-    assert picker_ids[:8] == [
+    assert picker_ids[:9] == [
         "core",
         "rlm",
         "pipy",
@@ -2166,6 +2166,7 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
         "systemone",
         "no-tool",
         "codex",
+        "codex-sdk",
         "claude",
     ]
     assert app._harness_highlighted_index == 0
@@ -2217,7 +2218,10 @@ def test_harness_switch_completion_includes_vendor_agents_and_all_presets():
     pinned = app._prompt_completion_candidates_for(":harness switch kimi-k3")
     registry_agent = app._prompt_completion_candidates_for(":harness switch acp:stak")
 
-    assert [candidate.value for candidate in codex] == [":harness switch codex"]
+    assert [candidate.value for candidate in codex] == [
+        ":harness switch codex",
+        ":harness switch codex-sdk",
+    ]
     assert ":harness switch kimi-code" in [candidate.value for candidate in kimi_code]
     assert ":harness switch qwen-code" in [candidate.value for candidate in qwen_code]
     assert [candidate.value for candidate in pinned] == [":harness switch kimi-k3-coding"]
@@ -4138,7 +4142,7 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     ]
     # The completion order mirrors the connect screen: methods first, then the
     # subscription products behind them.
-    assert connect_values[:10] == [
+    assert connect_values[:11] == [
         ":connect",
         ":connect local",
         ":connect acp",
@@ -4147,6 +4151,7 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
         ":connect other-harnesses",
         ":connect by-language",
         ":connect codex",
+        ":connect codex-sdk",
         ":connect grok",
         ":connect copilot",
     ]
@@ -6551,7 +6556,7 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     rendered = render_plain(log.items[-1])
 
     assert picker_rows(rendered) == [
-        (1, "Use an agent you already have"),
+        (1, "Connect to an existing harness"),
         (2, "Connect a harness with your model"),
         (3, "Build your own harness (Advanced)"),
         (4, "Connect with SystemOne models"),
@@ -6578,7 +6583,7 @@ def test_connect_picker_explains_every_choice():
     assert "Connect with Native SuperQode harnesses like Core, RLM, PiPy," in first
     assert "Import existing config" in first
     assert "ACP, A2A, or UHP" in first
-    assert "Use an agent you already have ↗" in first
+    assert "Connect to an existing harness ↗" in first
     assert "← SELECTED" not in first
     assert "click a row" in first
 
@@ -6614,7 +6619,7 @@ def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
 
     assert len(nonblank) <= 16
     assert all(len(line) <= width for line in text.splitlines())
-    assert "Use an agent you already have" in text
+    assert "Connect to an existing harness" in text
     assert "Connect a harness with your model" in text
     assert "Build your own harness" in text
     assert "Reach a remote agent with protocols" in text
@@ -6737,7 +6742,7 @@ def test_agents_picker_returns_to_the_root_screen():
     assert app.action_connect_menu_back() is True
     assert app._connect_menu == "root"
     assert app._awaiting_connect_type is True
-    assert (1, "Use an agent you already have") in picker_rows(render_plain(log.items[-1]))
+    assert (1, "Connect to an existing harness") in picker_rows(render_plain(log.items[-1]))
     # On the root screen Esc falls through to cancelling instead.
     assert app.action_connect_menu_back() is False
 

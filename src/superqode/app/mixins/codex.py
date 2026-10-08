@@ -1,4 +1,4 @@
-"""Codex SDK runtime support."""
+"""Codex CLI and SDK runtime controls."""
 
 from __future__ import annotations
 import asyncio
@@ -21,7 +21,7 @@ from superqode.app.recipes import PromptCompletionCandidate
 
 
 class CodexMixin:
-    """Codex SDK model/effort pickers and execution."""
+    """Codex model/effort pickers and execution."""
 
     @property
     def codex_models(self) -> List[Dict]:
@@ -50,9 +50,11 @@ class CodexMixin:
         runtime = getattr(existing, "_runtime", None) if existing is not None else None
         if (
             runtime is not None
-            and getattr(existing, "runtime_name", "") == "codex-sdk"
+            and getattr(existing, "runtime_name", "") in {"codex-cli", "codex-sdk"}
             and hasattr(runtime, "models")
         ):
+            if getattr(runtime, "name", "") == "codex-cli":
+                return list(getattr(self, "_codex_models", None) or [])
             return self._models_from_codex_response(runtime.models())
 
         from superqode.codex import make_codex_runtime
@@ -65,9 +67,27 @@ class CodexMixin:
 
     @staticmethod
     def _models_from_codex_response(models_response) -> List[Dict]:
-        data = list(getattr(models_response, "data", []) or [])
+        data = list(
+            models_response.get("data", [])
+            if isinstance(models_response, dict)
+            else getattr(models_response, "data", []) or []
+        )
         models: List[Dict] = []
         for model in data:
+            if isinstance(model, dict):
+                from types import SimpleNamespace
+
+                model = SimpleNamespace(
+                    **{
+                        "model": model.get("model", model.get("id", "")),
+                        "display_name": model.get("displayName"),
+                        "supported_reasoning_efforts": [
+                            o.get("reasoningEffort")
+                            for o in model.get("supportedReasoningEfforts", [])
+                        ],
+                        "hidden": model.get("hidden", False),
+                    }
+                )
             model_id = str(getattr(model, "model", getattr(model, "id", model)) or "")
             if not model_id:
                 continue
@@ -129,6 +149,10 @@ class CodexMixin:
         if config_hint:
             return config_hint
         lowered = (message or "").lower()
+        if "superqode_codex_bin" in lowered or "install codex cli" in lowered:
+            return "Install Codex CLI or check SUPERQODE_CODEX_BIN, then run `codex login`."
+        if "installed codex cli" in lowered:
+            return "Check the selected CLI and CODEX_HOME with `:codex status`; update Codex if its protocol is incompatible."
         if "codex-sdk" in lowered and "install" in lowered:
             return 'Install the SDK extra: uv tool install "superqode[codex-sdk]".'
         if "not logged" in lowered or "login" in lowered or "auth" in lowered:
@@ -147,7 +171,7 @@ class CodexMixin:
             )
         if "turn/completed" in lowered:
             return "The Codex app-server stream ended unexpectedly. Retry; if it repeats, run `:codex status`."
-        return "Run `:codex status` for SDK, app-server, auth, and model diagnostics."
+        return "Run `:codex status` for CLI, app-server, auth, and model diagnostics."
 
     def action_navigate_codex_model_up(self):
         """Navigate to previous Codex SDK model."""
@@ -228,7 +252,7 @@ class CodexMixin:
         prefix = ":codex "
         partial = value[len(prefix) :].lower()
         subcommands = (
-            ("status", "Show Codex SDK/app-server status"),
+            ("status", "Show Codex CLI/app-server status"),
             ("model", "Pick or set the Codex model for future turns"),
             ("models", "List models available to this Codex account"),
             ("effort", "Pick or set Codex reasoning effort"),
@@ -339,20 +363,30 @@ class CodexMixin:
             runtime = getattr(pure, "_runtime", None) if pure is not None else None
             if runtime is None:
                 return
-            model_id = str(
-                await asyncio.to_thread(lambda: getattr(runtime, "active_model", "")) or ""
-            )
+            if getattr(runtime, "name", "") == "codex-cli":
+                await runtime.ensure_thread()
+                model_id = runtime.active_model
+            else:
+                model_id = str(
+                    await asyncio.to_thread(lambda: getattr(runtime, "active_model", "")) or ""
+                )
             if not model_id and hasattr(runtime, "models"):
                 # Compatibility fallback for third-party runtime shims that
                 # have not yet exposed ``active_model``.
-                resp = await asyncio.to_thread(runtime.models)
-                data = list(getattr(resp, "data", []) or [])
-                chosen = next(
-                    (m for m in data if getattr(m, "is_default", False)),
-                    data[0] if data else None,
-                )
-                if chosen is not None:
-                    model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
+                if getattr(runtime, "name", "") == "codex-cli":
+                    resp = await runtime.models()
+                    data = resp.get("data") or []
+                    chosen = next((m for m in data if m.get("isDefault")), data[0] if data else {})
+                    model_id = str(chosen.get("model") or chosen.get("id") or "")
+                else:
+                    resp = await asyncio.to_thread(runtime.models)
+                    data = list(getattr(resp, "data", []) or [])
+                    chosen = next(
+                        (m for m in data if getattr(m, "is_default", False)),
+                        data[0] if data else None,
+                    )
+                    if chosen is not None:
+                        model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
             if not model_id:
                 return
             # A switch while this worker was starting must not change the new route.
@@ -361,14 +395,14 @@ class CodexMixin:
             self._set_status_model(model_id)
             status = getattr(runtime, "subscription_status", {})
             if status.get("billing_verified") == "chatgpt-account":
-                self._sync_self_contained_status("codex-sdk")
+                self._sync_self_contained_status(getattr(pure, "runtime_name", "codex-sdk"))
                 self._set_status_model(model_id)
                 log.add_info(
                     f"Codex ChatGPT login verified · plan: {status.get('plan', 'unavailable')} · quota unavailable"
                 )
             save_model = getattr(self, "_save_runtime_model_choice", None)
             if save_model:
-                save_model("codex-sdk", model_id)
+                save_model(getattr(pure, "runtime_name", "codex-sdk"), model_id)
             log.add_info(f"Active Codex model: {model_id}  ·  switch with :codex model")
         except Exception as exc:  # noqa: BLE001 — background connection feedback
             if getattr(runtime, "billing_requested", "") == "subscription":
@@ -381,9 +415,9 @@ class CodexMixin:
         sub = parts[0].lower() if parts else "connect"
         rest = parts[1].strip() if len(parts) > 1 else ""
         if sub in {"", "connect", "start"}:
-            self._requested_runtime_target = "codex-sdk"
+            self._requested_runtime_target = "codex-cli"
             self._requested_runtime_billing = "subscription"
-            self._runtime_cmd("codex-sdk", log)
+            self._runtime_cmd("codex-cli", log)
             return
         status_expr = f"{sub} {rest}".strip()
         if status_expr in {"status", "doctor", "status --probe", "status probe", "status models"}:
@@ -447,16 +481,16 @@ class CodexMixin:
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
         if (
             runtime is not None
-            and getattr(pure, "runtime_name", "") == "codex-sdk"
+            and getattr(pure, "runtime_name", "") in {"codex-cli", "codex-sdk"}
             and getattr(getattr(pure, "session", None), "connected", False)
         ):
             return runtime
-        self._requested_runtime_target = "codex-sdk"
+        self._requested_runtime_target = "codex-cli"
         self._requested_runtime_billing = "subscription"
-        self._runtime_cmd("codex-sdk", log)
+        self._runtime_cmd("codex-cli", log)
         pure = getattr(self, "_pure_mode", None)
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
-        if runtime is None or getattr(pure, "runtime_name", "") != "codex-sdk":
+        if runtime is None or getattr(pure, "runtime_name", "") not in {"codex-cli", "codex-sdk"}:
             raise RuntimeError("Codex runtime is not connected")
         return runtime
 
@@ -475,9 +509,32 @@ class CodexMixin:
             if not key.startswith("_") and not callable(getattr(obj, key))
         }
 
+    def _codex_async_read(self, log, label, runtime, operation, on_result) -> None:
+        """Run CLI RPCs on the UI loop without blocking input or redraws."""
+
+        async def execute():
+            try:
+                response = await operation()
+                if getattr(getattr(self, "_pure_mode", None), "_runtime", None) is runtime:
+                    on_result(response)
+            except Exception as exc:
+                log.add_error(f"Codex {label} failed: {exc}")
+                self._codex_config_error_hint(log, exc)
+
+        self.run_worker(execute(), exclusive=False)
+
     def _codex_runtime_action(self, log, label: str, action) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
+            if getattr(runtime, "name", "") == "codex-cli":
+                self._codex_async_read(
+                    log,
+                    label,
+                    runtime,
+                    lambda: action(runtime),
+                    lambda _response: log.add_success(f"Codex {label} complete."),
+                )
+                return
             action(runtime)
             log.add_success(f"Codex {label} complete.")
         except Exception as exc:  # noqa: BLE001
@@ -593,8 +650,16 @@ class CodexMixin:
         self, log, *, clear_log: bool = True, refetch: bool = True
     ) -> None:
         try:
-            if refetch or not getattr(self, "_codex_models", None):
+            if refetch or getattr(self, "_codex_models", None) is None:
                 runtime = self._codex_runtime_or_connect(log)
+                if getattr(runtime, "name", "") == "codex-cli":
+
+                    def show(response):
+                        self._codex_models = self._models_from_codex_response(response)
+                        self._show_codex_model_picker(log, clear_log=clear_log, refetch=False)
+
+                    self._codex_async_read(log, "models", runtime, runtime.models, show)
+                    return
                 response = runtime.models()
                 self._codex_models = self._models_from_codex_response(response)
         except Exception as exc:  # noqa: BLE001
@@ -663,17 +728,29 @@ class CodexMixin:
         text.append(" prints the catalog\n", style=THEME["dim"])
         self._show_command_output(log, text, clear_log=clear_log)
 
-    def _show_codex_effort_picker(self, log, *, clear_log: bool = True) -> None:
-        self._reset_connect_selection_states()
-        self._awaiting_codex_effort = True
+    def _show_codex_effort_picker(
+        self, log, *, clear_log: bool = True, refetch: bool = True
+    ) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
             # Refresh once when opening the picker so newly-added Codex
             # effort values are offered, without probing while the user types.
-            self._codex_models = self._models_from_codex_response(runtime.models())
+            if getattr(runtime, "name", "") == "codex-cli":
+                if refetch:
+
+                    def show(response):
+                        self._codex_models = self._models_from_codex_response(response)
+                        self._show_codex_effort_picker(log, clear_log=clear_log, refetch=False)
+
+                    self._codex_async_read(log, "models", runtime, runtime.models, show)
+                    return
+            else:
+                self._codex_models = self._models_from_codex_response(runtime.models())
             current = runtime.reasoning_effort or "default"
         except Exception:
             current = "default"
+        self._reset_connect_selection_states()
+        self._awaiting_codex_effort = True
         options = self._codex_effort_options()
         self._codex_highlighted_effort_index = min(
             getattr(self, "_codex_highlighted_effort_index", 0), len(options) - 1
@@ -783,10 +860,22 @@ class CodexMixin:
         self._codex_effort_cmd(selected["id"], log)
         return True
 
-    def _codex_models_cmd(self, log, *, include_hidden: bool = False) -> None:
+    def _codex_models_cmd(self, log, *, include_hidden: bool = False, response=None) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
-            response = runtime.models(include_hidden=include_hidden)
+            if response is None:
+                if getattr(runtime, "name", "") == "codex-cli":
+                    self._codex_async_read(
+                        log,
+                        "models",
+                        runtime,
+                        lambda: runtime.models(include_hidden=include_hidden),
+                        lambda result: self._codex_models_cmd(
+                            log, include_hidden=include_hidden, response=result
+                        ),
+                    )
+                    return
+                response = runtime.models(include_hidden=include_hidden)
             self._codex_models = self._models_from_codex_response(response)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex models: {exc}")
@@ -838,7 +927,7 @@ class CodexMixin:
             self._set_status_model(model)  # reflect in the status-bar badge
             save_model = getattr(self, "_save_runtime_model_choice", None)
             if save_model:
-                save_model("codex-sdk", model)
+                save_model(getattr(self._pure_mode, "runtime_name", "codex-sdk"), model)
             log.add_success(f"Codex model set to {label}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex model: {exc}")
@@ -869,10 +958,21 @@ class CodexMixin:
             log.add_error(f"Could not set Codex sandbox: {exc}")
             self._codex_config_error_hint(log, exc)
 
-    def _codex_thread_cmd(self, log) -> None:
+    def _codex_thread_cmd(self, log, *, response=None) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
-            thread = runtime.read_thread(include_turns=False).thread
+            if response is None:
+                if getattr(runtime, "name", "") == "codex-cli":
+                    self._codex_async_read(
+                        log,
+                        "thread",
+                        runtime,
+                        runtime.read_thread,
+                        lambda result: self._codex_thread_cmd(log, response=result),
+                    )
+                    return
+                response = runtime.read_thread(include_turns=False)
+            thread = response.get("thread", {}) if isinstance(response, dict) else response.thread
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not read Codex thread: {exc}")
             self._codex_config_error_hint(log, exc)
@@ -888,16 +988,30 @@ class CodexMixin:
                 text.append("\n")
         log.write(text)
 
-    def _codex_sessions_cmd(self, args: str, log) -> None:
+    def _codex_sessions_cmd(self, args: str, log, *, response=None) -> None:
         archived = "archived" in args.split() or "--archived" in args.split()
         try:
             runtime = self._codex_runtime_or_connect(log)
-            response = runtime.list_threads(limit=20, archived=archived)
+            if response is None:
+                if getattr(runtime, "name", "") == "codex-cli":
+                    self._codex_async_read(
+                        log,
+                        "sessions",
+                        runtime,
+                        lambda: runtime.list_threads(limit=20, archived=archived),
+                        lambda result: self._codex_sessions_cmd(args, log, response=result),
+                    )
+                    return
+                response = runtime.list_threads(limit=20, archived=archived)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex sessions: {exc}")
             self._codex_config_error_hint(log, exc)
             return
-        threads = list(getattr(response, "data", []) or getattr(response, "threads", []) or [])
+        threads = list(
+            response.get("data", [])
+            if isinstance(response, dict)
+            else getattr(response, "data", []) or getattr(response, "threads", []) or []
+        )
         text = Text()
         text.append("\n  Codex sessions\n\n", style=f"bold {THEME['cyan']}")
         if not threads:
@@ -947,16 +1061,33 @@ class CodexMixin:
             if not target:
                 log.add_info("Usage: :codex archive [thread_id]")
                 return
+            if getattr(runtime, "name", "") == "codex-cli":
+                self._codex_runtime_action(
+                    log,
+                    f"archive {str(target)[:12]}",
+                    lambda runtime: runtime.archive_thread(target),
+                )
+                return
             runtime.archive_thread(target)
             log.add_success(f"Codex archived {str(target)[:12]}.")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not archive Codex thread: {exc}")
             self._codex_config_error_hint(log, exc)
 
-    def _codex_account_cmd(self, log) -> None:
+    def _codex_account_cmd(self, log, *, response=None) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
-            response = runtime.account()
+            if response is None:
+                if getattr(runtime, "name", "") == "codex-cli":
+                    self._codex_async_read(
+                        log,
+                        "account",
+                        runtime,
+                        runtime.account,
+                        lambda result: self._codex_account_cmd(log, response=result),
+                    )
+                    return
+                response = runtime.account()
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not read Codex account: {exc}")
             self._codex_config_error_hint(log, exc)
@@ -976,7 +1107,10 @@ class CodexMixin:
     def _codex_review_cmd(self, prompt: str, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
-            runtime.set_next_turn_sandbox("read-only")
+            if getattr(runtime, "name", "") == "codex-cli":
+                runtime.set_review(prompt)
+            else:
+                runtime.set_next_turn_sandbox("read-only")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not start Codex review: {exc}")
             self._codex_config_error_hint(log, exc)
@@ -993,8 +1127,53 @@ class CodexMixin:
         self._cancel_requested = False
         self._send_to_pure_mode(review_prompt, log)
 
+    def _codex_cli_status(self, log, *, probe: bool = False) -> None:
+        from superqode.runtime.codex_cli import codex_binary
+
+        runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
+        binary = codex_binary()
+        text = Text("\n  Codex CLI status\n\n", style=f"bold {THEME['cyan']}")
+        text.append(f"  CLI         {binary or 'missing; install Codex CLI'}\n")
+        text.append(f"  Config      {os.getenv('CODEX_HOME') or str(Path.home() / '.codex')}\n")
+        if getattr(runtime, "name", "") == "codex-cli":
+            text.append(f"  App-server  {runtime.app_server_source}\n")
+            text.append(f"  Thread      {runtime.thread_id or 'not started'}\n")
+            text.append(
+                f"  Auth        {runtime.subscription_status.get('billing_verified', 'unknown')}\n"
+            )
+            if runtime.rate_limits:
+                text.append(f"  Rate limits {runtime.rate_limits}\n")
+            for phase, elapsed in runtime.timings.items():
+                text.append(f"  {phase:<16} {elapsed:.1f} ms\n")
+        if not probe:
+            text.append("\n  :codex status --probe checks the login and lists models.\n")
+        log.write(text)
+        if probe and binary:
+            runtime = self._codex_runtime_or_connect(log)
+
+            async def read():
+                if runtime.billing_requested == "subscription":
+                    await runtime.verify_account()
+                else:
+                    await runtime.account()
+                return await runtime.models()
+
+            def show(response):
+                self._codex_models = self._models_from_codex_response(response)
+                auth = (
+                    "ChatGPT login verified"
+                    if runtime.billing_requested == "subscription"
+                    else "agent-managed account checked"
+                )
+                log.add_info(f"Codex {auth}; {len(self._codex_models)} models in the catalog.")
+
+            self._codex_async_read(log, "probe", runtime, read, show)
+
     def _codex_status(self, log, *, probe: bool = False) -> None:
-        """Show Codex SDK/app-server/auth status."""
+        """Show the active Codex route without requiring the optional SDK."""
+        if getattr(getattr(self, "_pure_mode", None), "runtime_name", "") != "codex-sdk":
+            self._codex_cli_status(log, probe=probe)
+            return
         from importlib import metadata
         from superqode.runtime import list_runtimes
 

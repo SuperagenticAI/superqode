@@ -165,6 +165,7 @@ class HelpersMixin(
                     # native "core" profile is only SuperQode's wrapper and
                     # must not be presented as the active harness.
                     harness = {
+                        "codex-cli": "codex",
                         "codex-sdk": "codex",
                         "muse": "Muse Code",
                         "copilot-sdk": "copilot",
@@ -789,6 +790,7 @@ class HelpersMixin(
             else:
                 status.active_model = ""
             status.active_harness = {
+                "codex-cli": "codex",
                 "codex-sdk": "codex",
                 "muse": "Muse Code",
                 "copilot-sdk": "copilot",
@@ -1317,7 +1319,20 @@ class HelpersMixin(
             else:
                 raise
 
-        answer = await asyncio.wrap_future(future)
+        try:
+            answer = await asyncio.wrap_future(future)
+        except asyncio.CancelledError:
+
+            def clear_question():
+                if getattr(self, "_pending_agent_question_future", None) is future:
+                    self._awaiting_agent_question = False
+                    self._pending_agent_question = None
+                    self._pending_agent_question_future = None
+                    self._permission_pending = False
+                    self._reset_input_placeholder()
+
+            self._call_ui(clear_question)
+            raise
         return Answer(value=answer["value"], custom=answer.get("custom", False))
 
     def _direct_chat_status(self) -> tuple[bool, str, str]:

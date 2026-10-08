@@ -19,6 +19,7 @@ def test_dialog_lists_current_runtimes():
         "builtin",
         "adk",
         "openai-agents",
+        "codex-cli",
         "codex-sdk",
         "copilot-sdk",
         "claude-agent-sdk",

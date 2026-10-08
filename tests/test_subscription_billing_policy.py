@@ -35,6 +35,7 @@ class TestVendorResolution:
             ("kimi-code", "kimi"),
             ("copilot-sdk", "copilot"),
             ("copilot-cli", "copilot"),
+            ("codex-cli", "codex"),
             ("codex-sdk", "codex"),
             ("antigravity-cli", "antigravity"),
             ("muse-code", "muse"),

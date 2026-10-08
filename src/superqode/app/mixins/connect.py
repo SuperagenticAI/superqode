@@ -148,7 +148,7 @@ class ConnectMixin:
         pure = getattr(self, "_pure_mode", None)
         if (
             pure is not None
-            and getattr(pure, "runtime_name", "") in {"codex-sdk", "copilot-sdk"}
+            and getattr(pure, "runtime_name", "") in {"codex-cli", "codex-sdk", "copilot-sdk"}
             and getattr(getattr(pure, "session", None), "connected", False)
         ):
             runtime = getattr(pure, "_runtime", None)
@@ -2948,6 +2948,7 @@ class ConnectMixin:
                 "commands": ((":muse status", "for installation and sign-in details"),),
             },
         }
+        connection_details["codex-cli"] = connection_details["codex-sdk"]
         details = connection_details.get(
             runtime_name,
             {"auth": "managed by runtime", "model": "runtime default", "commands": ()},
@@ -2956,7 +2957,7 @@ class ConnectMixin:
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
         pending = (
-            runtime_name == "codex-sdk"
+            runtime_name in {"codex-cli", "codex-sdk"}
             and getattr(getattr(self, "_pure_mode", None), "billing_requested", "")
             == "subscription"
         )
@@ -3004,7 +3005,11 @@ class ConnectMixin:
             category="subscriptions" if billing == "subscription" else "runtime",
             auth_mode=billing,
             runtime_name=runtime_name,
-            profile_id="codex" if runtime_name == "codex-sdk" and billing == "subscription" else "",
+            profile_id=(
+                {"codex-cli": "codex", "codex-sdk": "codex-sdk"}.get(runtime_name, "")
+                if billing == "subscription"
+                else ""
+            ),
             acp_agent="",
             harness_id="",
             provider="",
@@ -3014,13 +3019,13 @@ class ConnectMixin:
             after_auth="",
             billing_requested=billing,
         )
-        if runtime_name == "codex-sdk" and billing == "subscription":
+        if runtime_name in {"codex-cli", "codex-sdk"} and billing == "subscription":
             log.add_info("ChatGPT login: verification pending; remaining quota is unverified.")
         elif runtime_name == "copilot-sdk":
             log.add_info(
                 "Account billing: unverified. Copilot checks sign-in and available usage on request."
             )
-        if runtime_name == "codex-sdk":
+        if runtime_name in {"codex-cli", "codex-sdk"}:
             self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
 
     def _show_antigravity_connect(self, log) -> None:

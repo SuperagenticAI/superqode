@@ -29,6 +29,7 @@ explicit user action. See the
 | `builtin` | included | SuperQode's native loop. This is the default and the canonical path for local-model and no-tool policy. |
 | `adk` | `uv tool install "superqode[adk]"` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
+| `codex-cli` | installed Codex CLI | Native asynchronous stdio connection to the user's Codex harness. `:connect codex` guards ChatGPT subscription authentication. |
 | `codex-sdk` | `uv tool install "superqode[codex-sdk]"` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
 | `copilot-sdk` | `uv tool install "superqode[copilot-sdk]"` | Official GitHub Copilot SDK runtime. Uses the user's Copilot account or an explicit GitHub token and normalizes SDK events into SuperQode. |
 | `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
@@ -111,39 +112,18 @@ backend. Precedence (CLI > YAML > env) still applies to the *initial* runtime.
 ## Connection Sources (`:connect`)
 
 `:connect` chooses **what you connect to** (a product/account), while runtime is
-the engine that executes it. The picker is profile-driven and shows live status:
+the engine that executes it. For Codex subscription access, follow:
 
 ```text
-:connect
-  How do you want to connect?
-  [1] Local                        Ollama / LM Studio / MLX / vLLM ...
-  [2] ACP (Agent Client Protocol)  Any installed external ACP agent
-  [3] BYOK (Bring Your Own Key)    Your API key, such as OpenAI, Anthropic, or Gemini
-  [4] Subscriptions                Vendor coding agents on a plan you already pay for
-  [5] Open harnesses               OSI-licensed harnesses such as Tau or OpenCode
-  [6] Closed harnesses             Proprietary harnesses on that vendor's key
+:connect → Connect to an existing harness → Subscriptions
+  Codex CLI: installed executable; no Python SDK required
+  Codex SDK: optional Codex Python SDK integration
 ```
 
-Option 4 opens the vendor screen. Esc returns to the screen above:
-
-```text
-:connect subscriptions
-  US Coding Agents
-  [1] Codex                Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
-  [2] Grok                 Use Grok Build through the signed-in Grok CLI
-  [3] Amp                  Use the Amp plan signed in to Amp CLI
-  [4] Antigravity CLI      Use Google's agent harness with your Google Sign-In
-  [5] GitHub Copilot       Use your plan through the SDK or official CLI
-  [6] Devin                Use Cognition's Devin CLI through devin acp
-  [7] Factory Droid        Use the locally authenticated Droid CLI
-  [8] Kiro                 Use a Kiro or Amazon Q Developer plan through Kiro CLI
-
-  China Coding Agents
-  [11] GLM Coding Plan      Use the paid plan through its authenticated ACP agent
-  [12] Qwen Code            Use QwenLM's signed-in first-party agent
-  [13] Kimi Code            Use Moonshot AI's signed-in first-party agent
-  [14] fx                   Use Vercel Labs' fx agent after `fx login`
-```
+Both choices verify ChatGPT authentication before running prompts. Select the
+route directly with `:connect codex` (CLI) or `:connect codex-sdk` (SDK).
+`:connect subscriptions` opens the same subscription list directly; Esc returns
+to Existing harnesses.
 
 The screen is reserved for vendor plans and vendor-managed sign-in. API-key-only
 routes such as the Claude Agent SDK and Z.AI general API stay under BYOK or
@@ -225,7 +205,7 @@ Use `:tau help` to see its provider, model, session, logout, and retry
 subcommands. The command selects Tau and connects the route, so a separate
 `:connect`, Tau TUI, or `/login` command is not required.
 
-Each source maps to a connector internally: **Codex** maps to the `codex-sdk` runtime
+Each source maps to a connector internally: **Codex** maps to the `codex-cli` runtime
 (self-contained, `~/.codex` auth); **GitHub Copilot** prefers the
 `copilot-sdk` runtime and falls back to the official CLI's ACP server; explicit
 SDK and CLI commands remain available;
@@ -235,7 +215,7 @@ SDK and CLI commands remain available;
 → the `builtin` runtime + provider/model, with an optional runtime override;
 **Advanced** → the raw `:runtime` picker.
 
-Codex and GitHub Copilot provide supported subscription SDK paths. Claude has two paths:
+Codex uses the installed CLI for its subscription route; GitHub Copilot uses its SDK. Claude has two paths:
 **Claude Code (ACP)** uses your own local Claude CLI, and **Claude Agent SDK** is
 an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`). Both are shipped.
 **Antigravity CLI** is a self-contained runtime backed by `agy --print`. The
@@ -431,6 +411,54 @@ Current limits:
 - Native SDK sandbox integrations remain a follow-up.
 - Native SDK MCP server objects are not yet the default bridge.
 
+### `codex-cli`
+
+Connect directly to the installed Codex CLI without a Python SDK dependency:
+
+```bash
+codex login
+superqode --connect codex --print "summarize this repository"
+```
+
+SuperQode reuses one async stdio app-server connection for a connected TUI
+session. Codex owns the harness and its configured tools, sandbox, MCP servers,
+skills and credentials. SuperQode renders public events and bridges interactive
+approvals, questions, session commands, cancellation and steering. Subscription
+connections verify ChatGPT authentication and the resolved OpenAI provider;
+API-key billing is not an automatic fallback.
+
+`SUPERQODE_CODEX_BIN` selects an executable; `CODEX_HOME` selects Codex's own
+configuration. Explicit `--runtime codex-cli` uses agent-managed authentication.
+The `codex-cli` HarnessSpec backend closes its process after each harness run.
+MCP elicitation forms/URL flows and additional permission profiles are not yet
+interactive; strict no-tool specs are unsupported. See
+[OpenAI Codex](providers/codex.md) for behavior and limits.
+
+In the TUI, switch backends mid-session without restarting:
+
+```text
+:codex                # guarded ChatGPT connection through codex-cli
+:codex status         # fast installed-CLI/app-server status without starting Codex
+:codex status --probe # check the CLI account and list available models
+:codex models         # list models exposed to your local Codex account
+:codex model          # pick a model with arrows, numbers, mouse, or exact id
+:codex model <id>     # set the model override directly
+:codex effort         # pick reasoning effort interactively
+:codex effort high    # set reasoning effort directly: minimal/low/medium/high/xhigh
+:codex sandbox read-only       # override sandbox for future turns
+:codex review         # run a native Codex review against the current diff
+:codex compact        # compact the active Codex thread
+:codex sessions       # list Codex sessions for this working directory
+:codex resume <id>    # resume an existing Codex thread
+:codex fork <id>      # fork an existing Codex thread
+:codex rename <name>  # rename the active Codex thread
+:codex archive [id]   # archive a Codex thread, defaulting to the active one
+:codex account        # show the current Codex account state
+:runtime list          # shows codex-cli as "ready" (or the install hint if missing)
+:runtime codex-cli     # swap backend; the status-bar badge updates
+<your prompt>          # the next message reconnects and runs through Codex
+```
+
 ### `codex-sdk`
 
 Wraps the official OpenAI Codex Python SDK (`openai-codex`) behind the SuperQode runtime contract. The SDK launches the Codex app-server locally and SuperQode talks to it through the SDK client.
@@ -474,36 +502,12 @@ runtime:
   backend: codex-sdk
 ```
 
-In the TUI, switch backends mid-session without restarting:
-
-```text
-:codex                # shorthand for :runtime codex-sdk
-:codex status         # fast SDK/app-server status without starting Codex
-:codex status --probe # start the SDK app-server and list available models
-:codex models         # list models exposed to your local Codex account
-:codex model          # pick a model with arrows, numbers, mouse, or exact id
-:codex model <id>     # set the model override directly
-:codex effort         # pick reasoning effort interactively
-:codex effort high    # set reasoning effort directly: minimal/low/medium/high/xhigh
-:codex sandbox read-only       # override sandbox for future turns
-:codex review         # run a read-only review turn against the current diff
-:codex compact        # compact the active Codex thread
-:codex sessions       # list Codex sessions for this working directory
-:codex resume <id>    # resume an existing Codex thread
-:codex fork <id>      # fork an existing Codex thread
-:codex rename <name>  # rename the active Codex thread
-:codex archive [id]   # archive a Codex thread, defaulting to the active one
-:codex account        # show the current Codex account state
-:runtime list          # shows codex-sdk as "ready" (or the install hint if missing)
-:runtime codex-sdk     # swap backend; the status-bar badge updates
-<your prompt>          # the next message reconnects and runs through Codex
-```
 
 The Codex model picker uses `CodexClient.model_list()` from the local account
 when available, instead of a hardcoded model catalog. `:codex status --probe`
 also caches the returned model list for the picker.
 
-These commands are SuperQode commands mapped to the SDK's typed public APIs; the
+On the SDK route, SuperQode commands map to the SDK's typed public APIs; the
 Python SDK does not provide a generic "run a Codex slash command" passthrough.
 `:codex review` intentionally uses the documented public pattern of a
 read-only turn with a review prompt. The lower-level `review/start` protocol is

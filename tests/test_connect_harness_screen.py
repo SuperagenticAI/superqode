@@ -100,7 +100,7 @@ def dispatch(profile_id):
 def test_root_offers_the_ways_to_get_a_harness():
     """Three owners you name, plus the loop that lives behind a protocol."""
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_ROOT)] == [
-        ("agents", "Use an agent you already have"),
+        ("agents", "Connect to an existing harness"),
         ("models", "Connect a harness with your model (Recommended)"),
         ("build", "Build your own harness (Advanced)"),
         ("systemone-models", "Connect with SystemOne models"),
@@ -324,7 +324,7 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
 
     badges = {p.id: p.badges for p in list_connection_profiles(CONNECT_MENU_VENDORS)}
 
-    assert badges["codex"][-1] == "via SDK"
+    assert badges["codex"][-1] == "via CLI"
     assert badges["cursor"][-1] == "via ACP"
     assert badges["antigravity"][-1] == "via CLI"
     # Copilot really does take either route, and the dispatcher prefers the SDK.
@@ -503,6 +503,7 @@ def test_the_subscriptions_category_holds_every_plan_alphabetically():
         "amp",
         "antigravity",
         "codex",
+        "codex-sdk",
         "cursor",
         "deepagents-code",
         "devin",
@@ -1277,6 +1278,7 @@ def test_every_pre_existing_connect_id_still_resolves():
         "subscriptions",
         "other-harnesses",
         "codex",
+        "codex-sdk",
         "cursor",
         "amp",
         "antigravity",

@@ -33,6 +33,7 @@ class RuntimeHarnessBackend:
         runtime_events: list[HarnessEvent] = []
         mcp_runtime = await create_harness_mcp_runtime(request.spec, cwd=request.working_directory)
         keep_mcp_runtime = False
+        runtime_obj = None
         try:
             runtime_name, runtime_obj = _create_runtime_for_request(
                 request,
@@ -77,12 +78,17 @@ class RuntimeHarnessBackend:
             )
         finally:
             if not keep_mcp_runtime:
-                await mcp_runtime.close()
+                try:
+                    if getattr(runtime_obj, "name", "") == "codex-cli":
+                        await runtime_obj.aclose()
+                finally:
+                    await mcp_runtime.close()
 
     async def stream(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         """Stream normalized harness delta events from the wrapped runtime."""
         mcp_runtime = await create_harness_mcp_runtime(request.spec, cwd=request.working_directory)
         keep_mcp_runtime = False
+        runtime_obj = None
         try:
             _runtime_name, runtime_obj = _create_runtime_for_request(
                 request,
@@ -134,7 +140,11 @@ class RuntimeHarnessBackend:
             )
         finally:
             if not keep_mcp_runtime:
-                await mcp_runtime.close()
+                try:
+                    if getattr(runtime_obj, "name", "") == "codex-cli":
+                        await runtime_obj.aclose()
+                finally:
+                    await mcp_runtime.close()
 
 
 class ADKHarnessBackend(RuntimeHarnessBackend):
@@ -173,6 +183,25 @@ class ClaudeAgentSDKHarnessBackend(RuntimeHarnessBackend):
 
 
 def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
+    if runtime_name == "codex-cli":
+        return HarnessBackendCapabilities(
+            backend=runtime_name,
+            supports_coding=True,
+            supports_no_tool=False,
+            supports_streaming=True,
+            supports_approvals=False,
+            supports_sandbox=True,
+            supports_shell=True,
+            supports_mcp=True,
+            supports_typed_output=False,
+            supports_workflow_children=True,
+            event_detail="rich",
+            notes=(
+                "Installed Codex CLI with native async stdio. Codex owns tools and MCP configuration. "
+                "Interactive approvals use SuperQode prompts; harness pause/resume approvals are not exposed. "
+                "Read-only sandboxing does not disable Codex tools.",
+            ),
+        )
     if runtime_name == "copilot-sdk":
         return HarnessBackendCapabilities(
             backend=runtime_name,

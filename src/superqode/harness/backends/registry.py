@@ -41,6 +41,7 @@ _OPTIONAL_BACKENDS = {
     "adk",
     "anthropic-managed",
     "openai-agents",
+    "codex-cli",
     "codex-sdk",
     "copilot-sdk",
     "claude-agent-sdk",
@@ -70,6 +71,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return OpenAIAgentsHarnessBackend()
     if resolved == "codex-sdk":
         return CodexSDKHarnessBackend()
+    if resolved == "codex-cli":
+        return RuntimeHarnessBackend(resolved)
     if resolved == "copilot-sdk":
         return CopilotSDKHarnessBackend()
     if resolved == "claude-agent-sdk":
@@ -227,6 +230,15 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
             capabilities,
             availability="available" if available else "missing",
             install_hint=None if available else issue,
+        )
+    if capabilities.backend == "codex-cli":
+        from superqode.runtime.codex_cli import codex_binary
+
+        available = codex_binary() is not None
+        return replace(
+            capabilities,
+            availability="available" if available else "missing",
+            install_hint=None if available else "Install Codex CLI, then run `codex login`.",
         )
     from superqode.providers.env_introspect import install_command
 

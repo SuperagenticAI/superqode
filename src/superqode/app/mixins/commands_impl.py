@@ -811,6 +811,7 @@ class CommandImplMixin:
         text.append("\n  Vendor runtime setup\n\n", style=f"bold {THEME['purple']}")
         text.append("  Install one SDK runtime\n", style=f"bold {THEME['text']}")
         for label, extra in (
+            ("Codex CLI", "codex-cli"),
             ("Codex SDK", "codex-sdk"),
             ("GitHub Copilot SDK", "copilot-sdk"),
             ("Claude Agent SDK", "claude-agent-sdk"),
@@ -2232,6 +2233,13 @@ class CommandImplMixin:
                 and Path(getattr(existing.session, "working_directory", Path.cwd())).resolve()
                 == Path.cwd().resolve()
                 and getattr(existing, "_runtime", None) is not None
+                and not (
+                    sub == "codex-cli"
+                    and (
+                        getattr(existing._runtime, "_closed", False)
+                        or getattr(existing._runtime, "_failure", None)
+                    )
+                )
                 and getattr(existing, "billing_requested", "agent-managed") == requested_billing
             ):
                 if requested_model:
@@ -2240,9 +2248,9 @@ class CommandImplMixin:
                 self._install_pure_permission_bridge(existing, log)
                 _os.environ["SUPERQODE_RUNTIME"] = sub
                 self._sync_self_contained_status(sub)
-                if sub == "codex-sdk":
+                if sub in {"codex-cli", "codex-sdk"}:
                     self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
-                    log.add_info("Already connected via codex-sdk; reusing warm Codex app-server.")
+                    log.add_info(f"Already connected via {sub}; reusing warm Codex app-server.")
                 else:
                     log.add_info(f"Already connected via {sub}; reusing the active session.")
                 return

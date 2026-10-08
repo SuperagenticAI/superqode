@@ -251,15 +251,24 @@ class ConnectionProfile:
 
 
 def _codex_ready() -> bool:
-    """SDK installed; the live app-server verifies the login on connection."""
-    if importlib.util.find_spec("openai_codex") is None:
+    """Installed CLI; app-server verifies the account on connection."""
+    from superqode.runtime.codex_cli import codex_binary
+
+    return codex_binary() is not None
+
+
+def _codex_sdk_ready() -> bool:
+    """The Python SDK is installed; Codex verifies login on connection."""
+    try:
+        return importlib.util.find_spec("openai_codex") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
-    return True
 
 
 def _codex_product_present() -> bool:
-    """The user's own Codex is here, even if our SDK extra is not."""
-    return shutil.which("codex") is not None or (Path.home() / ".codex" / "auth.json").exists()
+    """Presence is a local hint; authentication is checked through Codex."""
+    home = Path(os.getenv("CODEX_HOME") or Path.home() / ".codex")
+    return _codex_ready() or (home / "auth.json").exists()
 
 
 def _copilot_product_present() -> bool:
@@ -480,7 +489,7 @@ def _byok_ready() -> bool:
 _ROOT_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="agents",
-        label="Use an agent you already have",
+        label="Connect to an existing harness",
         description="Codex, Claude Code, Copilot, Grok, Devin and more",
         connector="agent-picker",
         detect=lambda: True,
@@ -886,16 +895,31 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         id="codex",
         harness_openness="open",
         model_openness="OpenAI models",
+        transport="CLI",
+        label="Codex CLI",
+        description="Use your installed Codex CLI with your ChatGPT login; no Python SDK required",
+        connector="runtime",
+        menu=CONNECT_MENU_VENDORS,
+        runtime="codex-cli",
+        self_contained=True,
+        detect=_codex_ready,
+        product_detect=_codex_product_present,
+        unavailable_hint="Install Codex CLI, then run `codex login`",
+    ),
+    ConnectionProfile(
+        id="codex-sdk",
+        harness_openness="open",
+        model_openness="OpenAI models",
         transport="SDK",
-        label="Codex",
-        description="Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)",
+        label="Codex SDK",
+        description="Use the Codex Python SDK with your ChatGPT login",
         connector="runtime",
         menu=CONNECT_MENU_VENDORS,
         runtime="codex-sdk",
         self_contained=True,
-        detect=_codex_ready,
+        detect=_codex_sdk_ready,
         product_detect=_codex_product_present,
-        unavailable_hint=missing_extra_hint("codex-sdk", suffix="then run `codex login`"),
+        unavailable_hint='Install "superqode[codex-sdk]", then run `codex login`',
     ),
     ConnectionProfile(
         id="grok",

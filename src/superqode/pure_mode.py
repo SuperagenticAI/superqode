@@ -101,7 +101,8 @@ class PureMode:
         self.on_thinking: Optional[Callable[[str], Awaitable[None]]] = None
         self.on_stream_chunk: Optional[Callable[[str], None]] = None
         self.on_permission_request: Optional[Callable[[str, dict[str, Any]], bool]] = None
-        self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
+        self.on_permission_request_async = None
+        self._runtime_tool_delta_buffers: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
         self._last_stats: dict[str, int | float] = {}
         self.last_context_selection = None
@@ -458,11 +459,12 @@ class PureMode:
         )
 
         runtime_kwargs: dict[str, Any] = {}
-        if self.runtime_name == "codex-sdk":
+        if self.runtime_name in {"codex-cli", "codex-sdk"}:
             runtime_kwargs["billing_requested"] = getattr(
                 self, "billing_requested", "agent-managed"
             )
         if self.runtime_name in (
+            "codex-cli",
             "codex-sdk",
             "copilot-sdk",
             "claude-agent-sdk",
@@ -470,6 +472,8 @@ class PureMode:
             "muse",
         ):
             runtime_kwargs["approval_callback"] = self.on_permission_request
+            if self.runtime_name == "codex-cli" and self.on_permission_request_async:
+                runtime_kwargs["approval_callback"] = self.on_permission_request_async
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
             runtime_kwargs["on_systemone"] = lambda event: (
@@ -631,7 +635,11 @@ class PureMode:
         """Run a task in Pure Mode."""
         if images and (
             (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
-            or (self._harness_spec is None and self._agent is None)
+            or (
+                self._harness_spec is None
+                and self._agent is None
+                and self.runtime_name != "codex-cli"
+            )
         ):
             raise ValueError(
                 "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
@@ -657,7 +665,7 @@ class PureMode:
             # Self-contained runtimes (e.g. codex-sdk) run via the runtime
             # directly — there's no builtin AgentLoop.
             if self._runtime is not None:
-                response = await self._runtime.run(prompt)
+                response = await self._runtime.run(prompt, **({"images": images} if images else {}))
                 self.session.total_tool_calls += response.tool_calls_made
                 self.session.total_iterations += response.iterations
                 self.session.total_requests += 1
@@ -699,7 +707,11 @@ class PureMode:
         self._last_stats = {}
         if images and (
             (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
-            or (self._harness_spec is None and self._agent is None)
+            or (
+                self._harness_spec is None
+                and self._agent is None
+                and self.runtime_name != "codex-cli"
+            )
         ):
             raise ValueError(
                 "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
@@ -751,7 +763,10 @@ class PureMode:
                 if hasattr(self._runtime, "run_harness_events"):
                     self._runtime_seen_tool_calls = set()
                     try:
-                        async for event in self._runtime.run_harness_events(prompt):
+                        events = self._runtime.run_harness_events(
+                            prompt, **({"images": images} if images else {})
+                        )
+                        async for event in events:
                             if self._cancel_requested:
                                 break
                             chunk = self._handle_runtime_harness_event(event)
@@ -760,6 +775,8 @@ class PureMode:
                                     self.on_stream_chunk(chunk)
                                 yield chunk
                     finally:
+                        if self.runtime_name == "codex-cli":
+                            await events.aclose()
                         self._flush_runtime_tool_delta_buffers(force=True)
                 else:
                     async for chunk in self._runtime.run_streaming(prompt):
@@ -823,20 +840,31 @@ class PureMode:
                 args = dict(event.data.get("args") or {}) or self._tool_args_from_runtime_event(
                     event
                 )
+                if tool_id is not None and self.runtime_name == "codex-cli":
+                    args["tool_call_id"] = tool_id
                 self.on_tool_call(name, args)
             return ""
         if event.type == "tool_delta":
             name = str(event.data.get("tool_name") or "tool")
             text = str(event.data.get("text") or "")
             if text:
-                self._buffer_runtime_tool_delta(name, text)
+                self._buffer_runtime_tool_delta(name, text, event.data.get("tool_call_id"))
             return ""
         if event.type == "diff":
             if self.on_tool_result:
                 changes = event.data.get("changes", [])
                 self.on_tool_result(
                     str(event.data.get("tool_name") or "patch"),
-                    ToolResult(success=True, output="patch updated", metadata={"changes": changes}),
+                    ToolResult(
+                        success=True,
+                        output="patch updated",
+                        metadata={
+                            "changes": changes,
+                            "diff_text": event.data.get("diff_text", ""),
+                            "tool_call_id": event.data.get("tool_call_id"),
+                            "partial": True,
+                        },
+                    ),
                 )
             return ""
         if event.type == "plan_update":
@@ -864,6 +892,8 @@ class PureMode:
         if event.type == "tool_result":
             name = str(event.data.get("tool_name") or "tool")
             tool_id = event.data.get("tool_call_id")
+            self._flush_runtime_tool_delta_buffers(force=True)
+            self._runtime_tool_delta_buffers.pop((name, tool_id), None)
             seen = getattr(self, "_runtime_seen_tool_calls", None)
             already = seen is not None and tool_id is not None and tool_id in seen
             # Only synthesize a tool_call card if the runtime didn't already emit
@@ -1005,12 +1035,14 @@ class PureMode:
             return ""
         return ""
 
-    def _buffer_runtime_tool_delta(self, name: str, text: str) -> None:
+    def _buffer_runtime_tool_delta(
+        self, name: str, text: str, tool_call_id: str | None = None
+    ) -> None:
         if not self.on_tool_result:
             return
         now = time.monotonic()
         buffer = self._runtime_tool_delta_buffers.setdefault(
-            name,
+            (name, tool_call_id),
             {"text": "", "last_flush": now},
         )
         buffer["text"] += text
@@ -1019,7 +1051,12 @@ class PureMode:
             # "partial" marks streamed output chunks, not completions — the
             # TUI's calm mode must not commit a finished-tool line per chunk.
             self.on_tool_result(
-                name, ToolResult(success=True, output=buffered, metadata={"partial": True})
+                name,
+                ToolResult(
+                    success=True,
+                    output=buffered,
+                    metadata={"partial": True, "tool_call_id": tool_call_id},
+                ),
             )
             buffer["text"] = ""
             buffer["last_flush"] = now
@@ -1029,13 +1066,18 @@ class PureMode:
             self._runtime_tool_delta_buffers.clear()
             return
         now = time.monotonic()
-        for name, buffer in list(self._runtime_tool_delta_buffers.items()):
+        for (name, tool_call_id), buffer in list(self._runtime_tool_delta_buffers.items()):
             text = str(buffer.get("text") or "")
             if not text:
                 continue
             if force or now - float(buffer.get("last_flush") or now) >= 0.1:
                 self.on_tool_result(
-                    name, ToolResult(success=True, output=text, metadata={"partial": True})
+                    name,
+                    ToolResult(
+                        success=True,
+                        output=text,
+                        metadata={"partial": True, "tool_call_id": tool_call_id},
+                    ),
                 )
                 buffer["text"] = ""
                 buffer["last_flush"] = now

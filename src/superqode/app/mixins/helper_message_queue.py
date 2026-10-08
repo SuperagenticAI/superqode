@@ -1,6 +1,8 @@
 """Queued input message enqueue/drain."""
 
 from __future__ import annotations
+
+import inspect
 from textual.widgets import Input
 from superqode.app.widgets import (
     ConversationLog,
@@ -27,6 +29,20 @@ class HelperMessageQueueMixin:
             and not getattr(self, "_awaiting_agent_question", False)
         ):
             try:
+                runtime = getattr(pure, "_runtime", None)
+                if inspect.iscoroutinefunction(getattr(runtime, "steer", None)):
+
+                    async def steer():
+                        try:
+                            if not await runtime.steer(text):
+                                raise RuntimeError("No Codex turn is active")
+                            log.add_info(f"↪ steering the current run: {text[:70]}")
+                        except Exception as exc:
+                            log.add_warning(f"Could not steer Codex: {exc}")
+                            self._set_prompt_prefill(text)
+
+                    self.run_worker(steer(), exclusive=False)
+                    return True
                 if pure.steer(text):
                     preview = " ".join(str(text).split())
                     if len(preview) > 70:

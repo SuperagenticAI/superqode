@@ -9,6 +9,7 @@ from typing import Any
 
 VENDOR_HARNESS_IDS = (
     "codex",
+    "codex-sdk",
     "claude",
     "kimi-code",
     "qwen-code",

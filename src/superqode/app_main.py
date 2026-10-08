@@ -1290,6 +1290,7 @@ class SuperQodeApp(
     # TUI without a separate :connect step.
     _SELF_CONTAINED_RUNTIMES = frozenset(
         {
+            "codex-cli",
             "codex-sdk",
             "copilot-sdk",
             "claude-agent-sdk",

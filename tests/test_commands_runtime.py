@@ -44,6 +44,7 @@ def test_list_json_emits_array(runner, monkeypatch):
         "builtin",
         "adk",
         "openai-agents",
+        "codex-cli",
         "codex-sdk",
         "copilot-sdk",
         "claude-agent-sdk",

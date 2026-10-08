@@ -858,11 +858,25 @@ class AgentRunMixin:
             from superqode.tools.base import ToolResult
 
             call_args_list = in_flight_args.get(name)
-            call_args = call_args_list.pop(0) if call_args_list else {}
+            metadata = (result.metadata or {}) if isinstance(result, ToolResult) else {}
+            partial = bool(metadata.get("partial"))
+            tool_id = metadata.get("tool_call_id")
+            index = next(
+                (
+                    i
+                    for i, args in enumerate(call_args_list or [])
+                    if tool_id is not None and args.get("tool_call_id") == tool_id
+                ),
+                0,
+            )
+            call_args = call_args_list[index] if call_args_list else {}
+            if call_args_list and not partial:
+                call_args_list.pop(index)
 
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
-                _complete_tool_activity(name, status)
+                if not partial:
+                    _complete_tool_activity(name, status)
                 if self._is_calm_output():
                     meta = result.metadata or {}
                     if meta.get("partial"):
@@ -1110,7 +1124,8 @@ class AgentRunMixin:
                     model=model,
                     hint=(
                         self._codex_error_hint(error_msg)
-                        if getattr(self._pure_mode, "runtime_name", "") == "codex-sdk"
+                        if getattr(self._pure_mode, "runtime_name", "")
+                        in {"codex-cli", "codex-sdk"}
                         else (
                             "Run :tau login to sync this provider and model, then run :tau retry."
                             if str(
@@ -4424,6 +4439,7 @@ class AgentRunMixin:
         runtime_name = str(getattr(pure, "runtime_name", "") or "")
         if runtime_name in self._SELF_CONTAINED_RUNTIMES:
             friendly = {
+                "codex-cli": "Codex",
                 "codex-sdk": "Codex",
                 "muse": "Muse Code",
                 "copilot-sdk": "Copilot SDK",

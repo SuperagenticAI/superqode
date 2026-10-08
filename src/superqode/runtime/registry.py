@@ -184,6 +184,9 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "adk": _adk_factory,
     "openai-agents": _openai_agents_factory,
     "pydanticai": _pydanticai_factory,
+    "codex-cli": lambda **kwargs: importlib.import_module(
+        "superqode.runtime.codex_cli"
+    ).CodexCLIRuntime(**kwargs),
     "codex-sdk": _codex_sdk_factory,
     "copilot-sdk": _copilot_sdk_factory,
     "claude-agent-sdk": _claude_agent_sdk_factory,
@@ -204,6 +207,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "adk": "Google Agent Development Kit",
     "openai-agents": "OpenAI Agents SDK",
     "pydanticai": "PydanticAI agent framework",
+    "codex-cli": "Installed Codex CLI / async stdio app-server",
     "codex-sdk": "OpenAI Codex Python SDK / local app-server",
     "copilot-sdk": "GitHub Copilot SDK / bundled Copilot runtime",
     "claude-agent-sdk": "Anthropic Claude Agent SDK (API key)",
@@ -235,6 +239,7 @@ _DOCUMENTATION_URLS: dict[str, str] = {
     "adk": "https://google.github.io/adk-docs/",
     "openai-agents": "https://openai.github.io/openai-agents-python/",
     "pydanticai": "https://ai.pydantic.dev/",
+    "codex-cli": "https://developers.openai.com/codex/app-server/",
     "codex-sdk": "https://developers.openai.com/codex/sdk/",
     "copilot-sdk": "https://github.com/github/copilot-sdk",
     "claude-agent-sdk": "https://docs.claude.com/en/api/agent-sdk/overview",
@@ -402,6 +407,17 @@ def list_runtimes(*, probe: bool = False) -> list[RuntimeInfo]:
                     "devin", "Devin", _DEVIN_INSTALL_HINT
                 )
             implemented = True
+        elif name == "codex-cli":
+            from .codex_cli import codex_binary
+
+            installed = ready = codex_binary() is not None
+            implemented = True
+            install_hint = None if installed else "Install Codex CLI, then run codex login"
+            status_detail = (
+                "Installed Codex CLI; ChatGPT login is verified on use"
+                if installed
+                else install_hint
+            )
         elif name == "muse":
             installed, ready, install_hint, status_detail = _cli_presence(
                 "muse", "Muse Code", "install Muse Code from https://dev.meta.ai, then muse login"

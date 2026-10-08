@@ -330,7 +330,7 @@ async def run_headless(
 
     runtime_name = resolve_runtime_name(cli=runtime)
     runtime_kwargs: dict[str, Any] = {}
-    if runtime_name == "codex-sdk":
+    if runtime_name in {"codex-cli", "codex-sdk"}:
         runtime_kwargs["billing_requested"] = billing_requested
     if runtime_name == "builtin":
         runtime_kwargs["hooks"] = extension_runtime.build_hooks()
@@ -360,12 +360,16 @@ async def run_headless(
             response.schema_errors = errors
         return response
     finally:
-        if worktree_info:
-            from .workspace.worktree import GitWorktreeManager
+        try:
+            if runtime_name == "codex-cli":
+                await runtime_obj.aclose()
+        finally:
+            if worktree_info:
+                from .workspace.worktree import GitWorktreeManager
 
-            await GitWorktreeManager(requested_working_directory).remove_worktree(
-                worktree_info, force=True
-            )
+                await GitWorktreeManager(requested_working_directory).remove_worktree(
+                    worktree_info, force=True
+                )
 
 
 def resolve_session_id(session_id_or_prefix: str, storage_dir: str = ".superqode/sessions") -> str:

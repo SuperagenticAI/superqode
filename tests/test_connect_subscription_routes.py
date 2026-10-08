@@ -382,7 +382,7 @@ def test_headless_codex_preserves_requested_subscription_billing(monkeypatch):
     monkeypatch.setattr("superqode.headless.run_headless", run)
     result = CliRunner().invoke(cli_main, ["-p", "--connect", "codex", "hello"])
     assert result.exit_code == 0, result.output
-    assert captured[0]["runtime"] == "codex-sdk"
+    assert captured[0]["runtime"] == "codex-cli"
     assert captured[0]["billing_requested"] == "subscription"
 
 
@@ -399,3 +399,31 @@ def test_headless_subscription_cannot_override_runtime(monkeypatch):
     )
     assert result.exit_code == 2
     assert "cannot override its runtime" in result.output
+
+
+@pytest.mark.parametrize(
+    "runtime,profile_id,transport,label",
+    [("codex-cli", "codex", "CLI", "Codex CLI"), ("codex-sdk", "codex-sdk", "SDK", "Codex SDK")],
+)
+def test_codex_announcement_saves_exact_subscription_route(runtime, profile_id, transport, label):
+    app = AccountApp()
+    app._pure_mode = SimpleNamespace(
+        billing_requested="subscription", session=SimpleNamespace(model="chosen-model")
+    )
+    app._set_status_runtime = lambda _: None
+    app._set_status_model = lambda _: None
+    app._sync_self_contained_status = lambda _: None
+    app._mark_onboarding_complete = lambda: None
+    app._teach = lambda *args, **kwargs: None
+    saved = []
+    app._save_connection_config = lambda **fields: saved.append(fields)
+    app._resolve_codex_active_model = lambda log: None
+    app.run_worker = lambda *args, **kwargs: None
+    log = Log()
+    log.write = lambda value: log.messages.append(str(value))
+    app._announce_self_contained_connection(runtime, log)
+    assert saved[0]["profile_id"] == profile_id
+    assert saved[0]["runtime_name"] == runtime
+    assert saved[0]["transport"] == transport
+    assert saved[0]["billing_requested"] == "subscription"
+    assert label in "\n".join(log.messages)

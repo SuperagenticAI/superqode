@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-10-08
+
+### Added
+
+- Native Codex CLI runtime using the user's installed executable and a persistent
+  asynchronous stdio app-server connection, without the optional Python SDK.
+  Codex owns its tools, sandbox, skills, MCP configuration and login storage.
+- Streaming Codex text, public reasoning summaries, plans, tool activity, file
+  changes, usage and rate limits in the TUI, with approvals, user questions,
+  cancellation, steering and native review.
+- Asynchronous Codex account, model and session controls, plus startup, RPC and
+  turn timing diagnostics.
+
+### Changed
+
+- `:connect` now offers **Connect to an existing harness** → **Subscriptions** →
+  separate **Codex CLI** and **Codex SDK** entries. Reconnect retains the selected
+  route, and the Harness Hub and command completion expose both choices.
+- `:connect codex` selects the installed CLI; `:connect codex-sdk` selects the
+  optional Python SDK. Both subscription routes verify ChatGPT authentication
+  before thread creation and prompts, without automatic API billing fallback.
+
+### Notes
+
+- The native CLI integration still uses Codex's supported app-server protocol.
+  Model and service latency still apply; faster inference is not guaranteed.
+- MCP elicitation forms and URL flows currently cancel with a visible message;
+  additional permission-profile requests decline.
+
 ## [2.7.1] - 2026-10-07
 
 ### Fixed
