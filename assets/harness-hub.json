@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-04T23:04:36.879305+00:00",
-  "count": 102,
+  "generated_at": "2026-10-08T07:35:34.194368+00:00",
+  "count": 103,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -442,18 +442,18 @@
     },
     {
       "id": "codex",
-      "name": "Codex",
-      "description": "Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)",
+      "name": "Codex CLI",
+      "description": "Use your installed Codex CLI with your ChatGPT login; no Python SDK required",
       "category": "Coding agents",
       "kind": "connection",
-      "runtime": "codex-sdk",
+      "runtime": "codex-cli",
       "source": "connection:runtime",
       "readiness": "setup-required",
       "integration_level": "managed",
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[codex-sdk]\", then run `codex login`",
+      "setup": "Install Codex CLI, then run `codex login`",
       "warning": "",
       "project_path": "",
       "homepage": "https://openai.com/codex/",
@@ -463,7 +463,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/codex/",
-      "install_command": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[codex-sdk]\", then run `codex login`",
+      "install_command": "Install Codex CLI, then run `codex login`",
       "tui_commands": [
         ":connect codex",
         ":codex status",
@@ -485,15 +485,15 @@
       "capabilities": [
         "open harness",
         "OpenAI models",
-        "via SDK",
+        "via CLI",
         "Managed connection from SuperQode"
       ],
-      "based_on": "Codex",
+      "based_on": "Codex CLI",
       "popularity_rank": 10,
       "setup_steps": [
         {
-          "title": "Install the SuperQode Codex integration",
-          "command": "uv tool install \"superqode[codex-sdk]\"",
+          "title": "Install Codex CLI",
+          "command": "npm install -g @openai/codex",
           "description": ""
         },
         {
@@ -507,6 +507,69 @@
       "language": "Rust",
       "language_confidence": "confirmed",
       "language_evidence": "openai/codex is Rust (96%); the npm package is a thin wrapper."
+    },
+    {
+      "id": "codex-sdk",
+      "name": "Codex SDK",
+      "description": "Use the Codex Python SDK with your ChatGPT login",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "codex-sdk",
+      "source": "connection:runtime",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "Install \"superqode[codex-sdk]\", then run `codex login`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://openai.com/codex/",
+      "repository": "https://github.com/openai/codex",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/providers/codex/",
+      "install_command": "uv tool install \"superqode[codex-sdk]\"",
+      "tui_commands": [
+        ":connect codex-sdk",
+        ":codex status",
+        ":codex models",
+        ":codex sessions"
+      ],
+      "cli_commands": [
+        "superqode harness run codex-sdk \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "open harness",
+        "OpenAI models",
+        "via SDK",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Codex SDK",
+      "popularity_rank": 10,
+      "setup_steps": [
+        {
+          "title": "Install the Codex SDK integration",
+          "command": "uv tool install \"superqode[codex-sdk]\"",
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python/Rust",
+      "language_confidence": "confirmed",
+      "language_evidence": "The Python SDK connects to the Rust Codex app-server."
     },
     {
       "id": "claude",
@@ -929,7 +992,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/github-copilot/",
-      "install_command": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "install_command": "uv tool install \"superqode[copilot-sdk]\"",
       "tui_commands": [
         ":connect copilot",
         ":copilot status",
@@ -958,19 +1021,9 @@
       "popularity_rank": 40,
       "setup_steps": [
         {
-          "title": "Recommended: install the SuperQode Copilot SDK integration",
+          "title": "Install the GitHub Copilot integration",
           "command": "uv tool install \"superqode[copilot-sdk]\"",
-          "description": ""
-        },
-        {
-          "title": "Alternative: install the official GitHub Copilot CLI",
-          "command": "npm install -g @github/copilot",
-          "description": ""
-        },
-        {
-          "title": "Authenticate with GitHub Copilot",
-          "command": "copilot login",
-          "description": ""
+          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
         }
       ],
       "openness": "closed",
@@ -4342,7 +4395,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "",
+      "setup": "uv tool install \"superqode[deepagents]\"",
       "warning": "DeepAgents runs its own filesystem and execute tools, so SuperQode approvals do not gate them. Model routes resolve through LangChain's provider strings.",
       "project_path": "",
       "homepage": "",
