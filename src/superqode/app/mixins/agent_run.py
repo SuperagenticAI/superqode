@@ -818,8 +818,12 @@ class AgentRunMixin:
                 }
             )
 
-        def _safe_call(func, *args):
+        def _safe_call(func, *args, **kwargs):
             """Call function safely - handles threading correctly."""
+            if kwargs:
+                from functools import partial
+
+                func = partial(func, **kwargs)
             try:
                 self._call_ui(func, *args)
             except RuntimeError as e:
@@ -1102,6 +1106,14 @@ class AgentRunMixin:
                     stats.get("completion_tokens", 0),
                     stats.get("thinking_tokens", 0),
                     stats.get("cost_usd", stats.get("total_cost", 0.0)),
+                    **(
+                        {
+                            "cached_tokens": stats.get("cached_tokens"),
+                            "reasoning_tokens": stats.get("reasoning_tokens"),
+                        }
+                        if runtime_name == "codex-cli"
+                        else {}
+                    ),
                 )
                 if hasattr(self._pure_mode, "get_pending_approvals"):
                     self._announce_pending_approvals(self._pure_mode, log)
@@ -1281,6 +1293,8 @@ class AgentRunMixin:
                             "model": model,
                             "prompt": text,
                             "total_tokens": total_tokens,
+                            "cached_tokens": stats.get("cached_tokens"),
+                            "reasoning_tokens": stats.get("reasoning_tokens"),
                             "skip_git_fallback": True,
                         },
                         log,
@@ -1298,6 +1312,8 @@ class AgentRunMixin:
                         "prompt": text,
                         "response": response_text,
                         "total_tokens": total_tokens,
+                        "cached_tokens": stats.get("cached_tokens"),
+                        "reasoning_tokens": stats.get("reasoning_tokens"),
                         "skip_git_fallback": True,
                     }
 

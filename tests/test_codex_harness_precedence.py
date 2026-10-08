@@ -71,6 +71,9 @@ async def test_codex_startup_ignores_saved_harness_and_executes_native(
     pure = PureMode(runtime=runtime_name)
     pure.connect("openai", "", working_directory=project_harness.parent)
     assert pure._harness_spec is None
+    assert pure._harness_definition is None
+    assert pure._runtime.config.harness_id == "codex"
+    assert pure._runtime.config.harness_source == "runtime"
     assert runtimes[0][0] == runtime_name
     assert pure._runtime.config.model == ""
     assert (await pure.run("first")).content == "native answer"
@@ -110,6 +113,10 @@ def test_connect_switch_clears_loaded_project_harness(
     assert pure.session.provider == "openai"
     assert pure.session.model == ""
     assert pure.get_status()["harness"]["source"] == "runtime"
+    import os
+
+    assert os.environ["SUPERQODE_HARNESS"] == str(project_harness)
+    assert pure.session.harness_name == "Codex"
     # The file can still be deliberately selected after the vendor connection.
     pure.load_harness(project_harness)
     pure.connect("anthropic", "project-model")
@@ -167,3 +174,42 @@ def test_headless_codex_ignores_project_defaults_but_keeps_explicit_harness(
     assert calls[0]["runtime"] == runtime_name
     assert calls[0]["profile_name"] == (str(project_harness) if explicit_harness else "core")
     assert calls[0]["provider"] == ("anthropic" if explicit_harness else "openai")
+
+
+@pytest.mark.parametrize("runtime_name", ["codex-cli", "codex-sdk"])
+def test_returning_to_builtin_restores_saved_project_harness(
+    project_harness, runtimes, monkeypatch, runtime_name
+):
+    import os
+
+    pure = PureMode(runtime=runtime_name)
+    pure.connect("openai", "")
+    app = SuperQodeApp()
+    app._pure_mode = pure
+    monkeypatch.setenv("SUPERQODE_RUNTIME", runtime_name)
+    monkeypatch.setattr(
+        "superqode.runtime.list_runtimes",
+        lambda: [SimpleNamespace(name="builtin", installed=True, implemented=True, ready=True)],
+    )
+    monkeypatch.setattr(app, "_set_status_runtime", lambda *args: None)
+    monkeypatch.setattr(app, "_set_status_model", lambda *args: None)
+    log = SimpleNamespace(add_info=lambda text: None, add_error=pytest.fail)
+    app._runtime_cmd("builtin", log)
+    assert os.environ["SUPERQODE_HARNESS"] == str(project_harness)
+    assert pure._harness_spec.name == "project-coder"
+    assert pure.runtime_name == "builtin"
+    pure.connect("anthropic", "project-model")
+    assert pure._runtime is None
+
+
+@pytest.mark.parametrize("runtime_name", ["codex-cli", "codex-sdk"])
+def test_reload_extensions_keeps_codex_owner_with_default_model(
+    project_harness, runtimes, runtime_name
+):
+    pure = PureMode(runtime=runtime_name)
+    pure.connect("openai", "")
+    pure.reload_extensions()
+    assert len(runtimes) == 2
+    assert pure._harness_definition is None and pure._harness_spec is None
+    assert pure._runtime.config.harness_id == "codex"
+    assert pure.get_status()["harness"]["source"] == "runtime"

@@ -473,3 +473,65 @@ def test_control_options_complete_without_probing_runtime(monkeypatch, prefix, e
         app, "_runtime_cmd", lambda *args: pytest.fail("Completion connected a runtime")
     )
     assert expected in {item.value for item in app._prompt_completion_candidates_for(prefix)}
+
+
+@pytest.mark.asyncio
+async def test_native_turn_displays_cached_and_reasoning_subsets(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    from superqode.app.widgets import ConversationLog
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    for name in (
+        "_prewarm_litellm",
+        "_start_models_dev_refresh",
+        "_start_acp_registry_refresh",
+        "_report_catalog_freshness",
+        "_run_startup_connect",
+    ):
+        monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None)
+
+    class Runtime:
+        async def run_harness_events(self, prompt):
+            yield HarnessEvent(type="model_delta", data={"text": "Native answer"})
+            yield HarnessEvent(
+                type="turn_complete",
+                data={
+                    "status": "completed",
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": 30,
+                        "total_tokens": 130,
+                        "cached_input_tokens": 60,
+                        "reasoning_output_tokens": 10,
+                    },
+                },
+            )
+
+    monkeypatch.setattr("superqode.pure_mode.create_runtime", lambda *a, **k: Runtime())
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)):
+        pure = PureMode(runtime="codex-cli")
+        pure.connect("openai", "test-model", working_directory=tmp_path)
+        app._pure_mode = pure
+        monkeypatch.setattr(app, "_begin_task_changes", lambda: None)
+        monkeypatch.setattr(app, "_resolve_mcp_attachment_context", AsyncMock(return_value=""))
+        monkeypatch.setattr("superqode.app.mixins.agent_run.get_git_changes", lambda *a: [])
+        log = app.query_one("#log", ConversationLog)
+        rendered = []
+        write = log.write
+
+        def record(value, *a, **k):
+            rendered.append(getattr(value, "plain", str(value)))
+            return write(value, *a, **k)
+
+        monkeypatch.setattr(log, "write", record)
+        await app._send_to_pure_mode("Hello", log).wait()
+        text = "\n".join(rendered)
+        assert "130 toks" in text
+        assert "60 cached" in text
+        assert "10 reasoning" in text
+        assert "170 toks" not in text
+        assert app._last_run_summary["cached_tokens"] == 60
+        assert app._last_run_summary["reasoning_tokens"] == 10

@@ -54,7 +54,8 @@ Codex owns the model loop, built-in tools, sandbox, skills, MCP configuration,
 and credential storage. The app-server is the supported integration boundary
 for displaying that harness in a custom client.
 
-Selecting Codex CLI or Codex SDK replaces the active SuperQode harness selection.
+Selecting Codex CLI or Codex SDK bypasses the active SuperQode harness selection
+without changing the saved choice. Returning to `:runtime builtin` restores it.
 A repository's `harness.yaml` or saved default does not wrap or override this
 connection. The Harness sidebar shows Codex as the owner. Keep the YAML file in
 place; use `:harness <path>` to explicitly select it again. Headless Codex routes

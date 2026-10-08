@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.10] - 2026-10-08
+
+### Fixed
+
+- Selecting or resuming Codex bypasses the host harness without replacing the
+  saved SuperQode selection with `core`. Returning to the builtin runtime
+  restores that selection; Codex remains the displayed execution owner.
+- Per-turn Codex stats and completion summaries retain cached and reasoning
+  token counts without adding these subsets to the total again.
+- Read-only Codex controls avoid initializing busy-state UI watchers. The
+  slash-runtime picker regression tests now also gate publication.
+
 ## [2.9.1] - 2026-10-08
 
 ### Fixed

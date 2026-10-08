@@ -469,3 +469,32 @@ def test_native_codex_status_displays_unknown_usage():
     status = ColorfulStatusBar()
     status.update_byok_status(provider="openai", tokens=None)
     assert "tokens unknown" in status._render_for_width(140).plain
+
+
+@pytest.mark.parametrize("reported_total", [False, True])
+def test_native_codex_turn_stats_keep_token_subsets_without_double_counting(reported_total):
+    pure = PureMode(runtime="codex-cli")
+    usage = {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "cached_input_tokens": 60,
+        "reasoning_output_tokens": 10,
+    }
+    if reported_total:
+        usage["total_tokens"] = 130
+    pure._handle_runtime_harness_event(HarnessEvent(type="turn_complete", data={"usage": usage}))
+    stats = pure.get_status()["stats"]
+    assert stats["total_tokens"] == 130
+    assert stats["cached_tokens"] == 60
+    assert stats["reasoning_tokens"] == stats["thinking_tokens"] == 10
+
+
+def test_native_codex_absent_token_details_stay_unknown():
+    pure = PureMode(runtime="codex-cli")
+    pure._handle_runtime_harness_event(
+        HarnessEvent(
+            type="turn_complete", data={"usage": {"input_tokens": 100, "output_tokens": 30}}
+        )
+    )
+    assert pure._last_stats["cached_tokens"] is None
+    assert pure._last_stats["reasoning_tokens"] is None

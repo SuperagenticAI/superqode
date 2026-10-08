@@ -2266,11 +2266,15 @@ class CommandImplMixin:
 
         _os.environ["SUPERQODE_RUNTIME"] = sub
         if hasattr(self, "_pure_mode") and self._pure_mode is not None:
+            previous_runtime = getattr(self._pure_mode, "runtime_name", "")
             try:
                 self._pure_mode.disconnect()
             except Exception:  # noqa: BLE001 — best-effort
                 pass
             self._pure_mode.runtime_name = sub
+            if sub == "builtin" and previous_runtime in {"codex-cli", "codex-sdk"}:
+                self._pure_mode._load_env_harness()
+                self._refresh_harness_panel()
         # Update the status bar badge if it's mounted.
         # Update the visible status-bar runtime badge. A non-self-contained swap
         # clears any stale model; the self-contained path below sets it.
@@ -2288,8 +2292,7 @@ class CommandImplMixin:
                     # Choosing Codex selects its harness as well as its
                     # transport. Otherwise connect() prefers a loaded YAML
                     # spec and never constructs the requested Codex runtime.
-                    pure.clear_harness()
-                    _os.environ["SUPERQODE_HARNESS"] = "core"
+                    pure.use_codex_harness()
                 self._install_pure_permission_bridge(pure, log)
                 pure.runtime_name = sub
                 pure.billing_requested = requested_billing

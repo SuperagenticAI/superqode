@@ -2289,6 +2289,10 @@ class DialogsMixin:
             facts.append(f"{total_tokens:,} toks")
         elif "total_tokens" in summary and summary["total_tokens"] is None:
             facts.append("tokens unknown")
+        if summary.get("cached_tokens") is not None:
+            facts.append(f"{summary['cached_tokens']:,} cached")
+        if summary.get("reasoning_tokens") is not None:
+            facts.append(f"{summary['reasoning_tokens']:,} reasoning")
         header.append("  •  ", style=SQ_COLORS.text_muted)
         header.append("  •  ".join(facts), style=SQ_COLORS.text_muted)
         header.append("\n\n")

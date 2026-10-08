@@ -104,7 +104,7 @@ class PureMode:
         self.on_permission_request_async = None
         self._runtime_tool_delta_buffers: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
-        self._last_stats: dict[str, int | float] = {}
+        self._last_stats: dict[str, int | float | None] = {}
         self.last_context_selection = None
         self._last_resume_descriptor = None
         self._cancel_requested = False
@@ -114,7 +114,7 @@ class PureMode:
         # selection must not turn a direct Codex connection into a kernel run.
         # Explicit select_harness/load_harness calls still opt into a spec.
         if self.runtime_name in {"codex-cli", "codex-sdk"}:
-            self.select_harness("core")
+            self.use_codex_harness()
             return
         reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
         try:
@@ -216,6 +216,21 @@ class PureMode:
         """Return to the built-in core harness."""
         self.select_harness("core")
 
+    def use_codex_harness(self) -> None:
+        """Detach the host harness without replacing the saved selection."""
+        self._dispose_runtime()
+        self._harness_spec = None
+        self._harness_definition = None
+        self._harness_path = ""
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
+        self.last_context_selection = None
+        self._loop_policy = core_loop_policy()
+        self.tool_profile = self._tool_profile_env or "coding"
+        self.tools = ToolRegistry.empty()
+        self._sync_harness_session_fields()
+
     def reload_extensions(self):
         """Reload enabled extensions and rebuild the active native runtime.
 
@@ -235,15 +250,20 @@ class PureMode:
         system_level = self.session.system_level
         working_directory = self.session.working_directory
         session_id = self.get_current_session_id()
+        direct_codex = (
+            self.runtime_name in {"codex-cli", "codex-sdk"} and self._harness_spec is None
+        )
 
         self._extension_runtime = load_extension_runtime(working_directory or Path.cwd())
-        self.select_harness(reference)
+        if direct_codex:
+            self.use_codex_harness()
+        else:
+            self.select_harness(reference)
         if (
             was_connected
             and provider
-            and model
-            and definition is not None
-            and definition.source == "built-in"
+            and (model or direct_codex)
+            and (direct_codex or (definition is not None and definition.source == "built-in"))
         ):
             self.connect(
                 provider,
@@ -258,10 +278,11 @@ class PureMode:
         """Mirror the loaded HarnessSpec into user-visible session status."""
         definition = self._harness_definition
         if definition is None:
-            self.session.harness_name = ""
+            direct_codex = self.runtime_name in {"codex-cli", "codex-sdk"}
+            self.session.harness_name = "Codex" if direct_codex else ""
             self.session.harness_path = ""
-            self.session.harness_flavor = ""
-            self.session.harness_runtime = ""
+            self.session.harness_flavor = "coding" if direct_codex else ""
+            self.session.harness_runtime = self.runtime_name if direct_codex else ""
             return
         self.session.harness_name = getattr(definition, "display_name", "") or definition.id
         self.session.harness_path = self._harness_path
@@ -364,7 +385,10 @@ class PureMode:
                     getattr(self, "billing_requested", "agent-managed"),
                 )
                 session_id = saved.backend_session_id if saved else None
-        selected_id = getattr(self._harness_definition, "id", "core")
+        direct_codex = (
+            self.runtime_name in {"codex-cli", "codex-sdk"} and self._harness_spec is None
+        )
+        selected_id = getattr(self._harness_definition, "id", "codex" if direct_codex else "core")
         if selected_id == "core":
             system_level = SystemPromptLevel.CORE
         elif selected_id == "no-tool":
@@ -468,7 +492,9 @@ class PureMode:
             session_history_limit=session_history_limit,
             loop_policy=self._loop_policy,
             harness_id=selected_id,
-            harness_source=getattr(self._harness_definition, "source", "built-in"),
+            harness_source=getattr(
+                self._harness_definition, "source", "runtime" if direct_codex else "built-in"
+            ),
             harness_digest=getattr(self._harness_definition, "digest", ""),
             tool_contract_version=("core-tools-v1" if selected_id == "core" else "workbench-v1"),
             harness_spec=self._harness_spec or getattr(self._harness_definition, "spec", None),
@@ -1039,11 +1065,23 @@ class PureMode:
                 }
                 if self.runtime_name == "codex-cli":
                     self._last_stats["cost_usd"] = None
+                    self._last_stats["cached_tokens"] = usage.get("cached_input_tokens")
+                    self._last_stats["reasoning_tokens"] = usage.get("reasoning_output_tokens")
+                    self._last_stats["thinking_tokens"] = usage.get("reasoning_output_tokens")
+                    # Codex output already includes reasoning; cached tokens
+                    # are a subset of input, not additional billable tokens.
+                    self._last_stats["total_tokens"] = int(
+                        usage.get("total_tokens")
+                        if usage.get("total_tokens") is not None
+                        else prompt_tokens + completion_tokens
+                    )
             elif self.runtime_name == "codex-cli":
                 self._last_stats = {
                     "prompt_tokens": None,
                     "completion_tokens": None,
-                    "thinking_tokens": 0,
+                    "thinking_tokens": None,
+                    "cached_tokens": None,
+                    "reasoning_tokens": None,
                     "total_tokens": None,
                     "cost_usd": None,
                 }
@@ -1465,8 +1503,8 @@ class PureMode:
                 raise SessionResumeError(f"Cannot resume '{label}': {detail}.{suffix}")
 
         if listed_metadata is not None and listed_metadata.runtime == "codex-cli":
-            self.clear_harness()
             self.runtime_name = "codex-cli"
+            self.use_codex_harness()
             self.billing_requested = listed_metadata.billing_requested
             self.connect(
                 "openai",

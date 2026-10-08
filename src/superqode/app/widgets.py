@@ -3544,8 +3544,11 @@ class ConversationLog(RichLog):
         response_text: str = "",
         prompt_tokens: int | None = 0,
         completion_tokens: int | None = 0,
-        thinking_tokens: int = 0,
+        thinking_tokens: int | None = 0,
         cost: float | None = 0.0,
+        *,
+        cached_tokens: int | None = None,
+        reasoning_tokens: int | None = None,
     ):
         """
         End the agent output session with a rich Mission Report summary.
@@ -3557,6 +3560,8 @@ class ConversationLog(RichLog):
             completion_tokens: Number of completion tokens used
             thinking_tokens: Number of thinking tokens used
             cost: Cost in dollars
+            cached_tokens: Reported subset of prompt tokens served from cache
+            reasoning_tokens: Reported subset of completion tokens used for reasoning
         """
         # Flush any remaining buffered response chunks
         self.flush_response_buffer()
@@ -3617,6 +3622,10 @@ class ConversationLog(RichLog):
             stats_line.append("tokens unknown")
         elif total_tokens > 0:
             stats_line.append(f"{total_tokens:,} toks")
+        if cached_tokens is not None:
+            stats_line.append(f"{cached_tokens:,} cached")
+        if reasoning_tokens is not None:
+            stats_line.append(f"{reasoning_tokens:,} reasoning")
         if cost is None:
             stats_line.append("cost unknown")
         elif cost > 0:

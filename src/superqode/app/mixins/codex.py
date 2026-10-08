@@ -425,15 +425,19 @@ class CodexMixin(CodexControlsMixin):
             return
         if self._codex_extended_cmd(sub, rest, log):
             return
-        if self.is_busy and sub in {
-            "resume",
-            "fork",
-            "archive",
-            "logout",
-            "compact",
-            "sandbox",
-            "review",
-        }:
+        if (
+            sub
+            in {
+                "resume",
+                "fork",
+                "archive",
+                "logout",
+                "compact",
+                "sandbox",
+                "review",
+            }
+            and self.is_busy
+        ):
             log.add_error("A Codex task is running; cancel it or wait before changing the session")
             return
         status_expr = f"{sub} {rest}".strip()
