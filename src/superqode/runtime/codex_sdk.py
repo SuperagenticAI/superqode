@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import threading
 import uuid
+import concurrent.futures
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Callable
@@ -22,6 +23,7 @@ from ..agent.loop import AgentConfig, AgentMessage, AgentResponse
 from ..harness.events import HarnessEvent
 from ..tools.permissions import Permission, PermissionManager
 from .errors import RuntimeNotInstalledError
+from .codex_interactions import CodexInteractions
 
 from superqode.herdr import sdk_env_overrides
 
@@ -269,7 +271,7 @@ class _SubscriptionVerificationError(RuntimeError):
     """A failed billing check must not trigger another app-server route."""
 
 
-class CodexSDKRuntime:
+class CodexSDKRuntime(CodexInteractions):
     """Official Codex Python SDK-backed runtime."""
 
     name = "codex-sdk"
@@ -298,6 +300,11 @@ class CodexSDKRuntime:
         self.sandbox_backend = sandbox_backend
         self._uses_default_permission_manager = permission_manager is None
         self._approval_callback = approval_callback
+        self._init_interactions()
+        self._items = {}
+        self._interaction_loop = None
+        self._interaction_futures = set()
+        self._interaction_lock = threading.Lock()
         self._permission_manager = permission_manager or self._default_permission_manager(config)
         self._client = None
         self._thread = None
@@ -318,7 +325,9 @@ class CodexSDKRuntime:
 
     @staticmethod
     def _default_permission_manager(config: AgentConfig) -> PermissionManager:
-        return PermissionManager()
+        from superqode.tools.permissions import load_permission_config
+
+        return PermissionManager(load_permission_config(config.working_directory))
 
     @property
     def metadata(self):
@@ -361,6 +370,12 @@ class CodexSDKRuntime:
             "client_title": "SuperQode Codex SDK Runtime",
             "client_version": self._sdk_client_version(),
         }
+        config_overrides = (
+            *config_overrides,
+            'approvals_reviewer="user"',
+            'apps._default.approvals_reviewer="user"',
+            "features.goals=false",
+        )
         overrides = sdk_env_overrides()
         if self.billing_requested == "subscription":
             from superqode.providers.subscription_env import VENDOR_API_KEY_ENVS
@@ -460,7 +475,10 @@ class CodexSDKRuntime:
         # (model, approval policy, sandbox, MCP, project trust). Only send what
         # the caller explicitly set, so an empty model/sandbox lets the local
         # Codex config decide. SuperQode imposes nothing extra.
-        params: dict[str, Any] = {"cwd": str(self.config.working_directory)}
+        params: dict[str, Any] = {
+            "cwd": str(self.config.working_directory),
+            "approvalsReviewer": "user",
+        }
         if self.config.model:
             params["model"] = self.config.model
         if self.billing_requested == "subscription":
@@ -469,7 +487,9 @@ class CodexSDKRuntime:
             params["modelProvider"] = self.config.provider
         if self.config.custom_system_prompt:
             params["developerInstructions"] = self.config.custom_system_prompt
-        if self.sandbox_backend:  # explicit override only; else use ~/.codex
+        if not self.config.tools_enabled:
+            params["sandbox"] = "read-only"
+        elif self.sandbox_backend:  # explicit override only; else use ~/.codex
             params["sandbox"] = self._thread_sandbox_mode()
         return params
 
@@ -481,6 +501,27 @@ class CodexSDKRuntime:
             client.start()
             init = client.initialize()
             self._verify_subscription_account(client)
+            read_config = getattr(client, "config_read", None)
+            if read_config is None and hasattr(client, "request"):
+
+                def read_config(params):
+                    from pydantic import RootModel
+
+                    return client.request(
+                        "config/read", params, response_model=RootModel[dict[str, Any]]
+                    )
+
+            if read_config is not None:
+                import json
+
+                data = _payload_dict(
+                    read_config({"cwd": str(self.config.working_directory), "includeLayers": False})
+                )
+                apps = _payload_dict(data.get("config")).get("apps") or {}
+                self._reviewer_overrides = {
+                    f"apps.{json.dumps(key)}.approvals_reviewer": "user" for key in apps
+                }
+                thread_params["config"] = self._reviewer_overrides
             started = client.thread_start(thread_params)
             self._verify_subscription_provider(started)
         except Exception:
@@ -530,6 +571,20 @@ class CodexSDKRuntime:
         }
 
     def _verify_subscription_provider(self, response) -> None:
+        reviewer = _payload_value(
+            response, "approvalsReviewer", "approvals_reviewer", default="user"
+        )
+        if _status_value(reviewer) != "user":
+            raise _SubscriptionVerificationError(
+                "Codex SDK did not honor SuperQode approval mediation"
+            )
+        self.effective_policy = {
+            "owner": "Codex",
+            "host_enforcement": "approval requests only",
+            "approvalsReviewer": _status_value(reviewer),
+            "approvalPolicy": _payload_value(response, "approvalPolicy", "approval_policy"),
+            "sandbox": _payload_value(response, "sandbox"),
+        }
         if self.billing_requested != "subscription":
             return
         provider = (
@@ -544,6 +599,9 @@ class CodexSDKRuntime:
             )
 
     def _ensure_started_sync(self) -> None:
+        from .codex_policy import preflight
+
+        preflight(self.config, self._permission_manager)
         if self._client is not None and self._thread is not None:
             return
         with self._start_lock:
@@ -766,67 +824,31 @@ class CodexSDKRuntime:
         return kwargs
 
     def _approval_handler(self, method: str, params: dict[str, Any] | None) -> dict[str, Any]:
-        params = params or {}
-        tool_name, arguments = self._approval_tool_request(method, params)
-        if not tool_name:
-            return {}
-        if self._uses_default_permission_manager:
-            if self._approval_callback is not None:
-                return self._callback_approval_decision(tool_name, arguments)
-            return {
-                "decision": "reject",
-                "reason": self._interactive_approval_unavailable(tool_name),
-            }
-        permission = self._permission_manager.check_permission(tool_name, arguments)
-        if permission == Permission.ALLOW:
-            return {"decision": "accept"}
-        if permission == Permission.ASK and self._approval_callback is not None:
-            return self._callback_approval_decision(tool_name, arguments)
-        if permission == Permission.DENY:
-            reason = f"SuperQode permission policy rejected {tool_name}"
-        else:
-            reason = self._interactive_approval_unavailable(tool_name)
-        return {"decision": "reject", "reason": reason}
-
-    def _callback_approval_decision(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
+        coroutine = self._handle_server_request(method, params or {})
+        loop = self._interaction_loop
         try:
-            approved = bool(self._approval_callback(tool_name, arguments))
-        except Exception as exc:  # noqa: BLE001
-            return {
-                "decision": "reject",
-                "reason": f"SuperQode approval bridge failed for {tool_name}: {exc}",
-            }
-        if approved:
-            return {"decision": "accept"}
-        return {"decision": "reject", "reason": f"SuperQode user rejected {tool_name}"}
+            if loop is not None and loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(coroutine, loop)
+                with self._interaction_lock:
+                    self._interaction_futures.add(future)
+                    if self._cancelled:
+                        future.cancel()
+                try:
+                    return future.result()
+                finally:
+                    with self._interaction_lock:
+                        self._interaction_futures.discard(future)
+            return asyncio.run(coroutine)
+        except (asyncio.CancelledError, concurrent.futures.CancelledError):
+            return self._cancelled_server_request(method)
 
-    @staticmethod
-    def _interactive_approval_unavailable(tool_name: str) -> str:
-        return (
-            f"SuperQode codex-sdk cannot present interactive approval for {tool_name} "
-            "outside the TUI; configure Codex trust/policy in ~/.codex or pass an "
-            "explicit SuperQode PermissionManager to approve non-interactively"
-        )
-
-    def _approval_tool_request(
-        self, method: str, params: dict[str, Any]
-    ) -> tuple[str, dict[str, Any]]:
-        if method == "item/commandExecution/requestApproval":
-            command = (
-                params.get("command")
-                or params.get("cmd")
-                or params.get("script")
-                or " ".join(str(part) for part in params.get("argv", []) or [])
-            )
-            return "bash", {"command": str(command), **params}
-        if method == "item/fileChange/requestApproval":
-            path = params.get("path") or params.get("filePath") or params.get("targetPath") or ""
-            return "patch", {"path": str(path), **params}
-        return "", {}
+    def _cancel_interactions(self):
+        with self._interaction_lock:
+            for future in tuple(self._interaction_futures):
+                future.cancel()
 
     async def run(self, prompt: str) -> AgentResponse:
+        self._interaction_loop = asyncio.get_running_loop()
         return await asyncio.to_thread(self._run_sync, prompt)
 
     def _run_sync(self, prompt: str) -> AgentResponse:
@@ -878,6 +900,7 @@ class CodexSDKRuntime:
                     yield str(text)
 
     async def run_harness_events(self, prompt: str) -> AsyncIterator[HarnessEvent]:
+        self._interaction_loop = asyncio.get_running_loop()
         await asyncio.to_thread(self._turn_lock.acquire)
         try:
             self.reset_cancellation()
@@ -936,6 +959,12 @@ class CodexSDKRuntime:
     ) -> list[HarnessEvent]:
         method = getattr(notification, "method", "")
         payload = getattr(notification, "payload", None)
+        if method in {"item/started", "item/completed"}:
+            item = getattr(payload, "item", None)
+            root = getattr(item, "root", item)
+            data = _payload_dict(root)
+            if data.get("id"):
+                self._items[data["id"]] = data
         if method == "item/agentMessage/delta":
             item_id = getattr(payload, "item_id", None)
             if item_id and seen_agent_delta_item_ids is not None:
@@ -1158,6 +1187,7 @@ class CodexSDKRuntime:
 
     def cancel(self) -> None:
         self._cancelled = True
+        self._cancel_interactions()
         turn = self._active_turn
         if turn is not None:
             try:
@@ -1169,6 +1199,7 @@ class CodexSDKRuntime:
         self._cancelled = False
 
     def close(self) -> None:
+        self._cancel_interactions()
         client = self._client
         self._client = None
         self._thread = None
@@ -1211,6 +1242,8 @@ class CodexSDKRuntime:
             thread_id,
             {
                 "cwd": str(self.config.working_directory),
+                "approvalsReviewer": "user",
+                "config": getattr(self, "_reviewer_overrides", {}),
                 **({"modelProvider": "openai"} if self.billing_requested == "subscription" else {}),
                 **({"model": self.config.model} if self.config.model else {}),
             },
@@ -1224,6 +1257,8 @@ class CodexSDKRuntime:
             thread_id,
             {
                 "cwd": str(self.config.working_directory),
+                "approvalsReviewer": "user",
+                "config": getattr(self, "_reviewer_overrides", {}),
                 **({"modelProvider": "openai"} if self.billing_requested == "subscription" else {}),
                 **({"model": self.config.model} if self.config.model else {}),
             },

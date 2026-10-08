@@ -28,6 +28,23 @@ def codex_options(args, *, flags=(), values=()):
 
 
 class CodexControlsMixin:
+    def _codex_show_mcp_login(self, log, result):
+        from urllib.parse import urlsplit
+
+        url = result.get("authorizationUrl", "")
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+        ):
+            raise ValueError("Codex returned an invalid MCP authorization URL")
+        text = Text("\nCodex MCP sign-in\nOpen this authorization URL yourself:\n")
+        text.append(url)
+        text.append("\nCodex completes and stores the MCP login.")
+        log.write(text)
+
     def _codex_help(self, log):
         text = Text("\nCodex commands\n\n")
         for command, description in CODEX_COMMANDS:
@@ -35,7 +52,7 @@ class CodexControlsMixin:
         text.append(
             "\nNew controls use Codex CLI. SDK connections retain their existing session controls.\n"
             "Codex owns these inventories; SuperQode's :mcp and :skills manage separate tools.\n"
-            "Cloud, daemon, deletion, worktrees, updates and terminal customization stay in Codex CLI.\n"
+            "Cloud, deletion, worktrees, updates and terminal customization stay in Codex CLI.\n"
             "Run !codex --help to inspect your installed CLI.\n"
         )
         log.write(text)
@@ -76,6 +93,9 @@ class CodexControlsMixin:
             "pwd",
             "diff",
             "copy",
+            "history",
+            "tools",
+            "attach",
         }
         if sub not in supported:
             return False
@@ -104,10 +124,15 @@ class CodexControlsMixin:
                 "agents",
             }:
                 options = None
-                if sub == "mcp" and rest in {"reload", "verbose"}:
+                if sub == "mcp" and (rest in {"reload", "verbose"} or rest.startswith("login ")):
                     options = {}
-                elif sub == "permissions" and rest in {"on-request", "never"}:
+                elif sub == "permissions" and (
+                    rest in {"on-request", "never", "untrusted"}
+                    or rest.startswith(("profile ", "granular "))
+                ):
                     options = {}
+                    if rest.startswith("granular "):
+                        options["policy"] = {"granular": json.loads(rest.removeprefix("granular "))}
                 else:
                     flags = ("--reload",) if sub in {"skills", "plugins", "apps"} else ()
                     values = (
@@ -124,6 +149,11 @@ class CodexControlsMixin:
                     raise ValueError("Usage: :codex plan [on|off]")
             elif sub == "usage":
                 options = codex_options(rest, flags=("--tokens",))
+            elif sub == "history":
+                options = codex_options(rest, values=("--cursor",))
+            elif sub == "attach":
+                if not rest or len(shlex.split(rest)) != 1:
+                    raise ValueError("Usage: :codex attach ws://127.0.0.1:<port>|stdio")
             elif sub == "unarchive":
                 if not rest or len(rest.split()) != 1 or rest.startswith("-"):
                     raise ValueError("Usage: :codex unarchive <thread_id>")
@@ -136,7 +166,7 @@ class CodexControlsMixin:
                     f":codex {sub} requires Codex CLI. Select :connect codex to use it; your SDK connection is still active."
                 )
                 return True
-            idle_only = {"new", "plan", "login", "permissions", "unarchive"}
+            idle_only = {"new", "plan", "login", "permissions", "unarchive", "attach"}
             if (
                 sub in idle_only
                 and not (sub == "login" and rest in {"status", "cancel"})
@@ -191,10 +221,39 @@ class CodexControlsMixin:
                     )
                 else:
                     read(lambda: runtime.set_plan_mode(rest == "on"), "collaboration mode")
-            elif sub == "permissions" and rest in {"on-request", "never"}:
-                runtime.set_approval_policy(rest)
+            elif sub == "history":
+                read(
+                    lambda: runtime.thread_history(cursor=options.get("--cursor")),
+                    "earlier messages and tool history",
+                    command="history",
+                )
+            elif sub == "tools":
+                self._codex_control_result(log, "SuperQode tools", runtime._dynamic_tool_specs())
+            elif sub == "attach":
+                read(lambda: runtime.attach_server(rest), "local harness connection")
+            elif sub == "permissions" and rest.startswith("profile "):
+                profile = rest.removeprefix("profile ").strip()
+                if not profile or len(shlex.split(profile)) != 1:
+                    raise ValueError("Usage: :codex permissions profile <id>")
+                read(lambda: runtime.select_permission_profile(profile), "permission profile")
+            elif sub == "permissions" and (
+                rest in {"on-request", "never", "untrusted"} or rest.startswith("granular ")
+            ):
+                policy = options["policy"] if rest.startswith("granular ") else rest
+                runtime.set_approval_policy(policy)
                 log.add_success(
                     f"Codex approval policy: {rest} (next turn). Sandbox unchanged; :codex sandbox controls filesystem access."
+                )
+            elif sub == "mcp" and rest.startswith("login "):
+                name = rest.removeprefix("login ").strip()
+                if not name or len(shlex.split(name)) != 1:
+                    raise ValueError("Usage: :codex mcp login <server>")
+                self._codex_async_read(
+                    log,
+                    "MCP sign-in",
+                    runtime,
+                    lambda: runtime.mcp_login(name),
+                    lambda result: self._codex_show_mcp_login(log, result),
                 )
             elif sub == "mcp" and rest == "reload":
                 read(runtime.reload_mcp, "MCP configuration reloaded")

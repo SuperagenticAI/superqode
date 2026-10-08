@@ -8,11 +8,14 @@ CODEX_COMMANDS = (
     ("models", "List models available to this Codex account"),
     ("effort", "Pick or set Codex reasoning effort"),
     ("sandbox", "Set the Codex sandbox override"),
-    ("permissions", "Inspect profiles or set approval policy: on-request or never"),
+    ("permissions", "Inspect/select profiles; on-request, untrusted, never or granular policy"),
     ("plan", "Set native Codex Plan mode: on or off"),
     ("review", "Review changes, --base <branch>, or --commit <sha>"),
     ("new", "Start a fresh Codex chat, optionally with a name"),
     ("thread", "Show the current Codex thread"),
+    ("history", "Inspect earlier messages and tool calls; --cursor pages back"),
+    ("tools", "Inspect SuperQode tools exposed through Codex dynamic tools"),
+    ("attach", "Attach a user-owned local Codex daemon, or return to stdio"),
     ("sessions", "List Codex sessions; supports --archived, --all and --cursor"),
     ("resume", "Resume a Codex thread by ID or --last"),
     ("fork", "Fork the current Codex thread or a saved thread ID"),
@@ -61,6 +64,9 @@ CODEX_OPTIONS = {
     "permissions": (
         ("on-request", "Let Codex request approvals"),
         ("never", "Never request approvals; retain sandbox restrictions"),
+        ("untrusted", "Ask for commands outside Codex's trusted set"),
+        ("profile", "Select a named permission profile: follow with its ID"),
+        ("granular", "Follow with JSON approval categories"),
     ),
     "login": (
         ("--device-auth", "Sign in with a one-time device code"),
@@ -68,6 +74,7 @@ CODEX_OPTIONS = {
         ("cancel", "Cancel the pending sign-in"),
     ),
     "review": (
+        ("--detached", "Run review in a separate read-only Codex thread"),
         ("--uncommitted", "Review staged, unstaged and untracked changes"),
         ("--base", "Follow with a base branch"),
         ("--commit", "Follow with a commit SHA"),
@@ -82,6 +89,7 @@ CODEX_OPTIONS = {
     "mcp": (
         ("verbose", "Show the full Codex MCP inventory"),
         ("reload", "Reload Codex MCP configuration"),
+        ("login", "Authorize a Codex MCP server: follow with its name"),
         ("--cursor", "Follow with the returned page cursor"),
     ),
     "skills": (("--reload", "Rescan Codex skills"),),
@@ -93,6 +101,7 @@ CODEX_OPTIONS = {
     "features": (("--cursor", "Follow with the returned page cursor"),),
     "ps": (("--cursor", "Follow with the returned page cursor"),),
     "agents": (("--cursor", "Follow with the returned page cursor"),),
+    "history": (("--cursor", "Follow with the returned history cursor"),),
 }
 
 

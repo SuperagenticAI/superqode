@@ -66,6 +66,21 @@ class SupervisionMixin:
         )
         if connected:
             state = "Waiting for approval" if approvals else "Running" if self.is_busy else "Idle"
+            runtime = getattr(pure, "_runtime", None)
+            codex_status = (
+                getattr(runtime, "run_status", {})
+                if getattr(runtime, "name", "") == "codex-cli"
+                else {}
+            )
+            if codex_status:
+                state = {
+                    "active": "Running",
+                    "idle": "Idle",
+                    "systemError": "Failed",
+                    "notLoaded": "Not loaded",
+                }.get(codex_status.get("type"), state)
+                if "waitingOnApproval" in codex_status.get("activeFlags", []):
+                    state = "Waiting for approval"
             if getattr(self, "_awaiting_agent_question", False):
                 state = "Waiting for answer"
             model = getattr(self, "current_model", "") or "Not reported"

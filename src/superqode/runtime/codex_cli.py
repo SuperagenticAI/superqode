@@ -18,6 +18,10 @@ from superqode.herdr import child_env
 from superqode.tools.permissions import Permission
 
 from .codex_events import CodexEvents
+from .codex_capabilities import CodexCapabilities, probe_capabilities
+from .codex_interactions import CodexInteractions
+from .codex_host_tools import CodexHostTools
+from .codex_features import CodexFeatures
 from .codex_transport import CodexTransport
 from .errors import RuntimeNotInstalledError
 
@@ -28,7 +32,7 @@ def codex_binary(explicit: str | None = None) -> str | None:
     return shutil.which(selected)
 
 
-class CodexCLIRuntime:
+class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
     name = "codex-cli"
 
     def __init__(
@@ -40,6 +44,7 @@ class CodexCLIRuntime:
         sandbox_backend=None,
         billing_requested="agent-managed",
         codex_bin: str | None = None,
+        codex_server: str | None = None,
         request_timeout: float = 60,
         **_unused,
     ):
@@ -51,6 +56,11 @@ class CodexCLIRuntime:
                 "Install Codex CLI, then run `codex login`. Set SUPERQODE_CODEX_BIN to select its path."
             )
         self.config = config
+        self.codex_server = codex_server or os.getenv("SUPERQODE_CODEX_SERVER")
+        if self.codex_server:
+            from .codex_daemon import local_codex_endpoint
+
+            local_codex_endpoint(self.codex_server)
         self.billing_requested = billing_requested
         self.sandbox_backend = sandbox_backend
         self.session_id = config.session_id or f"codex-{uuid.uuid4().hex[:8]}"
@@ -65,6 +75,25 @@ class CodexCLIRuntime:
             permission_manager = PermissionManager(load_permission_config(config.working_directory))
         self._permission_manager = permission_manager
         self._approval_callback = approval_callback
+        self._init_interactions()
+        self.capabilities = CodexCapabilities()
+        self._permission_profile = None
+        self.run_status = {}
+        self.hook_runs = {}
+        self.last_error = None
+        self.history = []
+        self._review_delivery = None
+        self._reviewer_overrides = {
+            "apps._default.approvals_reviewer": "user",
+            "features.goals": False,
+        }
+        self._turn_read_only = False
+        self._init_host_tools(
+            _unused.get("tools"),
+            _unused.get("gateway"),
+            _unused.get("hooks"),
+            _unused.get("on_systemone"),
+        )
         self._request_timeout = request_timeout
         self._transport: CodexTransport | None = None
         self._start_lock = asyncio.Lock()
@@ -115,6 +144,8 @@ class CodexCLIRuntime:
 
     @property
     def app_server_source(self):
+        if self.codex_server:
+            return f"user-owned local Codex daemon: {self.codex_server}"
         version = (self.metadata.get("serverInfo") or {}).get("version") or self.metadata.get(
             "userAgent", ""
         )
@@ -184,12 +215,13 @@ class CodexCLIRuntime:
         if mode:
             self._sandbox(mode)
         self.sandbox_backend = mode
+        self._permission_profile = None
 
     def set_next_turn_sandbox(self, mode):
         self._sandbox(mode)
         self._next_turn_sandbox = mode
 
-    def set_review(self, prompt: str = "", *, base=None, commit=None):
+    def set_review(self, prompt: str = "", *, base=None, commit=None, detached=False):
         if sum(bool(value) for value in (prompt, base, commit)) > 1:
             raise ValueError("Choose review instructions, --base, or --commit")
         self._require_idle()
@@ -202,6 +234,7 @@ class CodexCLIRuntime:
             if prompt
             else {"type": "uncommittedChanges"}
         )
+        self._review_delivery = "detached" if detached else None
 
     def _require_idle(self):
         if self._turn_lock.locked() or self._active_turn:
@@ -211,14 +244,46 @@ class CodexCLIRuntime:
 
     def set_approval_policy(self, policy):
         self._require_idle()
-        if policy not in {"on-request", "never"}:
-            raise ValueError("Approval policy must be on-request or never")
+        if isinstance(policy, dict):
+            from jsonschema import validate
+
+            validate(
+                policy,
+                {
+                    "type": "object",
+                    "properties": {
+                        "granular": {
+                            "type": "object",
+                            "properties": {
+                                name: {"type": "boolean"}
+                                for name in (
+                                    "mcp_elicitations",
+                                    "rules",
+                                    "sandbox_approval",
+                                    "request_permissions",
+                                    "skill_approval",
+                                )
+                            },
+                            "required": ["mcp_elicitations", "rules", "sandbox_approval"],
+                            "additionalProperties": False,
+                        }
+                    },
+                    "required": ["granular"],
+                    "additionalProperties": False,
+                },
+            )
+        elif policy not in {"on-request", "never", "untrusted"}:
+            raise ValueError(
+                "Approval policy must be on-request, untrusted, never, or a granular object"
+            )
         self._approval_policy = policy
 
     async def set_plan_mode(self, enabled):
         self._require_idle()
         # Check the installed server's supported presets before selecting one.
         await self._ensure_started()
+        self.capabilities.require("collaborationMode/list")
+        self.capabilities.require("turn/start", "collaborationMode")
         result = await self._timed_request("collaborationMode/list")
         mode = "plan" if enabled else "default"
         if mode not in {item.get("mode") for item in result.get("data", [])}:
@@ -236,6 +301,17 @@ class CodexCLIRuntime:
             self._queue.put_nowait(error)
 
     def _on_notification(self, method, params):
+        if params.get("threadId") == self._thread_id:
+            if method == "thread/status/changed":
+                self.run_status = params.get("status") or {}
+            elif method in {"hook/started", "hook/completed"}:
+                run = params.get("run") or {}
+                if run.get("id"):
+                    self.hook_runs[run["id"]] = run
+                    if len(self.hook_runs) > 100:
+                        self.hook_runs.pop(next(iter(self.hook_runs)))
+            elif method == "error":
+                self.last_error = params.get("error") or params
         if (
             method in {"item/started", "item/completed"}
             and params.get("threadId") == self._thread_id
@@ -270,6 +346,7 @@ class CodexCLIRuntime:
 
     async def _timed_request(self, method, params=None):
         assert self._transport is not None
+        self.capabilities.validate(method, params or {})
         start = time.monotonic()
         try:
             return await self._transport.request(method, params)
@@ -287,7 +364,8 @@ class CodexCLIRuntime:
             if self._transport is not None:
                 return
             self._loop = asyncio.get_running_loop()
-            argv = [self.binary]
+            self.capabilities = await asyncio.to_thread(probe_capabilities, self.binary)
+            argv = [self.binary, "-c", 'approvals_reviewer="user"', "-c", "features.goals=false"]
             env = child_env()
             if self.billing_requested == "subscription":
                 from superqode.providers.subscription_env import subscription_child_env
@@ -301,6 +379,16 @@ class CodexCLIRuntime:
                 self._on_error,
                 request_timeout=self._request_timeout,
             )
+            if self.codex_server:
+                from .codex_daemon import CodexDaemonTransport
+
+                transport = CodexDaemonTransport(
+                    self._on_notification,
+                    self._server_request,
+                    self._on_error,
+                    endpoint=self.codex_server,
+                    request_timeout=self._request_timeout,
+                )
             self._transport = transport
             start = time.monotonic()
             try:
@@ -315,10 +403,34 @@ class CodexCLIRuntime:
                             "title": "SuperQode",
                             "version": __version__,
                         },
-                        "capabilities": {"experimentalApi": True},
+                        "capabilities": {"experimentalApi": self.capabilities.verified},
                     },
                 )
                 await transport.notify("initialized")
+                if self.codex_server:
+                    import re
+
+                    version = re.search(
+                        r"\d+\.\d+\.\d+",
+                        str(self.metadata.get("serverInfo") or self.metadata.get("userAgent", "")),
+                    )
+                    if (
+                        not self.capabilities.version
+                        or not version
+                        or version.group() != self.capabilities.version
+                    ):
+                        raise RuntimeError(
+                            "Local Codex daemon version does not match the installed CLI schema. Use the same Codex binary for both."
+                        )
+                if self.capabilities.supports("config/read"):
+                    data = await self._timed_request(
+                        "config/read",
+                        {"cwd": str(self.config.working_directory), "includeLayers": False},
+                    )
+                    for app_id in (data.get("config") or {}).get("apps") or {}:
+                        self._reviewer_overrides[
+                            f"apps.{json.dumps(app_id)}.approvals_reviewer"
+                        ] = "user"
                 self.timings["startup"] = (time.monotonic() - start) * 1000
             except BaseException as exc:
                 await transport.close()
@@ -354,7 +466,11 @@ class CodexCLIRuntime:
         }
 
     def _thread_params(self):
-        params: dict[str, Any] = {"cwd": str(self.config.working_directory)}
+        params: dict[str, Any] = {
+            "cwd": str(self.config.working_directory),
+            "approvalsReviewer": "user",
+        }
+        params["config"] = dict(self._reviewer_overrides)
         if self.config.model:
             params["model"] = self.config.model
         if self.billing_requested == "subscription":
@@ -363,7 +479,9 @@ class CodexCLIRuntime:
             params["modelProvider"] = self.config.provider
         if self.config.custom_system_prompt:
             params["developerInstructions"] = self.config.custom_system_prompt
-        if not self.config.tools_enabled:
+        if self._permission_profile and self.config.tools_enabled:
+            params["permissions"] = self._permission_profile
+        elif not self.config.tools_enabled:
             params["sandbox"] = "read-only"
         elif self.sandbox_backend:
             params["sandbox"] = self._thread_sandbox(self.sandbox_backend)
@@ -377,6 +495,11 @@ class CodexCLIRuntime:
         preflight(self.config, self._permission_manager)
 
     def _accept_thread(self, result, *, persisted=False):
+        if result.get("approvalsReviewer", "user") != "user":
+            self._failure = RuntimeError(
+                "Codex did not honor SuperQode approval mediation; no turn was started"
+            )
+            raise self._failure
         if self.billing_requested == "subscription" and result.get("modelProvider") != "openai":
             self.subscription_status["billing_verified"] = "unknown"
             self._failure = RuntimeError(
@@ -385,6 +508,7 @@ class CodexCLIRuntime:
             raise self._failure
         new_id = result.get("thread", {}).get("id")
         if new_id != self._thread_id:
+            self._session_consents.clear()
             if new_id != self._resume_thread_id:
                 self.token_usage = {}
                 self._usage_baseline_known = False
@@ -397,9 +521,16 @@ class CodexCLIRuntime:
         self.effective_policy.update(
             {
                 key: result.get(key)
-                for key in ("approvalPolicy", "sandbox", "activePermissionProfile")
+                for key in (
+                    "approvalPolicy",
+                    "approvalsReviewer",
+                    "sandbox",
+                    "activePermissionProfile",
+                )
             }
         )
+        self.effective_policy["approvalsReviewer"] = result.get("approvalsReviewer", "user")
+        self.history = list((result.get("thread") or {}).get("turns") or [])
         self._active_model = result.get("model") or self.config.model
         from superqode.session.codex import record_thread
 
@@ -412,7 +543,14 @@ class CodexCLIRuntime:
             if self._thread_id is None:
                 await self.verify_account()
                 params = self._thread_params()
+                if (
+                    not self._resume_thread_id
+                    and self.config.tools_enabled
+                    and self.capabilities.supports("thread/start", "dynamicTools")
+                ):
+                    params["dynamicTools"] = self._dynamic_tool_specs()
                 if self._resume_thread_id:
+                    await self._check_resume_goal(self._resume_thread_id)
                     params["threadId"] = self._resume_thread_id
                     params.pop("developerInstructions", None)
                 self._accept_thread(
@@ -459,6 +597,7 @@ class CodexCLIRuntime:
             async with self._thread_lock:
                 await self.verify_account()
                 params = {**self._thread_params(), "threadId": thread_id}
+                await self._check_resume_goal(thread_id)
                 params.pop("developerInstructions", None)
                 result = await self._timed_request(method, params)
                 self._accept_thread(result, persisted=True)
@@ -479,7 +618,12 @@ class CodexCLIRuntime:
             await self._ensure_started()
             async with self._thread_lock:
                 await self.verify_account()
-                result = await self._timed_request("thread/start", self._thread_params())
+                params = self._thread_params()
+                if self.config.tools_enabled and self.capabilities.supports(
+                    "thread/start", "dynamicTools"
+                ):
+                    params["dynamicTools"] = self._dynamic_tool_specs()
+                result = await self._timed_request("thread/start", params)
                 self._accept_thread(result)
                 self.token_usage = {}
                 self._usage_baseline_known = True
@@ -629,6 +773,9 @@ class CodexCLIRuntime:
 
     async def background_terminals(self, *, stop=False, cursor=None):
         await self._ensure_started()
+        self.capabilities.require(
+            "thread/backgroundTerminals/clean" if stop else "thread/backgroundTerminals/list"
+        )
         if not self._thread_id:
             if stop:
                 raise RuntimeError("No Codex thread is active")
@@ -653,106 +800,14 @@ class CodexCLIRuntime:
         # The TUI has one composer for approvals/questions. Keep that UI
         # serialized while the independent transport reader keeps running.
         async with self._interaction_lock:
-            return await self._handle_server_request(method, params)
-
-    async def _handle_server_request(self, method, params):
-        if method in {"item/commandExecution/requestApproval", "item/fileChange/requestApproval"}:
-            tool = "bash" if "commandExecution" in method else "patch"
-            item = self._items.get(params.get("itemId"), {})
-            changes = item.get("changes") or []
-            arguments = {
-                **params,
-                "command": params.get("command") or item.get("command", ""),
-                "path": params.get("path") or (changes[0].get("path", "") if changes else ""),
-                "changes": changes,
-            }
-            allowed = False
-            permission = (
-                self._permission_manager.check_permission(tool, arguments)
-                if self._permission_manager
-                else Permission.ASK
-            )
-            if tool == "bash" and not arguments["command"]:
-                return {"decision": "decline"}
-            if (
-                permission == Permission.ALLOW
-                and self._permission_manager.config.get_permission(tool) == Permission.ASK
-            ):
-                # A Codex escalation still needs consent even if the host's
-                # shell heuristic considers the command read-only.
-                permission = Permission.ASK
-            if tool == "patch":
-                paths = [change.get("path") for change in changes] or [arguments["path"]]
-                if not all(paths):
-                    return {"decision": "decline"}
-                if self._permission_manager:
-                    permissions = [
-                        self._permission_manager.check_permission(tool, {**arguments, "path": path})
-                        for path in paths
-                    ]
-                    permission = (
-                        Permission.DENY
-                        if Permission.DENY in permissions
-                        else Permission.ASK
-                        if Permission.ASK in permissions
-                        else Permission.ALLOW
-                    )
-            if permission == Permission.ALLOW:
-                allowed = True
-            elif permission == Permission.ASK and self._approval_callback:
-                if inspect.iscoroutinefunction(self._approval_callback):
-                    allowed = bool(await self._approval_callback(tool, arguments))
-                else:
-                    allowed = bool(
-                        await asyncio.to_thread(self._approval_callback, tool, arguments)
-                    )
-            return {"decision": "accept" if allowed else "decline"}
-        if method == "item/tool/requestUserInput":
-            from superqode.tools.question_tool import Question, QuestionType, get_question_handler
-
-            handler = get_question_handler()
-            if handler is None:
-                raise RuntimeError(
-                    "Codex requested user input outside an interactive SuperQode session"
-                )
-            answers = {}
-            for question in params.get("questions", []):
-                options = question.get("options") or []
-                try:
-                    answer = await handler(
-                        Question(
-                            question=question.get("question", ""),
-                            question_type=QuestionType.CHOICE if options else QuestionType.TEXT,
-                            options=[option["label"] for option in options],
-                            allow_custom=question.get("isOther", True),
-                        )
-                    )
-                except asyncio.CancelledError:
-                    if asyncio.current_task().cancelling():
-                        raise
-                    # Skipping the question cancels its answer future, not
-                    # the RPC task. Send an empty answer so Codex can continue.
-                    return {"answers": {}}
-                values = answer.value if isinstance(answer.value, list) else [str(answer.value)]
-                answers[question["id"]] = {"answers": values}
-            return {"answers": answers}
-        if method == "mcpServer/elicitation/request":
-            self._on_notification(
-                "warning",
-                {
-                    "message": "Codex MCP elicitation cancelled: SuperQode does not yet support this form or URL flow."
-                },
-            )
-            return {"action": "cancel", "content": None}
-        if method == "item/permissions/requestApproval":
-            self._on_notification(
-                "warning",
-                {
-                    "message": "Codex additional permissions declined: use the command approval prompt or configure the Codex sandbox."
-                },
-            )
-            return {"permissions": {}, "scope": "turn"}
-        raise RuntimeError(f"SuperQode does not support Codex server request {method}")
+            if params.get("threadId") and params["threadId"] != self._thread_id:
+                raise RuntimeError("Codex request belongs to another thread")
+            try:
+                return await self._handle_server_request(method, params)
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise
+                return self._cancelled_server_request(method)
 
     async def run_harness_events(self, prompt: str, *, images=None):
         async with self._turn_lock:
@@ -761,10 +816,37 @@ class CodexCLIRuntime:
             mapper = None
             response_text = []
             turn_finished = False
+            origin = None
             try:
                 created = await self.ensure_thread()
                 if not created:
                     await self.verify_account()
+                if self._review and self._review_delivery == "detached":
+                    # A separate read-only fork avoids Codex's deprecated detached
+                    # review delivery while preserving the main conversation.
+                    origin = (
+                        self._thread_id,
+                        self.session_id,
+                        self.token_usage,
+                        self._usage_baseline_known,
+                        dict(self.effective_policy),
+                        self.history,
+                        self._active_model,
+                        self.run_status,
+                    )
+                    params = {
+                        **self._thread_params(),
+                        "threadId": self._thread_id,
+                        "sandbox": "read-only",
+                    }
+                    params.pop("permissions", None)
+                    if self.capabilities.supports("thread/fork", "deferGoalContinuation"):
+                        params["deferGoalContinuation"] = True
+                    self._accept_thread(
+                        await self._timed_request("thread/fork", params), persisted=True
+                    )
+                    self.last_review_thread_id = self._thread_id
+                    self._review_delivery = None
                 mapper = CodexEvents(
                     baseline=(self.token_usage.get("total") or {})
                     if self._usage_baseline_known
@@ -778,7 +860,8 @@ class CodexCLIRuntime:
                 yield HarnessEvent(type="model_request", data={"runtime": self.name})
                 params = {
                     "threadId": self._thread_id,
-                    "input": [{"type": "text", "text": prompt, "text_elements": []}],
+                    "approvalsReviewer": "user",
+                    "input": await self._composer_input(prompt),
                 }
                 for image in images or ():
                     params["input"].append(
@@ -786,8 +869,12 @@ class CodexCLIRuntime:
                     )
                 if self.config.model:
                     params["model"] = self.config.model
+                if self._permission_profile and self.config.tools_enabled:
+                    params["permissions"] = self._permission_profile
                 if self._reasoning_effort:
                     params["effort"] = self._reasoning_effort
+                if isinstance(self._approval_policy, dict):
+                    self.capabilities.require("turn/start", "approvalPolicy")
                 if self._approval_policy:
                     params["approvalPolicy"] = self._approval_policy
                 if self._collaboration_mode:
@@ -801,11 +888,18 @@ class CodexCLIRuntime:
                     }
                 sandbox = (
                     "read-only"
-                    if not self.config.tools_enabled
+                    if origin or not self.config.tools_enabled
                     else self._next_turn_sandbox or self.sandbox_backend
                 )
                 self._next_turn_sandbox = None
+                self._turn_read_only = (
+                    sandbox in {"read-only", "read", "readonly"}
+                    or bool(self._permission_profile)
+                    or not sandbox
+                    and (self.effective_policy.get("sandbox") or {}).get("type") == "readOnly"
+                )
                 if sandbox or not self.config.tools_enabled:
+                    params.pop("permissions", None)
                     policy = self._turn_sandbox_policy(sandbox or "read-only")
                     params["sandboxPolicy"] = policy
                     self.effective_policy["sandbox"] = policy
@@ -817,7 +911,14 @@ class CodexCLIRuntime:
                 review, self._review = self._review, None
                 if review:
                     result = await self._timed_request(
-                        "review/start", {"threadId": self._thread_id, "target": review}
+                        "review/start",
+                        {
+                            "threadId": self._thread_id,
+                            "target": review,
+                            **(
+                                {"delivery": self._review_delivery} if self._review_delivery else {}
+                            ),
+                        },
                     )
                 else:
                     result = await self._timed_request("turn/start", params)
@@ -879,6 +980,20 @@ class CodexCLIRuntime:
                     await self._transport.cancel_server_requests()
                 self._active_turn = None
                 self._queue = None
+                if origin:
+                    (
+                        self._thread_id,
+                        self.session_id,
+                        self.token_usage,
+                        self._usage_baseline_known,
+                        self.effective_policy,
+                        self.history,
+                        self._active_model,
+                        self.run_status,
+                    ) = origin
+                    from superqode.session.codex import record_thread
+
+                    record_thread(self, {}, persisted=True)
 
     async def run_streaming(self, prompt: str):
         from contextlib import aclosing

@@ -58,6 +58,49 @@ class HelperPermissionsMixin:
             if getattr(self, "_permission_pending", False):
                 log.add_error("Another approval prompt is already pending.")
                 return False
+            decisions = arguments.get("_codex_available_decisions")
+            if decisions:
+                from superqode.tools.question_tool import (
+                    Question,
+                    QuestionType,
+                    get_question_handler,
+                )
+
+                handler = get_question_handler()
+                if handler is not None:
+                    import json
+
+                    labels, values = [], []
+                    for decision in decisions:
+                        label = (
+                            {
+                                "accept": "Approve once",
+                                "acceptForSession": "Approve this scope for this session",
+                                "decline": "Decline",
+                                "cancel": "Cancel turn",
+                            }.get(decision)
+                            if isinstance(decision, str)
+                            else "Apply persistent Codex rule: " + json.dumps(decision)
+                        )
+                        if label:
+                            labels.append(label)
+                            values.append(decision)
+                    answer = await handler(
+                        Question(
+                            question=f"Codex requests {tool_name}:\n"
+                            + json.dumps(
+                                {k: v for k, v in arguments.items() if not k.startswith("_codex")},
+                                indent=2,
+                                default=str,
+                            ),
+                            question_type=QuestionType.CHOICE,
+                            options=labels,
+                            allow_custom=False,
+                        )
+                    )
+                    return (
+                        values[labels.index(answer.value)] if answer.value in labels else "decline"
+                    )
             event = threading.Event()
             self._permission_response = None
             self._permission_response_event = event

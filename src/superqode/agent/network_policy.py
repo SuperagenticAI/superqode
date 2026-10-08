@@ -144,6 +144,29 @@ def check_network(command: str, allowlist: set[str] | None = None) -> NetworkVer
     return NetworkVerdict(status="trusted", hosts=hosts)
 
 
+def check_destination(host: str, protocol: str) -> dict | None:
+    """Check a structured Codex network destination without inventing a shell command."""
+    if not isinstance(host, str) or not host or any(c in host for c in "/@?#\\\n\r\t "):
+        return None
+    try:
+        parsed = urlparse("//" + host)
+        hostname, port = parsed.hostname, parsed.port
+    except ValueError:
+        return None
+    if not hostname:
+        return None
+    hostname = hostname.rstrip(".").lower()
+    allowed = any(
+        hostname == domain or hostname.endswith("." + domain) for domain in load_allowlist()
+    )
+    return {
+        "host": hostname,
+        "port": port or {"http": 80, "https": 443}.get(protocol),
+        "protocol": protocol,
+        "network_status": "trusted" if allowed else "untrusted",
+    }
+
+
 def strict_mode() -> bool:
     """When set, untrusted network destinations are denied rather than prompted."""
     try:

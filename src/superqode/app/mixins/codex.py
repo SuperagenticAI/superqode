@@ -557,7 +557,7 @@ class CodexMixin(CodexControlsMixin):
                     label,
                     runtime,
                     lambda: action(runtime),
-                    lambda _response: log.add_success(f"Codex {label} complete."),
+                    lambda _response: self._codex_action_complete(log, label, runtime),
                 )
                 return
             action(runtime)
@@ -565,6 +565,22 @@ class CodexMixin(CodexControlsMixin):
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Codex {label} failed: {exc}")
             self._codex_config_error_hint(log, exc)
+
+    def _codex_action_complete(self, log, label, runtime):
+        log.add_success(f"Codex {label} complete.")
+        if label.startswith(("resume", "fork")):
+            history = getattr(runtime, "history", [])
+            if history:
+                self._codex_control_result(
+                    log,
+                    "restored history",
+                    {
+                        "turns": history[-5:],
+                        "older": ":codex history",
+                    },
+                )
+            else:
+                log.add_info("Use :codex history to inspect earlier messages and tool calls.")
 
     def _codex_effort_options(self) -> list[dict[str, str]]:
         """Return stable efforts plus newer values advertised by this account.
@@ -1094,8 +1110,8 @@ class CodexMixin(CodexControlsMixin):
                     "resume last",
                     runtime,
                     resume_last,
-                    lambda result: log.add_success(
-                        f"Codex resumed {result.get('thread', {}).get('id')}"
+                    lambda result: self._codex_action_complete(
+                        log, f"resume {result.get('thread', {}).get('id')}", runtime
                     ),
                 )
             except Exception as exc:
@@ -1183,22 +1199,26 @@ class CodexMixin(CodexControlsMixin):
             if self.is_busy:
                 raise ValueError("A task is running; cancel it or wait before starting a review")
             base = commit = None
+            detached = False
             if prompt.startswith("--"):
                 options = codex_options(
-                    prompt, flags=("--uncommitted",), values=("--base", "--commit")
+                    prompt, flags=("--uncommitted", "--detached"), values=("--base", "--commit")
                 )
-                if len(options) != 1:
+                detached = options.pop("--detached", False)
+                if len(options) > 1 or not options and not detached:
                     raise ValueError("Choose --base <branch>, --commit <sha>, or --uncommitted")
                 base, commit = options.get("--base"), options.get("--commit")
                 prompt = ""
             runtime = self._codex_runtime_or_connect(log)
             if getattr(runtime, "name", "") == "codex-cli":
                 if base or commit:
-                    runtime.set_review(base=base, commit=commit)
+                    runtime.set_review(
+                        base=base, commit=commit, **({"detached": True} if detached else {})
+                    )
                 else:
-                    runtime.set_review(prompt)
+                    runtime.set_review(prompt, **({"detached": True} if detached else {}))
             else:
-                if base or commit:
+                if base or commit or detached:
                     raise ValueError("Structured review targets require :connect codex (CLI)")
                 runtime.set_next_turn_sandbox("read-only")
         except Exception as exc:  # noqa: BLE001
@@ -1248,6 +1268,25 @@ class CodexMixin(CodexControlsMixin):
                 f"  Approval    {getattr(runtime, '_approval_policy', None) or 'Codex default'}\n"
             )
             policy = getattr(runtime, "effective_policy", {})
+            text.append(f"  Reviewer    {policy.get('approvalsReviewer') or 'user (SuperQode)'}\n")
+            capabilities = getattr(runtime, "capabilities", None)
+            text.append(
+                f"  Schema      {'verified from installed CLI' if capabilities and capabilities.verified else 'unavailable; experimental controls disabled'}\n"
+            )
+            text.append(
+                f"  Profile     {getattr(runtime, '_permission_profile', None) or 'Codex default'}\n"
+            )
+            text.append(f"  Run status  {getattr(runtime, 'run_status', {}) or 'not reported'}\n")
+            text.append(
+                f"  Context     {getattr(runtime, 'context_usage', {}) or 'not reported'}\n"
+            )
+            text.append(
+                f"  Host consents {len(getattr(runtime, 'approval_receipts', ()))} receipts\n"
+            )
+            if getattr(runtime, "last_error", None):
+                from superqode.codex_commands import redact_codex_data
+
+                text.append(f"  Last error  {redact_codex_data(runtime.last_error)}\n")
             text.append("  Policy owner: Codex; SuperQode checks received approval requests.\n")
             text.append(
                 f"  Effective approval: {policy.get('approvalPolicy') or 'not reported yet'}\n"

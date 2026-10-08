@@ -1,0 +1,53 @@
+name: Codex compatibility
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/superqode/runtime/codex*.py"
+      - "src/superqode/app/mixins/codex*.py"
+      - "src/superqode/app/mixins/helper_permissions.py"
+      - "src/superqode/pure_mode.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "tests/test_codex*.py"
+      - "tests/test_runtime_codex*.py"
+      - ".github/workflows/codex-compat.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        codex: ["0.160.0", "latest"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --extra dev --extra codex-sdk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated Codex
+        env:
+          CODEX_VERSION: ${{ matrix.codex }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/codex-cli" "@openai/codex@$CODEX_VERSION"
+          echo "$RUNNER_TEMP/codex-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Protocol, approvals and integration contracts without inference
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          SUPERQODE_REQUIRE_CODEX_INTEGRATION: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_codex_cli_integration.py tests/test_runtime_codex_cli.py
+          tests/test_runtime_codex_sdk.py tests/test_codex_integration_contracts.py
+          tests/test_codex_cli_ui.py -q

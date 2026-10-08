@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex CLI and SDK share valid approval decisions, user questions and MCP
+  elicitation handling. Both apply policy preflight and pin the human reviewer,
+  including per-app overrides. Commandless network approvals display structured
+  destinations; unsupported strict host policies block tasks up front.
+- Session consent binds every argument and the current policy. Persistent
+  Codex rule changes require a second confirmation. Dynamic tool calls use the
+  host executor and invocation-scoped receipts.
+
+### Added
+
+- Installed CLI schema discovery gates experimental controls. Native dynamic
+  tools expose project memory, WorkOrder inspection and governed host MCP tools.
+- Named permission profiles, granular/untrusted policies, MCP OAuth and forms,
+  typed skill/app mentions, earlier tool history and separate read-only reviews.
+- Native run state, hook events, typed errors and context-window reporting.
+- Explicit loopback Codex app-server attachment with version checks and detach
+  behavior that preserves the user's listener.
+- Daily pinned/latest Codex compatibility CI and expanded live protocol release
+  gates with isolated storage and no model inference.
+
 ## [2.9.10] - 2026-10-08
 
 ### Fixed

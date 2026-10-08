@@ -100,6 +100,7 @@ class PureMode:
         self.on_tool_result: Optional[Callable[[str, ToolResult], None]] = None
         self.on_thinking: Optional[Callable[[str], Awaitable[None]]] = None
         self.on_stream_chunk: Optional[Callable[[str], None]] = None
+        self.on_context_usage: Optional[Callable[[dict], None]] = None
         self.on_permission_request: Optional[Callable[[str, dict[str, Any]], bool]] = None
         self.on_permission_request_async = None
         self._runtime_tool_delta_buffers: dict[tuple[str, str | None], dict[str, Any]] = {}
@@ -520,9 +521,9 @@ class PureMode:
             "muse",
         ):
             runtime_kwargs["approval_callback"] = self.on_permission_request
-            if self.runtime_name == "codex-cli" and self.on_permission_request_async:
+            if self.runtime_name in {"codex-cli", "codex-sdk"} and self.on_permission_request_async:
                 runtime_kwargs["approval_callback"] = self.on_permission_request_async
-        if self.runtime_name == "builtin":
+        if self.runtime_name in {"builtin", "codex-cli"}:
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
             runtime_kwargs["on_systemone"] = lambda event: (
                 self.on_systemone(event) if self.on_systemone else None
@@ -869,6 +870,17 @@ class PureMode:
 
     def _handle_runtime_harness_event(self, event) -> str:
         """Forward runtime harness events into PureMode callbacks."""
+        if event.type == "usage" and self.runtime_name == "codex-cli":
+            callback = getattr(self, "on_context_usage", None)
+            if callback:
+                callback(self._runtime.context_usage)
+            return ""
+        if event.type == "hook":
+            if self.on_thinking:
+                result = self.on_thinking(str(event.data.get("text") or "Codex hook updated"))
+                if inspect.isawaitable(result):
+                    asyncio.create_task(result)
+            return ""
         if event.type == "context.selection":
             if self._harness_spec is not None and self._harness_spec.runtime.backend == "pipy":
                 self.last_context_selection = dict(event.data)

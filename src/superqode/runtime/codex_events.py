@@ -19,6 +19,24 @@ class CodexEvents:
             return [HarnessEvent(type=kind, data={"source_event": method, **payload})]
 
         item_id = data.get("itemId")
+        if method == "thread/status/changed":
+            return event("run_status", status=data.get("status") or {})
+        if method in {"hook/started", "hook/completed"}:
+            run = data.get("run") or {}
+            return event(
+                "hook",
+                run=run,
+                text=f"Codex hook {run.get('eventName', '')}: {run.get('status', '')}",
+            )
+        if method == "error":
+            error = data.get("error") or {}
+            return event(
+                "error",
+                error=error.get("message", "Codex error"),
+                error_info=error.get("codexErrorInfo"),
+                will_retry=data.get("willRetry", False),
+                details=error,
+            )
         if method in {"item/agentMessage/delta", "item/plan/delta"}:
             if item_id:
                 self.text_items.add(item_id)
@@ -91,6 +109,7 @@ class CodexEvents:
                 "turn_complete",
                 status=turn.get("status", ""),
                 error=error.get("message", ""),
+                error_info=error.get("codexErrorInfo"),
                 usage=None
                 if self._usage_incomplete
                 else {

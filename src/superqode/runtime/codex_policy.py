@@ -5,6 +5,12 @@ from superqode.tools.permissions import Permission, load_permission_config
 
 
 def preflight(config, permission_manager):
+    from superqode.agent.network_policy import strict_mode
+
+    if strict_mode():
+        raise RuntimeError(
+            "Codex cannot guarantee SuperQode strict network policy for actions that do not request approval. Use Codex managed network requirements or a SuperQode-governed runtime. No Codex task was started."
+        )
     bundle = load_governance(config.working_directory)
     active = active_governance()
     for policy in (bundle, active):

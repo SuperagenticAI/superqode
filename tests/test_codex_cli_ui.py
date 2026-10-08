@@ -23,6 +23,53 @@ class Log:
     add_success = write
 
 
+def test_mcp_oauth_displays_authorization_url_but_no_other_fields():
+    from superqode.app.mixins.codex_controls import CodexControlsMixin
+
+    log = Log()
+    CodexControlsMixin()._codex_show_mcp_login(
+        log,
+        {
+            "authorizationUrl": "https://example.com/authorize?state=fixture",
+            "accessToken": "never-display-this",
+        },
+    )
+    assert "https://example.com/authorize?state=fixture" in log.items[0]
+    assert "never-display-this" not in log.items[0]
+    with pytest.raises(ValueError):
+        CodexControlsMixin()._codex_show_mcp_login(log, {"authorizationUrl": "javascript:bad"})
+
+
+@pytest.mark.asyncio
+async def test_native_approval_choice_preserves_session_and_cancel(native_app):
+    from superqode.tools.question_tool import Answer, get_question_handler, set_question_handler
+
+    app, _, _ = native_app
+    app.approval_mode = "ask"
+    app._active_plan_mode_for_current_message = False
+    app._permission_pending = False
+    pure = SimpleNamespace()
+    app._install_pure_permission_bridge(pure, Log())
+    previous = get_question_handler()
+    answer = "Approve this scope for this session"
+
+    async def choose(question):
+        assert "Cancel turn" in question.options
+        return Answer(answer)
+
+    try:
+        set_question_handler(choose)
+        params = {
+            "command": "echo ok",
+            "_codex_available_decisions": ["accept", "acceptForSession", "decline", "cancel"],
+        }
+        assert await pure.on_permission_request_async("bash", params) == "acceptForSession"
+        answer = "Cancel turn"
+        assert await pure.on_permission_request_async("bash", params) == "cancel"
+    finally:
+        set_question_handler(previous)
+
+
 @pytest.fixture
 def native_app(monkeypatch):
     app = SuperQodeApp()

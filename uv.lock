@@ -23194,6 +23194,7 @@ dependencies = [
     { name = "superopt" },
     { name = "textual" },
     { name = "uvicorn" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -23448,6 +23449,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
     { name = "uvicorn", marker = "extra == 'uhp'", specifier = ">=0.32.0" },
     { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
+    { name = "websockets", specifier = ">=15,<16" },
 ]
 provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "uhp", "adk", "openai-agents", "codex-sdk", "copilot-sdk", "claude-agent-sdk", "antigravity-sdk", "vendor-sdks", "deepagents", "pydanticai", "pydanticai-logfire", "rlm-code", "tau", "deepseek-harness", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
 

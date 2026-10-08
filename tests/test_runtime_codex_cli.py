@@ -120,6 +120,23 @@ def native_runtime(tmp_path, monkeypatch):
         return await original_spawn(sys.executable, "-u", str(script), **kwargs)
 
     monkeypatch.setattr(cli, "codex_binary", lambda explicit=None: sys.executable)
+    from superqode.runtime.codex_capabilities import CodexCapabilities
+
+    monkeypatch.setattr(
+        cli,
+        "probe_capabilities",
+        lambda binary: CodexCapabilities(
+            methods={
+                "turn/start": {
+                    "properties": {"collaborationMode": {}, "permissions": {}, "approvalPolicy": {}}
+                },
+                "thread/start": {"properties": {"dynamicTools": {}}},
+                "collaborationMode/list": {},
+                "thread/backgroundTerminals/list": {},
+                "thread/backgroundTerminals/clean": {},
+            }
+        ),
+    )
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
     runtime = CodexCLIRuntime(
         config=AgentConfig(provider="openai", model="", working_directory=tmp_path),

@@ -1,0 +1,157 @@
+"""Version-gated Codex controls and structured composer inputs."""
+
+from __future__ import annotations
+
+import re
+
+
+class CodexFeatures:
+    async def _check_resume_goal(self, thread_id):
+        # Shared listeners may have autonomous goals running independently of
+        # this client's turn stream. Do not activate one through resume/fork.
+        if self.codex_server and self.capabilities.supports("thread/goal/get"):
+            from .codex_transport import CodexRPCError
+
+            try:
+                result = await self._timed_request("thread/goal/get", {"threadId": thread_id})
+            except CodexRPCError as exc:
+                if "goals feature is disabled" in str(exc):
+                    return
+                raise
+            if (result.get("goal") or {}).get("status") == "active":
+                raise RuntimeError(
+                    "This Codex thread has an active autonomous goal. Pause it in Codex before attaching it to SuperQode."
+                )
+
+    async def attach_server(self, endpoint):
+        self._require_idle()
+        from .codex_daemon import local_codex_endpoint
+
+        endpoint = None if endpoint == "stdio" else local_codex_endpoint(endpoint)
+        self._preflight_policy()
+        async with self._turn_lock:
+            saved = self._thread_id or self._resume_thread_id
+            await self.aclose()
+            self._closed = False
+            self._failure = None
+            self._thread_id = None
+            self._resume_thread_id = saved
+            self.codex_server = endpoint
+            self._session_consents.clear()
+            await self._ensure_started()
+            return {"server": self.app_server_source, "resumeThreadId": saved}
+
+    async def select_permission_profile(self, profile):
+        self._require_idle()
+        await self._ensure_started()
+        self.capabilities.require("turn/start", "permissions")
+        cursor = None
+        while True:
+            result = await self.inspect("permissions", cursor=cursor)
+            match = next(
+                (item for item in result.get("data", []) if item.get("id") == profile), None
+            )
+            if match:
+                if match.get("allowed") is not True:
+                    raise ValueError("Codex managed requirements forbid this permission profile")
+                break
+            cursor = result.get("nextCursor")
+            if not cursor:
+                raise ValueError(f"Unknown Codex permission profile: {profile}")
+        self._require_idle()
+        self._preflight_policy()
+        self._permission_profile = profile
+        self.sandbox_backend = None
+        return {"profile": profile, "applies": "next turn"}
+
+    async def mcp_login(self, name):
+        self._require_idle()
+        await self._ensure_started()
+        self.capabilities.require("mcpServer/oauth/login")
+        return await self._timed_request(
+            "mcpServer/oauth/login",
+            {"name": name, **({"threadId": self._thread_id} if self._thread_id else {})},
+        )
+
+    async def thread_history(self, *, cursor=None):
+        await self.ensure_thread()
+        if self.capabilities.supports("thread/items/list"):
+            return await self._timed_request(
+                "thread/items/list",
+                {
+                    "threadId": self._thread_id,
+                    "limit": 50,
+                    "sortDirection": "desc",
+                    **({"cursor": cursor} if cursor else {}),
+                },
+            )
+        if cursor:
+            raise ValueError("This Codex version does not support paginated tool history")
+        return await self.read_thread(include_turns=True)
+
+    async def _composer_input(self, prompt):
+        inputs = [{"type": "text", "text": prompt, "text_elements": []}]
+        skill_names = set(re.findall(r"(?<![\w\\])\$([\w][\w.-]*)", prompt))
+        app_names = set(re.findall(r"(?<![\w\\])@([\w][\w.-]*)", prompt))
+        if not skill_names and not app_names:
+            return inputs
+        # Names resolve only against Codex's catalogs. No invented paths or
+        # shell expansion, and ordinary @file references remain plain text.
+        found = set()
+        if skill_names and self.capabilities.supports("skills/list"):
+            result = await self.inspect("skills")
+            for group in result.get("data", []):
+                for skill in group.get("skills", []):
+                    name, path = skill.get("name"), skill.get("path")
+                    if name in skill_names and path and skill.get("enabled", True):
+                        if name in found:
+                            raise ValueError(
+                                f"Ambiguous Codex skill ${name}; use an explicit skill path in Codex"
+                            )
+                        inputs.append({"type": "skill", "name": name, "path": path})
+                        found.add(name)
+        wanted_apps = app_names | (skill_names - found)
+        if wanted_apps and self.capabilities.supports("app/list"):
+            cursor, matched = None, {}
+            while True:
+                result = await self.inspect("apps", cursor=cursor)
+                for app in result.get("data", []):
+                    name, app_id = app.get("name", ""), app.get("id", "")
+                    slug = re.sub(r"[^\w.-]+", "-", name.lower()).strip("-")
+                    aliases = {app_id, slug}
+                    requested = wanted_apps & aliases
+                    if (
+                        not requested
+                        or app.get("isAccessible") is not True
+                        or app.get("isEnabled") is not True
+                    ):
+                        continue
+                    for alias in requested:
+                        if alias in matched and matched[alias] != app_id:
+                            raise ValueError(f"Ambiguous Codex app mention {alias}")
+                        matched[alias] = app_id
+                    inputs.append({"type": "mention", "name": name, "path": "app://" + app_id})
+                cursor = result.get("nextCursor")
+                if not cursor:
+                    break
+            # Codex recognizes $app-slug; SuperQode also accepts @app-slug.
+            for alias in app_names & matched.keys():
+                inputs[0]["text"] = re.sub(
+                    r"(?<![\w\\])@" + re.escape(alias) + r"(?![\w.-])",
+                    "$" + alias,
+                    inputs[0]["text"],
+                )
+        return inputs
+
+    @property
+    def context_usage(self):
+        last = self.token_usage.get("last") or {}
+        used = last.get("totalTokens")
+        window = self.token_usage.get("modelContextWindow")
+        return {
+            "used": used,
+            "window": window,
+            "percent": min(100, round(100 * used / window, 1))
+            if isinstance(used, int) and isinstance(window, int) and window > 0
+            else None,
+        }

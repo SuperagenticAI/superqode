@@ -108,31 +108,34 @@ class CodexTransport:
             if self._server_tasks.get(rid) is asyncio.current_task():
                 self._server_tasks.pop(rid, None)
 
+    def _dispatch(self, message):
+        if not isinstance(message, dict):
+            raise RuntimeError("Codex sent a non-object JSON-RPC message")
+        if "method" in message:
+            if "id" in message:
+                rid = message["id"]
+                self._server_tasks[rid] = asyncio.create_task(self._answer(message))
+            else:
+                params = message.get("params") or {}
+                if message["method"] == "serverRequest/resolved":
+                    task = self._server_tasks.pop(params.get("requestId"), None)
+                    if task:
+                        task.cancel()
+                self.on_notification(message["method"], params)
+        elif (pending := self._pending.get(message.get("id"))) is not None:
+            method, future = pending
+            if not future.done():
+                if "error" in message:
+                    future.set_exception(CodexRPCError(method, message["error"]))
+                else:
+                    future.set_result(message.get("result") or {})
+
     async def _read(self) -> None:
         assert self.process is not None and self.process.stdout is not None
         try:
             while line := await self.process.stdout.readline():
                 message = json.loads(line)
-                if not isinstance(message, dict):
-                    raise RuntimeError("Codex sent a non-object JSON-RPC message")
-                if "method" in message:
-                    if "id" in message:
-                        rid = message["id"]
-                        self._server_tasks[rid] = asyncio.create_task(self._answer(message))
-                    else:
-                        params = message.get("params") or {}
-                        if message["method"] == "serverRequest/resolved":
-                            task = self._server_tasks.pop(params.get("requestId"), None)
-                            if task:
-                                task.cancel()
-                        self.on_notification(message["method"], params)
-                elif (pending := self._pending.get(message.get("id"))) is not None:
-                    method, future = pending
-                    if not future.done():
-                        if "error" in message:
-                            future.set_exception(CodexRPCError(method, message["error"]))
-                        else:
-                            future.set_result(message.get("result") or {})
+                self._dispatch(message)
             if not self._closing:
                 raise RuntimeError("Codex app-server closed stdout unexpectedly")
         except asyncio.CancelledError:

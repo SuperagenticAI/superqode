@@ -985,6 +985,18 @@ class AgentRunMixin:
         self._pure_mode.on_tool_result = on_tool_result
         self._pure_mode.on_thinking = on_thinking_async
 
+        def on_context_usage(usage):
+            known = isinstance(usage.get("used"), int) and isinstance(usage.get("window"), int)
+
+            def update():
+                self.query_one("#status-bar", ColorfulStatusBar).update_context_usage(
+                    usage["used"] if known else 0, usage["window"] if known else 0
+                )
+
+            self._call_ui(update)
+
+        self._pure_mode.on_context_usage = on_context_usage
+
         # Ensure callbacks are set on the agent
         if self._pure_mode._agent:
             self._pure_mode._agent.on_tool_call = on_tool_call

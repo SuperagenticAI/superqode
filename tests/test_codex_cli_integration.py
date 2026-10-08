@@ -1,8 +1,10 @@
 """Pinned real-CLI protocol checks with isolated storage and no inference."""
 
 import json
+import asyncio
 import os
 import subprocess
+import socket
 import uuid
 from pathlib import Path
 
@@ -11,6 +13,73 @@ from jsonschema import Draft7Validator
 
 from superqode.agent.loop import AgentConfig
 from superqode.runtime.codex_cli import CodexCLIRuntime, codex_binary
+
+
+def test_real_sdk_pins_reviewer_and_app_overrides(installed_codex, tmp_path):
+    pytest.importorskip("openai_codex")
+    from superqode.runtime.codex_sdk import CodexSDKRuntime
+
+    runtime = CodexSDKRuntime(
+        config=AgentConfig(
+            provider="fixture",
+            model="protocol-test",
+            working_directory=tmp_path,
+            tools_enabled=False,
+        )
+    )
+    try:
+        runtime._ensure_started_sync()
+        assert runtime.thread_id
+        assert runtime.effective_policy["approvalsReviewer"] == "user"
+        assert runtime._reviewer_overrides['apps."example".approvals_reviewer'] == "user"
+    finally:
+        runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_real_cli_loopback_attach_preserves_user_listener(installed_codex, tmp_path):
+    with socket.socket() as port_picker:
+        port_picker.bind(("127.0.0.1", 0))
+        port = port_picker.getsockname()[1]
+    endpoint = f"ws://127.0.0.1:{port}"
+    process = await asyncio.create_subprocess_exec(
+        installed_codex,
+        "app-server",
+        "--listen",
+        endpoint,
+        cwd=tmp_path,
+        env=dict(os.environ),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    runtime = CodexCLIRuntime(
+        config=AgentConfig(provider="fixture", model="protocol-test", working_directory=tmp_path),
+        codex_bin=installed_codex,
+        codex_server=endpoint,
+        request_timeout=20,
+    )
+    try:
+        async with asyncio.timeout(10):
+            while True:
+                try:
+                    _, writer = await asyncio.open_connection("127.0.0.1", port)
+                    writer.close()
+                    await writer.wait_closed()
+                    break
+                except OSError:
+                    if process.returncode is not None:
+                        pytest.fail("The installed Codex daemon exited before listening")
+                    await asyncio.sleep(0.05)
+        await runtime.ensure_thread()
+        assert runtime.thread_id
+        assert runtime.effective_policy["approvalsReviewer"] == "user"
+        await runtime.aclose()
+        assert process.returncode is None
+    finally:
+        await runtime.aclose()
+        if process.returncode is None:
+            process.terminate()
+        await process.wait()
 
 
 @pytest.fixture
@@ -23,7 +92,7 @@ def installed_codex(tmp_path, monkeypatch):
     home = tmp_path / "codex-home"
     home.mkdir()
     (home / "config.toml").write_text(
-        'model = "protocol-test"\nmodel_provider = "fixture"\n[model_providers.fixture]\nname = "Local protocol fixture"\nbase_url = "http://127.0.0.1:9/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n'
+        'model = "protocol-test"\nmodel_provider = "fixture"\napprovals_reviewer = "auto_review"\n[apps._default]\napprovals_reviewer = "auto_review"\n[apps.example]\napprovals_reviewer = "auto_review"\n[model_providers.fixture]\nname = "Local protocol fixture"\nbase_url = "http://127.0.0.1:9/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n'
     )
     monkeypatch.setenv("CODEX_HOME", str(home))
     monkeypatch.delenv("SUPERQODE_ORG_POLICY", raising=False)
@@ -51,6 +120,8 @@ async def test_real_cli_thread_start_resume_and_fork(installed_codex, tmp_path, 
         await runtime.ensure_thread()
         original = runtime.thread_id
         assert original
+        assert runtime.effective_policy["approvalsReviewer"] == "user"
+        assert runtime._reviewer_overrides['apps."example".approvals_reviewer'] == "user"
         assert runtime.effective_policy["sandbox"]["type"] == runtime._sandbox(
             "read-only" if mode == "tools-off" else mode
         )
@@ -96,8 +167,10 @@ async def test_real_cli_thread_start_resume_and_fork(installed_codex, tmp_path, 
         rollout.write_text("".join(json.dumps(row) + "\n" for row in rows))
         resumed = await runtime.resume_thread(saved)
         assert resumed["thread"]["id"] == saved
+        assert resumed["approvalsReviewer"] == "user"
         forked = await runtime.fork_thread(saved)
         assert forked["thread"]["id"] != saved
+        assert forked["approvalsReviewer"] == "user"
         await runtime.aclose()
         runtime = CodexCLIRuntime(
             config=AgentConfig(

@@ -730,9 +730,39 @@ def test_default_approval_handler_rejects_without_interactive_bridge(fake_codex_
         {"command": "git status"},
     )
 
-    assert decision["decision"] == "reject"
-    assert "outside the TUI" in decision["reason"]
-    assert "~/.codex" in decision["reason"]
+    assert decision["decision"] == "decline"
+    assert decision == {"decision": "decline"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method, expected",
+    [
+        ("item/commandExecution/requestApproval", {"decision": "cancel"}),
+        ("item/tool/requestUserInput", {"answers": {}}),
+        ("mcpServer/elicitation/request", {"action": "cancel", "content": None}),
+        ("item/permissions/requestApproval", {"permissions": {}, "scope": "turn"}),
+    ],
+)
+async def test_sdk_cancel_releases_blocked_reader_prompt(
+    fake_codex_sdk, tmp_path, monkeypatch, method, expected
+):
+    import asyncio
+
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+    runtime._interaction_loop = asyncio.get_running_loop()
+    reached = asyncio.Event()
+
+    async def pending(*args):
+        reached.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(runtime, "_handle_server_request", pending)
+    worker = asyncio.create_task(asyncio.to_thread(runtime._approval_handler, method, {}))
+    await reached.wait()
+    runtime.cancel()
+    assert await asyncio.wait_for(worker, 1) == expected
+    assert not runtime._interaction_futures
 
 
 def test_approval_handler_uses_bridge_callback_when_available(fake_codex_sdk, tmp_path):
@@ -750,7 +780,9 @@ def test_approval_handler_uses_bridge_callback_when_available(fake_codex_sdk, tm
     )
 
     assert decision == {"decision": "accept"}
-    assert calls == [("bash", {"command": "git status"})]
+    assert calls[0][0] == "bash"
+    assert calls[0][1]["command"] == "git status"
+    assert "cancel" in calls[0][1]["_codex_available_decisions"]
 
 
 def test_approval_handler_rejects_when_bridge_callback_denies(fake_codex_sdk, tmp_path):
@@ -766,8 +798,8 @@ def test_approval_handler_rejects_when_bridge_callback_denies(fake_codex_sdk, tm
         {"path": "app.py"},
     )
 
-    assert decision["decision"] == "reject"
-    assert "user rejected patch" in decision["reason"]
+    assert decision["decision"] == "decline"
+    assert decision == {"decision": "decline"}
 
 
 def test_pure_mode_passes_approval_bridge_to_codex_runtime(fake_codex_sdk, tmp_path):
@@ -786,7 +818,9 @@ def test_pure_mode_passes_approval_bridge_to_codex_runtime(fake_codex_sdk, tmp_p
     )
 
     assert decision == {"decision": "accept"}
-    assert calls == [("bash", {"command": "git status"})]
+    assert calls[0][0] == "bash"
+    assert calls[0][1]["command"] == "git status"
+    assert "cancel" in calls[0][1]["_codex_available_decisions"]
 
 
 def test_make_codex_runtime_passes_approval_policy_and_session_id(fake_codex_sdk, tmp_path):
@@ -809,7 +843,8 @@ def test_make_codex_runtime_passes_approval_policy_and_session_id(fake_codex_sdk
 
     assert runtime.session_id == "custom-codex-session"
     assert decision == {"decision": "accept"}
-    assert calls == [("patch", {"path": "app.py"})]
+    assert calls[0][0] == "patch"
+    assert calls[0][1]["path"] == "app.py"
 
 
 def test_pure_mode_forwards_codex_tool_events_to_callbacks(fake_codex_sdk, tmp_path):
@@ -939,8 +974,8 @@ def test_approval_handler_rejects_ask_policy_without_interactive_bridge(fake_cod
         {"path": "app.py"},
     )
 
-    assert decision["decision"] == "reject"
-    assert "interactive approval" in decision["reason"]
+    assert decision["decision"] == "decline"
+    assert decision == {"decision": "decline"}
 
 
 def test_empty_model_defers_to_local_codex_config(fake_codex_sdk, tmp_path):
@@ -1096,7 +1131,12 @@ def test_runtime_retries_with_compatible_effort_for_newer_config(
     runtime = create_runtime("codex-sdk", config=_config(tmp_path))
     assert runtime.metadata.userAgent == "fake-codex"
     assert attempts[0].closed is True
-    assert attempts[1].config.config_overrides == ('model_reasoning_effort="xhigh"',)
+    assert attempts[1].config.config_overrides == (
+        'model_reasoning_effort="xhigh"',
+        'approvals_reviewer="user"',
+        'apps._default.approvals_reviewer="user"',
+        "features.goals=false",
+    )
     assert runtime._app_server_config_overrides == ('model_reasoning_effort="xhigh"',)
 
 

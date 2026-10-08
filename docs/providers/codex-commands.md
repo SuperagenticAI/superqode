@@ -3,7 +3,7 @@
 Checked on **2026-10-08** against installed **codex-cli 0.160.0** on macOS arm64.
 The audit read all **72 named CLI command paths** (plus root help), **26 top-level commands**, and **62 slash-command variants** in the matching release source. Hidden/debug/platform-gated slash variants are included in the source count; they are not all shown in every Codex menu. The generated app-server JSON schemas were also inspected.
 
-SuperQode 2.8.0 exposed 15 primary `:codex` subcommands. SuperQode 2.9.0 exposes **38**, including help and client aliases. This is useful command coverage, not full Codex CLI or TUI parity. Upgrade to 2.9.0 for these additions and the repository harness precedence fix.
+SuperQode 2.8.0 exposed 15 primary `:codex` subcommands. The current command catalog exposes **41**, including help and client aliases. This is command coverage, not full Codex CLI or TUI parity. See [Codex integration](codex.md) for approval boundaries and native controls.
 
 ## Sources
 
@@ -42,9 +42,16 @@ Connect with `:connect codex`, then enter `:codex help`. SDK connections retain 
 :codex ps
 :codex stop
 :codex cancel
+:codex tools
+:codex history
+:codex permissions profile <id>
+:codex permissions untrusted
+:codex mcp login <server>
+:codex review --detached --base main
+:codex attach ws://127.0.0.1:4500
 ```
 
-Inspection commands expose Codex-owned resources. SuperQode's `:mcp`, `:skills`, and plugin tooling manage separate host resources. Listing a skill, app or plugin does not enable it, install it or insert a mention.
+Inspection commands expose Codex-owned resources. SuperQode's `:mcp`, `:skills`, and plugin tooling manage separate host resources. Enabled catalog entries can be invoked with `$skill-name` and `$app-slug` or `@app-slug` in the composer. Listing alone does not enable or install an entry.
 
 Plan mode selects a Codex collaboration preset for future turns. Approval policy and sandbox are separate controls; selecting `never` does not grant extra filesystem access. Managed Codex requirements still apply. These overrides are per connection and are not written to Codex configuration files.
 
@@ -63,7 +70,7 @@ Inventory/session pages show a `--cursor` continuation command when available. S
 | `codex review` | Native | `:codex review [instructions]`, `--uncommitted`, `--base <branch>` or `--commit <sha>`. |
 | `codex login` | Native | `:codex login`, `:codex login --device-auth`, `status` and `cancel`. ChatGPT sign-in only. |
 | `codex logout` | Native | `:codex logout`. |
-| `codex mcp` | Partial | `:codex mcp [verbose]` inventories Codex servers/tools; `:codex mcp reload` reloads configuration. Add/remove/OAuth management remains in Codex CLI. |
+| `codex mcp` | Partial | `:codex mcp [verbose]` inventories servers/tools; `reload` reloads configuration; `login <server>` starts OAuth. Add/remove/logout remain in Codex CLI. |
 | `codex plugin` | Partial | `:codex plugins [--reload]` lists plugins. Install/remove and marketplace management remain in Codex CLI. |
 | `codex app-server` | Internal | The persistent stdio app-server powers the integration. Daemon/proxy management and schema generators stay in Codex CLI. |
 | `codex remote-control` | CLI | Daemon pairing/start/stop remain in Codex CLI; SuperQode currently owns a local stdio process. |
@@ -115,7 +122,7 @@ Aliases `e` (`exec`) and `a` (`apply`) do not add independent behavior. The inst
 | --- | --- | --- |
 | `/model` | Native | `:codex model`, `:codex models`, `:codex effort` (`reasoning` alias). |
 | `/ide` | Client | Use SuperQode's file context; automatic Codex IDE selection/open-file integration is deferred. |
-| `/permissions` | Partial | `:codex permissions` lists profiles; `on-request` / `never` select turn approval policy. `:codex sandbox` selects the sandbox. Named profile selection is deferred. |
+| `/permissions` | Native | `:codex permissions` lists profiles; `profile <id>` selects one. `on-request`, `untrusted`, `never` and `granular <json>` select approval policy. `:codex sandbox` selects a sandbox instead of a named profile. |
 | `/keymap` | Client/CLI | Codex terminal presentation, keyboard/device or platform setup belongs to its client. Use SuperQode's corresponding UI settings where available; exact behavior is not mirrored. |
 | `/vim` | Client/CLI | Codex terminal presentation, keyboard/device or platform setup belongs to its client. Use SuperQode's corresponding UI settings where available; exact behavior is not mirrored. |
 | `/setup-default-sandbox` | Client/CLI | Codex terminal presentation, keyboard/device or platform setup belongs to its client. Use SuperQode's corresponding UI settings where available; exact behavior is not mirrored. |
@@ -150,7 +157,7 @@ Aliases `e` (`exec`) and `a` (`apply`) do not add independent behavior. The inst
 | `/diff` | Client | `:codex diff` delegates to SuperQode's workspace diff review, including its existing staged/unstaged/untracked behavior. |
 | `/mention` | Client | Use SuperQode file mentions and attachments in its composer; there is no `:codex mention` picker. |
 | `/status` | Native | `:codex status [--probe]`, `:codex thread`, `:codex account`; local connection and live RPC diagnostics. |
-| `/daemon` | CLI | Shared background server management remains in Codex CLI. |
+| `/daemon` | Partial | `:codex attach ws://127.0.0.1:<port>` attaches an explicitly selected user-owned listener. Startup, shutdown and remote pairing remain in Codex CLI. |
 | `/warnings` | Partial | Turn warnings render in the event stream; a retained-warning browser is not implemented. |
 | `/cd` | Deferred | Codex cwd changes must coordinate SuperQode workspace and permissions. `pwd` is available; change the SuperQode workspace before reconnecting. |
 | `/pwd`, `/cwd` | Native | `:codex pwd` (`cwd` alias) shows the executing Codex directory. |
@@ -161,7 +168,7 @@ Aliases `e` (`exec`) and `a` (`apply`) do not add independent behavior. The inst
 | `/theme` | Client/CLI | Codex terminal presentation, keyboard/device or platform setup belongs to its client. Use SuperQode's corresponding UI settings where available; exact behavior is not mirrored. |
 | `/pets`, `/pet` | Client/CLI | Codex terminal presentation, keyboard/device or platform setup belongs to its client. Use SuperQode's corresponding UI settings where available; exact behavior is not mirrored. |
 | `/mcp` | Inspect | `:codex mcp [verbose]` and `:codex mcp reload`. |
-| `/apps` | Inspect | `:codex apps [--reload]`; app mentions, install and OAuth UX remain in Codex CLI. |
+| `/apps` | Partial | `:codex apps [--reload]`; accessible enabled app mentions resolve in the composer. Install and app OAuth management remain in Codex CLI. |
 | `/plugins` | Inspect | `:codex plugins [--reload]`; install/remove/toggles remain in Codex CLI. |
 | `/logout` | Native | `:codex logout`. |
 | `/quit` | Client | Exit SuperQode with its own quit control; no vendor exit command is sent. |
@@ -182,4 +189,13 @@ Automated checks cover async UI responsiveness, rejected invalid options before 
 
 A live signed-out smoke test with an isolated `CODEX_HOME` on 0.160.0 verified skills, hooks, feature flags, permissions, MCP status, effective configuration/requirements, Plan preset discovery and doctor JSON. Metadata created no thread; guarded fresh-chat creation refused the signed-out account before `thread/start`. Doctor reported the expected unhealthy state for an empty installation home. No real login, model inference, cloud task, plugin installation or user-session mutation was performed.
 
-Priorities for another integration pass: app/skill mention selection and plugin management; native queued-turn event routing; goal/side-chat lifecycle; permission profile selection and MCP OAuth/elicitation; paginated Markdown transcript export; cloud/worktree handoffs. These require UI and lifecycle work beyond mapping command names.
+Installed-schema checks gate experimental controls. Daily CI checks both pinned
+0.160.0 and `@openai/codex@latest`, including real thread/reviewer/daemon protocol
+checks with isolated storage and no inference. Publish includes the approval and
+dynamic-tool regression contracts.
+
+Remaining separate lifecycle work: unattended native goals, queued turns,
+side chats, transcript export, plugin mutation and cloud/worktree handoffs.
+SuperQode does not expose sandbox-bypassing shell/process RPCs, copy ChatGPT
+tokens or write persistent Codex configuration. Built-in Codex actions that do
+not ask for approval remain governed by Codex rather than the host executor.
