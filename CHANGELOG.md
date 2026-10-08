@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Read-only SDK inventories remain available under strict host network policy.
 - Document the local server environment variable and check reference coverage
   in main CI and the publish gate.
+- Session approval consent ignores changes to Codex's explanation while
+  retaining the action scope. Descendant listings require installed-schema
+  support, and history on a fresh thread displays a clean empty-state message.
 
 ### Added
 

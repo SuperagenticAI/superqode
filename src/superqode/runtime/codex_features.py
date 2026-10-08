@@ -110,13 +110,18 @@ class CodexFeatures:
 
     async def thread_history(self, *, cursor=None):
         await self.ensure_thread()
+        from .codex_transport import CodexRPCError
+
+        empty = {
+            "data": [],
+            "nextCursor": None,
+            "message": "No messages or tool history available yet. Send a prompt to begin.",
+        }
         if self.capabilities.supports("thread/items/list") and not getattr(
             self, "_history_paging_unavailable", False
         ):
-            from .codex_transport import CodexRPCError
-
             try:
-                return await self._timed_request(
+                result = await self._timed_request(
                     "thread/items/list",
                     {
                         "threadId": self._thread_id,
@@ -125,13 +130,33 @@ class CodexFeatures:
                         **({"cursor": cursor} if cursor else {}),
                     },
                 )
+                if not result.get("data") and not result.get("nextCursor"):
+                    return {
+                        **result,
+                        "message": "No messages or tool history available on this page."
+                        if cursor
+                        else empty["message"],
+                    }
+                return result
             except CodexRPCError as exc:
+                if "is not materialized yet;" in str(exc) and "before first user message" in str(
+                    exc
+                ):
+                    return empty
                 if exc.code != -32601 and "not supported yet" not in str(exc).lower():
                     raise
                 self._history_paging_unavailable = True
         if cursor:
             raise ValueError("This Codex version does not support paginated tool history")
-        return await self.read_thread(include_turns=True)
+        try:
+            result = await self.read_thread(include_turns=True)
+        except CodexRPCError as exc:
+            if "is not materialized yet;" in str(exc) and "before first user message" in str(exc):
+                return empty
+            if not self._thread_persisted and "list_turns is not supported yet" in str(exc):
+                return empty
+            raise
+        return result if (result.get("thread") or {}).get("turns") else {**result, **empty}
 
     async def _composer_input(self, prompt):
         inputs = [{"type": "text", "text": prompt, "text_elements": []}]

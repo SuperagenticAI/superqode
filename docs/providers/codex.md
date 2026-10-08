@@ -130,8 +130,10 @@ policy revision; it does not become a blanket tool permission. Persistent
 Codex rule amendments require a second explicit confirmation. SuperQode pins
 the human reviewer on threads, turns and configured apps; it refuses a thread
 that reports a different reviewer. Status distinguishes the requested reviewer
-from a reviewer confirmed by a thread response. Session consent ignores RPC ids
-and timestamps while retaining the command, destination, paths and permissions.
+from a reviewer confirmed by a thread response. Session consent ignores RPC ids,
+timestamps and Codex's explanatory reason while retaining the command,
+destination, paths and permissions. Host tool arguments named `reason` still
+participate in consent scope.
 
 MCP elicitation supports validated JSON forms and manually completed URL flows.
 Use `:codex mcp login <server>` for Codex-owned MCP OAuth. Codex stores the login;
@@ -170,7 +172,9 @@ Existing threads restore their persisted dynamic tool definitions. Start a
 fresh thread with `:codex new` to advertise tools added after that thread was
 created. `:codex history` pages earlier messages and tool calls when implemented
 by the server. Codex 0.160 advertises paging but returns "not supported yet";
-SuperQode falls back to `thread/read`, without pagination. Explicit resume also
+SuperQode falls back to `thread/read`, without pagination. Fresh threads show a
+plain empty-history message. Descendant agent listings require support for the
+ancestor filter in the installed schema. Explicit resume also
 displays recent stored turns. Detached review forks saved conversations into a
 separate read-only thread. For a fresh, unsaved conversation it starts a separate
 read-only thread instead, and preserves the original conversation's unsaved state.

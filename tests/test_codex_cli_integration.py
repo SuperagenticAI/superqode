@@ -43,6 +43,25 @@ def test_real_sdk_pins_reviewer_and_app_overrides(installed_codex, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_real_cli_fresh_history_is_empty_and_descendants_are_supported(
+    installed_codex, tmp_path
+):
+    runtime = CodexCLIRuntime(
+        config=AgentConfig(provider="fixture", model="protocol-test", working_directory=tmp_path),
+        codex_bin=installed_codex,
+        request_timeout=20,
+    )
+    try:
+        result = await runtime.thread_history()
+        assert result["data"] == []
+        assert "No messages or tool history" in result["message"]
+        assert not runtime._thread_persisted
+        assert (await runtime.list_threads(descendants=True))["data"] == []
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
 async def test_real_cli_loopback_attach_preserves_user_listener(installed_codex, tmp_path):
     with socket.socket() as port_picker:
         port_picker.bind(("127.0.0.1", 0))

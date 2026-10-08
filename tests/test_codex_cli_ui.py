@@ -23,6 +23,23 @@ class Log:
     add_success = write
 
 
+def test_empty_codex_history_displays_a_message_without_raw_protocol_data():
+    from superqode.app.mixins.codex_controls import CodexControlsMixin
+
+    log = Log()
+    CodexControlsMixin()._codex_control_result(
+        log,
+        "history",
+        {
+            "data": [],
+            "nextCursor": None,
+            "message": "No messages or tool history available yet.",
+        },
+        command="history",
+    )
+    assert log.items == ["No messages or tool history available yet."]
+
+
 def test_mcp_oauth_displays_authorization_url_but_no_other_fields():
     from superqode.app.mixins.codex_controls import CodexControlsMixin
 

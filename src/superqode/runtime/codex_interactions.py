@@ -57,6 +57,10 @@ class CodexInteractions:
             if tool in {"bash", "patch", "network", "codex_permissions", "mcp_elicitation"}
             else set()
         )
+        if tool in {"bash", "patch", "network"}:
+            # Codex's explanation is presentation metadata. The action still
+            # binds command, cwd, paths, destinations and requested permissions.
+            rpc_metadata.add("reason")
         scope = {
             key: value
             for key, value in args.items()

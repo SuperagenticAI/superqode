@@ -131,6 +131,7 @@ def native_runtime(tmp_path, monkeypatch):
                     "properties": {"collaborationMode": {}, "permissions": {}, "approvalPolicy": {}}
                 },
                 "thread/start": {"properties": {"dynamicTools": {}}},
+                "thread/list": {"properties": {"ancestorThreadId": {}, "sourceKinds": {}}},
                 "collaborationMode/list": {},
                 "thread/backgroundTerminals/list": {},
                 "thread/backgroundTerminals/clean": {},

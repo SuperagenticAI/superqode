@@ -58,6 +58,14 @@ class CodexControlsMixin:
         log.write(text)
 
     def _codex_control_result(self, log, label, result, *, command=None):
+        if (
+            command == "history"
+            and isinstance(result, dict)
+            and result.get("message")
+            and result.get("data") == []
+        ):
+            log.add_info(result["message"])
+            return
         safe = redact_codex_data(result)
         content = json.dumps(safe, indent=2, ensure_ascii=False, default=str)
         text = Text(f"\nCodex {label}\n\n")

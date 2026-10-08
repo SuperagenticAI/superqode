@@ -113,11 +113,17 @@ async def test_session_consent_is_exact_scope_and_invalidates_on_policy_change(r
     seen = []
     runtime._approval_callback = lambda *args: seen.append(args) or "acceptForSession"
     method = "item/commandExecution/requestApproval"
-    params = {"command": "echo first", "cwd": "/project", "itemId": "a", "startedAtMs": 1}
-    assert await runtime._server_request(method, params) == {"decision": "accept"}
-    assert await runtime._server_request(method, {**params, "itemId": "b", "startedAtMs": 2}) == {
-        "decision": "accept"
+    params = {
+        "command": "echo first",
+        "cwd": "/project",
+        "itemId": "a",
+        "startedAtMs": 1,
+        "reason": "Check the workspace",
     }
+    assert await runtime._server_request(method, params) == {"decision": "accept"}
+    assert await runtime._server_request(
+        method, {**params, "itemId": "b", "startedAtMs": 2, "reason": "Inspect the project"}
+    ) == {"decision": "accept"}
     assert len(seen) == 1
     assert len(runtime.approval_receipts) == 2
     assert await runtime._server_request(method, {**params, "command": "echo second"}) == {
@@ -127,6 +133,69 @@ async def test_session_consent_is_exact_scope_and_invalidates_on_policy_change(r
     runtime._permission_manager.config.tools["bash"] = Permission.DENY
     assert await runtime._server_request(method, params) == {"decision": "decline"}
     assert len(seen) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,scope,changed",
+    [
+        ("item/fileChange/requestApproval", {"path": "/project/a.txt"}, {"path": "/project/b.txt"}),
+        (
+            "item/commandExecution/requestApproval",
+            {"networkApprovalContext": {"host": "github.com:443", "protocol": "https"}},
+            {"networkApprovalContext": {"host": "example.com:443", "protocol": "https"}},
+        ),
+    ],
+)
+async def test_session_consent_ignores_explanation_but_retains_paths_and_destinations(
+    runtime, method, scope, changed
+):
+    seen = []
+    runtime._approval_callback = lambda *args: seen.append(args) or "acceptForSession"
+    for reason in ("First explanation", "Reworded explanation"):
+        assert await runtime._server_request(method, {**scope, "reason": reason}) == {
+            "decision": "accept"
+        }
+    assert len(seen) == 1
+    assert await runtime._server_request(method, {**changed, "reason": "Reworded explanation"}) == {
+        "decision": "accept"
+    }
+    assert len(seen) == 2
+
+
+@pytest.mark.asyncio
+async def test_host_tool_reason_argument_still_changes_consent_scope(runtime):
+    seen = []
+    runtime._approval_callback = lambda *args: seen.append(args) or "acceptForSession"
+    for reason in ("First argument", "Different argument"):
+        assert (
+            await runtime._approval_choice(
+                "mcp_example_tool", {"arguments": {"reason": reason}}, Permission.ASK
+            )
+            == "accept"
+        )
+    assert len(seen) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("properties", [None, {}, {"ancestorThreadId": {}}])
+async def test_descendants_refuse_missing_schema_fields_without_sending_rpc(
+    runtime, monkeypatch, properties
+):
+    from unittest.mock import AsyncMock
+
+    runtime._thread_id = "parent"
+    runtime.capabilities = CodexCapabilities(
+        methods={} if properties is None else {"thread/list": {"properties": properties}}
+    )
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    request = AsyncMock(return_value={"data": []})
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    with pytest.raises(RuntimeError, match="does not advertise thread/list"):
+        await runtime.list_threads(descendants=True)
+    request.assert_not_awaited()
+    # The baseline session list remains available on older schemas.
+    assert await runtime.list_threads() == {"data": []}
 
 
 @pytest.mark.asyncio
@@ -573,6 +642,66 @@ async def test_history_falls_back_only_for_unimplemented_paging(runtime, monkeyp
         "thread/items/list", {"code": -32000, "message": "disconnected"}
     )
     with pytest.raises(CodexRPCError, match="disconnected"):
+        await runtime.thread_history()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("paged", [True, False])
+@pytest.mark.parametrize("error", [True, False])
+async def test_empty_history_handles_only_unmaterialized_thread_errors(
+    runtime, monkeypatch, paged, error
+):
+    from unittest.mock import AsyncMock
+    from superqode.runtime.codex_transport import CodexRPCError
+
+    monkeypatch.setattr(runtime, "ensure_thread", AsyncMock())
+    runtime.capabilities = CodexCapabilities(methods={"thread/items/list": {}} if paged else {})
+    response = (
+        {"data": [], "nextCursor": None, "backwardsCursor": "previous"}
+        if paged
+        else {"thread": {"id": "fresh", "turns": []}}
+    )
+    request = AsyncMock(return_value=response)
+    monkeypatch.setattr(runtime, "_timed_request" if paged else "read_thread", request)
+    if error:
+        request.side_effect = CodexRPCError(
+            "thread/read",
+            {
+                "code": -32600,
+                "message": "thread fresh is not materialized yet; includeTurns is unavailable before first user message",
+            },
+        )
+    result = await runtime.thread_history()
+    assert result["data"] == []
+    assert "No messages or tool history" in result["message"]
+    if paged and not error:
+        assert result["backwardsCursor"] == "previous"
+    request.side_effect = CodexRPCError(
+        "thread/read", {"code": -32000, "message": "permission denied"}
+    )
+    with pytest.raises(CodexRPCError, match="permission denied"):
+        await runtime.thread_history()
+
+
+@pytest.mark.asyncio
+async def test_fresh_history_handles_codex_0160_list_turns_limitation(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+    from superqode.runtime.codex_transport import CodexRPCError
+
+    monkeypatch.setattr(runtime, "ensure_thread", AsyncMock())
+    monkeypatch.setattr(
+        runtime,
+        "read_thread",
+        AsyncMock(
+            side_effect=CodexRPCError(
+                "thread/read",
+                {"code": -32601, "message": "list_turns is not supported yet"},
+            )
+        ),
+    )
+    assert (await runtime.thread_history())["data"] == []
+    runtime._thread_persisted = True
+    with pytest.raises(CodexRPCError, match="list_turns"):
         await runtime.thread_history()
 
 

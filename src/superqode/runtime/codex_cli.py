@@ -588,6 +588,8 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         if descendants:
             if not self._thread_id:
                 return {"data": []}
+            self.capabilities.require("thread/list", "ancestorThreadId")
+            self.capabilities.require("thread/list", "sourceKinds")
             params["ancestorThreadId"] = self._thread_id
             params["sourceKinds"] = [
                 "subAgent",
