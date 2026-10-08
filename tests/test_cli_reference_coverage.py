@@ -246,6 +246,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "acp": "providers/acp.md",
         "open-browse-acp": "concepts/modes.md",
         "codex": "providers/codex.md",
+        "codex-sdk": "providers/codex.md",
         "copilot": "providers/github-copilot.md",
         "cursor": "concepts/modes.md",
         "amp": "concepts/modes.md",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import shutil
 import time
@@ -55,6 +56,7 @@ class CodexCLIRuntime:
         self.session_id = config.session_id or f"codex-{uuid.uuid4().hex[:8]}"
         self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
         self.rate_limits: dict[str, Any] = {}
+        self.token_usage: dict[str, Any] = {}
         self.timings: dict[str, float] = {}
         self.metadata: dict[str, Any] = {}
         self._permission_manager = permission_manager
@@ -69,6 +71,10 @@ class CodexCLIRuntime:
         self._active_turn: str | None = None
         self._active_model = ""
         self._reasoning_effort: str | None = config.reasoning_effort
+        self._collaboration_mode: str | None = None
+        self._approval_policy: str | None = None
+        self._login_id: str | None = None
+        self.login_status: dict[str, Any] = {}
         self._next_turn_sandbox: str | None = None
         self._review: dict[str, Any] | None = None
         self._queue: asyncio.Queue | None = None
@@ -146,10 +152,43 @@ class CodexCLIRuntime:
         self._sandbox(mode)
         self._next_turn_sandbox = mode
 
-    def set_review(self, prompt: str = ""):
+    def set_review(self, prompt: str = "", *, base=None, commit=None):
+        if sum(bool(value) for value in (prompt, base, commit)) > 1:
+            raise ValueError("Choose review instructions, --base, or --commit")
+        self._require_idle()
         self._review = (
-            {"type": "custom", "instructions": prompt} if prompt else {"type": "uncommittedChanges"}
+            {"type": "baseBranch", "branch": base}
+            if base
+            else {"type": "commit", "sha": commit}
+            if commit
+            else {"type": "custom", "instructions": prompt}
+            if prompt
+            else {"type": "uncommittedChanges"}
         )
+
+    def _require_idle(self):
+        if self._turn_lock.locked() or self._active_turn:
+            raise RuntimeError(
+                "A Codex turn is running; cancel it or wait before changing the session"
+            )
+
+    def set_approval_policy(self, policy):
+        self._require_idle()
+        if policy not in {"on-request", "never"}:
+            raise ValueError("Approval policy must be on-request or never")
+        self._approval_policy = policy
+
+    async def set_plan_mode(self, enabled):
+        self._require_idle()
+        # Check the installed server's supported presets before selecting one.
+        await self._ensure_started()
+        result = await self._timed_request("collaborationMode/list")
+        mode = "plan" if enabled else "default"
+        if mode not in {item.get("mode") for item in result.get("data", [])}:
+            raise RuntimeError(f"This Codex CLI does not advertise {mode} collaboration mode")
+        self._require_idle()
+        self._collaboration_mode = mode
+        return {"mode": mode, "applies": "next turn"}
 
     def _on_error(self, error):
         self._failure = error
@@ -162,8 +201,14 @@ class CodexCLIRuntime:
     def _on_notification(self, method, params):
         if method == "account/updated":
             self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
+        elif method == "account/login/completed":
+            self.login_status = {key: params.get(key) for key in ("success", "error")}
+            if params.get("loginId") == self._login_id:
+                self._login_id = None
         elif method == "account/rateLimits/updated":
             self.rate_limits = params.get("rateLimits") or params
+        elif method == "thread/tokenUsage/updated" and params.get("threadId") == self._thread_id:
+            self.token_usage = params.get("tokenUsage") or {}
         if self._queue is None:
             return
         if params.get("threadId") not in {None, self._thread_id}:
@@ -286,7 +331,10 @@ class CodexCLIRuntime:
                 "Codex resolved a different provider. No API billing fallback was attempted."
             )
             raise self._failure
-        self._thread_id = result.get("thread", {}).get("id")
+        new_id = result.get("thread", {}).get("id")
+        if new_id != self._thread_id:
+            self.token_usage = {}
+        self._thread_id = new_id
         if not self._thread_id:
             raise RuntimeError("Codex response did not include a thread id")
         self._active_model = result.get("model") or self.config.model
@@ -306,12 +354,27 @@ class CodexCLIRuntime:
         await self._ensure_started()
         return await self._timed_request("model/list", {"includeHidden": include_hidden})
 
-    async def list_threads(self, *, limit=20, archived=False):
+    async def list_threads(
+        self, *, limit=20, archived=False, cursor=None, all_cwds=False, descendants=False
+    ):
         await self._ensure_started()
-        return await self._timed_request(
-            "thread/list",
-            {"limit": limit, "archived": archived, "cwd": str(self.config.working_directory)},
-        )
+        params = {"limit": limit, "archived": archived, "sortKey": "updated_at"}
+        if not all_cwds:
+            params["cwd"] = str(self.config.working_directory)
+        if cursor:
+            params["cursor"] = cursor
+        if descendants:
+            if not self._thread_id:
+                return {"data": []}
+            params["ancestorThreadId"] = self._thread_id
+            params["sourceKinds"] = [
+                "subAgent",
+                "subAgentReview",
+                "subAgentCompact",
+                "subAgentThreadSpawn",
+                "subAgentOther",
+            ]
+        return await self._timed_request("thread/list", params)
 
     async def _load_thread(self, method, thread_id):
         async with self._turn_lock:
@@ -330,6 +393,18 @@ class CodexCLIRuntime:
     async def fork_thread(self, thread_id):
         return await self._load_thread("thread/fork", thread_id)
 
+    async def new_thread(self, name=""):
+        self._require_idle()
+        async with self._turn_lock:
+            await self._ensure_started()
+            async with self._thread_lock:
+                await self.verify_account()
+                result = await self._timed_request("thread/start", self._thread_params())
+                self._accept_thread(result)
+            if name:
+                await self.rename_thread(name)
+            return result
+
     async def read_thread(self, *, include_turns=False):
         await self.ensure_thread()
         return await self._timed_request(
@@ -343,17 +418,141 @@ class CodexCLIRuntime:
         )
 
     async def compact_thread(self):
-        await self.ensure_thread()
-        return await self._timed_request("thread/compact/start", {"threadId": self._thread_id})
+        self._require_idle()
+        async with self._turn_lock:
+            await self.ensure_thread()
+            return await self._timed_request("thread/compact/start", {"threadId": self._thread_id})
 
     async def archive_thread(self, thread_id):
+        self._require_idle()
+        async with self._turn_lock:
+            await self._ensure_started()
+            result = await self._timed_request("thread/archive", {"threadId": thread_id})
+            if thread_id == self._thread_id:
+                self._thread_id = None
+                self._active_model = ""
+                self.token_usage = {}
+            return result
+
+    async def unarchive_thread(self, thread_id):
         await self._ensure_started()
-        return await self._timed_request("thread/archive", {"threadId": thread_id})
+        return await self._timed_request("thread/unarchive", {"threadId": thread_id})
+
+    async def login(self, *, device=False):
+        self._require_idle()
+        async with self._turn_lock:
+            await self._ensure_started()
+            if self._login_id:
+                raise RuntimeError("A Codex login is pending; finish it or use :codex login cancel")
+            result = await self._timed_request(
+                "account/login/start", {"type": "chatgptDeviceCode" if device else "chatgpt"}
+            )
+            self._login_id = result.get("loginId")
+            self.login_status = {"pending": True}
+            return result
+
+    async def cancel_login(self):
+        await self._ensure_started()
+        if not self._login_id:
+            raise RuntimeError("No Codex sign-in is pending")
+        result = await self._timed_request("account/login/cancel", {"loginId": self._login_id})
+        self._login_id = None
+        self.login_status = {"pending": False}
+        return result
+
+    async def inspect(self, topic, *, reload=False, cursor=None):
+        """A bounded, explicit set of Codex-owned inventories, never host inventories."""
+        cwd = str(self.config.working_directory)
+        methods = {
+            "skills": ("skills/list", {"cwds": [cwd], "forceReload": reload}),
+            "hooks": ("hooks/list", {"cwds": [cwd]}),
+            "plugins": ("plugin/list", {"cwds": [cwd], "forceRefetch": reload}),
+            "apps": ("app/list", {"limit": 50, "forceRefetch": reload}),
+            "features": ("experimentalFeature/list", {"limit": 50}),
+            "permissions": ("permissionProfile/list", {"cwd": cwd}),
+            "mcp": ("mcpServerStatus/list", {"limit": 50}),
+        }
+        if topic not in methods:
+            raise ValueError(f"Unsupported Codex inventory: {topic}")
+        await self._ensure_started()
+        method, params = methods[topic]
+        if cursor:
+            if topic not in {"apps", "features", "permissions", "mcp"}:
+                raise ValueError(f"{topic} does not accept a pagination cursor")
+            params["cursor"] = cursor
+        if self._thread_id and topic in {"apps", "features", "mcp"}:
+            params["threadId"] = self._thread_id
+        return await self._timed_request(method, params)
+
+    async def reload_mcp(self):
+        self._require_idle()
+        await self._ensure_started()
+        return await self._timed_request("config/mcpServer/reload")
+
+    async def usage(self, *, tokens=False):
+        await self._ensure_started()
+        result = await self._timed_request(
+            "account/usage/read" if tokens else "account/rateLimits/read",
+            {} if tokens else {"excludeResetCreditDetails": True, "supportsLunaReserve": False},
+        )
+        if not tokens:
+            self.rate_limits = result.get("rateLimits") or {}
+        return result
+
+    async def read_config(self):
+        await self._ensure_started()
+        config = await self._timed_request(
+            "config/read", {"cwd": str(self.config.working_directory), "includeLayers": True}
+        )
+        requirements = await self._timed_request("configRequirements/read")
+        return {"configuration": config, "requirements": requirements}
+
+    async def doctor(self):
+        """The CLI's own diagnostics require a separate noninteractive process."""
+        process = await asyncio.create_subprocess_exec(
+            self.binary,
+            "doctor",
+            "--json",
+            cwd=str(self.config.working_directory),
+            env=child_env(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=self._request_timeout
+            )
+            if not stdout:
+                raise RuntimeError(
+                    f"Codex doctor returned no JSON report (exit {process.returncode}); run codex doctor in a terminal"
+                )
+            # Doctor may return a nonzero status when the report contains failed checks.
+            return {"exitCode": process.returncode, "report": json.loads(stdout)}
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+
+    async def background_terminals(self, *, stop=False, cursor=None):
+        await self._ensure_started()
+        if not self._thread_id:
+            if stop:
+                raise RuntimeError("No Codex thread is active")
+            return {"data": []}
+        params = {"threadId": self._thread_id}
+        if cursor and not stop:
+            params["cursor"] = cursor
+        return await self._timed_request(
+            "thread/backgroundTerminals/clean" if stop else "thread/backgroundTerminals/list",
+            params,
+        )
 
     async def logout(self):
+        self._require_idle()
         await self._ensure_started()
         result = await self._timed_request("account/logout")
         self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
+        self._login_id = None
         return result
 
     async def _server_request(self, method, params):
@@ -460,6 +659,17 @@ class CodexCLIRuntime:
                     params["model"] = self.config.model
                 if self._reasoning_effort:
                     params["effort"] = self._reasoning_effort
+                if self._approval_policy:
+                    params["approvalPolicy"] = self._approval_policy
+                if self._collaboration_mode:
+                    params["collaborationMode"] = {
+                        "mode": self._collaboration_mode,
+                        "settings": {
+                            "model": self.config.model or self._active_model,
+                            "reasoning_effort": self._reasoning_effort,
+                            "developer_instructions": None,
+                        },
+                    }
                 sandbox = self._next_turn_sandbox or self.sandbox_backend
                 self._next_turn_sandbox = None
                 if sandbox or not self.config.tools_enabled:

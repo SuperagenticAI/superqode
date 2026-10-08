@@ -1198,6 +1198,14 @@ class HarnessPanel(Container):
 
     def _render_summary(self) -> Text:
         text = Text()
+        codex_runtime = self._active_codex_harness()
+        if codex_runtime:
+            text.append("Active Harness\n\n", style=f"bold {SQ_COLORS.text_primary}")
+            text.append("  Codex\n", style=f"bold {SQ_COLORS.info}")
+            text.append(f"  runtime     {codex_runtime}\n", style=SQ_COLORS.text_secondary)
+            text.append("  prompt, tools, sandbox, skills and MCP: owned by Codex\n")
+            text.append("\n  :codex status    :codex config    :codex help\n")
+            return text
         text.append("Harness Workbench\n\n", style=f"bold {SQ_COLORS.text_primary}")
 
         spec, path, load_error = self._load_active_harness()
@@ -1273,10 +1281,27 @@ class HarnessPanel(Container):
         text.append("  :workflow preview   :workflow run <task>\n", style=SQ_COLORS.text_dim)
         return text
 
+    def _active_codex_harness(self) -> str:
+        """Report the executing harness before considering repository files."""
+        try:
+            pure = getattr(self.app, "_pure_mode", None)
+        except Exception:  # An unmounted panel has no application yet.
+            return ""
+        if (
+            pure is not None
+            and pure.session.connected
+            and getattr(pure, "_harness_spec", None) is None
+            and pure.runtime_name in {"codex-cli", "codex-sdk"}
+        ):
+            return pure.runtime_name
+        return ""
+
     def _load_active_harness(self):
         """Load the active harness from env, then fall back to local harness.yaml."""
         import os
 
+        if self._active_codex_harness():
+            return None, "", ""
         env_path = os.getenv("SUPERQODE_HARNESS", "").strip()
         candidates = [env_path] if env_path else []
         if not candidates and Path("harness.yaml").exists():

@@ -6,6 +6,10 @@ harness ownership.
 
 ## Connection routes
 
+For the audited command mapping and supported controls, see
+[Codex command coverage](codex-commands.md). Enter `:codex help` in the TUI for
+the shared command list.
+
 | Route | Primary command | Authentication | Harness owner |
 | --- | --- | --- | --- |
 | Codex CLI | `:connect codex` | ChatGPT login through `codex login` | Installed Codex harness |
@@ -49,6 +53,13 @@ one asynchronous connection and Codex thread for the connected TUI session.
 Codex owns the model loop, built-in tools, sandbox, skills, MCP configuration,
 and credential storage. The app-server is the supported integration boundary
 for displaying that harness in a custom client.
+
+Selecting Codex CLI or Codex SDK replaces the active SuperQode harness selection.
+A repository's `harness.yaml` or saved default does not wrap or override this
+connection. The Harness sidebar shows Codex as the owner. Keep the YAML file in
+place; use `:harness <path>` to explicitly select it again. Headless Codex routes
+also ignore project defaults; passing `--harness <path>` explicitly opts into
+that harness instead.
 
 The profile is ready when the executable is present. Actual ChatGPT login is
 verified before thread creation and before each prompt. API-key authentication,

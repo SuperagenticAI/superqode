@@ -110,6 +110,12 @@ class PureMode:
         self._cancel_requested = False
 
     def _load_env_harness(self) -> None:
+        # Codex owns its prompt, tools and execution loop. A saved project
+        # selection must not turn a direct Codex connection into a kernel run.
+        # Explicit select_harness/load_harness calls still opt into a spec.
+        if self.runtime_name in {"codex-cli", "codex-sdk"}:
+            self.select_harness("core")
+            return
         reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
         try:
             self.select_harness(reference)
@@ -506,6 +512,11 @@ class PureMode:
             **runtime_kwargs,
         )
         self._agent = getattr(self._runtime, "loop", None)
+        if self.runtime_name in {"codex-cli", "codex-sdk"}:
+            self.session.harness_name = "Codex"
+            self.session.harness_path = ""
+            self.session.harness_flavor = "coding"
+            self.session.harness_runtime = self.runtime_name
 
         # Ensure callbacks are set on the agent (in case they were set after agent creation)
         if self._agent:
@@ -1238,7 +1249,7 @@ class PureMode:
 
     def get_status(self) -> Dict[str, Any]:
         """Get current Pure Mode status."""
-        return {
+        status = {
             "connected": self.session.connected,
             "provider": self.session.provider,
             "model": self.session.model,
@@ -1265,6 +1276,25 @@ class PureMode:
                 "runtime": self.session.harness_runtime,
             },
         }
+        if (
+            self.session.connected
+            and self._runtime is not None
+            and self._harness_spec is None
+            and self.runtime_name in {"codex-cli", "codex-sdk"}
+        ):
+            status["harness"] = {
+                "enabled": True,
+                "id": "codex",
+                "name": "Codex",
+                "source": "runtime",
+                "runtime": self.runtime_name,
+                "digest": "",
+                "path": "",
+                "flavor": "coding",
+            }
+            status["tools"] = []  # Codex's inventory is available through :codex.
+            status["tool_profile"] = "codex"
+        return status
 
     # Session management methods
     def list_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:

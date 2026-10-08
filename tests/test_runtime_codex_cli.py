@@ -444,3 +444,251 @@ async def test_closing_at_terminal_event_keeps_connection_reusable(native_runtim
     finally:
         await events.aclose()
         await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_native_controls_do_not_create_threads_or_change_auth(native_runtime, monkeypatch):
+    runtime, launches = native_runtime
+    calls = []
+    original = runtime._timed_request
+
+    async def record(method, params=None):
+        calls.append((method, params))
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", record)
+    try:
+        for topic in ("skills", "mcp", "apps", "plugins", "hooks", "features", "permissions"):
+            await runtime.inspect(topic)
+        await runtime.read_config()
+        await runtime.usage()
+        await runtime.usage(tokens=True)
+        assert await runtime.background_terminals() == {"data": []}
+        assert runtime.thread_id is None
+        assert len(launches) == 1
+        assert not any(
+            method.startswith("thread/") or method == "account/login/start" for method, _ in calls
+        )
+        assert (
+            "account/rateLimits/read",
+            {"excludeResetCreditDetails": True, "supportsLunaReserve": False},
+        ) in calls
+        with pytest.raises(ValueError, match="Unsupported"):
+            await runtime.inspect("command/exec")
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_new_and_archive_preserve_subscription_verification(native_runtime, monkeypatch):
+    runtime, _ = native_runtime
+    calls = []
+    original = runtime._timed_request
+
+    async def record(method, params=None):
+        calls.append((method, params))
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", record)
+    try:
+        await runtime.new_thread("release audit")
+        assert [method for method, _ in calls][1:3] == ["account/read", "thread/start"]
+        assert ("thread/name/set", {"threadId": "thread-1", "name": "release audit"}) in calls
+        await runtime.archive_thread(runtime.thread_id)
+        assert runtime.thread_id is None
+        calls.clear()
+        await runtime.ensure_thread()
+        assert [method for method, _ in calls] == ["account/read", "thread/start"]
+        await runtime.unarchive_thread("archived-id")
+        assert calls[-1] == ("thread/unarchive", {"threadId": "archived-id"})
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_new_chat_refuses_api_billing_before_creation(native_runtime, monkeypatch):
+    runtime, _ = native_runtime
+
+    async def account(**kwargs):
+        return {"account": {"type": "apiKey"}, "requiresOpenaiAuth": True}
+
+    monkeypatch.setattr(runtime, "account", account)
+    try:
+        with pytest.raises(RuntimeError, match="No API billing fallback"):
+            await runtime.new_thread()
+        assert runtime.thread_id is None
+        assert "thread/start" not in runtime.timings
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("device", [False, True])
+async def test_login_only_uses_chatgpt_and_cancels_exact_flow(native_runtime, monkeypatch, device):
+    runtime, _ = native_runtime
+    calls = []
+
+    async def request(method, params=None):
+        calls.append((method, params))
+        if method == "account/login/start":
+            return {"loginId": "login-123", "authUrl": "https://auth.openai.com/example"}
+        return {}
+
+    try:
+        await runtime._ensure_started()
+        monkeypatch.setattr(runtime, "_timed_request", request)
+        await runtime.login(device=device)
+        assert calls == [
+            ("account/login/start", {"type": "chatgptDeviceCode" if device else "chatgpt"})
+        ]
+        with pytest.raises(RuntimeError, match="pending"):
+            await runtime.login()
+        await runtime.cancel_login()
+        assert calls[-1] == ("account/login/cancel", {"loginId": "login-123"})
+        assert runtime.thread_id is None
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_plan_and_permissions_apply_to_turn_without_replacing_native_instructions(
+    native_runtime, monkeypatch
+):
+    runtime, _ = native_runtime
+    calls = []
+    original = runtime._timed_request
+
+    async def record(method, params=None):
+        calls.append((method, params))
+        if method == "collaborationMode/list":
+            return {"data": [{"mode": "plan"}, {"mode": "default"}]}
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", record)
+    runtime.config.custom_system_prompt = "Project-specific instructions"
+    try:
+        await runtime.set_plan_mode(True)
+        runtime.set_approval_policy("on-request")
+        await runtime.run("plan this")
+        params = next(params for method, params in calls if method == "turn/start")
+        assert params["collaborationMode"] == {
+            "mode": "plan",
+            "settings": {
+                "model": "test-model",
+                "reasoning_effort": None,
+                "developer_instructions": None,
+            },
+        }
+        assert params["approvalPolicy"] == "on-request"
+        await runtime.set_plan_mode(False)
+        assert runtime._collaboration_mode == "default"
+        with pytest.raises(ValueError):
+            runtime.set_approval_policy("dangerously-bypass-everything")
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_session_mutations_reject_running_turn_instead_of_queuing(native_runtime):
+    runtime, _ = native_runtime
+    try:
+        async with runtime._turn_lock:
+            for operation in (
+                runtime.new_thread,
+                runtime.compact_thread,
+                runtime.login,
+                runtime.logout,
+                runtime.reload_mcp,
+            ):
+                with pytest.raises(RuntimeError, match="turn is running"):
+                    await operation()
+            with pytest.raises(RuntimeError, match="turn is running"):
+                await runtime.archive_thread("thread-1")
+            with pytest.raises(RuntimeError, match="turn is running"):
+                runtime.set_review(base="main")
+        assert runtime._transport is None
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", [{"base": "main"}, {"commit": "deadbeef"}])
+async def test_structured_review_uses_native_targets(native_runtime, monkeypatch, target):
+    runtime, _ = native_runtime
+    calls = []
+    original = runtime._timed_request
+
+    async def record(method, params=None):
+        calls.append((method, params))
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", record)
+    try:
+        runtime.set_review(**target)
+        await runtime.run("review")
+        expected = (
+            {"type": "baseBranch", "branch": "main"}
+            if "base" in target
+            else {"type": "commit", "sha": "deadbeef"}
+        )
+        assert next(p["target"] for m, p in calls if m == "review/start") == expected
+        assert not any(m == "turn/start" for m, _ in calls)
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_background_terminal_stop_targets_only_current_thread(native_runtime, monkeypatch):
+    runtime, _ = native_runtime
+    calls = []
+    original = runtime._timed_request
+
+    async def record(method, params=None):
+        calls.append((method, params))
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", record)
+    try:
+        await runtime.ensure_thread()
+        await runtime.background_terminals(stop=True)
+        assert calls[-1] == ("thread/backgroundTerminals/clean", {"threadId": "thread-1"})
+        assert not any(method == "turn/interrupt" for method, _ in calls)
+        await runtime.list_threads(descendants=True, all_cwds=True)
+        params = calls[-1][1]
+        assert params["ancestorThreadId"] == "thread-1"
+        assert "cwd" not in params
+        assert "subAgentThreadSpawn" in params["sourceKinds"]
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_doctor_timeout_reaps_child_process(native_runtime, monkeypatch):
+    runtime, _ = native_runtime
+    runtime._request_timeout = 0.01
+
+    class Process:
+        returncode = None
+        killed = waited = False
+
+        async def communicate(self):
+            await asyncio.sleep(60)
+
+        def kill(self):
+            self.killed = True
+
+        async def wait(self):
+            self.waited = True
+            self.returncode = -9
+
+    process = Process()
+
+    async def spawn(*args, **kwargs):
+        assert args[1:] == ("doctor", "--json")
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    with pytest.raises(TimeoutError):
+        await runtime.doctor()
+    assert process.killed and process.waited
+    assert runtime._transport is None

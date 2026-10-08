@@ -7972,6 +7972,9 @@ def test_codex_connect_uses_live_sdk_login_verification(tmp_path, monkeypatch, c
     )
 
     class Pure:
+        def clear_harness(self):
+            pass
+
         def connect(self, **kwargs):
             self.connection = kwargs
 

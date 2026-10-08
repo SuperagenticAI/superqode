@@ -99,7 +99,7 @@ class CompletionMixin:
                 PromptCompletionCandidate(
                     value=":codex",
                     label=":codex",
-                    description="Connect to the Codex SDK runtime",
+                    description="Connect to the installed Codex CLI",
                     kind="command",
                 ),
                 *self._codex_subcommand_completion_candidates(":codex "),
@@ -111,6 +111,8 @@ class CompletionMixin:
         if lowered.startswith(":codex sandbox "):
             return self._codex_sandbox_completion_candidates(value)
         if lowered.startswith(":codex "):
+            if len(value.split(" ", 2)) == 3:
+                return self._codex_option_completion_candidates(value)
             return self._codex_subcommand_completion_candidates(value)
         if lowered == ":copilot":
             return [

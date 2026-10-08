@@ -2990,6 +2990,9 @@ class ConnectMixin:
                 dedupe_key=f"runtime:{runtime_name}",
             )
         self._sync_self_contained_status(runtime_name)
+        refresh_harness = getattr(self, "_refresh_harness_panel", None)
+        if refresh_harness is not None:
+            refresh_harness()
         self._teach(
             "_write_connection_teaching_card",
             log,

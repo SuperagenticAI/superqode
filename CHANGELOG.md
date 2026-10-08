@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-08
+
+### Added
+
+- Shared `:codex help` and completion catalog, with native ChatGPT browser/device
+  sign-in, fresh chats, unarchive, Plan mode, approval policy, usage, Codex-owned
+  skills/MCP/plugins/apps/hooks/features/config inspection, CLI doctor diagnostics,
+  descendant agents, background terminals and cancellation controls.
+- Full Codex 0.160.0 CLI and slash-command coverage audit documenting supported,
+  partial and deferred integrations.
+
+### Fixed
+
+- Selecting Codex CLI or SDK clears an active repository harness override;
+  startup ignores saved project defaults for direct Codex routes. Harness status
+  and the sidebar report Codex instead of a nearby `harness.yaml`.
+- Codex session listings show full IDs and pagination with retained filters.
+  Resume supports `--last`, fork defaults to the active thread, and native review
+  supports branch/commit targets. Session mutations refuse running tasks, and
+  archiving the active thread detaches it before the next prompt.
+
 ## [2.8.0] - 2026-10-08
 
 ### Added

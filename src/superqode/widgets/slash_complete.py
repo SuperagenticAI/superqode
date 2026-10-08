@@ -15,6 +15,7 @@ from textual.widgets import Static
 
 from superqode.app.constants import COMMANDS, CONNECT_COMPLETION_COMMANDS
 from superqode.utils.fuzzy import FuzzySearch
+from superqode.codex_commands import CODEX_COMMANDS
 
 
 @dataclass
@@ -167,21 +168,10 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":config validate", "Validate SuperQode config", category="workflow"),
     SlashCommand(":serve", "Run SuperQode service commands", category="workflow"),
     SlashCommand(":codex", "Connect to the installed Codex CLI", category="workflow"),
-    SlashCommand(":codex status", "Show Codex CLI/app-server status", category="workflow"),
-    SlashCommand(":codex models", "List Codex account models", category="workflow"),
-    SlashCommand(":codex model", "Pick or set Codex model for future turns", category="workflow"),
-    SlashCommand(":codex effort", "Pick or set Codex reasoning effort", category="workflow"),
-    SlashCommand(":codex sandbox", "Set Codex sandbox override", category="workflow"),
-    SlashCommand(":codex review", "Run a read-only Codex diff review", category="workflow"),
-    SlashCommand(":codex compact", "Compact the current Codex thread", category="workflow"),
-    SlashCommand(":codex sessions", "List Codex sessions for this repo", category="workflow"),
-    SlashCommand(":codex resume", "Resume a Codex thread", category="workflow"),
-    SlashCommand(":codex fork", "Fork a Codex thread", category="workflow"),
-    SlashCommand(":codex thread", "Show current Codex thread info", category="workflow"),
-    SlashCommand(":codex rename", "Rename the current Codex thread", category="workflow"),
-    SlashCommand(":codex archive", "Archive a Codex thread", category="workflow"),
-    SlashCommand(":codex account", "Show the signed-in Codex account", category="workflow"),
-    SlashCommand(":codex logout", "Sign out of Codex", category="workflow"),
+    *(
+        SlashCommand(f":codex {name}", description, category="workflow")
+        for name, description in CODEX_COMMANDS
+    ),
     SlashCommand(":antigravity", "Show Antigravity CLI launch handoff", category="workflow"),
     SlashCommand(":antigravity status", "Check local agy CLI status", category="workflow"),
     SlashCommand(":antigravity migrate", "Show Gemini CLI migration steps", category="workflow"),

@@ -805,11 +805,19 @@ def cli_main(
     if effective_runtime:
         _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
     effective_harness = str(harness_path or yaml_harness or "core")
+    from click.core import ParameterSource
+
+    if (
+        effective_runtime in {"codex-cli", "codex-sdk"}
+        and ctx.get_parameter_source("harness_path") != ParameterSource.COMMANDLINE
+    ):
+        # A project default is for SuperQode's native loop. Direct Codex
+        # routes own their harness; --harness remains an explicit opt-in.
+        effective_harness = "core"
     # A model-aware harness is directly runnable: when provider/model were not
     # explicitly supplied, inherit its exact curated target. Explicit CLI or
     # environment choices still win.
     try:
-        from click.core import ParameterSource
         from superqode.harness import resolve_harness
 
         definition = resolve_harness(effective_harness, root=Path.cwd())

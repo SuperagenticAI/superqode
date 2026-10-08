@@ -2,6 +2,8 @@
 SuperQode App Constants - Theme, Icons, Colors, and Messages.
 """
 
+from superqode.codex_commands import CODEX_COMMANDS
+
 # Clean ASCII art for SUPERQODE - Standard style (upright, thin)
 ASCII_LOGO = """
  ____  _   _ ____  _____ ____   ___    ___  ____  _____
@@ -573,21 +575,7 @@ COMMANDS = [
     ":runtime copilot-sdk",
     ":runtime doctor",
     ":codex",
-    ":codex status",
-    ":codex models",
-    ":codex model",
-    ":codex effort",
-    ":codex sandbox",
-    ":codex review",
-    ":codex compact",
-    ":codex thread",
-    ":codex sessions",
-    ":codex resume",
-    ":codex fork",
-    ":codex rename",
-    ":codex archive",
-    ":codex account",
-    ":codex logout",
+    *(f":codex {name}" for name, _ in CODEX_COMMANDS),
     ":copilot",
     ":copilot login",
     ":copilot sdk",

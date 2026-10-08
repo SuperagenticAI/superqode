@@ -242,3 +242,234 @@ async def test_connect_menu_navigates_to_distinct_codex_subscription_routes(
         await pilot.press(*(["down"] * index), "enter")
         await pilot.pause()
         assert selected == [(runtime, "subscription")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "command",
+    [
+        "skills --reload",
+        "mcp",
+        "apps",
+        "plugins",
+        "hooks",
+        "features",
+        "permissions",
+        "config",
+        "usage --tokens",
+        "ps",
+        "doctor",
+    ],
+)
+async def test_extended_inspection_yields_and_redacts_results(native_app, command):
+    app, runtime, tasks = native_app
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def inspect(*args, **kwargs):
+        reached.set()
+        await release.wait()
+        return {
+            "data": [{"name": "tool", "env": {"TOKEN": "hidden-credential"}}],
+            "nextCursor": "next-page",
+        }
+
+    runtime.inspect = runtime.read_config = runtime.usage = runtime.background_terminals = (
+        runtime.doctor
+    ) = inspect
+    log = Log()
+    app._codex_cmd(command, log)
+    await reached.wait()
+    assert not log.items
+    release.set()
+    await asyncio.gather(*tasks)
+    assert "hidden-credential" not in "\n".join(log.items)
+    assert "[redacted]" in "\n".join(log.items)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "skills --invalid",
+        "apps --cursor",
+        "login --with-api-key",
+        "usage --redeem",
+        "permissions full-access",
+        "plan maybe",
+        "unarchive",
+    ],
+)
+def test_invalid_controls_do_not_start_a_connection(monkeypatch, command):
+    app = SuperQodeApp()
+    calls = []
+    monkeypatch.setattr(app, "_runtime_cmd", lambda *args: calls.append(args))
+    log = Log()
+    app._codex_cmd(command, log)
+    assert not calls
+    assert log.items
+
+
+def test_help_is_available_without_a_runtime_and_completion_is_shared(monkeypatch):
+    from superqode.app.constants import COMMANDS
+    from superqode.codex_commands import CODEX_COMMANDS
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+    app = SuperQodeApp()
+    monkeypatch.setattr(app, "_runtime_cmd", lambda *args: pytest.fail("Help connected a runtime"))
+    log = Log()
+    app._codex_cmd("help", log)
+    live = {candidate.value for candidate in app._codex_subcommand_completion_candidates(":codex ")}
+    overlay = {item.command for item in DEFAULT_COMMANDS}
+    for command, _ in CODEX_COMMANDS:
+        assert f":codex {command}" in live & overlay & set(COMMANDS)
+        assert f":codex {command}" in "\n".join(log.items)
+    assert len({name for name, _ in CODEX_COMMANDS}) == len(CODEX_COMMANDS)
+
+
+@pytest.mark.asyncio
+async def test_sdk_control_is_explicit_and_does_not_switch_runtime(native_app):
+    app, runtime, tasks = native_app
+    runtime.name = "codex-sdk"
+    log = Log()
+    app._codex_cmd("mcp", log)
+    assert not tasks
+    assert app._pure_mode._runtime is runtime
+    assert "requires Codex CLI" in log.items[0]
+
+
+@pytest.mark.asyncio
+async def test_resume_last_uses_latest_repo_session_and_fork_defaults_current(native_app):
+    app, runtime, tasks = native_app
+    calls = []
+    runtime.thread_id = "current-thread"
+
+    async def threads(**kwargs):
+        calls.append(kwargs)
+        return {"data": [{"id": "latest-thread"}]}
+
+    async def resume(thread_id):
+        calls.append(thread_id)
+        return {"thread": {"id": thread_id}}
+
+    runtime.list_threads = threads
+    runtime.resume_thread = runtime.fork_thread = resume
+    app._codex_cmd("resume --last", Log())
+    await asyncio.gather(*tasks)
+    assert calls == [{"limit": 1}, "latest-thread"]
+    app._codex_cmd("fork", Log())
+    await asyncio.gather(*tasks)
+    assert calls[-1] == "current-thread"
+
+
+@pytest.mark.asyncio
+async def test_session_page_shows_full_ids_and_preserves_filters(native_app):
+    app, runtime, tasks = native_app
+    calls = []
+    thread_id = "abcde012-1234-5678-9abc-def012345678"
+
+    async def threads(**kwargs):
+        calls.append(kwargs)
+        return {"data": [{"id": thread_id, "name": "release"}], "nextCursor": "page-two"}
+
+    runtime.list_threads = threads
+    log = Log()
+    app._codex_cmd("sessions --archived --all --cursor page-one", log)
+    await asyncio.gather(*tasks)
+    assert calls == [{"limit": 20, "archived": True, "all_cwds": True, "cursor": "page-one"}]
+    assert thread_id in "\n".join(log.items)
+    assert ":codex sessions --archived --all --cursor page-two" in "\n".join(log.items)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "new",
+        "login",
+        "plan on",
+        "permissions never",
+        "mcp reload",
+        "archive",
+        "resume saved",
+        "fork",
+        "compact",
+        "logout",
+    ],
+)
+def test_busy_task_rejects_session_mutation(native_app, monkeypatch, command):
+    app, runtime, tasks = native_app
+    monkeypatch.setattr(app, "watch_is_busy", lambda busy: None)
+    app.is_busy = True
+    log = Log()
+    app._codex_cmd(command, log)
+    assert not tasks
+    assert "task is running" in "\n".join(log.items)
+
+
+def test_login_displays_only_public_flow_details():
+    log = Log()
+    SuperQodeApp._codex_show_login(
+        log,
+        {
+            "verificationUrl": "https://auth.openai.com/device",
+            "userCode": "ABC-DEF",
+            "accessToken": "never-display-this",
+        },
+    )
+    assert "ABC-DEF" in "\n".join(log.items)
+    assert "never-display-this" not in "\n".join(log.items)
+
+
+def test_diagnostic_redaction_covers_layers_headers_and_environment():
+    from superqode.codex_commands import redact_codex_data
+
+    value = {
+        "layers": [
+            {
+                "config": {
+                    "api_key": "sensitive",
+                    "http_headers": {"Authorization": "sensitive"},
+                    "env": {"CUSTOM": "sensitive"},
+                    "refreshToken": "sensitive",
+                }
+            }
+        ],
+        "totalTokens": 123,
+        "model": "example",
+    }
+    result = redact_codex_data(value)
+    assert "sensitive" not in str(result)
+    assert result["totalTokens"] == 123
+    assert result["model"] == "example"
+
+
+@pytest.mark.asyncio
+async def test_diff_alias_schedules_async_review_and_copy_targets_response(native_app, monkeypatch):
+    app, runtime, tasks = native_app
+    calls = []
+
+    async def diff(args, log):
+        calls.append(("diff", args))
+
+    monkeypatch.setattr(app, "_handle_diff", diff)
+    monkeypatch.setattr(app, "_handle_copy", lambda log, args: calls.append(("copy", args)))
+    app._codex_cmd("diff", Log())
+    await asyncio.gather(*tasks)
+    app._codex_cmd("copy", Log())
+    assert calls == [("diff", ""), ("copy", "response")]
+
+
+@pytest.mark.parametrize(
+    "prefix,expected",
+    [
+        (":codex plan ", ":codex plan on"),
+        (":codex login --d", ":codex login --device-auth"),
+        (":codex review --b", ":codex review --base"),
+        (":codex permissions ", ":codex permissions on-request"),
+        (":codex sessions --a", ":codex sessions --all"),
+    ],
+)
+def test_control_options_complete_without_probing_runtime(monkeypatch, prefix, expected):
+    app = SuperQodeApp()
+    monkeypatch.setattr(
+        app, "_runtime_cmd", lambda *args: pytest.fail("Completion connected a runtime")
+    )
+    assert expected in {item.value for item in app._prompt_completion_candidates_for(prefix)}

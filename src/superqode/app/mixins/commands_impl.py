@@ -2233,6 +2233,7 @@ class CommandImplMixin:
                 and Path(getattr(existing.session, "working_directory", Path.cwd())).resolve()
                 == Path.cwd().resolve()
                 and getattr(existing, "_runtime", None) is not None
+                and getattr(existing, "_harness_spec", None) is None
                 and not (
                     sub == "codex-cli"
                     and (
@@ -2283,6 +2284,12 @@ class CommandImplMixin:
         if sub in self._SELF_CONTAINED_RUNTIMES:
             try:
                 pure = self._ensure_pure_mode()
+                if sub in {"codex-cli", "codex-sdk"}:
+                    # Choosing Codex selects its harness as well as its
+                    # transport. Otherwise connect() prefers a loaded YAML
+                    # spec and never constructs the requested Codex runtime.
+                    pure.clear_harness()
+                    _os.environ["SUPERQODE_HARNESS"] = "core"
                 self._install_pure_permission_bridge(pure, log)
                 pure.runtime_name = sub
                 pure.billing_requested = requested_billing

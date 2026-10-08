@@ -429,7 +429,7 @@ that matches the account, runtime, and harness ownership required for the task.
 
 | Vendor or product | Available routes | Direct selection |
 | --- | --- | --- |
-| OpenAI Codex | Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect acp codex`, `:connect byok openai <model>` |
+| OpenAI Codex | Codex CLI, Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect codex-sdk`, `:connect acp codex`, `:connect byok openai <model>` |
 | Anthropic Claude | Claude Agent SDK, Anthropic BYOK | `:runtime claude-agent-sdk`, `:connect byok anthropic <model>` |
 | Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
 | Google Gemini | Gemini CLI Google sign-in, Google AI Studio BYOK, Google ADK runtime | `:connect gemini-cli`, `:connect acp gemini`, `:connect byok google <model>`, `:runtime adk` |
@@ -641,7 +641,8 @@ SuperQode's terminal, sessions, approvals, plans, and evidence surface.
 
 | Runtime | Selection | Authentication |
 | --- | --- | --- |
-| Codex SDK | `:connect codex` | Local Codex or ChatGPT login, or OpenAI API key |
+| Codex CLI | `:connect codex` | Guarded ChatGPT subscription login through the installed CLI |
+| Codex SDK | `:connect codex-sdk` | Guarded ChatGPT subscription login through the Python SDK |
 | GitHub Copilot | `:connect copilot` | GitHub Copilot account through the SDK or official CLI |
 | Claude Agent SDK | `:runtime claude-agent-sdk` | Anthropic API key |
 | Antigravity CLI | `:connect antigravity` | Google Sign-In through `agy` |

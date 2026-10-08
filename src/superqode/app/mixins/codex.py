@@ -18,9 +18,11 @@ from superqode.app.widgets import (
 
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.recipes import PromptCompletionCandidate
+from superqode.codex_commands import CODEX_ALIASES, CODEX_COMMANDS, CODEX_OPTIONS
+from .codex_controls import CodexControlsMixin, codex_options
 
 
-class CodexMixin:
+class CodexMixin(CodexControlsMixin):
     """Codex model/effort pickers and execution."""
 
     @property
@@ -251,23 +253,7 @@ class CodexMixin:
 
         prefix = ":codex "
         partial = value[len(prefix) :].lower()
-        subcommands = (
-            ("status", "Show Codex CLI/app-server status"),
-            ("model", "Pick or set the Codex model for future turns"),
-            ("models", "List models available to this Codex account"),
-            ("effort", "Pick or set Codex reasoning effort"),
-            ("sandbox", "Set the Codex sandbox override"),
-            ("review", "Run a read-only Codex diff review"),
-            ("thread", "Show the current Codex thread"),
-            ("sessions", "List Codex sessions for this repo"),
-            ("resume", "Resume a Codex thread"),
-            ("fork", "Fork a Codex thread"),
-            ("compact", "Compact the current Codex thread"),
-            ("rename", "Rename the current Codex thread"),
-            ("archive", "Archive a Codex thread"),
-            ("account", "Show the signed-in Codex account"),
-            ("logout", "Sign out of Codex"),
-        )
+        subcommands = CODEX_COMMANDS
         return [
             PromptCompletionCandidate(
                 value=f"{prefix}{subcommand}",
@@ -277,6 +263,23 @@ class CodexMixin:
             )
             for subcommand, description in subcommands
             if subcommand.startswith(partial) and f"{prefix}{subcommand}" != value
+        ]
+
+    @staticmethod
+    def _codex_option_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
+        parts = value.split(" ", 2)
+        if len(parts) != 3:
+            return []
+        sub = CODEX_ALIASES.get(parts[1].lower(), parts[1].lower())
+        prefix = f"{parts[0]} {parts[1]} "
+        # Complete one option without guessing branch names, IDs or cursors.
+        partial = parts[2].lower()
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{option}", label=option, description=description, kind="codex"
+            )
+            for option, description in CODEX_OPTIONS.get(sub, ())
+            if option.startswith(partial) and f"{prefix}{option}" != value
         ]
 
     def _codex_effort_completion_candidates(self, value: str) -> list[PromptCompletionCandidate]:
@@ -409,15 +412,29 @@ class CodexMixin:
                 log.add_error(f"Codex subscription verification failed: {exc}")
 
     def _codex_cmd(self, args: str, log) -> None:
-        """Handle :codex and Codex SDK runtime subcommands."""
+        """Handle Codex controls, with explicit CLI-only capabilities."""
         raw = (args or "").strip()
         parts = raw.split(maxsplit=1)
         sub = parts[0].lower() if parts else "connect"
+        sub = CODEX_ALIASES.get(sub, sub)
         rest = parts[1].strip() if len(parts) > 1 else ""
         if sub in {"", "connect", "start"}:
             self._requested_runtime_target = "codex-cli"
             self._requested_runtime_billing = "subscription"
             self._runtime_cmd("codex-cli", log)
+            return
+        if self._codex_extended_cmd(sub, rest, log):
+            return
+        if self.is_busy and sub in {
+            "resume",
+            "fork",
+            "archive",
+            "logout",
+            "compact",
+            "sandbox",
+            "review",
+        }:
+            log.add_error("A Codex task is running; cancel it or wait before changing the session")
             return
         status_expr = f"{sub} {rest}".strip()
         if status_expr in {"status", "doctor", "status --probe", "status probe", "status models"}:
@@ -473,7 +490,7 @@ class CodexMixin:
             return
         log.add_error(f"Unknown codex command: {sub}")
         log.add_info(
-            "Usage: :codex [status|models|model|effort|sandbox|review|compact|thread|sessions|resume|fork|rename|archive|account|logout]"
+            "Use :codex help for supported controls. !codex --help lists the installed CLI commands."
         )
 
     def _codex_runtime_or_connect(self, log):
@@ -519,6 +536,10 @@ class CodexMixin:
                     on_result(response)
             except Exception as exc:
                 log.add_error(f"Codex {label} failed: {exc}")
+                if getattr(exc, "code", None) == -32601:
+                    log.add_info(
+                        "This installed Codex CLI does not expose that control. Update Codex or use its CLI; no SDK fallback was attempted."
+                    )
                 self._codex_config_error_hint(log, exc)
 
         self.run_worker(execute(), exclusive=False)
@@ -989,8 +1010,11 @@ class CodexMixin:
         log.write(text)
 
     def _codex_sessions_cmd(self, args: str, log, *, response=None) -> None:
-        archived = "archived" in args.split() or "--archived" in args.split()
         try:
+            if args == "archived":
+                args = "--archived"
+            options = codex_options(args, flags=("--archived", "--all"), values=("--cursor",))
+            archived = bool(options.get("--archived"))
             runtime = self._codex_runtime_or_connect(log)
             if response is None:
                 if getattr(runtime, "name", "") == "codex-cli":
@@ -998,10 +1022,17 @@ class CodexMixin:
                         log,
                         "sessions",
                         runtime,
-                        lambda: runtime.list_threads(limit=20, archived=archived),
+                        lambda: runtime.list_threads(
+                            limit=20,
+                            archived=archived,
+                            cursor=options.get("--cursor"),
+                            all_cwds=bool(options.get("--all")),
+                        ),
                         lambda result: self._codex_sessions_cmd(args, log, response=result),
                     )
                     return
+                if options.get("--cursor") or options.get("--all"):
+                    raise ValueError("Session pagination and --all require :connect codex (CLI)")
                 response = runtime.list_threads(limit=20, archived=archived)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex sessions: {exc}")
@@ -1019,7 +1050,7 @@ class CodexMixin:
         for thread in threads:
             data = self._codex_obj_dict(thread)
             tid = str(data.get("id") or "")
-            text.append(f"  {tid[:12]:<14}", style=f"bold {THEME['cyan']}")
+            text.append(f"  {tid}  ", style=f"bold {THEME['cyan']}")
             text.append(
                 str(data.get("name") or data.get("preview") or "(unnamed)")[:80],
                 style=THEME["text"],
@@ -1030,11 +1061,44 @@ class CodexMixin:
         text.append(" or ", style=THEME["muted"])
         text.append(":codex fork <thread_id>", style=THEME["cyan"])
         text.append(".\n", style=THEME["muted"])
+        cursor = self._codex_obj_dict(response).get("nextCursor")
+        if cursor:
+            flags = " --archived" if archived else ""
+            flags += " --all" if options.get("--all") else ""
+            text.append(f"  Next page: :codex sessions{flags} --cursor {cursor}\n")
         log.write(text)
 
     def _codex_resume_cmd(self, thread_id: str, log) -> None:
         if not thread_id:
-            log.add_info("Usage: :codex resume <thread_id>")
+            self._codex_sessions_cmd("", log)
+            return
+        if thread_id == "--last":
+            try:
+                runtime = self._codex_runtime_or_connect(log)
+                if getattr(runtime, "name", "") != "codex-cli":
+                    raise ValueError("--last requires the native Codex CLI connection")
+
+                async def resume_last():
+                    result = await runtime.list_threads(limit=1)
+                    threads = result.get("data", [])
+                    if not threads:
+                        raise ValueError("No saved Codex chat exists for this directory")
+                    return await runtime.resume_thread(threads[0]["id"])
+
+                self._codex_async_read(
+                    log,
+                    "resume last",
+                    runtime,
+                    resume_last,
+                    lambda result: log.add_success(
+                        f"Codex resumed {result.get('thread', {}).get('id')}"
+                    ),
+                )
+            except Exception as exc:
+                log.add_error(f"Codex resume: {exc}")
+            return
+        if thread_id.startswith("-") or len(thread_id.split()) != 1:
+            log.add_error("Usage: :codex resume <thread_id>|--last")
             return
         self._codex_runtime_action(
             log, f"resume {thread_id[:12]}", lambda runtime: runtime.resume_thread(thread_id)
@@ -1042,8 +1106,14 @@ class CodexMixin:
 
     def _codex_fork_cmd(self, thread_id: str, log) -> None:
         if not thread_id:
-            log.add_info("Usage: :codex fork <thread_id>")
-            return
+            try:
+                runtime = self._codex_runtime_or_connect(log)
+                thread_id = runtime.thread_id
+                if not thread_id:
+                    raise ValueError("No current Codex thread to fork; provide a saved thread ID")
+            except Exception as exc:
+                log.add_error(f"Codex fork: {exc}")
+                return
         self._codex_runtime_action(
             log, f"fork {thread_id[:12]}", lambda runtime: runtime.fork_thread(thread_id)
         )
@@ -1106,16 +1176,38 @@ class CodexMixin:
 
     def _codex_review_cmd(self, prompt: str, log) -> None:
         try:
+            if self.is_busy:
+                raise ValueError("A task is running; cancel it or wait before starting a review")
+            base = commit = None
+            if prompt.startswith("--"):
+                options = codex_options(
+                    prompt, flags=("--uncommitted",), values=("--base", "--commit")
+                )
+                if len(options) != 1:
+                    raise ValueError("Choose --base <branch>, --commit <sha>, or --uncommitted")
+                base, commit = options.get("--base"), options.get("--commit")
+                prompt = ""
             runtime = self._codex_runtime_or_connect(log)
             if getattr(runtime, "name", "") == "codex-cli":
-                runtime.set_review(prompt)
+                if base or commit:
+                    runtime.set_review(base=base, commit=commit)
+                else:
+                    runtime.set_review(prompt)
             else:
+                if base or commit:
+                    raise ValueError("Structured review targets require :connect codex (CLI)")
                 runtime.set_next_turn_sandbox("read-only")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not start Codex review: {exc}")
             self._codex_config_error_hint(log, exc)
             return
-        review_prompt = prompt or (
+        review_prompt = (
+            f"Review changes against {base}"
+            if base
+            else f"Review commit {commit}"
+            if commit
+            else prompt
+        ) or (
             "Review the current uncommitted diff only. Do not edit files or run commands that modify state. "
             "Prioritize correctness bugs, regressions, safety risks, and missing tests. "
             "Return findings first with file/line references where possible."
@@ -1139,10 +1231,25 @@ class CodexMixin:
             text.append(f"  App-server  {runtime.app_server_source}\n")
             text.append(f"  Thread      {runtime.thread_id or 'not started'}\n")
             text.append(
+                f"  Model       {runtime.active_model or runtime.model or 'Codex default'}\n"
+            )
+            text.append(f"  Effort      {runtime.reasoning_effort or 'Codex default'}\n")
+            text.append(
+                f"  Sandbox     {getattr(runtime, 'sandbox_backend', None) or 'Codex default'}\n"
+            )
+            text.append(
+                f"  Mode        {getattr(runtime, '_collaboration_mode', None) or 'Codex default'}\n"
+            )
+            text.append(
+                f"  Approval    {getattr(runtime, '_approval_policy', None) or 'Codex default'}\n"
+            )
+            text.append(
                 f"  Auth        {runtime.subscription_status.get('billing_verified', 'unknown')}\n"
             )
             if runtime.rate_limits:
                 text.append(f"  Rate limits {runtime.rate_limits}\n")
+            if getattr(runtime, "token_usage", None):
+                text.append(f"  Token usage {runtime.token_usage}\n")
             for phase, elapsed in runtime.timings.items():
                 text.append(f"  {phase:<16} {elapsed:.1f} ms\n")
         if not probe:

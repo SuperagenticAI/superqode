@@ -173,6 +173,7 @@ nav:
       - 🔗 Connection Profiles: advanced/connection-profiles.md
       - 🤖 ACP Agent Catalog: providers/acp.md
       - 🧠 OpenAI Codex: providers/codex.md
+      - Codex command coverage: providers/codex-commands.md
       - 🟠 Anthropic Claude: providers/anthropic-claude.md
       - 🐙 GitHub Copilot: providers/github-copilot.md
       - 🚀 Google Antigravity: providers/antigravity.md
