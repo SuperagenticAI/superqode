@@ -785,6 +785,44 @@ def test_approval_handler_uses_bridge_callback_when_available(fake_codex_sdk, tm
     assert "cancel" in calls[0][1]["_codex_available_decisions"]
 
 
+@pytest.mark.parametrize(
+    "method,expected",
+    [
+        ("item/commandExecution/requestApproval", {"decision": "cancel"}),
+        ("item/fileChange/requestApproval", {"decision": "cancel"}),
+        ("item/tool/requestUserInput", {"answers": {}}),
+        ("mcpServer/elicitation/request", {"action": "cancel", "content": None}),
+        ("item/permissions/requestApproval", {"permissions": {}, "scope": "turn"}),
+    ],
+)
+def test_sdk_handler_exception_returns_protocol_cancellation(
+    fake_codex_sdk, tmp_path, monkeypatch, method, expected
+):
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def broken(*args):
+        raise RuntimeError("handler failed")
+
+    monkeypatch.setattr(runtime, "_handle_server_request", broken)
+    assert runtime._approval_handler(method, {}) == expected
+
+
+def test_sdk_read_only_lists_work_under_strict_network_policy(
+    fake_codex_sdk, tmp_path, monkeypatch
+):
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+    monkeypatch.setenv("SUPERQODE_NET_STRICT", "1")
+    runtime.models()
+    runtime.account()
+    runtime.list_threads()
+    runtime.read_thread()
+    assert runtime.metadata is not None
+    assert runtime.active_model
+    assert runtime.app_server_source
+    with pytest.raises(RuntimeError, match="strict network policy"):
+        runtime._run_sync("do work")
+
+
 def test_approval_handler_rejects_when_bridge_callback_denies(fake_codex_sdk, tmp_path):
     runtime = create_runtime(
         "codex-sdk",

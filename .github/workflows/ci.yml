@@ -31,6 +31,10 @@ jobs:
         run: uv run ruff format --check .
       - name: Public documentation style
         run: uv run python scripts/check_public_docs_style.py
+      - name: CLI and environment reference coverage
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_cli_reference_coverage.py -q
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
       - name: TUI keyboard and draft checks

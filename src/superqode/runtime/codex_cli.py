@@ -66,6 +66,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         self.session_id = config.session_id or f"codex-{uuid.uuid4().hex[:8]}"
         self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
         self.rate_limits: dict[str, Any] = {}
+        self.rate_limits_by_limit_id: dict[str, Any] = {}
         self.token_usage: dict[str, Any] = {}
         self.timings: dict[str, float] = {}
         self.metadata: dict[str, Any] = {}
@@ -101,6 +102,9 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         self._turn_lock = asyncio.Lock()
         self._interaction_lock = asyncio.Lock()
         self._thread_id: str | None = None
+        self._thread_persisted = False
+        self.native_session_id = None
+        self.forked_from_id = None
         self._resume_thread_id = config.session_id
         self._usage_baseline_known = not bool(config.session_id)
         if config.session_id:
@@ -122,6 +126,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         self._login_id: str | None = None
         self.login_status: dict[str, Any] = {}
         self._next_turn_sandbox: str | None = None
+        self._next_turn_options = {}
         self._review: dict[str, Any] | None = None
         self._queue: asyncio.Queue | None = None
         self._failure: BaseException | None = None
@@ -327,6 +332,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                 self._login_id = None
         elif method == "account/rateLimits/updated":
             self.rate_limits = params.get("rateLimits") or params
+            self.rate_limits_by_limit_id = params.get("rateLimitsByLimitId") or {}
         elif method == "thread/tokenUsage/updated" and params.get("threadId") == self._thread_id:
             self.token_usage = params.get("tokenUsage") or {}
             self._usage_baseline_known = bool(self.token_usage.get("total"))
@@ -427,10 +433,9 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                         "config/read",
                         {"cwd": str(self.config.working_directory), "includeLayers": False},
                     )
-                    for app_id in (data.get("config") or {}).get("apps") or {}:
-                        self._reviewer_overrides[
-                            f"apps.{json.dumps(app_id)}.approvals_reviewer"
-                        ] = "user"
+                    self._reviewer_overrides.update(
+                        self._app_reviewer_overrides((data.get("config") or {}).get("apps") or {})
+                    )
                 self.timings["startup"] = (time.monotonic() - start) * 1000
             except BaseException as exc:
                 await transport.close()
@@ -495,7 +500,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         preflight(self.config, self._permission_manager)
 
     def _accept_thread(self, result, *, persisted=False):
-        if result.get("approvalsReviewer", "user") != "user":
+        if result.get("approvalsReviewer") not in {None, "user"}:
             self._failure = RuntimeError(
                 "Codex did not honor SuperQode approval mediation; no turn was started"
             )
@@ -516,6 +521,9 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         if not self._thread_id:
             raise RuntimeError("Codex response did not include a thread id")
         self._resume_thread_id = None
+        self._thread_persisted = persisted
+        self.native_session_id = (result.get("thread") or {}).get("sessionId")
+        self.forked_from_id = (result.get("thread") or {}).get("forkedFromId")
         self.session_id = self._thread_id
         self._items.clear()
         self.effective_policy.update(
@@ -529,7 +537,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                 )
             }
         )
-        self.effective_policy["approvalsReviewer"] = result.get("approvalsReviewer", "user")
+        self.effective_policy["approvalsReviewer"] = result.get("approvalsReviewer")
         self.history = list((result.get("thread") or {}).get("turns") or [])
         self._active_model = result.get("model") or self.config.model
         from superqode.session.codex import record_thread
@@ -720,7 +728,10 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
             params["cursor"] = cursor
         if self._thread_id and topic in {"apps", "features", "mcp"}:
             params["threadId"] = self._thread_id
-        return await self._timed_request(method, params)
+        result = await self._timed_request(method, params)
+        if reload:
+            self._mention_catalog_cache = {}
+        return result
 
     async def reload_mcp(self):
         self._require_idle()
@@ -735,6 +746,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         )
         if not tokens:
             self.rate_limits = result.get("rateLimits") or {}
+            self.rate_limits_by_limit_id = result.get("rateLimitsByLimitId") or {}
         return result
 
     async def read_config(self):
@@ -833,6 +845,9 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                         self.history,
                         self._active_model,
                         self.run_status,
+                        self._thread_persisted,
+                        self.native_session_id,
+                        self.forked_from_id,
                     )
                     params = {
                         **self._thread_params(),
@@ -842,8 +857,14 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                     params.pop("permissions", None)
                     if self.capabilities.supports("thread/fork", "deferGoalContinuation"):
                         params["deferGoalContinuation"] = True
+                    if not self._thread_persisted:
+                        params.pop("threadId")
+                        params.pop("deferGoalContinuation", None)
                     self._accept_thread(
-                        await self._timed_request("thread/fork", params), persisted=True
+                        await self._timed_request(
+                            "thread/fork" if self._thread_persisted else "thread/start", params
+                        ),
+                        persisted=self._thread_persisted,
                     )
                     self.last_review_thread_id = self._thread_id
                     self._review_delivery = None
@@ -921,10 +942,13 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                         },
                     )
                 else:
+                    params.update(self._next_turn_options)
+                    self._next_turn_options = {}
                     result = await self._timed_request("turn/start", params)
                 self._active_turn = result.get("turn", {}).get("id")
                 if not self._active_turn:
                     raise RuntimeError("Codex turn/start did not include a turn id")
+                self._thread_persisted = True
                 if self._cancelled:
                     await self._interrupt()
                 first_event = True
@@ -941,6 +965,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                         first_event = False
                     if method == "turn/completed":
                         turn_finished = True
+                        self._thread_persisted = True
                         from superqode.session.codex import record_turn
 
                         record_turn(self, "".join(response_text))
@@ -981,6 +1006,8 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                 self._active_turn = None
                 self._queue = None
                 if origin:
+                    self._review = None
+                    self._review_delivery = None
                     (
                         self._thread_id,
                         self.session_id,
@@ -990,10 +1017,13 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                         self.history,
                         self._active_model,
                         self.run_status,
+                        self._thread_persisted,
+                        self.native_session_id,
+                        self.forked_from_id,
                     ) = origin
                     from superqode.session.codex import record_thread
 
-                    record_thread(self, {}, persisted=True)
+                    record_thread(self, {}, persisted=self._thread_persisted)
 
     async def run_streaming(self, prompt: str):
         from contextlib import aclosing

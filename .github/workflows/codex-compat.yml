@@ -4,12 +4,28 @@ on:
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/superqode/runtime/codex*.py"
+      - "src/superqode/session/codex.py"
+      - "src/superqode/app/mixins/codex*.py"
+      - "src/superqode/app/mixins/helper_permissions.py"
+      - "src/superqode/pure_mode.py"
+      - "src/superqode/codex_commands.py"
+      - "tests/test_codex*.py"
+      - "tests/test_runtime_codex*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/codex-compat.yml"
   pull_request:
     paths:
       - "src/superqode/runtime/codex*.py"
       - "src/superqode/app/mixins/codex*.py"
       - "src/superqode/app/mixins/helper_permissions.py"
       - "src/superqode/pure_mode.py"
+      - "src/superqode/session/codex.py"
+      - "src/superqode/codex_commands.py"
       - "pyproject.toml"
       - "uv.lock"
       - "tests/test_codex*.py"

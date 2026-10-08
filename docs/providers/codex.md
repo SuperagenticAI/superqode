@@ -129,12 +129,15 @@ and session consent. Session consent binds the exact action, arguments and
 policy revision; it does not become a blanket tool permission. Persistent
 Codex rule amendments require a second explicit confirmation. SuperQode pins
 the human reviewer on threads, turns and configured apps; it refuses a thread
-that reports a different reviewer.
+that reports a different reviewer. Status distinguishes the requested reviewer
+from a reviewer confirmed by a thread response. Session consent ignores RPC ids
+and timestamps while retaining the command, destination, paths and permissions.
 
 MCP elicitation supports validated JSON forms and manually completed URL flows.
 Use `:codex mcp login <server>` for Codex-owned MCP OAuth. Codex stores the login;
 SuperQode displays the authorization URL. Additional permission requests require
 explicit consent for that turn. Unknown server requests return an explicit error.
+SDK handler failures cancel the individual request without terminating the reader.
 
 The installed executable's generated schema gates experimental features at
 connect time. An unavailable schema disables experimental controls. A supported
@@ -148,6 +151,8 @@ backend does not claim support for a strict no-tool spec.
 :codex tools
 :codex history
 :codex permissions untrusted
+:codex permissions mediated
+:codex turn-options {"summary":"concise","outputSchema":{"type":"object"}}
 :codex permissions profile <id>
 :codex permissions granular {"sandbox_approval":true,"rules":false,"mcp_elicitations":true}
 :codex mcp login <server>
@@ -163,14 +168,29 @@ MCP services. Git and WorkOrder delivery remain owned by SuperQode.
 
 Existing threads restore their persisted dynamic tool definitions. Start a
 fresh thread with `:codex new` to advertise tools added after that thread was
-created. `:codex history` pages earlier messages and tool calls; explicit resume
-also displays recent stored turns. Detached review uses a separate read-only
-fork and restores the original conversation when it ends.
+created. `:codex history` pages earlier messages and tool calls when implemented
+by the server. Codex 0.160 advertises paging but returns "not supported yet";
+SuperQode falls back to `thread/read`, without pagination. Explicit resume also
+displays recent stored turns. Detached review forks saved conversations into a
+separate read-only thread. For a fresh, unsaved conversation it starts a separate
+read-only thread instead, and preserves the original conversation's unsaved state.
+
+The `mediated` preset selects `on-request`, `workspace-write` and the human
+reviewer. It does not expose native actions that Codex executes without approval.
+`:codex turn-options <JSON>` sets `outputSchema`, `summary`, `serviceTier` and/or
+`clientUserMessageId` on the next ordinary turn; fields must be supported by the
+installed schema. Use `:codex turn-options reset` to clear pending options.
+Codex may retain summary and service-tier choices for subsequent turns.
+Native `sessionId`, `forkedFromId` and account rate-limit pools are retained and
+shown in status when reported.
 
 Use `$skill-name` to invoke an enabled skill returned by `:codex skills`.
 Use `$app-slug` or `@app-slug` for an accessible, enabled app from `:codex apps`.
 SuperQode resolves the catalog entry and sends Codex a typed skill/app input.
 Unknown names remain ordinary text; ambiguous names produce an error.
+Catalog results are cached for up to 60 seconds. Lookup failures leave the
+original text intact; `:codex skills --reload` or `:codex apps --reload` clears
+the mention cache after a successful refresh.
 
 ## User-owned local app-server
 

@@ -38,6 +38,8 @@ def record_thread(runtime, thread, *, persisted=False):
     meta = sessions.get_session_info(sid)
     meta.runtime = "codex-cli"
     meta.backend_session_id = sid
+    meta.backend_native_session_id = getattr(runtime, "native_session_id", None) or ""
+    meta.backend_forked_from_id = getattr(runtime, "forked_from_id", None) or ""
     meta.backend_home = codex_home()
     meta.backend_resume_ready = meta.backend_resume_ready or persisted
     meta.billing_requested = runtime.billing_requested
@@ -68,6 +70,7 @@ def record_turn(runtime, response):
     sessions.add_assistant_message(response)
     meta = sessions.get_session_info(runtime.thread_id)
     meta.backend_usage = runtime.token_usage
+    meta.backend_resume_ready = True
     sessions.store._save_metadata(meta)
 
 

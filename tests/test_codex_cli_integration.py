@@ -31,7 +31,13 @@ def test_real_sdk_pins_reviewer_and_app_overrides(installed_codex, tmp_path):
         runtime._ensure_started_sync()
         assert runtime.thread_id
         assert runtime.effective_policy["approvalsReviewer"] == "user"
-        assert runtime._reviewer_overrides['apps."example".approvals_reviewer'] == "user"
+        assert runtime._reviewer_overrides["apps"]["example"]["approvals_reviewer"] == "user"
+        # Prove the server parses this exact nested override. Quoted dotted
+        # keys used to pass validation while configuring a different app id.
+        params = runtime._thread_start_params()
+        params["config"] = {"apps": {"example": {"approvals_reviewer": "invalid-reviewer"}}}
+        with pytest.raises(Exception, match="invalid-reviewer"):
+            runtime._client.thread_start(params)
     finally:
         runtime.close()
 
@@ -121,7 +127,13 @@ async def test_real_cli_thread_start_resume_and_fork(installed_codex, tmp_path, 
         original = runtime.thread_id
         assert original
         assert runtime.effective_policy["approvalsReviewer"] == "user"
-        assert runtime._reviewer_overrides['apps."example".approvals_reviewer'] == "user"
+        assert runtime._reviewer_overrides["apps"]["example"]["approvals_reviewer"] == "user"
+        from superqode.runtime.codex_transport import CodexRPCError
+
+        invalid = runtime._thread_params()
+        invalid["config"] = {"apps": {"example": {"approvals_reviewer": "invalid-reviewer"}}}
+        with pytest.raises(CodexRPCError, match="invalid-reviewer"):
+            await runtime._timed_request("thread/start", invalid)
         assert runtime.effective_policy["sandbox"]["type"] == runtime._sandbox(
             "read-only" if mode == "tools-off" else mode
         )
@@ -168,6 +180,8 @@ async def test_real_cli_thread_start_resume_and_fork(installed_codex, tmp_path, 
         resumed = await runtime.resume_thread(saved)
         assert resumed["thread"]["id"] == saved
         assert resumed["approvalsReviewer"] == "user"
+        history = await runtime.thread_history()
+        assert history.get("thread", {}).get("turns") or history.get("data")
         forked = await runtime.fork_thread(saved)
         assert forked["thread"]["id"] != saved
         assert forked["approvalsReviewer"] == "user"
@@ -229,3 +243,36 @@ def test_emitted_sandbox_params_match_installed_schema(installed_codex, tmp_path
                 "sandboxPolicy": runtime._turn_sandbox_policy(mode),
             }
         )
+
+
+def test_real_sdk_reader_survives_failed_and_unknown_server_requests(installed_codex, tmp_path):
+    pytest.importorskip("openai_codex")
+    from io import StringIO
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from openai_codex.client import CodexClient
+    from superqode.runtime.codex_sdk import CodexSDKRuntime, _guarded_sdk_client
+
+    runtime = CodexSDKRuntime(
+        config=AgentConfig(provider="fixture", model="protocol-test", working_directory=tmp_path)
+    )
+    client = _guarded_sdk_client(CodexClient)(approval_handler=runtime._approval_handler)
+    wire = StringIO()
+    client._proc = SimpleNamespace(stdin=wire)
+    client._router = SimpleNamespace(route_response=Mock(), fail_all=Mock())
+    messages = iter(
+        [
+            {"id": 1, "method": "item/tool/requestUserInput", "params": {}},
+            {"id": 2, "method": "item/tool/call", "params": {}},
+            {"id": 3, "method": "future/unknown", "params": {}},
+            {"id": 4, "result": {"stillAlive": True}},
+        ]
+    )
+    client._read_message = lambda: next(messages)
+    client._reader_loop()
+    responses = [json.loads(row) for row in wire.getvalue().splitlines()]
+    assert responses[0] == {"id": 1, "result": {"answers": {}}}
+    assert responses[1]["result"]["success"] is False
+    assert responses[2]["error"]["code"] == -32601
+    assert "result" not in responses[2]
+    client._router.route_response.assert_called_once_with({"id": 4, "result": {"stillAlive": True}})

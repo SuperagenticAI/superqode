@@ -949,6 +949,12 @@ def probe_session_availability(
                 "Native thread is archived or has no saved id",
                 "Use :codex sessions --archived to inspect it",
             )
+        if not metadata.backend_resume_ready and metadata.message_count == 0:
+            return SessionAvailability(
+                "missing_transcript",
+                "Codex has not saved a turn for this conversation yet",
+                "Continue the currently connected conversation before resuming it",
+            )
         return SessionAvailability(
             "ok", "Exact native Codex resume; login and thread are verified on the next request"
         )

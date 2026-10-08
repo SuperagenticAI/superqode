@@ -15,6 +15,12 @@ from superqode.tools.question_tool import Question, QuestionType, get_question_h
 
 class CodexInteractions:
     @staticmethod
+    def _app_reviewer_overrides(apps):
+        # RPC config keys use dot-separated paths, not TOML-quoted paths.
+        # A nested value also preserves app ids containing dots or quotes.
+        return {"apps": {key: {"approvals_reviewer": "user"} for key in {"_default", *apps}}}
+
+    @staticmethod
     def _cancelled_server_request(method):
         if method == "item/tool/requestUserInput":
             return {"answers": {}}
@@ -39,7 +45,15 @@ class CodexInteractions:
         # RPC ids/timestamps change between calls. Consent binds actual scope,
         # host policy and permission configuration, never a blanket tool grant.
         rpc_metadata = (
-            {"itemId", "turnId", "threadId", "approvalId", "callId", "availableDecisions"}
+            {
+                "itemId",
+                "turnId",
+                "threadId",
+                "approvalId",
+                "callId",
+                "availableDecisions",
+                "startedAtMs",
+            }
             if tool in {"bash", "patch", "network", "codex_permissions", "mcp_elicitation"}
             else set()
         )

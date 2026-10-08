@@ -41,6 +41,39 @@ def test_mcp_oauth_displays_authorization_url_but_no_other_fields():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "command", ["permissions mediated", 'turn-options {"summary":"concise"}', "turn-options reset"]
+)
+async def test_mediated_and_turn_option_controls_dispatch_asynchronously(native_app, command):
+    from unittest.mock import AsyncMock
+
+    app, runtime, tasks = native_app
+    runtime.set_mediated_profile = AsyncMock(return_value={"approvalPolicy": "on-request"})
+    runtime.set_turn_options = AsyncMock(return_value={"nextTurn": {}})
+    log = Log()
+    app._codex_cmd(command, log)
+    await asyncio.gather(*tasks)
+    if command == "permissions mediated":
+        runtime.set_mediated_profile.assert_awaited_once()
+    else:
+        runtime.set_turn_options.assert_awaited_once_with(
+            {} if command.endswith("reset") else {"summary": "concise"}
+        )
+
+
+@pytest.mark.parametrize("value", ["null", "[]", '{"unknown":true}'])
+def test_invalid_turn_options_do_not_start_a_connection(native_app, value):
+    from unittest.mock import Mock
+
+    app, _, _ = native_app
+    app._codex_runtime_or_connect = Mock(side_effect=AssertionError("must not connect"))
+    log = Log()
+    app._codex_cmd("turn-options " + value, log)
+    app._codex_runtime_or_connect.assert_not_called()
+    assert any("Turn options" in item or "Usage:" in item for item in log.items)
+
+
+@pytest.mark.asyncio
 async def test_native_approval_choice_preserves_session_and_cancel(native_app):
     from superqode.tools.question_tool import Answer, get_question_handler, set_question_handler
 

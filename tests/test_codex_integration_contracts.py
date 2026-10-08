@@ -113,9 +113,9 @@ async def test_session_consent_is_exact_scope_and_invalidates_on_policy_change(r
     seen = []
     runtime._approval_callback = lambda *args: seen.append(args) or "acceptForSession"
     method = "item/commandExecution/requestApproval"
-    params = {"command": "echo first", "cwd": "/project", "itemId": "a"}
+    params = {"command": "echo first", "cwd": "/project", "itemId": "a", "startedAtMs": 1}
     assert await runtime._server_request(method, params) == {"decision": "accept"}
-    assert await runtime._server_request(method, {**params, "itemId": "b"}) == {
+    assert await runtime._server_request(method, {**params, "itemId": "b", "startedAtMs": 2}) == {
         "decision": "accept"
     }
     assert len(seen) == 1
@@ -473,10 +473,14 @@ def test_reviewer_mismatch_fails_before_any_turn(runtime):
 
 
 @pytest.mark.asyncio
-async def test_detached_review_streams_separate_thread_and_restores_main(runtime, monkeypatch):
+@pytest.mark.parametrize("persisted", [True, False])
+async def test_detached_review_streams_separate_thread_and_restores_main(
+    runtime, monkeypatch, persisted
+):
     from unittest.mock import AsyncMock
 
     runtime._thread_id = runtime.session_id = "main-thread"
+    runtime._thread_persisted = persisted
     runtime.history = [{"id": "earlier-turn", "items": []}]
     runtime.token_usage = {"last": {"totalTokens": 42}}
     runtime._transport = SimpleNamespace(cancel_server_requests=AsyncMock())
@@ -486,10 +490,11 @@ async def test_detached_review_streams_separate_thread_and_restores_main(runtime
     )
 
     async def request(method, params):
-        if method == "thread/fork":
-            assert params["threadId"] == "main-thread"
+        if method in {"thread/fork", "thread/start"}:
+            assert method == ("thread/fork" if persisted else "thread/start")
+            assert params.get("threadId") == ("main-thread" if persisted else None)
             assert params["sandbox"] == "read-only"
-            assert params["deferGoalContinuation"] is True
+            assert params.get("deferGoalContinuation") is (True if persisted else None)
             return {"thread": {"id": "review-thread"}, "approvalsReviewer": "user"}
         assert method == "review/start"
         assert params["threadId"] == "review-thread"
@@ -514,9 +519,14 @@ async def test_detached_review_streams_separate_thread_and_restores_main(runtime
     assert runtime.last_review_thread_id == "review-thread"
     from superqode.session.codex import latest_thread
 
+    assert latest_thread(
+        runtime.config.working_directory, runtime.billing_requested
+    ).session_id == ("main-thread" if persisted else "review-thread")
+    from superqode.session.codex import saved_thread
+
     assert (
-        latest_thread(runtime.config.working_directory, runtime.billing_requested).session_id
-        == "main-thread"
+        saved_thread(runtime.config.working_directory, "main-thread").backend_resume_ready
+        == persisted
     )
 
 
@@ -531,3 +541,192 @@ async def test_shared_listener_cannot_resume_unobserved_autonomous_goal(runtime,
     with pytest.raises(RuntimeError, match="Pause it in Codex"):
         await runtime._check_resume_goal("existing-thread")
     request.assert_awaited_once_with("thread/goal/get", {"threadId": "existing-thread"})
+
+
+@pytest.mark.asyncio
+async def test_history_falls_back_only_for_unimplemented_paging(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+    from superqode.runtime.codex_transport import CodexRPCError
+
+    runtime._thread_id = "saved"
+    runtime.capabilities = CodexCapabilities(methods={"thread/items/list": {}})
+    monkeypatch.setattr(runtime, "ensure_thread", AsyncMock())
+    request = AsyncMock(
+        side_effect=CodexRPCError(
+            "thread/items/list",
+            {
+                "code": -32600,
+                "message": "not supported yet",
+            },
+        )
+    )
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    fallback = AsyncMock(return_value={"thread": {"turns": [{"id": "old"}]}})
+    monkeypatch.setattr(runtime, "read_thread", fallback)
+    for _ in range(2):
+        assert (await runtime.thread_history())["thread"]["turns"][0]["id"] == "old"
+    assert request.await_count == 1
+    with pytest.raises(ValueError, match="paginated"):
+        await runtime.thread_history(cursor="old-page")
+    runtime._history_paging_unavailable = False
+    request.side_effect = CodexRPCError(
+        "thread/items/list", {"code": -32000, "message": "disconnected"}
+    )
+    with pytest.raises(CodexRPCError, match="disconnected"):
+        await runtime.thread_history()
+
+
+@pytest.mark.asyncio
+async def test_optional_mention_catalog_failure_is_cached_and_does_not_fail_turn(
+    runtime, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    runtime.capabilities = CodexCapabilities(methods={"skills/list": {}, "app/list": {}})
+    inspect = AsyncMock(side_effect=RuntimeError("catalog offline"))
+    monkeypatch.setattr(runtime, "inspect", inspect)
+    for _ in range(2):
+        assert await runtime._composer_input("$review @drive") == [
+            {"type": "text", "text": "$review @drive", "text_elements": []}
+        ]
+    assert inspect.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_fresh_detached_review_never_forks_or_marks_origin_resumable(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+    from superqode.session.codex import saved_thread, latest_thread
+
+    runtime._accept_thread({"thread": {"id": "unsaved"}, "approvalsReviewer": "user"})
+    runtime._transport = SimpleNamespace(cancel_server_requests=AsyncMock())
+    monkeypatch.setattr(runtime, "ensure_thread", AsyncMock(return_value=False))
+
+    async def request(method, params):
+        assert method == "thread/start"
+        assert "threadId" not in params
+        raise RuntimeError("review creation failed")
+
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    runtime.set_review(detached=True)
+    with pytest.raises(RuntimeError, match="review creation failed"):
+        await runtime.run("review")
+    assert runtime.thread_id == "unsaved"
+    saved = saved_thread(runtime.config.working_directory, "unsaved")
+    assert not saved.backend_resume_ready
+    from superqode.session.harness_bridge import probe_session_availability
+
+    assert (
+        probe_session_availability(saved, cwd=runtime.config.working_directory).status
+        == "missing_transcript"
+    )
+    assert latest_thread(runtime.config.working_directory, runtime.billing_requested) is None
+
+
+def test_native_identity_and_limit_pools_are_preserved(runtime):
+    from superqode.session.codex import saved_thread
+
+    runtime._accept_thread(
+        {
+            "thread": {
+                "id": "child",
+                "sessionId": "native-session",
+                "forkedFromId": "parent",
+            },
+            "approvalsReviewer": "user",
+        },
+        persisted=True,
+    )
+    saved = saved_thread(runtime.config.working_directory, "child")
+    assert saved.backend_native_session_id == runtime.native_session_id == "native-session"
+    assert saved.backend_forked_from_id == runtime.forked_from_id == "parent"
+    runtime._on_notification(
+        "account/rateLimits/updated",
+        {
+            "rateLimits": {"primary": {}},
+            "rateLimitsByLimitId": {"codex": {"limitId": "codex"}},
+        },
+    )
+    assert runtime.rate_limits_by_limit_id["codex"]["limitId"] == "codex"
+
+
+@pytest.mark.asyncio
+async def test_mediated_profile_clears_full_access_and_named_profile(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    runtime.capabilities = CodexCapabilities(
+        methods={"turn/start": {"properties": {"approvalsReviewer": {}}}}
+    )
+    runtime._permission_profile = "unsafe-profile"
+    runtime.sandbox_backend = runtime._next_turn_sandbox = "danger-full-access"
+    runtime._approval_policy = "never"
+    assert (await runtime.set_mediated_profile())["sandbox"] == "workspace-write"
+    assert runtime._permission_profile is None
+    assert runtime._next_turn_sandbox is None
+    assert runtime._approval_policy == "on-request"
+
+
+@pytest.mark.asyncio
+async def test_turn_options_are_validated_and_sent_once(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+    from jsonschema import ValidationError, SchemaError
+
+    runtime._thread_id = runtime.session_id = "main-thread"
+    runtime._transport = SimpleNamespace(cancel_server_requests=AsyncMock())
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    monkeypatch.setattr(runtime, "ensure_thread", AsyncMock(return_value=False))
+    runtime.capabilities = CodexCapabilities(
+        methods={
+            "turn/start": {
+                "properties": {
+                    "outputSchema": {},
+                    "summary": {"enum": ["concise", "detailed", "none", "auto"]},
+                    "serviceTier": {"type": ["string", "null"]},
+                    "clientUserMessageId": {"type": ["string", "null"]},
+                }
+            }
+        }
+    )
+    options = {
+        "outputSchema": {"type": "object"},
+        "summary": "concise",
+        "serviceTier": None,
+        "clientUserMessageId": "message-1",
+    }
+    await runtime.set_turn_options(options)
+    with pytest.raises(ValidationError):
+        await runtime.set_turn_options({"summary": "invalid"})
+    with pytest.raises(SchemaError):
+        await runtime.set_turn_options({"outputSchema": {"type": "invalid"}})
+    with pytest.raises(ValueError):
+        await runtime.set_turn_options({"unknown": True})
+    seen = []
+
+    async def request(method, params):
+        assert method == "turn/start"
+        seen.append(params)
+        runtime._on_notification(
+            "turn/completed",
+            {
+                "threadId": "main-thread",
+                "turn": {"id": "turn", "status": "completed"},
+            },
+        )
+        return {"turn": {"id": "turn"}}
+
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    await runtime.run("first")
+    await runtime.run("second")
+    assert all(seen[0][key] == value for key, value in options.items())
+    assert not options.keys() & seen[1].keys()
+
+
+@pytest.mark.asyncio
+async def test_turn_options_refuse_fields_absent_from_selected_binary(runtime, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    runtime.capabilities = CodexCapabilities(methods={"turn/start": {"properties": {}}})
+    with pytest.raises(RuntimeError, match="outputSchema"):
+        await runtime.set_turn_options({"outputSchema": {"type": "object"}})
+    assert runtime._next_turn_options == {}

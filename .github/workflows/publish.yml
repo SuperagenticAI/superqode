@@ -73,6 +73,7 @@ jobs:
           uv run --frozen pytest -p pytest_asyncio.plugin
           tests/test_runtime_codex_cli.py tests/test_codex_cli_integration.py
           tests/test_runtime_codex_sdk.py tests/test_codex_integration_contracts.py
+          tests/test_cli_reference_coverage.py
           tests/test_codex_cli_ui.py tests/test_codex_harness_precedence.py
           tests/test_pure_mode_sessions.py tests/test_harness_session_bridge.py
           tests/test_session_switchboard.py tests/test_omnigent_importer.py

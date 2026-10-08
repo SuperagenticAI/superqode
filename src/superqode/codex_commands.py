@@ -15,6 +15,10 @@ CODEX_COMMANDS = (
     ("thread", "Show the current Codex thread"),
     ("history", "Inspect earlier messages and tool calls; --cursor pages back"),
     ("tools", "Inspect SuperQode tools exposed through Codex dynamic tools"),
+    (
+        "turn-options",
+        "Set JSON output schema, summary, service tier or client message ID for the next turn",
+    ),
     ("attach", "Attach a user-owned local Codex daemon, or return to stdio"),
     ("sessions", "List Codex sessions; supports --archived, --all and --cursor"),
     ("resume", "Resume a Codex thread by ID or --last"),
@@ -62,6 +66,7 @@ CODEX_ALIASES = {
 CODEX_OPTIONS = {
     "plan": (("on", "Use native Codex Plan mode"), ("off", "Use native Codex default mode")),
     "permissions": (
+        ("mediated", "Use human approvals, on-request policy and workspace-write sandbox"),
         ("on-request", "Let Codex request approvals"),
         ("never", "Never request approvals; retain sandbox restrictions"),
         ("untrusted", "Ask for commands outside Codex's trusted set"),

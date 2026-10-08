@@ -3,7 +3,7 @@
 Checked on **2026-10-08** against installed **codex-cli 0.160.0** on macOS arm64.
 The audit read all **72 named CLI command paths** (plus root help), **26 top-level commands**, and **62 slash-command variants** in the matching release source. Hidden/debug/platform-gated slash variants are included in the source count; they are not all shown in every Codex menu. The generated app-server JSON schemas were also inspected.
 
-SuperQode 2.8.0 exposed 15 primary `:codex` subcommands. The current command catalog exposes **41**, including help and client aliases. This is command coverage, not full Codex CLI or TUI parity. See [Codex integration](codex.md) for approval boundaries and native controls.
+SuperQode 2.8.0 exposed 15 primary `:codex` subcommands. The current command catalog exposes **42**, including help. This is command coverage, not full Codex CLI or TUI parity. See [Codex integration](codex.md) for approval boundaries and native controls.
 
 ## Sources
 
@@ -46,6 +46,8 @@ Connect with `:connect codex`, then enter `:codex help`. SDK connections retain 
 :codex history
 :codex permissions profile <id>
 :codex permissions untrusted
+:codex permissions mediated
+:codex turn-options {"summary":"concise","serviceTier":null}
 :codex mcp login <server>
 :codex review --detached --base main
 :codex attach ws://127.0.0.1:4500
@@ -55,9 +57,20 @@ Inspection commands expose Codex-owned resources. SuperQode's `:mcp`, `:skills`,
 
 Plan mode selects a Codex collaboration preset for future turns. Approval policy and sandbox are separate controls; selecting `never` does not grant extra filesystem access. Managed Codex requirements still apply. These overrides are per connection and are not written to Codex configuration files.
 
+The mediated preset requests human review with `on-request` and `workspace-write`;
+SuperQode still only sees native actions that request approval. Turn options apply
+to the next ordinary turn and are schema-checked. History falls back to
+`thread/read` when the server advertises paging but has not implemented it.
+Detached reviews fork saved conversations or create a separate read-only thread
+for a fresh conversation; unsaved originals are not marked resumable.
+
+Persistent rule amendments require a separate confirmation and Codex may then
+write its rules. Codex also stores OAuth state after explicit MCP login. These
+native writes are separate from SuperQode's per-connection overrides.
+
 SuperQode's `:plan` host guard is a separate setting and still applies when enabled. `:codex plan off` changes the native collaboration preset.
 
-Subscription authentication is checked before fresh-thread creation and each prompt. Sign-in starts only ChatGPT browser/device flows; API-key and access-token login are not exposed. Metadata commands do not create a thread or call a model. Configuration and inventories redact credential-related fields before display. Login URLs and one-time device codes are intentionally displayed.
+Subscription authentication is checked before fresh-thread creation and each prompt. Sign-in starts only ChatGPT browser/device flows; API-key and access-token login are not exposed. Native CLI metadata commands do not create a thread or call a model. SDK metadata may initialize an empty thread but never starts a model turn. Configuration and inventories redact credential-related fields before display. Login URLs and one-time device codes are intentionally displayed.
 
 Inventory/session pages show a `--cursor` continuation command when available. Session IDs are displayed in full. Changing the active session is blocked while a task runs. Archiving the current thread detaches it; unarchive restores a saved thread without activating it.
 
@@ -196,6 +209,8 @@ dynamic-tool regression contracts.
 
 Remaining separate lifecycle work: unattended native goals, queued turns,
 side chats, transcript export, plugin mutation and cloud/worktree handoffs.
-SuperQode does not expose sandbox-bypassing shell/process RPCs, copy ChatGPT
-tokens or write persistent Codex configuration. Built-in Codex actions that do
-not ask for approval remain governed by Codex rather than the host executor.
+SuperQode does not expose sandbox-bypassing shell/process RPCs or copy ChatGPT
+tokens. Connection overrides do not write persistent Codex configuration;
+explicitly confirmed rule amendments and MCP OAuth can cause Codex-managed
+persistent writes. Built-in Codex actions that do not ask for approval remain
+governed by Codex rather than the host executor.

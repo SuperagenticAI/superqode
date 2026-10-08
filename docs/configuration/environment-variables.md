@@ -100,6 +100,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_COPILOT_AUTH_PROBE_TIMEOUT` | seconds | `15` | Maximum wait for the background check of whether the Copilot CLI is signed in. |
 | `SUPERQODE_CODEX_PREFER_LOCAL_CLI` | `0`/`1` | on | Prefer a compatible installed Codex CLI app-server over the SDK-pinned server. |
 | `SUPERQODE_CODEX_BIN` | executable path or name | `codex` on PATH | Select the executable for the native Codex CLI runtime. An invalid explicit selection reports an error. |
+| `SUPERQODE_CODEX_SERVER` | loopback WebSocket URL | unset | Attach the native Codex runtime to a user-owned local app-server, such as `ws://127.0.0.1:4500`. Its version must match the selected CLI. Unset launches a private stdio app-server. |
 | `SUPERQODE_ANTIGRAVITY_CLI_AGENT` | custom agent name | CLI default | Pass a custom agent to signed-in `agy --agent`. |
 | `SUPERQODE_ANTIGRAVITY_CLI_EFFORT` | `low`/`medium`/`high` | CLI default | Pass a thinking level to `agy --effort`; requires agy 1.1.5 or newer. |
 | `SUPERQODE_ANTIGRAVITY_SKILLS` | paths (`:`-sep) | unset | Add skill directories to the local Antigravity SDK runtime. |

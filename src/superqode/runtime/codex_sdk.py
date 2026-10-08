@@ -51,6 +51,20 @@ _CODEX_VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 _FORWARD_COMPATIBILITY_LOCK = threading.Lock()
 
 
+class _SDKRequestError(dict):
+    """A server-request error to emit as JSON-RPC error, never as a result."""
+
+
+def _guarded_sdk_client(base):
+    class GuardedClient(base):
+        def _write_message(self, payload):
+            if isinstance(payload.get("result"), _SDKRequestError):
+                payload = {"id": payload["id"], "error": dict(payload["result"])}
+            return super()._write_message(payload)
+
+    return GuardedClient
+
+
 def _codex_binary_version(binary: str) -> tuple[int, int, int] | None:
     """Return a Codex CLI's numeric version without invoking a shell."""
 
@@ -331,7 +345,7 @@ class CodexSDKRuntime(CodexInteractions):
 
     @property
     def metadata(self):
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         return self._init
 
     def _preferred_local_codex_binary(self) -> tuple[str, str] | None:
@@ -496,7 +510,9 @@ class CodexSDKRuntime(CodexInteractions):
     def _start_sdk_client(self, CodexClient, sdk_config, thread_params: dict[str, Any]):
         """Start, initialize, and create a thread, closing a failed client."""
 
-        client = CodexClient(config=sdk_config, approval_handler=self._approval_handler)
+        client = _guarded_sdk_client(CodexClient)(
+            config=sdk_config, approval_handler=self._approval_handler
+        )
         try:
             client.start()
             init = client.initialize()
@@ -512,15 +528,11 @@ class CodexSDKRuntime(CodexInteractions):
                     )
 
             if read_config is not None:
-                import json
-
                 data = _payload_dict(
                     read_config({"cwd": str(self.config.working_directory), "includeLayers": False})
                 )
                 apps = _payload_dict(data.get("config")).get("apps") or {}
-                self._reviewer_overrides = {
-                    f"apps.{json.dumps(key)}.approvals_reviewer": "user" for key in apps
-                }
+                self._reviewer_overrides = self._app_reviewer_overrides(apps)
                 thread_params["config"] = self._reviewer_overrides
             started = client.thread_start(thread_params)
             self._verify_subscription_provider(started)
@@ -571,17 +583,15 @@ class CodexSDKRuntime(CodexInteractions):
         }
 
     def _verify_subscription_provider(self, response) -> None:
-        reviewer = _payload_value(
-            response, "approvalsReviewer", "approvals_reviewer", default="user"
-        )
-        if _status_value(reviewer) != "user":
+        reviewer = _payload_value(response, "approvalsReviewer", "approvals_reviewer")
+        if reviewer is not None and _status_value(reviewer) != "user":
             raise _SubscriptionVerificationError(
                 "Codex SDK did not honor SuperQode approval mediation"
             )
         self.effective_policy = {
             "owner": "Codex",
             "host_enforcement": "approval requests only",
-            "approvalsReviewer": _status_value(reviewer),
+            "approvalsReviewer": _status_value(reviewer) if reviewer is not None else None,
             "approvalPolicy": _payload_value(response, "approvalPolicy", "approval_policy"),
             "sandbox": _payload_value(response, "sandbox"),
         }
@@ -598,10 +608,11 @@ class CodexSDKRuntime(CodexInteractions):
                 "Codex subscription route resolved a different model provider. No API billing fallback was attempted."
             )
 
-    def _ensure_started_sync(self) -> None:
-        from .codex_policy import preflight
+    def _ensure_started_sync(self, *, task=True) -> None:
+        if task:
+            from .codex_policy import preflight
 
-        preflight(self.config, self._permission_manager)
+            preflight(self.config, self._permission_manager)
         if self._client is not None and self._thread is not None:
             return
         with self._start_lock:
@@ -795,14 +806,14 @@ class CodexSDKRuntime(CodexInteractions):
     def active_model(self) -> str:
         """The model resolved by the live Codex thread, not a stale list default."""
 
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         return self._active_model
 
     @property
     def app_server_source(self) -> str:
         """Human-readable source of the app-server backing this runtime."""
 
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         return self._app_server_source
 
     def _turn_kwargs(self) -> dict[str, Any]:
@@ -839,8 +850,13 @@ class CodexSDKRuntime(CodexInteractions):
                     with self._interaction_lock:
                         self._interaction_futures.discard(future)
             return asyncio.run(coroutine)
-        except (asyncio.CancelledError, concurrent.futures.CancelledError):
-            return self._cancelled_server_request(method)
+        except (asyncio.CancelledError, concurrent.futures.CancelledError, Exception):
+            try:
+                return self._cancelled_server_request(method)
+            except RuntimeError:
+                return _SDKRequestError(
+                    code=-32601, message=f"Unsupported SuperQode Codex request: {method}"
+                )
 
     def _cancel_interactions(self):
         with self._interaction_lock:
@@ -1207,7 +1223,7 @@ class CodexSDKRuntime(CodexInteractions):
             client.close()
 
     def models(self, *, include_hidden: bool = False):
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         try:
             return self._client.model_list(include_hidden=include_hidden)
         except Exception as error:
@@ -1215,7 +1231,7 @@ class CodexSDKRuntime(CodexInteractions):
             return self._client.model_list(include_hidden=include_hidden)
 
     def account(self, *, refresh_token: bool = False):
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         try:
             return self._client.account_read({"refreshToken": refresh_token})
         except Exception as error:
@@ -1227,7 +1243,7 @@ class CodexSDKRuntime(CodexInteractions):
         return self._client.account_logout()
 
     def list_threads(self, *, limit: int = 20, archived: bool = False):
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         return self._client.thread_list(
             {
                 "limit": limit,
@@ -1279,7 +1295,7 @@ class CodexSDKRuntime(CodexInteractions):
         return self._thread.compact()
 
     def read_thread(self, *, include_turns: bool = False):
-        self._ensure_started_sync()
+        self._ensure_started_sync(task=False)
         return self._thread.read(include_turns=include_turns)
 
     @property

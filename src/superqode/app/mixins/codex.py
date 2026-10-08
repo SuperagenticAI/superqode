@@ -1268,7 +1268,13 @@ class CodexMixin(CodexControlsMixin):
                 f"  Approval    {getattr(runtime, '_approval_policy', None) or 'Codex default'}\n"
             )
             policy = getattr(runtime, "effective_policy", {})
-            text.append(f"  Reviewer    {policy.get('approvalsReviewer') or 'user (SuperQode)'}\n")
+            text.append(
+                f"  Reviewer    {policy.get('approvalsReviewer') or 'user requested; not confirmed by a thread'}\n"
+            )
+            if getattr(runtime, "native_session_id", None):
+                text.append(f"  Session     {runtime.native_session_id}\n")
+            if getattr(runtime, "forked_from_id", None):
+                text.append(f"  Forked from {runtime.forked_from_id}\n")
             capabilities = getattr(runtime, "capabilities", None)
             text.append(
                 f"  Schema      {'verified from installed CLI' if capabilities and capabilities.verified else 'unavailable; experimental controls disabled'}\n"
@@ -1297,6 +1303,8 @@ class CodexMixin(CodexControlsMixin):
             )
             if runtime.rate_limits:
                 text.append(f"  Rate limits {runtime.rate_limits}\n")
+            if getattr(runtime, "rate_limits_by_limit_id", None):
+                text.append(f"  Limit pools {runtime.rate_limits_by_limit_id}\n")
             if getattr(runtime, "token_usage", None):
                 text.append(f"  Token usage {runtime.token_usage}\n")
             else:

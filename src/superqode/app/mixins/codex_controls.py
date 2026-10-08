@@ -96,6 +96,7 @@ class CodexControlsMixin:
             "history",
             "tools",
             "attach",
+            "turn-options",
         }
         if sub not in supported:
             return False
@@ -127,7 +128,7 @@ class CodexControlsMixin:
                 if sub == "mcp" and (rest in {"reload", "verbose"} or rest.startswith("login ")):
                     options = {}
                 elif sub == "permissions" and (
-                    rest in {"on-request", "never", "untrusted"}
+                    rest in {"on-request", "never", "untrusted", "mediated"}
                     or rest.startswith(("profile ", "granular "))
                 ):
                     options = {}
@@ -151,6 +152,19 @@ class CodexControlsMixin:
                 options = codex_options(rest, flags=("--tokens",))
             elif sub == "history":
                 options = codex_options(rest, values=("--cursor",))
+            elif sub == "turn-options":
+                options = {} if rest == "reset" else json.loads(rest) if rest else None
+                if rest and not isinstance(options, dict):
+                    raise ValueError("Usage: :codex turn-options <JSON object>|reset")
+                if isinstance(options, dict) and options.keys() - {
+                    "outputSchema",
+                    "summary",
+                    "serviceTier",
+                    "clientUserMessageId",
+                }:
+                    raise ValueError(
+                        "Turn options accept outputSchema, summary, serviceTier and clientUserMessageId"
+                    )
             elif sub == "attach":
                 if not rest or len(shlex.split(rest)) != 1:
                     raise ValueError("Usage: :codex attach ws://127.0.0.1:<port>|stdio")
@@ -166,7 +180,15 @@ class CodexControlsMixin:
                     f":codex {sub} requires Codex CLI. Select :connect codex to use it; your SDK connection is still active."
                 )
                 return True
-            idle_only = {"new", "plan", "login", "permissions", "unarchive", "attach"}
+            idle_only = {
+                "new",
+                "plan",
+                "login",
+                "permissions",
+                "unarchive",
+                "attach",
+                "turn-options",
+            }
             if (
                 sub in idle_only
                 and not (sub == "login" and rest in {"status", "cancel"})
@@ -231,6 +253,13 @@ class CodexControlsMixin:
                 self._codex_control_result(log, "SuperQode tools", runtime._dynamic_tool_specs())
             elif sub == "attach":
                 read(lambda: runtime.attach_server(rest), "local harness connection")
+            elif sub == "turn-options":
+                if options is None:
+                    self._codex_control_result(log, "next-turn options", runtime._next_turn_options)
+                else:
+                    read(lambda: runtime.set_turn_options(options), "next-turn options")
+            elif sub == "permissions" and rest == "mediated":
+                read(runtime.set_mediated_profile, "mediated permissions")
             elif sub == "permissions" and rest.startswith("profile "):
                 profile = rest.removeprefix("profile ").strip()
                 if not profile or len(shlex.split(profile)) != 1:

@@ -13,9 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   elicitation handling. Both apply policy preflight and pin the human reviewer,
   including per-app overrides. Commandless network approvals display structured
   destinations; unsupported strict host policies block tasks up front.
-- Session consent binds every argument and the current policy. Persistent
+- Session consent binds every action argument and the current policy. Persistent
   Codex rule changes require a second confirmation. Dynamic tool calls use the
   host executor and invocation-scoped receipts.
+- Correct per-app reviewer override serialization; exclude changing approval
+  timestamps from exact-scope consent. SDK request exceptions cancel or return
+  JSON-RPC errors without stopping the SDK reader.
+- History falls back to thread reads when paging is advertised but unimplemented.
+  Fresh detached reviews create a separate thread and preserve unsaved originals.
+- Optional mention catalogs are cached and lookup errors preserve the prompt.
+  Read-only SDK inventories remain available under strict host network policy.
+- Document the local server environment variable and check reference coverage
+  in main CI and the publish gate.
 
 ### Added
 
@@ -24,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Named permission profiles, granular/untrusted policies, MCP OAuth and forms,
   typed skill/app mentions, earlier tool history and separate read-only reviews.
 - Native run state, hook events, typed errors and context-window reporting.
+- Mediated permission preset, schema-checked next-turn options, native session
+  and fork identities, and account rate-limit pools. Reviewer status remains
+  unconfirmed until a thread reports it.
 - Explicit loopback Codex app-server attachment with version checks and detach
   behavior that preserves the user's listener.
 - Daily pinned/latest Codex compatibility CI and expanded live protocol release

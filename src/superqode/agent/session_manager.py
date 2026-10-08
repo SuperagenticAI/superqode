@@ -49,6 +49,8 @@ class SessionMetadata:
     working_directory: str = ""
     runtime: str = ""
     backend_session_id: str = ""
+    backend_native_session_id: str = ""
+    backend_forked_from_id: str = ""
     backend_home: str = ""
     billing_requested: str = "agent-managed"
     backend_usage: Dict[str, Any] = field(default_factory=dict)
