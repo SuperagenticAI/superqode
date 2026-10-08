@@ -47,6 +47,13 @@ class SessionMetadata:
     harness_display_name: str = ""
     # Absolute cwd the session belonged to (for resume scoping).
     working_directory: str = ""
+    runtime: str = ""
+    backend_session_id: str = ""
+    backend_home: str = ""
+    billing_requested: str = "agent-managed"
+    backend_usage: Dict[str, Any] = field(default_factory=dict)
+    backend_resume_ready: bool = False
+    archived: bool = False
 
 
 @dataclass

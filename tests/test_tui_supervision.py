@@ -374,3 +374,33 @@ def test_approval_preview_puts_command_before_metadata():
     )
     assert row.detail.splitlines()[1] == "command: pytest tests/test_delivery.py"
     assert row.detail.index("command:") < row.detail.index("Invocation:")
+
+
+def test_supervision_reuses_read_only_store_without_initialization(tmp_path, monkeypatch):
+    from superqode.app.mixins.supervision import SupervisionMixin
+
+    path = tmp_path / "workorders.sqlite3"
+    store = WorkOrderStore(path)
+    store.create(
+        WorkOrder(
+            work_order_id="poll-check",
+            goal="Inspect",
+            repository=str(tmp_path),
+            tasks=(WorkOrderTask(task_id="check", title="Check", goal="Check"),),
+        )
+    )
+    monkeypatch.setattr(
+        WorkOrderStore, "_initialize", lambda *_: pytest.fail("Polling initialized the store")
+    )
+    app = SimpleNamespace()
+    first = SupervisionMixin._work_supervision(app, path, tmp_path)
+    cached = app._supervision_read_store[1]
+    second = SupervisionMixin._work_supervision(app, path, tmp_path)
+    assert [entry.id for entry in second[0]] == [entry.id for entry in first[0]]
+    assert app._supervision_read_store[1] is cached
+    with pytest.raises(Exception, match="readonly"):
+        with cached._connect() as connection:
+            connection.execute("CREATE TABLE forbidden (id INTEGER)")
+    missing = tmp_path / "missing.sqlite3"
+    assert SupervisionMixin._work_supervision(app, missing, tmp_path) == ([], [])
+    assert not missing.exists()

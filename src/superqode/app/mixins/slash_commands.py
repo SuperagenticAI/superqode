@@ -1877,6 +1877,10 @@ class SlashCommandMixin:
             definition = getattr(pure_mode, "_harness_definition", None)
             if definition is not None:
                 os.environ["SUPERQODE_HARNESS"] = str(definition.path or definition.id)
+            if pure_mode.runtime_name == "codex-cli":
+                os.environ["SUPERQODE_RUNTIME"] = "codex-cli"
+                os.environ["SUPERQODE_HARNESS"] = "core"
+                self._sync_self_contained_status("codex-cli", tokens=None)
             self._refresh_harness_panel()
         except (AttributeError, TypeError, Exception):
             pass

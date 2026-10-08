@@ -1236,7 +1236,11 @@ class AgentRunMixin:
                     # Get stats for display
                     stats = self._pure_mode.get_status()["stats"]
                     tool_count = max(stats.get("total_tool_calls", 0), len(tool_actions))
-                    total_tokens = int(stats.get("total_tokens", 0) or 0)
+                    total_tokens = (
+                        None
+                        if stats.get("total_tokens") is None and runtime_name == "codex-cli"
+                        else int(stats.get("total_tokens", 0) or 0)
+                    )
 
                     # Merge tool-tracked writes with git changes detected after the run.
                     try:
@@ -1298,15 +1302,16 @@ class AgentRunMixin:
                     }
 
                     # Track usage
-                    self._track_byok_usage(
-                        text,
-                        response_text,
-                        tool_count,
-                        prompt_tokens=int(stats.get("prompt_tokens", 0) or 0),
-                        completion_tokens=int(stats.get("completion_tokens", 0) or 0),
-                        total_tokens=total_tokens,
-                        total_cost=float(stats.get("total_cost", 0.0) or 0.0) or None,
-                    )
+                    if total_tokens is not None and runtime_name != "codex-cli":
+                        self._track_byok_usage(
+                            text,
+                            response_text,
+                            tool_count,
+                            prompt_tokens=int(stats.get("prompt_tokens", 0) or 0),
+                            completion_tokens=int(stats.get("completion_tokens", 0) or 0),
+                            total_tokens=total_tokens,
+                            total_cost=float(stats.get("total_cost", 0.0) or 0.0) or None,
+                        )
                     if runtime_name in self._SELF_CONTAINED_RUNTIMES:
                         # Usage tracking shares the historical BYOK tracker,
                         # whose provider/model may be "unknown". Restore the

@@ -99,6 +99,29 @@ reported, and measured startup/RPC/first-text/turn timings. Model and service
 latency still apply; using native stdio is not a guarantee of faster inference.
 Failed or timed-out turns are never replayed automatically.
 
+Native thread IDs and their connection settings are saved in the project's
+session index. `:sessions` lists these sessions and `:resume <id>` reconnects
+to the same Codex thread without requiring an OpenAI API key. Reconnecting the
+CLI route selects the most recent unarchived native session for that project,
+Codex home and billing route. Use `:codex new` for a fresh thread. Codex verifies
+the saved thread on the next request; an unavailable thread produces an error
+instead of silently starting another. Codex retains the full tool history;
+SuperQode stores the user/assistant text observed through this connection.
+
+Codex owns execution policy. SuperQode checks the command and file approval
+requests Codex sends, including every reported file path, but does not receive
+an approval request for every tool call. `:codex status` shows the policy owner,
+approval policy and sandbox reported by Codex. Project or organization deny,
+approval, network or credential restrictions that require host interception
+block native execution before a task starts. Use a SuperQode-governed runtime
+for those restrictions, or configure enforcement with Codex managed requirements.
+Codex settings such as `never` or full access do not turn approval forwarding
+into host policy enforcement.
+
+Turn usage includes the reported cumulative changes across model/tool iterations.
+Missing token counts and costs remain unknown; subscription usage is not converted
+into an estimated API charge.
+
 Some Codex UI features need additional client integration. MCP elicitation
 forms and URL flows currently cancel with a visible message; additional
 permission-profile requests decline. Unknown server requests return an explicit

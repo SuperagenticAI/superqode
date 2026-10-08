@@ -460,7 +460,7 @@ def set_permission_manager(manager: PermissionManager) -> None:
     _permission_manager = manager
 
 
-def load_permission_config(project_root: Path) -> PermissionConfig:
+def load_permission_config(project_root: Path, *, strict: bool = False) -> PermissionConfig:
     """Load permission config from superqode.yaml."""
     import yaml
 
@@ -470,11 +470,13 @@ def load_permission_config(project_root: Path) -> PermissionConfig:
 
     try:
         with open(yaml_path) as f:
-            data = yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
 
         perm_data = data.get("superqode", {}).get("permissions", {})
 
         return PermissionConfig.from_yaml_dict(perm_data)
 
     except Exception:
+        if strict:
+            raise
         return PermissionConfig()

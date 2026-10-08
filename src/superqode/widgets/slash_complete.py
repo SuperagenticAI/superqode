@@ -41,7 +41,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":agents show", "Show agent details", category="agents"),
     SlashCommand(":agents free-models", "Show free model routes for agents", category="agents"),
     # File commands
-    SlashCommand("/files", "Show project files", "Ctrl+O", category="files"),
+    SlashCommand("/files", "Show project files", "", category="files"),
     SlashCommand("/find", "Fuzzy search files", "Ctrl+F", category="files"),
     SlashCommand("/recent", "Show recent files", category="files"),
     SlashCommand("/open", "Open a file or bookmark", category="files"),

@@ -354,6 +354,16 @@ class PureMode:
         """
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        if self.runtime_name == "codex-cli" and self._harness_spec is None:
+            from superqode.session.codex import latest_thread, manager
+
+            self._session_manager = manager(working_directory or Path.cwd())
+            if not session_id:
+                saved = latest_thread(
+                    working_directory or Path.cwd(),
+                    getattr(self, "billing_requested", "agent-managed"),
+                )
+                session_id = saved.backend_session_id if saved else None
         selected_id = getattr(self._harness_definition, "id", "core")
         if selected_id == "core":
             system_level = SystemPromptLevel.CORE
@@ -364,7 +374,7 @@ class PureMode:
         self.session.system_level = system_level
         self.session.working_directory = working_directory or Path.cwd()
         self.session.connected = True
-        if session_id:
+        if session_id and self.runtime_name != "codex-cli":
             if self._session_manager is None:
                 self._session_manager = SessionManager(storage_dir=".superqode/sessions")
             self._session_manager.start_session(
@@ -465,6 +475,12 @@ class PureMode:
         )
 
         runtime_kwargs: dict[str, Any] = {}
+        if self.runtime_name == "codex-cli":
+            from .tools.permissions import PermissionManager, load_permission_config
+
+            runtime_kwargs["permission_manager"] = PermissionManager(
+                load_permission_config(self.session.working_directory)
+            )
         if self.runtime_name in {"codex-cli", "codex-sdk"}:
             runtime_kwargs["billing_requested"] = getattr(
                 self, "billing_requested", "agent-managed"
@@ -676,6 +692,8 @@ class PureMode:
             # Self-contained runtimes (e.g. codex-sdk) run via the runtime
             # directly — there's no builtin AgentLoop.
             if self._runtime is not None:
+                if self.runtime_name == "codex-cli" and plan_mode:
+                    self._runtime.set_next_turn_sandbox("read-only")
                 response = await self._runtime.run(prompt, **({"images": images} if images else {}))
                 self.session.total_tool_calls += response.tool_calls_made
                 self.session.total_iterations += response.iterations
@@ -771,6 +789,8 @@ class PureMode:
             # Self-contained runtimes (e.g. codex-sdk) have no builtin AgentLoop
             # (no ``.loop``); stream straight through the runtime instead.
             if self._runtime is not None:
+                if self.runtime_name == "codex-cli" and plan_mode:
+                    self._runtime.set_next_turn_sandbox("read-only")
                 if hasattr(self._runtime, "run_harness_events"):
                     self._runtime_seen_tool_calls = set()
                     try:
@@ -989,7 +1009,7 @@ class PureMode:
             return f"\n\n⚠️  {error}\n"
         if event.type == "turn_complete":
             usage = event.data.get("usage")
-            if isinstance(usage, dict):
+            if isinstance(usage, dict) and usage:
                 prompt_tokens = int(
                     usage.get("total_input_tokens")
                     or usage.get("input_tokens")
@@ -1016,6 +1036,16 @@ class PureMode:
                     "completion_tokens": completion_tokens,
                     "thinking_tokens": thinking_tokens,
                     "total_tokens": total_tokens,
+                }
+                if self.runtime_name == "codex-cli":
+                    self._last_stats["cost_usd"] = None
+            elif self.runtime_name == "codex-cli":
+                self._last_stats = {
+                    "prompt_tokens": None,
+                    "completion_tokens": None,
+                    "thinking_tokens": 0,
+                    "total_tokens": None,
+                    "cost_usd": None,
                 }
             # A self-contained runtime reports a failed turn here rather than
             # raising. Dropping it ended the turn with an empty response and no
@@ -1306,6 +1336,7 @@ class PureMode:
 
             sessions = ensure_sessions_listed(
                 cwd=self.session.working_directory or Path.cwd(),
+                storage_dir=self._session_manager.store.base_dir,
             )
         except Exception:
             sessions = self._session_manager.list_all_sessions()
@@ -1319,7 +1350,7 @@ class PureMode:
                 "message_count": s.message_count,
                 "updated_at": s.updated_at,
             }
-            for s in sessions[:limit]
+            for s in [item for item in sessions if not item.archived][:limit]
         ]
 
     def resolve_session_id(self, session_id_or_prefix: str) -> Optional[str]:
@@ -1432,6 +1463,21 @@ class PureMode:
                 recovery = descriptor.availability.recovery
                 suffix = f" {recovery}." if recovery else ""
                 raise SessionResumeError(f"Cannot resume '{label}': {detail}.{suffix}")
+
+        if listed_metadata is not None and listed_metadata.runtime == "codex-cli":
+            self.clear_harness()
+            self.runtime_name = "codex-cli"
+            self.billing_requested = listed_metadata.billing_requested
+            self.connect(
+                "openai",
+                listed_metadata.model,
+                working_directory=Path(listed_metadata.working_directory),
+                session_id=listed_metadata.backend_session_id,
+            )
+            self._session_manager._current_session_id = listed_metadata.session_id
+            return [
+                {"role": m.role, "content": m.content} for m in self._session_manager.get_messages()
+            ]
 
         if any(item.session_id == resolved_session_id for item in external_sessions):
             try:
@@ -1555,6 +1601,10 @@ class PureMode:
 
     def get_current_session_id(self) -> Optional[str]:
         """Get current session ID."""
+        if self.runtime_name == "codex-cli" and self._runtime is not None:
+            return getattr(self._runtime, "thread_id", None) or getattr(
+                self._runtime, "_resume_thread_id", None
+            )
         if self._agent:
             return self._agent.session_id
         if self._harness_session_id:

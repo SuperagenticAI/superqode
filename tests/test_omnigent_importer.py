@@ -351,7 +351,7 @@ def test_receipt_separates_policy_preservation_and_native_substitution():
     assert "policies" in preserved and "not become SuperQode governance" in preserved["policies"]
     assert "executor.auth" in preserved
     assert any(
-        entry["field"] == "executor.harness" and "codex-sdk" in entry["reason"]
+        entry["field"] == "executor.harness" and "codex-cli" in entry["reason"]
         for entry in receipt["behavior_changes"]
     )
     assert any(entry["field"] == "unknown_feature" for entry in receipt["unsupported"])

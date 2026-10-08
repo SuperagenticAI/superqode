@@ -26,7 +26,7 @@ _HARNESS_BACKEND_MAP = {
     "openai-agents": "openai-agents",
     "open-responses": "openai-agents",
     "codex": "codex-sdk",
-    "codex-native": "codex-sdk",
+    "codex-native": "codex-cli",
     "claude-native": "claude-agent-sdk",
     "pi": "runtime",
 }

@@ -6557,7 +6557,7 @@ def test_connect_root_picker_asks_who_runs_the_loop():
 
     assert picker_rows(rendered) == [
         (1, "Connect to an existing harness"),
-        (2, "Connect a harness with your model"),
+        (2, "Connect a harness with your model (Recommended)"),
         (3, "Build your own harness (Advanced)"),
         (4, "Connect with SystemOne models"),
         (5, "Reach a remote agent with protocols"),
@@ -6593,7 +6593,7 @@ def test_connect_picker_explains_every_choice():
     assert "Codex, Claude Code, Copilot, Grok, Devin and more" in second
     assert "Core, RLM, PiPy, Workbench or Build Your own" in " ".join(second.split())
     assert "Import existing config" in second
-    assert "Connect a harness with your model ↗" in second
+    assert "Connect a harness with your model (Recommended) ↗" in second
     assert second.count("●") >= 1
     assert "← SELECTED" not in second
 

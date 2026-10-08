@@ -115,6 +115,12 @@ def load_image(path: Path) -> ImageAttachment:
         with path.open("rb") as stream:
             data = stream.read(MAX_IMAGE_BYTES + 1)
     except (OSError, ValueError) as exc:
+        # Python 3.13's non-strict resolve can leave a symlink loop for open()
+        # to detect. Keep the same validation error across Python versions.
+        import errno
+
+        if isinstance(exc, OSError) and exc.errno == errno.ELOOP:
+            raise ValueError(f"Cannot resolve image path: {path.name}") from exc
         raise ValueError(f"Cannot read image: {path.name}") from exc
     if len(data) > MAX_IMAGE_BYTES:
         raise ValueError("Image exceeds 4 MB. Resize or crop it before attaching.")

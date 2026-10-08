@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-10-08
+
+### Fixed
+
+- Codex thread start/resume/fork send the CLI's hyphenated sandbox modes;
+  turn overrides retain the separate tagged policy format. Tools-off requests
+  select read-only even when another sandbox was previously chosen.
+- Native Codex sessions retain their actual thread ID, billing route and Codex
+  home in the project session index. Sessions remain listable and resumable
+  after reconnect without an API key or a silent replacement thread.
+- Codex approvals receive the project permission manager and file-change paths.
+  Every reported path is checked; missing paths decline. Host restrictions that
+  the native protocol cannot guarantee stop execution before task creation.
+  Status and documentation identify Codex as policy owner and describe the
+  approval forwarding boundary.
+- Codex turn usage counts model/tool iterations from cumulative totals. Missing
+  usage stays unknown and subscription turns do not estimate API charges.
+- Omnigent imports map `codex-native` to `codex-cli`. Updated picker expectations,
+  defensive sidebar state handling and file shortcut hints match the TUI.
+- Image symlink loops retain their validation error on Python 3.13 as well as
+  earlier Python versions.
+- The supervision strip reuses an existing WorkOrder database in read-only mode
+  without initializing its schema or changing its permissions on each poll.
+
+### Changed
+
+- Publication now requires pinned Codex 0.160.0 sandbox schema and live protocol
+  checks, plus native runtime/session/policy, TUI and Herdr regression contracts.
+  Protocol checks use isolated storage without credentials or model inference.
+
 ## [2.9.0] - 2026-10-08
 
 ### Added

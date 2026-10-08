@@ -622,7 +622,9 @@ def ensure_sessions_listed(
         merged[item.session_id] = _merge_external_metadata(merged.get(item.session_id), item)
     external_ids = {item.session_id for item in external}
     sessions = [
-        item for item in merged.values() if not _orphaned_import_placeholder(item, external_ids)
+        item
+        for item in merged.values()
+        if not item.archived and not _orphaned_import_placeholder(item, external_ids)
     ]
     sessions.sort(key=lambda item: item.updated_at, reverse=True)
     # Prefer rows that belong to this cwd when working_directory was recorded.
@@ -927,6 +929,29 @@ def probe_session_availability(
 
     Read-only: does not register external sessions or touch the active runtime.
     """
+    if metadata.runtime == "codex-cli":
+        from superqode.runtime.codex_cli import codex_binary
+        from superqode.session.codex import codex_home
+
+        if not codex_binary():
+            return SessionAvailability(
+                "missing_harness", "Codex CLI is not installed", "Install Codex CLI and retry"
+            )
+        if metadata.backend_home != codex_home():
+            return SessionAvailability(
+                "missing_harness",
+                "This thread belongs to a different CODEX_HOME",
+                "Restore the original CODEX_HOME and retry",
+            )
+        if not metadata.backend_session_id or metadata.archived:
+            return SessionAvailability(
+                "missing_transcript",
+                "Native thread is archived or has no saved id",
+                "Use :codex sessions --archived to inspect it",
+            )
+        return SessionAvailability(
+            "ok", "Exact native Codex resume; login and thread are verified on the next request"
+        )
     working = Path(cwd or Path.cwd()).expanduser().resolve()
     sid = str(metadata.session_id or "").strip()
     store_root = Path(storage_dir)

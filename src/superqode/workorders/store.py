@@ -37,6 +37,14 @@ from .usage import (
 class WorkOrderStore:
     """Durable local WorkOrder store with atomic task claims."""
 
+    @classmethod
+    def read_only(cls, path: str | Path):
+        """Inspect an existing database without schema initialization or writes."""
+        store = cls.__new__(cls)
+        store.path = Path(path).resolve()
+        store._read_only = True
+        return store
+
     def __init__(self, path: str | Path = ".superqode/workorders/store.sqlite3") -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -1717,6 +1725,11 @@ class WorkOrderStore:
             )
 
     def _connect(self) -> sqlite3.Connection:
+        if getattr(self, "_read_only", False):
+            conn = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True, timeout=5)
+            conn.row_factory = sqlite3.Row
+            conn.execute("pragma query_only = on")
+            return conn
         conn = sqlite3.connect(self.path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("pragma foreign_keys = on")

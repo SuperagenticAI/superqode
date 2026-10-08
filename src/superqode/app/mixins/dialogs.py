@@ -2287,6 +2287,8 @@ class DialogsMixin:
             facts.append(change_label)
         if total_tokens > 0:
             facts.append(f"{total_tokens:,} toks")
+        elif "total_tokens" in summary and summary["total_tokens"] is None:
+            facts.append("tokens unknown")
         header.append("  •  ", style=SQ_COLORS.text_muted)
         header.append("  •  ".join(facts), style=SQ_COLORS.text_muted)
         header.append("\n\n")

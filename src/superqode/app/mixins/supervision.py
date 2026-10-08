@@ -166,14 +166,19 @@ class SupervisionMixin:
             notice = f"WorkOrder state unavailable: {exc}"
         return SupervisionSnapshot(tuple(runs), tuple(approvals), tuple(delivery), notice)
 
-    @staticmethod
-    def _work_supervision(path, project):
+    def _work_supervision(self, path, project):
         if not path.is_file():
             return [], []
         from superqode.workorders.store import WorkOrderStore
         from superqode.workorders.cockpit import build_cockpit_snapshot
 
-        store = WorkOrderStore(path)
+        stat = path.stat()
+        key = (path, stat.st_dev, stat.st_ino)
+        cached = getattr(self, "_supervision_read_store", None)
+        if cached is None or cached[0] != key:
+            cached = (key, WorkOrderStore.read_only(path))
+            self._supervision_read_store = cached
+        store = cached[1]
         runs, delivery = [], []
         for order in store.list(limit=100):
             if Path(order.repository).resolve() != project:

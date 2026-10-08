@@ -49,7 +49,7 @@ DEFAULT_PALETTE_COMMANDS: list[PaletteCommand] = [
         "disconnect", "Disconnect", "Disconnect from current agent", "🔌", "Ctrl+D", "agents"
     ),
     # File commands
-    PaletteCommand("open_file", "Open File", "Open a file from project", "📁", "Ctrl+O", "files"),
+    PaletteCommand("open_file", "Open File", "Open a file from project", "📁", "", "files"),
     PaletteCommand("find_file", "Find File", "Fuzzy search for files", "🔍", "Ctrl+F", "files"),
     PaletteCommand("recent_files", "Recent Files", "Show recently opened files", "📋", "", "files"),
     PaletteCommand("bookmarks", "Bookmarks", "Manage file bookmarks", "🔖", "", "files"),

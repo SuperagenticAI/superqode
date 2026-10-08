@@ -334,6 +334,13 @@ async def run_headless(
         runtime_kwargs["billing_requested"] = billing_requested
     if runtime_name == "builtin":
         runtime_kwargs["hooks"] = extension_runtime.build_hooks()
+    permissions = apply_backend_permissions(profile.permissions, sandbox_backend)
+    if runtime_name == "codex-cli":
+        from .tools.permissions import load_permission_config
+
+        permissions = load_permission_config(active_working_directory)
+        if profile.name in {"plan", "review", "no-tool"}:
+            runtime_kwargs["sandbox_backend"] = "read-only"
     runtime_obj = create_runtime(
         runtime_name,
         gateway=LiteLLMGateway(),
@@ -341,9 +348,7 @@ async def run_headless(
         config=config,
         parallel_tools=True,
         include_mcp=_env_flag("SUPERQODE_MCP_SEARCH") and loop_policy.mcp,
-        permission_manager=PermissionManager(
-            apply_backend_permissions(profile.permissions, sandbox_backend)
-        ),
+        permission_manager=PermissionManager(permissions),
         **runtime_kwargs,
     )
     try:

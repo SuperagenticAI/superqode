@@ -1289,9 +1289,9 @@ class HarnessPanel(Container):
             return ""
         if (
             pure is not None
-            and pure.session.connected
+            and getattr(getattr(pure, "session", None), "connected", False)
             and getattr(pure, "_harness_spec", None) is None
-            and pure.runtime_name in {"codex-cli", "codex-sdk"}
+            and getattr(pure, "runtime_name", "") in {"codex-cli", "codex-sdk"}
         ):
             return pure.runtime_name
         return ""

@@ -29,10 +29,8 @@ jobs:
   # parallel on a tag push, so it cannot gate this one. This job can, and it
   # covers everything that makes a release wrong in a way PyPI cannot undo.
   #
-  # The test suite is deliberately not a gate here. It carries a standing
-  # backlog of failures unrelated to any given release, so requiring it would
-  # block every publish until that backlog is cleared. ci.yml runs it on every
-  # push and pull request, which is where those failures should be fixed.
+  # Focused runtime, TUI and release contracts gate publication. The broader
+  # suite also runs on pull requests in ci.yml.
   verify:
     needs: [resolve]
     runs-on: ubuntu-latest
@@ -49,6 +47,14 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Set up Node for pinned Codex protocol checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated Codex CLI
+        run: |
+          npm install --prefix "$RUNNER_TEMP/codex-cli" @openai/codex@0.160.0
+          echo "$RUNNER_TEMP/codex-cli/node_modules/.bin" >> "$GITHUB_PATH"
       # Cheapest first: a wrong version fails here in seconds, before the
       # number is spent on PyPI where it cannot be withdrawn.
       - name: Validate release metadata
@@ -59,6 +65,18 @@ jobs:
         run: uv run ruff format --check .
       - name: Public documentation style
         run: uv run python scripts/check_public_docs_style.py
+      - name: Codex protocol, session, policy and TUI release contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          SUPERQODE_REQUIRE_CODEX_INTEGRATION: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_runtime_codex_cli.py tests/test_codex_cli_integration.py
+          tests/test_codex_cli_ui.py tests/test_codex_harness_precedence.py
+          tests/test_pure_mode_sessions.py tests/test_harness_session_bridge.py
+          tests/test_session_switchboard.py tests/test_omnigent_importer.py
+          tests/test_tui_smoke.py tests/test_tui_supervision.py
+          tests/test_herdr.py tests/test_herdr_restore.py -q
       - name: Native context and WorkOrder release contracts
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"

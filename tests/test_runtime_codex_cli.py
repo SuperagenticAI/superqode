@@ -692,3 +692,251 @@ async def test_doctor_timeout_reaps_child_process(native_runtime, monkeypatch):
         await runtime.doctor()
     assert process.killed and process.waited
     assert runtime._transport is None
+
+
+@pytest.mark.asyncio
+async def test_native_session_survives_reconnect_and_is_listable(native_runtime, monkeypatch):
+    from superqode.pure_mode import PureMode
+    from superqode.session.codex import latest_thread, manager
+
+    runtime, _ = native_runtime
+    root = runtime.config.working_directory
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setenv("SUPERQODE_RUNTIME", "builtin")
+    await runtime.run("remember this")
+    sid = runtime.thread_id
+    await runtime.aclose()
+    pure = PureMode(runtime="codex-cli")
+    pure.billing_requested = "subscription"
+    pure.connect("openai", "", working_directory=root)
+    replacement = pure._runtime
+    calls = []
+    original = replacement._timed_request
+
+    async def request(method, params=None):
+        calls.append((method, params))
+        return await original(method, params)
+
+    monkeypatch.setattr(replacement, "_timed_request", request)
+    try:
+        assert pure.get_current_session_id() == sid
+        assert any(row["session_id"] == sid for row in pure.list_sessions())
+        await replacement.run("continue")
+        assert any(
+            method == "thread/resume" and params["threadId"] == sid for method, params in calls
+        )
+        assert not any(method == "thread/start" for method, _ in calls)
+        info = manager(root).get_session_info(sid)
+        assert info.runtime == "codex-cli" and info.harness_id == "codex"
+        assert info.message_count == 4
+        await replacement.archive_thread(sid)
+        assert latest_thread(root, "subscription") is None
+        assert not pure.list_sessions()
+    finally:
+        await replacement.aclose()
+
+
+@pytest.mark.asyncio
+async def test_native_resume_restores_binding_without_api_key(native_runtime, monkeypatch):
+    from superqode.pure_mode import PureMode
+
+    runtime, _ = native_runtime
+    root = runtime.config.working_directory
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setenv("SUPERQODE_RUNTIME", "builtin")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    await runtime.run("persist")
+    sid = runtime.thread_id
+    await runtime.aclose()
+    pure = PureMode()
+    try:
+        messages = pure.resume_session(sid)
+        assert [m["role"] for m in messages] == ["user", "assistant"]
+        assert pure.runtime_name == "codex-cli"
+        assert pure.billing_requested == "subscription"
+        assert pure.get_current_session_id() == sid
+        await pure._runtime.ensure_thread()
+        assert pure._runtime.thread_id == sid
+    finally:
+        if pure._runtime:
+            await pure._runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_failed_turn_keeps_native_thread_binding(native_runtime):
+    from superqode.session.codex import latest_thread
+
+    runtime, _ = native_runtime
+    try:
+        with pytest.raises(RuntimeError, match="unsupported model"):
+            await runtime.run("rpc-fail")
+        assert (
+            latest_thread(runtime.config.working_directory, "subscription").backend_session_id
+            == runtime.thread_id
+        )
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "policy", ["default: deny", "tools: {bash: deny}", "deny_patterns: ['secret']"]
+)
+async def test_host_deny_policy_stops_before_start(native_runtime, policy):
+    runtime, launches = native_runtime
+    (runtime.config.working_directory / "superqode.yaml").write_text(
+        "superqode:\n  permissions:\n    " + policy + "\n"
+    )
+    try:
+        with pytest.raises(RuntimeError, match="cannot guarantee SuperQode"):
+            await runtime.run("must not run")
+        assert not launches
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_policy_changes_are_checked_on_connected_runtime(native_runtime):
+    runtime, _ = native_runtime
+    try:
+        await runtime.run("first")
+        (runtime.config.working_directory / "superqode.yaml").write_text(
+            "superqode:\n  permissions:\n    default: deny\n"
+        )
+        with pytest.raises(RuntimeError, match="No Codex task was started"):
+            await runtime.run("blocked")
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_governance_restrictions_stop_before_native_start(native_runtime, monkeypatch):
+    from types import SimpleNamespace
+    import superqode.runtime.codex_policy as policy
+
+    runtime, launches = native_runtime
+    monkeypatch.setattr(
+        policy,
+        "load_governance",
+        lambda _: SimpleNamespace(
+            network_strict=True,
+            broker=SimpleNamespace(bindings={}),
+            engine=SimpleNamespace(layers=[]),
+        ),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="organization/project policy"):
+            await runtime.run("blocked")
+        assert not launches
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_file_approval_uses_all_item_paths_and_declines_unknown(native_runtime):
+    from superqode.tools.permissions import PermissionConfig, PermissionManager
+
+    runtime, _ = native_runtime
+    seen = []
+
+    def approve(tool, arguments):
+        seen.append(arguments)
+        return True
+
+    runtime._approval_callback = approve
+    runtime._thread_id = "thread-1"
+    params = {"threadId": "thread-1", "turnId": "t", "itemId": "patch"}
+    method = "item/fileChange/requestApproval"
+    try:
+        assert await runtime._server_request(method, params) == {"decision": "decline"}
+        runtime._on_notification(
+            "item/started",
+            {
+                "threadId": "thread-1",
+                "item": {
+                    "id": "patch",
+                    "type": "fileChange",
+                    "changes": [{"path": "/safe.txt"}, {"path": "/secret.txt"}],
+                },
+            },
+        )
+        runtime._permission_manager = PermissionManager(PermissionConfig(deny_patterns=["secret"]))
+        assert await runtime._server_request(method, params) == {"decision": "decline"}
+        assert not seen
+        runtime._permission_manager = PermissionManager(PermissionConfig())
+        assert await runtime._server_request(method, params) == {"decision": "accept"}
+        assert seen[0]["path"] == "/safe.txt"
+        assert len(seen[0]["changes"]) == 2
+    finally:
+        await runtime.aclose()
+
+
+def test_usage_counts_every_model_call_and_resumed_thread_deltas():
+    from superqode.runtime.codex_events import CodexEvents
+
+    mapper = CodexEvents(baseline={"inputTokens": 100, "outputTokens": 20})
+    for total, last in [(130, 30), (180, 50)]:
+        mapper.map(
+            "thread/tokenUsage/updated",
+            {
+                "tokenUsage": {
+                    "total": {"inputTokens": total, "outputTokens": 25},
+                    "last": {"inputTokens": last, "outputTokens": 5},
+                }
+            },
+        )
+    usage = mapper.map("turn/completed", {"turn": {"status": "completed"}})[0].data["usage"]
+    assert usage == {"input_tokens": 80, "output_tokens": 5}
+    mapper = CodexEvents()
+    assert mapper.map("turn/completed", {})[0].data["usage"] is None
+    mapper.map("thread/tokenUsage/updated", {"tokenUsage": {"total": {"inputTokens": 200}}})
+    assert mapper.map("turn/completed", {})[0].data["usage"] is None
+
+
+def test_tools_off_overrides_selected_sandbox(native_runtime):
+    runtime, _ = native_runtime
+    runtime.config.tools_enabled = False
+    runtime.set_sandbox_backend("danger-full-access")
+    assert runtime._thread_params()["sandbox"] == "read-only"
+
+
+@pytest.mark.asyncio
+async def test_missing_native_resume_never_starts_replacement(native_runtime, monkeypatch):
+    runtime, _ = native_runtime
+    runtime._resume_thread_id = "missing-thread"
+    calls = []
+    original = runtime._timed_request
+
+    async def request(method, params=None):
+        calls.append(method)
+        if method == "thread/resume":
+            raise RuntimeError("no rollout found for thread")
+        return await original(method, params)
+
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    try:
+        with pytest.raises(RuntimeError, match="no rollout found"):
+            await runtime.run("continue")
+        assert "thread/resume" in calls
+        assert "thread/start" not in calls and "turn/start" not in calls
+    finally:
+        await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_native_explicit_resume_is_retained_before_next_turn(native_runtime):
+    from superqode.session.codex import latest_thread
+
+    runtime, _ = native_runtime
+    try:
+        await runtime.ensure_thread()
+        assert latest_thread(runtime.config.working_directory, "subscription") is None
+        await runtime.resume_thread("thread-1")
+        assert (
+            latest_thread(runtime.config.working_directory, "subscription").backend_session_id
+            == "thread-1"
+        )
+    finally:
+        await runtime.aclose()

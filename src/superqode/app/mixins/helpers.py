@@ -773,13 +773,13 @@ class HelpersMixin(
 
         sync(self)
 
-    def _sync_self_contained_status(self, runtime_name: str, *, tokens: int = 0) -> None:
+    def _sync_self_contained_status(self, runtime_name: str, *, tokens: int | None = 0) -> None:
         """Replace stale provider state with runtime-owned identity."""
         try:
             from superqode.app.widgets import ColorfulStatusBar
 
             status = self.query_one("#status-bar", ColorfulStatusBar)
-            status.update_byok_status(tokens=max(0, int(tokens or 0)))
+            status.update_byok_status(tokens=tokens)
             status.connection_auth = getattr(self, "_connection_auth_for_status", lambda: "")()
             status.active_runtime = runtime_name
             if runtime_name == "antigravity-managed":

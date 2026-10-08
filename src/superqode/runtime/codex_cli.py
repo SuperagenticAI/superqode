@@ -59,6 +59,10 @@ class CodexCLIRuntime:
         self.token_usage: dict[str, Any] = {}
         self.timings: dict[str, float] = {}
         self.metadata: dict[str, Any] = {}
+        if permission_manager is None:
+            from superqode.tools.permissions import PermissionManager, load_permission_config
+
+            permission_manager = PermissionManager(load_permission_config(config.working_directory))
         self._permission_manager = permission_manager
         self._approval_callback = approval_callback
         self._request_timeout = request_timeout
@@ -68,6 +72,19 @@ class CodexCLIRuntime:
         self._turn_lock = asyncio.Lock()
         self._interaction_lock = asyncio.Lock()
         self._thread_id: str | None = None
+        self._resume_thread_id = config.session_id
+        self._usage_baseline_known = not bool(config.session_id)
+        if config.session_id:
+            from superqode.session.codex import saved_thread
+
+            saved = saved_thread(config.working_directory, config.session_id)
+            if saved is not None and saved.runtime == "codex-cli":
+                self.token_usage = saved.backend_usage
+        self._items: dict[str, dict[str, Any]] = {}
+        self.effective_policy: dict[str, Any] = {
+            "owner": "Codex",
+            "host_enforcement": "approval requests only",
+        }
         self._active_turn: str | None = None
         self._active_model = ""
         self._reasoning_effort: str | None = config.reasoning_effort
@@ -143,6 +160,26 @@ class CodexCLIRuntime:
             raise ValueError(f"Unsupported Codex sandbox: {mode}")
         return aliases[mode]
 
+    @classmethod
+    def _thread_sandbox(cls, mode):
+        return {
+            "readOnly": "read-only",
+            "workspaceWrite": "workspace-write",
+            "dangerFullAccess": "danger-full-access",
+        }[cls._sandbox(mode)]
+
+    def _turn_sandbox_policy(self, mode):
+        policy = {"type": self._sandbox(mode)}
+        if policy["type"] != "dangerFullAccess":
+            policy["networkAccess"] = False
+        if policy["type"] == "workspaceWrite":
+            policy.update(
+                writableRoots=[str(self.config.working_directory.resolve())],
+                excludeTmpdirEnvVar=False,
+                excludeSlashTmp=False,
+            )
+        return policy
+
     def set_sandbox_backend(self, mode):
         if mode:
             self._sandbox(mode)
@@ -199,6 +236,13 @@ class CodexCLIRuntime:
             self._queue.put_nowait(error)
 
     def _on_notification(self, method, params):
+        if (
+            method in {"item/started", "item/completed"}
+            and params.get("threadId") == self._thread_id
+        ):
+            item = params.get("item") or {}
+            if item.get("id"):
+                self._items[item["id"]] = item
         if method == "account/updated":
             self.subscription_status = {"auth_method": "unknown", "billing_verified": "unknown"}
         elif method == "account/login/completed":
@@ -209,6 +253,7 @@ class CodexCLIRuntime:
             self.rate_limits = params.get("rateLimits") or params
         elif method == "thread/tokenUsage/updated" and params.get("threadId") == self._thread_id:
             self.token_usage = params.get("tokenUsage") or {}
+            self._usage_baseline_known = bool(self.token_usage.get("total"))
         if self._queue is None:
             return
         if params.get("threadId") not in {None, self._thread_id}:
@@ -318,13 +363,20 @@ class CodexCLIRuntime:
             params["modelProvider"] = self.config.provider
         if self.config.custom_system_prompt:
             params["developerInstructions"] = self.config.custom_system_prompt
-        if self.sandbox_backend:
-            params["sandbox"] = self._sandbox(self.sandbox_backend)
-        elif not self.config.tools_enabled:
-            params["sandbox"] = "readOnly"
+        if not self.config.tools_enabled:
+            params["sandbox"] = "read-only"
+        elif self.sandbox_backend:
+            params["sandbox"] = self._thread_sandbox(self.sandbox_backend)
+        if self._approval_policy:
+            params["approvalPolicy"] = self._approval_policy
         return params
 
-    def _accept_thread(self, result):
+    def _preflight_policy(self):
+        from .codex_policy import preflight
+
+        preflight(self.config, self._permission_manager)
+
+    def _accept_thread(self, result, *, persisted=False):
         if self.billing_requested == "subscription" and result.get("modelProvider") != "openai":
             self.subscription_status["billing_verified"] = "unknown"
             self._failure = RuntimeError(
@@ -333,20 +385,44 @@ class CodexCLIRuntime:
             raise self._failure
         new_id = result.get("thread", {}).get("id")
         if new_id != self._thread_id:
-            self.token_usage = {}
+            if new_id != self._resume_thread_id:
+                self.token_usage = {}
+                self._usage_baseline_known = False
         self._thread_id = new_id
         if not self._thread_id:
             raise RuntimeError("Codex response did not include a thread id")
+        self._resume_thread_id = None
+        self.session_id = self._thread_id
+        self._items.clear()
+        self.effective_policy.update(
+            {
+                key: result.get(key)
+                for key in ("approvalPolicy", "sandbox", "activePermissionProfile")
+            }
+        )
         self._active_model = result.get("model") or self.config.model
+        from superqode.session.codex import record_thread
+
+        record_thread(self, result.get("thread") or {}, persisted=persisted)
 
     async def ensure_thread(self):
+        self._preflight_policy()
         await self._ensure_started()
         async with self._thread_lock:
             if self._thread_id is None:
                 await self.verify_account()
+                params = self._thread_params()
+                if self._resume_thread_id:
+                    params["threadId"] = self._resume_thread_id
+                    params.pop("developerInstructions", None)
                 self._accept_thread(
-                    await self._timed_request("thread/start", self._thread_params())
+                    await self._timed_request(
+                        "thread/resume" if self._resume_thread_id else "thread/start", params
+                    ),
+                    persisted=bool(params.get("threadId")),
                 )
+                if params.get("threadId") is None:
+                    self._usage_baseline_known = True
                 return True
             return False
 
@@ -377,6 +453,7 @@ class CodexCLIRuntime:
         return await self._timed_request("thread/list", params)
 
     async def _load_thread(self, method, thread_id):
+        self._preflight_policy()
         async with self._turn_lock:
             await self._ensure_started()
             async with self._thread_lock:
@@ -384,7 +461,9 @@ class CodexCLIRuntime:
                 params = {**self._thread_params(), "threadId": thread_id}
                 params.pop("developerInstructions", None)
                 result = await self._timed_request(method, params)
-                self._accept_thread(result)
+                self._accept_thread(result, persisted=True)
+                # The CLI may have advanced this thread outside SuperQode.
+                self._usage_baseline_known = False
                 return result
 
     async def resume_thread(self, thread_id):
@@ -395,12 +474,15 @@ class CodexCLIRuntime:
 
     async def new_thread(self, name=""):
         self._require_idle()
+        self._preflight_policy()
         async with self._turn_lock:
             await self._ensure_started()
             async with self._thread_lock:
                 await self.verify_account()
                 result = await self._timed_request("thread/start", self._thread_params())
                 self._accept_thread(result)
+                self.token_usage = {}
+                self._usage_baseline_known = True
             if name:
                 await self.rename_thread(name)
             return result
@@ -413,9 +495,13 @@ class CodexCLIRuntime:
 
     async def rename_thread(self, name):
         await self.ensure_thread()
-        return await self._timed_request(
+        result = await self._timed_request(
             "thread/name/set", {"threadId": self._thread_id, "name": name}
         )
+        from superqode.session.codex import record_thread
+
+        record_thread(self, {"name": name})
+        return result
 
     async def compact_thread(self):
         self._require_idle()
@@ -430,13 +516,21 @@ class CodexCLIRuntime:
             result = await self._timed_request("thread/archive", {"threadId": thread_id})
             if thread_id == self._thread_id:
                 self._thread_id = None
+                self._resume_thread_id = None
                 self._active_model = ""
                 self.token_usage = {}
+            from superqode.session.codex import archive_thread
+
+            archive_thread(self, thread_id, archived=True)
             return result
 
     async def unarchive_thread(self, thread_id):
         await self._ensure_started()
-        return await self._timed_request("thread/unarchive", {"threadId": thread_id})
+        result = await self._timed_request("thread/unarchive", {"threadId": thread_id})
+        from superqode.session.codex import archive_thread
+
+        archive_thread(self, thread_id, archived=False)
+        return result
 
     async def login(self, *, device=False):
         self._require_idle()
@@ -564,10 +658,13 @@ class CodexCLIRuntime:
     async def _handle_server_request(self, method, params):
         if method in {"item/commandExecution/requestApproval", "item/fileChange/requestApproval"}:
             tool = "bash" if "commandExecution" in method else "patch"
+            item = self._items.get(params.get("itemId"), {})
+            changes = item.get("changes") or []
             arguments = {
                 **params,
-                "command": params.get("command", ""),
-                "path": params.get("path", ""),
+                "command": params.get("command") or item.get("command", ""),
+                "path": params.get("path") or (changes[0].get("path", "") if changes else ""),
+                "changes": changes,
             }
             allowed = False
             permission = (
@@ -575,6 +672,31 @@ class CodexCLIRuntime:
                 if self._permission_manager
                 else Permission.ASK
             )
+            if tool == "bash" and not arguments["command"]:
+                return {"decision": "decline"}
+            if (
+                permission == Permission.ALLOW
+                and self._permission_manager.config.get_permission(tool) == Permission.ASK
+            ):
+                # A Codex escalation still needs consent even if the host's
+                # shell heuristic considers the command read-only.
+                permission = Permission.ASK
+            if tool == "patch":
+                paths = [change.get("path") for change in changes] or [arguments["path"]]
+                if not all(paths):
+                    return {"decision": "decline"}
+                if self._permission_manager:
+                    permissions = [
+                        self._permission_manager.check_permission(tool, {**arguments, "path": path})
+                        for path in paths
+                    ]
+                    permission = (
+                        Permission.DENY
+                        if Permission.DENY in permissions
+                        else Permission.ASK
+                        if Permission.ASK in permissions
+                        else Permission.ALLOW
+                    )
             if permission == Permission.ALLOW:
                 allowed = True
             elif permission == Permission.ASK and self._approval_callback:
@@ -636,16 +758,23 @@ class CodexCLIRuntime:
         async with self._turn_lock:
             self.reset_cancellation()
             start = time.monotonic()
-            mapper = CodexEvents()
+            mapper = None
+            response_text = []
             turn_finished = False
             try:
                 created = await self.ensure_thread()
                 if not created:
                     await self.verify_account()
+                mapper = CodexEvents(
+                    baseline=(self.token_usage.get("total") or {})
+                    if self._usage_baseline_known
+                    else None
+                )
                 if self._cancelled:
                     yield HarnessEvent(type="turn_complete", data={"status": "cancelled"})
                     return
                 self._queue = asyncio.Queue(maxsize=8192)
+                self._items.clear()
                 yield HarnessEvent(type="model_request", data={"runtime": self.name})
                 params = {
                     "threadId": self._thread_id,
@@ -670,19 +799,21 @@ class CodexCLIRuntime:
                             "developer_instructions": None,
                         },
                     }
-                sandbox = self._next_turn_sandbox or self.sandbox_backend
+                sandbox = (
+                    "read-only"
+                    if not self.config.tools_enabled
+                    else self._next_turn_sandbox or self.sandbox_backend
+                )
                 self._next_turn_sandbox = None
                 if sandbox or not self.config.tools_enabled:
-                    policy = {"type": self._sandbox(sandbox or "read-only")}
-                    if policy["type"] != "dangerFullAccess":
-                        policy["networkAccess"] = False
-                    if policy["type"] == "workspaceWrite":
-                        policy.update(
-                            writableRoots=[str(self.config.working_directory.resolve())],
-                            excludeTmpdirEnvVar=False,
-                            excludeSlashTmp=False,
-                        )
+                    policy = self._turn_sandbox_policy(sandbox or "read-only")
                     params["sandboxPolicy"] = policy
+                    self.effective_policy["sandbox"] = policy
+                if self._approval_policy:
+                    self.effective_policy["approvalPolicy"] = self._approval_policy
+                from superqode.session.codex import record_prompt
+
+                record_prompt(self, prompt)
                 review, self._review = self._review, None
                 if review:
                     result = await self._timed_request(
@@ -709,7 +840,12 @@ class CodexCLIRuntime:
                         first_event = False
                     if method == "turn/completed":
                         turn_finished = True
+                        from superqode.session.codex import record_turn
+
+                        record_turn(self, "".join(response_text))
                     for event in mapper.map(method, payload):
+                        if event.type == "model_delta":
+                            response_text.append(str(event.data.get("text") or ""))
                         if event.type == "model_delta" and "first_text" not in self.timings:
                             self.timings["first_text"] = (time.monotonic() - start) * 1000
                         yield event

@@ -1243,6 +1243,12 @@ class CodexMixin(CodexControlsMixin):
             text.append(
                 f"  Approval    {getattr(runtime, '_approval_policy', None) or 'Codex default'}\n"
             )
+            policy = getattr(runtime, "effective_policy", {})
+            text.append("  Policy owner: Codex; SuperQode checks received approval requests.\n")
+            text.append(
+                f"  Effective approval: {policy.get('approvalPolicy') or 'not reported yet'}\n"
+            )
+            text.append(f"  Effective sandbox: {policy.get('sandbox') or 'not reported yet'}\n")
             text.append(
                 f"  Auth        {runtime.subscription_status.get('billing_verified', 'unknown')}\n"
             )
@@ -1250,6 +1256,8 @@ class CodexMixin(CodexControlsMixin):
                 text.append(f"  Rate limits {runtime.rate_limits}\n")
             if getattr(runtime, "token_usage", None):
                 text.append(f"  Token usage {runtime.token_usage}\n")
+            else:
+                text.append("  Token usage Not reported\n")
             for phase, elapsed in runtime.timings.items():
                 text.append(f"  {phase:<16} {elapsed:.1f} ms\n")
         if not probe:

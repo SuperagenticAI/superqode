@@ -451,3 +451,21 @@ async def test_active_cleanup_failure_still_awaits_previous_runtime_cleanup():
         assert closed == [True]
     finally:
         await pending
+
+
+def test_native_codex_missing_usage_stays_unknown():
+    pure = PureMode(runtime="codex-cli")
+    pure._handle_runtime_harness_event(
+        HarnessEvent(type="turn_complete", data={"status": "completed", "usage": None})
+    )
+    assert pure._last_stats["total_tokens"] is None
+    assert pure._last_stats["prompt_tokens"] is None
+    assert pure._last_stats["cost_usd"] is None
+
+
+def test_native_codex_status_displays_unknown_usage():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    status = ColorfulStatusBar()
+    status.update_byok_status(provider="openai", tokens=None)
+    assert "tokens unknown" in status._render_for_width(140).plain

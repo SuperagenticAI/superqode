@@ -189,6 +189,7 @@ class ColorfulStatusBar(Static):
     byok_provider: reactive[str] = reactive("")
     byok_model: reactive[str] = reactive("")
     byok_tokens: reactive[int] = reactive(0)
+    byok_usage_known: reactive[bool] = reactive(True)
     byok_cost: reactive[float] = reactive(0.0)
     # Authentication/billing identity is separate from the provider transport.
     # Some subscription plans use the direct-model engine without being BYOK.
@@ -432,6 +433,10 @@ class ColorfulStatusBar(Static):
                     right_separator()
                 right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
                 right.append(" tok", style="#71717a")
+            elif medium and not self.byok_usage_known:
+                if right.plain:
+                    right_separator()
+                right.append("tokens unknown", style="#71717a")
 
             # Launch fires the models.dev and ACP registry refreshes behind the
             # first frame. Saying so costs one chip and turns a quiet couple of
@@ -671,7 +676,7 @@ class ColorfulStatusBar(Static):
         self,
         provider: str = "",
         model: str = "",
-        tokens: int = 0,
+        tokens: int | None = 0,
         cost: float = 0.0,
         context_window: int = 0,
         auth_mode: str = "",
@@ -679,9 +684,10 @@ class ColorfulStatusBar(Static):
         """Update direct-model status, including its user-facing auth source."""
         self.byok_provider = provider
         self.byok_model = model
-        self.byok_tokens = tokens
+        self.byok_usage_known = tokens is not None
+        self.byok_tokens = max(0, int(tokens or 0))
         self.byok_cost = cost
-        self.context_used = tokens if context_window > 0 else 0
+        self.context_used = self.byok_tokens if context_window > 0 else 0
         self.context_window = context_window
         self.connection_auth = auth_mode
 

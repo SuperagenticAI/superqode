@@ -8,9 +8,11 @@ from superqode.harness.events import HarnessEvent
 
 
 class CodexEvents:
-    def __init__(self):
+    def __init__(self, baseline=None):
         self.text_items: set[str] = set()
         self.usage: dict[str, Any] = {}
+        self._previous_total = baseline
+        self._usage_incomplete = False
 
     def map(self, method: str, data: dict[str, Any]) -> list[HarnessEvent]:
         def event(kind, **payload):
@@ -52,7 +54,35 @@ class CodexEvents:
             ]
             return event("plan_update", todos=todos, explanation=data.get("explanation", ""))
         if method == "thread/tokenUsage/updated":
-            self.usage = data.get("tokenUsage", {}).get("last", {})
+            reported = data.get("tokenUsage") or {}
+            total, last = reported.get("total"), reported.get("last")
+            if isinstance(total, dict):
+                # Totals include every model call, including tool iterations.
+                previous = self._previous_total
+                if previous is None:
+                    if not isinstance(last, dict):
+                        self._previous_total = total
+                        self._usage_incomplete = True
+                        return event("usage", usage={}, token_usage=reported)
+                    previous = {
+                        key: max(0, value - (last or {}).get(key, value))
+                        for key, value in total.items()
+                        if isinstance(value, int)
+                    }
+                for key, value in total.items():
+                    if isinstance(value, int):
+                        delta = value - previous.get(key, 0)
+                        if delta < 0:
+                            delta = (last or {}).get(key)
+                            if delta is None:
+                                self._usage_incomplete = True
+                                continue
+                        self.usage[key] = self.usage.get(key, 0) + delta
+                self._previous_total = total
+            elif isinstance(last, dict):
+                for key, value in last.items():
+                    if isinstance(value, int):
+                        self.usage[key] = self.usage.get(key, 0) + value
             return event("usage", usage=self.usage, token_usage=data.get("tokenUsage", {}))
         if method == "turn/completed":
             turn = data.get("turn", {})
@@ -61,12 +91,20 @@ class CodexEvents:
                 "turn_complete",
                 status=turn.get("status", ""),
                 error=error.get("message", ""),
-                usage={
-                    "input_tokens": self.usage.get("inputTokens", 0),
-                    "output_tokens": self.usage.get("outputTokens", 0),
-                    "cached_input_tokens": self.usage.get("cachedInputTokens", 0),
-                    "reasoning_output_tokens": self.usage.get("reasoningOutputTokens", 0),
-                },
+                usage=None
+                if self._usage_incomplete
+                else {
+                    target: self.usage[source]
+                    for source, target in {
+                        "inputTokens": "input_tokens",
+                        "outputTokens": "output_tokens",
+                        "cachedInputTokens": "cached_input_tokens",
+                        "reasoningOutputTokens": "reasoning_output_tokens",
+                        "totalTokens": "total_tokens",
+                    }.items()
+                    if source in self.usage
+                }
+                or None,
             )
         if method in {"warning", "error", "configWarning", "model/rerouted"}:
             error = data.get("error") or {}
