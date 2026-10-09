@@ -141,6 +141,44 @@ SuperQode displays the authorization URL. Additional permission requests require
 explicit consent for that turn. Unknown server requests return an explicit error.
 SDK handler failures cancel the individual request without terminating the reader.
 
+### Demonstrating approvals
+
+Start a fresh conversation before recording:
+
+```text
+:connect codex
+:codex new
+:mode ask
+:codex permissions untrusted
+:codex sandbox read-only
+:codex status
+```
+
+Check the host mode, blanket Allow all state, requested policy and effective
+policy separately. Selecting `:mode ask` clears an earlier blanket Allow all
+grant; existing approvals for an exact session scope remain valid. A new Codex
+conversation clears those scopes. Policy and sandbox changes apply on the next
+turn, so effective settings may still describe the previous turn.
+
+For Codex 0.162, a small command such as `python -c "print(123)"` can exercise
+command approval under `untrusted`. Existing Codex execution rules may allow a
+command without asking. Choose a numbered option in the approval card. The
+choices vary by request: session approval and decline are not always advertised;
+use Cancel turn when that is the available rejection choice. Avoid persistent
+rule amendments during a demo.
+
+Before demonstrating an edit, switch to `:codex sandbox workspace-write`.
+Read-only is a filesystem restriction, not a guarantee that every write attempt
+produces a file-change approval. The model must use a supported native edit tool;
+an edit performed through a shell can appear as command approval instead.
+Likewise, routine tests and network commands do not guarantee prompts under
+every policy, profile or existing rule. SuperQode displays requests Codex emits.
+
+The installed schema and server determine whether `untrusted` is supported.
+Codex 0.162 accepts it through app-server; newer releases may retire the setting.
+Use the approval policies supported by the installed executable rather than
+editing global Codex configuration to reproduce a demo.
+
 The installed executable's generated schema gates experimental features at
 connect time. An unavailable schema disables experimental controls. A supported
 schema still does not guarantee that a feature is enabled by Codex configuration

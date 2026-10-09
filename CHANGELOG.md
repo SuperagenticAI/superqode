@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-10-09
+
+### Fixed
+
+- Selecting an approval mode clears an earlier blanket runtime Allow all grant,
+  so returning to ASK displays received Codex approval requests again. Codex
+  status reports the host mode, blanket grant, exact-scope consents and CLI
+  version. Document request-dependent approval choices and demo limitations.
+
 ## [2.10.0] - 2026-10-09
 
 ### Fixed

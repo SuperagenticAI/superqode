@@ -21,6 +21,7 @@ class Log:
     add_error = write
     add_warning = write
     add_success = write
+    add_system = write
 
 
 def test_empty_codex_history_displays_a_message_without_raw_protocol_data():
@@ -118,6 +119,61 @@ async def test_native_approval_choice_preserves_session_and_cancel(native_app):
         assert await pure.on_permission_request_async("bash", params) == "cancel"
     finally:
         set_question_handler(previous)
+
+
+@pytest.mark.asyncio
+async def test_ask_mode_restores_native_prompts_after_allow_all(native_app, monkeypatch):
+    from superqode.tools.question_tool import Answer, get_question_handler, set_question_handler
+
+    app, _, _ = native_app
+    app.approval_mode = "ask"
+    app._runtime_permission_allow_all = True
+    app._active_plan_mode_for_current_message = False
+    app._permission_pending = False
+    monkeypatch.setattr(app, "_sync_approval_mode", lambda: None)
+    pure, log, shown = SimpleNamespace(), Log(), []
+    app._install_pure_permission_bridge(pure, log)
+    previous = get_question_handler()
+
+    async def choose(question):
+        shown.append(question)
+        return Answer("Decline")
+
+    try:
+        set_question_handler(choose)
+        params = {
+            "command": "python -m pytest -q",
+            "_codex_available_decisions": ["accept", "decline"],
+        }
+        assert await pure.on_permission_request_async("bash", params) is True
+        assert not shown
+        app._set_approval_mode("ask", log)
+        assert await pure.on_permission_request_async("bash", params) == "decline"
+        assert len(shown) == 1
+        assert not app._runtime_permission_allow_all
+    finally:
+        set_question_handler(previous)
+
+
+def test_native_status_exposes_silent_approval_flags(native_app):
+    from pathlib import Path
+    from superqode.agent.loop import AgentConfig
+    from superqode.runtime.codex_cli import CodexCLIRuntime
+
+    app, _, _ = native_app
+    runtime = CodexCLIRuntime(
+        config=AgentConfig(provider="fixture", model="", working_directory=Path.cwd()),
+        codex_bin="python",
+    )
+    app._pure_mode._runtime = runtime
+    app.approval_mode = "ask"
+    app._runtime_permission_allow_all = True
+    log = Log()
+    app._codex_cli_status(log)
+    text = "\n".join(log.items)
+    assert "Host mode   ask" in text
+    assert "Allow all   active; :mode ask resets it" in text
+    assert "Received approvals are accepted without prompting" in text
 
 
 @pytest.fixture

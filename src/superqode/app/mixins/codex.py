@@ -1267,6 +1267,14 @@ class CodexMixin(CodexControlsMixin):
             text.append(
                 f"  Approval    {getattr(runtime, '_approval_policy', None) or 'Codex default'}\n"
             )
+            text.append(f"  Host mode   {self.approval_mode}\n")
+            blanket = getattr(self, "_runtime_permission_allow_all", False)
+            text.append(f"  Allow all   {'active; :mode ask resets it' if blanket else 'off'}\n")
+            text.append(
+                f"  Session scopes {len(getattr(runtime, '_session_consents', ()))} approved\n"
+            )
+            if self.approval_mode == "auto" or blanket:
+                text.append("  Received approvals are accepted without prompting.\n")
             policy = getattr(runtime, "effective_policy", {})
             text.append(
                 f"  Reviewer    {policy.get('approvalsReviewer') or 'user requested; not confirmed by a thread'}\n"
@@ -1276,6 +1284,9 @@ class CodexMixin(CodexControlsMixin):
             if getattr(runtime, "forked_from_id", None):
                 text.append(f"  Forked from {runtime.forked_from_id}\n")
             capabilities = getattr(runtime, "capabilities", None)
+            text.append(
+                f"  Version     {getattr(capabilities, 'version', '') or 'not probed yet'}\n"
+            )
             text.append(
                 f"  Schema      {'verified from installed CLI' if capabilities and capabilities.verified else 'unavailable; experimental controls disabled'}\n"
             )

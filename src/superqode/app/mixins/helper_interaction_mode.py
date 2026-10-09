@@ -98,6 +98,9 @@ class HelperInteractionModeMixin:
 
         if mode in ("auto", "ask", "deny"):
             self.approval_mode = mode
+            # An explicit mode selection supersedes an earlier blanket grant.
+            # Otherwise switching back to ASK still silently approves runtime requests.
+            self._runtime_permission_allow_all = False
             self._sync_approval_mode()
 
             icons = {"auto": "🟢", "ask": "🟡", "deny": "🔴"}
@@ -110,6 +113,13 @@ class HelperInteractionModeMixin:
 
             log.add_success(f"{icons[mode]} Approval mode set to {mode.upper()}")
             log.add_system(descs[mode])
+            if mode == "ask" and getattr(
+                getattr(getattr(self, "_pure_mode", None), "_runtime", None), "name", ""
+            ) in {"codex-cli", "codex-sdk"}:
+                log.add_info(
+                    "Codex controls when approval is requested. ASK shows received requests; "
+                    "existing approvals for a specific session scope remain valid."
+                )
         else:
             log.add_error(f"Invalid mode: {mode}")
             log.add_system("Valid modes: auto, ask, deny")
