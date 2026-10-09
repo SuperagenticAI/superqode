@@ -26,7 +26,7 @@ Color System:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 from typing import Dict, List, Tuple
 
 
@@ -789,6 +789,10 @@ class Theme:
     name: str
     description: str
     colors: ColorPalette
+    appearance: str = "dark"
+    tokens: dict[str, str] = field(default_factory=dict)
+    source: str = "built-in"
+    extensions: dict[str, str] = field(default_factory=dict)
 
 
 # Built-in themes
@@ -1125,10 +1129,12 @@ def get_theme(name: str = None) -> Theme:
 
 def set_theme(name: str) -> bool:
     """Set the active theme. Returns True if successful."""
-    global _active_theme, COLORS
+    global _active_theme
     if name in THEMES:
         _active_theme = name
-        COLORS = THEMES[name].colors
+        # Keep imported aliases live without mutating a preset's source colors.
+        for color in fields(ColorPalette):
+            setattr(COLORS, color.name, getattr(THEMES[name].colors, color.name))
         return True
     return False
 

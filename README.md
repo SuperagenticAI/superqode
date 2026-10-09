@@ -71,23 +71,6 @@ from the same terminal.
 
 ## Quick Start
 
-### Improve decisions with SystemOne Tune
-
-Teach SystemOne how your team routes or judges work from reviewed examples, then compare the candidate on held-out data before you use it:
-
-```sh
-superqode harness tune --setup          # once: install pinned GEPA support
-superqode harness tune                  # guided labeling + experiment
-superqode harness tune --demo --live    # small synthetic routing demo
-
-# From a repository checkout: uncertainty-ranked, multi-round demo
-superqode harness tune --data examples/tune/factory-route-active.csv \
-  --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
-```
-
-In the TUI, run `:systemone tune` or open **Improve decisions** on SystemOne in Harness Hub. See the [SystemOne Tune guide](https://docs.superqode.dev/advanced/systemone-tune/).
-
-
 ```bash
 curl -fsSL https://superqode.dev/install.sh | sh
 ```
@@ -131,6 +114,12 @@ superqode                                      # coding agent TUI
 :connect ollama                                # local models / airplane mode
 superqode connect a2a --url https://a2a.superqode.dev
 ```
+
+Open `:theme` to search and preview 83 palette choices, including the complete
+offline Awesome Pi collection. Enter installs and applies a palette; `:theme
+import` opens a preview dialog for your own JSON file. Use `superqode theme
+install --all` to install the whole collection. See [Themes](docs/advanced/themes.md)
+for light/system modes, custom palettes, and live reload.
 
 ## The Harness Hub
 
@@ -205,6 +194,22 @@ no-filesystem interpreter with `sandbox: monty`.
 See [Native RLM](https://docs.superqode.dev/advanced/rlm/).
 
 ## Evaluate and Optimize
+
+### Improve decisions with SystemOne Tune
+
+Teach SystemOne how your team routes or judges work from reviewed examples, then compare the candidate on held-out data before you use it:
+
+```sh
+superqode harness tune --setup          # once: install pinned GEPA support
+superqode harness tune                  # guided labeling + experiment
+superqode harness tune --demo --live    # small synthetic routing demo
+
+# From a repository checkout: uncertainty-ranked, multi-round demo
+superqode harness tune --data examples/tune/factory-route-active.csv \
+  --batch-size 5 --max-evals 30 --max-reflection-cost 0.50
+```
+
+In the TUI, run `:systemone tune` or open **Improve decisions** on SystemOne in Harness Hub. See the [SystemOne Tune guide](https://docs.superqode.dev/advanced/systemone-tune/).
 
 Treat the harness the way you treat the rest of your code: measure it, then gate
 changes against repeatable tasks.

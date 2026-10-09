@@ -56,6 +56,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `skillopt` | [SkillOpt Commands](skillopt-commands.md) |
 | `skills` | [Skills Commands](skills-commands.md) |
 | `tools` | [Tools Commands](tools-commands.md) |
+| `theme` | [Theme Commands](theme-commands.md) |
 | `trust` | [Trust Commands](trust-commands.md) |
 | `update` | [Update Command](update-command.md) |
 | `work` | [WorkOrder Commands](work-commands.md) |
@@ -77,6 +78,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `--fork` | superqode | Fork a stored session interactively, or continue the fork with a headless prompt |
 | `--approval-mode` | superqode | Set the startup TUI approval policy: `ask`, `auto`, or `deny` |
 | `--interaction-mode` | superqode | Set the startup TUI interaction mode: `build` or `plan` |
+| `--theme`, `--use-theme` | superqode | Select a palette, light/dark pair, or explicit JSON path for this launch |
 | `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
 
 ### Headless SuperQode

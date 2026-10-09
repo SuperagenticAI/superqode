@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 307
+EXPECTED_COMMAND_COUNT = 319
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -153,7 +153,11 @@ EXPECTED_COMMAND_COUNT = 307
 # `benchmark compare` (298 -> 307). The same releases added
 # `harness eval --recovery-store` and refreshed the registry-derived
 # `--connect` choice list. No previously shipped command was removed.
-EXPECTED_HELP_TREE_SHA256 = "d7ab559cc090732ed1347229b50436f407b542cb1e01ff5f806d07da34694a90"
+# The 2.10.1 surface includes SystemOne Tune and the commands added since
+# 2.4.44. This audit changes no Click commands or CLI options.
+# Theme management adds one group and four commands; startup adds --theme/--use-theme.
+# The offline theme gallery adds browse and install, and refreshes group help.
+EXPECTED_HELP_TREE_SHA256 = "7a74d66cac25ff1bb933a7a867901fe5c645754ef2d4fa42aa5edefc55d652de"
 
 
 def _render_help_tree() -> tuple[int, str]:

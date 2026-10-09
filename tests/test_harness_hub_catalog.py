@@ -398,11 +398,11 @@ def test_full_hub_exposes_get_started_tools_policies_and_popularity():
     assert by_id["workbench"]["based_on"] == "workbench"
     assert by_id["codex"]["popularity_rank"] < by_id["core"]["popularity_rank"]
     assert [step["title"] for step in by_id["copilot"]["setup_steps"]] == [
-        "Recommended: install the SuperQode Copilot SDK integration",
-        "Alternative: install the official GitHub Copilot CLI",
-        "Authenticate with GitHub Copilot",
+        "Install the GitHub Copilot integration",
     ]
-    assert by_id["copilot"]["setup_steps"][2]["command"] == "copilot login"
+    assert by_id["copilot"]["setup_steps"][0]["command"] == (
+        'uv tool install "superqode[copilot-sdk]"'
+    )
 
 
 def test_openness_is_resolved_from_the_most_specific_source_that_knows():

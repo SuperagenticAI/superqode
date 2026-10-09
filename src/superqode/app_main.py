@@ -35,6 +35,7 @@ from superqode.app.recipes import PromptCompletionCandidate, LocalRecipe  # noqa
 
 # Import from modular app package
 from superqode.app.css import APP_CSS
+from superqode.theming.css import theme_css
 from superqode.app.models import AgentInfo
 from superqode.app.prompt_stack import PromptSpec, PromptStack  # noqa: F401
 from superqode.app.suggester import CommandSuggester
@@ -210,11 +211,17 @@ class SuperQodeApp(
     SidebarMixin,
     App,
 ):
-    CSS = APP_CSS
+    CSS = theme_css(APP_CSS)
     TITLE = "SuperQode"
 
+    def get_default_screen(self):
+        """Make the composer ready on activation, before delayed focus retries."""
+        screen = super().get_default_screen()
+        screen.AUTO_FOCUS = "#prompt-input"
+        return screen
+
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", show=True),
+        Binding("ctrl+c", "interrupt", "Interrupt", show=True),
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
@@ -379,8 +386,11 @@ class SuperQodeApp(
         fork_from: str | None = None,
         approval_mode: str | None = None,
         interaction_mode: str | None = None,
+        theme_selection: str | None = None,
     ):
-        super().__init__()
+        from superqode.theming.terminal import terminal_driver
+
+        super().__init__(driver_class=terminal_driver())
         self._startup_resume = resume or fork_from or ""
         self._startup_fork = bool(fork_from)
         self._startup_interaction_mode = interaction_mode
@@ -392,7 +402,28 @@ class SuperQodeApp(
         # Apply the persisted accent theme before any widget renders so the
         # whole UI paints in the chosen palette from the first frame.
         self._current_theme = load_saved_theme()
+        if theme_selection is not None:
+            from superqode.app.theme_bridge import load_project_theme, resolve_selection
+
+            if (
+                not resolve_selection(theme_selection)
+                and Path(theme_selection).expanduser().is_file()
+            ):
+                theme_selection = load_project_theme(Path(theme_selection))
+            if not resolve_selection(theme_selection):
+                raise ValueError(f"Unknown theme: {theme_selection}")
+            self._current_theme = theme_selection
         _apply_theme_palette(self._current_theme)
+        from superqode.theming.css import ThemeStylesheet
+        from superqode.app.theme_bridge import textual_theme
+
+        self.stylesheet = ThemeStylesheet(variables=self.get_css_variables())
+        self.register_theme(textual_theme())
+        self.theme = "superqode-live"
+        self._theme_file_signature = None
+        self._theme_save_error = None
+        self._terminal_palette = {}
+        self._terminal_theme_refresh_timer = None
         # Lazy load agents to improve startup time
         self._agents: Optional[List[AgentInfo]] = None
         # Lazy load model lists for faster startup
@@ -499,10 +530,99 @@ class SuperQodeApp(
 
         yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
 
+    def get_css_variables(self):
+        from superqode.app.theme_bridge import css_variables
+
+        return {**super().get_css_variables(), **css_variables()}
+
+    def _refresh_theme_view(self):
+        if not self.is_running:
+            return  # Shutdown removes children before all palette timers drain.
+        from superqode.app.theme_bridge import textual_theme
+
+        self.register_theme(textual_theme())
+        self.mutate_reactive(App.theme)
+        self.refresh_css(animate=False)
+        for screen in self.screen_stack:
+            # App.query only visits the default screen. Refresh mounted
+            # overlays too, including the isolated system/auto preview.
+            for widget in (screen, *screen.query("*")):
+                refresh = getattr(widget, "refresh_theme_colors", None)
+                if callable(refresh):
+                    refresh()
+                widget.refresh(repaint=True)
+
+    def _query_terminal_theme(self):
+        if self._current_theme not in {"system", "auto"} and "/" not in self._current_theme:
+            return
+        from superqode.theming.terminal import QUERY
+
+        driver = self._driver
+        if driver is not None and type(driver).__name__ == "ThemeLinuxDriver":
+            driver.write(QUERY)
+            driver.flush()
+
+    def on_terminal_color_reply(self, message):
+        from superqode.app.theme_bridge import set_terminal_colors
+
+        if all(self._terminal_palette.get(key) == value for key, value in message.colors.items()):
+            return
+        self._terminal_palette.update(message.colors)
+        set_terminal_colors(message.colors)
+        if self._terminal_theme_refresh_timer is None:
+            self._terminal_theme_refresh_timer = self.set_timer(0.1, self._finish_terminal_theme)
+
+    def _finish_terminal_theme(self):
+        self._terminal_theme_refresh_timer = None
+        if self._current_theme in {"system", "auto"} or "/" in self._current_theme:
+            if _apply_theme_palette(self._current_theme):
+                self._refresh_theme_view()
+
+    def _poll_theme_file(self):
+        """Reload a complete changed user file, retaining the last working palette."""
+        if not self.is_running:
+            return
+        from superqode import design_system as ds
+        from superqode.app.theme_bridge import apply_theme, theme_directory
+        from superqode.theming import load_theme_file, ThemeError
+
+        active = ds.get_theme()
+        path = Path(active.source)
+        if not path.is_absolute() or path.parent.resolve() != theme_directory().resolve():
+            return
+        try:
+            stat = path.stat()
+            signature = (str(path), stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            signature = (str(path), "missing")
+        if signature == self._theme_file_signature:
+            return
+        self._theme_file_signature = signature
+        try:
+            updated = load_theme_file(path)
+            if updated.name != active.name:
+                raise ThemeError(
+                    "Active theme was renamed; use :theme reload to discover its new name"
+                )
+            updated.source = active.source
+            ds.THEMES[updated.name] = updated
+        except ThemeError as exc:
+            self.notify(str(exc)[:300], title="Theme retained", severity="warning", markup=False)
+            return
+        if apply_theme(self._current_theme):
+            self._refresh_theme_view()
+
     def on_mount(self):
         from superqode.app.herdr import start
 
         start(self)
+        self.set_interval(0.5, self._poll_theme_file)
+        self.set_interval(3, self._query_terminal_theme)
+        self.call_after_refresh(self._query_terminal_theme)
+        from superqode.app.theme_bridge import theme_errors
+
+        for error in theme_errors():
+            self.notify(error[:300], title="Theme file", severity="warning", markup=False)
         self.set_interval(1, self._refresh_supervision_bar)
         self.set_interval(3, self._refresh_work_supervision_cache)
         self.run_worker(self._refresh_work_supervision_cache())
@@ -601,6 +721,7 @@ class SuperQodeApp(
         "scroll_log_home",
         "scroll_log_end",
         "cancel_agent",
+        "interrupt",
         "undo_action",
         "redo_action",
         "toggle_split_view",
@@ -1054,6 +1175,9 @@ class SuperQodeApp(
             if self._cancel_install():
                 self.query_one("#log", ConversationLog).add_info("Stopping the installer…")
             return
+        if getattr(self, "_awaiting_agent_question", False):
+            self.action_cancel_agent()
+            return
         # A registry-driven prompt is always the topmost modal thing on screen,
         # so it cancels first. Going through the stack runs the prompt's own
         # on_cancel hook, which is what returns to the picker underneath it.
@@ -1232,6 +1356,7 @@ class SuperQodeApp(
         """Abort the live model or harness turn and unlock the composer."""
         self._queue_paused = True
         self._cancel_requested = True
+        self._cancel_pending_decisions()
         pure = getattr(self, "_pure_mode", None)
         if pure is not None:
             pure.cancel()
@@ -1403,8 +1528,31 @@ class SuperQodeApp(
     # Help & Utility
     # ========================================================================
 
+    def action_interrupt(self) -> None:
+        """Stop work without exiting; require two idle presses to quit."""
+        from time import monotonic
+
+        if getattr(self, "_install_in_progress", False):
+            self._last_interrupt_at = None
+            self.action_smart_cancel()
+            return
+        if self.is_busy or self._permission_pending or self._awaiting_agent_question:
+            self._last_interrupt_at = None
+            self.action_cancel_agent()
+            return
+        now = monotonic()
+        previous = getattr(self, "_last_interrupt_at", None)
+        if previous is not None and now - previous < 2.0:
+            self._last_interrupt_at = None
+            self.action_quit()
+            return
+        self._last_interrupt_at = now
+        self.query_one("#log", ConversationLog).add_info(
+            "Press Ctrl+C again within 2 seconds to exit, or use :exit. Your draft is kept."
+        )
+
     def action_quit(self) -> None:
-        """Handle quit action (Ctrl+C) - clean up properly before exit."""
+        """Clean up properly before an explicit exit."""
         # Get the log widget
         try:
             log = self.query_one("#log", ConversationLog)

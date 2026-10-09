@@ -625,6 +625,13 @@ class SuperQodeGroup(click.Group):
 )
 @click.option("--fork", "fork_from", help="Fork a stored session by id or unique prefix")
 @click.option(
+    "--theme",
+    "--use-theme",
+    "theme_selection",
+    default=None,
+    help="Theme name, light/dark pair, or JSON file for this run; leaves saved preference intact",
+)
+@click.option(
     "--sandbox",
     "sandbox_backend",
     default="local",
@@ -717,6 +724,7 @@ def cli_main(
     quiet_logs,
     runtime_name,
     connect_name=None,
+    theme_selection=None,
     _headless_messages=None,
 ):
     # Tool-output verbosity propagates through env so the TUI widget
@@ -982,8 +990,195 @@ def cli_main(
             startup["approval_mode"] = approval_mode
         if interaction_mode is not None:
             startup["interaction_mode"] = interaction_mode
-        run_textual_app(**startup)
+        if theme_selection is not None:
+            startup["theme_selection"] = theme_selection
+        from superqode.theming import ThemeError
+
+        try:
+            run_textual_app(**startup)
+        except (ThemeError, ValueError) as exc:
+            if theme_selection is not None:
+                raise click.BadParameter(str(exc), param_hint="--theme") from exc
+            raise
         return
+
+
+@cli_main.group("theme")
+def theme_cli():
+    """Browse, install, validate and create palettes without starting an agent."""
+
+
+@theme_cli.command("list")
+@click.option("--json", "json_output", is_flag=True)
+def theme_list(json_output):
+    from superqode.app.theme_bridge import discover_themes, available_themes
+    from superqode import design_system as ds
+
+    errors = discover_themes()
+    rows = [
+        {
+            "name": name,
+            "description": description,
+            "appearance": ds.get_theme(name).appearance,
+            "source": ds.get_theme(name).source,
+        }
+        for name, description in available_themes()
+    ]
+    if json_output:
+        import json
+
+        click.echo(json.dumps({"themes": rows, "errors": errors}, indent=2))
+    else:
+        for row in rows:
+            click.echo(f"{row['name']:<20} {row['appearance']:<5} {row['description']}")
+        for error in errors:
+            click.echo(f"Warning: {error}", err=True)
+        click.echo("Find more: superqode theme browse. Preview and apply in the TUI: :theme")
+
+
+@theme_cli.command("browse")
+@click.argument("query", required=False, default="")
+@click.option("--json", "json_output", is_flag=True)
+def theme_browse(query, json_output):
+    """Find installed themes and the offline community collection."""
+    from superqode.app.theme_bridge import discover_themes
+    from superqode.theming.library import theme_rows
+
+    errors = discover_themes()
+    rows = theme_rows(query)
+    if json_output:
+        import json
+
+        click.echo(json.dumps({"themes": rows, "errors": errors}, indent=2))
+    else:
+        for row in rows:
+            status = "installed" if row["installed"] else "available"
+            click.echo(f"{row['name']:<23} {row['appearance']:<5} {status:<10} {row['source']}")
+        if not rows:
+            click.echo(f"No themes match {query!r}. Try: superqode theme browse")
+        for error in errors:
+            click.echo(f"Warning: {error}", err=True)
+        click.echo("Install: superqode theme install NAME (or --all). Preview in the TUI: :theme")
+
+
+@theme_cli.command("install")
+@click.argument("names", nargs=-1)
+@click.option("--all", "all_themes", is_flag=True, help="Install the entire offline collection.")
+def theme_install(names, all_themes):
+    """Install catalog palettes by name, preserving existing themes."""
+    from superqode.app.theme_bridge import discover_themes
+    from superqode.theming import ThemeError
+    from superqode.theming.library import catalog, install_theme
+    from superqode import design_system as ds
+
+    if bool(names) == all_themes:
+        raise click.UsageError("Choose theme names or --all. Find names: superqode theme browse")
+    discover_themes()
+    requested = catalog()["themes"] if all_themes else list(dict.fromkeys(names))
+    errors = []
+    for name in requested:
+        installed = name in ds.THEMES
+        try:
+            install_theme(name)
+            click.echo(f"{'Already installed' if installed else 'Installed'}: {name}")
+        except ThemeError as exc:
+            errors.append(str(exc))
+    if errors:
+        raise click.ClickException("\n".join(errors))
+    click.echo("Choose and save in the TUI: :theme. Try once: superqode --theme NAME")
+
+
+@theme_cli.command("check")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+def theme_check(path, json_output):
+    from superqode.theming import ThemeError, load_theme_file, palette_tokens, contrast
+
+    try:
+        theme = load_theme_file(path)
+        palette = palette_tokens(theme)
+    except ThemeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    ratios = {
+        key: round(
+            min(
+                contrast(palette[key], palette[bg])
+                for bg in (
+                    "bg",
+                    "surface",
+                    "surface2",
+                    "code_bg",
+                    "tool_pending_bg",
+                    "tool_success_bg",
+                    "tool_error_bg",
+                )
+            ),
+            2,
+        )
+        for key in ("text", "muted", "dim", "success", "error", "warning")
+    }
+    if json_output:
+        import json
+
+        click.echo(
+            json.dumps(
+                {
+                    "name": theme.name,
+                    "appearance": theme.appearance,
+                    "contrast": ratios,
+                    "valid": True,
+                    "preserved_extension_colors": sorted(theme.extensions),
+                },
+                indent=2,
+            )
+        )
+    else:
+        click.echo(
+            f"{theme.name}: valid ({theme.appearance}); effective minimum contrast {min(ratios.values()):.2f}:1"
+        )
+        if theme.extensions:
+            click.echo(
+                f"Additional colours retained without changing the UI: {', '.join(theme.extensions)}"
+            )
+
+
+@theme_cli.command("import")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def theme_import(path):
+    from superqode.app.theme_bridge import discover_themes, import_theme
+    from superqode.theming import ThemeError
+
+    discover_themes()
+    try:
+        name = import_theme(path)
+    except ThemeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Imported {name}. Try: superqode --theme {name}")
+
+
+@theme_cli.command("init")
+@click.argument("path", type=click.Path(dir_okay=False, path_type=Path))
+@click.option("--name", default="my-theme")
+@click.option("--base", default="superqode")
+def theme_init(path, name, base):
+    from superqode import design_system as ds
+    from superqode.app.theme_bridge import discover_themes
+    from superqode.theming import NAME_RE, atomic_json, native_document, ThemeError
+
+    discover_themes()
+    if path.exists():
+        raise click.ClickException("Destination already exists")
+    if not NAME_RE.fullmatch(name) or name in ds.THEMES or name == "auto":
+        raise click.BadParameter("Use a unique lowercase theme slug", param_hint="--name")
+    if base not in ds.THEMES:
+        raise click.BadParameter(f"Unknown base theme: {base}", param_hint="--base")
+    document = native_document(ds.get_theme(base))
+    document.update(name=name, description=f"Custom palette based on {base}")
+    try:
+        atomic_json(path, document, overwrite=False)
+    except OSError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Created {path}. Validate: superqode theme check {path}")
 
 
 @cli_main.command("doctor")
@@ -1274,11 +1469,23 @@ def config_init(force):
 
 # TUI command
 @cli_main.command("tui")
-def tui_command():
+@click.pass_context
+def tui_command(ctx):
     """Launch the Textual TUI interface."""
     from superqode.app import run_textual_app
 
-    run_textual_app()
+    startup = {
+        key: value
+        for key, value in (ctx.parent.params if ctx.parent else {}).items()
+        if key in {"resume", "fork_from", "approval_mode", "interaction_mode", "theme_selection"}
+        and value is not None
+    }
+    try:
+        run_textual_app(**startup)
+    except ValueError as exc:
+        if startup.get("theme_selection") is not None:
+            raise click.BadParameter(str(exc), param_hint="--theme") from exc
+        raise
 
 
 # Init command (top-level for convenience)

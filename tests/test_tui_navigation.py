@@ -39,6 +39,17 @@ def isolate_startup(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_composer_accepts_the_first_key_before_the_startup_focus_timer(monkeypatch):
+    monkeypatch.setattr(SuperQodeApp, "_focus_input_on_ready", lambda self: None)
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        assert app.focused is prompt
+        await pilot.press("d", "r", "a", "f", "t")
+        assert prompt.value == "draft"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("size", [(80, 24), (110, 30)])
 async def test_sidebar_keyboard_search_preview_back_and_draft(tmp_path, size):
     (tmp_path / "alpha.py").write_text("print('alpha')\n")

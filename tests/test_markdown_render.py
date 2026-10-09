@@ -59,7 +59,12 @@ def test_agent_code_theme_tracks_selected_tui_theme():
     theme_bridge.apply_theme("nord")
     try:
         rendered = render_agent_markdown("```python\nprint('hi')\n```")
-        assert rendered.code_theme == "superqode"
+        from pygments.token import Keyword
+        from superqode.app.constants import THEME
+
+        assert (
+            rendered.code_theme.get_style_for_token(Keyword).color.name == THEME["syntax_keyword"]
+        )
         assert "print" in _render_text("```python\nprint('hi')\n```")
     finally:
         theme_bridge.apply_theme("superqode")

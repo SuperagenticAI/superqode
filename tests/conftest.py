@@ -120,6 +120,12 @@ def _isolate_connection_defaults(tmp_path_factory, monkeypatch, request):
     isolated_home = tmp_path_factory.mktemp("connection-home")
     monkeypatch.setenv("HOME", str(isolated_home))
     monkeypatch.setenv("USERPROFILE", str(isolated_home))
+    # The theme bridge captures its path at import time, before HOME changes.
+    # Redirect it too so mounted tests cannot load or save the developer's
+    # palettes/preferences and change later gallery expectations.
+    from superqode.app import theme_bridge
+
+    monkeypatch.setattr(theme_bridge, "_CONFIG_PATH", isolated_home / ".superqode" / "config.json")
     # An explicit builtin env value would count as an intentional override
     # of ACP/subscription routing. Preserve the genuine no-override default.
     monkeypatch.setenv("SUPERQODE_RUNTIME", "")

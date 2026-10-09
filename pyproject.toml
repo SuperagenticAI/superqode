@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.10.1"
+version = "2.11.0"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -37,7 +37,10 @@ dependencies = [
     "agent-client-protocol>=0.10.0,<0.12",
     "prompt_toolkit>=3.0.52",
     "rich>=15.0.0",
-    "textual>=0.47.0",
+    # The TUI uses modern Content and Select APIs. The old 0.47 floor cannot
+    # import it; require the version verified by the terminal/journey checks.
+    "textual>=8.2.8",
+    "coloraide>=8.13", # Perceptual colour conversion for custom and Pi themes.
     # Keep the stable MCP v1 line while FastMCP 4 / MCP SDK v2 are prerelease.
     # The standalone framework replaces the FastMCP 1.0 copy bundled in mcp v1.
     "fastmcp==3.4.4",
@@ -282,6 +285,10 @@ where = ["src"]
 superqode = [
     "agents/data/*.toml",
     "data/*.yaml",
+    "data/themes/*.json",
+    "data/themes/*LICENSE*",
+    "data/theme-library/*.json",
+    "data/theme-library/*LICENSE*",
     "data/eval_fixtures/*.log",
     "data/eval_packs/*.yaml",
     "systemone/packs/*.yaml",

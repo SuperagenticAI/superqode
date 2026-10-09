@@ -43,7 +43,7 @@ Useful keys:
 | `Ctrl+K` | Open the command palette |
 | `:` | Enter a command, or Command mode when optional Vim mode is enabled |
 | `Ctrl+T` | Toggle thinking/session logs |
-| `Ctrl+C` | Quit |
+| `Ctrl+C` | Interrupt work; press twice within 2 seconds while idle to exit |
 | `Escape` | Close a modal or picker |
 
 ---

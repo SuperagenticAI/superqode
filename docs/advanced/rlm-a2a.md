@@ -45,7 +45,7 @@ Opening setup does not start a model call or restart a worker.
 
 ## Configure a route
 
-Start from the [example spec](../../examples/harnesses/rlm-a2a.yaml), or add this
+Start from the [example spec](https://github.com/SuperagenticAI/superqode/blob/main/examples/harnesses/rlm-a2a.yaml), or add this
 under `runtime.config` in a native RLM HarnessSpec. The same routing
 configuration works with host, Docker, and Monty profiles.
 
@@ -221,7 +221,7 @@ a central transactional ledger. Worker request deadlines, turn and payload caps
 bound the pilot; task credits do not establish a dollar ceiling on arbitrary
 provider or external work. Do not expose an unrestricted paid recursive root.
 
-See the [evaluation pack](../../examples/rlm-a2a-eval/README.md) before changing
+See the [evaluation pack](https://github.com/SuperagenticAI/superqode/blob/main/examples/rlm-a2a-eval/README.md) before changing
 routing defaults. This feature does not establish measured model-cost savings
 or superior answer quality on its own.
 

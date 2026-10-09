@@ -103,16 +103,16 @@ and selection-to-ready rather than inferring speed from framework choice.
 ## Sources
 
 SuperQode: [TUI guide](../advanced/tui.md),
-[design system](../../src/superqode/design_system.py),
-[theme bridge](../../src/superqode/app/theme_bridge.py),
-[sidebar](../../src/superqode/sidebar.py),
-[Session Browser](../../src/superqode/widgets/session_browser.py),
-[Activity](../../src/superqode/widgets/outcome_screen.py),
-[WorkOrder inspector](../../src/superqode/widgets/workorder_inspector.py),
-[permission previews](../../src/superqode/widgets/permission_preview.py),
-[approval dialog](../../src/superqode/app/mixins/dialogs.py),
-[queue/steering/fork/compact commands](../../src/superqode/app/mixins/slash_commands.py),
-[shell dispatch](../../src/superqode/app/mixins/events.py).
+[design system](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/design_system.py),
+[theme bridge](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/app/theme_bridge.py),
+[sidebar](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/sidebar.py),
+[Session Browser](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/widgets/session_browser.py),
+[Activity](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/widgets/outcome_screen.py),
+[WorkOrder inspector](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/widgets/workorder_inspector.py),
+[permission previews](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/widgets/permission_preview.py),
+[approval dialog](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/app/mixins/dialogs.py),
+[queue/steering/fork/compact commands](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/app/mixins/slash_commands.py),
+[shell dispatch](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/app/mixins/events.py).
 
 Omnigent, immutable reviewed snapshot:
 [REPL and overview](https://github.com/omnigent-ai/omnigent/blob/36c94573f86d21410b61ce535e793448131a4784/omnigent/repl/_repl.py),

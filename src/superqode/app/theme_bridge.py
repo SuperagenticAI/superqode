@@ -1,78 +1,163 @@
-"""Bridge between the rich ``design_system`` themes and the render-time palette.
-
-The TUI reads colors at render time from the flat ``THEME`` dict in
-``app/constants.py`` (~2000 lookups), while full themes (superqode, tokyonight,
-dracula, nord, monokai, gruvbox) are defined as ``ColorPalette`` objects in
-``design_system``. Historically ``:theme`` changed the design-system palette but
-not ``THEME``, so it required a restart.
-
-This bridge maps a selected ``ColorPalette`` onto ``THEME`` *in place* so theme
-changes apply live, and persists the choice to ``~/.superqode/config.json``
-(the same file the legacy ``:theme`` command already used).
-"""
+"""One palette for CSS, Rich output, previews, custom files and exports."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from superqode.app.constants import THEME
 from superqode import design_system as ds
+from superqode.app.constants import THEME
+from superqode.theming import (
+    ThemeError,
+    atomic_json,
+    load_theme_file,
+    native_document,
+    palette_tokens,
+    system_theme,
+    terminal_appearance,
+)
 
 _CONFIG_PATH = Path.home() / ".superqode" / "config.json"
+_theme_errors: list[str] = []
+_terminal_colors: dict[str, str] = {}
+MAX_CONFIG_BYTES = 1024 * 1024
 
 
-def _palette_to_theme(colors: "ds.ColorPalette") -> dict[str, str]:
-    """Map a design-system ColorPalette onto the flat THEME keys."""
-    return {
-        "bg": colors.bg_void,
-        "surface": colors.bg_void,
-        "surface2": colors.bg_elevated,
-        "border": colors.border_subtle,
-        "border_active": colors.border_default,
-        "purple": colors.primary_bright,
-        "magenta": colors.secondary,
-        "pink": colors.secondary_light,
-        "rose": colors.error_light,
-        "orange": colors.warning,
-        "gold": colors.warning_light,
-        "yellow": colors.warning_light,
-        "cyan": colors.info,
-        "teal": colors.info,
-        "green": colors.success,
-        "success": colors.success,
-        "error": colors.error,
-        "warning": colors.warning,
-        "code_bg": colors.code_bg,
-        "diff_add": colors.diff_add,
-        "diff_remove": colors.diff_remove,
-        "text": colors.text_secondary,
-        # Each rung shifts up one: "muted" carries real prose and needs body-text
-        # contrast, which ``text_dim`` does not reach (4.35:1 on the default
-        # palette, below 4.5:1). ``text_muted`` is the rung meant for it and was
-        # otherwise unused, while ``text_ghost`` (2.72:1) is too faint for any
-        # visible text and is now dropped.
-        "muted": colors.text_muted,
-        "dim": colors.text_dim,
-        # Links are informational, not brand marks — follow ``info`` so the
-        # superqode theme's slate carries them instead of purple.
-        "link": colors.info,
-    }
+def _read_theme_config():
+    if not _CONFIG_PATH.exists():
+        return {}
+    if not _CONFIG_PATH.is_file():
+        raise ThemeError("Theme preferences must be a regular JSON file")
+    with _CONFIG_PATH.open("rb") as stream:
+        content = stream.read(MAX_CONFIG_BYTES + 1)
+    if len(content) > MAX_CONFIG_BYTES:
+        raise ThemeError("Theme preferences exceed 1 MiB; existing configuration was retained")
+    return json.loads(content.decode("utf-8"))
+
+
+def theme_directory() -> Path:
+    return _CONFIG_PATH.parent / "themes"
+
+
+def discover_themes() -> list[str]:
+    """Retain last-good themes on invalid/deleted files; report collisions."""
+    errors = []
+    directory = theme_directory()
+    try:
+        paths = sorted(directory.glob("*.json"))
+    except OSError as exc:
+        paths = []
+        errors.append(str(exc))
+    seen = {}
+    for path in paths:
+        try:
+            theme = load_theme_file(path)
+            # Watch the installed link itself, including when dotfiles managers
+            # repoint it to a new palette file outside the theme directory.
+            theme.source = str(path.absolute())
+            existing = ds.THEMES.get(theme.name)
+            if theme.name in seen or (
+                existing and existing.source not in {"built-in", theme.source}
+            ):
+                raise ThemeError(f"Duplicate theme name: {theme.name}")
+            seen[theme.name] = path
+            ds.THEMES[theme.name] = theme
+        except ThemeError as exc:
+            errors.append(f"{path.name}: {exc}")
+    _theme_errors[:] = errors
+    ds.THEMES["system"] = system_theme(_terminal_colors)
+    update_auto_theme()
+    return errors
+
+
+def theme_errors() -> list[str]:
+    return list(_theme_errors)
+
+
+def _palette_to_theme(colors: ds.ColorPalette) -> dict[str, str]:
+    theme = next((t for t in ds.THEMES.values() if t.colors is colors), None)
+    return palette_tokens(theme or ds.Theme("palette", "", colors))
+
+
+def resolve_selection(selection: str) -> str:
+    appearance = ds.THEMES["system"].appearance
+    if selection == "auto":
+        return "light" if appearance == "light" else "superqode"
+    if "/" in selection:
+        names = selection.split("/")
+        if len(names) != 2 or any(name not in ds.THEMES for name in names):
+            return ""
+        return names[0] if appearance == "light" else names[1]
+    return selection if selection in ds.THEMES else ""
 
 
 def apply_theme(name: str) -> bool:
-    """Activate the named design-system theme and sync it onto THEME live.
-
-    Returns True if the theme exists, False otherwise.
-    """
-    if not ds.set_theme(name):
+    selected = resolve_selection(name)
+    if not selected:
         return False
-    THEME.update(_palette_to_theme(ds.get_theme(name).colors))
+    theme = ds.THEMES[selected]
+    try:
+        tokens = palette_tokens(theme)
+    except ThemeError as exc:
+        _theme_errors.append(f"{name}: {exc}")
+        return False
+    ds.set_theme(selected)
+    THEME.update(tokens)
+    # Legacy widgets import COLORS by reference. Give them the same readable
+    # values as CSS/Rich roles while retaining the raw preset for export/editing.
+    field_roles = {
+        "bg_void": "bg",
+        "bg_surface": "surface",
+        "bg_elevated": "surface2",
+        "bg_hover": "hover",
+        "bg_active": "active",
+        "code_bg": "code_bg",
+        "border_subtle": "border",
+        "border_default": "border_muted",
+        "border_focus": "border_active",
+        "text_primary": "text",
+        "text_secondary": "text",
+        "text_muted": "muted",
+        "text_dim": "dim",
+        "text_ghost": "dim",
+        "diff_add": "diff_add",
+        "diff_remove": "diff_remove",
+        "diff_change": "warning",
+    }
+    for prefix, role in (
+        ("primary", "purple"),
+        ("secondary", "pink"),
+        ("success", "success"),
+        ("warning", "warning"),
+        ("error", "error"),
+        ("info", "cyan"),
+    ):
+        for field_name in vars(ds.COLORS):
+            if field_name == prefix or field_name.startswith(prefix + "_"):
+                field_roles[field_name] = role
+    for field_name, role in field_roles.items():
+        setattr(ds.COLORS, field_name, tokens[role])
     return True
 
 
+def set_terminal_colors(colors: dict[str, str]) -> None:
+    _terminal_colors.update(colors)
+    ds.THEMES["system"] = system_theme(_terminal_colors)
+    update_auto_theme()
+
+
+def update_auto_theme() -> None:
+    base = ds.get_theme("light" if ds.THEMES["system"].appearance == "light" else "superqode")
+    ds.THEMES["auto"] = ds.Theme(
+        "auto",
+        "Choose SuperQode dark or light with terminal appearance",
+        base.colors,
+        base.appearance,
+        palette_tokens(base),
+    )
+
+
 def available_themes() -> list[tuple[str, str]]:
-    """List ``(name, description)`` for every theme."""
     return ds.list_themes()
 
 
@@ -84,31 +169,197 @@ def active_theme_name() -> str:
     return ds.get_active_theme_name()
 
 
-def save_theme(name: str) -> None:
-    """Persist the chosen theme to ``~/.superqode/config.json``."""
-    if name not in dict(ds.list_themes()):
-        return
+def save_theme(name: str) -> str | None:
+    """Return an error if selection applies but cannot be persisted."""
+    if not resolve_selection(name):
+        return "Unknown theme selection"
     try:
-        _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        config: dict = {}
-        if _CONFIG_PATH.exists():
-            try:
-                config = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, ValueError):
-                config = {}
+        config = _read_theme_config()
+        if not isinstance(config, dict):
+            return "Configuration must be an object; existing file was retained"
+        # A startup file is temporary, but an explicit Save must also work on
+        # the next launch, when project palettes are not discovered implicitly.
+        for selected in name.split("/"):
+            theme = ds.THEMES[selected]
+            if theme.source in {"built-in", "bundled"}:
+                continue
+            if Path(theme.source).parent.resolve() == theme_directory().resolve():
+                continue
+            destination = theme_directory() / f"{theme.name}.json"
+            atomic_json(destination, native_document(theme), overwrite=False)
+            theme.source = str(destination.absolute())
         config["theme"] = name
-        _CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+        atomic_json(_CONFIG_PATH, config)
+    except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+        return f"Theme applied but could not be saved: {exc}"
+    return None
 
 
 def load_saved_theme() -> str:
-    """Return the persisted theme name, or the default ('superqode')."""
+    discover_themes()
     try:
-        data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+        data = _read_theme_config()
         name = data.get("theme")
-        if name in dict(ds.list_themes()):
+        if isinstance(name, str) and resolve_selection(name):
             return name
-    except Exception:
-        pass
+    except (OSError, ValueError, AttributeError, UnicodeError, RecursionError) as exc:
+        _theme_errors.append(
+            f"Could not read theme preference; existing configuration retained: {exc}"
+        )
     return ds.get_active_theme_name()
+
+
+def import_theme(path: Path) -> str:
+    """Import palette data only; convert to our native, versioned document."""
+    theme = load_theme_file(path.expanduser())
+    if theme.name in ds.THEMES:
+        raise ThemeError(f"Theme {theme.name!r} already exists; choose a new name")
+    destination = theme_directory() / f"{theme.name}.json"
+    if destination.exists():
+        raise ThemeError(f"Theme file already exists: {destination}")
+    try:
+        atomic_json(destination, native_document(theme), overwrite=False)
+    except OSError as exc:
+        raise ThemeError(f"Could not import theme: {exc}") from exc
+    theme.source = str(destination.absolute())
+    ds.THEMES[theme.name] = theme
+    return theme.name
+
+
+def load_project_theme(path: Path) -> str:
+    """Explicitly load project palette data without changing saved preferences."""
+    path = path.expanduser()
+    theme = load_theme_file(path)
+    existing = ds.THEMES.get(theme.name)
+    if existing:
+        if (
+            existing.source in {"built-in", "bundled"}
+            or Path(existing.source).resolve() != path.resolve()
+        ):
+            raise ThemeError(f"Theme name collision: {theme.name}")
+        theme.source = existing.source
+    ds.THEMES[theme.name] = theme
+    return theme.name
+
+
+def css_variables() -> dict[str, str]:
+    return {"sq-" + key.replace("_", "-"): value for key, value in THEME.items()}
+
+
+def textual_theme():
+    from textual.theme import Theme
+
+    return Theme(
+        name="superqode-live",
+        primary=THEME["purple"],
+        secondary=THEME["pink"],
+        warning=THEME["warning"],
+        error=THEME["error"],
+        success=THEME["success"],
+        foreground=THEME["text"],
+        background=THEME["bg"],
+        surface=THEME["surface"],
+        panel=THEME["surface2"],
+        dark=ds.get_theme().appearance == "dark",
+        variables=css_variables(),
+        text_alpha=1,
+    )
+
+
+def bind_strip(strip):
+    """Tag owned colours once; later paints resolve roles without replaying state."""
+    from rich.segment import Segment
+    from rich.style import Style
+    from textual.strip import Strip
+
+    roles = {}
+    for key in (
+        "text",
+        "muted",
+        "dim",
+        "error",
+        "warning",
+        "success",
+        "purple",
+        "pink",
+        "cyan",
+        "diff_add",
+        "diff_remove",
+        *THEME,
+    ):
+        roles.setdefault(THEME[key].lower(), key)
+    segments = []
+    for segment in strip:
+        style = segment.style
+        if style:
+            meta = {}
+            for attribute, meta_key in (("color", "sq_fg"), ("bgcolor", "sq_bg")):
+                color = getattr(style, attribute)
+                if color and color.type.name == "TRUECOLOR" and color.name.lower() in roles:
+                    meta[meta_key] = roles[color.name.lower()]
+            if meta:
+                style = style + Style.from_meta({**meta, **style.meta})
+                if style.dim:
+                    style = style + Style(dim=False)
+        segments.append(Segment(segment.text, style, segment.control))
+    return Strip(segments, strip.cell_length)
+
+
+def recolor_strip(strip):
+    from rich.segment import Segment
+    from rich.style import Style
+    from textual.strip import Strip
+
+    segments = []
+    for segment in strip:
+        style = segment.style
+        if style:
+            fg, bg = style.meta.get("sq_fg"), style.meta.get("sq_bg")
+            if fg or bg:
+                style = style + Style(color=THEME.get(fg), bgcolor=THEME.get(bg))
+        segments.append(Segment(segment.text, style, segment.control))
+    return Strip(segments, strip.cell_length)
+
+
+def theme_legacy_text(text):
+    """Recolour legacy status chrome while retaining links and typography."""
+    from rich.style import Style
+    from rich.text import Span
+    from superqode.theming.css import color_role
+
+    if active_theme_name() == "superqode":
+        return text
+
+    def restyle(style):
+        if isinstance(style, str):
+            style = Style.parse(style)
+        if not style or not style.color:
+            return style
+        rgb = style.color.get_truecolor()
+        color = f"#{rgb.red:02x}{rgb.green:02x}{rgb.blue:02x}"
+        key = color_role(color).replace("-", "_")
+        return style + Style(color=THEME.get(key, THEME["text"]))
+
+    result = text.copy()
+    result.style = restyle(result.style)
+    result.spans = [Span(span.start, span.end, restyle(span.style)) for span in result.spans]
+    return result
+
+
+def load_bundled_themes() -> None:
+    directory = Path(__file__).parents[1] / "data" / "themes"
+    for path in sorted(directory.glob("*.json")):
+        if path.name == "schema.json":
+            continue
+        try:
+            theme = load_theme_file(path)
+            theme.source = "bundled"
+            ds.THEMES.setdefault(theme.name, theme)
+        except ThemeError as exc:
+            _theme_errors.append(f"{path.name}: {exc}")
+
+
+ds.THEMES["system"] = system_theme()
+update_auto_theme()
+load_bundled_themes()
+apply_theme("superqode")

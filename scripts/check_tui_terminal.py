@@ -18,7 +18,7 @@ import struct
 import subprocess
 import sys
 import tempfile
-from time import monotonic
+from time import monotonic, sleep
 
 
 def child(state_path: Path):
@@ -28,7 +28,7 @@ def child(state_path: Path):
 
     class TerminalProbe(SuperQodeApp):
         def __init__(self):
-            super().__init__()
+            super().__init__(theme_selection="system")
             self._history_manager = HistoryManager(history_file=Path.cwd() / "history.jsonl")
             self.copies = []
             for name in (
@@ -56,6 +56,7 @@ def child(state_path: Path):
 
         def record(self):
             from textual.css.query import NoMatches
+            from superqode.app.constants import THEME
 
             try:
                 prompt = self.query_one("#prompt-input", SelectionAwareInput)
@@ -68,6 +69,11 @@ def child(state_path: Path):
                 "screen": type(self.screen).__name__,
                 "size": [self.size.width, self.size.height],
                 "copies": self.copies,
+                "theme_bg": self.screen.styles.background.hex.lower(),
+                "theme_name": self._current_theme,
+                "terminal_palette": self._terminal_palette,
+                "palette_bg": THEME["bg"],
+                "theme_timer_pending": self._terminal_theme_refresh_timer is not None,
             }
             temporary = state_path.with_suffix(".tmp")
             temporary.write_text(json.dumps(state), encoding="utf-8")
@@ -135,6 +141,39 @@ def probe(term: str, size: tuple[int, int]):
                 "startup and rendering",
                 lambda s: s["focused"] == "prompt-input" and s["size"] == list(size),
             )
+            wait_for("system palette query emitted", lambda s: b"\x1b]11;?" in transcript)
+            send(b"theme draft")
+            wait_for("theme probe draft", lambda s: s["text"] == "theme draft")
+            send(b"\x1b]11;rgb:fafa/")
+            sleep(0.25)  # Cross the input driver's 100 ms Escape timeout.
+            send(b"fafa/fafa\x1b\\\x1b]10;rgb:2222/2222/2222\x07")
+            wait_for(
+                "late fragmented light palette preserves draft",
+                lambda s: s["theme_bg"] == "#fafafa" and s["text"] == "theme draft",
+            )
+            send(b"\x1b]11;rgb:1a1a/1b1b/2626\x07\x1b]10;rgb:eeee/eeee/eeee\x1b\\")
+            wait_for(
+                "terminal dark appearance preserves draft",
+                lambda s: s["theme_bg"] == "#1a1b26" and s["text"] == "theme draft",
+            )
+            send(b"\x1b]1")
+            sleep(0.25)
+            send(b" resumed")
+            wait_for(
+                "unfinished color header preserves typing",
+                lambda s: s["text"] == "theme draft resumed",
+            )
+            send(b"\x1b]11;rgb:ff")
+            sleep(0.15)
+            send(b"d")
+            sleep(0.07)
+            send(b"raft")
+            wait_for(
+                "unfinished RGB payload preserves fragmented typing",
+                lambda s: s["text"] == "theme draft resumeddraft",
+            )
+            send(b"\x15")
+            wait_for("clear theme probe draft", lambda s: s["text"] == "")
             send(b"\x1b[200~first\n  second\x1b[201~")
             wait_for(
                 "bracketed multiline paste remains unsent", lambda s: s["text"] == "first\n  second"

@@ -100,15 +100,19 @@ async def test_connection_back_restores_transcript_position_draft_and_runtime(si
         log = app.query_one("#log", ConversationLog)
         log.clear()
         log.add_user("original task")
-        log.add_assistant("answer\n" * 60)
+        # Markdown soft line breaks collapse into one paragraph. Use actual
+        # paragraphs so the saved reading position stays within the viewport's
+        # scroll range after the composer/setup layout settles.
+        log.add_assistant("answer\n\n" * 60)
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "draft before setup"
         await pilot.pause()
         log.scroll_to(y=5, animate=False, force=True)
         await pilot.pause()
         old_scroll = log.scroll_y
+        assert old_scroll == 5
         before = [line.text for line in log.lines]
         messages = list(log._messages)
-        prompt = app.query_one("#prompt-input", SelectionAwareInput)
-        prompt.value = "draft before setup"
         runtime = object()
         app._pure_mode = SimpleNamespace(_runtime=runtime)
         app._show_connect_type_picker(log)

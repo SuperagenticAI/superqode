@@ -14,9 +14,9 @@ from rich.text import Text
 from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Input, OptionList, Static
+from textual.widgets import Button, Footer, Input, OptionList, Select, Static
 from textual.widgets.option_list import Option
 
 from superqode.app.harness_picker import HarnessPickerItem
@@ -179,7 +179,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     HarnessHubScreen #hub-list:focus > .option-list--option-highlighted {
         background: #241542;
     }
-    HarnessHubScreen #hub-detail {
+    HarnessHubScreen #hub-detail-scroll {
         width: 1fr;
         height: 100%;
         padding: 1 2;
@@ -215,7 +215,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         width: 100%;
         height: 1fr;
     }
-    HarnessHubScreen.narrow #hub-detail {
+    HarnessHubScreen.narrow #hub-detail-scroll {
         display: block;
         width: 100%;
         height: 8;
@@ -224,6 +224,42 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     HarnessHubScreen.narrow #hub-search {
         width: 28;
         max-width: 48%;
+    }
+    HarnessHubScreen #hub-compact-filters {
+        display: none;
+        height: 3;
+        padding: 0 1;
+    }
+    HarnessHubScreen #hub-compact-filters Select {
+        width: 1fr;
+        margin-right: 1;
+    }
+    HarnessHubScreen.compact #hub-compact-filters {
+        display: block;
+    }
+    HarnessHubScreen.compact #hub-filters,
+    HarnessHubScreen.compact #hub-languages {
+        display: none;
+    }
+    HarnessHubScreen.compact #hub-body {
+        layout: horizontal;
+    }
+    HarnessHubScreen.compact #hub-list {
+        width: 54%;
+        height: 100%;
+    }
+    HarnessHubScreen.compact #hub-detail-scroll {
+        width: 1fr;
+        height: 100%;
+        padding: 0 1;
+    }
+    HarnessHubScreen.compact #hub-actions Button {
+        min-width: 8;
+        margin-left: 0;
+    }
+    HarnessHubScreen.compact #hub-build,
+    HarnessHubScreen.compact #hub-jev-routing {
+        display: none;
     }
     """
 
@@ -299,9 +335,31 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
                     for label, slug in row:
                         yield Button(label, id=f"hub-language-{slug}")
 
+        with Horizontal(id="hub-compact-filters"):
+            yield Select(
+                [
+                    ("All harnesses", "all"),
+                    ("Available", "ready"),
+                    ("Setup required", "setup"),
+                    ("Open source", "open"),
+                    ("Your harnesses", "custom"),
+                    ("Coming soon", "coming"),
+                ],
+                value=self.filter_name,
+                allow_blank=False,
+                id="hub-readiness-select",
+            )
+            yield Select(
+                [("Any language", ""), *[(name, name) for name in self._languages_present()]],
+                value="",
+                allow_blank=False,
+                id="hub-language-select",
+            )
+
         with Horizontal(id="hub-body"):
             yield OptionList(id="hub-list")
-            yield Static(id="hub-detail")
+            with VerticalScroll(id="hub-detail-scroll"):
+                yield Static(id="hub-detail")
 
         with Horizontal(id="hub-actions"):
             yield Button("Build your own", id="hub-build")
@@ -316,6 +374,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
     def on_mount(self) -> None:
         self.query_one("#hub-tune", Button).display = False
         self.set_class(self.size.width < 82, "narrow")
+        self.set_class(self.size.height < 32 or self.size.width < 100, "compact")
         self._refresh_items()
         search = self.query_one("#hub-search", Input)
         if self.search_query:
@@ -325,6 +384,13 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
     def on_resize(self, event: events.Resize) -> None:
         self.set_class(event.size.width < 82, "narrow")
+        self.set_class(event.size.height < 32 or event.size.width < 100, "compact")
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "use" and self.focused is not None:
+            if any(isinstance(node, Select) for node in self.focused.ancestors_with_self):
+                return False
+        return True
 
     def _matches_filter(self, item: HarnessPickerItem) -> bool:
         if self.filter_name == "ready":
@@ -693,6 +759,9 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self.query_one("#hub-detail", Static).update(text)
 
     def _update_filter_buttons(self) -> None:
+        with self.prevent(Select.Changed):
+            self.query_one("#hub-readiness-select", Select).value = self.filter_name
+            self.query_one("#hub-language-select", Select).value = self.language_filter
         for filter_name in self.FILTERS:
             button = self.query_one(f"#hub-filter-{filter_name}", Button)
             button.set_class(filter_name == self.filter_name, "on")
@@ -706,6 +775,18 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             )
             button.set_class(active, "on")
             button.variant = "default"
+
+    @on(Select.Changed, "#hub-readiness-select")
+    def on_readiness_selected(self, event: Select.Changed) -> None:
+        if event.value is not Select.NULL:
+            self.filter_name = str(event.value)
+            self._refresh_items()
+
+    @on(Select.Changed, "#hub-language-select")
+    def on_language_selected(self, event: Select.Changed) -> None:
+        if event.value is not Select.NULL:
+            self.language_filter = str(event.value)
+            self._refresh_items()
 
     @on(Input.Changed, "#hub-search")
     def on_search_changed(self, event: Input.Changed) -> None:
@@ -827,7 +908,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
         self._inspect_expanded = True
         self._update_detail(item)
         try:
-            self.query_one("#hub-detail", Static).focus()
+            self.query_one("#hub-detail-scroll", VerticalScroll).focus()
         except Exception:  # noqa: BLE001
             pass
 

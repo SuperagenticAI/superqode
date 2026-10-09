@@ -18,6 +18,23 @@ from superqode.app.widgets import (
 class HelperPermissionsMixin:
     """Tool-permission requests, approval bridge, and permission pulse."""
 
+    def _cancel_pending_decisions(self) -> None:
+        """Release approval/question waiters and recover the pre-decision draft."""
+        event = getattr(self, "_permission_response_event", None)
+        if event is not None:
+            self._permission_response = "deny"
+            event.set()
+        future = getattr(self, "_pending_agent_question_future", None)
+        if future is not None and not future.done():
+            future.cancel()
+        self._awaiting_agent_question = False
+        self._pending_agent_question = None
+        self._pending_agent_question_future = None
+        self._permission_pending = False
+        self._pending_tool_name = None
+        self._pending_tool_input = None
+        self._reset_input_placeholder()
+
     def _ensure_pure_mode(self):
         """Ensure the PureMode object exists for session operations."""
         if not hasattr(self, "_pure_mode"):

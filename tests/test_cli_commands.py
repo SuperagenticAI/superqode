@@ -2581,7 +2581,7 @@ class TestHeadlessCommand:
 
         result = runner.invoke(cli_main, ["-p", "--harness", "kimi-coding", "demo"])
 
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
         assert result.output.strip() == "ready"
 
     def test_json_mode_outputs_structured_result(self, runner, monkeypatch):

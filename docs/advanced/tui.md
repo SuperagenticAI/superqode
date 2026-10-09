@@ -204,7 +204,7 @@ notifications limited to state changes that require user awareness.
 | `Ctrl+T` | Toggle agent thinking/session logs |
 | `Ctrl+R` | Open the rewind / transcript overlay |
 | `Ctrl+Shift+C` | Copy the latest response |
-| `Ctrl+C` | Quit |
+| `Ctrl+C` | Interrupt work; press twice within 2 seconds while idle to exit. Copy selected prompt text while idle. |
 | `PageUp` / `PageDown` | Scroll the conversation by page |
 | `Ctrl+Home` / `Ctrl+End` | Jump to the beginning or end of the conversation |
 | `Escape` `Escape` | Rewind the conversation (when the prompt is empty) |
@@ -490,24 +490,30 @@ Use this to retry a turn with a better prompt without starting a new session.
 
 ## Themes
 
-SuperQode ships several accent themes on top of its dark identity. Open the
-picker with `:theme`, or apply one directly with `:theme <name>`:
+SuperQode supports complete light, dark, terminal-derived, and custom JSON
+palettes. Open the searchable picker with `:theme`, or apply a name directly:
 
 ```text
-:theme            # open the picker with live swatch previews
+:theme            # preview messages, tools, code, a diff, and a warning
 :theme tokyonight
 :theme dracula
+:theme light
+:theme system
+:theme auto
 ```
 
-The choice is saved to `~/.superqode/config.json` and applied on the next launch.
+Selection applies immediately, including retained conversation output, and is
+saved to `~/.superqode/config.json`. Drafts and queued tasks remain in place.
+Use `superqode --theme light` for a temporary startup choice. See
+[Themes](themes.md) for custom files, Pi palette imports, and live editing.
 
 ## Accessibility
 
 `:theme high-contrast` maximizes legibility for low vision or a bright room.
-Where the other themes use low-contrast greys to de-emphasize text, this one
-keeps every text tone at or above the WCAG AAA ratio of 7:1 against the
-background, and keeps success, warning, error, and info distinct from one
-another.
+All effective body/status text palettes meet a 4.5:1 contrast target on their
+supported surfaces. The high-contrast preset raises primary, muted, and dim
+text to at least 7:1 on its black canvas. Success, warning, and error retain
+distinct labels and colors.
 
 Set `NO_COLOR` to remove colour entirely:
 

@@ -63,7 +63,7 @@ DEFAULT_PALETTE_COMMANDS: list[PaletteCommand] = [
     # System commands
     PaletteCommand("settings", "Settings", "Open settings", "⚙️", "Ctrl+,", "system"),
     PaletteCommand("help", "Help", "Show help documentation", "❓", "?", "system"),
-    PaletteCommand("exit", "Exit", "Exit SuperQode", "🚪", "Ctrl+C", "system"),
+    PaletteCommand("exit", "Exit", "Exit SuperQode", "🚪", ":exit", "system"),
 ]
 
 
@@ -364,11 +364,20 @@ class CommandPalette(Widget):
 
     def _update_filtered_commands(self) -> None:
         """Update filtered commands based on search text."""
-        if self.search_text:
+        query = self.search_text.strip().casefold()
+        if query:
             # Build searchable items (search both label and description)
             items = [(f"{cmd.label} {cmd.description}", cmd) for cmd in self.commands]
             results = self.fuzzy.search_with_data(self.search_text, items, max_results=10)
-            self.filtered_commands = [cmd for _, cmd in results]
+            # A command's description must not displace an exact name match.
+            # Otherwise searching "connect" opens BYOK ahead of the Connect menu.
+            exact = [cmd for cmd in self.commands if cmd.label.casefold() == query]
+            exact += [
+                cmd
+                for cmd in self.commands
+                if cmd not in exact and cmd.command.lstrip(":/").strip().casefold() == query
+            ]
+            self.filtered_commands = (exact + [cmd for _, cmd in results if cmd not in exact])[:10]
         else:
             self.filtered_commands = self.commands[:10]
 

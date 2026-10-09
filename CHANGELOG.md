@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-10-10
+
+### Added
+
+- Searchable theme gallery with 83 palette choices, live code/tool/diff previews,
+  an import dialog and the complete offline collection of 71 Awesome Pi themes.
+  Install individual palettes or the whole collection from the TUI or CLI.
+- Native and Pi JSON theme import, validation and export; light/dark appearance
+  pairs, terminal-aware system/auto modes, temporary startup overrides and live
+  reload of custom palettes. Bundle the upstream palette licenses and schema.
+- Developer trial guidance and regression coverage for installation, connection
+  discovery, keyboard navigation, draft recovery and theme workflows.
+
+### Fixed
+
+- Repaint retained transcripts, syntax highlighting, exports and open previews
+  when changing themes. Validate text contrast across hover/active surfaces,
+  including middle-gray terminal backgrounds.
+- Keep edited catalog palettes selectable and retain description-only changes.
+  Explicitly saving a project-file palette installs a user copy so it survives
+  restart; symlinked palettes retain hot reload after atomic replacement.
+- Handle malformed, deeply nested, oversized and overlong-integer JSON without
+  crashing theme import or preferences. Installed theme names take precedence
+  over same-named project files; explicit paths still select files.
+- Decode delayed and interrupted terminal color reports without leaking RGB
+  fragments into the composer or swallowing typed keys, navigation and paste.
+- Focus the composer immediately at startup and prevent hidden sidebar views
+  from taking focus. Preserve prompts when connection setup is needed and keep
+  drafts when cancelling questions, approvals or active work.
+- Make Ctrl+C interrupt active work and use a two-press idle exit; improve
+  command search ranking, narrow-terminal Harness Hub controls and scrolling.
+
+### Changed
+
+- Require Textual 8.2.8 or newer to match the TUI APIs used by the application.
+- Add theme and developer-journey regressions to CI and the release gate.
+- Put installation and connection first in Quick Start and document supported
+  theme workflows and the remaining live-provider and terminal trial scope.
+
 ## [2.10.1] - 2026-10-09
 
 ### Fixed

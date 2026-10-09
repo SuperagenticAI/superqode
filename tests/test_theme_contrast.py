@@ -152,6 +152,19 @@ class TestPaletteHygiene:
             for token, value in THEME.items()
             if value.startswith("#")
             and token not in {"bg", "surface", "surface2", "border", "border_active", "code_bg"}
+            and token
+            not in {
+                "hover",
+                "active",
+                "border_muted",
+                "selected_text",
+                "search_text",
+                "scrollbar_track",
+                "md_hr",
+                "md_quote_border",
+            }
+            and not token.endswith("_bg")
+            and not token.startswith("export_")
             and token != "user_prompt_bg"
             and contrast_ratio(value, THEME["bg"]) < LARGE_TEXT_MINIMUM
         }
@@ -162,16 +175,12 @@ class TestPaletteHygiene:
 class TestEveryThemeIsReadable:
     """The bridge maps a design-system palette onto THEME for every theme.
 
-    The default SuperQode theme is the product's own identity and is held to
-    the full contract. The ported themes (Tokyo Night, Monokai, Gruvbox) carry
-    their upstream authors' palettes, which are genuinely low-contrast; that is
-    recorded here rather than silently shipped, so the gap is a known trade-off
-    instead of an accident.
+    Effective text colors are normalized on the actual surfaces. No decorative
+    preset is exempt from the text contrast contract.
     """
 
-    #: Themes whose upstream palette does not meet the contract. Shrinking this
-    #: set is an improvement; growing it silently is a regression.
-    KNOWN_LOW_CONTRAST = {"tokyonight", "monokai", "gruvbox"}
+    #: No preset may be exempt from readable text.
+    KNOWN_LOW_CONTRAST = set()
 
     def _ratios(self, name):
         from superqode import design_system as ds

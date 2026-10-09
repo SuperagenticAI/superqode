@@ -31,6 +31,18 @@ class SlashCommand:
 
 # Default slash commands
 DEFAULT_COMMANDS: list[SlashCommand] = [
+    SlashCommand(":theme", "Search, preview, install and apply themes", category="settings"),
+    SlashCommand(
+        ":theme browse", "Browse the offline community theme gallery", category="settings"
+    ),
+    SlashCommand(
+        ":theme import", "Preview and import a local native or Pi JSON palette", category="settings"
+    ),
+    SlashCommand(
+        ":theme install",
+        "Install a catalog theme; use --all for the collection",
+        category="settings",
+    ),
     # Agent commands
     SlashCommand("/agents", "List available agents", "Ctrl+A", category="agents"),
     SlashCommand("/store", "Open agent marketplace", "Ctrl+S", category="agents"),
@@ -379,9 +391,9 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":e", "View a file", category="system"),
     SlashCommand(":ls", "List saved sessions", category="system"),
     SlashCommand(":grep", "Search the workspace", category="system"),
-    SlashCommand("/exit", "Exit SuperQode", "Ctrl+C", category="system"),
-    SlashCommand(":exit", "Exit SuperQode", "Ctrl+C", category="system"),
-    SlashCommand(":quit", "Exit SuperQode", "Ctrl+C", category="system"),
+    SlashCommand("/exit", "Exit SuperQode", category="system"),
+    SlashCommand(":exit", "Exit SuperQode", category="system"),
+    SlashCommand(":quit", "Exit SuperQode", category="system"),
 ]
 
 # The colon-command list is authoritative for the live TUI.  Supplement this

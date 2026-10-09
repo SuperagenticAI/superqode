@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from contextvars import ContextVar
 from functools import lru_cache
 from typing import Any
 
@@ -10,20 +11,13 @@ from rich.console import Console, ConsoleOptions, RenderResult
 from rich.markdown import CodeBlock, Heading, Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.style import Style
 from rich.text import Text
 
 import superqode.code_theme  # noqa: F401  (registers the "superqode" Pygments style)
+from superqode.code_theme import SemanticSyntaxTheme
 
-# NOTE: Only code output is brand-green (AgentCodeBlock panel +
-# AgentCodespan). Prose elements (lists, tables, headings, links,
-# quotes, hr) intentionally use neutral styles so the transcript
-# doesn't look all-green.
-_BRAND_GREEN = "#7fb069"
-_BRANDED_CODE_STYLES = {
-    "markdown.code": _BRAND_GREEN,
-    "markdown.code_block": _BRAND_GREEN,
-}
-
+_render_palette = ContextVar("markdown_palette", default=None)
 
 _MARKDOWN_TABLE_RE = re.compile(
     r"(?m)^\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$"
@@ -34,24 +28,13 @@ def _live_theme() -> dict[str, str]:
     """Load the mutable TUI palette lazily to avoid an app/widget import cycle."""
     from superqode.app.constants import THEME
 
-    return THEME
+    return _render_palette.get() or THEME
 
 
-# Brand-fixed colors for agent output. These must never follow
-# theme_bridge.apply_theme(), otherwise any non-superqode palette
-# repaints code-block chrome cyan/blue via primary_bright/info.
-_BRAND_THEME = {
-    "green": "#7fb069",
-    "pink": "#ec4899",
-    "text": "#e4e4e7",
-    "bg": "default",
-    "code_bg": "default",
-}
-
-
-def _brand_theme() -> dict[str, str]:
-    """Brand palette for agent markdown (immune to :theme switches)."""
-    return _BRAND_THEME
+def _code_palette() -> dict[str, str]:
+    """Use theme roles, preserving brand green in the default palette."""
+    theme = _live_theme()
+    return {**theme, "green": theme["md_code"]}
 
 
 _FENCED_MARKDOWN_RE = re.compile(
@@ -73,25 +56,32 @@ def _validated_lexer_name(name: str) -> str:
 
 
 class AgentHeading(Heading):
-    """Theme-aware headings; code keeps brand green separately."""
+    """Compact theme-aware headings."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         text = self.text.copy()
         text.justify = "left"
         level = int(self.tag[1:]) if self.tag[1:].isdigit() else 2
         theme = _live_theme()
-        color = theme.get("text", "#e4e4e7")
+        color = theme["md_heading"]
         prefix = "▌ " if level <= 2 else "• "
-        yield Text(prefix, style=f"bold {color}") + Text(text.plain, style=f"bold {color}")
+        style = Style(color=color, bold=True, meta={"sq_fg": "md_heading"})
+        yield Text(prefix, style=style) + Text(text.plain, style=style)
 
 
 class AgentCodespan(Text):
-    """Inline code with subtle brand tint (always green, theme-independent)."""
+    """Inline code using the selected palette's code role."""
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        theme = _brand_theme()
+        theme = _code_palette()
         text = self.copy()
-        text.stylize(f"{theme['green']} on {theme.get('code_bg', theme['bg'])}")
+        text.stylize(
+            Style(
+                color=theme["green"],
+                bgcolor=theme["code_bg"],
+                meta={"sq_fg": "md_code", "sq_bg": "code_bg"},
+            )
+        )
         yield text
 
 
@@ -160,7 +150,7 @@ class AgentCodeBlock(CodeBlock):
     }
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        theme = _brand_theme()
+        theme = _code_palette()
         code = str(self.text).rstrip()
         lang = (self.lexer_name or "text").strip() or "text"
         lexer = _validated_lexer_name(self.NORMALIZE_LEXER.get(lang.lower(), lang))
@@ -175,7 +165,7 @@ class AgentCodeBlock(CodeBlock):
         syntax = Syntax(
             code,
             lexer,
-            theme="superqode",
+            theme=SemanticSyntaxTheme(_live_theme()),
             # Wrapping a large code fence multiplies layout and render work.
             # Keep code horizontally stable and let the transcript clip it.
             word_wrap=False,
@@ -191,7 +181,7 @@ class AgentCodeBlock(CodeBlock):
         yield Panel(
             syntax,
             title=f"[{theme['green']}]{icon} {lang}[/]{title_suffix}",
-            border_style=theme["green"],
+            border_style=theme["md_code_border"],
             padding=(0, 0),
         )
 
@@ -207,15 +197,38 @@ class AgentMarkdown(Markdown):
         "codespan_open": AgentCodespan,
     }
 
+    def __init__(self, *args, palette=None, **kwargs):
+        self.palette = palette
+        super().__init__(*args, **kwargs)
+
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        # Only code spans/blocks get brand green. Everything else
-        # (lists, tables, headings, links, quotes) keeps Rich defaults
-        # so prose stays neutral.
+        # A context-local palette keeps preview rendering isolated from the app.
         from rich.theme import Theme
 
-        brand = Theme(_BRANDED_CODE_STYLES)
-        with console.use_theme(brand):
-            yield from super().__rich_console__(console, options)
+        token = _render_palette.set(self.palette)
+        try:
+            theme = _live_theme()
+            brand = Theme(
+                {
+                    "markdown.code": theme["md_code"],
+                    "markdown.code_block": theme["md_code_block"],
+                    "markdown.h1": theme["md_heading"],
+                    "markdown.h2": theme["md_heading"],
+                    "markdown.link": theme["link"],
+                    "markdown.link_url": theme["md_link_url"],
+                    "markdown.block_quote": theme["md_quote"],
+                    "markdown.list": theme["text"],
+                    "markdown.item.bullet": theme["md_bullet"],
+                    "markdown.item.number": theme["md_bullet"],
+                    "markdown.hr": theme["md_hr"],
+                    "markdown.table.border": theme["border"],
+                    "markdown.table.header": theme["md_heading"],
+                }
+            )
+            with console.use_theme(brand):
+                yield from super().__rich_console__(console, options)
+        finally:
+            _render_palette.reset(token)
 
 
 def _is_markdown_table(text: str) -> bool:
@@ -245,7 +258,7 @@ def normalize_agent_markdown(text: str) -> str:
 
 def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
     """Return a Rich renderable for polished agent markdown."""
-    theme = _live_theme()
+    theme = kwargs.get("palette") or _live_theme()
     return AgentMarkdown(
         normalize_agent_markdown(text),
         code_theme=kwargs.pop("code_theme", active_code_theme()),
@@ -255,12 +268,9 @@ def render_agent_markdown(text: str, **kwargs: Any) -> Markdown:
     )
 
 
-def active_code_theme() -> str:
-    """Return the Pygments theme matching the active TUI theme."""
-    # Brand decision: agent code blocks always use the SuperQode green
-    # Pygments style regardless of the selected TUI theme, so code never
-    # renders cyan/blue (e.g. monokai/github-dark defaults).
-    return "superqode"
+def active_code_theme() -> SemanticSyntaxTheme:
+    """Return semantic syntax styles for all SuperQode code views."""
+    return SemanticSyntaxTheme()
 
 
 def markdown_to_plain_text(text: str) -> str:

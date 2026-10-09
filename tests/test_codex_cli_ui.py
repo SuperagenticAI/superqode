@@ -317,11 +317,20 @@ def test_interleaved_command_output_keeps_item_identity():
 
 
 @pytest.mark.asyncio
-async def test_mounted_native_picker_keeps_input_responsive(monkeypatch):
+async def test_mounted_native_picker_keeps_input_responsive(monkeypatch, tmp_path):
     from superqode.app.widgets import ConversationLog
     from superqode.app.inputs import SelectionAwareInput
 
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    monkeypatch.chdir(tmp_path)
+    for name in (
+        "_start_models_dev_refresh",
+        "_start_acp_registry_refresh",
+        "_report_catalog_freshness",
+        "_run_startup_connect",
+        "_prewarm_litellm",
+    ):
+        monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None)
     app = SuperQodeApp()
     reached, release = asyncio.Event(), asyncio.Event()
     selected = []
@@ -346,29 +355,40 @@ async def test_mounted_native_picker_keeps_input_responsive(monkeypatch):
         monkeypatch.setattr(
             app, "_apply_codex_model_override", lambda model, log: selected.append(model)
         )
+        prior_workers = set(app.workers)
         app._show_codex_model_picker(app.query_one("#log", ConversationLog))
+        model_workers = [worker for worker in app.workers if worker not in prior_workers]
         await asyncio.wait_for(reached.wait(), 2)
         await pilot.press("d", "r", "a", "f", "t")
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
         assert prompt.value == "draft"
         prompt.value = ""
         release.set()
+        await asyncio.wait_for(app.workers.wait_for_complete(model_workers), timeout=2)
         await pilot.pause()
         assert app._awaiting_codex_model
         await pilot.press("down", "enter")
         await pilot.pause()
-        assert selected == ["second"]
+        assert selected == ["second"], {
+            "prompt": prompt.value,
+            "focused": getattr(app.focused, "id", None),
+            "awaiting": app._awaiting_codex_model,
+            "highlight": app._codex_highlighted_model_index,
+            "log": [line.text for line in app.query_one("#log", ConversationLog).lines[-8:]],
+        }
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("profile_id,runtime", [("codex", "codex-cli"), ("codex-sdk", "codex-sdk")])
 async def test_connect_menu_navigates_to_distinct_codex_subscription_routes(
-    monkeypatch, profile_id, runtime
+    monkeypatch, tmp_path, profile_id, runtime
 ):
     from superqode.app.widgets import ConversationLog
     from superqode.providers.connection_profiles import display_ordered_profiles
 
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
     app = SuperQodeApp()
     selected = []
     monkeypatch.setattr(

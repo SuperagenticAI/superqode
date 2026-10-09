@@ -97,7 +97,10 @@ async def test_filtered_slash_rows_mount_with_active_theme_colors():
 def test_unified_log_code_theme_tracks_active_tui_theme():
     theme_bridge.apply_theme("nord")
     try:
-        assert UnifiedLogFormatter()._code_theme() == "superqode"
+        from pygments.token import Keyword
+
+        syntax_theme = UnifiedLogFormatter()._code_theme()
+        assert syntax_theme.get_style_for_token(Keyword).color.name == THEME["syntax_keyword"]
         assert UnifiedLogFormatter(LogConfig(code_theme="monokai"))._code_theme() == "monokai"
     finally:
         theme_bridge.apply_theme("superqode")

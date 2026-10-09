@@ -622,7 +622,7 @@ class HelperStartupMixin:
             PaletteCommand(
                 "clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"
             ),
-            PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
+            PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", ":exit", "system"),
             PaletteCommand(
                 "image",
                 "Attach Image",

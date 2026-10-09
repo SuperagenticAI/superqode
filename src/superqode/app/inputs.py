@@ -106,7 +106,22 @@ class SelectionAwareInput(TextArea):
     BINDINGS = [
         Binding("ctrl+a", "select_all", "Select all", show=False),
         Binding("ctrl+u", "clear_prompt", "Clear prompt", show=True),
+        Binding("ctrl+c", "interrupt_or_copy", "Interrupt", show=False),
     ]
+
+    def action_interrupt_or_copy(self) -> None:
+        """Copy an idle selection; otherwise use the app's interrupt workflow."""
+        app = self.app
+        waiting = (
+            app.is_busy
+            or getattr(app, "_permission_pending", False)
+            or getattr(app, "_awaiting_agent_question", False)
+            or getattr(app, "_install_in_progress", False)
+        )
+        if not waiting and not self.selection.is_empty:
+            self.action_copy()
+            return
+        app.action_interrupt()
 
     def action_clear_prompt(self) -> None:
         """Clear the entire prompt buffer (every line), not just the current line."""

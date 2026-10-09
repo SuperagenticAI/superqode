@@ -551,45 +551,19 @@ class HelpersMixin(
         ]
 
     def _apply_and_persist_theme(self, name: str) -> bool:
-        """Apply a theme palette live, persist it, and repaint what is on screen.
-
-        ``refresh()`` alone looks like nothing happened. The conversation log
-        holds text whose colours were resolved when each line was written, so
-        redrawing the same styled objects reproduces the old palette. Anything
-        already on screen therefore has to be rebuilt from source, not refreshed.
-        """
+        """Apply and save colours without clearing or replaying user activity."""
         if not _apply_theme_palette(name):
             return False
         self._current_theme = name
-        save_theme(name)
-        # Rebuild the home screen from source when that is all that is shown, so
-        # the new palette is visible immediately. Rebuilding is only safe here:
-        # it clears the log, and a transcript must never be destroyed by a
-        # cosmetic command.
-        repainted = False
-        if getattr(self, "_welcome_active", False):
-            try:
-                self._rerender_welcome()
-                repainted = True
-            except Exception:  # noqa: BLE001 - repaint is best-effort
-                repainted = False
-        try:
+        self._theme_save_error = save_theme(name)
+        refresh_theme_view = getattr(self, "_refresh_theme_view", None)
+        if callable(refresh_theme_view):
+            refresh_theme_view()
+        else:
             self.screen.refresh(layout=True)
-        except Exception:  # noqa: BLE001
-            pass
-        # Widget CSS is static, so overlays with brand chrome (slash
-        # autocomplete) re-resolve their colors from the new palette.
-        try:
-            for widget in self.query(
-                "SlashComplete, CommandPalette, HistorySearchModal, SupervisionBar"
-            ):
-                refresh = getattr(widget, "refresh_theme_colors", None)
-                if callable(refresh):
-                    refresh()
-            self._refresh_attachment_bar()
-        except Exception:  # noqa: BLE001
-            pass
-        self._theme_repainted_welcome = repainted
+        query_terminal_theme = getattr(self, "_query_terminal_theme", None)
+        if callable(query_terminal_theme):
+            query_terminal_theme()
         return True
 
     def _perform_rewind(self, occurrence: int, log: ConversationLog) -> None:

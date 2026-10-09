@@ -734,7 +734,8 @@ async def test_conversation_log_selection_uses_cell_offsets_for_wide_glyphs():
 
 
 async def test_conversation_log_selection_style_is_visible():
-    """Mouse-selected text must visibly contrast against the black log."""
+    """Mouse-selected text must use the active palette's selection colours."""
+    from superqode.app.constants import THEME
     from textual.geometry import Offset
     from textual.selection import Selection
 
@@ -749,9 +750,9 @@ async def test_conversation_log_selection_style_is_visible():
         style = log.selection_style
 
         assert style.bgcolor is not None
-        assert style.bgcolor.get_truecolor().hex == "#2563eb"
+        assert style.bgcolor.get_truecolor().hex == THEME["selected_bg"]
         assert style.color is not None
-        assert style.color.get_truecolor().hex == "#ffffff"
+        assert style.color.get_truecolor().hex == THEME["selected_text"]
 
         rendered_line = log.render_line(0)
         selected_segments = [
@@ -759,7 +760,7 @@ async def test_conversation_log_selection_style_is_visible():
             for segment in rendered_line
             if segment.style
             and segment.style.bgcolor
-            and segment.style.bgcolor.get_truecolor().hex == "#2563eb"
+            and segment.style.bgcolor.get_truecolor().hex == THEME["selected_bg"]
         ]
         assert selected_segments
         assert "".join(segment.text for segment in selected_segments) == "select"

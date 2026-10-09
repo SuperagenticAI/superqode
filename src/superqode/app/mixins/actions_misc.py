@@ -219,6 +219,8 @@ class MiscActionsMixin:
     def action_cancel_agent(self):
         """Cancel the currently running agent operation."""
         self._queue_paused = True
+        pending_decision = self._permission_pending or self._awaiting_agent_question
+        self._cancel_pending_decisions()
         log = self.query_one("#log", ConversationLog)
         if getattr(self, "_cancel_requested", False) and self.is_busy:
             return
@@ -274,7 +276,7 @@ class MiscActionsMixin:
             log.add_info("🛑 Cancelling agent operation...")
             self._stop_stream_animation()
             self._stop_thinking()
-        elif self.is_busy:
+        elif self.is_busy or pending_decision:
             pure = getattr(self, "_pure_mode", None)
             if pure is not None and hasattr(pure, "cancel"):
                 pure.cancel()

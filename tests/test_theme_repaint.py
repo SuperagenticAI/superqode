@@ -1,9 +1,7 @@
 """Changing theme must visibly change the screen, without eating the transcript.
 
-`:theme <name>` updated all 21 palette keys correctly but looked like it did
-nothing: the conversation log stores text whose colours were resolved when each
-line was written, so `refresh()` redraws the same styled objects in the old
-palette. Anything already on screen has to be rebuilt from source instead.
+Retained strips carry semantic roles and resolve them when painted. Theme changes
+refresh CSS and widgets without clearing or replaying conversation activity.
 """
 
 from __future__ import annotations
@@ -51,14 +49,14 @@ def _app(*, welcome_active: bool, applied: bool = True):
 
 
 class TestRepaintOnThemeChange:
-    def test_home_screen_is_rebuilt_so_the_change_is_visible(self, monkeypatch):
+    def test_home_screen_refreshes_without_clearing_retained_content(self, monkeypatch):
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: True)
         monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n: None)
         app = _app(welcome_active=True)
 
         assert app._apply_and_persist_theme("superqode") is True
-        assert app.rerendered == 1, "the home screen must be rebuilt from source"
-        assert app._theme_repainted_welcome is True
+        assert app.rerendered == 0
+        assert app.refreshed == 1
 
     def test_a_transcript_is_never_destroyed_by_a_cosmetic_command(self, monkeypatch):
         """Rebuilding clears the log, so it must not run over a conversation."""
@@ -68,7 +66,7 @@ class TestRepaintOnThemeChange:
 
         assert app._apply_and_persist_theme("nord") is True
         assert app.rerendered == 0
-        assert app._theme_repainted_welcome is False
+        assert app.refreshed == 1
 
     def test_an_unknown_theme_changes_and_repaints_nothing(self, monkeypatch):
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: False)
@@ -80,8 +78,8 @@ class TestRepaintOnThemeChange:
         assert app.rerendered == 0
         assert saved == [], "an invalid theme must not be persisted"
 
-    def test_a_failing_repaint_still_applies_the_theme(self, monkeypatch):
-        """A cosmetic repaint must never be what breaks the command."""
+    def test_theme_switch_never_invokes_destructive_welcome_replay(self, monkeypatch):
+        """The welcome replay path must not run during a theme switch."""
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: True)
         monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n: None)
         app = _app(welcome_active=True)
@@ -92,7 +90,7 @@ class TestRepaintOnThemeChange:
         app._rerender_welcome = explode
 
         assert app._apply_and_persist_theme("superqode") is True
-        assert app._theme_repainted_welcome is False
+        assert app.refreshed == 1
 
 
 class TestUserIsToldWhatHappened:
@@ -106,8 +104,8 @@ class TestUserIsToldWhatHappened:
         assert log.success == ["Theme changed to: superqode"]
         assert log.info == []
 
-    def test_an_unrepainted_change_explains_why_the_screen_looks_the_same(self):
-        """Silence here is what made the command feel broken."""
+    def test_a_changed_theme_does_not_claim_retained_output_is_stale(self):
+        """Retained output now resolves its colours at paint time."""
         app = _app(welcome_active=False)
         app._theme_repainted_welcome = False
         log = _Log()
@@ -115,6 +113,4 @@ class TestUserIsToldWhatHappened:
         app._report_theme_change("nord", log)
 
         assert log.success == ["Theme changed to: nord"]
-        assert len(log.info) == 1
-        assert "already on screen" in log.info[0]
-        assert ":home" in log.info[0]
+        assert log.info == []

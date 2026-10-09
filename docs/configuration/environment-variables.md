@@ -227,7 +227,17 @@ SDK, HTTP, and MCP.
 | `SUPERQODE_NO_BROWSER` | `0`/`1` | off | Do not open the system browser automatically during subscription login. Print the login URL instead. |
 | `SUPERQODE_NO_SPLASH` | `0`/`1` | off | Skip the wordmark printed while the TUI starts. The splash covers the wait before the first frame and is already suppressed when output is not a terminal. |
 
-## Notes
+## Terminal appearance
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `SUPERQODE_TERMINAL_BACKGROUND` | `#rrggbb` | terminal reply or appearance fallback | Set the initial system-theme canvas where OSC reporting is unavailable. |
+| `SUPERQODE_TERMINAL_FOREGROUND` | `#rrggbb` | terminal reply or appearance fallback | Set the initial system-theme text color. |
+| `COLORFGBG` | terminal color indices separated by semicolons | unset | Appearance fallback; background index 7 or 15 selects light. |
+
+See [Themes](../advanced/themes.md) for system detection and named light/dark pairs.
+
+## Environment notes
 
 - Boolean variables accept `1/true/yes/on` and `0/false/no/off`.
 - Env vars set in the shell that launches SuperQode are inherited by spawned subprocesses (ACP clients, shell sessions) unless the env policy filters them.

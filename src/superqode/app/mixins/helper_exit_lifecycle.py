@@ -55,6 +55,7 @@ class HelperExitLifecycleMixin:
 
     def _begin_conversation_transcript(self, log: ConversationLog) -> None:
         """Replace temporary connection/setup content with the first turn."""
+        self._welcome_active = False
         self._welcome_present = False
         # A live conversation is the new navigation root. Stale connection
         # picker history must never replace its transcript via Back.
@@ -91,6 +92,7 @@ class HelperExitLifecycleMixin:
         down, detach the harness, and clear the environment the next connection
         would otherwise inherit.
         """
+        self._cancel_pending_decisions()
         self._clear_sidebar_session_files()
         cancel = getattr(self, "_cancel_harness_wizard", None)
         if callable(cancel):
@@ -364,6 +366,7 @@ class HelperExitLifecycleMixin:
 
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""
+        self._cancel_pending_decisions()
         self._flush_draft_recovery()
         # Cancel any pending operations
         self._cancel_requested = True

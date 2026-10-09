@@ -391,8 +391,19 @@ class CompletionMixin:
 
     @staticmethod
     def _theme_completion_candidates() -> list[PromptCompletionCandidate]:
-        """Theme names for `:theme <name>` completion."""
+        """Offer discovery actions alongside installed theme names."""
         from superqode.app.theme_bridge import available_themes
+
+        actions = [
+            ("browse", "Search and preview the offline community collection"),
+            ("import", "Open a JSON file import dialog"),
+            ("install", "Open the catalog; install NAME or --all"),
+            ("help", "Theme commands and usage"),
+            ("list", "List installed themes"),
+            ("reload", "Rescan custom theme files"),
+            ("check", "Validate a JSON palette file"),
+            ("init", "Create an editable JSON palette"),
+        ]
 
         return [
             PromptCompletionCandidate(
@@ -401,7 +412,7 @@ class CompletionMixin:
                 description=description,
                 kind="theme",
             )
-            for name, description in available_themes()
+            for name, description in [*actions, *available_themes()]
         ]
 
     @staticmethod

@@ -4,10 +4,14 @@ SuperQode App CSS Styles.
 
 APP_CSS = """
 Screen { background: #000000; }
+TextArea .text-area--placeholder { color: $sq-muted; text-opacity: 100%; }
+Input .input--placeholder { color: $sq-muted; text-opacity: 100%; }
+Input.-empty { color: $sq-muted; }
+Input.-empty:focus { color: $sq-muted; }
 
 Screen > .screen--selection {
-    background: #2563eb;
-    color: #ffffff;
+    background: $sq-selected-bg;
+    color: $sq-selected-text;
     text-style: bold;
 }
 

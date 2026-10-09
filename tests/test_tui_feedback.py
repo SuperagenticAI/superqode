@@ -173,11 +173,13 @@ async def test_success_notification_is_a_centered_colored_card():
 
         assert 30 <= toast.region.width < 58
         assert abs(toast.region.x - (80 - toast.region.width) // 2) <= 1
-        assert toast.styles.background.hex == "#000000"
+        from superqode.app.constants import THEME
+
+        assert toast.styles.background.hex.lower() == THEME["bg"]
         assert title_style.color is not None
-        assert title_style.color.name == "#f472b6"
-        assert toast.styles.border_left[1].hex == "#A855F7"
-        assert toast.styles.border_right[1].hex == "#F97316"
+        assert title_style.color.name == THEME["pink"]
+        assert toast.styles.border_left[1].hex.lower() == THEME["border_active"]
+        assert toast.styles.border_right[1].hex.lower() == THEME["border_active"]
 
 
 def test_information_transition_can_request_a_short_popup() -> None:

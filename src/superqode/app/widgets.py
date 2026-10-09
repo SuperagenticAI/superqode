@@ -670,7 +670,9 @@ class ColorfulStatusBar(Static):
             run(action)
 
     def render(self) -> Text:
-        return self._render_for_width(self.size.width or 120)
+        from superqode.app.theme_bridge import theme_legacy_text
+
+        return theme_legacy_text(self._render_for_width(self.size.width or 120))
 
     def update_byok_status(
         self,
@@ -1441,7 +1443,7 @@ class ConversationLog(RichLog):
         if not spans:
             return strip
 
-        highlight_style = Style.parse(cls.SEARCH_HIGHLIGHT_STYLE)
+        highlight_style = Style.parse(f"bold {THEME['search_text']} on {THEME['search_bg']}")
         for start, end in reversed(spans):
             strip = cls._style_strip_span(strip, start, end, highlight_style)
         return strip
@@ -1461,6 +1463,9 @@ class ConversationLog(RichLog):
         start/extract stay consistent.
         """
         strip = super().render_line(y)
+        from superqode.app.theme_bridge import recolor_strip
+
+        strip = recolor_strip(strip)
         try:
             from rich.segment import Segment
             from rich.style import Style
@@ -1496,7 +1501,9 @@ class ConversationLog(RichLog):
                 start = max(0, min(start, strip.cell_length))
                 end = max(start, min(end, strip.cell_length))
                 if end > start:
-                    selection_style = Style.parse("bold white on #2563eb")
+                    selection_style = Style.parse(
+                        f"bold {THEME['selected_text']} on {THEME['selected_bg']}"
+                    )
                     strip = self._style_strip_span(strip, start, end, selection_style)
             return strip
         except Exception:
@@ -1740,6 +1747,7 @@ class ConversationLog(RichLog):
             # those writes until the user explicitly follows again.
             self.auto_scroll = False
         lines_before = len(self.lines)
+        start_line_before = self._start_line
 
         # Ensure console width is updated before writing
         self._update_console_width()
@@ -1754,6 +1762,10 @@ class ConversationLog(RichLog):
             processed_args.append(arg)
 
         result = super().write(*processed_args, **kwargs)
+        from superqode.app.theme_bridge import bind_strip
+
+        first_new = max(0, lines_before - (self._start_line - start_line_before))
+        self.lines[first_new:] = [bind_strip(strip) for strip in self.lines[first_new:]]
         if user_locked:
             self.auto_scroll = False
             self._unread_output_lines += max(1, len(self.lines) - lines_before)

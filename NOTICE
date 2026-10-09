@@ -46,3 +46,21 @@ superqode.harness.tau_adapter, superqode.harness.backends.tau
 These modules integrate with Hugging Face Tau (https://github.com/huggingface/tau)
 as an optional dependency. They contain no Tau source. Tau is distributed under
 the MIT License, Copyright (c) 2026 Alejandro AO.
+
+Bundled theme palette data
+--------------------------
+
+src/superqode/data/themes/halcyon-rivet.json and saffron-cavern.json are
+palette data from awesome-pi-themes 1.2.19, Copyright (c) 2026 Isashi Mitsui:
+https://github.com/isashi/awesome-pi-themes
+The complete MIT license is included alongside them as AWESOME-PI-LICENSE.
+The offline catalog at src/superqode/data/theme-library/ includes all 71 JSON
+palettes from revision a268b1aca442d348705e7733dc3db9af927079e0 of the same
+collection, with its complete MIT license alongside the palette files.
+
+ayu-light.json and ayu-mirage.json are palette data from pi-ayu-themes:
+https://github.com/iodic/pi-ayu-themes
+The upstream MIT license is included alongside them as AYU-LICENSE.
+
+Only JSON palette data is bundled. Upstream TypeScript extensions are not
+included or executed by the palette importer.

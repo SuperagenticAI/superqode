@@ -1,9 +1,4 @@
-"""SuperQode brand code theme (green / yellow / orange / cyan).
-
-Pygments style used for all agent-output code blocks so code never
-renders in blue. No background fill: every Syntax caller passes
-``background_color="default"`` so blocks blend into the terminal.
-"""
+"""Default brand style plus live semantic syntax roles for selectable themes."""
 
 from __future__ import annotations
 
@@ -84,3 +79,54 @@ def register() -> None:
 
 
 register()
+
+
+from rich.syntax import SyntaxTheme
+from rich.style import Style as RichStyle
+
+
+class SemanticSyntaxTheme(SyntaxTheme):
+    """Keep syntax roles in retained strips so code recolours without replay."""
+
+    def __init__(self, palette=None):
+        self.palette = palette
+
+    def _palette(self):
+        if self.palette is not None:
+            return self.palette
+        from superqode.app.constants import THEME
+
+        return THEME
+
+    def get_style_for_token(self, token_type):
+        role = "syntax_variable"
+        for token, name in (
+            (Comment, "comment"),
+            (Keyword, "keyword"),
+            (Name.Function, "function"),
+            (Name.Class, "type"),
+            (Name.Builtin, "type"),
+            (String, "string"),
+            (Number, "number"),
+            (Operator, "operator"),
+        ):
+            if token_type in token:
+                role = "syntax_" + name
+                break
+        from pygments.token import Punctuation
+
+        if token_type in Punctuation:
+            role = "syntax_punctuation"
+        if token_type in Generic.Inserted:
+            role = "diff_add"
+        elif token_type in Generic.Deleted or token_type in Error:
+            role = "diff_remove"
+        palette = self._palette()
+        return RichStyle(
+            color=palette.get(role, palette["text"]),
+            italic=token_type in Comment,
+            meta={"sq_fg": role},
+        )
+
+    def get_background_style(self):
+        return RichStyle(bgcolor=self._palette()["code_bg"], meta={"sq_bg": "code_bg"})

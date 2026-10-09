@@ -3361,6 +3361,7 @@ def test_vim_search_input_parser_navigates_existing_search(monkeypatch):
 
 
 def test_conversation_log_search_highlight_styles_matching_spans():
+    from superqode.app.constants import THEME
     from rich.segment import Segment
     from rich.style import Style
     from textual.strip import Strip
@@ -3373,7 +3374,7 @@ def test_conversation_log_search_highlight_styles_matching_spans():
         for segment in highlighted
         if segment.style
         and segment.style.bgcolor
-        and segment.style.bgcolor.get_truecolor().hex == "#facc15"
+        and segment.style.bgcolor.get_truecolor().hex == THEME["search_bg"]
     ]
 
     assert "".join(segment.text for segment in highlighted_segments) == "alphaalpha"

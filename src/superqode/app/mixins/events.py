@@ -207,7 +207,7 @@ class EventHandlerMixin:
         Dragging the mouse over the conversation (or anywhere selectable) copies
         the highlighted text straight to the system clipboard — no ``:copy``
         needed. We rely on Textual's ``TextSelected`` event rather than
-        intercepting keyboard shortcuts, so Ctrl+C (quit) / Ctrl+Z behavior is
+        intercepting keyboard shortcuts, so Ctrl+C / Ctrl+Z behavior is
         preserved.
         """
         try:

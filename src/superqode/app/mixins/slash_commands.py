@@ -2304,8 +2304,7 @@ class SlashCommandMixin:
             chat_ready, chat_message, _who = self._direct_chat_status()
             if not chat_ready:
                 log.add_error(chat_message)
-                if images:
-                    self._set_prompt_prefill(text)
+                self._set_prompt_prefill(original_text)
                 self._chat_mode = False
                 self._refresh_prompt_mode_label()
                 return
@@ -2421,10 +2420,9 @@ class SlashCommandMixin:
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
         else:
-            if images:
-                self._set_prompt_prefill(text)
+            self._set_prompt_prefill(original_text)
             log.add_info(
-                "Not connected. Use :connect for chat/coding, or :systemone connect <pack> for direct Jev decisions. :systemone live only enables tool checks."
+                "Not connected. Your prompt is kept. Press Ctrl+K, choose Connect, then send it."
             )
 
     def _handle_agent_question_input(self, response: str, log: ConversationLog) -> bool:
@@ -3499,31 +3497,120 @@ class SlashCommandMixin:
         ``:theme`` opens the interactive picker; ``:theme <name>`` applies and
         persists a theme immediately. Themes apply live (no restart needed).
         """
-        theme_name = args.strip().lower() if args else ""
+        from superqode.app.theme_bridge import discover_themes, import_theme, apply_theme
+        from superqode.theming import ThemeError
+        from superqode.theming.library import catalog, install_theme
+        from superqode.widgets.theme_picker import ThemeImportDialog
 
-        if theme_name:
-            if self._apply_and_persist_theme(theme_name):
-                self._report_theme_change(theme_name, log)
-            else:
-                log.add_error(f"Unknown theme: {theme_name}")
-                log.add_info(f"Available: {', '.join(theme_names())}")
-            return
+        argument = args.strip() if args else ""
+        if argument:
+            verb, *tail = argument.split(maxsplit=1)
+            if verb.lower() in {
+                "browse",
+                "install",
+                "import",
+                "help",
+                "list",
+                "check",
+                "init",
+                "reload",
+            }:
+                argument = verb.lower() + (" " + tail[0] if tail else "")
 
         def _on_dismissed(name: str | None) -> None:
             self.set_timer(0.1, self._ensure_input_focus)
             if name and self._apply_and_persist_theme(name):
                 self._report_theme_change(name, log)
 
-        self.push_screen(ThemePicker(current=self._current_theme), callback=_on_dismissed)
+        if argument in {"", "browse", "install"}:
+            discover_themes()
+            self.push_screen(ThemePicker(current=self._current_theme), callback=_on_dismissed)
+            return
+        if argument == "import":
+            discover_themes()
+            self.push_screen(ThemeImportDialog(), callback=_on_dismissed)
+            return
+        if argument in {"help", "--help", "-h"}:
+            log.add_info(":theme — search, preview, install and apply themes")
+            log.add_info(":theme import — preview and import a local native or Pi JSON file")
+            log.add_info(":theme install NAME — install and apply an offline catalog theme")
+            log.add_info(
+                ":theme install --all — install the whole collection; then choose with :theme"
+            )
+            log.add_info(":theme check FILE · :theme init FILE --name NAME · :theme reload")
+            return
+        if argument.startswith("browse "):
+            self._run_cli_group("theme", argument, log, "Theme catalog")
+            return
+        if argument.startswith("install "):
+            import shlex
+
+            try:
+                names = shlex.split(argument[8:])
+                if len(names) != 1 or names[0].startswith("-"):
+                    self._run_cli_group("theme", argument, log, "Theme installation")
+                    return
+                discover_themes()
+                name = install_theme(names[0])
+                if self._apply_and_persist_theme(name):
+                    self._report_theme_change(name, log)
+            except (ThemeError, ValueError) as exc:
+                log.add_error(str(exc))
+            return
+        if argument.split(maxsplit=1)[:1] in (["list"], ["check"], ["init"]):
+            self._run_cli_group("theme", argument, log, "Theme command")
+            return
+        if argument == "reload":
+            errors = discover_themes()
+            if errors:
+                for error in errors:
+                    log.add_error(error)
+            elif apply_theme(self._current_theme):
+                self._refresh_theme_view()
+                log.add_success("Themes reloaded")
+            return
+        if argument.startswith("import "):
+            import shlex
+
+            try:
+                paths = shlex.split(argument[7:])
+                if len(paths) != 1:
+                    raise ThemeError("Use :theme import <JSON file>; quote paths containing spaces")
+                name = import_theme(Path(paths[0]))
+                if self._apply_and_persist_theme(name):
+                    self._report_theme_change(name, log)
+            except (ThemeError, ValueError) as exc:
+                log.add_error(str(exc))
+            return
+        theme_name = argument.lower()
+
+        if theme_name:
+            if theme_name not in theme_names() and theme_name in catalog()["themes"]:
+                try:
+                    discover_themes()
+                    install_theme(theme_name)
+                except ThemeError as exc:
+                    log.add_error(str(exc))
+                    return
+            if self._apply_and_persist_theme(theme_name):
+                self._report_theme_change(theme_name, log)
+            else:
+                log.add_error(f"Unknown theme: {theme_name}")
+                from difflib import get_close_matches
+
+                matches = get_close_matches(theme_name, [*theme_names(), *catalog()["themes"]])
+                if matches:
+                    log.add_info(f"Did you mean: {', '.join(matches)}?")
+                log.add_info(
+                    "Use :theme to browse and install themes, or :theme import for a JSON file"
+                )
+            return
 
     def _report_theme_change(self, name: str, log: ConversationLog) -> None:
-        """Confirm a theme change and say what it could and could not repaint."""
+        """Confirm the selection and report any persistence error."""
         log.add_success(f"Theme changed to: {name}")
-        if not getattr(self, "_theme_repainted_welcome", False):
-            log.add_info(
-                "Output already on screen keeps the colours it was written with. "
-                "New output uses the new theme, and :home repaints in full."
-            )
+        if error := getattr(self, "_theme_save_error", None):
+            log.add_info(error)
 
     def _handle_diagnostics(self, args: str, log: ConversationLog):
         """Handle :diagnostics command with a fast, non-blocking source scan."""

@@ -83,11 +83,11 @@ Preserve direct `llm_query` semantics. An optional future `a2a.query` helper cou
 
 ## Our existing hosted foundation
 
-[Customer keys](../../src/superqode/a2a/keys.py) already carry signed identity, customer, tier, issue time and expiry, with revocation support. Missing credentials and invalid credentials are handled distinctly. [Server shortlist handling](../../src/superqode/a2a/server.py) already uses a deterministic keyword path for anonymous callers; keyed callers can optionally use one model interpretation call. [Request interpretation](../../src/superqode/a2a/understand.py) caps input at 800 characters and model output at 512 tokens.
+[Customer keys](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/a2a/keys.py) already carry signed identity, customer, tier, issue time and expiry, with revocation support. Missing credentials and invalid credentials are handled distinctly. [Server shortlist handling](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/a2a/server.py) already uses a deterministic keyword path for anonymous callers; keyed callers can optionally use one model interpretation call. [Request interpretation](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/a2a/understand.py) caps input at 800 characters and model output at 512 tokens.
 
 This is a useful existing split to preserve. A paying user should not need a model call to fetch a card, discover a peer, get cached status, or retrieve an already-produced artifact. For straightforward shortlist inputs, deterministic parsing can remain the first path even for keyed users; more expensive interpretation can be explicitly requested or triggered by measured uncertainty within quota.
 
-However, [rate limits](../../src/superqode/a2a/limits.py) are explicitly in-memory and best-effort. They reset with process state and do not establish a durable account balance across replicas. Signed key expiry does not cap spending. The executor also uses a deployment-level `harness_skill_enabled` gate; it does not yet implement the proposed per-customer paid skill/budget policy. Enabling a hosted harness on a deployment that allows anonymous access therefore needs an explicit per-skill entitlement gate before executing model work.
+However, [rate limits](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/a2a/limits.py) are explicitly in-memory and best-effort. They reset with process state and do not establish a durable account balance across replicas. Signed key expiry does not cap spending. The executor also uses a deployment-level `harness_skill_enabled` gate; it does not yet implement the proposed per-customer paid skill/budget policy. Enabling a hosted harness on a deployment that allows anonymous access therefore needs an explicit per-skill entitlement gate before executing model work.
 
 Do not treat “any nonanonymous tier” as a paid account: current keys can assert a trial tier, and tier labels are not a billing ledger. Keep the current public pilot shortlist scope while preparing a separately gated hosted specialist deployment.
 
@@ -112,7 +112,7 @@ For our A2A bridge, Monty receives functions such as `_a2a_start`, `_a2a_poll`, 
 
 Do not expose an arbitrary HTTP fetcher, unrestricted shell callback, or entire client object as a convenience shortcut. Monty has no ambient filesystem/network capability; explicitly exposed host functions and mounts determine access. Worker processes provide crash isolation but do not turn Monty into an OS sandbox. [Security model](https://pydantic.dev/docs/monty/concepts/security/).
 
-Current upstream offers opt-in filesystem access through mounts and host callbacks. Our existing native [Monty profile](../../src/superqode/rlm/kernel_monty.py) intentionally refuses repository writes and shell commands. Preserve that useful contract for the initial route. Adding `shell.run` as a host callback would make command execution inherit whichever executor receives it; Monty itself would not isolate that subprocess.
+Current upstream offers opt-in filesystem access through mounts and host callbacks. Our existing native [Monty profile](https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/rlm/kernel_monty.py) intentionally refuses repository writes and shell commands. Preserve that useful contract for the initial route. Adding `shell.run` as a host callback would make command execution inherit whichever executor receives it; Monty itself would not isolate that subprocess.
 
 ### Controller plus executor
 

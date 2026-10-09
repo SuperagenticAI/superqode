@@ -3053,8 +3053,10 @@ class CollapsibleSidebar(Container):
                 pass
 
             # View-specific actions
+            focus_visible = bool(getattr(self.app, "sidebar_visible", True))
             if view == "files":
-                self.query_one("#file-tree", ColorfulDirectoryTree).focus()
+                if focus_visible:
+                    self.query_one("#file-tree", ColorfulDirectoryTree).focus()
             elif view == "changes":
                 # Refresh changes when switching to changes tab
                 try:
@@ -3062,8 +3064,9 @@ class CollapsibleSidebar(Container):
                 except Exception:
                     pass
             elif view == "code":
-                self.query_one("#preview-content", FilePreviewScroll).focus()
-            elif view == "search":
+                if focus_visible:
+                    self.query_one("#preview-content", FilePreviewScroll).focus()
+            elif view == "search" and focus_visible:
                 # Focus the search input
                 try:
                     self.query_one("#codebase-search", CodebaseSearch).query_one(

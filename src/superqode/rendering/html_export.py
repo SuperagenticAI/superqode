@@ -2,7 +2,7 @@
 
 Dependency-free: turns the ConversationLog message record
 ``[(role, text, agent), ...]`` into a self-contained, styled HTML document that
-keeps SuperQode's dark/quantum look. Lightweight markdown is supported (fenced
+uses the selected SuperQode palette. Lightweight markdown is supported (fenced
 code blocks, headings, bold/inline code, bullet lists) — enough for clean,
 shareable transcripts without pulling in a markdown dependency.
 """
@@ -113,9 +113,9 @@ _TEMPLATE = """<!DOCTYPE html>
     letter-spacing:.05em; margin-bottom:.4rem; }}
   .msg pre {{ background:#050505; border:1px solid #27272a; border-radius:6px;
     padding:.75rem; overflow-x:auto; }}
-  .msg code {{ background:#1a1a1a; padding:.1rem .3rem; border-radius:4px;
+  .msg code {{ background:{code_bg}; color:{md_code}; padding:.1rem .3rem; border-radius:4px;
     font-size:.9em; }}
-  .msg pre code {{ background:none; padding:0; }}
+  .msg pre code {{ background:none; color:{md_code_block}; padding:0; }}
   .msg h1,.msg h2,.msg h3 {{ color:#d4d4d8; }}
   .msg p {{ margin:.4rem 0; }}
   footer {{ color:#71717a; font-size:.8rem; margin-top:2rem; text-align:center; }}
@@ -139,13 +139,28 @@ def render_transcript_html(
     messages: list[tuple[str, str, str]],
     *,
     title: str = "SuperQode Transcript",
+    palette: dict[str, str] | None = None,
 ) -> str:
     """Render a list of ``(role, text, agent)`` messages to an HTML document."""
+    from superqode.app.constants import THEME
+
+    palette = palette or THEME
+    roles = {
+        "user": "user_text",
+        "agent": "purple",
+        "assistant": "purple",
+        "system": "muted",
+        "error": "error",
+        "success": "success",
+        "info": "muted",
+        "shell": "warning",
+    }
     blocks: list[str] = []
     for role, text, agent in messages:
         if role in ("info",):  # skip transient UI chatter
             continue
         label, color = _ROLE_META.get(role, (role or "msg", "#a1a1aa"))
+        color = palette.get(roles.get(role, "muted"), palette["text"])
         if role in ("agent", "assistant") and agent:
             label = agent
         if role in ("agent", "assistant", "system", "error"):
@@ -159,4 +174,28 @@ def render_transcript_html(
 
     meta = datetime.now().strftime("%Y-%m-%d %H:%M")
     body = "\n".join(blocks) if blocks else '<p class="meta">Empty transcript.</p>'
-    return _TEMPLATE.format(title=html.escape(title), meta=meta, body=body)
+    template_colors = {
+        "#000": "export_bg",
+        "#e4e4e7": "text",
+        "#27272a": "border_muted",
+        "#a855f7": "purple",
+        "#a1a1aa": "muted",
+        "#0a0a0a": "export_card_bg",
+        "#1a1a1a": "border",
+        "#050505": "code_bg",
+        "#d4d4d8": "md_heading",
+        "#71717a": "dim",
+    }
+    template = re.sub(
+        r"#[0-9a-f]{6}(?![0-9a-f])|#[0-9a-f]{3}(?![0-9a-f])",
+        lambda match: palette.get(template_colors.get(match[0], "text"), palette["text"]),
+        _TEMPLATE,
+    )
+    return template.format(
+        title=html.escape(title),
+        meta=meta,
+        body=body,
+        code_bg=palette["code_bg"],
+        md_code=palette["md_code"],
+        md_code_block=palette["md_code_block"],
+    )

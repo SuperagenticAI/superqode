@@ -448,7 +448,10 @@ def test_a_long_list_gives_every_row_the_same_height():
 def test_the_highlighted_row_still_shows_its_full_description():
     rendered = _picker("vendors", width=120)
 
-    assert "Drive OpenAI Codex with your ChatGPT/Codex login" in rendered.plain
+    from superqode.providers.connection_profiles import display_ordered_profiles
+
+    highlighted = display_ordered_profiles("vendors")[0]
+    assert highlighted.description in rendered.plain
     assert "…" in rendered.plain, "long descriptions on other rows should be shortened"
 
 
