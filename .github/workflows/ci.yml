@@ -133,7 +133,9 @@ jobs:
               for case in ET.parse(results).iter("testcase"):
                   for failure in [*case.findall("failure"), *case.findall("error")]:
                       message = f"{case.get('classname')}.{case.get('name')}: {failure.text or failure.get('message', '')}"
-                      message = message[:6000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      if len(message) > 6000:
+                          message = message[:1000] + "\n... traceback truncated ...\n" + message[-4800:]
+                      message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                       print(f"::error::{message}")
 
   build:
