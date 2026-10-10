@@ -219,6 +219,32 @@ async def test_switch_repaints_retained_output_without_changing_task_state(size)
         assert THEME["error"] in colors and old_error not in colors
 
 
+async def test_pending_follow_scroll_respects_new_reading_lock(monkeypatch):
+    app = SuperQodeApp(theme_selection="superqode")
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        log.reset_conversation()
+        for index in range(40):
+            log.add_info(f"retained line {index}")
+        await pilot.pause()
+        callbacks = []
+
+        def defer(callback, *args, **kwargs):
+            callbacks.append(lambda: callback(*args, **kwargs))
+            return True
+
+        monkeypatch.setattr(log, "call_after_refresh", defer)
+        log.scroll_end(animate=False)
+        assert callbacks
+        log.lock_viewport()
+        log.scroll_to(y=3, animate=False, force=True, immediate=True)
+        assert log.scroll_y == 3
+        for callback in callbacks:
+            callback()
+        assert log.scroll_y == 3
+        assert log.viewport_mode == "user_locked"
+
+
 async def test_preview_search_cancel_and_apply_are_isolated():
     app = SuperQodeApp(theme_selection="superqode")
     async with app.run_test(size=(80, 24)) as pilot:

@@ -1772,6 +1772,18 @@ class ConversationLog(RichLog):
             self._sync_unread_indicator()
         return result
 
+    def scroll_end(self, *, immediate: bool = False, **kwargs) -> None:
+        """A queued tail scroll must respect a subsequent manual reading lock."""
+
+        def scroll_if_unlocked() -> None:
+            if getattr(self, "_viewport_mode", "following") != "user_locked":
+                super(ConversationLog, self).scroll_end(immediate=True, **kwargs)
+
+        if immediate:
+            scroll_if_unlocked()
+        else:
+            self.call_after_refresh(scroll_if_unlocked)
+
     @property
     def viewport_mode(self) -> str:
         """Current transcript-follow policy (useful to status UI and tests)."""

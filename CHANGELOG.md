@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Focus the composer immediately at startup and prevent hidden sidebar views
   from taking focus. Preserve prompts when connection setup is needed and keep
   drafts when cancelling questions, approvals or active work.
+- Discard pending transcript follow-scrolls after the user locks the reading
+  position, including the Windows theme-switch ordering found by release CI.
 - Make Ctrl+C interrupt active work and use a two-press idle exit; improve
   command search ranking, narrow-terminal Harness Hub controls and scrolling.
 
