@@ -27,8 +27,8 @@ superqode<span class=w> </span>--harness<span class=w> </span>superqode.local.ya
 :plan approve           # execute it
 :context                # check the detected context window
 :local optimize         # benchmark candidates and generate role routes
-</code></pre></div> <p>Type while the agent works and your message steers the current run between tool calls.</p> </div> <div class=tabbed-block> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>-p<span class=w> </span>--mode<span class=w> </span>json<span class=w> </span><span class=s2>&quot;summarize the architecture&quot;</span><span class=w> </span><span class=p>|</span><span class=w> </span>jq<span class=w> </span>.success
-superqode<span class=w> </span>-p<span class=w> </span>--resume<span class=w> </span>4f2a<span class=w> </span><span class=s2>&quot;continue where we left off&quot;</span>
+</code></pre></div> <p>Type while the agent works and your message steers the current run between tool calls.</p> </div> <div class=tabbed-block> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>-p<span class=w> </span>--mode<span class=w> </span>json<span class=w> </span><span class=s2>"summarize the architecture"</span><span class=w> </span><span class=p>|</span><span class=w> </span>jq<span class=w> </span>.success
+superqode<span class=w> </span>-p<span class=w> </span>--resume<span class=w> </span>4f2a<span class=w> </span><span class=s2>"continue where we left off"</span>
 superqode<span class=w> </span>sessions<span class=w> </span><span class=nb>export</span><span class=w> </span>4f2a<span class=w> </span>--format<span class=w> </span>html<span class=w> </span>-o<span class=w> </span>run.html
 </code></pre></div> </div> <div class=tabbed-block> <div class=highlight><pre><span></span><code><span class=c1># harness.yaml: the portable run contract</span>
 <span class=nt>name</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">my-coder</span>
@@ -41,15 +41,15 @@ superqode<span class=w> </span>sessions<span class=w> </span><span class=nb>expo
 <span class=nt>execution_policy</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>sandbox</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">docker</span>
 <span class=w>  </span><span class=nt>approval_profile</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">ask</span>
-</code></pre></div> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span>--spec<span class=w> </span>harness.yaml<span class=w> </span>--prompt<span class=w> </span><span class=s2>&quot;make the smallest safe fix&quot;</span>
+</code></pre></div> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span>--spec<span class=w> </span>harness.yaml<span class=w> </span>--prompt<span class=w> </span><span class=s2>"make the smallest safe fix"</span>
 superqode<span class=w> </span>harness<span class=w> </span>events<span class=w> </span>&lt;run-id&gt;
 </code></pre></div> </div> <div class=tabbed-block> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>-p<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--sandbox<span class=w> </span>git-worktree<span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--rubric<span class=w> </span><span class=s2>&quot;the full test suite passes; the diff is minimal&quot;</span><span class=w> </span><span class=se>\</span>
+<span class=w>  </span>--rubric<span class=w> </span><span class=s2>"the full test suite passes; the diff is minimal"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--output-schema<span class=w> </span>fix-report.schema.json<span class=w> </span><span class=se>\</span>
-<span class=w>  </span><span class=s2>&quot;find one failing test and fix it properly&quot;</span><span class=w> </span>&gt;<span class=w> </span>report.json
+<span class=w>  </span><span class=s2>"find one failing test and fix it properly"</span><span class=w> </span>&gt;<span class=w> </span>report.json
 
-jq<span class=w> </span>-e<span class=w> </span><span class=s1>&#39;.schema_valid and .success&#39;</span><span class=w> </span>report.json
+jq<span class=w> </span>-e<span class=w> </span><span class=s1>'.schema_valid and .success'</span><span class=w> </span>report.json
 </code></pre></div> </div> </div> </div> <hr> <h2 id=how-a-run-works>How a run works<a class=headerlink href=#how-a-run-works title="Permanent link">&para;</a></h2> <div class=highlight><pre><span></span><code>1. SPEC       Choose coding, no-tool, or custom harness behavior
 2. MODEL      Apply model policy, local hints, fallback rules, and prompt profile
 3. RUNTIME    Select builtin, OpenAI Agents, ADK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI

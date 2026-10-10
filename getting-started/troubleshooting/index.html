@@ -9,7 +9,7 @@ superqode<span class=w> </span>trust<span class=w> </span>doctor
 superqode<span class=w> </span>providers<span class=w> </span>doctor<span class=w> </span>openai<span class=w> </span>--json
 superqode<span class=w> </span>harness<span class=w> </span>doctor<span class=w> </span>--spec<span class=w> </span>harness.yaml<span class=w> </span>--json
 </code></pre></div> <hr> <h2 id=installation-issues>Installation Issues<a class=headerlink href=#installation-issues title="Permanent link">&para;</a></h2> <h3 id=modulenotfounderror-no-module-named-superqode><code>ModuleNotFoundError: No module named 'superqode'</code><a class=headerlink href=#modulenotfounderror-no-module-named-superqode title="Permanent link">&para;</a></h3> <p>Reinstall SuperQode in the environment you are using:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>upgrade<span class=w> </span>superqode
-python<span class=w> </span>-c<span class=w> </span><span class=s2>&quot;import superqode; print(superqode.__version__)&quot;</span>
+python<span class=w> </span>-c<span class=w> </span><span class=s2>"import superqode; print(superqode.__version__)"</span>
 </code></pre></div> <p>With <code>uv</code>:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span>--force<span class=w> </span>superqode
 superqode<span class=w> </span>--version
 </code></pre></div> <p>For source installs:</p> <div class=highlight><pre><span></span><code>git<span class=w> </span>clone<span class=w> </span>https://github.com/SuperagenticAI/superqode.git
@@ -27,9 +27,9 @@ uv<span class=w> </span>tool<span class=w> </span>list
 :connect local ollama qwen3:8b
 :connect acp opencode
 </code></pre></div> <p>Then confirm state:</p> <div class=highlight><pre><span></span><code>:status
-</code></pre></div> <h3 id=provider-authentication-fails>Provider authentication fails<a class=headerlink href=#provider-authentication-fails title="Permanent link">&para;</a></h3> <p>Check the provider-specific environment variable:</p> <div class=highlight><pre><span></span><code><span class=nb>echo</span><span class=w> </span><span class=s2>&quot;</span><span class=nv>$OPENAI_API_KEY</span><span class=s2>&quot;</span>
-<span class=nb>echo</span><span class=w> </span><span class=s2>&quot;</span><span class=nv>$ANTHROPIC_API_KEY</span><span class=s2>&quot;</span>
-<span class=nb>echo</span><span class=w> </span><span class=s2>&quot;</span><span class=nv>$GOOGLE_API_KEY</span><span class=s2>&quot;</span>
+</code></pre></div> <h3 id=provider-authentication-fails>Provider authentication fails<a class=headerlink href=#provider-authentication-fails title="Permanent link">&para;</a></h3> <p>Check the provider-specific environment variable:</p> <div class=highlight><pre><span></span><code><span class=nb>echo</span><span class=w> </span><span class=s2>"</span><span class=nv>$OPENAI_API_KEY</span><span class=s2>"</span>
+<span class=nb>echo</span><span class=w> </span><span class=s2>"</span><span class=nv>$ANTHROPIC_API_KEY</span><span class=s2>"</span>
+<span class=nb>echo</span><span class=w> </span><span class=s2>"</span><span class=nv>$GOOGLE_API_KEY</span><span class=s2>"</span>
 superqode<span class=w> </span>auth<span class=w> </span>check<span class=w> </span>openai
 superqode<span class=w> </span>providers<span class=w> </span>doctor<span class=w> </span>openai
 </code></pre></div> <p>Never place API keys directly in documentation, issues, logs, or committed config. In <code>superqode.yaml</code>, reference environment variables:</p> <div class=highlight><pre><span></span><code><span class=nt>providers</span><span class=p>:</span>
@@ -45,13 +45,13 @@ superqode<span class=w> </span>connect<span class=w> </span>acp<span class=w> </
 superqode<span class=w> </span>harness<span class=w> </span>inspect<span class=w> </span>--spec<span class=w> </span>harness.yaml
 </code></pre></div> <p>Common fixes:</p> <ul> <li>use <code>flavor: coding</code> or <code>flavor: no_tool</code></li> <li>use a known runtime backend such as <code>builtin</code>, <code>openai-agents</code>, <code>adk</code>, <code>deepagents</code>, <code>pydanticai</code>, or <code>codex-sdk</code></li> <li>keep <code>execution_policy.allow_write</code> and <code>execution_policy.allow_shell</code> false for no-tool harnesses</li> <li>define <code>agents</code> as a YAML list</li> </ul> <h3 id=optional-runtime-backend-is-missing>Optional runtime backend is missing<a class=headerlink href=#optional-runtime-backend-is-missing title="Permanent link">&para;</a></h3> <p>List backends:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span>list-backends
 superqode<span class=w> </span>runtime<span class=w> </span>doctor<span class=w> </span>pydanticai
-</code></pre></div> <p>Install only the backend you need:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[pydanticai]&quot;</span>
-uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[deepagents]&quot;</span>
-uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[openai-agents]&quot;</span>
-uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[adk]&quot;</span>
-uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[codex-sdk]&quot;</span>
+</code></pre></div> <p>Install only the backend you need:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[pydanticai]"</span>
+uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[deepagents]"</span>
+uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[openai-agents]"</span>
+uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[adk]"</span>
+uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[codex-sdk]"</span>
 </code></pre></div> <h3 id=langchain-runtime-cant-initialize-a-local-provider>LangChain runtime can't initialize a local provider<a class=headerlink href=#langchain-runtime-cant-initialize-a-local-provider title="Permanent link">&para;</a></h3> <p>The <code>deepagents</code> and <code>pydanticai</code> runtimes resolve models through LangChain, which imports the integration package per provider. Only Anthropic and Gemini ship with the runtime, so an Ollama model fails with:</p> <div class=highlight><pre><span></span><code>ImportError: Initializing ChatOllama requires the langchain-ollama package.
-</code></pre></div> <p>Install the matching package into the tool environment:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>&quot;superqode[deepagents]&quot;</span><span class=w> </span>--with<span class=w> </span>langchain-ollama<span class=w> </span>--force
+</code></pre></div> <p>Install the matching package into the tool environment:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s2>"superqode[deepagents]"</span><span class=w> </span>--with<span class=w> </span>langchain-ollama<span class=w> </span>--force
 </code></pre></div> <p>and use <code>:retry</code> in the session. See <a href=../../providers/deepagents/#provider-integration-packages>Provider Integration Packages</a>.</p> <h3 id=a-run-did-something-unexpected>A run did something unexpected<a class=headerlink href=#a-run-did-something-unexpected title="Permanent link">&para;</a></h3> <p>Inspect persisted events:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span>runs
 superqode<span class=w> </span>harness<span class=w> </span>events<span class=w> </span>&lt;run-id&gt;
 superqode<span class=w> </span>harness<span class=w> </span>graph<span class=w> </span>&lt;run-id&gt;
@@ -71,7 +71,7 @@ superqode<span class=w> </span>harness<span class=w> </span>inspect<span class=w
 </code></pre></div> <h3 id=a-tool-call-is-waiting-for-approval>A tool call is waiting for approval<a class=headerlink href=#a-tool-call-is-waiting-for-approval title="Permanent link">&para;</a></h3> <p>In the TUI:</p> <div class=highlight><pre><span></span><code>:approve
 :approve 1 always
 :reject
-:reject 1 &quot;use a safer command&quot;
+:reject 1 "use a safer command"
 </code></pre></div> <p>Use <code>always</code> only when you intentionally trust similar calls for the current session.</p> <hr> <h2 id=mcp-problems>MCP Problems<a class=headerlink href=#mcp-problems title="Permanent link">&para;</a></h2> <h3 id=mcp-server-is-not-available>MCP server is not available<a class=headerlink href=#mcp-server-is-not-available title="Permanent link">&para;</a></h3> <p>Check config and dependencies:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>config<span class=w> </span>init
 node<span class=w> </span>--version
 npx<span class=w> </span>--version
@@ -83,8 +83,8 @@ npx<span class=w> </span>--version
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;.&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"."</span>
 </code></pre></div> <p>Use <code>mcpServers</code> only when importing external MCP config. New SuperQode config should use <code>mcp_servers</code>.</p> <hr> <h2 id=local-model-problems>Local Model Problems<a class=headerlink href=#local-model-problems title="Permanent link">&para;</a></h2> <h3 id=ollama-model-does-not-appear>Ollama model does not appear<a class=headerlink href=#ollama-model-does-not-appear title="Permanent link">&para;</a></h3> <p>Check Ollama:</p> <div class=highlight><pre><span></span><code>ollama<span class=w> </span>list
 ollama<span class=w> </span>serve
 ollama<span class=w> </span>pull<span class=w> </span>qwen3:8b

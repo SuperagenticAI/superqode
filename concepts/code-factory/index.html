@@ -26,8 +26,8 @@ superqode<span class=w> </span>harness<span class=w> </span>list
 <span class=c1># Connect an established ACP coding agent</span>
 superqode
 <span class=c1># Then run: :connect</span>
-</code></pre></div> <p>Add durable repository delivery when a change requires roles, dependencies, recovery, and acceptance:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>create<span class=w> </span><span class=s2>&quot;Implement the approved repository change&quot;</span><span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--acceptance-test<span class=w> </span><span class=s2>&quot;pytest -q&quot;</span><span class=w> </span><span class=se>\</span>
+</code></pre></div> <p>Add durable repository delivery when a change requires roles, dependencies, recovery, and acceptance:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>create<span class=w> </span><span class=s2>"Implement the approved repository change"</span><span class=w> </span><span class=se>\</span>
+<span class=w>  </span>--acceptance-test<span class=w> </span><span class=s2>"pytest -q"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--queue
 sq<span class=w> </span>work<span class=w> </span>worker<span class=w> </span>WORK_ID<span class=w> </span>--once
 sq<span class=w> </span>work<span class=w> </span>watch<span class=w> </span>WORK_ID

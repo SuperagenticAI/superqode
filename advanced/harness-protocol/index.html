@@ -8,13 +8,13 @@ model.completed
 message.created          # final assistant response
 run.completed | run.failed | run.cancelled
 </code></pre></div> <p>Approval, artifact, checkpoint, thinking, and validation events use the same envelope. Every stored event includes protocol version, event ID, sequence, session ID, run ID, harness ID, timestamp, parent event ID, and payload. Memory, file, and SQLite stores persist the same fields. Older underscore-style kernel event names remain supported and are normalized only at the protocol boundary.</p> <h2 id=reference-adapters>Reference adapters<a class=headerlink href=#reference-adapters title="Permanent link">&para;</a></h2> <table> <thead> <tr> <th>Adapter</th> <th>Purpose</th> <th>Important limits</th> </tr> </thead> <tbody> <tr> <td><code>CoreHarnessProtocolAdapter</code></td> <td>Run a native <code>HarnessSpec</code> and <code>HarnessKernel</code></td> <td>Current run path is non-streaming at the adapter boundary; resume restores protocol identity but does not promise provider-private context; steering, cancellation, and native checkpoints are not claimed</td> </tr> <tr> <td><code>DirectPythonHarnessAdapter</code></td> <td>Package a Python callable as a harness</td> <td>Resume and checkpoints are portable adapter state; durable application state remains the package author's responsibility</td> </tr> <tr> <td><code>ACPHarnessProtocolAdapter</code></td> <td>Run an ACP coding-agent process</td> <td>Resume works only when the connected ACP agent advertises <code>loadSession</code>; ACP does not imply steering or checkpoints</td> </tr> </tbody> </table> <p>The controller always provides a portable session export from its ledger. That does not mean an adapter can export private or provider-native state.</p> <h2 id=build-a-python-harness-package>Build a Python harness package<a class=headerlink href=#build-a-python-harness-package title="Permanent link">&para;</a></h2> <p>The normal developer path is one async function:</p> <div class=highlight><pre><span></span><code><span class=k>async</span> <span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>message</span><span class=p>,</span> <span class=n>session</span><span class=p>):</span>
-    <span class=k>return</span> <span class=sa>f</span><span class=s2>&quot;handled by </span><span class=si>{</span><span class=n>session</span><span class=o>.</span><span class=n>harness_id</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>message</span><span class=o>.</span><span class=n>content</span><span class=si>}</span><span class=s2>&quot;</span>
-</code></pre></div> <p>Expose that function from <code>pyproject.toml</code>:</p> <div class=highlight><pre><span></span><code><span class=k>[project.entry-points.</span><span class=s2>&quot;superqode.harnesses&quot;</span><span class=k>]</span>
-<span class=n>team-reviewer</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=s2>&quot;my_package:run&quot;</span>
+    <span class=k>return</span> <span class=sa>f</span><span class=s2>"handled by </span><span class=si>{</span><span class=n>session</span><span class=o>.</span><span class=n>harness_id</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>message</span><span class=o>.</span><span class=n>content</span><span class=si>}</span><span class=s2>"</span>
+</code></pre></div> <p>Expose that function from <code>pyproject.toml</code>:</p> <div class=highlight><pre><span></span><code><span class=k>[project.entry-points.</span><span class=s2>"superqode.harnesses"</span><span class=k>]</span>
+<span class=n>team-reviewer</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=s2>"my_package:run"</span>
 </code></pre></div> <p>After installing the package, SuperQode handles registration, sessions, event storage, export, and conformance:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>pip<span class=w> </span>install<span class=w> </span>-e<span class=w> </span>.
 superqode<span class=w> </span>harness<span class=w> </span>list
 superqode<span class=w> </span>harness<span class=w> </span>show<span class=w> </span>team-reviewer
-superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span>team-reviewer<span class=w> </span><span class=s2>&quot;Review the current diff&quot;</span>
+superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span>team-reviewer<span class=w> </span><span class=s2>"Review the current diff"</span>
 superqode<span class=w> </span>harness<span class=w> </span>protocol<span class=w> </span>conformance<span class=w> </span>team-reviewer
 </code></pre></div> <p>See the <a href=https://github.com/SuperagenticAI/superqode/tree/main/examples/harness-packages/hello-harness><code>hello-harness</code> example</a> for a complete minimal package.</p> <h2 id=advanced-adapter-api>Advanced adapter API<a class=headerlink href=#advanced-adapter-api title="Permanent link">&para;</a></h2> <p>Use the controller directly only when embedding SuperQode or implementing custom lifecycle behavior:</p> <div class=highlight><pre><span></span><code><span class=kn>from</span><span class=w> </span><span class=nn>superqode.harness</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
     <span class=n>DirectPythonHarnessAdapter</span><span class=p>,</span>
@@ -25,27 +25,27 @@ superqode<span class=w> </span>harness<span class=w> </span>protocol<span class=
 
 
 <span class=k>async</span> <span class=k>def</span><span class=w> </span><span class=nf>answer</span><span class=p>(</span><span class=n>message</span><span class=p>,</span> <span class=n>session</span><span class=p>):</span>
-    <span class=k>return</span> <span class=sa>f</span><span class=s2>&quot;handled by </span><span class=si>{</span><span class=n>session</span><span class=o>.</span><span class=n>harness_id</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>message</span><span class=o>.</span><span class=n>content</span><span class=si>}</span><span class=s2>&quot;</span>
+    <span class=k>return</span> <span class=sa>f</span><span class=s2>"handled by </span><span class=si>{</span><span class=n>session</span><span class=o>.</span><span class=n>harness_id</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>message</span><span class=o>.</span><span class=n>content</span><span class=si>}</span><span class=s2>"</span>
 
 
 <span class=n>adapter</span> <span class=o>=</span> <span class=n>DirectPythonHarnessAdapter</span><span class=p>(</span>
-    <span class=s2>&quot;team-reviewer&quot;</span><span class=p>,</span>
+    <span class=s2>"team-reviewer"</span><span class=p>,</span>
     <span class=n>answer</span><span class=p>,</span>
-    <span class=n>name</span><span class=o>=</span><span class=s2>&quot;Team reviewer&quot;</span><span class=p>,</span>
+    <span class=n>name</span><span class=o>=</span><span class=s2>"Team reviewer"</span><span class=p>,</span>
 <span class=p>)</span>
 <span class=n>controller</span> <span class=o>=</span> <span class=n>HarnessProtocolController</span><span class=p>(</span>
     <span class=p>[</span><span class=n>adapter</span><span class=p>],</span>
-    <span class=n>store</span><span class=o>=</span><span class=n>FileHarnessStore</span><span class=p>(</span><span class=s2>&quot;.superqode/harness-protocol&quot;</span><span class=p>),</span>
+    <span class=n>store</span><span class=o>=</span><span class=n>FileHarnessStore</span><span class=p>(</span><span class=s2>".superqode/harness-protocol"</span><span class=p>),</span>
 <span class=p>)</span>
 
 <span class=n>session</span> <span class=o>=</span> <span class=k>await</span> <span class=n>controller</span><span class=o>.</span><span class=n>create</span><span class=p>(</span>
     <span class=n>HarnessCreateRequest</span><span class=p>(</span>
-        <span class=n>harness_id</span><span class=o>=</span><span class=s2>&quot;team-reviewer&quot;</span><span class=p>,</span>
-        <span class=n>provider</span><span class=o>=</span><span class=s2>&quot;anthropic&quot;</span><span class=p>,</span>
-        <span class=n>model</span><span class=o>=</span><span class=s2>&quot;claude-sonnet&quot;</span><span class=p>,</span>
+        <span class=n>harness_id</span><span class=o>=</span><span class=s2>"team-reviewer"</span><span class=p>,</span>
+        <span class=n>provider</span><span class=o>=</span><span class=s2>"anthropic"</span><span class=p>,</span>
+        <span class=n>model</span><span class=o>=</span><span class=s2>"claude-sonnet"</span><span class=p>,</span>
     <span class=p>)</span>
 <span class=p>)</span>
-<span class=k>async</span> <span class=k>for</span> <span class=n>event</span> <span class=ow>in</span> <span class=n>controller</span><span class=o>.</span><span class=n>send</span><span class=p>(</span><span class=n>session</span><span class=p>,</span> <span class=s2>&quot;Review the current diff&quot;</span><span class=p>):</span>
+<span class=k>async</span> <span class=k>for</span> <span class=n>event</span> <span class=ow>in</span> <span class=n>controller</span><span class=o>.</span><span class=n>send</span><span class=p>(</span><span class=n>session</span><span class=p>,</span> <span class=s2>"Review the current diff"</span><span class=p>):</span>
     <span class=nb>print</span><span class=p>(</span><span class=n>event</span><span class=o>.</span><span class=n>type</span><span class=p>,</span> <span class=n>event</span><span class=o>.</span><span class=n>data</span><span class=p>)</span>
 
 <span class=n>bundle</span> <span class=o>=</span> <span class=n>controller</span><span class=o>.</span><span class=n>export</span><span class=p>(</span><span class=n>session</span><span class=p>)</span>

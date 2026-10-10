@@ -52,13 +52,13 @@ superqode<span class=w> </span>auth<span class=w> </span>check<span class=w> </s
 <span class=c1># Check OpenCode agent</span>
 superqode<span class=w> </span>auth<span class=w> </span>check<span class=w> </span>opencode
 </code></pre></div> <hr> <h2 id=security-transparency>Security &amp; Transparency<a class=headerlink href=#security-transparency title="Permanent link">&para;</a></h2> <h3 id=where-are-keys-stored>Where Are Keys Stored?<a class=headerlink href=#where-are-keys-stored title="Permanent link">&para;</a></h3> <table> <thead> <tr> <th>Source</th> <th>Location</th> <th>Permissions</th> </tr> </thead> <tbody> <tr> <td>Environment</td> <td>Your shell config (<code>~/.zshrc</code>, <code>~/.bashrc</code>)</td> <td>Your control</td> </tr> <tr> <td>Local Storage</td> <td><code>~/.superqode/auth.json</code></td> <td><code>0600</code> (owner only)</td> </tr> <tr> <td>ACP Agents</td> <td>Agent-specific (e.g., <code>~/.local/share/opencode/auth.json</code>)</td> <td>Agent's control</td> </tr> </tbody> </table> <h3 id=what-superqode-does-not-do>What SuperQode Does NOT Do<a class=headerlink href=#what-superqode-does-not-do title="Permanent link">&para;</a></h3> <ul> <li>❌ Send keys to any external server</li> <li>❌ Log or display full key values</li> <li>❌ Share keys between projects</li> <li>❌ Store keys without your explicit action</li> </ul> <h3 id=what-superqode-does-do>What SuperQode DOES Do<a class=headerlink href=#what-superqode-does-do title="Permanent link">&para;</a></h3> <ul> <li>✅ Read keys from environment at runtime</li> <li>✅ Optionally store keys locally if you use <code>auth login</code></li> <li>✅ Set secure file permissions (0600) on auth.json</li> <li>✅ Show masked key previews (first 8 chars only)</li> <li>✅ Show exactly where each key is configured</li> </ul> <h3 id=file-format>File Format<a class=headerlink href=#file-format title="Permanent link">&para;</a></h3> <p>The <code>~/.superqode/auth.json</code> file format:</p> <div class=highlight><pre><span></span><code><span class=p>{</span>
-<span class=w>  </span><span class=nt>&quot;anthropic&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>    </span><span class=nt>&quot;type&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;api&quot;</span><span class=p>,</span>
-<span class=w>    </span><span class=nt>&quot;key&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;sk-ant-api03-...&quot;</span>
+<span class=w>  </span><span class=nt>"anthropic"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>    </span><span class=nt>"type"</span><span class=p>:</span><span class=w> </span><span class=s2>"api"</span><span class=p>,</span>
+<span class=w>    </span><span class=nt>"key"</span><span class=p>:</span><span class=w> </span><span class=s2>"sk-ant-api03-..."</span>
 <span class=w>  </span><span class=p>},</span>
-<span class=w>  </span><span class=nt>&quot;openai&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>    </span><span class=nt>&quot;type&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;api&quot;</span><span class=p>,</span>
-<span class=w>    </span><span class=nt>&quot;key&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;sk-proj-...&quot;</span>
+<span class=w>  </span><span class=nt>"openai"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>    </span><span class=nt>"type"</span><span class=p>:</span><span class=w> </span><span class=s2>"api"</span><span class=p>,</span>
+<span class=w>    </span><span class=nt>"key"</span><span class=p>:</span><span class=w> </span><span class=s2>"sk-proj-..."</span>
 <span class=w>  </span><span class=p>}</span>
 <span class=p>}</span>
 </code></pre></div> <h3 id=inspecting-your-auth-file>Inspecting Your Auth File<a class=headerlink href=#inspecting-your-auth-file title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=c1># View the file (keys will be visible)</span>
@@ -94,7 +94,7 @@ superqode<span class=w> </span>auth<span class=w> </span>login<span class=w> </s
 superqode<span class=w> </span>auth<span class=w> </span>check<span class=w> </span>anthropic
 </code></pre></div> <hr> <h2 id=troubleshooting>Troubleshooting<a class=headerlink href=#troubleshooting title="Permanent link">&para;</a></h2> <h3 id=key-not-found>Key Not Found<a class=headerlink href=#key-not-found title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>❌ anthropic not set
 </code></pre></div> <p><strong>Solutions:</strong></p> <div class=highlight><pre><span></span><code><span class=c1># Option 1: Set via environment</span>
-<span class=nb>export</span><span class=w> </span><span class=nv>ANTHROPIC_API_KEY</span><span class=o>=</span><span class=s2>&quot;sk-ant-...&quot;</span>
+<span class=nb>export</span><span class=w> </span><span class=nv>ANTHROPIC_API_KEY</span><span class=o>=</span><span class=s2>"sk-ant-..."</span>
 
 <span class=c1># Option 2: Store locally</span>
 superqode<span class=w> </span>auth<span class=w> </span>login<span class=w> </span>anthropic

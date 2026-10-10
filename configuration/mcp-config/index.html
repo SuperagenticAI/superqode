@@ -2,23 +2,23 @@
 <span class=w>  </span><span class=nt>filesystem</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;.&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"-y"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"."</span><span class="p p-Indicator">]</span>
 </code></pre></div></p> </li> <li> <p><strong>JSON Configuration</strong> (<code>.superqode/mcp.json</code>, <code>~/.superqode/mcp.json</code>, or <code>~/.config/superqode/mcp.json</code>): <div class=highlight><pre><span></span><code><span class=p>{</span>
-<span class=w>  </span><span class=nt>&quot;mcpServers&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>    </span><span class=nt>&quot;filesystem&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>      </span><span class=nt>&quot;transport&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;stdio&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;command&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;npx&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;args&quot;</span><span class=p>:</span><span class=w> </span><span class=p>[</span><span class=s2>&quot;-y&quot;</span><span class=p>,</span><span class=w> </span><span class=s2>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class=p>,</span><span class=w> </span><span class=s2>&quot;.&quot;</span><span class=p>]</span>
+<span class=w>  </span><span class=nt>"mcpServers"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>    </span><span class=nt>"filesystem"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>      </span><span class=nt>"transport"</span><span class=p>:</span><span class=w> </span><span class=s2>"stdio"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"command"</span><span class=p>:</span><span class=w> </span><span class=s2>"npx"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"args"</span><span class=p>:</span><span class=w> </span><span class=p>[</span><span class=s2>"-y"</span><span class=p>,</span><span class=w> </span><span class=s2>"@modelcontextprotocol/server-filesystem"</span><span class=p>,</span><span class=w> </span><span class=s2>"."</span><span class=p>]</span>
 <span class=w>    </span><span class=p>}</span>
 <span class=w>  </span><span class=p>}</span>
 <span class=p>}</span>
 </code></pre></div></p> </li> </ol> <p>The shared resolver merges files in this order, from lowest to highest priority:</p> <ol> <li><code>~/.config/superqode/mcp.json</code></li> <li><code>~/.superqode/mcp.json</code></li> <li><code>&lt;working-directory&gt;/.superqode/mcp.json</code></li> <li>Harness <code>runtime.config.mcp_servers</code> (or <code>runtime.config.mcp</code>) entries</li> </ol> <p>A higher-priority server declaration replaces the whole earlier declaration. Disabled or invalid overrides do not silently enable an older entry. Working directories are resolved when configuration is loaded. Stdio servers default to the harness working directory. <code>${NAME}</code> references are substituted in environment values and HTTP headers; commands are not shell-expanded.</p> <p>Set <code>runtime.config.mcp_config: false</code> for inline-only harness configuration, or set it to a file path to use one explicit JSON file plus inline overrides. Relative paths resolve against the harness working directory. This resolver is shared by hosted PiPy, native MCP clients and SuperQode's harness MCP bridge; vendor SDKs can retain their own configuration paths.</p> <p>ACP sessions receive enabled JSON definitions when a new session is created. Top-level YAML definitions remain available to native client sessions.</p> <h3 id=web-fetch-for-acp-agents>Web Fetch for ACP Agents<a class=headerlink href=#web-fetch-for-acp-agents title="Permanent link">&para;</a></h3> <p>SuperQode's built-in <code>fetch</code> and <code>web_fetch</code> tools are available to the default SuperQode runtime. ACP agents such as OpenCode need fetch exposed through MCP. Add an enabled fetch server to one of the JSON MCP config locations:</p> <div class=highlight><pre><span></span><code><span class=p>{</span>
-<span class=w>  </span><span class=nt>&quot;mcpServers&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>    </span><span class=nt>&quot;fetch&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>      </span><span class=nt>&quot;transport&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;stdio&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;command&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;uvx&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;args&quot;</span><span class=p>:</span><span class=w> </span><span class=p>[</span><span class=s2>&quot;mcp-server-fetch&quot;</span><span class=p>],</span>
-<span class=w>      </span><span class=nt>&quot;enabled&quot;</span><span class=p>:</span><span class=w> </span><span class=kc>true</span>
+<span class=w>  </span><span class=nt>"mcpServers"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>    </span><span class=nt>"fetch"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>      </span><span class=nt>"transport"</span><span class=p>:</span><span class=w> </span><span class=s2>"stdio"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"command"</span><span class=p>:</span><span class=w> </span><span class=s2>"uvx"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"args"</span><span class=p>:</span><span class=w> </span><span class=p>[</span><span class=s2>"mcp-server-fetch"</span><span class=p>],</span>
+<span class=w>      </span><span class=nt>"enabled"</span><span class=p>:</span><span class=w> </span><span class=kc>true</span>
 <span class=w>    </span><span class=p>}</span>
 <span class=w>  </span><span class=p>}</span>
 <span class=p>}</span>
@@ -30,20 +30,20 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;.&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"."</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
 <span class=w>      </span><span class=nt>NODE_ENV</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
 <span class=w>    </span><span class=nt>cwd</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/workspace</span>
 <span class=w>    </span><span class=nt>timeout</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">30.0</span>
-</code></pre></div> <p><strong>Fields:</strong></p> <table> <thead> <tr> <th>Field</th> <th>Type</th> <th>Description</th> </tr> </thead> <tbody> <tr> <td><code>transport</code></td> <td><code>"stdio"</code></td> <td>Transport type</td> </tr> <tr> <td><code>enabled</code></td> <td>boolean</td> <td>Whether server is enabled</td> </tr> <tr> <td><code>auto_connect</code></td> <td>boolean</td> <td>Auto-connect on startup</td> </tr> <tr> <td><code>command</code></td> <td>string</td> <td>Executable command</td> </tr> <tr> <td><code>args</code></td> <td>array</td> <td>Command arguments</td> </tr> <tr> <td><code>env</code></td> <td>object</td> <td>Environment variables</td> </tr> <tr> <td><code>cwd</code></td> <td>string</td> <td>Working directory</td> </tr> <tr> <td><code>timeout</code></td> <td>number</td> <td>Connection timeout (seconds)</td> </tr> </tbody> </table> <h3 id=semantic-code-search-mcp>Semantic Code Search MCP<a class=headerlink href=#semantic-code-search-mcp title="Permanent link">&para;</a></h3> <p>For AST-aware semantic repository search, install <code>ccc</code> and run <code>cocoindex-code</code> as a stdio MCP server:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s1>&#39;cocoindex-code&#39;</span>
+</code></pre></div> <p><strong>Fields:</strong></p> <table> <thead> <tr> <th>Field</th> <th>Type</th> <th>Description</th> </tr> </thead> <tbody> <tr> <td><code>transport</code></td> <td><code>"stdio"</code></td> <td>Transport type</td> </tr> <tr> <td><code>enabled</code></td> <td>boolean</td> <td>Whether server is enabled</td> </tr> <tr> <td><code>auto_connect</code></td> <td>boolean</td> <td>Auto-connect on startup</td> </tr> <tr> <td><code>command</code></td> <td>string</td> <td>Executable command</td> </tr> <tr> <td><code>args</code></td> <td>array</td> <td>Command arguments</td> </tr> <tr> <td><code>env</code></td> <td>object</td> <td>Environment variables</td> </tr> <tr> <td><code>cwd</code></td> <td>string</td> <td>Working directory</td> </tr> <tr> <td><code>timeout</code></td> <td>number</td> <td>Connection timeout (seconds)</td> </tr> </tbody> </table> <h3 id=semantic-code-search-mcp>Semantic Code Search MCP<a class=headerlink href=#semantic-code-search-mcp title="Permanent link">&para;</a></h3> <p>For AST-aware semantic repository search, install <code>ccc</code> and run <code>cocoindex-code</code> as a stdio MCP server:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>install<span class=w> </span><span class=s1>'cocoindex-code'</span>
 </code></pre></div> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>cocoindex-code</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>enabled</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class=w>    </span><span class=nt>auto_connect</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">ccc</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;mcp&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"mcp"</span><span class="p p-Indicator">]</span>
 <span class=w>    </span><span class=nt>cwd</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/workspace</span>
 </code></pre></div> <p>Run <code>ccc init --litellm-model ollama/nomic-embed-text</code> and <code>ccc index</code> in the workspace first if you want local Ollama embeddings. The MCP server exposes a semantic <code>search</code> tool with <code>query</code>, <code>limit</code>, <code>offset</code>, <code>languages</code>, <code>paths</code>, and <code>refresh_index</code>.</p> <p>For local laptops, note that <code>ccc mcp</code> starts a background index task and its search tool refreshes the index by default. For repeated searches after a manual <code>ccc index</code>, pass <code>refresh_index=false</code> to keep calls lightweight. See <a href=../../advanced/semantic-search/ >Semantic Code Search</a> for the native <code>semantic_search</code> tool, MCP tradeoffs, and local-model setup.</p> <h3 id=http-transport>HTTP Transport<a class=headerlink href=#http-transport title="Permanent link">&para;</a></h3> <p>HTTP/HTTPS servers for remote or containerized MCP servers:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>database</span><span class=p>:</span>
@@ -52,7 +52,7 @@
 <span class=w>    </span><span class=nt>auto_connect</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class=w>    </span><span class=nt>url</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:8080/mcp</span>
 <span class=w>    </span><span class=nt>headers</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>&quot;Bearer</span><span class=nv> </span><span class=s>${MCP_DB_TOKEN}&quot;</span>
+<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>"Bearer</span><span class=nv> </span><span class=s>${MCP_DB_TOKEN}"</span>
 <span class=w>    </span><span class=nt>timeout</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">30.0</span>
 <span class=w>    </span><span class=nt>sse_read_timeout</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">300.0</span>
 </code></pre></div> <p><strong>Fields:</strong></p> <table> <thead> <tr> <th>Field</th> <th>Type</th> <th>Description</th> </tr> </thead> <tbody> <tr> <td><code>transport</code></td> <td><code>"http"</code></td> <td>Transport type</td> </tr> <tr> <td><code>enabled</code></td> <td>boolean</td> <td>Whether server is enabled</td> </tr> <tr> <td><code>auto_connect</code></td> <td>boolean</td> <td>Auto-connect on startup</td> </tr> <tr> <td><code>url</code></td> <td>string</td> <td>Server URL</td> </tr> <tr> <td><code>headers</code></td> <td>object</td> <td>HTTP headers</td> </tr> <tr> <td><code>timeout</code></td> <td>number</td> <td>Request timeout (seconds)</td> </tr> <tr> <td><code>sse_read_timeout</code></td> <td>number</td> <td>SSE read timeout (seconds)</td> </tr> </tbody> </table> <h3 id=sse-transport>SSE Transport<a class=headerlink href=#sse-transport title="Permanent link">&para;</a></h3> <p>Server-Sent Events for streaming responses:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
@@ -61,7 +61,7 @@
 <span class=w>    </span><span class=nt>enabled</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class=w>    </span><span class=nt>url</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:8080/mcp/events</span>
 <span class=w>    </span><span class=nt>headers</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>&quot;Bearer</span><span class=nv> </span><span class=s>${TOKEN}&quot;</span>
+<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>"Bearer</span><span class=nv> </span><span class=s>${TOKEN}"</span>
 <span class=w>    </span><span class=nt>timeout</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">5.0</span>
 <span class=w>    </span><span class=nt>sse_read_timeout</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">300.0</span>
 </code></pre></div> <p><strong>Fields:</strong></p> <table> <thead> <tr> <th>Field</th> <th>Type</th> <th>Description</th> </tr> </thead> <tbody> <tr> <td><code>transport</code></td> <td><code>"sse"</code></td> <td>Transport type</td> </tr> <tr> <td><code>enabled</code></td> <td>boolean</td> <td>Whether server is enabled</td> </tr> <tr> <td><code>auto_connect</code></td> <td>boolean</td> <td>Auto-connect on startup</td> </tr> <tr> <td><code>url</code></td> <td>string</td> <td>SSE endpoint URL</td> </tr> <tr> <td><code>headers</code></td> <td>object</td> <td>HTTP headers</td> </tr> <tr> <td><code>timeout</code></td> <td>number</td> <td>Connection timeout (seconds)</td> </tr> <tr> <td><code>sse_read_timeout</code></td> <td>number</td> <td>SSE read timeout (seconds)</td> </tr> </tbody> </table> <hr> <h2 id=common-mcp-servers>Common MCP Servers<a class=headerlink href=#common-mcp-servers title="Permanent link">&para;</a></h2> <h3 id=filesystem-server>Filesystem Server<a class=headerlink href=#filesystem-server title="Permanent link">&para;</a></h3> <p>Access local file system:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
@@ -71,8 +71,8 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;.&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"."</span>
 </code></pre></div> <h3 id=github-server>GitHub Server<a class=headerlink href=#github-server title="Permanent link">&para;</a></h3> <p>Interact with GitHub repositories:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>github</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
@@ -80,9 +80,9 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-github&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-github"</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${GITHUB_TOKEN}&quot;</span>
+<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>"${GITHUB_TOKEN}"</span>
 </code></pre></div> <h3 id=postgresql-server>PostgreSQL Server<a class=headerlink href=#postgresql-server title="Permanent link">&para;</a></h3> <p>Query PostgreSQL databases:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>postgres</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
@@ -90,9 +90,9 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-postgres&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-postgres"</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>POSTGRES_CONNECTION_STRING</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${POSTGRES_CONNECTION_STRING}&quot;</span>
+<span class=w>      </span><span class=nt>POSTGRES_CONNECTION_STRING</span><span class=p>:</span><span class=w> </span><span class=s>"${POSTGRES_CONNECTION_STRING}"</span>
 </code></pre></div> <h3 id=slack-server>Slack Server<a class=headerlink href=#slack-server title="Permanent link">&para;</a></h3> <p>Interact with Slack:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>slack</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
@@ -100,10 +100,10 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-slack&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-slack"</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>SLACK_BOT_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${SLACK_BOT_TOKEN}&quot;</span>
-<span class=w>      </span><span class=nt>SLACK_TEAM_ID</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${SLACK_TEAM_ID}&quot;</span>
+<span class=w>      </span><span class=nt>SLACK_BOT_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>"${SLACK_BOT_TOKEN}"</span>
+<span class=w>      </span><span class=nt>SLACK_TEAM_ID</span><span class=p>:</span><span class=w> </span><span class=s>"${SLACK_TEAM_ID}"</span>
 </code></pre></div> <h3 id=brave-search-server>Brave Search Server<a class=headerlink href=#brave-search-server title="Permanent link">&para;</a></h3> <p>Search the web:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>brave-search</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
@@ -111,17 +111,17 @@
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
 <span class=w>    </span><span class=nt>args</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">-y</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-brave-search&quot;</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-brave-search"</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>BRAVE_API_KEY</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${BRAVE_API_KEY}&quot;</span>
+<span class=w>      </span><span class=nt>BRAVE_API_KEY</span><span class=p>:</span><span class=w> </span><span class=s>"${BRAVE_API_KEY}"</span>
 </code></pre></div> <hr> <h2 id=mcp-server-assignment>MCP Server Assignment<a class=headerlink href=#mcp-server-assignment title="Permanent link">&para;</a></h2> <p>MCP ownership depends on the selected runtime:</p> <table> <thead> <tr> <th>Runtime path</th> <th>How MCP servers are attached</th> </tr> </thead> <tbody> <tr> <td>Hosted PiPy, <code>builtin</code> HarnessSpec</td> <td>Shared JSON files plus inline runtime declarations</td> </tr> <tr> <td><code>openai-agents</code> HarnessSpec</td> <td>SuperQode bridges discovered MCP tools as SDK function tools</td> </tr> <tr> <td>PydanticAI</td> <td>Uses its native MCP configuration path</td> </tr> <tr> <td>Codex, Claude, and Copilot SDKs</td> <td>Uses the runtime's local MCP configuration</td> </tr> <tr> <td>ACP coding agents</td> <td>SuperQode forwards enabled JSON MCP definitions during session creation</td> </tr> <tr> <td>Google ADK</td> <td>MCP tools are not bridged yet</td> </tr> </tbody> </table> <p>Project-level <code>mcp_servers</code> definitions are available to SuperQode-managed client sessions, but they are not automatically injected into every vendor SDK. Use the runtime-specific documentation when the runtime owns its MCP lifecycle.</p> <h3 id=runnable-harness-example>Runnable Harness Example<a class=headerlink href=#runnable-harness-example title="Permanent link">&para;</a></h3> <p>The repository includes a local FastMCP documentation server and a HarnessSpec that consumes it over stdio:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span>run<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--spec<span class=w> </span>examples/harnesses/mcp-docs.yaml<span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--prompt<span class=w> </span><span class=s2>&quot;Find the documentation for MCP serving&quot;</span>
+<span class=w>  </span>--prompt<span class=w> </span><span class=s2>"Find the documentation for MCP serving"</span>
 </code></pre></div> <p>The example server is <code>examples/mcp/local_docs_server.py</code>. Its tool is exposed to the harness as <code>mcp_docs_search_docs</code>.</p> <h2 id=environment-variables>Environment Variables<a class=headerlink href=#environment-variables title="Permanent link">&para;</a></h2> <p>Use environment variables in MCP configuration:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>github</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${GITHUB_TOKEN}&quot;</span><span class=w>  </span><span class=c1># Will read from $GITHUB_TOKEN</span>
+<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>"${GITHUB_TOKEN}"</span><span class=w>  </span><span class=c1># Will read from $GITHUB_TOKEN</span>
 </code></pre></div> <p><strong>Variable Resolution:</strong></p> <ul> <li><code>${VAR_NAME}</code>: Reads from environment</li> <li>Default values: <code>${VAR_NAME:-default}</code> (not supported, use explicit env vars)</li> </ul> <hr> <h2 id=enablingdisabling-servers>Enabling/Disabling Servers<a class=headerlink href=#enablingdisabling-servers title="Permanent link">&para;</a></h2> <h3 id=enable-all-servers>Enable All Servers<a class=headerlink href=#enable-all-servers title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>filesystem</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>enabled</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -142,9 +142,9 @@
 </code></pre></div> <hr> <h2 id=troubleshooting>Troubleshooting<a class=headerlink href=#troubleshooting title="Permanent link">&para;</a></h2> <h3 id=server-not-starting>Server Not Starting<a class=headerlink href=#server-not-starting title="Permanent link">&para;</a></h3> <p><strong>Problem</strong>: MCP server fails to start</p> <p><strong>Solution</strong>: Check command and environment:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>filesystem</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;.&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"-y"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"."</span><span class="p p-Indicator">]</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>DEBUG</span><span class=p>:</span><span class=w> </span><span class=s>&quot;1&quot;</span><span class=w>  </span><span class=c1># Enable debug logging</span>
+<span class=w>      </span><span class=nt>DEBUG</span><span class=p>:</span><span class=w> </span><span class=s>"1"</span><span class=w>  </span><span class=c1># Enable debug logging</span>
 </code></pre></div> <h3 id=connection-timeout>Connection Timeout<a class=headerlink href=#connection-timeout title="Permanent link">&para;</a></h3> <p><strong>Problem</strong>: Server connection times out</p> <p><strong>Solution</strong>: Increase timeout:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>database</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
@@ -172,26 +172,26 @@ superqode<span class=w> </span>mcp<span class=w> </span>--dir<span class=w> </sp
 </code></pre></div> <h3 id=3-use-environment-variables>3. Use Environment Variables<a class=headerlink href=#3-use-environment-variables title="Permanent link">&para;</a></h3> <p>Never hardcode secrets:</p> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>github</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>env</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>&quot;${GITHUB_TOKEN}&quot;</span><span class=w>  </span><span class=c1># [CORRECT] Good</span>
-<span class=w>      </span><span class=c1># GITHUB_TOKEN: &quot;ghp_...&quot;        # [INCORRECT] Bad</span>
+<span class=w>      </span><span class=nt>GITHUB_TOKEN</span><span class=p>:</span><span class=w> </span><span class=s>"${GITHUB_TOKEN}"</span><span class=w>  </span><span class=c1># [CORRECT] Good</span>
+<span class=w>      </span><span class=c1># GITHUB_TOKEN: "ghp_..."        # [INCORRECT] Bad</span>
 </code></pre></div> <h3 id=4-test-connections>4. Test Connections<a class=headerlink href=#4-test-connections title="Permanent link">&para;</a></h3> <p>Verify servers work before using:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>config<span class=w> </span>validate
 superqode<span class=w> </span>mcp<span class=w> </span>--dir<span class=w> </span>./harnesses
 </code></pre></div> <hr> <h2 id=json-configuration-format>JSON Configuration Format<a class=headerlink href=#json-configuration-format title="Permanent link">&para;</a></h2> <p>MCP servers can also be configured in JSON format:</p> <div class=highlight><pre><span></span><code><span class=p>{</span>
-<span class=w>  </span><span class=nt>&quot;mcpServers&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>    </span><span class=nt>&quot;filesystem&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>      </span><span class=nt>&quot;transport&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;stdio&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;enabled&quot;</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;autoConnect&quot;</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;command&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;npx&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;args&quot;</span><span class=p>:</span><span class=w> </span><span class=p>[</span>
-<span class=w>        </span><span class=s2>&quot;-y&quot;</span><span class=p>,</span>
-<span class=w>        </span><span class=s2>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class=p>,</span>
-<span class=w>        </span><span class=s2>&quot;.&quot;</span>
+<span class=w>  </span><span class=nt>"mcpServers"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>    </span><span class=nt>"filesystem"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>      </span><span class=nt>"transport"</span><span class=p>:</span><span class=w> </span><span class=s2>"stdio"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"enabled"</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"autoConnect"</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"command"</span><span class=p>:</span><span class=w> </span><span class=s2>"npx"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"args"</span><span class=p>:</span><span class=w> </span><span class=p>[</span>
+<span class=w>        </span><span class=s2>"-y"</span><span class=p>,</span>
+<span class=w>        </span><span class=s2>"@modelcontextprotocol/server-filesystem"</span><span class=p>,</span>
+<span class=w>        </span><span class=s2>"."</span>
 <span class=w>      </span><span class=p>],</span>
-<span class=w>      </span><span class=nt>&quot;env&quot;</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
-<span class=w>        </span><span class=nt>&quot;NODE_ENV&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;production&quot;</span>
+<span class=w>      </span><span class=nt>"env"</span><span class=p>:</span><span class=w> </span><span class=p>{</span>
+<span class=w>        </span><span class=nt>"NODE_ENV"</span><span class=p>:</span><span class=w> </span><span class=s2>"production"</span>
 <span class=w>      </span><span class=p>},</span>
-<span class=w>      </span><span class=nt>&quot;timeout&quot;</span><span class=p>:</span><span class=w> </span><span class=mf>30.0</span>
+<span class=w>      </span><span class=nt>"timeout"</span><span class=p>:</span><span class=w> </span><span class=mf>30.0</span>
 <span class=w>    </span><span class=p>}</span>
 <span class=w>  </span><span class=p>}</span>
 <span class=p>}</span>
@@ -199,26 +199,26 @@ superqode<span class=w> </span>mcp<span class=w> </span>--dir<span class=w> </sp
 <span class=w>  </span><span class=nt>filesystem-workspace</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;/workspace&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"-y"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"/workspace"</span><span class="p p-Indicator">]</span>
 
 <span class=w>  </span><span class=nt>filesystem-home</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;~&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"-y"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"~"</span><span class="p p-Indicator">]</span>
 </code></pre></div> <h3 id=custom-working-directory>Custom Working Directory<a class=headerlink href=#custom-working-directory title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>filesystem</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
 <span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>&quot;.&quot;</span><span class="p p-Indicator">]</span>
+<span class=w>    </span><span class=nt>args</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">[</span><span class=s>"-y"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"@modelcontextprotocol/server-filesystem"</span><span class="p p-Indicator">,</span><span class=w> </span><span class=s>"."</span><span class="p p-Indicator">]</span>
 <span class=w>    </span><span class=nt>cwd</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/project</span><span class=w>  </span><span class=c1># Override working directory</span>
 </code></pre></div> <h3 id=custom-headers-for-http>Custom Headers for HTTP<a class=headerlink href=#custom-headers-for-http title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=nt>mcp_servers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>api</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>transport</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
 <span class=w>    </span><span class=nt>url</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">https://api.example.com/mcp</span>
 <span class=w>    </span><span class=nt>headers</span><span class=p>:</span>
-<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>&quot;Bearer</span><span class=nv> </span><span class=s>${API_TOKEN}&quot;</span>
-<span class=w>      </span><span class=nt>X-API-Version</span><span class=p>:</span><span class=w> </span><span class=s>&quot;v2&quot;</span>
-<span class=w>      </span><span class=nt>User-Agent</span><span class=p>:</span><span class=w> </span><span class=s>&quot;SuperQode/1.0&quot;</span>
+<span class=w>      </span><span class=nt>Authorization</span><span class=p>:</span><span class=w> </span><span class=s>"Bearer</span><span class=nv> </span><span class=s>${API_TOKEN}"</span>
+<span class=w>      </span><span class=nt>X-API-Version</span><span class=p>:</span><span class=w> </span><span class=s>"v2"</span>
+<span class=w>      </span><span class=nt>User-Agent</span><span class=p>:</span><span class=w> </span><span class=s>"SuperQode/1.0"</span>
 </code></pre></div> <hr> <h2 id=next-steps>Next Steps<a class=headerlink href=#next-steps title="Permanent link">&para;</a></h2> <ul> <li><a href=../yaml-reference/ >YAML Reference</a> - Complete configuration reference</li> </ul> <h2 id=inspect-and-refresh-connections>Inspect and refresh connections<a class=headerlink href=#inspect-and-refresh-connections title="Permanent link">&para;</a></h2> <div class=highlight><pre><span></span><code>sq<span class=w> </span>mcp<span class=w> </span>list<span class=w> </span>--cwd<span class=w> </span>./project
 sq<span class=w> </span>mcp<span class=w> </span>list<span class=w> </span>--connect<span class=w> </span>--cwd<span class=w> </span>./project
 sq<span class=w> </span>mcp<span class=w> </span>login<span class=w> </span>SERVER

@@ -21,13 +21,13 @@ superqode<span class=w> </span>--harness<span class=w> </span>superqode.local.ya
 </code></pre></div> <hr> <h2 id=4-ask-a-small-first-task>4. Ask A Small First Task<a class=headerlink href=#4-ask-a-small-first-task title="Permanent link">&para;</a></h2> <p>Start with a low-risk prompt:</p> <div class=highlight><pre><span></span><code>Summarize this repository and identify the smallest safe improvement.
 </code></pre></div> <p>Then try a focused coding task:</p> <div class=highlight><pre><span></span><code>Find one low-risk bug or cleanup, make the smallest fix, and run the narrowest useful test.
 </code></pre></div> <p>The TUI keeps successful tool activity compact by default:</p> <div class=highlight><pre><span></span><code>read_file(pyproject.toml)
-grep(&quot;TODO&quot;, src)
-bash(&quot;uv run pytest tests/test_config.py&quot;)
+grep("TODO", src)
+bash("uv run pytest tests/test_config.py")
 </code></pre></div> <p>Use verbose logs only when you need detail:</p> <div class=highlight><pre><span></span><code>:log verbose
 </code></pre></div> <hr> <h2 id=5-handle-approvals>5. Handle Approvals<a class=headerlink href=#5-handle-approvals title="Permanent link">&para;</a></h2> <p>When policy requires approval, the TUI shows the pending tool call before it runs. Review the command or file operation, then approve or reject it:</p> <div class=highlight><pre><span></span><code>:approve
 :approve 1 always
 :reject
-:reject 1 &quot;use a safer command&quot;
+:reject 1 "use a safer command"
 </code></pre></div> <p>Use <code>always</code> only when you want to allow the same kind of request for the rest of the session.</p> <hr> <h2 id=6-inspect-changes>6. Inspect Changes<a class=headerlink href=#6-inspect-changes title="Permanent link">&para;</a></h2> <p>Ask SuperQode what changed:</p> <div class=highlight><pre><span></span><code>Summarize the files changed and the tests you ran.
 </code></pre></div> <p>You can also use normal Git commands in another terminal:</p> <div class=highlight><pre><span></span><code>git<span class=w> </span>status<span class=w> </span>--short
 git<span class=w> </span>diff

@@ -22,16 +22,16 @@
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">bash</span>
 </code></pre></div> <p>Example prompt:</p> <div class=highlight><pre><span></span><code>Find why checkout double-charges. Use spawn_harness to inspect payment,
 webhook, and ledger paths separately, then synthesize the root cause.
-</code></pre></div> <p>For long logs or diffs, inspect the handle first:</p> <div class=highlight><pre><span></span><code>Use context_handle(action=&quot;grep&quot;, handle=&quot;file:ci-run.log&quot;, pattern=&quot;ERROR|FAILED&quot;)
+</code></pre></div> <p>For long logs or diffs, inspect the handle first:</p> <div class=highlight><pre><span></span><code>Use context_handle(action="grep", handle="file:ci-run.log", pattern="ERROR|FAILED")
 to locate failure clusters. Then spawn child harnesses for the top clusters.
 </code></pre></div> <p>For broad map-style scans, let <code>spawn_harness</code> chunk and fan out directly:</p> <div class=highlight><pre><span></span><code>Use spawn_harness(
-  task=&quot;Inspect this chunk for the earliest root-cause failure. Return only evidence and confidence.&quot;,
-  context_handle=&quot;file:ci-run.log&quot;,
+  task="Inspect this chunk for the earliest root-cause failure. Return only evidence and confidence.",
+  context_handle="file:ci-run.log",
   fanout=true,
   chunk_chars=12000,
   max_chunks=6,
   max_parallel=2,
-  mode=&quot;read-only&quot;
+  mode="read-only"
 ), then synthesize the child findings.
 </code></pre></div> <h2 id=run-lineage>Run Lineage<a class=headerlink href=#run-lineage title="Permanent link">&para;</a></h2> <p>Recursive work should never be opaque. Harness runs now carry lineage fields:</p> <ul> <li><code>parent_run_id</code>: the immediate run that spawned this run</li> <li><code>root_run_id</code>: the top-level run for the recursive tree</li> </ul> <p>Replay and evidence tools can use these fields to render:</p> <div class=highlight><pre><span></span><code>root: diagnose checkout double charge
   child: scan payment/
@@ -47,43 +47,43 @@ to locate failure clusters. Then spawn child harnesses for the top clusters.
 <span class=w>    </span><span class=nt>base_agent</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GEMINI_API_KEY</span>
 </code></pre></div> <p>Known managed backend names:</p> <ul> <li><code>google-agent-engine</code></li> <li><code>anthropic-managed</code></li> </ul> <p>Google's current Agent Platform documentation describes Agent Runtime as the managed runtime for deployed agents, with sessions, memory, sandbox execution, tracing, logging, and monitoring as platform services. Configure <code>google-agent-engine</code> in one of two ways:</p> <ul> <li><code>mode: generate_content</code> for direct Gemini offload with <code>GEMINI_API_KEY</code> and no deployed agent endpoint.</li> <li><code>mode: persisted</code> or <code>mode: agent</code> with <code>agent_id</code> and <code>api_base</code> for a deployed managed-agent interaction endpoint.</li> </ul> <p>Anthropic describes Claude Managed Agents as a hosted service that separates the brain, sandbox, and session log for long-running work. Configure <code>anthropic-managed</code> with the hosted endpoint for your managed agent and <code>ANTHROPIC_API_KEY</code>. If you want the documented local/hostable SDK path instead of the hosted Managed Agents service, use the existing <code>claude-agent-sdk</code> runtime backend.</p> <p>Until a managed backend has its required credentials and, where the selected mode needs one, an endpoint, it fails closed and reports the missing configuration instead of silently running locally.</p> <h2 id=dynamic-workflows>Dynamic Workflows<a class=headerlink href=#dynamic-workflows title="Permanent link">&para;</a></h2> <p>The next tier is model-authored orchestration. A root model writes a restricted plan, and the runtime exposes only safe helpers. The first shipped primitive is <code>dynamic_workflow</code>, a bounded orchestration tool over <code>spawn_harness</code>:</p> <div class=highlight><pre><span></span><code><span class=p>{</span>
-<span class=w>  </span><span class=nt>&quot;objective&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;Audit all route handlers for missing auth checks.&quot;</span><span class=p>,</span>
-<span class=w>  </span><span class=nt>&quot;steps&quot;</span><span class=p>:</span><span class=w> </span><span class=p>[</span>
+<span class=w>  </span><span class=nt>"objective"</span><span class=p>:</span><span class=w> </span><span class=s2>"Audit all route handlers for missing auth checks."</span><span class=p>,</span>
+<span class=w>  </span><span class=nt>"steps"</span><span class=p>:</span><span class=w> </span><span class=p>[</span>
 <span class=w>    </span><span class=p>{</span>
-<span class=w>      </span><span class=nt>&quot;id&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;routes&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;task&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;Inspect this route chunk for missing authentication checks.&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;context_handle&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;repo:src/routes/**/*.py&quot;</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;fanout&quot;</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;chunk_chars&quot;</span><span class=p>:</span><span class=w> </span><span class=mi>12000</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;max_chunks&quot;</span><span class=p>:</span><span class=w> </span><span class=mi>6</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;max_parallel&quot;</span><span class=p>:</span><span class=w> </span><span class=mi>2</span><span class=p>,</span>
-<span class=w>      </span><span class=nt>&quot;mode&quot;</span><span class=p>:</span><span class=w> </span><span class=s2>&quot;read-only&quot;</span>
+<span class=w>      </span><span class=nt>"id"</span><span class=p>:</span><span class=w> </span><span class=s2>"routes"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"task"</span><span class=p>:</span><span class=w> </span><span class=s2>"Inspect this route chunk for missing authentication checks."</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"context_handle"</span><span class=p>:</span><span class=w> </span><span class=s2>"repo:src/routes/**/*.py"</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"fanout"</span><span class=p>:</span><span class=w> </span><span class=kc>true</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"chunk_chars"</span><span class=p>:</span><span class=w> </span><span class=mi>12000</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"max_chunks"</span><span class=p>:</span><span class=w> </span><span class=mi>6</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"max_parallel"</span><span class=p>:</span><span class=w> </span><span class=mi>2</span><span class=p>,</span>
+<span class=w>      </span><span class=nt>"mode"</span><span class=p>:</span><span class=w> </span><span class=s2>"read-only"</span>
 <span class=w>    </span><span class=p>}</span>
 <span class=w>  </span><span class=p>],</span>
-<span class=w>  </span><span class=nt>&quot;max_children&quot;</span><span class=p>:</span><span class=w> </span><span class=mi>8</span><span class=p>,</span>
-<span class=w>  </span><span class=nt>&quot;max_depth&quot;</span><span class=p>:</span><span class=w> </span><span class=mi>1</span>
+<span class=w>  </span><span class=nt>"max_children"</span><span class=p>:</span><span class=w> </span><span class=mi>8</span><span class=p>,</span>
+<span class=w>  </span><span class=nt>"max_depth"</span><span class=p>:</span><span class=w> </span><span class=mi>1</span>
 <span class=p>}</span>
-</code></pre></div> <p>Each step delegates through <code>spawn_harness</code>, so child runs still get kernel lineage, sandbox/model metadata, and replayable event records. This gives the agent dynamic orchestration without granting arbitrary host execution.</p> <p>For a more natural authoring shape, use <code>dynamic_workflow_script</code>. This is not arbitrary Python execution: SuperQode parses the script AST and only accepts literal <code>workflow(...)</code> and <code>step(...)</code> calls, then compiles them to the same <code>dynamic_workflow</code> plan.</p> <div class=highlight><pre><span></span><code><span class=n>workflow</span><span class=p>(</span><span class=s2>&quot;Audit all route handlers for missing auth checks.&quot;</span><span class=p>,</span> <span class=n>max_children</span><span class=o>=</span><span class=mi>8</span><span class=p>)</span>
+</code></pre></div> <p>Each step delegates through <code>spawn_harness</code>, so child runs still get kernel lineage, sandbox/model metadata, and replayable event records. This gives the agent dynamic orchestration without granting arbitrary host execution.</p> <p>For a more natural authoring shape, use <code>dynamic_workflow_script</code>. This is not arbitrary Python execution: SuperQode parses the script AST and only accepts literal <code>workflow(...)</code> and <code>step(...)</code> calls, then compiles them to the same <code>dynamic_workflow</code> plan.</p> <div class=highlight><pre><span></span><code><span class=n>workflow</span><span class=p>(</span><span class=s2>"Audit all route handlers for missing auth checks."</span><span class=p>,</span> <span class=n>max_children</span><span class=o>=</span><span class=mi>8</span><span class=p>)</span>
 
 <span class=n>step</span><span class=p>(</span>
-    <span class=s2>&quot;routes&quot;</span><span class=p>,</span>
-    <span class=n>task</span><span class=o>=</span><span class=s2>&quot;Inspect this route chunk for missing authentication checks.&quot;</span><span class=p>,</span>
-    <span class=n>context_handle</span><span class=o>=</span><span class=s2>&quot;repo:src/routes/**/*.py&quot;</span><span class=p>,</span>
+    <span class=s2>"routes"</span><span class=p>,</span>
+    <span class=n>task</span><span class=o>=</span><span class=s2>"Inspect this route chunk for missing authentication checks."</span><span class=p>,</span>
+    <span class=n>context_handle</span><span class=o>=</span><span class=s2>"repo:src/routes/**/*.py"</span><span class=p>,</span>
     <span class=n>fanout</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
     <span class=n>chunk_chars</span><span class=o>=</span><span class=mi>12000</span><span class=p>,</span>
     <span class=n>max_chunks</span><span class=o>=</span><span class=mi>6</span><span class=p>,</span>
     <span class=n>max_parallel</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span>
-    <span class=n>mode</span><span class=o>=</span><span class=s2>&quot;read-only&quot;</span><span class=p>,</span>
+    <span class=n>mode</span><span class=o>=</span><span class=s2>"read-only"</span><span class=p>,</span>
 <span class=p>)</span>
-</code></pre></div> <p>A later tier can add a true sandboxed orchestration runtime with safe helpers:</p> <div class=highlight><pre><span></span><code><span class=n>routes</span> <span class=o>=</span> <span class=n>load_context</span><span class=p>(</span><span class=s2>&quot;repo:src/routes&quot;</span><span class=p>)</span><span class=o>.</span><span class=n>chunk</span><span class=p>(</span><span class=s2>&quot;files&quot;</span><span class=p>)</span>
+</code></pre></div> <p>A later tier can add a true sandboxed orchestration runtime with safe helpers:</p> <div class=highlight><pre><span></span><code><span class=n>routes</span> <span class=o>=</span> <span class=n>load_context</span><span class=p>(</span><span class=s2>"repo:src/routes"</span><span class=p>)</span><span class=o>.</span><span class=n>chunk</span><span class=p>(</span><span class=s2>"files"</span><span class=p>)</span>
 <span class=n>findings</span> <span class=o>=</span> <span class=p>[]</span>
 
 <span class=k>for</span> <span class=n>route</span> <span class=ow>in</span> <span class=n>routes</span><span class=p>:</span>
     <span class=n>findings</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>spawn_harness</span><span class=p>(</span>
-        <span class=n>task</span><span class=o>=</span><span class=sa>f</span><span class=s2>&quot;Audit auth checks in </span><span class=si>{</span><span class=n>route</span><span class=o>.</span><span class=n>path</span><span class=si>}</span><span class=s2>&quot;</span><span class=p>,</span>
+        <span class=n>task</span><span class=o>=</span><span class=sa>f</span><span class=s2>"Audit auth checks in </span><span class=si>{</span><span class=n>route</span><span class=o>.</span><span class=n>path</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
         <span class=n>context_handle</span><span class=o>=</span><span class=n>route</span><span class=o>.</span><span class=n>handle</span><span class=p>,</span>
-        <span class=n>mode</span><span class=o>=</span><span class=s2>&quot;read-only&quot;</span><span class=p>,</span>
-        <span class=n>sandbox</span><span class=o>=</span><span class=s2>&quot;docker&quot;</span><span class=p>,</span>
+        <span class=n>mode</span><span class=o>=</span><span class=s2>"read-only"</span><span class=p>,</span>
+        <span class=n>sandbox</span><span class=o>=</span><span class=s2>"docker"</span><span class=p>,</span>
     <span class=p>))</span>
 
 <span class=n>FINAL</span><span class=p>(</span><span class=n>summarize</span><span class=p>(</span><span class=n>findings</span><span class=p>))</span>
@@ -91,7 +91,7 @@ to locate failure clusters. Then spawn child harnesses for the top clusters.
 superqode<span class=w> </span>harness<span class=w> </span>eval-packs<span class=w> </span>local-recursive-smoke
 </code></pre></div> <p>Run it live from the SuperQode checkout with a local recursive harness:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>harness<span class=w> </span><span class=nb>eval</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--spec<span class=w> </span>harness.yaml<span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--tasks<span class=w> </span><span class=s2>&quot;</span><span class=k>$(</span>superqode<span class=w> </span>harness<span class=w> </span>eval-packs<span class=w> </span>local-recursive-smoke<span class=k>)</span><span class=s2>&quot;</span><span class=w> </span><span class=se>\</span>
+<span class=w>  </span>--tasks<span class=w> </span><span class=s2>"</span><span class=k>$(</span>superqode<span class=w> </span>harness<span class=w> </span>eval-packs<span class=w> </span>local-recursive-smoke<span class=k>)</span><span class=s2>"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--provider<span class=w> </span>openai-compatible<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--model<span class=w> </span>qwen3:8b<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--sandbox<span class=w> </span>docker<span class=w> </span><span class=se>\</span>

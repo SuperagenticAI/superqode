@@ -39,20 +39,20 @@ sq<span class=w> </span>harness<span class=w> </span>doctor<span class=w> </span
 sq<span class=w> </span>harness<span class=w> </span>explain<span class=w> </span>--spec<span class=w> </span>harness.yaml
 </code></pre></div> <p>Commit <code>harness.yaml</code> when you want the worker definition reviewed and versioned with the repository.</p> <p>An existing Omnigent agent can enter through the same path:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>harness<span class=w> </span>import-omnigent<span class=w> </span>path/to/agent.yaml<span class=w> </span>--output<span class=w> </span>harness.yaml
 sq<span class=w> </span>harness<span class=w> </span>validate<span class=w> </span>--spec<span class=w> </span>harness.yaml
-</code></pre></div> <h3 id=2-define-the-finish-line>2. Define the finish line<a class=headerlink href=#2-define-the-finish-line title="Permanent link">&para;</a></h3> <p>Create a WorkOrder in draft so roles and dependencies can be added before it is queued:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>create<span class=w> </span><span class=s2>&quot;Implement and review the authentication fix&quot;</span><span class=w> </span><span class=se>\</span>
+</code></pre></div> <h3 id=2-define-the-finish-line>2. Define the finish line<a class=headerlink href=#2-define-the-finish-line title="Permanent link">&para;</a></h3> <p>Create a WorkOrder in draft so roles and dependencies can be added before it is queued:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>create<span class=w> </span><span class=s2>"Implement and review the authentication fix"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--repo<span class=w> </span>.<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--task-id<span class=w> </span>investigate<span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--task-title<span class=w> </span><span class=s2>&quot;Investigate&quot;</span><span class=w> </span><span class=se>\</span>
+<span class=w>  </span>--task-title<span class=w> </span><span class=s2>"Investigate"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--role<span class=w> </span>investigator<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--harness<span class=w> </span>rlm-code<span class=w> </span><span class=se>\</span>
-<span class=w>  </span>--acceptance-test<span class=w> </span><span class=s2>&quot;uv run pytest -q tests/test_auth.py&quot;</span><span class=w> </span><span class=se>\</span>
+<span class=w>  </span>--acceptance-test<span class=w> </span><span class=s2>"uv run pytest -q tests/test_auth.py"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--max-workers<span class=w> </span><span class=m>2</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--max-seconds<span class=w> </span><span class=m>1800</span>
-</code></pre></div> <p>Copy the printed <code>work_...</code> id, then build the task graph:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>add-task<span class=w> </span>work_...<span class=w> </span><span class=s2>&quot;Implement the smallest safe fix&quot;</span><span class=w> </span><span class=se>\</span>
+</code></pre></div> <p>Copy the printed <code>work_...</code> id, then build the task graph:</p> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>add-task<span class=w> </span>work_...<span class=w> </span><span class=s2>"Implement the smallest safe fix"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--task-id<span class=w> </span>implement<span class=w> </span>--role<span class=w> </span>implementer<span class=w> </span>--harness<span class=w> </span>harness.yaml<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--depends-on<span class=w> </span>investigate
 
-sq<span class=w> </span>work<span class=w> </span>add-task<span class=w> </span>work_...<span class=w> </span><span class=s2>&quot;Review the resulting patch&quot;</span><span class=w> </span><span class=se>\</span>
+sq<span class=w> </span>work<span class=w> </span>add-task<span class=w> </span>work_...<span class=w> </span><span class=s2>"Review the resulting patch"</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--task-id<span class=w> </span>review<span class=w> </span>--role<span class=w> </span>reviewer<span class=w> </span>--harness<span class=w> </span>review<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--depends-on<span class=w> </span>implement
 
@@ -62,7 +62,7 @@ sq<span class=w> </span>work<span class=w> </span>queue<span class=w> </span>wor
 </code></pre></div> <p>Ready tasks are claimed atomically. Patch-producing roles receive isolated Git worktrees, evidence-only roles are prevented from changing files, dependencies see safely integrated predecessor work, and overlapping changes block rather than overwrite one another.</p> <h3 id=4-gate-and-deliver-the-exact-result>4. Gate and deliver the exact result<a class=headerlink href=#4-gate-and-deliver-the-exact-result title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>sq<span class=w> </span>work<span class=w> </span>check<span class=w> </span>work_...
 sq<span class=w> </span>work<span class=w> </span>prepare<span class=w> </span>work_...
 sq<span class=w> </span>work<span class=w> </span>diff<span class=w> </span>work_...
-sq<span class=w> </span>work<span class=w> </span>approve<span class=w> </span>work_...<span class=w> </span>--actor<span class=w> </span>maintainer<span class=w> </span>--reason<span class=w> </span><span class=s2>&quot;reviewed and green&quot;</span>
+sq<span class=w> </span>work<span class=w> </span>approve<span class=w> </span>work_...<span class=w> </span>--actor<span class=w> </span>maintainer<span class=w> </span>--reason<span class=w> </span><span class=s2>"reviewed and green"</span>
 sq<span class=w> </span>work<span class=w> </span>merge<span class=w> </span>work_...<span class=w> </span>--actor<span class=w> </span>maintainer<span class=w> </span>--cleanup
 </code></pre></div> <p>SuperQode does not stage or commit the user's checkout. Approval is tied to the prepared candidate digest, and merge rechecks target drift before applying it.</p> <h3 id=5-measure-and-improve-the-harness>5. Measure and improve the harness<a class=headerlink href=#5-measure-and-improve-the-harness title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>sq<span class=w> </span>harness<span class=w> </span><span class=nb>eval</span><span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--spec<span class=w> </span>harness.yaml<span class=w> </span><span class=se>\</span>
