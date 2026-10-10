@@ -144,6 +144,9 @@ class EventHandlerMixin:
         from superqode.app.herdr import close
 
         close(self)
+        disable = getattr(self, "_disable_scheme_notifications", None)
+        if callable(disable):
+            disable()
         self._stop_wave_bursts()
         self._flush_draft_recovery()
 

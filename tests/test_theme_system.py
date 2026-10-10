@@ -463,7 +463,7 @@ def test_offline_catalog_install_all_is_repeatable_and_preserves_selection():
     from superqode.theming.library import catalog, theme_rows
 
     runner = CliRunner()
-    assert len(theme_rows()) == 83
+    assert len(theme_rows()) == 87
     assert len(theme_rows("Awesome Pi")) == 71
     assert {row["name"] for row in theme_rows("light")} >= {"light", "ayu-light"}
     result = runner.invoke(cli_main, ["theme", "browse", "alien", "--json"])
@@ -523,9 +523,9 @@ async def test_gallery_search_preview_install_and_restart(size):
         await pilot.pause()
         picker = app.screen
         assert isinstance(picker, ThemePicker)
-        assert picker.query_one("#theme-list", OptionList).option_count == 83
+        assert picker.query_one("#theme-list", OptionList).option_count == 87
         await pilot.click("#theme-installed")
-        assert picker.query_one("#theme-list", OptionList).option_count == 14
+        assert picker.query_one("#theme-list", OptionList).option_count == 18
         await pilot.click("#theme-all")
         picker.query_one("#theme-search", Input).value = "alien-candy"
         await pilot.pause()
@@ -770,7 +770,7 @@ async def test_tui_install_all_runs_cli_and_discoverable_themes(tmp_path, monkey
         app._handle_command(":theme", log)
         await pilot.pause()
         assert all(row["installed"] for row in theme_rows())
-        assert app.screen.query_one("#theme-list", OptionList).option_count == 83
+        assert app.screen.query_one("#theme-list", OptionList).option_count == 87
         await pilot.press("escape")
 
 
@@ -847,7 +847,7 @@ def test_catalog_description_edit_is_not_a_color_conflict():
 def test_deep_config_cannot_crash_a_theme_save():
     original = '{"other":' + "[" * 4000 + "0" + "]" * 4000 + "}"
     bridge._CONFIG_PATH.write_text(original)
-    assert bridge.load_saved_theme() == "superqode"
+    assert bridge.load_saved_theme() == "auto"
     assert bridge.save_theme("light")
     assert bridge._CONFIG_PATH.read_text() == original
 

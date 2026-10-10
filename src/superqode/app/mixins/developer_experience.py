@@ -1,4 +1,4 @@
-"""Guided first tasks and local, reviewed hackathon feedback."""
+"""Guided first tasks and local, reviewed developer feedback."""
 
 from __future__ import annotations
 

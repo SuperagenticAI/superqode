@@ -80,6 +80,6 @@ build are recorded under `validation/pi-theme-implementation/theme-audit-*`.
 
 These checks establish the tested paths, rather than a guarantee that no bug
 can occur. Real Windows/Linux terminal appearance reporting, SSH transports
-and live provider workflows still need participant testing. See
-[Themes](themes.md) for supported behavior and [Hackathon readiness](../getting-started/hackathon.md)
+and live provider workflows still need developer testing. See
+[Themes](themes.md) for supported behavior and [Developer trial readiness](../getting-started/developer-trial.md)
 for the broader developer trial.

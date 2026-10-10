@@ -86,7 +86,7 @@ def test_load_theme_defaults_when_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(theme_bridge, "_CONFIG_PATH", cfg)
     theme_bridge.apply_theme("light")
     try:
-        assert theme_bridge.load_saved_theme() == "superqode"
+        assert theme_bridge.load_saved_theme() == "auto"
     finally:
         _reset_default()
 

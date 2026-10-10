@@ -1,8 +1,8 @@
-# Hackathon readiness review: 9 October 2026
+# Developer trial readiness review: 9 October 2026
 
 Reviewed the 2.10.1 checkout at `45c54302` and the local changes in this review.
 These fixes are local and unreleased. Package and publish the reviewed changes
-before directing participants to a public install that should include them.
+before directing developers to a public install that should include them.
 The implementation has a substantial developer workflow already. A successful
 local test run establishes an offline regression baseline; it does not certify
 every vendor account, operating system, terminal, or future backend release.
@@ -22,7 +22,7 @@ every vendor account, operating system, terminal, or future backend release.
 | Help described :home as disconnecting and Ctrl+C as exiting. | Align help, completion, palette, and keyboard documentation with actual behavior. |
 | Release assertions lagged shipped commands, RLM variants, ordering, and guided Copilot setup. | Update the affected contracts to the inspected 2.10.1 surface. Isolate the Codex picker test from the developer's project and startup connection. |
 
-The new mounted journey tests are in `tests/test_tui_hackathon_journey.py` and
+The new mounted journey tests are in the mounted developer trial journey test module and
 run in the existing CI keyboard gate and macOS/Linux/Windows connection matrix.
 The CI configuration change has not itself run on GitHub during this review.
 
@@ -90,7 +90,7 @@ The follow-up passed 6,091 regression tests (30 skipped, 24 integration tests
 excluded), 58 real-PTY checks, final focused theme/mounted checks, responsiveness
 budgets, and an isolated installed-wheel check. See [Themes](themes.md).
 Cross-platform terminal appearance and live vendor workflows still require
-the participant/pre-release checks below.
+the developer/pre-release checks below.
 
 ## Reusing Hermes
 
@@ -110,7 +110,7 @@ interactions locally and copies no Hermes source.
 
 ## Experience work after the pilot
 
-Prioritize measured friction from the participant exercise:
+Prioritize measured friction from the developer trial:
 
 | Priority | Acceptance target |
 | --- | --- |
@@ -123,7 +123,7 @@ Prioritize measured friction from the participant exercise:
 ## Release decision and live acceptance
 
 Invite a small, supported pilot after the local gates pass. Complete the live
-matrix below before describing the product as broadly hackathon-ready. A claim
+matrix below before describing the product as broadly ready for new developers. A claim
 of zero bugs would not be supported by these checks.
 
 For each advertised route, record a versioned result for:
@@ -138,8 +138,8 @@ For each advertised route, record a versioned result for:
 
 Suggested first matrix: Codex CLI, Claude Code over ACP, OpenCode over ACP,
 and one Ollama model on macOS and Linux; add Windows if it is promised to
-participants. This is a proposed pilot scope, not a statement of live results.
-Use [Developer Trial](../getting-started/hackathon.md) for the participant
+developers. This is a proposed pilot scope, not a statement of live results.
+Use [Developer Trial](../getting-started/developer-trial.md) for the developer
 exercise and feedback fields. Record time to first task, setup failures, lost
 drafts, incorrect session restoration, and the number of times a user needed
 help. Broaden support after those results are satisfactory.

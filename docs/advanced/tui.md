@@ -276,6 +276,9 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:rewind` - Open the rewind overlay (or `:rewind <n>` to jump directly)
 - `:tree` - Show saved session branches and forks
 - `:theme` - Open the theme picker (or `:theme <name>` to apply one)
+- `:settings` or `:appearance` - Open appearance settings: theme mode, light/dark pair, spacing, motion and icons
+- `:trial` - Open the guided first task
+- `:feedback` - Review and export a redacted local diagnostic bundle
 - `:export html|markdown|json` - Export the current transcript
 - `:share` - Create, import, list, or revoke portable session artifacts
 - `:trust` - Show or change local trust for this project
@@ -510,13 +513,20 @@ Highlighting previews immediately, including retained conversation output.
 Enter applies and saves to `~/.superqode/config.json`; Escape restores the
 original appearance. Drafts and queued tasks remain in place. The gallery
 includes explicit Light/Dark, Favorites and Recent filters; Ctrl+S toggles a favorite.
+
+Some terminals intercept function keys or Ctrl+S: macOS Terminal sends F3/F4 to the
+system unless Fn is held, tmux and screen can drop function keys with an old `TERM`,
+and Ctrl+S is flow control (XOFF) outside raw mode. In the gallery, move focus to
+the list (Tab or the arrow keys) and use **e** to customize, **w** to view the
+workspace and **f** to toggle a favorite. In the customizer and appearance
+settings, **w** views the workspace when a text field is not focused.
 Use `superqode --theme light` for a temporary startup choice. See
 [Themes](themes.md) for custom files, Pi palette imports, and live editing.
 
 Open `:trial` for connection validation, project context, an explicit first task
 and recorded result review. Use `:feedback` to inspect a redacted diagnostic
 snapshot and export it locally after review. See the [first-session guide](../getting-started/first-session.md)
-and [hackathon guide](../getting-started/hackathon.md).
+and [developer trial guide](../getting-started/developer-trial.md).
 
 ## Accessibility
 

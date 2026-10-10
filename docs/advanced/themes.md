@@ -19,23 +19,23 @@ superqode theme list
 
 In the TUI, use `:theme` or `:theme browse` to open the searchable gallery. **All** includes installed palettes and the offline community catalog; **Installed** filters to themes ready to use. **Light** and **Dark** are explicit appearance filters. Search by name, appearance, source (`custom`), or collection (`Awesome Pi`). Arrow keys preview your actual prompt, transcript, diffs, header and notifications, along with a small coding sample. **F4** reduces the gallery to a bottom strip so you can inspect the workspace; arrows continue switching previews. Tab moves between controls; Enter applies and saves, installing a catalog theme first when needed. Escape restores the original appearance without installing a preview or changing your draft and selection. Use `:theme nord` to apply a name directly.
 
-**Ctrl+S** toggles a favorite. **Favorites** and **Recent** narrow the gallery; **All** clears these filters. `:theme next` cycles favorites and installs a catalog favorite if needed. **Undo** or `:theme previous` restores the last selected theme, including an automatic selection or light/dark pair. `:theme undo` is an alias. Favorites and recent choices persist in your private appearance preferences.
+**Ctrl+S** (or **f** when the list has focus) toggles a favorite. **Favorites** and **Recent** narrow the gallery; **All** clears these filters. `:theme next` cycles favorites and installs a catalog favorite if needed. **Undo** or `:theme previous` restores the last selected theme, including an automatic selection or light/dark pair. `:theme undo` is an alias. Favorites and recent choices persist in your private appearance preferences.
 
 ## Appearance settings
 
 Open `:settings` or `:appearance` from the prompt or command palette. One screen brings together the gallery, a fixed theme, automatic SuperQode light/dark switching, terminal-derived colors, a custom light/dark pair, comfortable/compact spacing, reduced animation, and simple ASCII status icons. Pair selectors show installed palettes of the appropriate appearance; install additional palettes through the gallery first.
 
-Changes preview live. F4 exposes the workspace. **Apply & save** saves the selection and preferences together; Escape restores them. Reduced animation retains a steady working status while stopping sweeps and rotating prompt/thinking indicators. Simple icons preserve clickable header and hint controls; agent responses and code retain their original characters.
+Changes preview live. F4 (or **w** outside a text field) exposes the workspace. **Apply & save** saves the selection and preferences together; Escape restores them. Reduced animation retains a steady working status while stopping sweeps and rotating prompt/thinking indicators. Simple icons preserve clickable header and hint controls; agent responses and code retain their original characters.
 
 ## Visual customizer
 
-Use `:theme customize` for the active palette, or **F3** / **Edit** for the selected gallery palette. Adjust the accent, background, panel background and text; light/dark canvas presets provide starting points. The actual workspace previews valid edits. The status shows requested and rendered text contrast immediately, including automatic readability corrections. Invalid edits retain the last working preview and disable saving.
+Use `:theme customize` for the active palette, or **F3** / **e** / **Edit** for the selected gallery palette. Adjust the accent, background, panel background and text; light/dark canvas presets provide starting points. The actual workspace previews valid edits. The status shows requested and rendered text contrast immediately, including automatic readability corrections. Invalid edits retain the last working preview and disable saving.
 
 Choose a unique lowercase theme name. **Save & apply** installs a native JSON theme in your user theme directory and selects it. **Export JSON** writes a reusable native theme to your chosen path while leaving the workspace in preview. Existing files are retained. Escape cancels the preview; an explicitly exported file remains available to share. F4 shows the workspace while editing.
 
-The initial collection has seven original dark palettes, a native light palette, terminal-derived `system`, `auto`, and four MIT-licensed community palettes: Ayu Light, Ayu Mirage, Halcyon Rivet, and Saffron Cavern. Run the list command for the complete installed collection.
+The initial collection has seven original dark palettes, a native light palette, terminal-derived `system`, `auto`, four MIT-licensed community palettes (Ayu Light, Ayu Mirage, Halcyon Rivet, and Saffron Cavern), and four SuperQode light palettes: Paper Light, Solar Dawn, Nordic Snow, and Sakura Light. Every Awesome Pi catalog palette is dark, so the bundled light palettes are what the **Light** filter and light/dark pairs offer. Run the list command for the complete installed collection.
 
-The offline catalog includes **all 71 palettes from Awesome Pi Themes 1.2.19**. Two are already bundled, giving a fresh installation 83 distinct choices. No network connection or npm setup is needed. Preview before selecting; the gallery shows whether Enter will apply or install and apply. To install one, several, or the entire collection from a shell:
+The offline catalog includes **all 71 palettes from Awesome Pi Themes 1.2.19**. Two are already bundled, giving a fresh installation 87 distinct choices. No network connection or npm setup is needed. Preview before selecting; the gallery shows whether Enter will apply or install and apply. To install one, several, or the entire collection from a shell:
 
 ```bash
 superqode theme browse
@@ -53,6 +53,16 @@ The startup `--theme` (alias `--use-theme`) option lasts for that launch; it doe
 `system` derives its canvas and surface colors from the terminal's foreground/background and ANSI palette. On POSIX terminals, SuperQode sends OSC 10, 11, and 4 queries asynchronously; it does not delay startup. Late replies and appearance changes repaint the active session, including an open theme preview. Delayed RGB fragments retain their framing independently of the Escape-key timeout. Navigation and paste can interrupt an unfinished report; escape sequences inside bracketed paste remain paste content. Middle-gray terminal backgrounds retain readable body text across raised, hover, and active surfaces.
 
 `auto` chooses the native light or SuperQode dark palette. A `light-name/dark-name` pair selects the first name for light appearance and the second for dark. Keep using an explicit named palette if your terminal does not report colors.
+
+Without a saved choice, SuperQode starts with `auto`. On dark or undetected terminals this is the SuperQode palette, so existing dark setups look the same; saved choices are never changed.
+
+Light or dark is decided in this order: the reported background (OSC 11), the terminal's colour scheme report (DEC mode 2031), `SUPERQODE_TERMINAL_BACKGROUND`, `COLORFGBG` (backgrounds 7 and 9 to 15 are light, others dark, `default` is ignored), then dark. Feedback bundles record which source decided. Terminals that support mode 2031 notify SuperQode when their scheme changes and are queried again only then; other terminals are queried every 30 seconds while a terminal-following theme is active.
+
+Inside tmux, SuperQode sends each query directly (tmux 3.3 and later answer from their own view of the outer terminal) and through DCS passthrough, which reaches the outer terminal when `set -g allow-passthrough on` is set. If neither answers, set `COLORFGBG` or `SUPERQODE_TERMINAL_BACKGROUND`, or choose a named palette.
+
+## Colour depth and plain output
+
+`NO_COLOR` (any non-empty value) and `TERM=dumb` render the TUI and launch banner without colour. `COLORTERM=truecolor` or `24bit`, a `*-direct` `TERM`, Windows Terminal, iTerm2 and WezTerm get 24-bit colour. Other `*-256color` terminals, including `screen-256color` and `tmux-256color`, get the nearest xterm 256-colour values, and anything else the 16 standard colours. Set `TEXTUAL_COLOR_SYSTEM` (`truecolor`, `256`, `standard`) to override detection.
 
 Windows and non-terminal hosts retain their native Textual input driver and use environment/default appearance fallbacks. The POSIX OSC implementation has been tested in a real macOS PTY; Windows/Linux terminal appearance reporting still needs hands-on validation. Where querying is unavailable, set `SUPERQODE_TERMINAL_BACKGROUND` and `SUPERQODE_TERMINAL_FOREGROUND` to six-digit hex colors before launching. `COLORFGBG` supplies an additional appearance hint.
 

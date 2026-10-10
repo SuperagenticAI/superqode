@@ -231,7 +231,7 @@ async def test_nested_settings_gallery_cancel_restores_parent_preview():
         assert len(app._theme_previews) == 1
         await pilot.press("escape")
         await pilot.pause()
-        assert app._current_theme == "superqode"
+        assert app._current_theme == "auto"
         assert THEME["bg"] == palette_tokens(ds.get_theme("superqode"))["bg"]
         assert prompt.value == "Still here"
         assert not bridge._CONFIG_PATH.exists()
@@ -255,7 +255,7 @@ async def test_settings_preview_save_or_cancel(save):
         settings.action_save() if save else settings.action_cancel()
         await pilot.pause()
         assert app._appearance.density == ("compact" if save else "comfortable")
-        assert app._current_theme == ("auto" if save else "superqode")
+        assert app._current_theme == "auto"  # new users start on auto; cancel restores it
         assert bool(bridge._CONFIG_PATH.exists()) is save
         if save:
             assert load_appearance().icons == "ascii"
@@ -286,7 +286,7 @@ async def test_customizer_exports_private_json_and_preserves_existing_file(tmp_p
             customizer.query_one("#custom-status", Static).render()
         )
         await pilot.press("escape")
-        assert app._current_theme == "superqode"
+        assert app._current_theme == "auto"
         assert not bridge._CONFIG_PATH.exists()
 
 

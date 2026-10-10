@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from functools import lru_cache
 import json
 from pathlib import Path
@@ -18,10 +19,26 @@ def catalog() -> dict:
 
 
 @lru_cache(maxsize=128)
-def library_theme(name: str) -> ds.Theme:
+def _cached_library_theme(name: str) -> ds.Theme:
     if name not in catalog()["themes"]:
         raise ThemeError(f"Unknown catalog theme: {name}. Browse with :theme browse")
     return load_theme_file(LIBRARY / f"{name}.json")
+
+
+def library_theme(name: str) -> ds.Theme:
+    """Return a private copy; callers may edit it without poisoning the cache."""
+    return deepcopy(_cached_library_theme(name))
+
+
+def catalog_appearance(name: str) -> str:
+    """Appearance recorded in the catalog, detected from colours when absent."""
+    recorded = catalog().get("appearances", {}).get(name)
+    if recorded in {"light", "dark"}:
+        return recorded
+    try:
+        return _cached_library_theme(name).appearance
+    except ThemeError:
+        return "dark"
 
 
 def theme_rows(query: str = "", *, installed_only: bool = False) -> list[dict]:
@@ -43,7 +60,7 @@ def theme_rows(query: str = "", *, installed_only: bool = False) -> list[dict]:
         row = {
             "name": name,
             "description": theme.description if theme else name.replace("-", " ").title(),
-            "appearance": theme.appearance if theme else "dark",
+            "appearance": theme.appearance if theme else catalog_appearance(name),
             "source": source,
             "installed": theme is not None,
         }

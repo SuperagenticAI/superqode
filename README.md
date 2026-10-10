@@ -115,7 +115,7 @@ superqode                                      # coding agent TUI
 superqode connect a2a --url https://a2a.superqode.dev
 ```
 
-Open `:theme` to search and preview 83 palette choices, including the complete
+Open `:theme` to search and preview 87 palette choices, including the complete
 offline Awesome Pi collection. Enter installs and applies a palette; `:theme
 import` opens a preview dialog for your own JSON file. Use `superqode theme
 install --all` to install the whole collection. See [Themes](docs/advanced/themes.md)

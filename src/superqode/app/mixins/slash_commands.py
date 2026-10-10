@@ -3595,6 +3595,12 @@ class SlashCommandMixin:
                 if len(paths) != 1:
                     raise ThemeError("Use :theme import <JSON file>; quote paths containing spaces")
                 name = import_theme(Path(paths[0]))
+                from superqode.theming import adjustment_warning
+                from superqode import design_system as _ds
+
+                warning = adjustment_warning(_ds.THEMES[name])
+                if warning:
+                    log.add_warning(warning)
                 if self._apply_and_persist_theme(name):
                     self._report_theme_change(name, log)
             except (ThemeError, ValueError) as exc:

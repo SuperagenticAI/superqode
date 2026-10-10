@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project context, normal prompt execution and recorded result review.
 - Developer-reviewed local feedback bundles with bounded diagnostic metadata,
   error summaries and credential/path redaction.
+- Four bundled light palettes (Paper Light, Solar Dawn, Nordic Snow, Sakura
+  Light) so the Light filter and light/dark pairs have real choices.
+- Follow terminal light/dark changes through DEC mode 2031 colour scheme
+  reports; query through tmux passthrough as well as directly; record the
+  detection source in feedback bundles.
+- Warn in the importer, CLI import and customizer when readability correction
+  changes a colour.
+- Letter-key alternatives in the gallery (e, w, f) and appearance screens (w)
+  for terminals that intercept F3, F4 or Ctrl+S.
 
 ### Fixed
 
@@ -30,6 +39,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep workspace approval, plan and navigation keys from acting behind modal
   editors and theme previews.
 - Resolve inline y/n/a approval keys before composer text insertion.
+- Record catalog light/dark appearance instead of listing uninstalled catalog
+  palettes as dark.
+- Return private copies of cached catalog themes so edits cannot alter the cache.
+- Use the reported terminal background (OSC 11) for light/dark decisions and
+  parse COLORFGBG by the xterm 16-colour convention.
+- Honour NO_COLOR and TERM=dumb in the TUI as well as the launch banner, and use
+  256-colour or 16-colour output when the terminal does not report truecolor.
+- Fall back to an exclusive file create when hard links are unsupported, so
+  no-overwrite exports work on FAT and network filesystems.
+
+### Changed
+
+- New users without a saved theme follow the terminal (`auto`); saved choices are
+  unchanged and dark terminals still get the SuperQode palette.
+- Query terminal colours on scheme change, or every 30 seconds when the terminal
+  does not report changes, instead of every 3 seconds; check the active theme
+  file once per second without resolving paths on every check.
 
 ## [2.12.0] - 2026-10-10
 

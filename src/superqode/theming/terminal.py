@@ -10,12 +10,31 @@ import time
 from textual.message import Message
 
 QUERY = "\x1b]10;?\x07\x1b]11;?\x07" + "".join(f"\x1b]4;{index};?\x07" for index in range(16))
+# DEC mode 2031: the terminal sends CSI ? 997 ; 1 n (dark) or ; 2 n (light)
+# when its colour scheme changes. CSI ? 996 n asks for the current scheme.
+SCHEME_ENABLE = "\x1b[?2031h\x1b[?996n"
+SCHEME_DISABLE = "\x1b[?2031l"
+SCHEME_REPORT = re.compile(r"\x1b\[\?997;([12])n")
 PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
 COLOR_PREFIXES = ("\x1b]10;", "\x1b]11;", "\x1b]4;")
 REPLY = re.compile(
     r"\x1b](?:(10|11);|4;(\d{1,2});)rgb:([0-9a-fA-F]{1,4})/"
     r"([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})(?:\x07|\x1b\\)$"
 )
+
+
+def tmux_wrap(sequence: str) -> str:
+    """DCS passthrough so the outer terminal answers (needs tmux
+    allow-passthrough). tmux 3.3+ also answers OSC 10/11 itself, so callers
+    send both forms; duplicate replies are de-duplicated by the app."""
+    return "\x1bPtmux;" + sequence.replace("\x1b", "\x1b\x1b") + "\x1b\\"
+
+
+def query_sequence(environ=None) -> str:
+    environ = os.environ if environ is None else environ
+    if environ.get("TMUX"):
+        return QUERY + tmux_wrap(QUERY)
+    return QUERY
 
 
 def _partial_color_reply(value: str) -> bool:
@@ -73,6 +92,10 @@ class ColorInputFilter:
         else:
             self._possible_keys = ""
         self.buffer += data
+        if "\x1b[?997;" in self.buffer and not self.pasting:
+            for match in SCHEME_REPORT.finditer(self.buffer):
+                self.callback({"scheme": "dark" if match[1] == "1" else "light"})
+            self.buffer = SCHEME_REPORT.sub("", self.buffer)
         output = []
         while self.buffer:
             if self.pasting:

@@ -561,19 +561,54 @@ class SuperQodeApp(
                     refresh()
                 widget.refresh(repaint=True)
 
-    def _query_terminal_theme(self):
+    def _query_terminal_theme(self, *, force: bool = False):
         if self._current_theme not in {"system", "auto"} and "/" not in self._current_theme:
             return
-        from superqode.theming.terminal import QUERY
+        # Terminals that report scheme changes (DEC 2031) are re-queried on
+        # change only; others get an occasional fallback query.
+        if not force and getattr(self, "_scheme_notifications", False):
+            return
+        from superqode.theming.terminal import query_sequence
 
         driver = self._driver
         if driver is not None and type(driver).__name__ == "ThemeLinuxDriver":
-            driver.write(QUERY)
+            driver.write(query_sequence())
             driver.flush()
+
+    def _enable_scheme_notifications(self):
+        from superqode.theming.terminal import SCHEME_ENABLE
+
+        driver = self._driver
+        if driver is not None and type(driver).__name__ == "ThemeLinuxDriver":
+            driver.write(SCHEME_ENABLE)
+            driver.flush()
+
+    def _disable_scheme_notifications(self):
+        from superqode.theming.terminal import SCHEME_DISABLE
+
+        driver = self._driver
+        if driver is not None and type(driver).__name__ == "ThemeLinuxDriver":
+            try:
+                driver.write(SCHEME_DISABLE)
+                driver.flush()
+            except Exception:  # noqa: BLE001 - shutdown must not fail on a closed terminal
+                pass
 
     def on_terminal_color_reply(self, message):
         from superqode.app.theme_bridge import set_terminal_colors
 
+        scheme = message.colors.get("scheme")
+        if scheme:
+            first = not getattr(self, "_scheme_notifications", False)
+            self._scheme_notifications = True
+            if self._terminal_palette.get("scheme") != scheme and not first:
+                # The scheme changed: reported colours are stale; ask again.
+                for key in [key for key in self._terminal_palette if key != "scheme"]:
+                    self._terminal_palette.pop(key)
+                from superqode.app import theme_bridge
+
+                theme_bridge._terminal_colors.clear()
+                self._query_terminal_theme(force=True)
         if all(self._terminal_palette.get(key) == value for key, value in message.colors.items()):
             return
         self._terminal_palette.update(message.colors)
@@ -601,8 +636,14 @@ class SuperQodeApp(
         from superqode.theming import load_theme_file, ThemeError
 
         active = ds.get_theme()
-        path = Path(active.source)
-        if not path.is_absolute() or path.parent.resolve() != theme_directory().resolve():
+        cached = getattr(self, "_theme_watch", None)
+        if cached is None or cached[0] != active.source:
+            # Resolve paths once per active theme, not on every tick.
+            path = Path(active.source)
+            watched = path.is_absolute() and path.parent.resolve() == theme_directory().resolve()
+            self._theme_watch = cached = (active.source, path if watched else None)
+        path = cached[1]
+        if path is None:
             return
         try:
             stat = path.stat()
@@ -630,9 +671,10 @@ class SuperQodeApp(
         from superqode.app.herdr import start
 
         start(self)
-        self.set_interval(0.5, self._poll_theme_file)
-        self.set_interval(3, self._query_terminal_theme)
-        self.call_after_refresh(self._query_terminal_theme)
+        self.set_interval(1, self._poll_theme_file)
+        self.set_interval(30, self._query_terminal_theme)
+        self.call_after_refresh(self._enable_scheme_notifications)
+        self.call_after_refresh(lambda: self._query_terminal_theme(force=True))
         from superqode.app.theme_bridge import theme_errors
 
         for error in theme_errors():

@@ -253,6 +253,10 @@ def load_saved_theme() -> str:
         name = data.get("theme")
         if isinstance(name, str) and resolve_selection(name):
             return name
+        if name is None:
+            # New users follow the terminal; "auto" resolves to SuperQode dark
+            # on dark or undetected terminals, so dark users see no change.
+            return "auto"
     except (OSError, ValueError, AttributeError, UnicodeError, RecursionError) as exc:
         _theme_errors.append(
             f"Could not read theme preference; existing configuration retained: {exc}"

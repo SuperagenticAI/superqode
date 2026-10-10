@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import math
 import os
@@ -200,7 +201,7 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 MAX_THEME_BYTES = 256 * 1024
 
 
-def palette_tokens(theme: ds.Theme) -> dict[str, str]:
+def palette_tokens(theme: ds.Theme, changes: list[str] | None = None) -> dict[str, str]:
     c = theme.colors
     result = {
         "bg": c.bg_void,
@@ -354,22 +355,75 @@ def palette_tokens(theme: ds.Theme) -> dict[str, str]:
         "diff_remove",
         "diff_context",
     } | {key for key in result if key.startswith(("syntax_", "thinking_"))}
+    before = dict(result)
     for key in body_keys:
         result[key] = readable(result[key], surfaces)
     result["selected_text"] = readable(result["selected_text"], [result["selected_bg"]])
     result["search_text"] = readable(result["search_text"], [result["search_bg"]])
+    if changes is not None:
+        changes.extend(sorted(key for key in result if result[key] != before[key]))
     return result
 
 
-def terminal_appearance() -> str:
+def readability_adjustments(theme: ds.Theme) -> list[str]:
+    """Roles whose colour automatic readability correction changed."""
+    changes: list[str] = []
+    palette_tokens(theme, changes)
+    return changes
+
+
+def adjustment_warning(theme: ds.Theme) -> str:
+    changes = readability_adjustments(theme)
+    if not changes:
+        return ""
+    shown = ", ".join(changes[:6]) + (f" and {len(changes) - 6} more" if len(changes) > 6 else "")
+    return f"Readability correction changed {len(changes)} colour role(s) to reach 4.5:1: {shown}"
+
+
+# Where the last light/dark decision came from, for diagnostics and feedback.
+DETECTION_SOURCE = "default"
+
+
+def colorfgbg_appearance(value: str | None = None) -> str | None:
+    """Parse COLORFGBG ("fg;bg" or "fg;default;bg"); None when unknown.
+
+    xterm's 16-colour convention: backgrounds 0-6 and 8 are dark, 7 and 9-15
+    are light. "default" and malformed values give no answer.
+    """
+    value = os.environ.get("COLORFGBG", "") if value is None else value
+    field = value.split(";")[-1].strip()
+    if not field.isdigit():
+        return None
+    index = int(field)
+    if index > 15:
+        return None
+    return "light" if index == 7 or index >= 9 else "dark"
+
+
+def terminal_appearance(terminal: dict[str, str] | None = None) -> str:
+    """Light or dark from, in order: the OSC 11 reply, the terminal's colour
+    scheme report (DEC mode 2031 / CSI ? 997), an explicit override,
+    COLORFGBG, then dark. Records the winning source in DETECTION_SOURCE."""
+    global DETECTION_SOURCE
+    terminal = terminal or {}
+    background = terminal.get("bg", "")
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", background):
+        DETECTION_SOURCE = "osc11"
+        return "light" if luminance(background) > 0.5 else "dark"
+    scheme = terminal.get("scheme")
+    if scheme in {"light", "dark"}:
+        DETECTION_SOURCE = "color-scheme-report"
+        return scheme
     background = os.environ.get("SUPERQODE_TERMINAL_BACKGROUND", "")
     if re.fullmatch(r"#[0-9a-fA-F]{6}", background):
+        DETECTION_SOURCE = "env-override"
         return "light" if luminance(background) > 0.5 else "dark"
-    try:
-        index = int(os.environ.get("COLORFGBG", "").split(";")[-1])
-        return "light" if index in (7, 15) else "dark"
-    except ValueError:
-        return "dark"
+    parsed = colorfgbg_appearance()
+    if parsed:
+        DETECTION_SOURCE = "colorfgbg"
+        return parsed
+    DETECTION_SOURCE = "default"
+    return "dark"
 
 
 def system_theme(terminal: dict[str, str] | None = None) -> ds.Theme:
@@ -380,11 +434,7 @@ def system_theme(terminal: dict[str, str] | None = None) -> ds.Theme:
         background = ""
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", foreground):
         foreground = ""
-    appearance = (
-        ("light" if luminance(background) > 0.5 else "dark")
-        if background
-        else terminal_appearance()
-    )
+    appearance = terminal_appearance(terminal)
     base = LIGHT if appearance == "light" else BUILTINS["superqode"]
     bg = background or base.colors.bg_void
     fg = foreground or base.colors.text_secondary
@@ -644,6 +694,25 @@ def theme_from_document(data: dict, *, source: str = "preview") -> ds.Theme:
     return theme
 
 
+_NO_LINK_ERRNOS = {
+    getattr(errno, name)
+    for name in ("EPERM", "EXDEV", "ENOTSUP", "EOPNOTSUPP", "EMLINK", "ENOSYS", "EACCES")
+    if hasattr(errno, name)
+}
+
+
+def _exclusive_copy(source: Path, path: Path) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as target:
+            target.write(source.read_bytes())
+            target.flush()
+            os.fsync(target.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+
+
 def atomic_json(path: Path, data: dict, *, overwrite: bool = True) -> None:
     """Replace only a complete document, with private user-config permissions."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -662,7 +731,16 @@ def atomic_json(path: Path, data: dict, *, overwrite: bool = True) -> None:
         else:
             # Publish the complete document only if the destination is absent.
             # A concurrent import must never overwrite another developer's file.
-            os.link(temporary, path)
+            try:
+                os.link(temporary, path)
+            except FileExistsError:
+                raise
+            except (OSError, NotImplementedError, AttributeError) as exc:
+                if isinstance(exc, OSError) and exc.errno not in _NO_LINK_ERRNOS:
+                    raise
+                # Filesystems without hard links (FAT, some SMB/NFS mounts):
+                # exclusive create still refuses an existing destination.
+                _exclusive_copy(temporary, path)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

@@ -20,6 +20,7 @@ class AppearanceSettings(ModalScreen[bool]):
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("f4", "workspace", "View workspace", priority=True),
+        Binding("w", "workspace", "View workspace", show=False),
     ]
     CSS = """
     AppearanceSettings { align: center middle; background: transparent; }

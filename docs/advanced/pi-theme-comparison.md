@@ -28,7 +28,7 @@ retain the initial baseline so the reasoning is reviewable.
   Bare `:theme import` opens a validation/preview dialog; F2 or the Import JSON
   button opens it from the gallery. `theme browse` exposes source metadata,
   and `theme install --all` installs the entire collection. A fresh install
-  has 83 distinct choices, including the original and light palettes.
+  has 87 distinct choices, including the original and six light palettes.
 - Effective small-text roles target 4.5:1 on their supported surfaces. The
   original decorative-preset contrast exceptions are removed. Four licensed
   initial community palettes, all 71 offline catalog palettes, their licenses,
@@ -55,7 +55,7 @@ This establishes feature coverage and local regression evidence. Pi still has
 its own package/extension APIs and automatic project theme discovery. Windows
 uses native-driver appearance fallbacks; Windows/Linux OSC behavior and live
 provider workflows are not certified by these macOS/offline checks. A claim of
-better developer usability needs comparative participant feedback.
+better developer usability needs comparative developer feedback.
 
 ## Current releases
 
@@ -214,5 +214,5 @@ This review inspected released upstream source and package data, validated one
 community JSON theme, and exercised the local app headlessly. It did not install
 Pi or community extensions, validate all 71 palettes, or establish live terminal
 appearance support across operating systems. No theme runtime changes were made
-in this follow-up. See the [hackathon readiness review](hackathon-readiness-review.md)
+in this follow-up. See the [developer trial readiness review](developer-trial-readiness-review.md)
 for the wider developer journey and remaining live acceptance checks.

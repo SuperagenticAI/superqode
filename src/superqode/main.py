@@ -1153,6 +1153,12 @@ def theme_import(path):
         name = import_theme(path)
     except ThemeError as exc:
         raise click.ClickException(str(exc)) from exc
+    from superqode import design_system as ds
+    from superqode.theming import adjustment_warning
+
+    warning = adjustment_warning(ds.THEMES[name])
+    if warning:
+        click.echo(f"Warning: {warning}", err=True)
     click.echo(f"Imported {name}. Try: superqode --theme {name}")
 
 

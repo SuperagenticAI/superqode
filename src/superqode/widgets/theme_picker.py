@@ -62,6 +62,12 @@ class ThemePicker(ModalScreen[str | None]):
         Binding("f3", "customize", "Customize", show=False, priority=True),
         Binding("f4", "workspace", "View workspace", priority=True),
         Binding("ctrl+s", "favorite", "Favorite", priority=True),
+        # Letter alternatives for terminals that eat function keys or Ctrl+S
+        # (macOS Terminal, tmux, XON/XOFF). Not priority: they act only when the
+        # list or a button has focus, so typing in the search box is unaffected.
+        Binding("e", "customize", "Customize", show=False),
+        Binding("w", "workspace", "View workspace", show=False),
+        Binding("f", "favorite", "Favorite", show=False),
     ]
     CSS = """
     ThemePicker { align: center middle; background: transparent; }
@@ -468,6 +474,11 @@ class ThemeImportDialog(ModalScreen[str | None]):
         except ThemeError as exc:
             self.query_one("#import-status", Static).update(str(exc)[:300])
             return
+        from superqode.theming import adjustment_warning
+
+        warning = adjustment_warning(ds.THEMES[name])
+        if warning:
+            self.app.notify(warning[:300], title="Theme imported", severity="warning", markup=False)
         self.dismiss(name)
 
     def action_cancel(self) -> None:

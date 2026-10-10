@@ -67,7 +67,7 @@ Select **I reviewed this diagnostic bundle**, choose an export path, and click
 The exported JSON matches the reviewed snapshot, uses private file permissions,
 and retains any existing destination file. It is saved locally; nothing is
 uploaded automatically. Review the file for private information before sharing
-it with the organizers.
+it with the SuperQode maintainers.
 
 Include the following in feedback or an issue:
 

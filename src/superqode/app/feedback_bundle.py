@@ -66,6 +66,12 @@ def redact_feedback(value, *, secrets=(), paths=()):
     return redact_evidence(sanitize(value)) if isinstance(value, str) else value
 
 
+def _detection_source() -> str:
+    from superqode import theming
+
+    return str(theming.DETECTION_SOURCE)
+
+
 def feedback_bundle(app, description="", *, include_errors=True, include_route=True) -> dict:
     """No prompts, source files, tool arguments, config dumps or session IDs."""
     secrets = [
@@ -109,6 +115,7 @@ def feedback_bundle(app, description="", *, include_errors=True, include_route=T
             "theme": str(app._current_theme),
             "active_theme": ds.get_theme().name,
             "light_or_dark": ds.get_theme().appearance,
+            "detection_source": _detection_source(),
             **{key: getattr(app._appearance, key) for key in ("density", "motion", "icons")},
         },
         "description": str(description),

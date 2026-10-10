@@ -25,6 +25,7 @@ class ThemeCustomizer(ModalScreen[str | None]):
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("f4", "workspace", "View workspace", priority=True),
+        Binding("w", "workspace", "View workspace", show=False),
     ]
     CSS = """
     ThemeCustomizer { align: center middle; background: transparent; }
@@ -127,7 +128,14 @@ class ThemeCustomizer(ModalScreen[str | None]):
                 self.query_one(f"#custom-swatch-{key}", Static).styles.background = palette[role]
             paint_preview(self.query_one("#custom-preview", RichLog), theme)
             self.app._preview_workspace_theme(self, theme)
-            correction = " · text adjusted for readability" if requested < 4.5 else ""
+            from superqode.theming import readability_adjustments
+
+            adjusted = readability_adjustments(theme)
+            correction = (
+                f" · readability correction changed {len(adjusted)} colour role(s)"
+                if adjusted
+                else ""
+            )
             status.update(
                 f"{theme.name} · {theme.appearance}{correction}\nRequested text {requested:.1f}:1 · Displayed text ≥ {rendered:.1f}:1\nF4 views your workspace · Esc restores the original"
             )
