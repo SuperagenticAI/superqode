@@ -767,11 +767,15 @@ async def test_every_catalog_theme_repaints_mounted_session(size):
 
     app = SuperQodeApp(theme_selection="superqode")
     async with app.run_test(size=size) as pilot:
+        await pilot.pause()
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
         prompt.value = "Developer draft"
         prompt.selection = Selection((0, 1), (0, 5))
         log = app.query_one("#log", ConversationLog)
+        log.reset_conversation()
+        app._welcome_active = False
         log.add_assistant("Review this diff and code.")
+        await pilot.pause()
         before = [line.text for line in log.lines]
         for name in catalog()["themes"]:
             install_theme(name)

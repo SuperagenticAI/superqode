@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drafts when cancelling questions, approvals or active work.
 - Discard pending transcript follow-scrolls and feedback reveals after the user locks the reading
   position, including the Windows theme-switch ordering found by release CI.
+- Ignore late file-completion results after the composer is removed during
+  teardown, preserving the normal completion worker error reporting.
 - Make Ctrl+C interrupt active work and use a two-press idle exit; improve
   command search ranking, narrow-terminal Harness Hub controls and scrolling.
 

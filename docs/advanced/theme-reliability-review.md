@@ -22,6 +22,7 @@ can expect from the current implementation.
 | Type immediately after startup or use a picker before the delayed focus callback | The sidebar view watcher could focus the hidden file tree, dropping the first composer character or picker key. | The primary screen autofocuses the composer, and hidden sidebar views no longer request focus. |
 | Save a palette loaded through a project-file startup override | Only its name was saved, so the next launch could not rediscover it. | Explicit Save installs a native user copy, including palettes in appearance pairs; collisions retain the existing file and preference. The original project file is retained. |
 | Switch themes while reading older output on Windows | A pending tail scroll or feedback reveal could execute after a reading lock and move the transcript to the bottom. | Deferred scrolls recheck the reading lock; locking also cancels pending feedback reveals. Deterministic regressions reproduce both callback orderings. |
+| Close the UI while a file completion is loading | A late completion could query a composer already removed during teardown. | Results require a running app and mounted composer; the original regression raises `NoMatches`, and the fixed worker exits safely. |
 
 The audit also corrected test isolation. The theme preference path was captured
 before tests changed `HOME`, so mounted tests could load the developer's own
@@ -50,6 +51,9 @@ separate validation requirement.
 Preparing 2.11.0 exposed the deferred-scroll issue above in the Windows CI
 matrix. The queued-scroll regression fails against the earlier implementation;
 the release fixes the callback ordering before publishing the version tag.
+Release validation also settles the initial welcome before capturing a
+conversation, waits for appearance refresh completion rather than a fixed
+timer delay, and checks late completion results after composer removal.
 
 The pre-release theme audit passed 6,256 tests, with 30 skipped, 24 integration
 tests deselected and 139 warnings. The focused theme, navigation, model-picker

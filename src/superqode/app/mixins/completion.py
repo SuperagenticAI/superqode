@@ -5,6 +5,7 @@ import asyncio
 from time import monotonic
 from pathlib import Path
 from textual import work
+from textual.css.query import NoMatches
 from textual.widgets import Static
 from rich.text import Text
 from superqode.app.constants import (
@@ -506,9 +507,13 @@ class CompletionMixin:
         # Debounce filesystem work, and reject results for an obsolete draft.
         await asyncio.sleep(0.05)
         candidates = await asyncio.to_thread(self._prompt_completion_candidates_for, value)
-        if revision != self._completion_revision:
+        if revision != self._completion_revision or not self.is_running:
             return
-        if self.query_one("#prompt-input", SelectionAwareInput).value != value:
+        try:
+            prompt = self.query_one("#prompt-input", SelectionAwareInput)
+        except NoMatches:
+            return  # Shutdown may remove the composer before a thread returns.
+        if prompt.value != value:
             return
         self._apply_prompt_completions(value, candidates)
 

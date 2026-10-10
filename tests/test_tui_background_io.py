@@ -198,6 +198,7 @@ async def test_tab_accepts_single_file_completion_after_background_load(tmp_path
     (tmp_path / "unique.py").write_text("x")
     app = SuperQodeApp()
     async with app.run_test() as pilot:
+        await pilot.pause()
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
         prompt.value = "@uniq"
         prompt.focus()
@@ -212,6 +213,31 @@ async def test_tab_accepts_single_file_completion_after_background_load(tmp_path
         )
         await pilot.pause()
         assert prompt.value == "@unique.py"
+
+
+async def test_late_completion_ignores_an_unmounted_composer(monkeypatch):
+    started, release = threading.Event(), threading.Event()
+
+    def candidates(self, value):
+        started.set()
+        assert release.wait(5)
+        return [PromptCompletionCandidate("@unique.py", "unique.py", "file", "file")]
+
+    monkeypatch.setattr(SuperQodeApp, "_prompt_completion_candidates_for", candidates)
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        revision = getattr(app, "_completion_revision", 0)
+        app._completion_revision = revision
+        worker = app._load_prompt_completions("@uniq", revision)
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            await prompt.remove()
+        finally:
+            release.set()
+        await asyncio.wait_for(worker.wait(), timeout=2)
+        assert not app._prompt_completion_visible
 
 
 async def test_slow_diff_review_keeps_typing_responsive(monkeypatch):
