@@ -12,6 +12,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import struct
@@ -19,6 +20,8 @@ import subprocess
 import sys
 import tempfile
 from time import monotonic, sleep
+
+OSC_SEQUENCE = re.compile(rb"\x1b\][0-9]+;[^\x07\x1b]*(?:\x07|\x1b\\)")
 
 
 def child(state_path: Path):
@@ -132,6 +135,7 @@ def probe(term: str, size: tuple[int, int]):
         )
         os.close(slave)
         transcript = bytearray()
+        osc_log = []
 
         def wait_for(name, predicate, timeout=8):
             nonlocal output_bytes
@@ -145,6 +149,13 @@ def probe(term: str, size: tuple[int, int]):
                     except OSError:
                         data = b""
                     output_bytes += len(data)
+                    # A large repaint can follow an OSC sequence in the same
+                    # read and push it out of the bounded transcript before a
+                    # check runs. Keep OSC sequences separately, including
+                    # ones split across reads.
+                    window = bytes(transcript[-4096:]) + data
+                    osc_log.extend(OSC_SEQUENCE.findall(window))
+                    del osc_log[:-200]
                     transcript.extend(data)
                     del transcript[:-16000]
                 if process.poll() is not None:
@@ -166,7 +177,10 @@ def probe(term: str, size: tuple[int, int]):
                 "startup and rendering",
                 lambda s: s["focused"] == "prompt-input" and s["size"] == list(size),
             )
-            wait_for("system palette query emitted", lambda s: b"\x1b]11;?" in transcript)
+            wait_for(
+                "system palette query emitted",
+                lambda s: any(item.startswith(b"\x1b]11;?") for item in osc_log),
+            )
             send(b"theme draft")
             wait_for("theme probe draft", lambda s: s["text"] == "theme draft")
             send(b"\x1b]11;rgb:fafa/")
@@ -221,7 +235,7 @@ def probe(term: str, size: tuple[int, int]):
             encoded = base64.b64encode(b"copy fixture\nexact code")
             wait_for(
                 "OSC 52 clipboard escape emitted",
-                lambda s: b"\x1b]52;" in transcript and encoded in transcript,
+                lambda s: any(item.startswith(b"\x1b]52;") and encoded in item for item in osc_log),
             )
             send(b"keep this draft")
             wait_for("typing", lambda s: s["text"] == "keep this draft")

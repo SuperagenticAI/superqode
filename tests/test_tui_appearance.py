@@ -3,6 +3,7 @@
 from dataclasses import replace
 import json
 import os
+import sys
 import threading
 
 import pytest
@@ -466,6 +467,9 @@ async def test_feedback_is_bounded_and_optional_sections_are_excluded(monkeypatc
         (b"x" * 262145, "big.txt"),
         (b"\xff", "encoding.txt"),
     ],
+    # Short ids: a 256 KiB bytes repr as the id makes tmp_path exceed
+    # Windows path limits.
+    ids=["binary", "dotenv", "private-key", "oversized", "bad-encoding"],
 )
 def test_trial_context_rejects_unsuitable_files(tmp_path, content, name):
     (tmp_path / name).write_bytes(content)
@@ -605,8 +609,18 @@ async def test_trial_cannot_obscure_an_approval_and_cannot_run_after_route_chang
         assert app.screen.query_one("#trial-run", Button).disabled
 
 
+_WINDOWS_INVALID = pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows file names cannot contain quotes or backslashes"
+)
+
+
 @pytest.mark.parametrize(
-    "name", ["docs/first task.md", 'docs/a"quote.md', "docs/with\\backslash.md"]
+    "name",
+    [
+        "docs/first task.md",
+        pytest.param('docs/a"quote.md', marks=_WINDOWS_INVALID),
+        pytest.param("docs/with\\backslash.md", marks=_WINDOWS_INVALID),
+    ],
 )
 def test_quoted_file_references_expand_the_exact_context(tmp_path, name):
     from superqode.widgets.file_reference import (

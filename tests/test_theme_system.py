@@ -1002,11 +1002,11 @@ def test_saving_a_project_theme_does_not_overwrite_a_destination_collision(tmp_p
 def test_preferences_refuse_non_regular_and_oversized_files(tmp_path):
     if hasattr(os, "mkfifo"):
         os.mkfifo(bridge._CONFIG_PATH)
-        assert bridge.load_saved_theme() == "superqode"
+        assert bridge.load_saved_theme() == "auto"
         assert "regular" in bridge.save_theme("light")
         bridge._CONFIG_PATH.unlink()
     bridge._CONFIG_PATH.write_bytes(b" " * (bridge.MAX_CONFIG_BYTES + 1))
-    assert bridge.load_saved_theme() == "superqode"
+    assert bridge.load_saved_theme() == "auto"
     assert "1 MiB" in bridge.save_theme("light")
     assert bridge._CONFIG_PATH.stat().st_size == bridge.MAX_CONFIG_BYTES + 1
 

@@ -261,7 +261,9 @@ def load_saved_theme() -> str:
         _theme_errors.append(
             f"Could not read theme preference; existing configuration retained: {exc}"
         )
-    return "superqode"
+    # No usable saved choice: follow the terminal. "auto" is the SuperQode
+    # palette on dark or undetected terminals.
+    return "auto"
 
 
 def import_theme(path: Path) -> str:
