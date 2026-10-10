@@ -211,15 +211,7 @@ def test_no_internal_event_mentions_in_tracked_files():
         pytest.skip("git checkout required")
     word = "hack" + "athon"
     hits = []
-    # CI workflow files and the test module they reference keep their legacy names.
-    allowed = {
-        ".github/workflows/ci.yml",
-        ".github/workflows/publish.yml",
-        "tests/test_tui_" + word + "_journey.py",
-    }
     for name in tracked:
-        if name in allowed:
-            continue
         file = root / name
         if word in name.lower():
             hits.append(name)
