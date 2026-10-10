@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from types import SimpleNamespace
 import subprocess
 import threading
@@ -224,11 +226,29 @@ def mounted_startup(monkeypatch, tmp_path):
     return SuperQodeApp, calls
 
 
+async def _settle(pilot, ready, timeout=10.0):
+    """Startup restore runs after mount; under full-suite load 0.3 s is not
+    always enough, so poll for the restored state instead of a fixed sleep."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        await pilot.pause(0.05)
+        try:
+            if ready():
+                return
+        except (AttributeError, IndexError, KeyError):
+            pass
+    await pilot.pause(0.3)
+
+
 async def test_mounted_startup_resumes_without_running_a_new_turn(mounted_startup):
     App, calls = mounted_startup
     app = App(resume="saved", approval_mode="deny", interaction_mode="plan")
     async with app.run_test() as pilot:
-        await pilot.pause(0.3)
+        await _settle(
+            pilot,
+            lambda: app._pure_mode.get_current_session_id() == "saved" and calls[-1][0] == "idle",
+        )
         assert app._pure_mode.get_current_session_id() == "saved"
         assert app.current_model == "test-model"
         assert app.approval_mode == "deny"
@@ -244,7 +264,11 @@ async def test_mounted_startup_fork_reports_child_and_keeps_original(mounted_sta
     App, calls = mounted_startup
     app = App(fork_from="saved")
     async with app.run_test() as pilot:
-        await pilot.pause(0.3)
+        await _settle(
+            pilot,
+            lambda: app._pure_mode.get_current_session_id() not in {None, "", "saved"}
+            and calls[-1][1]["session_id"] == app._pure_mode.get_current_session_id(),
+        )
         sid = app._pure_mode.get_current_session_id()
         assert sid != "saved"
         assert app._pure_mode._session_manager.get_session_info(sid).parent_session_id == "saved"
@@ -256,7 +280,7 @@ async def test_missing_startup_session_is_actionable_and_ui_stays_open(mounted_s
     App, calls = mounted_startup
     app = App(resume="missing")
     async with app.run_test() as pilot:
-        await pilot.pause(0.3)
+        await _settle(pilot, lambda: calls[-1][0] == "blocked")
         assert calls[-1][0] == "blocked"
         assert calls[-1][1]["message"] == "Session restore failed"
         assert calls[-1][1]["session_id"] == ""
