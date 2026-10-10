@@ -227,3 +227,62 @@ def test_no_internal_event_mentions_in_tracked_files():
 def test_invalid_theme_still_rejected():
     with pytest.raises(ThemeError):
         theming.theme_from_document({"name": "superqode"})
+
+
+def test_scheme_report_split_across_reads_is_not_typed():
+    seen = []
+    framing = ColorInputFilter(seen.append)
+    assert framing.feed("ab\x1b[?99") == "ab"
+    assert framing.feed("7;2nc") == "c"
+    assert seen == [{"scheme": "light"}]
+    for first, second in (("\x1b[?", "997;1n"), ("\x1b[?997;", "1n"), ("\x1b[?997;1", "n")):
+        seen.clear()
+        assert framing.feed(first) == ""
+        assert framing.feed(second) == ""
+        assert seen == [{"scheme": "dark"}]
+
+
+def test_unfinished_scheme_prefix_is_released_as_keys(monkeypatch):
+    from superqode.theming import terminal
+
+    clock = [100.0]
+    monkeypatch.setattr(terminal.time, "monotonic", lambda: clock[0])
+    framing = ColorInputFilter(lambda colors: None)
+    assert framing.feed("\x1b[?9") == ""
+    clock[0] += 0.2
+    assert framing.tick() == ""  # still within the hold window
+    clock[0] += 1.0
+    assert framing.tick() == "\x1b[?9"
+    assert framing.feed("\x1b[A") == "\x1b[A"  # complete keys are never held
+
+
+def test_dumb_terminal_uses_standard_colour_codes():
+    env = {"TERM": "dumb"}
+    assert configure_textual_colors(env) == "none"
+    assert env["NO_COLOR"] == "1" and env["TEXTUAL_COLOR_SYSTEM"] == "standard"
+
+
+def test_driver_disables_scheme_notifications_on_stop(monkeypatch):
+    import sys as _sys
+
+    from superqode.theming import terminal
+
+    if _sys.platform == "win32":
+        pytest.skip("POSIX driver only")
+    monkeypatch.setattr(terminal.sys.stdin, "isatty", lambda: True)
+    driver_class = terminal.terminal_driver()
+    written = []
+
+    class Probe(driver_class):
+        def __init__(self):
+            pass
+
+        def write(self, data):
+            written.append(data)
+
+        def flush(self):
+            pass
+
+    monkeypatch.setattr(driver_class.__mro__[1], "stop_application_mode", lambda self: None)
+    Probe().stop_application_mode()
+    assert terminal.SCHEME_DISABLE in written

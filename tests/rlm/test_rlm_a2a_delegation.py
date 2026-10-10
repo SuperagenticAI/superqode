@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 from concurrent.futures import ThreadPoolExecutor
 import json
 import pickle
 import time
 
 import httpx
+
 import pytest
 
 from superqode.a2a.billing import CreditLedger
@@ -27,6 +29,11 @@ from superqode.rlm.delegation import DelegationManager
 from superqode.rlm.delegation_policy import DelegationPolicy
 from superqode.rlm.delegation_store import DelegationStore
 from superqode.rlm.kernel_server import A2AProxy, DelegationProxy, _revive, rebind_delegations
+
+requires_monty = pytest.mark.skipif(
+    importlib.util.find_spec("pydantic_monty") is None,
+    reason="pydantic-monty is not installed (optional monty extra)",
+)
 
 
 def task(state="working", text=""):
@@ -379,7 +386,7 @@ async def test_credentialed_peer_cannot_retarget_card_origin():
             await client.get_agent_card()
 
 
-@pytest.mark.parametrize("profile", ["host", "monty"])
+@pytest.mark.parametrize("profile", ["host", pytest.param("monty", marks=requires_monty)])
 async def test_native_one_tool_selects_context_and_delegates(profile, tmp_path, monkeypatch):
     from superqode.pipy.ai import FakeStream, text_response, tool_response
     from superqode.pipy import ToolCall
@@ -525,6 +532,7 @@ async def test_root_semantic_quota_survives_children_and_restart(tmp_path):
     assert root.snapshot()["root_usage"]["calls"] == 1
 
 
+@requires_monty
 async def test_monty_timeout_revokes_late_callback_admission(tmp_path):
     from dataclasses import replace
     import asyncio
@@ -659,6 +667,7 @@ async def test_completed_child_continuation_preserves_original_run(tmp_path):
     assert len(supervisor.mailbox.read(original.id)) == 1
 
 
+@requires_monty
 async def test_monty_restore_refuses_changed_resource_policy(tmp_path):
     from dataclasses import replace
     from superqode.rlm.kernel_monty import MontyKernelBackend
@@ -685,6 +694,7 @@ async def test_monty_restore_refuses_changed_resource_policy(tmp_path):
         await changed.close()
 
 
+@requires_monty
 async def test_monty_completed_feed_restores_automatically_without_repeating_admission(tmp_path):
     from superqode.rlm.kernel_monty import MontyKernelBackend
     from superqode.rlm.sandbox import RLMSandboxConfig
@@ -710,6 +720,7 @@ async def test_monty_completed_feed_restores_automatically_without_repeating_adm
         await fresh.close()
 
 
+@requires_monty
 async def test_real_monty_child_continuation_keeps_heap_and_retained_inbox(tmp_path):
     from superqode.pipy.ai import FakeStream, tool_response, text_response
     from superqode.pipy import ToolCall

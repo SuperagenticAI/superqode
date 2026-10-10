@@ -15,6 +15,9 @@ QUERY = "\x1b]10;?\x07\x1b]11;?\x07" + "".join(f"\x1b]4;{index};?\x07" for index
 SCHEME_ENABLE = "\x1b[?2031h\x1b[?996n"
 SCHEME_DISABLE = "\x1b[?2031l"
 SCHEME_REPORT = re.compile(r"\x1b\[\?997;([12])n")
+# An unfinished report at the end of a read, from "\x1b[?" onwards.
+SCHEME_PARTIAL = re.compile(r"\x1b\[\?(?:9(?:9(?:7(?:;[12]?)?)?)?)?")
+SCHEME_HOLD_SECONDS = 0.5
 PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
 COLOR_PREFIXES = ("\x1b]10;", "\x1b]11;", "\x1b]4;")
 REPLY = re.compile(
@@ -128,6 +131,10 @@ class ColorInputFilter:
             prefixes = (PASTE_START, *COLOR_PREFIXES)
             if any(prefix.startswith(self.buffer) for prefix in prefixes):
                 break
+            if SCHEME_PARTIAL.fullmatch(self.buffer):
+                # A colour scheme report split across reads; the rest is
+                # matched on the next feed instead of leaking as keys.
+                break
             if (
                 len(previous_pending) >= 3
                 and any(prefix.startswith(previous_pending) for prefix in COLOR_PREFIXES)
@@ -204,6 +211,11 @@ class ColorInputFilter:
                 for prefix in COLOR_PREFIXES
             ):
                 return ""
+            if (
+                SCHEME_PARTIAL.fullmatch(self.buffer)
+                and time.monotonic() - self.pending_since <= SCHEME_HOLD_SECONDS
+            ):
+                return ""
             pending, self.buffer = self.buffer, ""
             self.pending_since = 0
             return pending
@@ -220,6 +232,16 @@ def terminal_driver():
     from textual.drivers.linux_driver import LinuxDriver
 
     class ThemeLinuxDriver(LinuxDriver):
+        def stop_application_mode(self):
+            # Turn colour scheme notifications off with the rest of the
+            # terminal modes, on every exit path that restores the terminal.
+            try:
+                self.write(SCHEME_DISABLE)
+                self.flush()
+            except Exception:  # noqa: BLE001 - restoring the terminal must continue
+                pass
+            super().stop_application_mode()
+
         def run_input_thread(self):
             parser = XTermParser(self._debug)
             framing = ColorInputFilter(

@@ -94,4 +94,8 @@ class TestLeftClusterUnaffected:
         # Not asserting zero overflow (pre-existing, per-field truncation only
         # loosely tracks the target width) — asserting it stays in the same
         # order of magnitude rather than exploding.
-        assert len(line.plain) <= 60 + 15
+        # Narrow terminals now wrap the header onto two lines, so measure each
+        # rendered line in terminal cells rather than the joined string.
+        from rich.cells import cell_len
+
+        assert max(cell_len(row) for row in line.plain.split("\n")) <= 60

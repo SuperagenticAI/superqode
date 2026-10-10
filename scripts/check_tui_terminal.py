@@ -24,6 +24,18 @@ from time import monotonic, sleep
 OSC_SEQUENCE = re.compile(rb"\x1b\][0-9]+;[^\x07\x1b]*(?:\x07|\x1b\\)")
 
 
+def _theme_appearance():
+    from superqode import design_system as ds
+
+    return ds.get_theme().appearance
+
+
+def _detection_source():
+    from superqode import theming
+
+    return theming.DETECTION_SOURCE
+
+
 def child(state_path: Path):
     from superqode.app_main import SuperQodeApp, SelectionAwareInput
     from superqode.app.widgets import ConversationLog
@@ -65,7 +77,8 @@ def child(state_path: Path):
                 setattr(self, name, lambda *a, **k: None)
 
         def on_mount(self):
-            super().on_mount()
+            # Textual already dispatches on_mount to every class in the MRO;
+            # calling super() here would mount SuperQode's timers twice.
             self._last_response = "copy fixture\nexact code"
             self.query_one("#log", ConversationLog).add_assistant(self._last_response)
             self.set_interval(0.05, self.record)
@@ -100,6 +113,9 @@ def child(state_path: Path):
                 "theme_timer_pending": self._terminal_theme_refresh_timer is not None,
                 "workspace_preview": self.screen.has_class("workspace-view"),
                 "appearance_preview": bool(self._theme_previews),
+                "appearance": _theme_appearance(),
+                "detection_source": _detection_source(),
+                "scheme_notifications": bool(getattr(self, "_scheme_notifications", False)),
             }
             temporary = state_path.with_suffix(".tmp")
             temporary.write_text(json.dumps(state), encoding="utf-8")

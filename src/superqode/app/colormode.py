@@ -22,9 +22,10 @@ def configure_textual_colors(environ=None) -> str:
     environ = os.environ if environ is None else environ
     mode = color_mode(environ)
     if mode == "none":
+        # Textual renders NO_COLOR as monochrome. Pair it with the 16-colour
+        # system so dumb terminals get basic SGR, never 24-bit sequences.
         environ.setdefault("NO_COLOR", "1")
-        return mode
-    system = environ.get("TEXTUAL_COLOR_SYSTEM") or _TEXTUAL_SYSTEM[mode]
+    system = environ.get("TEXTUAL_COLOR_SYSTEM") or _TEXTUAL_SYSTEM.get(mode, "standard")
     environ.setdefault("TEXTUAL_COLOR_SYSTEM", system)
     import sys
 
