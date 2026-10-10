@@ -1343,7 +1343,12 @@ def test_colorful_status_bar_compacts_by_width():
 
     assert f"SuperQode v{__version__}" in wide
     assert "Harness Engineering frameworks" not in wide
-    assert "\n" not in wide
+    from rich.cells import cell_len
+
+    for rendered, width in ((wide, 140), (medium, 90), (narrow, 58)):
+        assert 1 <= len(rendered.splitlines()) <= 2
+        assert all(cell_len(line) <= width for line in rendered.splitlines())
+        assert "Theme: " in rendered
     assert "ollama/" in wide
     assert "runtime builtin" not in wide
     assert "12K/200K" in wide

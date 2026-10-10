@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-10
+
+### Added
+
+- Show the current theme in the header. Click the theme label to open the
+  searchable gallery; automatic selections also show an Auto indicator.
+- Confirm theme changes with a visible connection-style notification near
+  the prompt, preserving the draft and recording the result in Activity.
+
+### Fixed
+
+- Keep the welcome headline, repository name, logo, header controls and
+  prompt labels readable across dark and light themes.
+- Use theme colors for success, warning and error notifications, and retain
+  full prompt contrast while the agent is working.
+- Keep Connect, Harness Hub and Exit accessible in narrow terminals by
+  placing theme and session details on a second header row when needed.
+- Respect sidebar navigation when a deferred startup callback requests
+  composer focus.
+
+### Changed
+
+- Use SuperQode as the default theme when no saved selection exists, while
+  continuing to restore valid saved themes on startup.
+
 ## [2.11.0] - 2026-10-10
 
 ### Added

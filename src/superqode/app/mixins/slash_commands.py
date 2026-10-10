@@ -3608,9 +3608,22 @@ class SlashCommandMixin:
 
     def _report_theme_change(self, name: str, log: ConversationLog) -> None:
         """Confirm the selection and report any persistence error."""
-        log.add_success(f"Theme changed to: {name}")
-        if error := getattr(self, "_theme_save_error", None):
-            log.add_info(error)
+        from superqode.app.theme_bridge import resolve_selection, theme_display_name
+
+        error = getattr(self, "_theme_save_error", None)
+        self._announce_transition(
+            title="Theme changed",
+            primary=theme_display_name(resolve_selection(name)),
+            detail=error or "Saved for your next session",
+            severity="warning" if error else "success",
+            log=log,
+            popup=True,
+            modal=False,
+            timeout=5 if error else 3,
+            # Every explicit selection should confirm, including a return to
+            # the same palette within the usual transition dedupe window.
+            dedupe_key=f"theme:{name}:{time.monotonic()}",
+        )
 
     def _handle_diagnostics(self, args: str, log: ConversationLog):
         """Handle :diagnostics command with a fast, non-blocking source scan."""

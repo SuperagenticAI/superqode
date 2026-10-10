@@ -401,9 +401,11 @@ async def test_mounted_status_header_keeps_identity_and_operational_state(monkey
         await pilot.pause()
 
         rendered = bar.render().plain
-        assert bar.outer_size.height == 3  # top breathing row + content + bottom border
+        # Breathing row, one or two content rows, then the bottom border.
+        assert bar.outer_size.height == len(rendered.splitlines()) + 2
         assert bar.content_region.y == bar.region.y + 1
-        assert "\n" not in rendered
+        assert len(rendered.splitlines()) == 2
+        assert "Theme: " in rendered
         assert f"SuperQode v{__version__}" in rendered
         assert "Harness Engineering frameworks" not in rendered
         assert "Model: not connected" in rendered

@@ -20,6 +20,10 @@ COLOR_PROPERTIES = {
     "border-bottom",
     "border-left",
     "border-right",
+    "border-title-color",
+    "border-title-background",
+    "border-subtitle-color",
+    "border-subtitle-background",
     "outline",
     "outline-top",
     "outline-bottom",
@@ -61,7 +65,11 @@ def color_role(value: str, property_name: str = "color") -> str:
         if green > red * 1.4 and green > blue:
             return "tool-success-bg"
         return "active"
-    if "border" in property_name:
+    if (
+        "border" in property_name
+        and "-title-" not in property_name
+        and "-subtitle-" not in property_name
+    ):
         if neutral:
             return "border" if max(red, green, blue) < 48 else "border-muted"
         return "border-active"

@@ -11,7 +11,10 @@ from superqode.app_main import SuperQodeApp
 
 @pytest.fixture(autouse=True)
 def isolate_feedback_startup(monkeypatch, tmp_path):
+    from superqode.app import theme_bridge as bridge
+
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(bridge, "_CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
     for name in (
         "_start_models_dev_refresh",
@@ -192,8 +195,8 @@ async def test_success_notification_is_a_centered_colored_card():
         assert toast.styles.background.hex.lower() == THEME["bg"]
         assert title_style.color is not None
         assert title_style.color.name == THEME["pink"]
-        assert toast.styles.border_left[1].hex.lower() == THEME["border_active"]
-        assert toast.styles.border_right[1].hex.lower() == THEME["border_active"]
+        assert toast.styles.border_left[1].hex.lower() == THEME["purple"]
+        assert toast.styles.border_right[1].hex.lower() == THEME["orange"]
 
 
 def test_information_transition_can_request_a_short_popup() -> None:
@@ -220,3 +223,78 @@ def test_information_transition_can_request_a_short_popup() -> None:
             },
         )
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("theme", ["superqode", "light", "ayu-light", "nord"])
+async def test_theme_change_uses_connection_card_and_preserves_draft(theme):
+    from textual.document._document import Selection
+    from textual.widgets._toast import Toast
+    from superqode.app.constants import THEME
+    from superqode.app.inputs import SelectionAwareInput
+    from superqode.app.theme_bridge import theme_display_name
+    from superqode.theming import contrast
+    from superqode.widgets.outcome_screen import OutcomeScreen
+
+    app = SuperQodeApp(theme_selection="superqode")
+    async with app.run_test(size=(80, 24), notifications=True) as pilot:
+        await pilot.pause()
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "Keep my developer draft"
+        prompt.selection = Selection((0, 1), (0, 5))
+        log = app.query_one("#log", ConversationLog)
+        app._handle_theme(theme, log)
+        await pilot.pause()
+
+        toast = app.query_one(Toast)
+        assert toast._notification.title == "Theme changed"
+        assert theme_display_name(theme) in toast._notification.message
+        assert "Saved for your next session" in toast._notification.message
+        assert abs(toast.region.x - (80 - toast.region.width) // 2) <= 1
+        assert toast.region.y <= app.query_one("#input-box").region.bottom
+        title_color = toast.get_component_rich_style("toast--title").color
+        assert contrast(title_color.name, toast.styles.background.hex) >= 4.5
+        assert contrast(toast.styles.color.hex, toast.styles.background.hex) >= 4.5
+        assert not isinstance(app.screen, OutcomeScreen)
+        assert prompt.value == "Keep my developer draft"
+        assert prompt.selection == Selection((0, 1), (0, 5))
+        assert app.focused is prompt
+        assert "Theme changed" in "\n".join(line.text for line in log.lines)
+
+
+@pytest.mark.asyncio
+async def test_theme_save_error_is_visible_without_claiming_it_was_saved(monkeypatch):
+    from textual.widgets._toast import Toast
+
+    monkeypatch.setattr(
+        "superqode.app.mixins.helpers.save_theme",
+        lambda _name: "Theme applied but could not be saved: disk full",
+    )
+    app = SuperQodeApp(theme_selection="superqode")
+    async with app.run_test(size=(80, 24), notifications=True) as pilot:
+        await pilot.pause()
+        app._handle_theme("light", app.query_one("#log", ConversationLog))
+        await pilot.pause()
+        toast = app.query_one(Toast)
+        assert toast._notification.severity == "warning"
+        assert "disk full" in toast._notification.message
+        assert "Saved for your next session" not in toast._notification.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("theme", ["superqode", "light"])
+@pytest.mark.parametrize("severity", ["warning", "error"])
+async def test_attention_cards_are_readable_on_dark_and_light_themes(theme, severity):
+    from textual.widgets._toast import Toast
+    from superqode.theming import contrast
+
+    app = SuperQodeApp(theme_selection=theme)
+    async with app.run_test(size=(80, 24), notifications=True) as pilot:
+        app.notify(
+            "Details and recovery guidance", title="Needs attention", severity=severity, timeout=5
+        )
+        await pilot.pause()
+        toast = app.query_one(Toast)
+        title = toast.get_component_rich_style("toast--title").color.name
+        assert contrast(title, toast.styles.background.hex) >= 4.5
+        assert contrast(toast.styles.color.hex, toast.styles.background.hex) >= 4.5

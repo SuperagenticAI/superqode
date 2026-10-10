@@ -169,6 +169,25 @@ def active_theme_name() -> str:
     return ds.get_active_theme_name()
 
 
+def theme_display_name(name: str) -> str:
+    """A readable label for a selected palette, including the product spelling."""
+    return {"superqode": "SuperQode", "tokyonight": "TokyoNight"}.get(
+        name, name.replace("-", " ").title()
+    )
+
+
+def brand_style(color: str):
+    """Keep the logo's gradient readable and repaintable on every canvas."""
+    from rich.style import Style
+    from superqode.theming import readable
+
+    return Style(
+        color=readable(color, [THEME["bg"], THEME["surface"]]),
+        bold=True,
+        meta={"sq_brand": color},
+    )
+
+
 def save_theme(name: str) -> str | None:
     """Return an error if selection applies but cannot be persisted."""
     if not resolve_selection(name):
@@ -206,7 +225,7 @@ def load_saved_theme() -> str:
         _theme_errors.append(
             f"Could not read theme preference; existing configuration retained: {exc}"
         )
-    return ds.get_active_theme_name()
+    return "superqode"
 
 
 def import_theme(path: Path) -> str:
@@ -317,6 +336,8 @@ def recolor_strip(strip):
             fg, bg = style.meta.get("sq_fg"), style.meta.get("sq_bg")
             if fg or bg:
                 style = style + Style(color=THEME.get(fg), bgcolor=THEME.get(bg))
+            if brand := style.meta.get("sq_brand"):
+                style = style + brand_style(brand)
         segments.append(Segment(segment.text, style, segment.control))
     return Strip(segments, strip.cell_length)
 

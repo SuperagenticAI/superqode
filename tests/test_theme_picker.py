@@ -84,7 +84,11 @@ def test_save_theme_ignores_unknown_names(tmp_path, monkeypatch):
 def test_load_theme_defaults_when_missing(tmp_path, monkeypatch):
     cfg = tmp_path / ".superqode" / "config.json"
     monkeypatch.setattr(theme_bridge, "_CONFIG_PATH", cfg)
-    assert theme_bridge.load_saved_theme() == ds.get_active_theme_name()
+    theme_bridge.apply_theme("light")
+    try:
+        assert theme_bridge.load_saved_theme() == "superqode"
+    finally:
+        _reset_default()
 
 
 # ----- HTML export -----------------------------------------------------------

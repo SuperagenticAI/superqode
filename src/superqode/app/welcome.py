@@ -11,6 +11,7 @@ from rich.text import Text
 
 from superqode.app.constants import ASCII_LOGO, GRADIENT, THEME
 from superqode.app.mixins.clickable_commands import command_link
+from superqode.app.theme_bridge import brand_style
 
 if TYPE_CHECKING:
     from superqode.app.models import AgentInfo
@@ -150,7 +151,7 @@ def render_welcome(
         items = []
 
         title = Text()
-        title.append("SuperQode\n", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
+        title.append("SuperQode\n", style=brand_style(GRADIENT[3 % len(GRADIENT)]))
         items.append(title)
 
         workspace = Text()
@@ -233,12 +234,12 @@ def render_welcome(
 
     logo_text = Text()
     if narrow or (width is not None and width < logo_width):
-        logo_text.append("SuperQode", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
+        logo_text.append("SuperQode", style=brand_style(GRADIENT[3 % len(GRADIENT)]))
         logo_text.append("\n", style="")
     else:
         for i, line in enumerate(logo_lines):
             color = GRADIENT[i % len(GRADIENT)]
-            logo_text.append(f"{line}\n", style=f"bold {color}")
+            logo_text.append(f"{line}\n", style=brand_style(color))
     items.append(place(logo_text))
 
     desc_text = Text(justify=align)
@@ -250,7 +251,7 @@ def render_welcome(
         headline = "HARNESS LAYER"
     else:
         headline = "SUPERQODE"
-    desc_text.append(f"{headline}\n", style="bold #ffffff")
+    desc_text.append(f"{headline}\n", style=f"bold {THEME['text']}")
     if not narrow:
         desc_text.append("\n", style="")
         desc_text.append(
@@ -279,7 +280,7 @@ def render_welcome(
         branch_text = Text(justify=align)
         repo_name = Path(state.repository).name if state.repository else ""
         if repo_name:
-            branch_text.append(repo_name, style="bold #ffffff")
+            branch_text.append(repo_name, style=f"bold {THEME['text']}")
             branch_text.append("  ·  ", style=THEME["dim"])
         branch_text.append(f"⎇ {state.git_branch}\n", style=f"bold {THEME['cyan']}")
         items.append(place(branch_text))

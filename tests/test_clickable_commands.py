@@ -228,7 +228,7 @@ def test_the_hub_is_a_permanent_top_level_control():
 
 @pytest.mark.parametrize("width", [60, 72, 90, 100, 110, 115, 120, 140, 200])
 def test_the_button_never_widens_the_row_past_the_terminal(width):
-    """A crowded bar drops the label, then the button, rather than wrapping."""
+    """Explicit header rows fit without wrapping their controls or state."""
     crowded = _bar(
         byok_provider="anthropic",
         byok_model="claude-opus-4-20250514",
@@ -239,12 +239,35 @@ def test_the_button_never_widens_the_row_past_the_terminal(width):
         byok_cost=1.23,
     )
     plain = crowded._render_for_width(width).plain
-    # The bar has a pre-existing overflow with long model names at narrow
-    # widths. What this guards is that the button never adds to it: wherever
-    # the row fit without a button, it still fits with one.
-    without_button = plain.split(" [")[0].rstrip(" │")
-    if cell_len(without_button) <= width:
-        assert cell_len(plain) <= width, f"controls pushed the row past {width}"
+    assert all(cell_len(line) <= width for line in plain.splitlines()), (
+        f"controls pushed a header row past {width}"
+    )
+
+
+@pytest.mark.parametrize("width", [58, 78, 118, 158])
+def test_theme_and_connection_hit_targets_follow_their_header_row(width):
+    bar = _bar(active_model="example-model", active_harness="core")
+    rendered = bar._render_for_width(width)
+    start, end, row = bar._theme_hit
+    assert "Theme: " in rendered.plain.splitlines()[row]
+    assert bar.action_at(start + 1, row) == "theme"
+    assert bar.action_at(end - 1, row) == "theme"
+    if bar._connection_hit:
+        start, end, row, action = bar._connection_hit
+        assert action == "disconnect"
+        assert bar.action_at(start, row) == action
+        assert bar.action_at(end - 1, row) == action
+    for line in rendered.plain.splitlines():
+        assert cell_len(line) <= width
+
+
+def test_narrow_header_keeps_hub_and_exit_accessible():
+    bar = _bar(active_harness="core", interaction_mode="build")
+    rendered = bar._render_for_width(78)
+    assert "[🔌 Connect ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain.splitlines()[0]
+    assert _hit(bar, rendered, "[⚓ Hub ↑]") == "hub"
+    assert _hit(bar, rendered, "[⏻ Exit ↑]") == "exit"
+    assert "BUILD" in rendered.plain.splitlines()[1]
 
 
 def test_exit_does_not_ask_when_nothing_is_running():

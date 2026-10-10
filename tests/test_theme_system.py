@@ -121,6 +121,19 @@ def test_css_conversion_preserves_selectors_and_pseudo_classes():
     assert "color: $sq-muted; background: $sq-bg;" in converted
 
 
+def test_border_labels_use_text_roles_instead_of_outline_roles():
+    from superqode.theming.css import theme_css
+
+    converted = theme_css(
+        "#input-box { border-title-color: #ffffff; border-subtitle-color: #71717a; "
+        "border-title-background: #000000; border: round #a855f7; }"
+    )
+    assert "border-title-color: $sq-text" in converted
+    assert "border-subtitle-color: $sq-dim" in converted
+    assert "border-title-background: $sq-bg" in converted
+    assert "border: round $sq-border-active" in converted
+
+
 @pytest.mark.parametrize(
     "changes", [{"version": 2}, {"unknown": 1}, {"colors": {"typo": "#fff"}}, {"description": []}]
 )
@@ -785,6 +798,12 @@ async def test_every_catalog_theme_repaints_mounted_session(size):
             assert prompt.value == "Developer draft"
             assert prompt.selection == Selection((0, 1), (0, 5))
             assert [line.text for line in log.lines] == before
+            header = app.query_one("#status-bar")
+            assert bridge.theme_display_name(name) in header.render().plain
+            assert header.region.bottom < prompt.region.y
+            composer = app.query_one("#input-box")
+            assert contrast(composer.styles.border_title_color.hex, THEME["bg"]) >= 4.5
+            assert contrast(composer.styles.border_subtitle_color.hex, THEME["bg"]) >= 4.5
         assert bridge.load_saved_theme() == catalog()["themes"][-1]
 
 
@@ -1014,3 +1033,122 @@ async def test_overlong_json_integer_is_an_inline_import_error(tmp_path):
         assert app.screen.query_one("#import-confirm").disabled
         assert "Cannot read theme" in str(app.screen.query_one("#import-status").render())
         await pilot.press("escape")
+
+
+def test_welcome_and_navigation_text_are_readable_in_every_palette():
+    """Check rendered colours, including brand text, rather than tokens alone."""
+    from superqode.app.welcome import WelcomeState, render_welcome
+    from superqode.app.widgets import ColorfulStatusBar
+    from superqode.theming.library import catalog, library_theme
+
+    themes = [*ds.THEMES.values(), *(library_theme(name) for name in catalog()["themes"])]
+    console = Console(width=160, color_system="truecolor")
+    bar = ColorfulStatusBar()
+    bar.byok_provider = "openai"
+    bar.byok_model = "gpt-example"
+    bar.active_harness = "core"
+    bar.interaction_mode = "plan"
+    bar.context_used = 98000
+    bar.context_window = 200000
+    for theme in themes:
+        ds.THEMES[theme.name] = theme
+        assert bridge.apply_theme(theme.name)
+        for connected in (False, True):
+            state = WelcomeState(
+                repository="/work/open",
+                git_branch="main",
+                connection="gpt-example" if connected else "",
+            )
+            surfaces = (
+                (render_welcome([], width=160, state=state), THEME["bg"]),
+                (bar._render_for_width(158), THEME["surface"]),
+            )
+            for rendered, background in surfaces:
+                for segment in console.render(rendered):
+                    if not segment.text.strip() or not segment.style or not segment.style.color:
+                        continue
+                    color = segment.style.color.get_truecolor()
+                    foreground = f"#{color.red:02x}{color.green:02x}{color.blue:02x}"
+                    assert not segment.style.dim, (theme.name, segment.text)
+                    assert contrast(foreground, background) >= 4.5, (
+                        theme.name,
+                        segment.text,
+                        foreground,
+                        background,
+                    )
+
+
+def test_retained_welcome_repaints_headline_repository_and_logo():
+    from textual.strip import Strip
+    from superqode.app.welcome import WelcomeState, render_welcome
+
+    rendered = render_welcome(
+        [], width=120, state=WelcomeState(repository="open", git_branch="main")
+    )
+    strip = bridge.bind_strip(Strip(list(Console(width=120).render(rendered))))
+    original = "".join(segment.text for segment in strip)
+    assert bridge.apply_theme("light")
+    repainted = bridge.recolor_strip(strip)
+    assert "".join(segment.text for segment in repainted) == original
+    for segment in repainted:
+        if not segment.text.strip() or not segment.style or not segment.style.color:
+            continue
+        color = segment.style.color.get_truecolor()
+        foreground = f"#{color.red:02x}{color.green:02x}{color.blue:02x}"
+        assert contrast(foreground, THEME["bg"]) >= 4.5, segment.text
+        if "THE HARNESS LAYER" in segment.text or segment.text == "open":
+            assert foreground == THEME["text"]
+
+
+@pytest.mark.parametrize("size", [(58, 24), (80, 24), (120, 40)])
+async def test_header_theme_control_opens_gallery_at_every_width(size):
+    app = SuperQodeApp(theme_selection="superqode")
+    async with app.run_test(size=size) as pilot:
+        await pilot.pause()
+        bar = app.query_one("#status-bar")
+        assert "Theme: SuperQode" in bar.render().plain
+        start, _end, row = bar._theme_hit
+        await pilot.click(
+            "#status-bar", offset=(bar.content_offset.x + start + 1, bar.content_offset.y + row)
+        )
+        await pilot.pause()
+        assert isinstance(app.screen, ThemePicker)
+        await pilot.press("escape")
+
+
+async def test_header_theme_tracks_automatic_terminal_appearance():
+    from superqode.theming.terminal import TerminalColorReply
+
+    bridge.set_terminal_colors({"bg": "#000000"})
+    app = SuperQodeApp(theme_selection="auto")
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        header = app.query_one("#status-bar")
+        assert "Theme: SuperQode (Auto)" in header.render().plain
+        app.on_terminal_color_reply(TerminalColorReply({"bg": "#ffffff", "fg": "#111111"}))
+        import asyncio
+
+        async with asyncio.timeout(5):
+            while app._terminal_theme_refresh_timer is not None:
+                await pilot.pause(0.01)
+        await pilot.pause()
+        assert "Theme: Light (Auto)" in header.render().plain
+
+
+@pytest.mark.parametrize("name", ["superqode", "light", "ayu-light"])
+async def test_working_prompt_keeps_text_and_border_labels_readable(name):
+    app = SuperQodeApp(theme_selection=name)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        area = app.query_one("#prompt-area")
+        area.add_class("working")
+        await pilot.pause()
+        composer = app.query_one("#input-box")
+        assert area.styles.opacity == 1
+        assert (
+            contrast(composer.styles.border_title_color.hex, composer.styles.background.hex) >= 4.5
+        )
+        assert (
+            contrast(composer.styles.border_subtitle_color.hex, composer.styles.background.hex)
+            >= 4.5
+        )

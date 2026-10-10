@@ -42,6 +42,7 @@ from .constants import (
     AGENT_COLORS,
     AGENT_ICONS,
 )
+from .theme_bridge import active_theme_name, brand_style, theme_display_name
 
 
 _SHELL_TOOL_MARKERS = ("bash", "shell", "terminal", "exec", "command", "run")
@@ -175,7 +176,7 @@ class GradientLogo(Static):
 
         for i, line in enumerate(lines):
             color = GRADIENT[i % len(GRADIENT)]
-            result.append(line, style=f"bold {color}")
+            result.append(line, style=brand_style(color))
             if i < len(lines) - 1:
                 result.append("\n")
 
@@ -234,8 +235,11 @@ class ColorfulStatusBar(Static):
         return f"{value[:left]}…{value[-right:]}"
 
     def _render_for_width(self, width: int) -> Text:
-        """Render one compact identity and operational status line."""
+        """Render navigation and state in one or two bounded header rows."""
         width = max(1, int(width or 120))
+        self._theme_hit = None
+        self._connection_hit = None
+        theme = self._theme_indicator(width)
         wide = width >= 110
         medium = width >= 72
         result = Text()
@@ -250,10 +254,10 @@ class ColorfulStatusBar(Static):
             # The state cluster no longer opens the row, so it only needs a
             # separator between its own parts.
             if result.plain:
-                result.append(" │ ", style="#3f3f46")
+                result.append(" │ ", style=THEME["dim"])
 
         def right_separator() -> None:
-            right.append(" │ ", style="#3f3f46")
+            right.append(" │ ", style=THEME["dim"])
 
         def append_auth(default: str = "") -> None:
             auth_mode = (self.connection_auth or default).strip().lower()
@@ -265,9 +269,11 @@ class ColorfulStatusBar(Static):
                 "byok": "BYOK",
             }.get(auth_mode, auth_mode.upper())
             if label:
-                color = {"subscription": "#c084fc", "local": "#06b6d4", "byok": "#f59e0b"}.get(
-                    auth_mode, "#a1a1aa"
-                )
+                color = {
+                    "subscription": THEME["purple"],
+                    "local": THEME["cyan"],
+                    "byok": THEME["warning"],
+                }.get(auth_mode, THEME["muted"])
                 result.append(f"{label} ", style=f"bold {color}")
 
         # Compact branded identity, kept in the corner. Version is retained at
@@ -276,12 +282,12 @@ class ColorfulStatusBar(Static):
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
         for i, char in enumerate("Super"):
             color = super_colors[i % len(super_colors)]
-            identity.append(char, style=f"bold {color}")
+            identity.append(char, style=brand_style(color))
         qode_colors = ["#ec4899", "#f472b6", "#f97316", "#fb923c"]
         for i, char in enumerate("Qode"):
             color = qode_colors[i % len(qode_colors)]
-            identity.append(char, style=f"bold {color}")
-        identity.append(f" v{__version__}", style="#a1a1aa")
+            identity.append(char, style=brand_style(color))
+        identity.append(f" v{__version__}", style=THEME["muted"])
 
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
@@ -294,49 +300,49 @@ class ColorfulStatusBar(Static):
         decision_session = self.active_runtime == "systemone"
         if decision_session:
             conn_action = "disconnect"
-            result.append("SystemOne", style="bold #06b6d4")
-            result.append(" · ", style="#71717a")
-            result.append("Jev", style="bold #a855f7")
+            result.append("SystemOne", style=f"bold {THEME['cyan']}")
+            result.append(" · ", style=THEME["dim"])
+            result.append("Jev", style=f"bold {THEME['purple']}")
         elif self.byok_provider:
             separator()
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=THEME["success"])
             append_auth("byok")
             result.append(
                 self._truncate_status_value(self.byok_provider, provider_limit),
-                style="bold #10b981",
+                style=f"bold {THEME['success']}",
             )
             if self.byok_model:
                 result.append(
                     f"/{self._truncate_status_value(self.byok_model, model_limit)}",
-                    style="#a1a1aa",
+                    style=THEME["muted"],
                 )
         elif self.active_model:
             separator()
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=THEME["success"])
             append_auth()
             result.append(
                 self._truncate_status_value(self.active_model, model_limit),
-                style="bold #10b981",
+                style=f"bold {THEME['success']}",
             )
         elif self.active_runtime:
             separator()
             conn_start = cell_len(result.plain)
             conn_action = "disconnect"
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=THEME["success"])
             append_auth()
             result.append(
                 self._truncate_status_value(self.active_runtime, model_limit),
-                style="bold #10b981",
+                style=f"bold {THEME['success']}",
             )
         else:
             separator()
             conn_start = cell_len(result.plain)
             conn_action = "connect"
-            result.append("Model: not connected", style="#a1a1aa")
+            result.append("Model: not connected", style=THEME["muted"])
         conn_end = cell_len(result.plain)
 
         if not decision_session:
@@ -345,30 +351,32 @@ class ColorfulStatusBar(Static):
             runtime = (self.active_runtime or "").strip()
             if runtime and self.active_model:
                 separator()
-                result.append("rt ", style="#71717a")
+                result.append("rt ", style=THEME["dim"])
                 runtime_limit = 20 if medium else 7
                 if self.connection_auth and width < 90:
                     runtime_limit = 8 if medium else 4
-                result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
+                result.append(
+                    self._truncate_status_value(runtime, runtime_limit), style=THEME["cyan"]
+                )
 
             harness = (self.active_harness or "").strip()
             if harness:
                 separator()
-                result.append("harness " if wide else "h ", style="#71717a")
+                result.append("harness " if wide else "h ", style=THEME["dim"])
                 harness_limit = 18 if wide else 10 if medium else 6
                 result.append(
                     self._truncate_status_value(harness, harness_limit),
-                    style="bold #a855f7",
+                    style=f"bold {THEME['purple']}",
                 )
 
             session_label = (self.active_session or "").strip()
             if session_label and medium:
                 separator()
-                result.append("sess " if wide else "s ", style="#71717a")
+                result.append("sess " if wide else "s ", style=THEME["dim"])
                 session_limit = 22 if wide else 14
                 result.append(
                     self._truncate_status_value(session_label, session_limit),
-                    style="#e9d5ff",
+                    style=THEME["text"],
                 )
 
             # Interaction mode is always visible, on the right cluster.
@@ -378,10 +386,10 @@ class ColorfulStatusBar(Static):
                     mode, mode.upper()
                 )
                 mode_color = {
-                    "chat": "#06b6d4",
-                    "plan": "#fbbf24",
-                    "build": "#22c55e",
-                }.get(mode, "#a855f7")
+                    "chat": THEME["cyan"],
+                    "plan": THEME["gold"],
+                    "build": THEME["success"],
+                }.get(mode, THEME["purple"])
                 right.append(mode_label, style=f"bold {mode_color}")
 
             # Keep the interaction mode and the optional input mode distinct.
@@ -394,15 +402,15 @@ class ColorfulStatusBar(Static):
                     "search": "SEARCH",
                 }.get(vim_state, vim_state.upper())
                 vim_color = {
-                    "normal": "#a855f7",
-                    "insert": "#06b6d4",
-                    "command": "#fbbf24",
-                    "search": "#ec4899",
-                }.get(vim_state, "#a855f7")
+                    "normal": THEME["purple"],
+                    "insert": THEME["cyan"],
+                    "command": THEME["gold"],
+                    "search": THEME["pink"],
+                }.get(vim_state, THEME["purple"])
                 if right.plain:
                     right_separator()
                 if medium:
-                    right.append("VIM ", style="#a1a1aa")
+                    right.append("VIM ", style=THEME["muted"])
                     right.append(vim_label, style=f"bold {vim_color}")
                 else:
                     right.append(vim_label[:1], style=f"bold {vim_color}")
@@ -413,30 +421,30 @@ class ColorfulStatusBar(Static):
             if medium and self.context_window > 0 and context_used > 0:
                 pct = min(100, round(100 * context_used / self.context_window))
                 if pct < 60:
-                    context_color = "#22c55e"
+                    context_color = THEME["success"]
                 elif pct < 85:
-                    context_color = "#fbbf24"
+                    context_color = THEME["gold"]
                 else:
-                    context_color = "#ef4444"
+                    context_color = THEME["error"]
                 if right.plain:
                     right_separator()
-                right.append("ctx ", style="#a1a1aa")
+                right.append("ctx ", style=THEME["muted"])
                 right.append(f"{pct}%", style=context_color)
                 if wide:
                     right.append(
                         f" · {self._format_token_count(context_used)}/"
                         f"{self._format_token_count(self.context_window)}",
-                        style="#a1a1aa",
+                        style=THEME["muted"],
                     )
             elif medium and self.byok_tokens > 0:
                 if right.plain:
                     right_separator()
-                right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
-                right.append(" tok", style="#71717a")
+                right.append(self._format_token_count(self.byok_tokens), style=THEME["cyan"])
+                right.append(" tok", style=THEME["dim"])
             elif medium and not self.byok_usage_known:
                 if right.plain:
                     right_separator()
-                right.append("tokens unknown", style="#71717a")
+                right.append("tokens unknown", style=THEME["dim"])
 
             # Launch fires the models.dev and ACP registry refreshes behind the
             # first frame. Saying so costs one chip and turns a quiet couple of
@@ -444,18 +452,18 @@ class ColorfulStatusBar(Static):
             if self.catalog_state and medium:
                 if right.plain:
                     right_separator()
-                right.append("⟳ ", style="#06b6d4")
-                right.append(self.catalog_state.strip(), style="#a1a1aa")
+                right.append("⟳ ", style=THEME["cyan"])
+                right.append(self.catalog_state.strip(), style=THEME["muted"])
 
             if self.plan_state:
                 state = self.plan_state.strip()
                 color = {
-                    "ON": "#fbbf24",
-                    "pending": "#f59e0b",
-                    "active": "#06b6d4",
-                    "approved": "#22c55e",
-                    "executing": "#22c55e",
-                }.get(state, "#a855f7")
+                    "ON": THEME["gold"],
+                    "pending": THEME["warning"],
+                    "active": THEME["cyan"],
+                    "approved": THEME["success"],
+                    "executing": THEME["success"],
+                }.get(state, THEME["purple"])
                 if right.plain:
                     right_separator()
                 right.append("PLAN", style=f"bold {color}")
@@ -467,7 +475,7 @@ class ColorfulStatusBar(Static):
                 cost = (
                     f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
                 )
-                right.append(cost, style="#fbbf24")
+                right.append(cost, style=THEME["gold"])
 
         # The way out of a session sits at the far right, where a window
         # control would be: one fixed place, present at every width, and
@@ -479,9 +487,21 @@ class ColorfulStatusBar(Static):
             self.byok_provider or self.active_model or self.active_runtime or has_harness
         )
         icon, word, colour, action = (
-            ("⏏", "Disconnect", "#fb7185", "disconnect")
+            ("⏏", "Disconnect", THEME["rose"], "disconnect")
             if connected
-            else ("🔌", "Connect", "#22c55e", "connect")
+            else ("🔌", "Connect", THEME["success"], "connect")
+        )
+        toolbar_width = sum(
+            cell_len(label) + 5 for label in (f"{icon} {word}", "⚓ Hub", "⏻ Exit")
+        ) + (11 if self.can_go_back else 0)
+        two_rows = width < (
+            cell_len(identity.plain)
+            + toolbar_width
+            + cell_len(theme.plain)
+            + cell_len(result.plain)
+            + cell_len(right.plain)
+            + (2 if right.plain else 0)
+            + 6
         )
         # Sized against the room actually left rather than a width band: the
         # label is what overflows a busy bar, not the terminal being narrow.
@@ -498,6 +518,8 @@ class ColorfulStatusBar(Static):
             - (3 if right.plain else 0)
             - 2
         )
+        if two_rows:
+            room = width - cell_len(identity.plain) - 4
         # Connect/disconnect takes the room first. Hub is permanent product
         # navigation rather than a command users have to discover, and Exit
         # remains the final window-style control.
@@ -512,7 +534,7 @@ class ColorfulStatusBar(Static):
                     self._append_button(
                         controls,
                         label,
-                        "#06b6d4",
+                        THEME["cyan"],
                         "back",
                         separator=False,
                         hits=control_hits,
@@ -547,7 +569,7 @@ class ColorfulStatusBar(Static):
                     self._append_button(
                         controls,
                         label,
-                        "#a855f7",
+                        THEME["purple"],
                         "hub",
                         separator=False,
                         gap=True,
@@ -564,7 +586,7 @@ class ColorfulStatusBar(Static):
                     self._append_button(
                         controls,
                         label,
-                        "#ef4444",
+                        THEME["error"],
                         "exit",
                         separator=False,
                         gap=True,
@@ -572,23 +594,42 @@ class ColorfulStatusBar(Static):
                     )
                     break
 
-        # Right-align the session-state cluster to the far edge when there is
-        # real room for it; otherwise keep it adjacent so nothing overflows a
-        # narrow terminal.
-        if right.plain:
-            result.append("  ", style="")
-            result.append(right)
+        def second_row(line: Text) -> Text:
+            line.truncate(width, overflow="ellipsis")
+            line.append("\n")
+            self._append_theme_indicator(line, theme, row=1)
+            state_width = max(0, width - cell_len(theme.plain) - 2)
+            if state_width:
+                line.append("  ")
+                state_origin = cell_len(theme.plain) + 2
+                state = result.copy()
+                # Preserve mode/usage at the right edge while long connection
+                # names compact. Both clusters fit without an implicit wrap.
+                right_width = min(cell_len(right.plain), max(0, state_width // 2))
+                right.truncate(right_width, overflow="ellipsis")
+                state.truncate(
+                    max(0, state_width - right_width - (2 if right_width else 0)),
+                    overflow="ellipsis",
+                )
+                line.append(state)
+                visible_connection_end = min(conn_end, cell_len(state.plain))
+                if conn_action and conn_start < visible_connection_end:
+                    self._connection_hit = (
+                        state_origin + conn_start,
+                        state_origin + visible_connection_end,
+                        1,
+                        conn_action,
+                    )
+                if right_width:
+                    gap = width - cell_len(line.plain.rsplit("\n", 1)[-1]) - right_width
+                    line.append(" " * max(2, gap))
+                    line.append(right)
+            return line
 
         hits: list[tuple[int, int, str]] = [(0, cell_len(identity.plain), "home")]
         if not controls.plain:
-            if result.plain:
-                identity.append(" │ ", style="#3f3f46")
-            result_origin = cell_len(identity.plain)
-            identity.append(result)
-            if conn_action:
-                hits.append((result_origin + conn_start, result_origin + conn_end, conn_action))
             self._hits = hits
-            return identity
+            return second_row(identity)
 
         # Identity keeps the corner. The controls follow it, still on the left
         # where a browser toolbar sits, and the state right-aligns after them.
@@ -599,8 +640,16 @@ class ColorfulStatusBar(Static):
         line.append(controls)
         for start, end, hit in control_hits:
             hits.append((origin + start, origin + end, hit))
+        self._hits = hits
+        if two_rows:
+            return second_row(line)
+        if right.plain:
+            result.append("  ", style="")
+            result.append(right)
         # Measured in cells, not characters: an emoji glyph occupies two
         # columns while len() counts it once, which wrapped the row.
+        line.append("  ")
+        self._append_theme_indicator(line, theme, row=0)
         gap = width - cell_len(line.plain) - cell_len(result.plain)
         # Padding only when there is room for it. A crowded row is already
         # over the edge; widening it further is the one thing that helps least.
@@ -611,6 +660,24 @@ class ColorfulStatusBar(Static):
             hits.append((result_origin + conn_start, result_origin + conn_end, conn_action))
         self._hits = hits
         return line
+
+    def _theme_indicator(self, width: int) -> Text:
+        name = theme_display_name(active_theme_name())
+        if self.is_mounted:
+            selection = getattr(self.app, "_current_theme", "")
+            if selection == "auto" or "/" in selection:
+                name += " (Auto)"
+        name = self._truncate_status_value(name, max(1, width - 9))
+        indicator = Text("Theme: ", style=THEME["muted"])
+        indicator.append(name, style=f"bold {THEME['text']}")
+        indicator.append(" ↑", style=f"bold {THEME['cyan']}")
+        indicator.truncate(width, overflow="ellipsis")
+        return indicator
+
+    def _append_theme_indicator(self, line: Text, theme: Text, *, row: int) -> None:
+        start = cell_len(line.plain.rsplit("\n", 1)[-1])
+        line.append(theme)
+        self._theme_hit = (start, start + cell_len(theme.plain), row)
 
     @staticmethod
     def _append_button(
@@ -631,9 +698,9 @@ class ColorfulStatusBar(Static):
         own underline on hover for those, which we cannot turn off.
         """
         style = f"bold {colour}"
-        chrome = "#52525b"
+        chrome = THEME["dim"]
         if separator:
-            target.append(" │ ", style="#3f3f46")
+            target.append(" │ ", style=THEME["dim"])
         elif gap:
             target.append(" ", style="")
         start = cell_len(target.plain)
@@ -644,8 +711,18 @@ class ColorfulStatusBar(Static):
         if hits is not None:
             hits.append((start, cell_len(target.plain), action))
 
-    def action_at(self, column: int) -> str:
+    def action_at(self, column: int, row: int = 0) -> str:
         """Return the command under a cell column, if any."""
+        if hit := getattr(self, "_theme_hit", None):
+            start, end, theme_row = hit
+            if row == theme_row and start <= column < end:
+                return "theme"
+        if hit := getattr(self, "_connection_hit", None):
+            start, end, connection_row, action = hit
+            if row == connection_row and start <= column < end:
+                return action
+        if row != 0:
+            return ""
         for start, end, action in getattr(self, "_hits", ()):
             if start <= column < end:
                 return action
@@ -654,11 +731,13 @@ class ColorfulStatusBar(Static):
     def on_click(self, event) -> None:
         """Run the control under the pointer without an OSC-8 hyperlink."""
         column = int(getattr(event, "x", -1))
+        row = int(getattr(event, "y", -1))
         try:
             column -= int(self.content_offset.x)
+            row -= int(self.content_offset.y)
         except Exception:  # noqa: BLE001 - unmounted tests have no layout
             pass
-        action = self.action_at(column)
+        action = self.action_at(column, row)
         if not action:
             return
         event.stop()
@@ -670,9 +749,7 @@ class ColorfulStatusBar(Static):
             run(action)
 
     def render(self) -> Text:
-        from superqode.app.theme_bridge import theme_legacy_text
-
-        return theme_legacy_text(self._render_for_width(self.size.width or 120))
+        return self._render_for_width(self.content_size.width or 120)
 
     def update_byok_status(
         self,

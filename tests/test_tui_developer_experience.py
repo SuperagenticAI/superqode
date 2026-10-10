@@ -202,7 +202,7 @@ def test_subscription_status_fits_short_terminals(width):
     status.active_model = "example-model"
     status.active_harness = "codex"
     text = status._render_for_width(width).plain
-    assert cell_len(text) <= width
+    assert all(cell_len(line) <= width for line in text.splitlines())
     assert "BUILD" in text
 
 

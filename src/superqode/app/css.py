@@ -34,39 +34,39 @@ Toast {
     height: auto;
     margin-top: 1;
     padding: 0 1;
-    background: #121018;
-    color: #f4f4f5;
-    border: round #52525b;
+    background: $sq-surface2;
+    color: $sq-text;
+    border: round $sq-border-muted;
 }
 Toast .toast--title {
     text-style: bold;
-    color: #fafafa;
+    color: $sq-text;
 }
 /* Textual calls successful app notifications "information". Use the same
    purple -> pink -> orange identity as the SuperQode logo for routine product
    confirmations such as Model ready, Connected, and Disconnected. */
 Toast.-information {
-    background: #000000;
-    color: #f5e9ff;
-    border: round #7c3aed;
-    border-left: thick #a855f7;
-    border-right: thick #f97316;
+    background: $sq-bg;
+    color: $sq-text;
+    border: round $sq-purple;
+    border-left: thick $sq-purple;
+    border-right: thick $sq-orange;
 }
-Toast.-information .toast--title { color: #f472b6; }
+Toast.-information .toast--title { color: $sq-pink; }
 Toast.-warning {
-    background: #1c1506;
-    color: #fef3c7;
-    border: round #92400e;
-    border-left: thick #f59e0b;
+    background: $sq-tool-pending-bg;
+    color: $sq-text;
+    border: round $sq-warning;
+    border-left: thick $sq-warning;
 }
-Toast.-warning .toast--title { color: #fcd34d; }
+Toast.-warning .toast--title { color: $sq-warning; }
 Toast.-error {
-    background: #210b0b;
-    color: #fee2e2;
-    border: round #991b1b;
-    border-left: thick #ef4444;
+    background: $sq-tool-error-bg;
+    color: $sq-text;
+    border: round $sq-error;
+    border-left: thick $sq-error;
 }
-Toast.-error .toast--title { color: #fca5a5; }
+Toast.-error .toast--title { color: $sq-error; }
 
 #main-grid { height: 100%; layout: horizontal; }
 
@@ -122,11 +122,11 @@ CollapsibleSidebar CollapsibleTitle:hover {
 
 /* Status bar - ALWAYS visible at top, never hidden */
 #status-bar {
-    height: 3;
+    height: auto;
     min-height: 3;
     background: #0a0a0a;
     padding: 1 1 0 1;
-    content-align: left middle;
+    content-align: left top;
     border-bottom: solid #27272a;
 }
 
@@ -192,7 +192,6 @@ ConversationLog {
    is disabled in Python, so this is honest status chrome rather than a field
    that looks editable but silently ignores input. */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
-#prompt-area.working { opacity: 0.78; }
 #prompt-area.working #input-box { border: round #7c3aed; background: #09060d; }
 #prompt-area.working #prompt-symbol { color: #a855f7; }
 #prompt-area.action-required #input-box { border: round #f59e0b; background: #0d0903; }
@@ -205,14 +204,14 @@ ConversationLog {
     width: 100%;
     background: #000000;
     border: round #3f3f46;
-    border-title-color: #fafafa;
-    border-subtitle-color: #71717a;
+    border-title-color: $sq-text;
+    border-subtitle-color: $sq-muted;
     margin: 1 2 0 2;
     padding: 0 1;
     overflow: hidden;
 }
 /* Focus glow: SuperQode purple border */
-#input-box:focus-within { border: round #a855f7; background: #000000; }
+#input-box:focus-within { border: round $sq-purple; background: $sq-bg; }
 /* One column wider than the "<>" glyph, left aligned, so the trailing gap is
    the gutter rather than a rounding artifact of centring. */
 #prompt-symbol {

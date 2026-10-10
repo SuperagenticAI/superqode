@@ -745,7 +745,10 @@ class SuperQodeApp(
             return
         if self.query("CommandPalette.show-palette"):
             return
-        if self._sidebar_has_focus():
+        # Opening the sidebar requests focus after layout. The startup timer
+        # can run before that request settles; respect the visible navigation
+        # intent instead of racing it back to the composer.
+        if self.sidebar_visible:
             return
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)

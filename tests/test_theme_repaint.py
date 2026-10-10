@@ -7,6 +7,7 @@ refresh CSS and widgets without clearing or replaying conversation activity.
 from __future__ import annotations
 
 from superqode.app.mixins.helpers import HelpersMixin
+from superqode.app.mixins.feedback import FeedbackMixin
 
 
 class _Log:
@@ -24,13 +25,17 @@ class _Log:
 def _app(*, welcome_active: bool, applied: bool = True):
     from superqode.app.mixins.slash_commands import SlashCommandMixin
 
-    class Stub(HelpersMixin, SlashCommandMixin):
+    class Stub(HelpersMixin, SlashCommandMixin, FeedbackMixin):
         def __init__(self):
             self._welcome_active = welcome_active
             self._current_theme = "dracula"
             self.rerendered = 0
             self.refreshed = 0
             self.saved: list[str] = []
+            self.notifications = []
+
+        def notify(self, message, **kwargs):
+            self.notifications.append((message, kwargs))
 
         def _rerender_welcome(self):
             self.rerendered += 1
@@ -101,8 +106,19 @@ class TestUserIsToldWhatHappened:
 
         app._report_theme_change("superqode", log)
 
-        assert log.success == ["Theme changed to: superqode"]
+        assert log.success == ["Theme changed: SuperQode · Saved for your next session"]
         assert log.info == []
+        assert app.notifications == [
+            (
+                "SuperQode\nSaved for your next session",
+                {
+                    "title": "Theme changed",
+                    "severity": "information",
+                    "timeout": 3,
+                    "markup": False,
+                },
+            )
+        ]
 
     def test_a_changed_theme_does_not_claim_retained_output_is_stale(self):
         """Retained output now resolves its colours at paint time."""
@@ -112,5 +128,5 @@ class TestUserIsToldWhatHappened:
 
         app._report_theme_change("nord", log)
 
-        assert log.success == ["Theme changed to: nord"]
+        assert log.success == ["Theme changed: Nord · Saved for your next session"]
         assert log.info == []

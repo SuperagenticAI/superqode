@@ -50,6 +50,22 @@ async def test_composer_accepts_the_first_key_before_the_startup_focus_timer(mon
 
 
 @pytest.mark.asyncio
+async def test_ready_focus_does_not_interrupt_a_sidebar_open_in_progress(monkeypatch):
+    app = SuperQodeApp()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        calls = []
+        monkeypatch.setattr(prompt, "focus", lambda *args, **kwargs: calls.append("composer"))
+        # Visibility records the user's intent before the next layout applies
+        # the sidebar's deferred focus request.
+        app.sidebar_visible = True
+        assert not app._sidebar_has_focus()
+        app._focus_input_on_ready()
+        assert calls == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("size", [(80, 24), (110, 30)])
 async def test_sidebar_keyboard_search_preview_back_and_draft(tmp_path, size):
     (tmp_path / "alpha.py").write_text("print('alpha')\n")
