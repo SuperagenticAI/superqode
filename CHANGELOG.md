@@ -7,55 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-10-10
+
 ### Added
 
-- Preview themes across the actual workspace with reversible Escape and a
-  compact F4 view; filter by Light/Dark, save favorites, browse recent choices,
-  cycle favorites, and restore the previous theme.
-- Central appearance settings for themes, automatic light/dark pairs, compact
-  spacing, reduced animation and simple terminal status icons.
+- Central appearance settings (`:settings` or `:appearance`) for themes,
+  automatic light/dark pairs, compact spacing, reduced animation and simple
+  terminal status icons.
+- Live theme preview across the actual workspace with reversible Escape and a
+  compact F4 view; Light/Dark filters, favorites, recent choices, next and
+  previous theme cycling, and undo to the previous theme.
 - A visual theme customizer with live readability checks and private native
   JSON save/export.
-- A guided first task connecting existing harness discovery, setup diagnostics,
-  project context, normal prompt execution and recorded result review.
-- Developer-reviewed local feedback bundles with bounded diagnostic metadata,
-  error summaries and credential/path redaction.
 - Four bundled light palettes (Paper Light, Solar Dawn, Nordic Snow, Sakura
-  Light) so the Light filter and light/dark pairs have real choices.
-- Follow terminal light/dark changes through DEC mode 2031 colour scheme
-  reports; query through tmux passthrough as well as directly; record the
-  detection source in feedback bundles.
-- Warn in the importer, CLI import and customizer when readability correction
-  changes a colour.
+  Light), giving 87 distinct theme choices with the offline catalog.
+- `:trial`, a guided first task connecting harness discovery, setup
+  diagnostics, project context, normal prompt execution and result review.
+- `:feedback`, developer-reviewed local feedback bundles with bounded
+  diagnostic metadata, error summaries and credential/path redaction. Bundles
+  stay on your machine; nothing is uploaded.
+- Follow terminal light/dark changes live through DEC mode 2031 colour scheme
+  reports, and query the terminal background through tmux passthrough as well
+  as directly.
+- Warnings in the importer, CLI import and customizer when readability
+  correction changes a colour.
 - Letter-key alternatives in the gallery (e, w, f) and appearance screens (w)
   for terminals that intercept F3, F4 or Ctrl+S.
 
+### Changed
+
+- New users without a saved theme follow the terminal (`auto`), using the
+  reported background (OSC 11) and COLORFGBG by the xterm 16-colour
+  convention; saved choices are unchanged and dark terminals still get the
+  SuperQode palette.
+- Query terminal colours on scheme change, or every 30 seconds when the
+  terminal does not report changes, instead of every 3 seconds; check the
+  active theme file once per second without resolving paths on every check.
+- Dependency security updates across the lock file, including PyJWT, nltk,
+  GitPython, mlflow, anyio, cryptography, urllib3, litellm, mcp, pillow and
+  pyasn1.
+
 ### Fixed
 
-- Keep catalog themes visible while previewing without installing them.
+- Honour NO_COLOR and TERM=dumb in the TUI as well as the launch banner, and
+  use 256-colour or 16-colour output when the terminal does not report
+  truecolor.
+- Resolve inline y/n/a approval keys before composer text insertion.
+- Keep workspace approval, plan and navigation keys from acting behind modal
+  editors and theme previews.
+- Follow the terminal (`auto`) when saved theme preferences cannot be read,
+  instead of failing on unreadable or deeply nested config.
+- Windows path handling for long trial-context ids and file names Windows
+  cannot create.
+- Hold a DEC 2031 colour scheme report split across reads instead of leaking
+  it as keystrokes, and turn mode 2031 off on every exit path.
+- Wait for restored session state on startup instead of a fixed delay.
+- Keep catalog themes visible while previewing without installing them, and
+  record catalog light/dark appearance correctly.
+- Return private copies of cached catalog themes so edits cannot alter the
+  cache.
 - Expand quoted file references so attachments with spaces and special
   characters resolve to the intended project file.
 - Keep result and Activity text readable on light and dark palettes.
-- Keep workspace approval, plan and navigation keys from acting behind modal
-  editors and theme previews.
-- Resolve inline y/n/a approval keys before composer text insertion.
-- Record catalog light/dark appearance instead of listing uninstalled catalog
-  palettes as dark.
-- Return private copies of cached catalog themes so edits cannot alter the cache.
-- Use the reported terminal background (OSC 11) for light/dark decisions and
-  parse COLORFGBG by the xterm 16-colour convention.
-- Honour NO_COLOR and TERM=dumb in the TUI as well as the launch banner, and use
-  256-colour or 16-colour output when the terminal does not report truecolor.
 - Fall back to an exclusive file create when hard links are unsupported, so
   no-overwrite exports work on FAT and network filesystems.
-
-### Changed
-
-- New users without a saved theme follow the terminal (`auto`); saved choices are
-  unchanged and dark terminals still get the SuperQode palette.
-- Query terminal colours on scheme change, or every 30 seconds when the terminal
-  does not report changes, instead of every 3 seconds; check the active theme
-  file once per second without resolving paths on every check.
 
 ## [2.12.0] - 2026-10-10
 
