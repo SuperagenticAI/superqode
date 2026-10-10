@@ -219,7 +219,11 @@ async def test_switch_repaints_retained_output_without_changing_task_state(size)
         assert THEME["error"] in colors and old_error not in colors
 
 
-async def test_pending_follow_scroll_respects_new_reading_lock(monkeypatch):
+@pytest.mark.parametrize("source", ["tail", "feedback"])
+@pytest.mark.parametrize("lock", ["public", "mode"])
+async def test_pending_follow_scroll_respects_new_reading_lock(monkeypatch, source, lock):
+    from rich.text import Text
+
     app = SuperQodeApp(theme_selection="superqode")
     async with app.run_test(size=(80, 24)) as pilot:
         log = app.query_one("#log", ConversationLog)
@@ -234,9 +238,15 @@ async def test_pending_follow_scroll_respects_new_reading_lock(monkeypatch):
             return True
 
         monkeypatch.setattr(log, "call_after_refresh", defer)
-        log.scroll_end(animate=False)
+        if source == "tail":
+            log.scroll_end(animate=False)
+        else:
+            log.write_feedback(Text("Feedback heading"))
         assert callbacks
-        log.lock_viewport()
+        if lock == "public":
+            log.lock_viewport()
+        else:
+            log._set_viewport_mode("user_locked")
         log.scroll_to(y=3, animate=False, force=True, immediate=True)
         assert log.scroll_y == 3
         for callback in callbacks:
@@ -843,6 +853,8 @@ async def test_appearance_pair_picker_highlights_the_active_palette():
 
 
 async def test_auto_preview_tracks_terminal_appearance_changes():
+    import asyncio
+
     from superqode.theming.terminal import TerminalColorReply
 
     bridge.set_terminal_colors({"bg": "#101010", "fg": "#eeeeee"})
@@ -852,7 +864,10 @@ async def test_auto_preview_tracks_terminal_appearance_changes():
         await pilot.pause()
         picker = app.screen
         app.on_terminal_color_reply(TerminalColorReply({"bg": "#ffffff", "fg": "#111111"}))
-        await pilot.pause(0.2)
+        async with asyncio.timeout(5):
+            while app._terminal_theme_refresh_timer is not None:
+                await pilot.pause(0.01)
+        await pilot.pause()
         preview = picker.query_one("#theme-preview")
         assert preview.styles.background.hex.lower() == palette_tokens(ds.get_theme("auto"))["bg"]
         assert app._current_theme == "auto"

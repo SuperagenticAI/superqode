@@ -1805,6 +1805,9 @@ class ConversationLog(RichLog):
     def _set_viewport_mode(self, mode: str) -> None:
         self._viewport_mode = mode
         self.auto_scroll = mode == "following"
+        if mode == "user_locked":
+            self._pending_response_reveal_token = None
+            self._feedback_anchor_active = False
         if mode == "following":
             self._feedback_anchor_active = False
             self._unread_output_lines = 0
@@ -1898,7 +1901,7 @@ class ConversationLog(RichLog):
         self._viewport_mode = "completion_anchored"
 
         def reveal() -> None:
-            if not self._feedback_anchor_active:
+            if not self._feedback_anchor_active or self._viewport_mode == "user_locked":
                 return
             anchor_y = start_y
             if marker:
