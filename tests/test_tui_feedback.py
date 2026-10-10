@@ -9,6 +9,20 @@ from superqode.app.widgets import ConversationLog
 from superqode.app_main import SuperQodeApp
 
 
+@pytest.fixture(autouse=True)
+def isolate_feedback_startup(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
+    for name in (
+        "_start_models_dev_refresh",
+        "_start_acp_registry_refresh",
+        "_report_catalog_freshness",
+        "_run_startup_connect",
+        "_prewarm_litellm",
+    ):
+        monkeypatch.setattr(SuperQodeApp, name, lambda *args, **kwargs: None)
+
+
 class _Log:
     def __init__(self) -> None:
         self.items: list[tuple[str, str]] = []
