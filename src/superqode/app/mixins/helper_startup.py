@@ -116,6 +116,30 @@ class HelperStartupMixin:
         """Build the command palette from the real TUI command surface."""
         commands = [
             PaletteCommand(
+                "appearance_settings",
+                "Appearance settings",
+                "Themes, spacing, animation and terminal icons",
+                "◇",
+                ":settings",
+                "settings",
+            ),
+            PaletteCommand(
+                "first_task",
+                "Guided first task",
+                "Connect, validate, attach context, run and review",
+                "◇",
+                ":trial",
+                "workflow",
+            ),
+            PaletteCommand(
+                "feedback_export",
+                "Export feedback",
+                "Review a redacted diagnostic bundle before saving",
+                "◇",
+                ":feedback",
+                "workflow",
+            ),
+            PaletteCommand(
                 "blocks",
                 "Pasted blocks",
                 "Inspect or remove folded pasted text",
@@ -904,6 +928,9 @@ class HelperStartupMixin:
     def _mark_onboarding_complete(self) -> None:
         """Persist first-run completion only after a connection succeeds."""
         self._record_milestone("connected")
+        resume_trial = getattr(self, "_trial_connection_ready", None)
+        if callable(resume_trial):
+            resume_trial()
         marker = self._onboarding_marker()
         try:
             marker.parent.mkdir(parents=True, exist_ok=True)
@@ -1029,6 +1056,13 @@ class HelperStartupMixin:
         t.append("just type", style=f"bold {THEME['success']}")
         t.append("    describe what to build\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
+        t.append("  │  ", style=THEME["muted"])
+        from superqode.app.mixins.clickable_commands import command_link
+
+        t.append(":trial", style=f"bold {THEME['cyan']} {command_link('trial')}")
+        t.append(
+            "     validate, attach context, run and review your first task\n", style=THEME["muted"]
+        )
         t.append("  │  ", style=THEME["muted"])
         t.append(":explore", style=f"bold {THEME['purple']}")
         t.append(

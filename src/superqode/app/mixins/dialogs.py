@@ -2343,6 +2343,9 @@ class DialogsMixin:
 
         # Reveal at most one capability, after a completed turn.
         self._record_milestone("task_completed")
+        record_trial = getattr(self, "_record_trial_completion", None)
+        if callable(record_trial):
+            record_trial(summary, response_text)
         # What the run did decides which hints become relevant.
         if files_modified:
             self._record_milestone("edited_files")

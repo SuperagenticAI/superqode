@@ -53,190 +53,326 @@ def paint_preview(preview: RichLog, theme: ds.Theme) -> None:
 
 
 class ThemePicker(ModalScreen[str | None]):
-    """Preview is isolated; Enter installs if needed and returns a selection."""
+    """Highlight previews the workspace; Esc rolls back; Enter commits."""
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("enter", "confirm", "Apply", show=False),
         Binding("f2", "import_file", "Import JSON", show=False, priority=True),
+        Binding("f3", "customize", "Customize", show=False, priority=True),
+        Binding("f4", "workspace", "View workspace", priority=True),
+        Binding("ctrl+s", "favorite", "Favorite", priority=True),
     ]
-
     CSS = """
-    ThemePicker { align: center middle; }
+    ThemePicker { align: center middle; background: transparent; }
     ThemePicker > Vertical {
         width: 86; max-width: 96%; height: 92%;
-        background: #0a0a0a; border: round #7c3aed; padding: 0 1;
+        background: $sq-bg; border: round $sq-purple; padding: 0 1;
     }
-    ThemePicker .title { text-align: center; color: #a855f7; text-style: bold; height: 1; }
-    ThemePicker #theme-tools { height: 1; align-horizontal: center; }
-    ThemePicker #theme-tools Button {
+    ThemePicker .title { text-align: center; color: $sq-purple; text-style: bold; height: 1; }
+    ThemePicker .theme-toolbar { height: 1; align-horizontal: center; }
+    ThemePicker .theme-toolbar Button {
         height: 1; min-height: 1; width: auto; min-width: 0; border: none;
         padding: 0 1; margin: 0 1 0 0;
     }
     ThemePicker #theme-search { height: 3; margin: 0; }
-    ThemePicker #theme-list { height: 4; background: #000000; }
+    ThemePicker #theme-list { height: 3; background: $sq-bg; }
     ThemePicker #theme-preview { height: 1fr; min-height: 3; padding: 0 1; }
-    ThemePicker #theme-detail { height: 2; color: #a1a1aa; }
-    ThemePicker .hints { height: 1; text-align: center; color: #a1a1aa; }
+    ThemePicker #theme-detail { height: 2; color: $sq-muted; }
+    ThemePicker .hints { height: 1; text-align: center; color: $sq-muted; }
+    ThemePicker.workspace-view { align: center bottom; }
+    ThemePicker.workspace-view > Vertical { height: 5; width: 100%; max-width: 100%; }
+    ThemePicker.workspace-view .title { display: none; }
+    ThemePicker.workspace-view #theme-detail { height: 1; }
+    ThemePicker.workspace-view #theme-tools,
+    ThemePicker.workspace-view #theme-filters,
+    ThemePicker.workspace-view #theme-search,
+    ThemePicker.workspace-view #theme-list,
+    ThemePicker.workspace-view #theme-preview { display: none; }
     """
 
-    def __init__(self, current: str | None = None, *, installed_only: bool = False) -> None:
+    def __init__(self, current=None, *, installed_only=False, confirm_label="applies and saves"):
         super().__init__()
         from superqode.app.theme_bridge import resolve_selection
 
         self._current = current if current in ds.THEMES else resolve_selection(current or "")
         self._installed_only = installed_only
-        self._names = [row["name"] for row in theme_rows(installed_only=installed_only)]
+        self._appearance_filter = "all"
+        self._scope = "all"
+        self._workspace = False
+        self._confirm_label = confirm_label
+        self._names = []
         self._preview_name = ""
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Static("Themes · preview before you apply", classes="title")
-            with Horizontal(id="theme-tools"):
-                yield Button(f"All themes ({len(theme_rows())})", id="theme-all", variant="primary")
-                yield Button(f"Installed ({len(ds.THEMES)})", id="theme-installed")
-                yield Button("Import JSON… (F2)", id="theme-import")
-            yield Input(
-                placeholder="Search name, light/dark, custom or collection", id="theme-search"
-            )
+            yield Static("Themes · preview your workspace", classes="title")
+            with Horizontal(id="theme-tools", classes="theme-toolbar"):
+                yield Button(f"All ({len(theme_rows())})", id="theme-all", variant="primary")
+                yield Button(
+                    f"Installed ({len(theme_rows(installed_only=True))})", id="theme-installed"
+                )
+                yield Button("Import F2", id="theme-import")
+            with Horizontal(id="theme-filters", classes="theme-toolbar"):
+                for label, name in (
+                    ("Light", "light"),
+                    ("Dark", "dark"),
+                    ("Favorites", "favorites"),
+                    ("Recent", "recent"),
+                ):
+                    yield Button(label, id=f"theme-{name}")
+            with Horizontal(id="theme-actions", classes="theme-toolbar"):
+                yield Button("Favorite", id="theme-favorite")
+                yield Button("Workspace F4", id="theme-workspace")
+                yield Button("Edit F3", id="theme-customize")
+                yield Button("Undo", id="theme-undo")
+            yield Input(placeholder="Search name, appearance or collection", id="theme-search")
             yield OptionList(*self._build_options(), id="theme-list")
             yield RichLog(id="theme-preview", wrap=True, min_width=1, auto_scroll=False)
             yield Static("", id="theme-detail", markup=False)
-            yield Static(
-                "↑↓ preview · Enter apply/install · Tab search · Esc cancel", classes="hints"
-            )
+            yield Static("↑↓ preview · Enter apply · F4 workspace · Esc cancel", classes="hints")
 
-    def on_mount(self) -> None:
+    def _begin_preview(self):
+        begin = getattr(self.app, "_begin_theme_preview", None)
+        if callable(begin):
+            begin(self)
+
+    def _end_preview(self):
+        end = getattr(self.app, "_end_theme_preview", None)
+        if callable(end):
+            end(self)
+
+    def on_mount(self):
+        self._begin_preview()
         options = self.query_one("#theme-list", OptionList)
         options.focus()
         options.highlighted = (
-            self._names.index(self._current) if self._current in self._names else 0
+            self._names.index(self._current)
+            if self._current in self._names
+            else (0 if self._names else None)
         )
         self._update_preview()
 
-    def on_resize(self, event: Resize) -> None:
-        # Keep the full seven-line preview on small terminals, and use the
-        # extra room on larger terminals to browse more than two entries.
-        for options in self.query("#theme-list"):
-            options.styles.height = max(4, min(12, event.size.height - 19))
+    def on_unmount(self):
+        self._end_preview()
 
-    def _build_options(self, query="") -> list[Option]:
+    def on_resize(self, event: Resize):
+        for options in self.query("#theme-list"):
+            options.styles.height = max(3, min(12, event.size.height - 22))
+
+    def _build_options(self, query=""):
+        from superqode.app.appearance import load_appearance
+
+        preferences = load_appearance()
+        favorites = preferences.favorite_themes
+        recent = list(
+            dict.fromkeys(name for item in preferences.recent_themes for name in item.split("/"))
+        )
         rows = theme_rows(query, installed_only=self._installed_only)
+        rows = [
+            row
+            for row in rows
+            if (self._appearance_filter == "all" or row["appearance"] == self._appearance_filter)
+            and (
+                self._scope == "all"
+                or row["name"] in (favorites if self._scope == "favorites" else recent)
+            )
+        ]
+        rows.sort(
+            key=lambda row: (
+                row["name"] not in favorites,
+                recent.index(row["name"]) if row["name"] in recent else len(recent),
+                row["name"].casefold(),
+            )
+        )
         self._names = [row["name"] for row in rows]
         return [
             Option(
                 Text(
-                    f"{'●' if row['name'] == self._current else ' '} {row['name']}"
-                    f"  ·  {row['appearance']}  ·  {'installed' if row['installed'] else 'install'}"
+                    f"{'*' if row['name'] in favorites else '●' if row['name'] == self._current else ' '} {row['name']}"
+                    f" · {row['appearance']} · {'installed' if row['installed'] else 'install'}"
                 ),
                 id=row["name"],
             )
             for row in rows
         ]
 
-    def _refilter(self) -> None:
+    def _refilter(self, keep=None):
         options = self.query_one("#theme-list", OptionList)
         options.clear_options()
         options.add_options(self._build_options(self.query_one("#theme-search", Input).value))
-        options.highlighted = 0 if options.option_count else None
-        self.query_one("#theme-all", Button).variant = (
-            "default" if self._installed_only else "primary"
+        options.highlighted = (
+            self._names.index(keep) if keep in self._names else (0 if self._names else None)
         )
-        self.query_one("#theme-installed", Button).variant = (
-            "primary" if self._installed_only else "default"
-        )
+        active = {
+            "all": not self._installed_only
+            and self._scope == "all"
+            and self._appearance_filter == "all",
+            "installed": self._installed_only,
+            "light": self._appearance_filter == "light",
+            "dark": self._appearance_filter == "dark",
+            "favorites": self._scope == "favorites",
+            "recent": self._scope == "recent",
+        }
+        for name, selected in active.items():
+            self.query_one(f"#theme-{name}", Button).variant = "primary" if selected else "default"
         self._update_preview()
 
-    def refresh_theme_colors(self) -> None:
+    def refresh_theme_colors(self):
         if self.is_running and self.query("#theme-preview"):
             self._update_preview()
 
-    def on_input_changed(self, event: Input.Changed) -> None:
+    def refresh_terminal_preview(self):
+        self._update_preview()
+
+    def on_input_changed(self, event: Input.Changed):
         if event.input.id == "theme-search":
             self._refilter()
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
+    def on_input_submitted(self, event: Input.Submitted):
         if event.input.id == "theme-search":
             self.action_confirm()
 
-    def on_key(self, event: Key) -> None:
-        if getattr(self.focused, "id", None) == "theme-search" and event.key in {"up", "down"}:
+    def on_key(self, event: Key):
+        if self._workspace and event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            self.action_confirm()
+        elif event.key in {"up", "down"} and (
+            self._workspace or getattr(self.focused, "id", None) == "theme-search"
+        ):
             event.stop()
             event.prevent_default()
             options = self.query_one("#theme-list", OptionList)
-            options.focus()
-            if event.key == "down":
-                options.action_cursor_down()
-            else:
-                options.action_cursor_up()
+            if not self._workspace:
+                options.focus()
+            options.action_cursor_down() if event.key == "down" else options.action_cursor_up()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "theme-import":
-            self.action_import_file()
-        elif event.button.id in {"theme-all", "theme-installed"}:
-            self._installed_only = event.button.id == "theme-installed"
-            self._refilter()
+    def on_button_pressed(self, event: Button.Pressed):
+        name = event.button.id.removeprefix("theme-")
+        if name in {"import", "workspace", "favorite", "customize"}:
+            getattr(self, f"action_{'import_file' if name == 'import' else name}")()
+        elif name == "undo":
+            self._end_preview()
+            self.dismiss(":previous")
+        else:
+            keep = self._selected_name()
+            if name == "all":
+                self._installed_only, self._scope, self._appearance_filter = False, "all", "all"
+            elif name == "installed":
+                self._installed_only = not self._installed_only
+            elif name in {"light", "dark"}:
+                self._appearance_filter = "all" if self._appearance_filter == name else name
+            elif name in {"favorites", "recent"}:
+                self._scope = "all" if self._scope == name else name
+            self._refilter(keep)
             self.query_one("#theme-list", OptionList).focus()
 
-    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+    def on_option_list_option_highlighted(self, event):
         self._update_preview()
 
     def _selected_name(self):
         options = self.query_one("#theme-list", OptionList)
-        if options.highlighted is None:
-            return None
-        return options.get_option_at_index(options.highlighted).id
+        return (
+            None
+            if options.highlighted is None
+            else options.get_option_at_index(options.highlighted).id
+        )
 
     def _update_preview(self):
         name = self._selected_name()
         preview = self.query_one("#theme-preview", RichLog)
-        preview.clear()
         detail = self.query_one("#theme-detail", Static)
         if not name:
-            detail.update("No matching themes. Clear the search or choose All themes.")
+            preview.clear()
+            detail.update("No matching themes. Clear the search or choose All.")
+            restore = getattr(self.app, "_preview_workspace_selection", None)
+            if callable(restore):
+                restore(self, self._current or "superqode")
             return
         try:
             theme = ds.THEMES.get(name) or library_theme(name)
             paint_preview(preview, theme)
+            preview_workspace = getattr(self.app, "_preview_workspace_theme", None)
+            if callable(preview_workspace):
+                preview_workspace(self, theme)
+            palette = palette_tokens(theme)
         except ThemeError as exc:
             detail.update(str(exc))
             return
-        palette = palette_tokens(theme)
         ratio = min(
             contrast(palette["text"], palette[key]) for key in ("bg", "surface", "surface2")
         )
+        installed = theme.source != "preview" and name in ds.THEMES
         action = (
-            "Enter applies and saves" if name in ds.THEMES else "Enter installs, applies and saves"
+            f"Enter {self._confirm_label}"
+            if installed
+            else f"Enter installs and {self._confirm_label}"
         )
-        credit = "Awesome Pi Themes · MIT" if name not in ds.THEMES else theme.description
-        detail.update(f"{credit}\nText ≥ {ratio:.1f}:1 · {action}")
+        detail.update(
+            f"{name} · {theme.appearance} · Text ≥ {ratio:.1f}:1\n{action} · Ctrl+S favorite · F4 view workspace"
+        )
         self._preview_name = name
 
-    def action_import_file(self) -> None:
+    def action_workspace(self):
+        self._workspace = not self._workspace
+        self.set_class(self._workspace, "workspace-view")
+        self.query_one("#theme-workspace", Button).label = (
+            "Gallery F4" if self._workspace else "Workspace F4"
+        )
+        if not self._workspace:
+            self.query_one("#theme-list", OptionList).focus()
+
+    def action_favorite(self):
+        from superqode.app.appearance import toggle_favorite
+
+        name = self._selected_name()
+        if name:
+            error = toggle_favorite(name)
+            if error:
+                self.query_one("#theme-detail", Static).update(error)
+            else:
+                self._refilter(name)
+
+    def action_import_file(self):
+        self._end_preview()
         self.app.push_screen(ThemeImportDialog(), callback=self._imported)
 
-    def _imported(self, name: str | None) -> None:
+    def action_customize(self):
+        from superqode.widgets.theme_customizer import ThemeCustomizer
+
+        name = self._selected_name()
+        theme = ds.THEMES.get(name) or (library_theme(name) if name else ds.get_theme())
+        self._end_preview()
+        self.app.push_screen(ThemeCustomizer(theme), callback=self._imported)
+
+    def _imported(self, name):
         if name:
             self.dismiss(name)
         else:
+            self._begin_preview()
             self.query_one("#theme-list", OptionList).focus()
+            self._update_preview()
 
-    def action_cancel(self) -> None:
+    def action_cancel(self):
+        self._end_preview()
         self.dismiss(None)
 
-    def action_confirm(self) -> None:
+    def action_confirm(self):
         name = self._selected_name()
         if not name:
             return
+        self._end_preview()
         try:
             if name not in ds.THEMES:
                 install_theme(name)
         except ThemeError as exc:
+            self._begin_preview()
             self.query_one("#theme-detail", Static).update(str(exc))
             return
         self.dismiss(name)
 
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+    def on_option_list_option_selected(self, event):
         self.action_confirm()
 
 

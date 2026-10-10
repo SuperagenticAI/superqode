@@ -135,7 +135,8 @@ class EventHandlerMixin:
             if getattr(self, "_wave_resume_on_focus", False):
                 self._begin_wave_bursts()
             try:
-                self.query_one("#streaming-thinking").auto_refresh = 1 / 2
+                reduced = getattr(getattr(self, "_appearance", None), "motion", "full") == "reduced"
+                self.query_one("#streaming-thinking").auto_refresh = None if reduced else 1 / 2
             except Exception:
                 pass
 

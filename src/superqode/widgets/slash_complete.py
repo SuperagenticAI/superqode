@@ -31,6 +31,21 @@ class SlashCommand:
 
 # Default slash commands
 DEFAULT_COMMANDS: list[SlashCommand] = [
+    SlashCommand(":settings", "Appearance: themes, spacing, motion and icons", category="settings"),
+    SlashCommand(":appearance", "Open appearance settings", category="settings"),
+    SlashCommand(":theme previous", "Restore the previous theme", category="settings"),
+    SlashCommand(":theme next", "Switch to the next favorite theme", category="settings"),
+    SlashCommand(
+        ":theme customize", "Create, preview and export a JSON theme", category="settings"
+    ),
+    SlashCommand(
+        ":trial",
+        "Guided first task: connect, validate, attach, run and review",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":feedback", "Review and export a redacted diagnostic bundle", category="workflow"
+    ),
     SlashCommand(":theme", "Search, preview, install and apply themes", category="settings"),
     SlashCommand(
         ":theme browse", "Browse the offline community theme gallery", category="settings"

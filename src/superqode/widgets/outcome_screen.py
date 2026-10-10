@@ -14,14 +14,15 @@ from textual.widgets import Button, Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
 from superqode.app.outcomes import Outcome, OutcomeSeverity
+from superqode.app.constants import THEME
 from superqode.widgets.panel_shortcuts import PanelShortcuts, PanelShortcutMixin
 
 
-_SEVERITY_COLORS = {
-    OutcomeSeverity.SUCCESS: "#22c55e",
-    OutcomeSeverity.INFORMATION: "#38bdf8",
-    OutcomeSeverity.WARNING: "#f59e0b",
-    OutcomeSeverity.ERROR: "#ef4444",
+_SEVERITY_ROLES = {
+    OutcomeSeverity.SUCCESS: "success",
+    OutcomeSeverity.INFORMATION: "cyan",
+    OutcomeSeverity.WARNING: "warning",
+    OutcomeSeverity.ERROR: "error",
 }
 
 #: Read before the words are. Kept to the set already used in the transcript so
@@ -44,18 +45,18 @@ class OutcomeSelection:
 
 def outcome_text(outcome: Outcome) -> Text:
     """Render an outcome without relying on Rich markup in external data."""
-    color = _SEVERITY_COLORS[outcome.severity]
+    color = THEME[_SEVERITY_ROLES[outcome.severity]]
     text = Text()
     text.append(f"{_SEVERITY_ICONS[outcome.severity]}  ", style=color)
     text.append(f"{outcome.title}\n\n", style=f"bold {color}")
-    text.append(f"{outcome.summary}\n", style="bold #f4f4f5")
+    text.append(f"{outcome.summary}\n", style=f"bold {THEME['text']}")
     if outcome.source:
-        text.append(f"\nFrom {outcome.source}\n", style="#71717a")
+        text.append(f"\nFrom {outcome.source}\n", style=THEME["muted"])
     if outcome.details:
         text.append("\n")
         for detail in outcome.details:
             if detail:
-                text.append(f"• {detail}\n", style="#d4d4d8")
+                text.append(f"• {detail}\n", style=THEME["text"])
     return text
 
 
@@ -156,6 +157,12 @@ class OutcomeScreen(PanelShortcutMixin, ModalScreen[OutcomeSelection | None]):
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def refresh_theme_colors(self) -> None:
+        if self.is_mounted:
+            self.query_one("#outcome-content", ScrollableContainer).query_one(Static).update(
+                outcome_text(self.outcome)
+            )
 
     def can_replace(self, outcome: Outcome) -> bool:
         """Whether a newer outcome can reuse this screen's button row.
@@ -269,15 +276,15 @@ class ActivityScreen(PanelShortcutMixin, Screen[OutcomeSelection | None]):
         for outcome in self.outcomes:
             stamp = outcome.created_at.astimezone().strftime("%H:%M")
             label = Text()
-            label.append(f"{stamp}  ", style="#71717a")
-            label.append(outcome.title, style=f"bold {_SEVERITY_COLORS[outcome.severity]}")
-            label.append(f"\n      {outcome.summary}", style="#a1a1aa")
+            label.append(f"{stamp}  ", style=THEME["muted"])
+            label.append(outcome.title, style=f"bold {THEME[_SEVERITY_ROLES[outcome.severity]]}")
+            label.append(f"\n      {outcome.summary}", style=THEME["muted"])
             options.append(Option(label, id=outcome.id))
         return options
 
     def _initial_detail(self) -> Text:
         if not self.outcomes:
-            return Text("Important results will remain available here.", style="#a1a1aa")
+            return Text("Important results will remain available here.", style=THEME["muted"])
         return outcome_text(self.outcomes[0])
 
     @on(OptionList.OptionHighlighted)

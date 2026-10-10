@@ -51,11 +51,18 @@ class SelectionAwareInput(TextArea):
             return
         elapsed = max(0.0, monotonic() - self._working_started_at)
         frame = self.WORKING_DOT_FRAMES[int(elapsed * 2) % len(self.WORKING_DOT_FRAMES)]
+        preferences = getattr(self.app, "_appearance", None)
+        reduced = getattr(preferences, "motion", "full") == "reduced"
+        simple = getattr(preferences, "icons", "unicode") == "ascii"
+        if reduced:
+            frame = "●"
+        if simple:
+            frame = frame.replace("●", "*").replace("·", ".")
         self._working_placeholder = f"Agent working {frame}"
         accents = list(
             dict.fromkeys(THEME[key] for key in ("purple", "pink", "gold", "cyan", "success"))
         )
-        colors = sample(accents, min(3, len(accents)))
+        colors = [THEME["purple"]] if reduced else sample(accents, min(3, len(accents)))
         content = Text("Agent working ", style=f"bold {THEME['purple']}")
         for index, dot in enumerate(frame):
             content.append(dot, style=f"bold {colors[index % len(colors)]}")
@@ -89,6 +96,11 @@ class SelectionAwareInput(TextArea):
                 self._working_timer = None
             return
         self._update_working_placeholder()
+        if getattr(getattr(self.app, "_appearance", None), "motion", "full") == "reduced":
+            if timer is not None:
+                timer.stop()
+                self._working_timer = None
+            return
         if timer is None:
             self._working_timer = self.set_interval(0.5, self._update_working_placeholder)
 
@@ -316,6 +328,10 @@ class SelectionAwareInput(TextArea):
         except Exception:
             app = getattr(self, "_app", None)
         if app is None:
+            return
+
+        permission_key = getattr(app, "_handle_permission_key", None)
+        if callable(permission_key) and permission_key(event):
             return
 
         if event.key == "alt+a":

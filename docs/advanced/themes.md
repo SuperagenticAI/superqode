@@ -5,6 +5,7 @@ Choose a palette without restarting your coding session. Theme changes repaint r
 **SuperQode is the default theme.** The header shows the current palette beside the navigation, or on a second header line in a narrow terminal. Click **Theme: … ↑** to open the gallery. Applying a theme shows the same confirmation card as a model connection and records the change in Activity. Your saved selection is restored on the next launch.
 
 See the [theme reliability review](theme-reliability-review.md) for bugs found during the follow-up audit and the validation coverage.
+See the [appearance workflow review](appearance-workflow-review.md) for workspace previews, settings, the customizer, guided tasks and feedback export.
 
 ## Choose and preview
 
@@ -16,7 +17,21 @@ superqode --theme light/tokyonight
 superqode theme list
 ```
 
-In the TUI, use `:theme` or `:theme browse` to open the searchable gallery. **All themes** includes installed palettes and the offline community catalog; **Installed** filters to themes ready to use. Search by name, appearance (`light`/`dark`), source (`custom`), or collection (`Awesome Pi`). Arrow keys preview palette swatches, a coding exchange, tool output, syntax, a diff, and a warning. Tab moves between controls; Enter applies and saves, installing a catalog theme first when needed. Escape cancels without changing the palette or installing anything. Use `:theme nord` to apply a name directly.
+In the TUI, use `:theme` or `:theme browse` to open the searchable gallery. **All** includes installed palettes and the offline community catalog; **Installed** filters to themes ready to use. **Light** and **Dark** are explicit appearance filters. Search by name, appearance, source (`custom`), or collection (`Awesome Pi`). Arrow keys preview your actual prompt, transcript, diffs, header and notifications, along with a small coding sample. **F4** reduces the gallery to a bottom strip so you can inspect the workspace; arrows continue switching previews. Tab moves between controls; Enter applies and saves, installing a catalog theme first when needed. Escape restores the original appearance without installing a preview or changing your draft and selection. Use `:theme nord` to apply a name directly.
+
+**Ctrl+S** toggles a favorite. **Favorites** and **Recent** narrow the gallery; **All** clears these filters. `:theme next` cycles favorites and installs a catalog favorite if needed. **Undo** or `:theme previous` restores the last selected theme, including an automatic selection or light/dark pair. `:theme undo` is an alias. Favorites and recent choices persist in your private appearance preferences.
+
+## Appearance settings
+
+Open `:settings` or `:appearance` from the prompt or command palette. One screen brings together the gallery, a fixed theme, automatic SuperQode light/dark switching, terminal-derived colors, a custom light/dark pair, comfortable/compact spacing, reduced animation, and simple ASCII status icons. Pair selectors show installed palettes of the appropriate appearance; install additional palettes through the gallery first.
+
+Changes preview live. F4 exposes the workspace. **Apply & save** saves the selection and preferences together; Escape restores them. Reduced animation retains a steady working status while stopping sweeps and rotating prompt/thinking indicators. Simple icons preserve clickable header and hint controls; agent responses and code retain their original characters.
+
+## Visual customizer
+
+Use `:theme customize` for the active palette, or **F3** / **Edit** for the selected gallery palette. Adjust the accent, background, panel background and text; light/dark canvas presets provide starting points. The actual workspace previews valid edits. The status shows requested and rendered text contrast immediately, including automatic readability corrections. Invalid edits retain the last working preview and disable saving.
+
+Choose a unique lowercase theme name. **Save & apply** installs a native JSON theme in your user theme directory and selects it. **Export JSON** writes a reusable native theme to your chosen path while leaving the workspace in preview. Existing files are retained. Escape cancels the preview; an explicitly exported file remains available to share. F4 shows the workspace while editing.
 
 The initial collection has seven original dark palettes, a native light palette, terminal-derived `system`, `auto`, and four MIT-licensed community palettes: Ayu Light, Ayu Mirage, Halcyon Rivet, and Saffron Cavern. Run the list command for the complete installed collection.
 

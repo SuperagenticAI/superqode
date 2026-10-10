@@ -158,11 +158,15 @@ def update_auto_theme() -> None:
 
 
 def available_themes() -> list[tuple[str, str]]:
-    return ds.list_themes()
+    return [
+        (name, description)
+        for name, description in ds.list_themes()
+        if ds.THEMES[name].source != "preview"
+    ]
 
 
 def theme_names() -> list[str]:
-    return [name for name, _ in ds.list_themes()]
+    return [name for name, _ in available_themes()]
 
 
 def active_theme_name() -> str:
@@ -188,7 +192,9 @@ def brand_style(color: str):
     )
 
 
-def save_theme(name: str) -> str | None:
+def save_theme(
+    name: str, *, appearance: dict | None = None, previous_selection: str | None = None
+) -> str | None:
     """Return an error if selection applies but cannot be persisted."""
     if not resolve_selection(name):
         return "Unknown theme selection"
@@ -207,6 +213,32 @@ def save_theme(name: str) -> str | None:
             destination = theme_directory() / f"{theme.name}.json"
             atomic_json(destination, native_document(theme), overwrite=False)
             theme.source = str(destination.absolute())
+        from superqode.app.appearance import AppearancePreferences
+        from dataclasses import asdict
+
+        raw = config.get("appearance")
+        raw = dict(raw) if isinstance(raw, dict) else {}
+        if appearance:
+            raw.update(
+                {
+                    key: appearance[key]
+                    for key in ("density", "motion", "icons")
+                    if key in appearance
+                }
+            )
+        preferences = AppearancePreferences.from_dict(raw)
+        previous = (
+            previous_selection
+            if previous_selection is not None
+            else config.get("theme", "superqode")
+        )
+        if isinstance(previous, str) and previous != name and resolve_selection(previous):
+            preferences.previous_theme = previous
+        preferences.recent_themes = [
+            name,
+            *[item for item in preferences.recent_themes if item != name],
+        ][:30]
+        config["appearance"] = {**raw, **asdict(preferences)}
         config["theme"] = name
         atomic_json(_CONFIG_PATH, config)
     except (OSError, ValueError, UnicodeError, RecursionError) as exc:

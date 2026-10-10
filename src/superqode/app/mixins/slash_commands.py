@@ -584,6 +584,12 @@ class SlashCommandMixin:
             self._handle_diagnostics(args, log)
         elif c == "theme":
             self._handle_theme(args, log)
+        elif c in {"settings", "appearance"}:
+            self._appearance_cmd(log)
+        elif c == "trial":
+            self._trial_cmd(log)
+        elif c == "feedback":
+            self._feedback_cmd(log)
         # New coding agent commands
         elif c == "approve":
             self._handle_approve(args, log)
@@ -3503,6 +3509,15 @@ class SlashCommandMixin:
         from superqode.widgets.theme_picker import ThemeImportDialog
 
         argument = args.strip() if args else ""
+        if argument.lower() in {"previous", "undo"}:
+            self._restore_previous_theme(log)
+            return
+        if argument.lower() == "next":
+            self._cycle_favorite_theme(log)
+            return
+        if argument.lower() in {"customize", "edit"}:
+            self._customize_theme(log)
+            return
         if argument:
             verb, *tail = argument.split(maxsplit=1)
             if verb.lower() in {
@@ -3519,7 +3534,9 @@ class SlashCommandMixin:
 
         def _on_dismissed(name: str | None) -> None:
             self.set_timer(0.1, self._ensure_input_focus)
-            if name and self._apply_and_persist_theme(name):
+            if name == ":previous":
+                self._restore_previous_theme(log)
+            elif name and self._apply_and_persist_theme(name):
                 self._report_theme_change(name, log)
 
         if argument in {"", "browse", "install"}:
@@ -3538,6 +3555,7 @@ class SlashCommandMixin:
                 ":theme install --all — install the whole collection; then choose with :theme"
             )
             log.add_info(":theme check FILE · :theme init FILE --name NAME · :theme reload")
+            log.add_info(":theme previous · :theme next (favorites) · :theme customize · :settings")
             return
         if argument.startswith("browse "):
             self._run_cli_group("theme", argument, log, "Theme catalog")

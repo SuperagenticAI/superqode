@@ -56,7 +56,7 @@ def _app(*, welcome_active: bool, applied: bool = True):
 class TestRepaintOnThemeChange:
     def test_home_screen_refreshes_without_clearing_retained_content(self, monkeypatch):
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: True)
-        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n: None)
+        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n, **kw: None)
         app = _app(welcome_active=True)
 
         assert app._apply_and_persist_theme("superqode") is True
@@ -66,7 +66,7 @@ class TestRepaintOnThemeChange:
     def test_a_transcript_is_never_destroyed_by_a_cosmetic_command(self, monkeypatch):
         """Rebuilding clears the log, so it must not run over a conversation."""
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: True)
-        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n: None)
+        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n, **kw: None)
         app = _app(welcome_active=False)
 
         assert app._apply_and_persist_theme("nord") is True
@@ -76,7 +76,9 @@ class TestRepaintOnThemeChange:
     def test_an_unknown_theme_changes_and_repaints_nothing(self, monkeypatch):
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: False)
         saved: list[str] = []
-        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda n: saved.append(n))
+        monkeypatch.setattr(
+            "superqode.app.mixins.helpers.save_theme", lambda n, **kw: saved.append(n)
+        )
         app = _app(welcome_active=True)
 
         assert app._apply_and_persist_theme("nope") is False
@@ -86,7 +88,7 @@ class TestRepaintOnThemeChange:
     def test_theme_switch_never_invokes_destructive_welcome_replay(self, monkeypatch):
         """The welcome replay path must not run during a theme switch."""
         monkeypatch.setattr("superqode.app.mixins.helpers._apply_theme_palette", lambda _n: True)
-        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n: None)
+        monkeypatch.setattr("superqode.app.mixins.helpers.save_theme", lambda _n, **kw: None)
         app = _app(welcome_active=True)
 
         def explode():

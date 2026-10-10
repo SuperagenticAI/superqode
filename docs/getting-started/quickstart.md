@@ -45,6 +45,11 @@ superqode
 
 The terminal user interface starts by default.
 
+For a guided route through setup, open `:trial`. It combines connection choice,
+setup validation, a project-file attachment, a small task and result review.
+Use `:settings` to adjust themes and terminal appearance, and `:feedback` to
+review and export local diagnostics for an issue report.
+
 ## 3. Connect an agent or model
 
 Open the connection picker:

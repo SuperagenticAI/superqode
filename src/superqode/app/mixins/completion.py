@@ -66,7 +66,9 @@ class CompletionMixin:
         prefix_text = value[:at_pos]
         candidates: list[PromptCompletionCandidate] = []
         for path, description in self._path_token_candidates(query):
-            replacement = f"{prefix_text}@{path}"
+            from superqode.widgets.file_reference import format_file_reference
+
+            replacement = prefix_text + format_file_reference(path)
             # Skip the no-op match so a fully-typed reference closes the panel
             # instead of lingering on the path the user already selected.
             if replacement == value:
@@ -396,6 +398,9 @@ class CompletionMixin:
         from superqode.app.theme_bridge import available_themes
 
         actions = [
+            ("previous", "Restore the previous theme"),
+            ("next", "Switch to the next favorite theme"),
+            ("customize", "Edit colors and export your own JSON theme"),
             ("browse", "Search and preview the offline community collection"),
             ("import", "Open a JSON file import dialog"),
             ("install", "Open the catalog; install NAME or --all"),

@@ -665,7 +665,9 @@ class ColorfulStatusBar(Static):
         name = theme_display_name(active_theme_name())
         if self.is_mounted:
             selection = getattr(self.app, "_current_theme", "")
-            if selection == "auto" or "/" in selection:
+            if getattr(self.app, "_theme_previews", []):
+                name += " (Preview)"
+            elif selection == "auto" or "/" in selection:
                 name += " (Auto)"
         name = self._truncate_status_value(name, max(1, width - 9))
         indicator = Text("Theme: ", style=THEME["muted"])
@@ -749,7 +751,15 @@ class ColorfulStatusBar(Static):
             run(action)
 
     def render(self) -> Text:
-        return self._render_for_width(self.content_size.width or 120)
+        result = self._render_for_width(self.content_size.width or 120)
+        if (
+            self.is_mounted
+            and getattr(getattr(self.app, "_appearance", None), "icons", "unicode") == "ascii"
+        ):
+            from superqode.app.appearance import simple_text
+
+            return simple_text(result)
+        return result
 
     def update_byok_status(
         self,
@@ -1072,7 +1082,8 @@ class StreamingThinkingIndicator(Static):
 
     def watch_is_active(self, active: bool) -> None:
         if self.is_mounted:
-            self.auto_refresh = 1 / 2 if active else None
+            reduced = getattr(getattr(self.app, "_appearance", None), "motion", "full") == "reduced"
+            self.auto_refresh = 1 / 2 if active and not reduced else None
         self.refresh()
 
     def begin(self) -> None:
@@ -1119,12 +1130,22 @@ class StreamingThinkingIndicator(Static):
         spinner_idx = int(elapsed * self.SPINNER_FRAMES_PER_SECOND) % len(self.SPINNER_FRAMES)
         color = "#a855f7"
 
-        spinner = self.SPINNER_FRAMES[spinner_idx]
+        reduced = (
+            self.is_mounted
+            and getattr(getattr(self.app, "_appearance", None), "motion", "full") == "reduced"
+        )
+        simple = (
+            self.is_mounted
+            and getattr(getattr(self.app, "_appearance", None), "icons", "unicode") == "ascii"
+        )
+        spinner = "*" if simple else ("●" if reduced else self.SPINNER_FRAMES[spinner_idx])
 
         # Every phase begins with "Thinking", then moves through calm progress
         # language slowly enough to be readable rather than feeling rushed.
-        phrase_idx = int(elapsed / self.PHRASE_SECONDS) % len(phrase_order)
+        phrase_idx = 0 if reduced else int(elapsed / self.PHRASE_SECONDS) % len(phrase_order)
         phrase = phrase_order[phrase_idx]
+        if simple:
+            phrase = "Thinking"
 
         result.append(f"  {spinner} ", style=f"bold {color}")
         result.append(phrase, style=f"bold {color}")
@@ -1179,6 +1200,8 @@ class ModeBadge(Static):
     approval_mode = reactive("auto")
 
     def render(self) -> Text:
+        from superqode.app.appearance import appearance_text
+
         t = Text()
 
         if self.execution_mode == "pure":
@@ -1193,7 +1216,7 @@ class ModeBadge(Static):
                 t.append("  ", style="")
                 t.append(f"📊 {self.model}", style=THEME["muted"])
 
-            return t
+            return appearance_text(self, t)
 
         if self.agent:
             color = AGENT_COLORS.get(self.agent, THEME["purple"])
@@ -1281,7 +1304,7 @@ class ModeBadge(Static):
             # preserving this widget for useful agent/role connection state.
             return Text("")
 
-        return t
+        return appearance_text(self, t)
 
 
 class HintsBar(Static):
@@ -1292,6 +1315,8 @@ class HintsBar(Static):
     is_working = reactive(False)
 
     def render(self) -> Text:
+        from superqode.app.appearance import appearance_text
+
         t = Text()
 
         # t.append("\n", style="")
@@ -1304,7 +1329,7 @@ class HintsBar(Static):
             t.append("  •  ", style=THEME["dim"])
             t.append("Alt+A", style="bold #38bdf8")
             t.append(" Agent Screen", style=THEME["text"])
-            return t
+            return appearance_text(self, t)
 
         # Before connecting, the only thing that matters is connecting. Once a
         # session is running, the bar becomes what to do with it: evaluating,
@@ -1353,7 +1378,7 @@ class HintsBar(Static):
             if hint.lstrip(":") in CLICKABLE_COMMANDS:
                 t.append(" ↑", style=style)
 
-        return t
+        return appearance_text(self, t)
 
 
 class SelectableTextArea(Static):
@@ -2016,6 +2041,8 @@ class ConversationLog(RichLog):
     def add_error(self, text: str):
         self._messages.append(("error", text, ""))
         self._last_error = text  # Track for easy copy
+        # Keep only a bounded diagnostic tail. Export redacts before clipping.
+        self._diagnostic_errors = [*getattr(self, "_diagnostic_errors", []), str(text)][-10:]
 
         # Try to display with rich markup support
         try:

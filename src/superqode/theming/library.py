@@ -27,12 +27,14 @@ def library_theme(name: str) -> ds.Theme:
 def theme_rows(query: str = "", *, installed_only: bool = False) -> list[dict]:
     """Cheap discovery metadata; load only the palette being previewed."""
     collection = catalog()
-    names = list(ds.THEMES)
+    names = [name for name, theme in ds.THEMES.items() if theme.source != "preview"]
     if not installed_only:
-        names.extend(name for name in collection["themes"] if name not in ds.THEMES)
+        names.extend(name for name in collection["themes"] if name not in names)
     rows = []
     for name in names:
         theme = ds.THEMES.get(name)
+        if theme is not None and theme.source == "preview":
+            theme = None
         source = (
             (theme.source if theme.source in {"built-in", "bundled"} else "custom")
             if theme

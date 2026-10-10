@@ -7,6 +7,20 @@ calls when needed, and inspect what happened.
 
 The TUI keeps prompts, tool activity, approvals, file changes, and session state visible in one terminal.
 
+For an interactive version, open `:trial` or **Guided first task** in
+the command palette. Choose a connection, validate its setup, attach a small
+project text file, and explicitly run a task. The default task reads the project
+and explains how to test it. Validation sends no inference request; credential
+configuration is distinguished from account access established by the first
+task. The run uses the normal approval and cancellation controls.
+
+The guide returns after a successful connection where possible. Use `:trial`
+to reopen it after setup or a run, then review the recorded answer and task
+changes. Escape returns to the workspace. Attaching context retains your draft;
+running a different task saves the original draft for `:stash` to restore.
+For a file path containing spaces, `:attach "docs/project context.md"` stages a
+quoted reference such as `@"docs/project context.md"`.
+
 ---
 
 ## Before You Start

@@ -107,6 +107,9 @@ async def test_connection_back_restores_transcript_position_draft_and_runtime(si
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
         prompt.value = "draft before setup"
         await pilot.pause()
+        # Simulate the reading lock established by a manual scroll, so any
+        # delayed tail-follow callback from add_user cannot reset the position.
+        log._set_viewport_mode("user_locked")
         log.scroll_to(y=5, animate=False, force=True)
         await pilot.pause()
         old_scroll = log.scroll_y

@@ -17,6 +17,10 @@ from superqode.app.prompt_stack import PromptSpec
 CLICKABLE_COMMANDS: frozenset[str] = frozenset(
     {
         "activity",
+        "appearance",
+        "settings",
+        "trial",
+        "feedback",
         "history-earlier",
         "history-later",
         "agent",

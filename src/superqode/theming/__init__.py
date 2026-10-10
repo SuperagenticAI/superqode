@@ -520,6 +520,11 @@ def load_theme_file(path: Path) -> ds.Theme:
         data = json.loads(content.decode("utf-8"))
     except (OSError, UnicodeError, ValueError, RecursionError) as exc:
         raise ThemeError(f"Cannot read theme: {exc}") from exc
+    return theme_from_document(data, source=str(path.resolve()))
+
+
+def theme_from_document(data: dict, *, source: str = "preview") -> ds.Theme:
+    """Validate an in-memory palette with the same rules as JSON imports."""
     if not isinstance(data, dict):
         raise ThemeError("Theme must be a JSON object")
     name = data.get("name", "")
@@ -632,7 +637,7 @@ def load_theme_file(path: Path) -> ds.Theme:
         ds.ColorPalette(**palette),
         appearance,
         tokens,
-        str(path.resolve()),
+        source,
         extensions,
     )
     palette_tokens(theme)  # Validate surface contrast before replacing a working theme.

@@ -552,10 +552,13 @@ class HelpersMixin(
 
     def _apply_and_persist_theme(self, name: str) -> bool:
         """Apply and save colours without clearing or replaying user activity."""
+        previous = getattr(self, "_current_theme", "superqode")
         if not _apply_theme_palette(name):
             return False
+        if previous != name:
+            self._previous_theme = previous
         self._current_theme = name
-        self._theme_save_error = save_theme(name)
+        self._theme_save_error = save_theme(name, previous_selection=previous)
         refresh_theme_view = getattr(self, "_refresh_theme_view", None)
         if callable(refresh_theme_view):
             refresh_theme_view()

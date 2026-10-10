@@ -54,6 +54,21 @@ the model and harness.
 
 ## Report what happened
 
+Open `:feedback` or **Export feedback** in the command palette.
+Describe the problem and review the displayed JSON. You can exclude recent
+errors or harness/model names. The bundle records the version, platform,
+terminal size, theme and appearance preferences, selected route, and a bounded
+error tail. It excludes conversation history, source files, session IDs and
+configuration dumps. Known credentials, common token formats, private keys,
+authenticated URL parameters and local home/project paths are redacted.
+
+Select **I reviewed this diagnostic bundle**, choose an export path, and click
+**Export JSON**. Editing the notes or options clears the review acknowledgment.
+The exported JSON matches the reviewed snapshot, uses private file permissions,
+and retains any existing destination file. It is saved locally; nothing is
+uploaded automatically. Review the file for private information before sharing
+it with the organizers.
+
 Include the following in feedback or an issue:
 
 - SuperQode version, operating system, terminal application, and terminal size.

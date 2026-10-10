@@ -494,18 +494,29 @@ SuperQode supports complete light, dark, terminal-derived, and custom JSON
 palettes. Open the searchable picker with `:theme`, or apply a name directly:
 
 ```text
-:theme            # preview messages, tools, code, a diff, and a warning
+:theme            # preview the real workspace; F4 exposes it, Esc restores it
 :theme tokyonight
 :theme dracula
 :theme light
 :theme system
 :theme auto
+:theme next       # switch to the next favorite
+:theme previous   # restore the previous selection
+:theme customize  # edit a copy, check readability and save/export JSON
+:settings         # appearance, light/dark pairing, spacing, motion and icons
 ```
 
-Selection applies immediately, including retained conversation output, and is
-saved to `~/.superqode/config.json`. Drafts and queued tasks remain in place.
+Highlighting previews immediately, including retained conversation output.
+Enter applies and saves to `~/.superqode/config.json`; Escape restores the
+original appearance. Drafts and queued tasks remain in place. The gallery
+includes explicit Light/Dark, Favorites and Recent filters; Ctrl+S toggles a favorite.
 Use `superqode --theme light` for a temporary startup choice. See
 [Themes](themes.md) for custom files, Pi palette imports, and live editing.
+
+Open `:trial` for connection validation, project context, an explicit first task
+and recorded result review. Use `:feedback` to inspect a redacted diagnostic
+snapshot and export it locally after review. See the [first-session guide](../getting-started/first-session.md)
+and [hackathon guide](../getting-started/hackathon.md).
 
 ## Accessibility
 

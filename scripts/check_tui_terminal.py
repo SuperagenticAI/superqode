@@ -25,8 +25,29 @@ def child(state_path: Path):
     from superqode.app_main import SuperQodeApp, SelectionAwareInput
     from superqode.app.widgets import ConversationLog
     from superqode.history import HistoryManager
+    from textual.binding import Binding
 
     class TerminalProbe(SuperQodeApp):
+        BINDINGS = [
+            *SuperQodeApp.BINDINGS,
+            Binding("f6", "probe_themes", show=False, priority=True),
+            Binding("f7", "probe_settings", show=False, priority=True),
+            Binding("f8", "probe_feedback", show=False, priority=True),
+            Binding("f9", "probe_trial", show=False, priority=True),
+        ]
+
+        def action_probe_themes(self):
+            self._handle_theme("", self.query_one("#log", ConversationLog))
+
+        def action_probe_settings(self):
+            self._appearance_cmd(self.query_one("#log", ConversationLog))
+
+        def action_probe_feedback(self):
+            self._feedback_cmd(self.query_one("#log", ConversationLog))
+
+        def action_probe_trial(self):
+            self._trial_cmd(self.query_one("#log", ConversationLog))
+
         def __init__(self):
             super().__init__(theme_selection="system")
             self._history_manager = HistoryManager(history_file=Path.cwd() / "history.jsonl")
@@ -74,6 +95,8 @@ def child(state_path: Path):
                 "terminal_palette": self._terminal_palette,
                 "palette_bg": THEME["bg"],
                 "theme_timer_pending": self._terminal_theme_refresh_timer is not None,
+                "workspace_preview": self.screen.has_class("workspace-view"),
+                "appearance_preview": bool(self._theme_previews),
             }
             temporary = state_path.with_suffix(".tmp")
             temporary.write_text(json.dumps(state), encoding="utf-8")
@@ -96,6 +119,8 @@ def probe(term: str, size: tuple[int, int]):
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", size[1], size[0], 0, 0))
         env = {**os.environ, "TERM": term, "HOME": directory, "SUPERQODE_VIM_MODE": "0"}
         env.pop("SUPERQODE_CONNECT", None)
+        env.pop("NO_COLOR", None)
+        env["COLORTERM"] = "truecolor"
         process = subprocess.Popen(
             [sys.executable, str(Path(__file__).resolve()), "--child", str(state_path)],
             stdin=slave,
@@ -200,6 +225,48 @@ def probe(term: str, size: tuple[int, int]):
             )
             send(b"keep this draft")
             wait_for("typing", lambda s: s["text"] == "keep this draft")
+            send(b"\x1b[17~")
+            wait_for(
+                "theme gallery retains draft",
+                lambda s: s["screen"] == "ThemePicker" and s["text"] == "keep this draft",
+            )
+            send(b"\x1b[Z")
+            wait_for("theme search focused", lambda s: s["focused"] == "theme-search")
+            send(b"ayu-light")
+            wait_for(
+                "whole workspace light preview",
+                lambda s: s["palette_bg"] == "#f0f0f0"
+                and s["theme_name"] == "system"
+                and s["text"] == "keep this draft",
+            )
+            send(b"\x1bOS")
+            wait_for("compact workspace preview", lambda s: s["workspace_preview"])
+            send(b"\x1b")
+            wait_for(
+                "preview Escape restores palette draft and focus",
+                lambda s: not s["appearance_preview"]
+                and s["palette_bg"] == "#1a1b26"
+                and s["focused"] == "prompt-input"
+                and s["text"] == "keep this draft",
+            )
+            for key, screen in (
+                (b"\x1b[18~", "AppearanceSettings"),
+                (b"\x1b[19~", "FeedbackExportScreen"),
+                (b"\x1b[20~", "DeveloperTrialScreen"),
+            ):
+                send(key)
+                wait_for(
+                    f"{screen} opens with draft",
+                    lambda s, screen=screen: s["screen"] == screen
+                    and s["text"] == "keep this draft",
+                )
+                send(b"\x1b")
+                wait_for(
+                    f"{screen} Escape restores focus",
+                    lambda s, screen=screen: s["screen"] != screen
+                    and s["focused"] == "prompt-input"
+                    and s["text"] == "keep this draft",
+                )
             send(b"\x0b")
             wait_for("command palette keyboard focus", lambda s: s["focused"] != "prompt-input")
             send(b"\x1b")

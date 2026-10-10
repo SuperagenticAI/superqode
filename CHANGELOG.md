@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Preview themes across the actual workspace with reversible Escape and a
+  compact F4 view; filter by Light/Dark, save favorites, browse recent choices,
+  cycle favorites, and restore the previous theme.
+- Central appearance settings for themes, automatic light/dark pairs, compact
+  spacing, reduced animation and simple terminal status icons.
+- A visual theme customizer with live readability checks and private native
+  JSON save/export.
+- A guided first task connecting existing harness discovery, setup diagnostics,
+  project context, normal prompt execution and recorded result review.
+- Developer-reviewed local feedback bundles with bounded diagnostic metadata,
+  error summaries and credential/path redaction.
+
+### Fixed
+
+- Keep catalog themes visible while previewing without installing them.
+- Expand quoted file references so attachments with spaces and special
+  characters resolve to the intended project file.
+- Keep result and Activity text readable on light and dark palettes.
+- Keep workspace approval, plan and navigation keys from acting behind modal
+  editors and theme previews.
+- Resolve inline y/n/a approval keys before composer text insertion.
+
 ## [2.12.0] - 2026-10-10
 
 ### Added

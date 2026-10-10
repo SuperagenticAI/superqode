@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, TYPE_CHECKING
 
@@ -59,7 +60,23 @@ except ImportError:
 # ============================================================================
 
 # Pattern to match @filename references
-FILE_REFERENCE_PATTERN = re.compile(r"@([\w./\-_]+)")
+FILE_REFERENCE_PATTERN = re.compile(r'@("(?:[^"\\\n]|\\.)*"|[\w./\-_]+)')
+
+
+def reference_path(value: str) -> str:
+    """Decode a JSON-quoted path; keep the established unquoted syntax."""
+    if value.startswith('"'):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return ""
+    return value
+
+
+def format_file_reference(path: str) -> str:
+    return "@" + (
+        path if re.fullmatch(r"[\w./\-_]+", path) else json.dumps(path, ensure_ascii=False)
+    )
 
 
 def parse_file_references(text: str) -> List[str]:
@@ -72,8 +89,9 @@ def parse_file_references(text: str) -> List[str]:
     Returns:
         List of file paths referenced
     """
-    matches = FILE_REFERENCE_PATTERN.findall(text)
-    return matches
+    return [
+        path for value in FILE_REFERENCE_PATTERN.findall(text) if (path := reference_path(value))
+    ]
 
 
 def expand_file_references(text: str, root_path: Path) -> Tuple[str, List[Tuple[str, str]]]:
@@ -124,7 +142,9 @@ def expand_file_references(text: str, root_path: Path) -> Tuple[str, List[Tuple[
                 pass
 
     # Remove @ prefixes from text for clean display
-    clean_text = FILE_REFERENCE_PATTERN.sub(r"\1", text)
+    clean_text = FILE_REFERENCE_PATTERN.sub(
+        lambda match: reference_path(match[1]) or match[0], text
+    )
 
     return clean_text, file_contents
 

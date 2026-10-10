@@ -17,6 +17,9 @@ class HelperDiffReviewMixin:
         from superqode.app.task_changes import TaskChanges
 
         self._task_changes_current = TaskChanges(Path.cwd()).capture()
+        bind_trial = getattr(self, "_bind_trial_task", None)
+        if callable(bind_trial):
+            bind_trial(self._task_changes_current.id)
 
     def _task_change_sections(self, task_id: str = "") -> list[tuple[str, str]]:
         tasks = getattr(self, "_task_changes_history", {})

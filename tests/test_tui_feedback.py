@@ -268,7 +268,7 @@ async def test_theme_save_error_is_visible_without_claiming_it_was_saved(monkeyp
 
     monkeypatch.setattr(
         "superqode.app.mixins.helpers.save_theme",
-        lambda _name: "Theme applied but could not be saved: disk full",
+        lambda _name, **kw: "Theme applied but could not be saved: disk full",
     )
     app = SuperQodeApp(theme_selection="superqode")
     async with app.run_test(size=(80, 24), notifications=True) as pilot:

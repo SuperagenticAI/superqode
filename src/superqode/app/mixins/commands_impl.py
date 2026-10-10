@@ -1917,6 +1917,8 @@ class CommandImplMixin:
 
     def _attach_cmd(self, args: str, log: ConversationLog):
         """Insert file or URL references into the next prompt."""
+        from superqode.widgets.file_reference import format_file_reference
+
         value = args.strip()
         if not value:
             self._show_command_output(log, self._render_attachments())
@@ -1971,9 +1973,9 @@ class CommandImplMixin:
                 self._stage_image_attachment(path, log, source="path")
                 continue
             try:
-                refs.append("@" + str(path.relative_to(Path.cwd())))
+                refs.append(format_file_reference(str(path.relative_to(Path.cwd()))))
             except ValueError:
-                refs.append("@" + str(path))
+                refs.append(format_file_reference(str(path)))
         if not refs:
             return
         self._attached_refs.extend(refs)

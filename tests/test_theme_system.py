@@ -268,7 +268,7 @@ async def test_pending_follow_scroll_respects_new_reading_lock(monkeypatch, sour
         assert log.viewport_mode == "user_locked"
 
 
-async def test_preview_search_cancel_and_apply_are_isolated():
+async def test_preview_search_changes_workspace_and_cancel_restores_it():
     app = SuperQodeApp(theme_selection="superqode")
     async with app.run_test(size=(80, 24)) as pilot:
         original = dict(THEME)
@@ -278,7 +278,7 @@ async def test_preview_search_cancel_and_apply_are_isolated():
         options = picker.query_one("#theme-list", OptionList)
         options.highlighted = picker._names.index("ayu-light")
         await pilot.pause()
-        assert THEME == original
+        assert THEME != original
         assert not bridge._CONFIG_PATH.exists()
         assert (
             picker.query_one("#theme-preview").styles.background.hex.lower()
@@ -530,7 +530,7 @@ async def test_gallery_search_preview_install_and_restart(size):
         picker.query_one("#theme-search", Input).value = "alien-candy"
         await pilot.pause()
         assert picker._selected_name() == "alien-candy"
-        assert THEME == before and not bridge.theme_directory().exists()
+        assert THEME != before and not bridge.theme_directory().exists()
         preview = picker.query_one("#theme-preview")
         assert (
             preview.styles.background.hex.lower()

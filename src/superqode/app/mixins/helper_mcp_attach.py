@@ -14,7 +14,12 @@ class HelperMcpAttachMixin:
 
     def _preview_next_context(self, log: ConversationLog) -> None:
         from superqode.widgets.context_preview import ContextItem, ContextPreviewScreen
-        from superqode.widgets.file_reference import parse_file_references, FILE_REFERENCE_PATTERN
+        from superqode.widgets.file_reference import (
+            parse_file_references,
+            FILE_REFERENCE_PATTERN,
+            format_file_reference,
+            reference_path,
+        )
         from superqode.app.inputs import SelectionAwareInput
 
         prompt = self.query_one("#prompt-input", SelectionAwareInput)
@@ -26,7 +31,11 @@ class HelperMcpAttachMixin:
             dict.fromkeys(
                 [
                     *getattr(self, "_attached_refs", []),
-                    *([] if chat else ["@" + ref for ref in parse_file_references(draft)]),
+                    *(
+                        []
+                        if chat
+                        else [format_file_reference(ref) for ref in parse_file_references(draft)]
+                    ),
                     *([] if chat else inline_mcp_refs),
                 ]
             )
@@ -154,7 +163,7 @@ class HelperMcpAttachMixin:
                 spans = [
                     (match.start(), match.end())
                     for match in FILE_REFERENCE_PATTERN.finditer(text)
-                    if "@" + match.group(1) == reference
+                    if format_file_reference(reference_path(match.group(1))) == reference
                 ]
             else:
                 spans = [

@@ -163,6 +163,8 @@ from superqode.app.mixins.helpers import HelpersMixin
 
 
 from superqode.app.mixins.feedback import FeedbackMixin
+from superqode.app.mixins.appearance import AppearanceMixin
+from superqode.app.mixins.developer_experience import DeveloperExperienceMixin
 
 
 from superqode.app.mixins.build_harness import BuildHarnessMixin
@@ -180,6 +182,8 @@ from superqode.app.mixins.composer_blocks import ComposerBlocksMixin
 
 
 class SuperQodeApp(
+    AppearanceMixin,
+    DeveloperExperienceMixin,
     ComposerBlocksMixin,
     SupervisionMixin,
     HarnessHubMixin,
@@ -402,6 +406,11 @@ class SuperQodeApp(
         # Apply the persisted accent theme before any widget renders so the
         # whole UI paints in the chosen palette from the first frame.
         self._current_theme = load_saved_theme()
+        from superqode.app.appearance import load_appearance
+
+        self._appearance = load_appearance()
+        self._previous_theme = self._appearance.previous_theme
+        self._theme_previews = []
         if theme_selection is not None:
             from superqode.app.theme_bridge import load_project_theme, resolve_selection
 
@@ -574,13 +583,18 @@ class SuperQodeApp(
 
     def _finish_terminal_theme(self):
         self._terminal_theme_refresh_timer = None
+        if self._theme_previews:
+            refresh = getattr(self._theme_previews[-1]["owner"], "refresh_terminal_preview", None)
+            if callable(refresh):
+                refresh()
+            return
         if self._current_theme in {"system", "auto"} or "/" in self._current_theme:
             if _apply_theme_palette(self._current_theme):
                 self._refresh_theme_view()
 
     def _poll_theme_file(self):
         """Reload a complete changed user file, retaining the last working palette."""
-        if not self.is_running:
+        if not self.is_running or self._theme_previews:
             return
         from superqode import design_system as ds
         from superqode.app.theme_bridge import apply_theme, theme_directory
@@ -638,6 +652,7 @@ class SuperQodeApp(
         self._sync_approval_mode()
         # PERFORMANCE: Initialize animation manager for throttled animations
         self._init_animation_manager()
+        self._apply_appearance(self._appearance)
         # Initialize undo manager for checkpoint/restore
         self._init_undo_manager()
         # ACP agent discovery disabled on startup - user can run :acp discover manually if needed
@@ -928,22 +943,33 @@ class SuperQodeApp(
             return ""
         return typed if typed.isdigit() else ""
 
-    def on_key(self, event: events.Key) -> None:
-        """Handle key events globally - intercept arrow keys during selection modes."""
-        # Inline permission prompt: while a permission decision is pending,
-        # y/n/a resolve it and escape cancels. Intercepted before the Input
-        # widget so the keystroke never lands in the prompt buffer.
+    def _handle_permission_key(self, event: events.Key) -> bool:
+        """Resolve a visible inline approval before the composer inserts text."""
         if (
             len(self.screen_stack) == 1
             and getattr(self, "_permission_pending", False)
             and not getattr(self, "_awaiting_agent_question", False)
+            and event.key in ("y", "n", "a", "escape")
         ):
-            if event.key in ("y", "n", "a", "escape"):
-                event.stop()
-                mapping = {"y": "y", "n": "n", "a": "a", "escape": "n"}
-                self._handle_permission_input(mapping[event.key])
-                self.set_timer(0.05, self._ensure_input_focus)
-                return
+            event.stop()
+            event.prevent_default()
+            if event.key == "escape":
+                self.action_cancel_agent()
+            else:
+                self._handle_permission_input(event.key)
+            self.set_timer(0.05, self._ensure_input_focus)
+            return True
+        return False
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle key events globally - intercept arrow keys during selection modes."""
+        # Workspace decisions and navigation must not react to keys typed in
+        # a modal editor or preview. Each screen owns its own key handling.
+        if len(self.screen_stack) > 1:
+            return
+
+        if self._handle_permission_key(event):
+            return
 
         # Plan decisions use Alt shortcuts so ordinary composer typing remains
         # untouched. They are active only after a model-authored plan exists.

@@ -153,6 +153,8 @@ class AgentRunMixin:
                 pass
 
     def _begin_wave_bursts(self) -> None:
+        if getattr(getattr(self, "_appearance", None), "motion", "full") == "reduced":
+            return
         if getattr(self, "_wave_burst_running", False):
             return  # Streaming and preparation share one run's schedule.
         if not getattr(self, "_wave_window_focused", True):

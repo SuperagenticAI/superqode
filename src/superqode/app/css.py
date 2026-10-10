@@ -69,6 +69,10 @@ Toast.-error {
 Toast.-error .toast--title { color: $sq-error; }
 
 #main-grid { height: 100%; layout: horizontal; }
+.compact-appearance #input-box { margin: 0; }
+.compact-appearance #status-bar { padding-top: 0; min-height: 2; }
+.compact-appearance ConversationLog { padding-top: 0; padding-bottom: 0; }
+.compact-appearance #hints { height: 1; }
 
 /* Sidebar - hidden by default */
 #sidebar {
