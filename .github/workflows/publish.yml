@@ -72,7 +72,7 @@ jobs:
           uv run --frozen pytest -p pytest_asyncio.plugin
           tests/test_theme_system.py tests/test_theme_contrast.py
           tests/test_tui_appearance.py
-          tests/test_theme_repaint.py tests/test_tui_hackathon_journey.py
+          tests/test_theme_repaint.py tests/test_tui_developer_trial.py
           tests/test_tui_navigation.py tests/test_tui_developer_experience.py
           tests/test_tui_background_io.py tests/test_tui_feedback.py -q
       - name: Theme real-terminal input and rendering

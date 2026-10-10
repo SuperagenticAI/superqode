@@ -40,7 +40,7 @@ jobs:
       - name: TUI keyboard and draft checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_productivity.py tests/test_tui_draft_recovery.py tests/test_tui_hackathon_journey.py tests/test_theme_system.py tests/test_tui_appearance.py -q
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_productivity.py tests/test_tui_draft_recovery.py tests/test_tui_developer_trial.py tests/test_theme_system.py tests/test_tui_appearance.py tests/test_theme_detection_and_safety.py -q
       - name: Core provider tool-history checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
@@ -121,7 +121,7 @@ jobs:
       - name: Connection and terminal interaction checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_connection_experience.py tests/test_connect_harness_screen.py tests/test_subscription_billing_policy.py tests/test_harness_connect_catalog.py tests/test_tui_local_latency.py tests/test_tui_animation_bursts.py tests/test_tui_background_io.py tests/test_local_model_optimizations.py tests/test_herdr.py tests/test_herdr_restore.py tests/test_tui_hackathon_journey.py tests/test_theme_system.py tests/test_tui_appearance.py -q --junitxml=connection-tests.xml
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_connection_experience.py tests/test_connect_harness_screen.py tests/test_subscription_billing_policy.py tests/test_harness_connect_catalog.py tests/test_tui_local_latency.py tests/test_tui_animation_bursts.py tests/test_tui_background_io.py tests/test_local_model_optimizations.py tests/test_herdr.py tests/test_herdr_restore.py tests/test_tui_developer_trial.py tests/test_theme_system.py tests/test_tui_appearance.py -q --junitxml=connection-tests.xml
       - name: Report connection failures
         if: failure()
         shell: python {0}
