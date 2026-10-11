@@ -9,7 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, Select, Static
+from textual.widgets import Button, Input, Label, Select, Static
 
 from superqode import design_system as ds
 from superqode.app.appearance import load_appearance
@@ -114,10 +114,30 @@ class AppearanceSettings(ModalScreen[bool]):
                     allow_blank=False,
                     id="appearance-icons",
                 )
+                yield Label("Prompt cursor")
+                yield Select(
+                    [("Blinking block", "blink"), ("Steady block", "steady")],
+                    value=self.original.cursor,
+                    allow_blank=False,
+                    id="appearance-cursor",
+                )
+                yield Label("Mouse")
+                yield Select(
+                    [
+                        ("Application selection and controls", "on"),
+                        ("Terminal selection · keyboard controls", "off"),
+                    ],
+                    value=self.original.mouse,
+                    allow_blank=False,
+                    id="appearance-mouse",
+                )
+                yield Label("Export appearance JSON path")
+                yield Input(value="~/superqode-appearance.json", id="appearance-export-path")
             yield Static("", id="appearance-status", markup=False)
             with Horizontal(id="appearance-actions"):
                 yield Button("Apply & save", id="appearance-save", variant="primary")
                 yield Button("View F4", id="appearance-workspace")
+                yield Button("Export JSON", id="appearance-export")
                 yield Button("Cancel", id="appearance-cancel")
 
     @staticmethod
@@ -149,7 +169,7 @@ class AppearanceSettings(ModalScreen[bool]):
             self.original,
             **{
                 key: str(self.query_one(f"#appearance-{key}", Select).value)
-                for key in ("density", "motion", "icons")
+                for key in ("density", "motion", "icons", "cursor", "mouse")
             },
         )
 
@@ -212,6 +232,28 @@ class AppearanceSettings(ModalScreen[bool]):
             self.action_cancel()
         elif event.button.id == "appearance-workspace":
             self.action_workspace()
+        elif event.button.id == "appearance-export":
+            self.action_export()
+
+    def action_export(self):
+        from pathlib import Path
+        from superqode.app.appearance import appearance_document
+        from superqode.theming import atomic_json
+
+        value = self.query_one("#appearance-export-path", Input).value.strip()
+        try:
+            if not value:
+                raise ValueError("Choose an export path first")
+            path = Path(value).expanduser()
+            atomic_json(
+                path, appearance_document(self._preferences(), self._selection()), overwrite=False
+            )
+        except (OSError, ValueError) as exc:
+            self.query_one("#appearance-status", Static).update(f"Could not export: {exc}")
+        else:
+            self.query_one("#appearance-status", Static).update(
+                f"Exported appearance to {path}\nSettings remain a preview until Apply & save."
+            )
 
     def action_workspace(self):
         self._workspace = not self._workspace

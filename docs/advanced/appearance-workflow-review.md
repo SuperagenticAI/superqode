@@ -1,7 +1,7 @@
 # Appearance and first-task review: 10 October 2026
 
-These changes shipped in SuperQode 2.13.0, following the 2.12.0 baseline.
-The version has not been bumped and the changes have not been pushed or published.
+The workflows reviewed here shipped in SuperQode 2.13.0, following the 2.12.0
+baseline. See the [themes guide](themes.md) for current controls and exports.
 
 ## Delivered workflows
 

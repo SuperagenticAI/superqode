@@ -225,6 +225,12 @@ class SuperQodeApp(
         return screen
 
     BINDINGS = [
+        Binding("j", "panel_vim_down", "Next", show=False, priority=True),
+        Binding("k", "panel_vim_up", "Previous", show=False, priority=True),
+        Binding("g", "panel_vim_top", "First (gg)", show=False, priority=True),
+        Binding("G", "panel_vim_bottom", "Last", show=False, priority=True),
+        Binding("ctrl+u", "panel_vim_page_up", "Page up", show=False, priority=True),
+        Binding("ctrl+d", "panel_vim_page_down", "Page down", show=False, priority=True),
         Binding("ctrl+c", "interrupt", "Interrupt", show=True),
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
@@ -774,6 +780,14 @@ class SuperQodeApp(
     # Actions users may safely rebind via ~/.superqode/keybindings.json
     _REBINDABLE_ACTIONS = {binding.action for binding in BINDINGS}
 
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action.startswith("panel_vim_"):
+            available = self._panel_vim_target() is not None
+            if not available:
+                self._panel_vim_pending = None
+            return available
+        return super().check_action(action, parameters)
+
     def _sidebar_has_focus(self) -> bool:
         if not self.screen_stack or not self.sidebar_visible:
             return False
@@ -997,6 +1011,7 @@ class SuperQodeApp(
         # Workspace decisions and navigation must not react to keys typed in
         # a modal editor or preview. Each screen owns its own key handling.
         if len(self.screen_stack) > 1:
+            self._panel_vim_pending = None
             return
 
         if self._handle_permission_key(event):

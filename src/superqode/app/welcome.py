@@ -252,29 +252,23 @@ def render_welcome(
     else:
         headline = "SUPERQODE"
     desc_text.append(f"{headline}\n", style=f"bold {THEME['text']}")
-    if not narrow:
-        desc_text.append("\n", style="")
-        desc_text.append(
-            "Harnesses · Context · Memory · Tools · Evaluations · Control loops\n",
-            style=f"bold {THEME['cyan']}",
-        )
-        desc_text.append("\n", style="")
-        desc_text.append(
-            "Build · Connect · Orchestrate · Evaluate · Optimize\n",
-            style=f"bold {THEME['gold']}",
-        )
-        desc_text.append("\n", style="")
     desc_text.append("Terminal-first · Any agent or model\n", style=f"bold {THEME['purple']}")
     if not narrow:
-        desc_text.append("\n", style="")
-    interoperability = "Local · ACP · MCP · A2A · UHP · BYOK · Jev SystemOne Harness"
-    if narrow:
-        desc_text.append(interoperability, style=THEME["muted"])
-    else:
-        desc_text.append("Interoperability: ", style=THEME["dim"])
-        desc_text.append(interoperability, style=THEME["muted"])
-    desc_text.append("\n", style="")
+        desc_text.append(
+            "Connect your coding agent or model, run a task, and review its work.\n",
+            style=THEME["muted"],
+        )
     items.append(place(desc_text))
+
+    first_task = Text(justify=align)
+    first_task.append(
+        "Start your first task ↗",
+        style=f"bold {THEME['cyan']} {command_link('trial')}",
+    )
+    if width is None or width >= 48:
+        first_task.append("  :trial", style=THEME["muted"])
+    first_task.append("\n", style="")
+    items.append(place(first_task))
 
     if state.git_branch:
         branch_text = Text(justify=align)
@@ -316,6 +310,13 @@ def render_welcome(
         style=f"bold {THEME['cyan']} {command_link('help')}",
     )
     footer_text.append(" commands", style=THEME["muted"])
+    if width is None or width >= 80:
+        footer_text.append("  •  ", style=THEME["muted"])
+        footer_text.append(
+            ":explore",
+            style=f"bold {THEME['cyan']} {command_link('explore')}",
+        )
+        footer_text.append(" capabilities", style=THEME["muted"])
     items.append(place(footer_text))
 
     return Group(*items)

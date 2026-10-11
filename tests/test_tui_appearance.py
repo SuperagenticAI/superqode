@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import threading
+import asyncio
 
 import pytest
 from textual.document._document import Selection
@@ -27,6 +28,9 @@ from superqode.app.developer_trial import project_context
 from superqode.app.feedback_bundle import feedback_bundle, redact_feedback
 from superqode.widgets.developer_trial import DeveloperTrialScreen
 from superqode.widgets.feedback_export import FeedbackExportScreen
+from superqode.widgets.mcp_connections import MCPConnectionsScreen
+from superqode.mcp.client import MCPClientManager, MCPConnectionState
+from superqode.mcp.config import MCPServerConfig, MCPStdioConfig, MCPHttpConfig
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +98,47 @@ async def test_workspace_preview_cancel_restores_colors_and_draft(size):
         assert prompt.selection == Selection((0, 2), (0, 6))
         assert app.focused is prompt
         assert not app._theme_previews
+
+
+@pytest.mark.parametrize("format_name", ["superqode", "pi"])
+async def test_tui_theme_export_and_compatibility_preserve_draft(tmp_path, format_name):
+    import shlex
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "Keep my draft"
+        path = tmp_path / "portable palette.json"
+        log = app.query_one("#log", ConversationLog)
+        rendered = []
+        original_write = log.write
+
+        def capture(*values, **kwargs):
+            rendered.extend(value.plain for value in values if hasattr(value, "plain"))
+            return original_write(*values, **kwargs)
+
+        log.write = capture
+        app._handle_command(
+            f":theme export superqode {shlex.quote(str(path))} --format {format_name}", log
+        )
+        async with asyncio.timeout(10):
+            while not path.exists():
+                await pilot.pause(0.1)
+        await pilot.pause()
+        assert (
+            palette_tokens(load_theme_file(path))["purple"]
+            == palette_tokens(ds.get_theme("superqode"))["purple"]
+        )
+        original = path.read_bytes()
+        app._handle_command(f":theme compatibility {shlex.quote(str(path))}", log)
+        async with asyncio.timeout(10):
+            while not any('"valid": true' in value for value in rendered):
+                await pilot.pause(0.1)
+        await pilot.pause()
+        assert any('"valid": true' in value for value in rendered)
+        assert path.read_bytes() == original
+        assert prompt.value == "Keep my draft"
 
 
 @pytest.mark.parametrize(
@@ -248,14 +293,19 @@ async def test_settings_preview_save_or_cancel(save):
         settings.query_one("#appearance-density", Select).value = "compact"
         settings.query_one("#appearance-motion", Select).value = "reduced"
         settings.query_one("#appearance-icons", Select).value = "ascii"
+        settings.query_one("#appearance-cursor", Select).value = "steady"
+        settings.query_one("#appearance-mouse", Select).value = "off"
         settings.query_one("#appearance-mode", Select).value = "auto"
         await pilot.pause()
         assert app.default_screen.has_class("compact-appearance")
         assert app._appearance.motion == "reduced"
+        assert not app.query_one("#prompt-input", SelectionAwareInput).cursor_blink
         assert "🔌" not in app.query_one("#status-bar", ColorfulStatusBar).render().plain
         settings.action_save() if save else settings.action_cancel()
         await pilot.pause()
         assert app._appearance.density == ("compact" if save else "comfortable")
+        assert app._appearance.cursor == ("steady" if save else "blink")
+        assert app._appearance.mouse == ("off" if save else "on")
         assert app._current_theme == "auto"  # new users start on auto; cancel restores it
         assert bool(bridge._CONFIG_PATH.exists()) is save
         if save:
@@ -263,7 +313,250 @@ async def test_settings_preview_save_or_cancel(save):
             assert json.loads(bridge._CONFIG_PATH.read_text())["theme"] == "auto"
 
 
-async def test_customizer_exports_private_json_and_preserves_existing_file(tmp_path):
+async def test_appearance_export_does_not_commit_preview_or_change_draft(tmp_path):
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "unfinished task"
+        prompt.cursor_position = 5
+        app._appearance_cmd(app.query_one("#log", ConversationLog))
+        await pilot.pause()
+        settings = app.screen
+        path = tmp_path / "appearance.json"
+        settings.query_one("#appearance-export-path", Input).value = str(path)
+        settings.query_one("#appearance-cursor", Select).value = "steady"
+        await pilot.pause()
+        settings.action_export()
+        assert json.loads(path.read_text())["appearance"]["cursor"] == "steady"
+        original = path.read_bytes()
+        settings.action_export()
+        assert path.read_bytes() == original
+        assert not bridge._CONFIG_PATH.exists()
+        await pilot.press("escape")
+        assert app._appearance.cursor == "blink"
+        assert prompt.value == "unfinished task" and prompt.cursor_position == 5
+
+
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+async def test_mcp_panel_close_reopen_and_cancel_preserve_transport_ownership(size, monkeypatch):
+    manager = MCPClientManager()
+    manager.add_server(
+        MCPServerConfig(id="slow", name="slow", config=MCPStdioConfig(command="unused"))
+    )
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def establish(connection):
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(manager, "_establish_connection", establish)
+    app = SuperQodeApp()
+    try:
+        async with app.run_test(size=size) as pilot:
+            prompt = app.query_one("#prompt-input", SelectionAwareInput)
+            prompt.value = "keep my draft"
+            app.push_screen(MCPConnectionsScreen(manager))
+            await pilot.pause()
+            panel = app.screen
+            assert panel.query_one("#mcp-action-back", Button).region.bottom <= size[1]
+            assert panel.query_one("#mcp-action-login", Button).disabled
+            await pilot.click("#mcp-action-connect")
+            await asyncio.wait_for(started.wait(), 2)
+            await pilot.pause()
+            assert panel.query_one("#mcp-action-cancel", Button).disabled is False
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not manager._state_callbacks
+            assert (
+                "slow" in manager._owners
+            )  # Closing cancels the waiter, not the shared transport.
+            assert prompt.value == "keep my draft"
+            app.push_screen(MCPConnectionsScreen(manager))
+            await pilot.pause()
+            panel = app.screen
+            await pilot.click("#mcp-action-cancel")
+            await pilot.pause()
+            assert manager.get_connection_state("slow") == MCPConnectionState.DISCONNECTED
+            assert not manager._owners
+            # Retry after cancellation and retain the established connection when closing.
+            release.set()
+            await pilot.click("#mcp-action-retry")
+            await pilot.pause()
+            assert manager.get_connection_state("slow") == MCPConnectionState.CONNECTED
+            assert "connected" in panel.query_one("#mcp-detail", TextArea).text
+            await pilot.press("escape")
+            await pilot.pause()
+            assert manager.get_connection_state("slow") == MCPConnectionState.CONNECTED
+            assert not manager._state_callbacks
+    finally:
+        await manager.disconnect_all()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX driver mouse escape contract")
+def test_mouse_preference_survives_driver_resume():
+    from types import SimpleNamespace
+    from superqode.app.mixins.appearance import AppearanceMixin
+    from textual.drivers.linux_driver import LinuxDriver
+
+    written = []
+    driver = object.__new__(LinuxDriver)
+    driver._mouse = True
+    driver.write = written.append
+    driver.flush = lambda: None
+    app = SimpleNamespace(_driver=driver, capture_mouse=lambda _: None)
+    AppearanceMixin._apply_mouse_preference(app, "off")
+    driver._enable_mouse_support()  # Application-mode resume must respect the saved preference.
+    assert driver._mouse is False
+    assert written and all(sequence.endswith("l") for sequence in written)
+    written.clear()
+    AppearanceMixin._apply_mouse_preference(app, "on")
+    assert driver._mouse is True
+    assert written and all(sequence.endswith("h") for sequence in written)
+
+
+def test_mcp_panel_redacts_configured_and_stored_opaque_credentials(monkeypatch, tmp_path):
+    from superqode.mcp.auth_storage import MCPAuthStorage
+    from superqode.mcp.oauth import OAuthTokens
+
+    storage = MCPAuthStorage(tmp_path / "auth")
+    monkeypatch.setattr("superqode.mcp.auth_storage.get_auth_storage", lambda: storage)
+    url = "https://fixture.invalid/mcp"
+    storage.for_server("remote").save_tokens(
+        url, OAuthTokens("opaque-access-value", refresh_token="opaque-refresh-value")
+    )
+    manager = MCPClientManager()
+    manager.add_server(
+        MCPServerConfig(
+            id="remote",
+            name="remote",
+            config=MCPHttpConfig(url=url, headers={"Authorization": "Bearer opaque-header-value"}),
+        )
+    )
+    manager.add_server(
+        MCPServerConfig(
+            id="local",
+            name="local",
+            config=MCPStdioConfig(env={"PRIVATE_API_KEY": "opaque-environment-value"}),
+        )
+    )
+    panel = MCPConnectionsScreen(manager)
+    safe = panel.diagnostic(
+        "remote", "Failed: opaque-access-value opaque-refresh-value opaque-header-value"
+    )
+    assert "opaque-" not in safe and "Failed" in safe
+    assert "opaque-environment-value" not in panel.diagnostic(
+        "local", "Failed: opaque-environment-value"
+    )
+
+
+async def test_mcp_panel_closing_login_cleans_up_pending_work(monkeypatch):
+    manager = MCPClientManager()
+    manager.add_server(
+        MCPServerConfig(
+            id="remote", name="remote", config=MCPHttpConfig(url="https://fixture.invalid/mcp")
+        )
+    )
+    started, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def authenticate(name):
+        try:
+            started.set()
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(manager, "authenticate_server", authenticate)
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        app.push_screen(MCPConnectionsScreen(manager))
+        await pilot.pause()
+        panel = app.screen
+        await pilot.click("#mcp-action-login")
+        await asyncio.wait_for(started.wait(), 2)
+        pending = panel._tasks["remote"]
+        await pilot.press("escape")
+        await asyncio.wait_for(cancelled.wait(), 2)
+        await pilot.pause()
+        assert pending.done() and not manager._state_callbacks
+
+
+async def test_new_commands_reach_their_views_without_starting_connections(monkeypatch):
+    from types import SimpleNamespace
+    from superqode.runtime.codex_capabilities import CodexCapabilities
+
+    manager = MCPClientManager()
+
+    async def get_manager():
+        return manager
+
+    async def forbidden(*args):
+        raise AssertionError("Viewing status must not connect or infer")
+
+    monkeypatch.setattr("superqode.mcp.integration.get_mcp_manager", get_manager)
+    monkeypatch.setattr(manager, "connect", forbidden)
+    monkeypatch.setattr(
+        "superqode.app.mixins.connect.get_session", lambda: SimpleNamespace(connected_agent=None)
+    )
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._pure_mode = SimpleNamespace(
+            runtime_name="codex-cli",
+            session=SimpleNamespace(
+                connected=True, provider="codex", model="selected", harness_runtime="codex-cli"
+            ),
+            _runtime=SimpleNamespace(capabilities=CodexCapabilities(methods={"thread/resume": {}})),
+        )
+        output = []
+        monkeypatch.setattr(
+            app, "_show_command_output", lambda log, text: output.append(text.plain)
+        )
+        app._handle_command(":connect capabilities", log)
+        assert "Continue: Supported" in output[-1]
+        assert "Fork: Unavailable" in output[-1]
+        app._handle_command(":mcp panel", log)
+        await pilot.pause()
+        assert isinstance(app.screen, MCPConnectionsScreen)
+        assert "No MCP servers configured" in app.screen.query_one("#mcp-detail", TextArea).text
+        await pilot.press("escape")
+
+
+async def test_mcp_panel_errors_are_redacted_and_retry_recovers(monkeypatch):
+    manager = MCPClientManager()
+    manager.add_server(
+        MCPServerConfig(id="fixture", name="fixture", config=MCPStdioConfig(command="unused"))
+    )
+    monkeypatch.setenv("TEST_MCP_API_KEY", "private-fixture-secret-value")
+
+    async def fail(connection):
+        raise RuntimeError("Server denied private-fixture-secret-value")
+
+    async def success(connection):
+        pass
+
+    monkeypatch.setattr(manager, "_establish_connection", fail)
+    app = SuperQodeApp()
+    try:
+        async with app.run_test(size=(80, 24)) as pilot:
+            app.push_screen(MCPConnectionsScreen(manager))
+            await pilot.pause()
+            await pilot.click("#mcp-action-connect")
+            await pilot.pause()
+            panel = app.screen
+            detail = panel.query_one("#mcp-detail", TextArea).text
+            assert "error" in detail and "denied" in detail
+            assert "private-fixture-secret-value" not in detail
+            monkeypatch.setattr(manager, "_establish_connection", success)
+            await pilot.click("#mcp-action-retry")
+            await pilot.pause()
+            assert manager.get_connection_state("fixture") == MCPConnectionState.CONNECTED
+            assert "denied" not in panel.query_one("#mcp-detail", TextArea).text
+    finally:
+        await manager.disconnect_all()
+
+
+@pytest.mark.parametrize("format_name", ["superqode", "pi"])
+async def test_customizer_exports_private_json_and_preserves_existing_file(tmp_path, format_name):
     app = SuperQodeApp()
     async with app.run_test() as pilot:
         app.push_screen(ThemeCustomizer(ds.get_theme()))
@@ -271,12 +564,16 @@ async def test_customizer_exports_private_json_and_preserves_existing_file(tmp_p
         customizer = app.screen
         customizer.query_one("#custom-accent", Input).value = "#00bbaa"
         customizer.query_one("#custom-export-path", Input).value = str(tmp_path / "export.json")
+        customizer.query_one("#custom-export-format", Select).value = format_name
         await pilot.pause()
         assert customizer._candidate is not None
         customizer.action_export()
         path = tmp_path / "export.json"
         exported = load_theme_file(path)
         assert exported.tokens["purple"] == "#00bbaa"
+        assert ("earendil-works/pi" in json.loads(path.read_text())["$schema"]) is (
+            format_name == "pi"
+        )
         before = path.read_bytes()
         customizer.action_export()
         assert path.read_bytes() == before

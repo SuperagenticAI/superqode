@@ -199,6 +199,7 @@ TOKEN_KEYS = set(PI_MAP.values()) | {
 }
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 MAX_THEME_BYTES = 256 * 1024
+THEME_SCHEMA_URL = "https://raw.githubusercontent.com/SuperagenticAI/superqode/main/src/superqode/data/themes/schema.json"
 
 
 def palette_tokens(theme: ds.Theme, changes: list[str] | None = None) -> dict[str, str]:
@@ -748,6 +749,7 @@ def atomic_json(path: Path, data: dict, *, overwrite: bool = True) -> None:
 
 def native_document(theme: ds.Theme) -> dict:
     return {
+        "$schema": THEME_SCHEMA_URL,
         "version": 1,
         "name": theme.name,
         "description": theme.description,

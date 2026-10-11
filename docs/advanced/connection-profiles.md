@@ -12,6 +12,23 @@ by name, so `:connect codex` does not require navigating the menus.
 
 ## Model and agent sources (`:connect`)
 
+The searchable connection browser describes which interface owns approvals,
+continuation, steering, compaction, file recovery and usage. Model-source pickers
+retain the selected harness, so their final controls depend on that harness.
+External vendor terminals own their controls and recovery.
+
+After selecting a connection, use `:connect capabilities` for the active route.
+Native controls are distinguished from harness-owned controls. ACP resume is
+shown as not negotiated, advertised, or context replay; an advertisement does
+not prove that a particular saved session can be restored. Codex controls use
+the installed CLI's advertised schema and distinguish unsupported operations
+from capabilities that have not been verified. This view does not start an
+agent, generate a response or probe an account. Use `:connect test` for setup
+checks, or its explicit inference option to verify a model request.
+
+File recovery requires a captured Git task baseline and remains subject to its
+size and retention limits. Usage and cost are shown only when reported.
+
 ### 1. Local (connector: local, runtime: builtin)
 
 Connects to local/self-hosted model servers. Opens a local provider picker (Ollama, MLX, LM Studio, vLLM, SGLang, TGI, DS4). Keeps the selected native harness.

@@ -259,6 +259,7 @@ COMMANDS = [
     ":connect setup",
     ":connect search",
     ":connect status",
+    ":connect capabilities",
     ":connect retry",
     ":connect test",
     ":connect test --infer",
@@ -473,6 +474,8 @@ COMMANDS = [
     ":theme install",
     ":theme help",
     ":theme check",
+    ":theme compatibility",
+    ":theme export",
     ":theme import",
     ":theme init",
     ":theme reload",
@@ -734,6 +737,7 @@ COMMANDS = [
     ":mcp",
     ":mcp list",
     ":mcp status",
+    ":mcp panel",
     ":mcp tools",
     ":mcp resources",
     ":mcp prompts",
@@ -822,13 +826,23 @@ class SlashCommand:
 
 # Default slash commands
 DEFAULT_COMMANDS: list[SlashCommand] = [
-    SlashCommand(":settings", "Appearance: themes, spacing, motion and icons", category="settings"),
+    SlashCommand(
+        ":settings",
+        "Appearance: themes, spacing, motion, icons, cursor and mouse",
+        category="settings",
+    ),
+    SlashCommand(
+        ":connect capabilities", "Show supported controls and their owner", category="connections"
+    ),
+    SlashCommand(":mcp panel", "Live MCP status, login, retry and cancellation", category="tools"),
     SlashCommand(":appearance", "Open appearance settings", category="settings"),
     SlashCommand(":theme previous", "Restore the previous theme", category="settings"),
     SlashCommand(":theme next", "Switch to the next favorite theme", category="settings"),
     SlashCommand(
         ":theme customize", "Create, preview and export a JSON theme", category="settings"
     ),
+    SlashCommand(":theme export", "Export a native or Pi JSON palette", category="settings"),
+    SlashCommand(":theme compatibility", "Check a palette's Pi compatibility", category="settings"),
     SlashCommand(
         ":trial",
         "Guided first task: connect, validate, attach, run and review",

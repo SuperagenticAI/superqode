@@ -45,11 +45,51 @@ def child(state_path: Path):
     class TerminalProbe(SuperQodeApp):
         BINDINGS = [
             *SuperQodeApp.BINDINGS,
+            Binding("f5", "probe_mcp", show=False, priority=True),
             Binding("f6", "probe_themes", show=False, priority=True),
             Binding("f7", "probe_settings", show=False, priority=True),
             Binding("f8", "probe_feedback", show=False, priority=True),
             Binding("f9", "probe_trial", show=False, priority=True),
+            Binding("f10", "probe_terminal_preferences", show=False, priority=True),
+            Binding("f11", "probe_vim_panel", show=False, priority=True),
         ]
+
+        def action_probe_vim_panel(self):
+            from superqode.widgets.hotkeys import HotkeysScreen
+
+            enabled, mode = self._vim_enabled(), self._vim_input_mode
+            self._vim_experience_enabled = True
+            self._set_vim_state("normal")
+
+            def restore(_result):
+                self._vim_experience_enabled = enabled
+                self._set_vim_state(mode)
+                self._ensure_input_focus()
+
+            self.push_screen(
+                HotkeysScreen([("app", str(i), f"action_{i}", f"Action {i}") for i in range(30)]),
+                callback=restore,
+            )
+
+        def action_probe_mcp(self):
+            from superqode.mcp.client import MCPClientManager
+            from superqode.widgets.mcp_connections import MCPConnectionsScreen
+
+            self.push_screen(
+                MCPConnectionsScreen(MCPClientManager()),
+                callback=lambda _: self._ensure_input_focus(),
+            )
+
+        def action_probe_terminal_preferences(self):
+            from dataclasses import replace
+
+            self._apply_appearance(
+                replace(
+                    self._appearance,
+                    mouse="off" if self._appearance.mouse == "on" else "on",
+                    cursor="steady" if self._appearance.cursor == "blink" else "blink",
+                )
+            )
 
         def action_probe_themes(self):
             self._handle_theme("", self.query_one("#log", ConversationLog))
@@ -93,6 +133,7 @@ def child(state_path: Path):
 
         def record(self):
             from textual.css.query import NoMatches
+            from textual.widgets import OptionList
             from superqode.app.constants import THEME
 
             try:
@@ -116,7 +157,12 @@ def child(state_path: Path):
                 "appearance": _theme_appearance(),
                 "detection_source": _detection_source(),
                 "scheme_notifications": bool(getattr(self, "_scheme_notifications", False)),
+                "mouse_reporting": self._driver._mouse,
+                "cursor_blink": prompt.cursor_blink,
+                "vim_enabled": self._vim_enabled(),
             }
+            if type(self.screen).__name__ == "HotkeysScreen":
+                state["panel_index"] = self.screen.query_one(OptionList).highlighted
             temporary = state_path.with_suffix(".tmp")
             temporary.write_text(json.dumps(state), encoding="utf-8")
             os.replace(temporary, state_path)
@@ -152,9 +198,11 @@ def probe(term: str, size: tuple[int, int]):
         os.close(slave)
         transcript = bytearray()
         osc_log = []
+        mouse_commands = []
+        control_tail = b""
 
         def wait_for(name, predicate, timeout=8):
-            nonlocal output_bytes
+            nonlocal output_bytes, control_tail
             deadline = monotonic() + timeout
             state = {}
             while monotonic() < deadline:
@@ -172,6 +220,13 @@ def probe(term: str, size: tuple[int, int]):
                     window = bytes(transcript[-4096:]) + data
                     osc_log.extend(OSC_SEQUENCE.findall(window))
                     del osc_log[:-200]
+                    control_window = control_tail + data
+                    mouse_commands.extend(
+                        match.group()
+                        for match in re.finditer(rb"\x1b\[\?1000[hl]", control_window)
+                        if match.end() > len(control_tail)
+                    )
+                    control_tail = control_window[-16:]
                     transcript.extend(data)
                     del transcript[:-16000]
                 if process.poll() is not None:
@@ -280,6 +335,7 @@ def probe(term: str, size: tuple[int, int]):
                 and s["text"] == "keep this draft",
             )
             for key, screen in (
+                (b"\x1b[15~", "MCPConnectionsScreen"),
                 (b"\x1b[18~", "AppearanceSettings"),
                 (b"\x1b[19~", "FeedbackExportScreen"),
                 (b"\x1b[20~", "DeveloperTrialScreen"),
@@ -297,6 +353,51 @@ def probe(term: str, size: tuple[int, int]):
                     and s["focused"] == "prompt-input"
                     and s["text"] == "keep this draft",
                 )
+            mouse_off_before = mouse_commands.count(b"\x1b[?1000l")
+            send(b"\x1b[21~")
+            wait_for(
+                "steady cursor and terminal selection",
+                lambda s: not s["mouse_reporting"]
+                and not s["cursor_blink"]
+                and mouse_commands.count(b"\x1b[?1000l") > mouse_off_before
+                and s["text"] == "keep this draft",
+            )
+            mouse_on_before = mouse_commands.count(b"\x1b[?1000h")
+            send(b"\x1b[21~")
+            wait_for(
+                "restore cursor and application mouse",
+                lambda s: s["mouse_reporting"]
+                and s["cursor_blink"]
+                and mouse_commands.count(b"\x1b[?1000h") > mouse_on_before
+                and s["text"] == "keep this draft",
+            )
+            send(b"\x1b[23~")
+            wait_for(
+                "Vim panel opens with draft",
+                lambda s: s["screen"] == "HotkeysScreen"
+                and s["vim_enabled"]
+                and s["text"] == "keep this draft",
+            )
+            send(b"\t")
+            wait_for("Vim list focus", lambda s: s["focused"] == "hotkeys-list")
+            send(b"j")
+            wait_for("Vim j selects next", lambda s: s.get("panel_index") == 1)
+            send(b"k")
+            wait_for("Vim k selects previous", lambda s: s.get("panel_index") == 0)
+            send(b"G")
+            wait_for("Vim G selects last", lambda s: s.get("panel_index") == 29)
+            send(b"gg")
+            wait_for("Vim gg selects first", lambda s: s.get("panel_index") == 0)
+            send(b"\x04")
+            wait_for("Vim Ctrl+D selects next page", lambda s: s.get("panel_index", 0) > 0)
+            send(b"\x1b")
+            wait_for(
+                "Vim Escape restores draft focus and editing",
+                lambda s: s["screen"] != "HotkeysScreen"
+                and not s["vim_enabled"]
+                and s["focused"] == "prompt-input"
+                and s["text"] == "keep this draft",
+            )
             send(b"\x0b")
             wait_for("command palette keyboard focus", lambda s: s["focused"] != "prompt-input")
             send(b"\x1b")

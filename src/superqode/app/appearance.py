@@ -7,12 +7,20 @@ from dataclasses import asdict, dataclass, field
 from superqode.app import theme_bridge
 from superqode.theming import ThemeError, atomic_json
 
+APPEARANCE_SCHEMA_URL = "https://raw.githubusercontent.com/SuperagenticAI/superqode/main/src/superqode/data/themes/appearance.schema.json"
+
+
+def appearance_document(preferences, selection):
+    return {"$schema": APPEARANCE_SCHEMA_URL, "theme": selection, "appearance": asdict(preferences)}
+
 
 @dataclass
 class AppearancePreferences:
     density: str = "comfortable"
     motion: str = "full"
     icons: str = "unicode"
+    cursor: str = "blink"
+    mouse: str = "on"
     favorite_themes: list[str] = field(default_factory=list)
     recent_themes: list[str] = field(default_factory=list)
     previous_theme: str = ""
@@ -40,6 +48,8 @@ class AppearancePreferences:
             density=choice("density", {"comfortable", "compact"}, "comfortable"),
             motion=choice("motion", {"full", "reduced"}, "full"),
             icons=choice("icons", {"unicode", "ascii"}, "unicode"),
+            cursor=choice("cursor", {"blink", "steady"}, "blink"),
+            mouse=choice("mouse", {"on", "off"}, "on"),
             favorite_themes=names("favorite_themes"),
             recent_themes=names("recent_themes"),
             previous_theme=previous if isinstance(previous, str) and len(previous) <= 193 else "",

@@ -84,6 +84,30 @@ class AppearanceMixin:
             )
         for widget in self.query("#prompt-input"):
             widget._sync_working_animation()
+            widget.cursor_blink = preferences.cursor == "blink" and preferences.motion != "reduced"
+        self._apply_mouse_preference(preferences.mouse)
+
+    def _apply_mouse_preference(self, preference) -> None:
+        """Keep Textual's driver responsible for platform-specific terminal modes."""
+        driver = getattr(self, "_driver", None)
+        if driver is None or getattr(driver, "is_headless", False):
+            return
+        if preference == getattr(self, "_applied_mouse_preference", None):
+            return
+        method = getattr(
+            driver,
+            "_enable_mouse_support" if preference == "on" else "_disable_mouse_support",
+            None,
+        )
+        if callable(method):
+            if preference == "off":
+                self.capture_mouse(None)
+                method()
+                driver._mouse = False  # Preserve the preference when application mode resumes.
+            else:
+                driver._mouse = True
+                method()
+            self._applied_mouse_preference = preference
 
     def _appearance_cmd(self, log) -> None:
         from superqode.widgets.appearance_settings import AppearanceSettings

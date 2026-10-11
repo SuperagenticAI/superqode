@@ -167,6 +167,14 @@ class McpMixin:
 
         manager = await get_mcp_manager()
 
+        if subcommand == "panel":
+            from superqode.widgets.mcp_connections import MCPConnectionsScreen
+
+            self.push_screen(
+                MCPConnectionsScreen(manager), callback=lambda _: self._ensure_input_focus()
+            )
+            return
+
         if subcommand == "reload":
             resolution = await manager.reload_config(cwd=Path.cwd())
             results = await manager.connect_all()
@@ -410,5 +418,5 @@ class McpMixin:
             return
 
         log.add_info(
-            "Usage: :mcp status|add|connect|reconnect|reload|login|logout|disconnect|doctor|tools|resources|attach|prompts"
+            "Usage: :mcp panel|status|add|connect|reconnect|reload|login|logout|disconnect|doctor|tools|resources|attach|prompts"
         )

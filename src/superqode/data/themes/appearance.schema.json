@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SuperagenticAI/superqode/main/src/superqode/data/themes/appearance.schema.json",
+  "title": "SuperQode Appearance Preferences",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["theme", "appearance"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "theme": {"type": "string", "minLength": 1, "maxLength": 193},
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "density": {"enum": ["comfortable", "compact"], "default": "comfortable"},
+        "motion": {"enum": ["full", "reduced"], "default": "full"},
+        "icons": {"enum": ["unicode", "ascii"], "default": "unicode"},
+        "cursor": {"enum": ["blink", "steady"], "default": "blink"},
+        "mouse": {"enum": ["on", "off"], "default": "on"},
+        "favorite_themes": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 193}},
+        "recent_themes": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 193}},
+        "previous_theme": {"type": "string", "maxLength": 193}
+      }
+    }
+  }
+}

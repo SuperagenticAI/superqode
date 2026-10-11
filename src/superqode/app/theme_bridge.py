@@ -23,12 +23,13 @@ _terminal_colors: dict[str, str] = {}
 MAX_CONFIG_BYTES = 1024 * 1024
 
 
-def _read_theme_config():
-    if not _CONFIG_PATH.exists():
+def _read_theme_config(path: Path | None = None):
+    path = _CONFIG_PATH if path is None else path
+    if not path.exists():
         return {}
-    if not _CONFIG_PATH.is_file():
+    if not path.is_file():
         raise ThemeError("Theme preferences must be a regular JSON file")
-    with _CONFIG_PATH.open("rb") as stream:
+    with path.open("rb") as stream:
         content = stream.read(MAX_CONFIG_BYTES + 1)
     if len(content) > MAX_CONFIG_BYTES:
         raise ThemeError("Theme preferences exceed 1 MiB; existing configuration was retained")
@@ -222,7 +223,7 @@ def save_theme(
             raw.update(
                 {
                     key: appearance[key]
-                    for key in ("density", "motion", "icons")
+                    for key in ("density", "motion", "icons", "cursor", "mouse")
                     if key in appearance
                 }
             )
@@ -408,7 +409,7 @@ def theme_legacy_text(text):
 def load_bundled_themes() -> None:
     directory = Path(__file__).parents[1] / "data" / "themes"
     for path in sorted(directory.glob("*.json")):
-        if path.name == "schema.json":
+        if path.name.endswith("schema.json"):
             continue
         try:
             theme = load_theme_file(path)

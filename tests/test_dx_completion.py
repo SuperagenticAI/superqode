@@ -499,7 +499,10 @@ async def test_effective_hotkeys_support_scope_and_preserve_draft(theme, tmp_pat
         await pilot.press("escape")
         await pilot.pause()
         assert editor.value == "my unsent draft" and editor.cursor_position == 4
-        assert "ctrl+d" not in app._bindings.key_to_bindings
+        # Ctrl+D may page a Vim panel, but must never exit ordinary editing.
+        await pilot.press("ctrl+d")
+        await pilot.pause()
+        assert app.is_running
         await pilot.press("alt+u")
         assert editor.value == ""
 

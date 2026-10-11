@@ -72,6 +72,32 @@ Submitting a task, command, or search returns the TUI to Normal mode. SuperQode 
 
 Approval prompts retain priority over modal bindings. When an approval is pending, `y`, `n`, `a`, and `Escape` keep their approval behavior.
 
+### Panels
+
+Vim navigation also works in theme, connection, session, MCP, activity and help
+panels. Search boxes and editable text fields retain ordinary typing, including
+the letters `j`, `k` and `g`.
+
+| Key | Action in a panel |
+| --- | --- |
+| `j` / `k` | Select the next/previous list item, scroll a read-only view, or move between controls |
+| `gg` / `G` | Jump to the first/last list item or the beginning/end of a read-only view |
+| `Ctrl+U` / `Ctrl+D` | Move by page in a list or read-only view |
+| `Tab` / `Shift+Tab` | Move between controls |
+| `Enter` | Use the panel's existing selection or activation action |
+| `Escape` | Use the panel's existing Back or Cancel action |
+
+Panel bindings can be changed under the `app` scope in
+`~/.superqode/keybindings.json`, using `panel_vim_down`, `panel_vim_up`,
+`panel_vim_top`, `panel_vim_bottom`, `panel_vim_page_up` and
+`panel_vim_page_down`. They are active only with Vim enabled and focus outside
+an editable field. They do not change connection choices or the `:connect`
+workflow.
+
+Vim preferences use a JSON boolean, `"vim_mode": true` or `false`, in
+`~/.superqode/config.json`. Invalid configuration is retained. If a setting
+cannot be saved, the TUI explains that it applies only to the current session.
+
 ## Ex Commands
 
 All SuperQode `:` commands remain available. Vim mode also provides these aliases:

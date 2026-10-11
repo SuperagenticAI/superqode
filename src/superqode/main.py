@@ -1397,6 +1397,50 @@ def theme_import(path):
     click.echo(f"Imported {name}. Try: superqode --theme {name}")
 
 
+@theme_cli.command("export")
+@click.argument("name")
+@click.argument("path", type=click.Path(dir_okay=False, path_type=Path))
+@click.option(
+    "--format", "format_name", type=click.Choice(["superqode", "pi"]), default="superqode"
+)
+def theme_export(name, path, format_name):
+    """Export an installed palette without overwriting an existing file."""
+    from superqode import design_system as ds
+    from superqode.app.theme_bridge import discover_themes
+    from superqode.theming import ThemeError, atomic_json
+    from superqode.theming.export import native_export_document, pi_compatibility, pi_document
+
+    discover_themes()
+    if name not in ds.THEMES or name == "auto":
+        raise click.BadParameter(f"Unknown installed theme: {name}", param_hint="name")
+    theme = ds.get_theme(name)
+    try:
+        document = (
+            native_export_document(theme) if format_name == "superqode" else pi_document(theme)
+        )
+        report = pi_compatibility(theme) if format_name == "pi" else None
+        atomic_json(path, document, overwrite=False)
+    except (OSError, ThemeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Exported {name} as {format_name} JSON ({document['name']}) to {path}")
+    if report:
+        for note in report["notes"]:
+            click.echo(note)
+
+
+@theme_cli.command("compatibility")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def theme_compatibility(path):
+    """Report Pi export compatibility and omitted native information."""
+    from superqode.theming import ThemeError, load_theme_file
+    from superqode.theming.export import pi_compatibility
+
+    try:
+        click.echo(json.dumps(pi_compatibility(load_theme_file(path)), indent=2))
+    except ThemeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
 @theme_cli.command("init")
 @click.argument("path", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--name", default="my-theme")

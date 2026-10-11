@@ -578,6 +578,17 @@ mcp_servers:
 
 ## Inspect and refresh connections
 
+Open `:mcp panel` in the TUI for live connection state, tool/resource/prompt counts,
+and redacted server diagnostics. Tab moves to Connect, Retry, Login, Disconnect,
+Cancel and Back; arrow keys select a server. Login is available for HTTP/SSE
+servers and may open an authorization browser. Retry uses the existing reconnect
+operation. Cancel stops a pending connection or login and disconnects that server.
+
+Escape closes the panel and preserves the prompt draft. Established connections
+and pending transport initialization continue when the panel closes; a pending
+login started by the panel is cancelled. Reopen it to inspect or cancel initialization.
+Opening the panel alone does not connect servers or start authentication.
+
 ```bash
 sq mcp list --cwd ./project
 sq mcp list --connect --cwd ./project

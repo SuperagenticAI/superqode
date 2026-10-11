@@ -830,7 +830,8 @@ class SlashCommandMixin:
         elif c == "connect":
             if (
                 args
-                and args.split()[0].casefold() in {"search", "status", "test", "retry"}
+                and args.split()[0].casefold()
+                in {"search", "status", "capabilities", "test", "retry"}
                 and self._connection_tools_command(args, log)
             ):
                 return
@@ -3695,6 +3696,8 @@ class SlashCommandMixin:
                 "check",
                 "init",
                 "reload",
+                "compatibility",
+                "export",
             }:
                 argument = verb.lower() + (" " + tail[0] if tail else "")
 
@@ -3721,6 +3724,9 @@ class SlashCommandMixin:
                 ":theme install --all — install the whole collection; then choose with :theme"
             )
             log.add_info(":theme check FILE · :theme init FILE --name NAME · :theme reload")
+            log.add_info(
+                ":theme export NAME FILE --format superqode|pi · :theme compatibility NAME"
+            )
             log.add_info(":theme previous · :theme next (favorites) · :theme customize · :settings")
             return
         if argument.startswith("browse "):
@@ -3741,7 +3747,13 @@ class SlashCommandMixin:
             except (ThemeError, ValueError) as exc:
                 log.add_error(str(exc))
             return
-        if argument.split(maxsplit=1)[:1] in (["list"], ["check"], ["init"]):
+        if argument.split(maxsplit=1)[:1] in (
+            ["list"],
+            ["check"],
+            ["init"],
+            ["compatibility"],
+            ["export"],
+        ):
             self._run_cli_group("theme", argument, log, "Theme command")
             return
         if argument == "reload":

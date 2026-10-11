@@ -861,17 +861,21 @@ class CommandImplMixin:
         arg = (args or "").strip().lower()
         if arg in {"on", "1", "true", "yes"}:
             self._vim_experience_enabled = True
-            self._save_vim_preference(True)
+            save_error = self._save_vim_preference(True)
             self._set_vim_state("normal")
             log.add_success(
                 "Vim mode enabled. Press i to enter a task, : for commands, or :vim tutor."
             )
+            if save_error:
+                log.add_warning(save_error)
             return
         if arg in {"off", "0", "false", "no"}:
             self._vim_experience_enabled = False
-            self._save_vim_preference(False)
+            save_error = self._save_vim_preference(False)
             self._set_vim_state("insert")
             log.add_success("Vim mode disabled.")
+            if save_error:
+                log.add_warning(save_error)
             return
         if arg in {"tutor", "help", "keys"}:
             self._show_vim_tutor(log)
@@ -928,6 +932,16 @@ class CommandImplMixin:
                     ("gg / G", "jump to the top or bottom"),
                     ("Ctrl+U / Ctrl+D", "scroll by page"),
                     ("n / N", "move through search matches"),
+                ),
+            ),
+            (
+                "Panels",
+                (
+                    ("j / k", "select a list item or scroll read-only details"),
+                    ("gg / G", "jump to the first or last item"),
+                    ("Ctrl+U / Ctrl+D", "move by page"),
+                    ("Tab / Shift+Tab", "move between controls"),
+                    ("Enter / Esc", "use the panel's action or return"),
                 ),
             ),
             (

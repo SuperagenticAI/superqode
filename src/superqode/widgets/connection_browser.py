@@ -208,6 +208,12 @@ class ConnectionBrowserScreen(PanelShortcutMixin, ModalScreen[str | None]):
                 text.append("\nSetup available; access has not been verified")
             if selected.badges:
                 text.append("\n" + " · ".join(selected.badges))
+            from superqode.app.connection_capabilities import capability_text, profile_capabilities
+
+            features = profile_capabilities(selected)
+            if features:
+                text.append("\n\n" + capability_text(features))
+                text.append("\nVerify the active route with :connect capabilities")
         elif self.load_failed:
             text.append("Could not load the catalog. Retry keeps your search and current session.")
         elif self.catalog_loaded:

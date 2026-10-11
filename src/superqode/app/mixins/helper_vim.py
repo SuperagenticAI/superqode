@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
+from time import monotonic
 
 from superqode.app.widgets import (
     ConversationLog,
@@ -97,29 +97,80 @@ class HelperVimMixin:
         env_value = os.getenv("SUPERQODE_VIM_MODE")
         if env_value is not None:
             return env_value.strip().lower() in {"1", "true", "yes", "on"}
+        from superqode.app.theme_bridge import _read_theme_config
+
         try:
-            data = json.loads(self._vim_config_path().read_text(encoding="utf-8"))
-            return bool(data.get("vim_mode", False))
-        except Exception:
+            data = _read_theme_config(self._vim_config_path())
+            return isinstance(data, dict) and data.get("vim_mode") is True
+        except (OSError, ValueError, UnicodeError, RecursionError):
             return False
 
-    def _save_vim_preference(self, enabled: bool) -> None:
+    def _save_vim_preference(self, enabled: bool) -> str | None:
         """Persist the optional Vim mode without replacing other settings."""
+        from superqode.app.theme_bridge import _read_theme_config
+        from superqode.theming import ThemeError, atomic_json
+
         path = self._vim_config_path()
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            data: dict = {}
-            if path.exists():
-                try:
-                    loaded = json.loads(path.read_text(encoding="utf-8"))
-                    if isinstance(loaded, dict):
-                        data = loaded
-                except (json.JSONDecodeError, ValueError):
-                    pass
+            data = _read_theme_config(path)
+            if not isinstance(data, dict):
+                raise ThemeError("Configuration must be a JSON object")
             data["vim_mode"] = bool(enabled)
-            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        except Exception:
-            pass
+            atomic_json(path, data)
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            return f"Vim preference could not be saved: {exc}. This change applies to this session; existing configuration was retained."
+        return None
+
+    def _panel_vim_target(self):
+        """Never interpret panel typing as workspace navigation or decisions."""
+        from textual.widgets import Input, TextArea
+
+        if not self._vim_enabled() or len(self.screen_stack) < 2:
+            return None
+        focused = self.focused
+        if focused is None or focused.screen is not self.screen:
+            return None
+        if isinstance(focused, Input) or (isinstance(focused, TextArea) and not focused.read_only):
+            return None
+        return focused
+
+    def _navigate_panel_vim(self, motion: str) -> None:
+        from superqode.widgets.panel_shortcuts import navigate_panel
+
+        focused = self._panel_vim_target()
+        if focused is None:
+            self._panel_vim_pending = None
+            return
+        pending = getattr(self, "_panel_vim_pending", None)
+        self._panel_vim_pending = None
+        if motion == "g":
+            if (
+                not pending
+                or pending[:2] != (id(self.screen), id(focused))
+                or monotonic() - pending[2] > 1
+            ):
+                self._panel_vim_pending = (id(self.screen), id(focused), monotonic())
+                return
+            motion = "first"
+        navigate_panel(focused, motion)
+
+    def action_panel_vim_down(self) -> None:
+        self._navigate_panel_vim("down")
+
+    def action_panel_vim_up(self) -> None:
+        self._navigate_panel_vim("up")
+
+    def action_panel_vim_top(self) -> None:
+        self._navigate_panel_vim("g")
+
+    def action_panel_vim_bottom(self) -> None:
+        self._navigate_panel_vim("last")
+
+    def action_panel_vim_page_up(self) -> None:
+        self._navigate_panel_vim("page_up")
+
+    def action_panel_vim_page_down(self) -> None:
+        self._navigate_panel_vim("page_down")
 
     def _sync_vim_state(self) -> None:
         """Apply the current Vim state after the TUI widgets mount."""

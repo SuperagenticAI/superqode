@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-10-11
+
+### Added
+
+- Appearance controls for a blinking or steady prompt cursor and terminal
+  mouse reporting, with live preview and saved preferences.
+- Reusable JSON appearance exports with a bundled schema, and theme exports
+  in native SuperQode or Pi format.
+- Optional Vim panel navigation with j/k, gg/G and Ctrl+U/Ctrl+D page keys,
+  including searchable lists, dropdowns and read-only previews. Editable
+  fields keep ordinary typing; declared panel actions support key overrides.
+- Connection capability inspection through `:connect capabilities`, showing
+  which controls are native, negotiated or owned by the connected agent.
+- An MCP connection panel (`:mcp panel`) with server status, tool inventory
+  and retry controls.
+
+### Changed
+
+- Make the existing guided first task prominent on the welcome screen, with
+  clearer first-use copy and connection setup steps.
+- Include theme export and Vim panel regressions in the automated terminal
+  and cross-platform connection checks.
+
+### Fixed
+
+- Preserve existing configuration when saving Vim preferences encounters
+  invalid JSON, an oversized document or a write failure. Merge valid settings
+  atomically and show a session-only warning when persistence fails.
+- Require a JSON boolean for saved Vim preferences so string values such as
+  `"false"` do not unexpectedly enable Vim mode.
+- Highlight the first hotkey result on opening the panel, retain drafts when
+  closing panels and keep workspace decisions isolated from panel typing.
+- Keep theme and appearance exports bounded, validated and safe from
+  accidental overwrites, including Pi-format colour conversion.
+- Expose theme export and compatibility consistently in CLI help, TUI help,
+  completion and the command palette.
+
 ## [2.14.0] - 2026-10-11
 
 ### Added

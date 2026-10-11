@@ -438,10 +438,13 @@ def test_welcome_uses_unified_harness_positioning():
         assert command in text, f"{command} belongs to the welcome footer"
     for command in (":harness", ":work", ":init", ":mode", ":memory"):
         assert command not in text, f"{command} belongs to the prompt area"
-    assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
-    assert "Build · Connect · Orchestrate · Evaluate · Optimize" in text
+    assert "Start your first task" in text
+    assert ":trial" in text
+    assert "Connect your coding agent or model, run a task, and review its work." in text
     assert "Terminal-first · Any agent or model" in text
-    assert "Interoperability: Local · ACP · MCP · A2A · UHP · BYOK · Jev SystemOne Harness" in text
+    assert "Interoperability:" not in text
+    assert "Control loops" not in text
+    assert ":explore" in text
     # Harness, model and policy report only absence before a connection, which
     # is what the next step already says.
     assert "Not selected" not in text
@@ -450,19 +453,14 @@ def test_welcome_uses_unified_harness_positioning():
     assert "Next step" not in text
     assert "[1]" not in text
     assert "Ctrl+C" not in text
-    # What remains is the product story plus the navigation footer.
+    # First use presents an action before the command reference.
     assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
     lines = [line.strip() for line in text.splitlines()]
-    headline_index = lines.index("THE HARNESS LAYER FOR CODING AGENTS")
-    capabilities_index = lines.index(
-        "Harnesses · Context · Memory · Tools · Evaluations · Control loops"
-    )
-    lifecycle_index = lines.index("Build · Connect · Orchestrate · Evaluate · Optimize")
-    assert lines[headline_index + 1] == ""
-    assert lines[capabilities_index + 1] == ""
-    assert lines[lifecycle_index + 1] == ""
+    first_task_index = next(i for i, line in enumerate(lines) if "Start your first task" in line)
+    commands_index = next(i for i, line in enumerate(lines) if ":connect" in line)
+    assert first_task_index < commands_index
 
 
 def test_home_workspace_action_is_clickable_and_opens_existing_sidebar():
@@ -476,6 +474,7 @@ def test_home_workspace_action_is_clickable_and_opens_existing_sidebar():
     assert "superqode://cmd/connect" in links
     assert "superqode://cmd/theme" in links
     assert "superqode://cmd/help" in links
+    assert "superqode://cmd/trial" in links
 
     app = make_app()
     opened = []
@@ -557,7 +556,8 @@ def test_welcome_compacts_for_narrow_terminals():
 
     assert "SuperQode" in text
     assert "THE HARNESS LAYER FOR CODING AGENTS" in text
-    assert "Local · ACP · MCP · A2A · UHP · BYOK" in text
+    assert "Start your first task" in text
+    assert "ACP" not in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
     # Identity plus navigation footer. Commands live in the prompt area at every width.
@@ -610,28 +610,27 @@ def test_welcome_screen_fits_in_a_short_terminal():
     assert len(lines) <= 24, f"welcome screen needs {len(lines)} non-blank lines"
 
 
-def test_welcome_separates_terminal_first_from_interoperability():
-    """These two lines previously had no gap, unlike every other pairing."""
+def test_welcome_guides_first_use_before_protocol_details():
     text = render_plain(render_welcome([], width=100))
     lines = text.splitlines()
 
     terminal_first = next(i for i, line in enumerate(lines) if "Terminal-first" in line)
-    interoperability = next(i for i, line in enumerate(lines) if "Interoperability:" in line)
+    first_task = next(i for i, line in enumerate(lines) if "Start your first task" in line)
 
-    assert interoperability > terminal_first + 1, "expected a blank line between them"
-    assert lines[terminal_first + 1].strip() == ""
+    assert first_task > terminal_first
+    assert "ACP" not in text
+    assert ":explore" in text
 
 
 def test_the_closing_line_is_not_buried_behind_blank_lines():
     text = render_plain(render_welcome([], width=100))
     lines = text.splitlines()
 
-    interoperability = next(i for i, line in enumerate(lines) if "Interoperability:" in line)
+    first_task = next(i for i, line in enumerate(lines) if "Start your first task" in line)
     closing = next(i for i, line in enumerate(lines) if ":connect" in line)
 
-    # Footer follows the product story with at most one blank between them.
-    assert closing - interoperability <= 3, (
-        f"closing line is {closing - interoperability} lines below"
+    assert closing - first_task <= 3, (
+        f"closing line is {closing - first_task} lines below the first task"
     )
 
 

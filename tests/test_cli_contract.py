@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 319
+EXPECTED_COMMAND_COUNT = 321
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -161,7 +161,8 @@ EXPECTED_COMMAND_COUNT = 319
 # defaults and the readable --connect SOURCE metavar. Lazy commands are visited
 # through Click's public list/get API in canonical order; all 319 routes remain.
 # --approval-mode now documents supported headless runtimes as well as the TUI.
-EXPECTED_HELP_TREE_SHA256 = "9dc5d0a4a87aa16c8ebadfe5b9a4a1910d76e61bf2a346c042a657b13a005297"
+# Rebaselined for theme compatibility and native/Pi JSON export (319 -> 321).
+EXPECTED_HELP_TREE_SHA256 = "31bbc93b2f5f636cbcc2be2092ece5afa0e4481d806ed8aaa2b5964efdebf172"
 
 
 def _render_help_tree() -> tuple[int, str]:

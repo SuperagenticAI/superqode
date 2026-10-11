@@ -23,13 +23,29 @@ In the TUI, use `:theme` or `:theme browse` to open the searchable gallery. **Al
 
 ## Appearance settings
 
-Open `:settings` or `:appearance` from the prompt or command palette. One screen brings together the gallery, a fixed theme, automatic SuperQode light/dark switching, terminal-derived colors, a custom light/dark pair, comfortable/compact spacing, reduced animation, and simple ASCII status icons. Pair selectors show installed palettes of the appropriate appearance; install additional palettes through the gallery first.
+Open `:settings` or `:appearance` from the prompt or command palette. One screen brings together the gallery, a fixed theme, automatic SuperQode light/dark switching, terminal-derived colors, a custom light/dark pair, comfortable/compact spacing, reduced animation, simple ASCII status icons, a blinking or steady prompt cursor, and mouse reporting. Pair selectors show installed palettes of the appropriate appearance; install additional palettes through the gallery first.
+
+Turn mouse reporting off for terminal text selection and use Tab, arrows, Enter and Escape for application controls. The setting also applies after returning from an external editor. Reduced animation makes the prompt cursor steady. These controls affect the drawn prompt cursor and application mouse reporting; native cursor placement for IME is separate.
+
+**Export JSON** writes the staged selection and preferences to a new file with an appearance schema reference, without applying or saving the preview. The document contains `theme` and `appearance` fields compatible with `~/.superqode/config.json`. Merge those fields into an existing configuration to retain unrelated settings. Custom themes must be installed separately on the destination machine.
 
 Changes preview live. F4 (or **w** outside a text field) exposes the workspace. **Apply & save** saves the selection and preferences together; Escape restores them. Reduced animation retains a steady working status while stopping sweeps and rotating prompt/thinking indicators. Simple icons preserve clickable header and hint controls; agent responses and code retain their original characters.
 
 ## Visual customizer
 
 Use `:theme customize` for the active palette, or **F3** / **e** / **Edit** for the selected gallery palette. Adjust the accent, background, panel background and text; light/dark canvas presets provide starting points. The actual workspace previews valid edits. The status shows requested and rendered text contrast immediately, including automatic readability corrections. Invalid edits retain the last working preview and disable saving.
+
+Choose **SuperQode JSON** or **Pi JSON** beside the export path. Native exports include native fields and extension colors. Pi exports map supported roles to the rendered colors and flatten source variables; native fields and extension colors without a Pi equivalent are omitted. Exporting does not apply the preview or overwrite an existing file.
+
+Export an installed palette from the shell and inspect compatibility:
+
+```bash
+superqode theme export nord ./nord-copy.json
+superqode theme export nord ./nord-pi.json --format pi
+superqode theme compatibility ./nord-copy.json
+```
+
+Exports include editor schema references. Built-in palettes receive a `-copy` name so their exported documents can be imported without using a reserved name. Native exports preserve the rendered semantic colors; Pi compatibility reports the exported name, mapped roles and omitted extension colors. Pi exports reproduce mapped colors rather than every SuperQode surface and native setting.
 
 Choose a unique lowercase theme name. **Save & apply** installs a native JSON theme in your user theme directory and selects it. **Export JSON** writes a reusable native theme to your chosen path while leaving the workspace in preview. Existing files are retained. Escape cancels the preview; an explicitly exported file remains available to share. F4 shows the workspace while editing.
 

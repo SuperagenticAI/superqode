@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, RichLog, Static
+from textual.widgets import Button, Input, Label, RichLog, Select, Static
 
 from superqode import design_system as ds
 from superqode.app.theme_bridge import theme_directory
@@ -88,6 +88,12 @@ class ThemeCustomizer(ModalScreen[str | None]):
                 yield RichLog(id="custom-preview", wrap=True, min_width=1, auto_scroll=False)
                 yield Label("Export JSON path · existing files are retained")
                 yield Input(value=f"~/{name}.json", id="custom-export-path")
+                yield Select(
+                    [("SuperQode JSON", "superqode"), ("Pi JSON · effective palette", "pi")],
+                    value="superqode",
+                    allow_blank=False,
+                    id="custom-export-format",
+                )
             yield Static("", id="custom-status", markup=False)
             with Horizontal(id="custom-actions"):
                 yield Button("Save & apply", id="custom-save", variant="primary")
@@ -183,12 +189,23 @@ class ThemeCustomizer(ModalScreen[str | None]):
             return
         try:
             path = Path(value).expanduser()
-            atomic_json(path, native_document(self._candidate), overwrite=False)
+            format_name = self.query_one("#custom-export-format", Select).value
+            document = native_document(self._candidate)
+            note = ""
+            if format_name == "pi":
+                from superqode.theming.export import pi_compatibility, pi_document
+
+                report = pi_compatibility(self._candidate)
+                document = pi_document(self._candidate)
+                note = " · Pi palette; native-only roles omitted"
+                if report["omitted_extension_colors"]:
+                    note += f" ({len(report['omitted_extension_colors'])} extension colors)"
+            atomic_json(path, document, overwrite=False)
         except (OSError, ValueError) as exc:
             self.query_one("#custom-status", Static).update(f"Could not export: {exc}")
             return
         self.query_one("#custom-status", Static).update(
-            f"Exported JSON to {path}\nThe current workspace is still a preview; Esc restores it."
+            f"Exported JSON to {path}{note}\nThe current workspace is still a preview; Esc restores it."
         )
 
     def action_save(self):

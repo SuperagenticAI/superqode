@@ -390,8 +390,49 @@ class ConnectMixin:
             text.append(f"  Last attempt: {attempt}\n")
         if getattr(self, "_connection_retry_target", None):
             text.append("  Retry setup: :connect retry\n")
-        text.append("\n  :connect search · :connect test · :sessions\n", style=THEME["muted"])
+        text.append(
+            "\n  :connect search · :connect capabilities · :connect test · :sessions\n",
+            style=THEME["muted"],
+        )
         log.write(text)
+
+    def _show_connection_capabilities(self, log: ConversationLog) -> None:
+        from superqode.app.connection_capabilities import capability_text, connection_capabilities
+
+        kind, provider, _ = self._connection_target()
+        if not provider:
+            log.add_info("Choose a connection with :connect first.")
+            return
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None)
+        session = getattr(pure, "session", None)
+        client = getattr(self, "_acp_client", None)
+        negotiated = (
+            client.get_agent_capabilities()
+            if kind == "acp" and client and client.is_running()
+            else None
+        )
+        rows = connection_capabilities(
+            connector="acp" if kind == "acp" else "",
+            runtime=(
+                getattr(session, "harness_runtime", "") or getattr(pure, "runtime_name", "unknown")
+            )
+            if kind != "acp"
+            else "",
+            acp_capabilities=negotiated,
+            codex=getattr(runtime, "capabilities", None),
+            native_loop=False
+            if getattr(pure, "_harness_spec", None) is not None
+            and getattr(pure, "_agent", None) is None
+            else None,
+        )
+        text = Text("\n  Connection capabilities\n\n", style=THEME["text"])
+        text.append(capability_text(rows))
+        text.append("\n\nCancellation: Esc requests cancellation through the active route.\n")
+        text.append(
+            "File recovery requires a captured Git baseline; size and retention limits apply.\n"
+        )
+        self._show_command_output(log, text)
 
     async def _test_current_connection(
         self, log: ConversationLog, *, infer: bool = False, tools: bool = False
@@ -448,6 +489,8 @@ class ConnectMixin:
             self._open_connection_browser(log, rest.strip())
         elif sub == "status":
             self._show_connection_status(log)
+        elif sub == "capabilities":
+            self._show_connection_capabilities(log)
         elif sub == "test":
             if rest.strip() not in {"", "--infer", "--tools"}:
                 log.add_info(

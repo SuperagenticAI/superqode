@@ -80,9 +80,10 @@ jobs:
         run: >-
           uv run --frozen pytest -p pytest_asyncio.plugin
           tests/test_theme_system.py tests/test_theme_contrast.py
+          tests/test_theme_export.py tests/test_connection_capabilities.py
           tests/test_tui_appearance.py
           tests/test_theme_repaint.py tests/test_tui_developer_trial.py
-          tests/test_tui_navigation.py tests/test_tui_developer_experience.py
+          tests/test_tui_navigation.py tests/test_tui_vim_release.py tests/test_tui_developer_experience.py
           tests/test_tui_background_io.py tests/test_tui_feedback.py -q
       - name: Theme real-terminal input and rendering
         run: uv run --frozen python scripts/check_tui_terminal.py --output tui-terminal.json

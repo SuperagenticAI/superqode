@@ -227,6 +227,11 @@ class MCPClientManager:
         """Register callback for connection state changes."""
         self._state_callbacks.append(callback)
 
+    def remove_state_callback(self, callback: StateChangeCallback) -> None:
+        """Detach a temporary UI listener without disturbing other consumers."""
+        if callback in self._state_callbacks:
+            self._state_callbacks.remove(callback)
+
     def on_tools_changed(self, callback: ToolsChangedCallback) -> None:
         """Register callback for tools list changes."""
         self._tools_changed_callbacks.append(callback)

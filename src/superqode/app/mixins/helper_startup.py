@@ -89,10 +89,30 @@ class HelperStartupMixin:
             self.query_one("#log", ConversationLog).add_info(warning)
 
     def _apply_screen_keybindings(self):
+        from textual.widgets import OptionList
+
         keymap = getattr(self, "_keymap", None)
         if keymap and self.screen_stack:
             for node in [self.screen, *self.screen.walk_children()]:
                 keymap.apply(node)
+                # Searchable Select overlays consume printable keys before
+                # ancestor bindings. Bind the app's configured panel actions
+                # locally too; dynamic checks still leave ordinary typeahead
+                # untouched when Vim is disabled.
+                if isinstance(node, OptionList):
+                    for key, bindings in self._bindings.key_to_bindings.items():
+                        for binding in bindings:
+                            if binding.action.startswith("panel_vim_") and not any(
+                                existing.action == "app." + binding.action
+                                for existing in node._bindings.key_to_bindings.get(key, ())
+                            ):
+                                node._bindings.bind(
+                                    key,
+                                    "app." + binding.action,
+                                    binding.description,
+                                    show=False,
+                                    priority=True,
+                                )
 
     def _hotkeys_cmd(self, log):
         from superqode.keymap import Keymap
@@ -1075,10 +1095,19 @@ class HelperStartupMixin:
         t.append("Welcome to SuperQode 👋", style=f"bold {THEME['purple']}")
         t.append("  Three steps to your first task.\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
+        from superqode.app.mixins.clickable_commands import command_link
+
+        t.append("  │  ", style=THEME["purple"])
+        t.append(
+            "Start your first task ↗",
+            style=f"bold {THEME['cyan']} {command_link('trial')}",
+        )
+        t.append("  :trial guides you through setup, a task and review.\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
         t.append("  │  1. ", style=f"bold {THEME['cyan']}")
         t.append("Connect  ", style=f"bold {THEME['text']}")
         t.append(":connect", style=f"bold {THEME['success']}")
-        t.append("     choose who runs the coding loop\n", style=THEME["muted"])
+        t.append("     choose your coding agent or model\n", style=THEME["muted"])
         t.append("  │  2. ", style=f"bold {THEME['cyan']}")
         t.append("Pick     ", style=f"bold {THEME['text']}")
         t.append("↑/↓ Enter", style=f"bold {THEME['success']}")
@@ -1088,13 +1117,6 @@ class HelperStartupMixin:
         t.append("just type", style=f"bold {THEME['success']}")
         t.append("    describe what to build\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
-        t.append("  │  ", style=THEME["muted"])
-        from superqode.app.mixins.clickable_commands import command_link
-
-        t.append(":trial", style=f"bold {THEME['cyan']} {command_link('trial')}")
-        t.append(
-            "     validate, attach context, run and review your first task\n", style=THEME["muted"]
-        )
         t.append("  │  ", style=THEME["muted"])
         t.append(":explore", style=f"bold {THEME['purple']}")
         t.append(

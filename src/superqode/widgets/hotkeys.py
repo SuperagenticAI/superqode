@@ -33,6 +33,10 @@ class HotkeysScreen(ModalScreen):
             yield Static("Esc Back · Configure ~/.superqode/keybindings.json", id="hotkeys-footer")
 
     def on_mount(self):
+        if getattr(self.app, "_vim_enabled", lambda: False)():
+            self.query_one("#hotkeys-footer", Static).update(
+                "Tab List · j/k Select · gg/G First/Last · Esc Back\nConfigure ~/.superqode/keybindings.json"
+            )
         self._filter("")
         self.query_one(Input).focus()
 
@@ -46,6 +50,7 @@ class HotkeysScreen(ModalScreen):
         for scope, key, action, description in self.rows:
             if query.casefold() in " ".join((scope, key, action, description)).casefold():
                 values.add_option(Option(Text(f"{key:18} {description or action}  [{scope}]")))
+        values.highlighted = 0 if values.option_count else None
         if self.warnings:
             self.query_one("#hotkeys-footer", Static).update(Text(" · ".join(self.warnings)))
 

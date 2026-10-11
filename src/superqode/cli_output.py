@@ -12,11 +12,11 @@ from typing import Callable
 machine_events = ContextVar("superqode_machine_events", default=None)
 
 
-def sanitize_diagnostic(value):
+def sanitize_diagnostic(value, *, extra_secrets=()):
     from superqode.app.feedback_bundle import redact_feedback
     from superqode.tools.env_policy import is_secret_name
 
-    secrets = [value for key, value in os.environ.items() if is_secret_name(key)]
+    secrets = [*extra_secrets, *(value for key, value in os.environ.items() if is_secret_name(key))]
     # Stored credentials can be opaque strings that do not match token regexes.
     # Resolve them only for redaction; they never enter an output payload.
     try:
