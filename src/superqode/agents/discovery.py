@@ -76,7 +76,8 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
                 for file in search_path.iterdir():
                     if file.name.endswith(".toml") and file.is_file():
                         try:
-                            agent: "Agent" = tomllib.load(file.open("rb"))
+                            with file.open("rb") as stream:
+                                agent: "Agent" = tomllib.load(stream)
                             agent["user_defined"] = search_path == user_agent_dir
                             if agent.get("active", True):
                                 # Validate required fields

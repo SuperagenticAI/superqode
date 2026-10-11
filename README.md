@@ -77,7 +77,7 @@ curl -fsSL https://superqode.dev/install.sh | sh
 
 The installer pulls the latest release from PyPI into an isolated environment,
 installs [uv](https://docs.astral.sh/uv/) when needed, and never uses `sudo`.
-Already have uv? Run `uv tool install superqode` instead.
+Already have uv? Run `uv tool install --python 3.13 superqode` instead.
 
 Open any repository and start:
 

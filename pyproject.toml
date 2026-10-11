@@ -8,6 +8,9 @@ license = "Apache-2.0"
 # silently stop shipping if that default changes. NOTICE carries the MIT
 # attribution that superqode.pipy requires.
 license-files = ["LICENSE", "NOTICE"]
+# LiteLLM 1.91.5 and prime-agent-python-client 0.2 require Python <3.14.
+# Python 3.15 is also blocked by FastUUID's native build. See the dependency
+# compatibility guide before widening this range.
 requires-python = ">=3.12,<3.14"
 authors = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
@@ -21,6 +24,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Build Tools",
 ]
@@ -428,6 +432,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: tests that require external agents, services, or credentials",
 ]

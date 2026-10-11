@@ -86,7 +86,11 @@ def test_installer_uses_isolated_uv_tool_install_and_verifies_both_commands(tmp_
     assert "sq 0.test" in result.stdout
     assert "SuperQode is installed. Run: superqode" in result.stdout
     uv_calls = uv_log.read_text(encoding="utf-8")
-    assert ("tool install --no-config --upgrade --force --with litellm<1.92 superqode") in uv_calls
+    # uv 0.13 defaults to 3.15, where FastUUID cannot build. An explicit
+    # interpreter also keeps the MLX extra on a supported Python version.
+    assert (
+        "tool install --no-config --python 3.13 --upgrade --force --with litellm<1.92 superqode"
+    ) in uv_calls
     assert "tool dir --bin --no-config" in uv_calls
 
 
@@ -106,7 +110,7 @@ def test_installer_supports_explicit_extras_and_version_pin(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     assert (
-        "tool install --no-config --upgrade --force "
+        "tool install --no-config --python 3.13 --upgrade --force "
         "--with litellm<1.92 "
         "superqode[tau,vendor-sdks]==0.2.37"
     ) in uv_log.read_text(encoding="utf-8")

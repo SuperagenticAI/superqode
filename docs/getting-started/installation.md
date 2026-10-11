@@ -82,7 +82,7 @@ command.
 | Component | Requirement |
 |-----------|-------------|
 | **Operating System** | macOS 12+, Linux (Ubuntu 20.04+, Debian 11+), Windows 10+ (WSL2) |
-| **Python** | 3.12 or higher |
+| **Python** | 3.12 or 3.13 |
 | **Memory** | 4GB RAM minimum, 8GB recommended |
 | **Disk Space** | 500MB for installation |
 
@@ -90,10 +90,12 @@ command.
 
 ```bash
 python3 --version
-# Should output: Python 3.12.x or higher
+# Should output: Python 3.12.x or 3.13.x
 ```
 
-If you need to install Python 3.12+:
+Python 3.14 and 3.15 are currently blocked by dependencies. See
+[dependency compatibility](../integrations/dependency-compatibility.md) for
+the tested versions and repeatable checks. If you need to install Python:
 
 === "macOS"
 
@@ -146,7 +148,7 @@ Use `uv` for an isolated tool installation managed separately from project envir
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install SuperQode
-uv tool install superqode
+uv tool install --python 3.13 superqode
 ```
 
 ### Method 3: uvx (No Persistent Install)
@@ -154,7 +156,7 @@ uv tool install superqode
 Run SuperQode directly through uv when you want a temporary command.
 
 ```bash
-uvx superqode --version
+uvx --python 3.13 superqode --version
 ```
 
 ### Installing optional extras in one line
@@ -205,7 +207,7 @@ git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
 
 # Install using uv (recommended for dev)
-uv sync --extra dev --extra docs
+uv sync --locked --python 3.13 --extra dev --extra docs
 
 # Verify installation
 uv run superqode --version
@@ -500,7 +502,7 @@ $ superqode auth info
 
     **Error:** `requires Python 3.12+`
 
-    **Solution:** Install Python 3.12 or higher using your package manager or pyenv.
+    **Solution:** Install Python 3.12 or 3.13 using your package manager or pyenv.
 
     ```bash
     # Using pyenv

@@ -646,7 +646,11 @@ class SuperQodeGroup(click.Group):
                 _, _, help_text, short_help, hidden = self.lazy_commands[name]
                 if not hidden:
                     rows.append(
-                        (name, short_help or click.utils.make_default_short_help(help_text, limit))
+                        (
+                            name,
+                            short_help
+                            or click.Command(name=name, help=help_text).get_short_help_str(limit),
+                        )
                     )
         if rows:
             with formatter.section("Commands"):

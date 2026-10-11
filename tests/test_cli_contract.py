@@ -163,6 +163,11 @@ EXPECTED_COMMAND_COUNT = 321
 # --approval-mode now documents supported headless runtimes as well as the TUI.
 # Rebaselined for theme compatibility and native/Pi JSON export (319 -> 321).
 EXPECTED_HELP_TREE_SHA256 = "31bbc93b2f5f636cbcc2be2092ece5afa0e4481d806ed8aaa2b5964efdebf172"
+# Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
+# choices in lower case. Both verified renders expose the same command tree.
+EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
+    "a7c272d31fbf1af88b6de7d730e3d2910f1ddbf08d2a68a30d6e5858bf374cf9"
+)
 
 
 def _render_help_tree() -> tuple[int, str]:
@@ -186,11 +191,11 @@ def _render_help_tree() -> tuple[int, str]:
 
 
 def test_cli_help_tree_matches_refactor_baseline():
-    """Commands, ordering, options, and rendered help must remain byte-identical."""
+    """Commands and help must match one of the verified Click renders."""
     command_count, help_digest = _render_help_tree()
 
     assert command_count == EXPECTED_COMMAND_COUNT
-    assert help_digest == EXPECTED_HELP_TREE_SHA256
+    assert help_digest in {EXPECTED_HELP_TREE_SHA256, EXPECTED_MODERN_CLICK_HELP_TREE_SHA256}
 
 
 class TestHeadlessStdinNeverBlocks:

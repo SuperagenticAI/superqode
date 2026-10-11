@@ -84,7 +84,7 @@ Follow the documentation in this order:
 
 | Requirement | Version | Notes |
 | --- | --- | --- |
-| Python | 3.12+ | Required for the Python package |
+| Python | 3.12 or 3.13 | Required for the Python package |
 | One-line installer | recommended | Installs uv when needed, then verifies an isolated SuperQode tool install |
 | uv | direct | `uv tool install superqode` gives the same isolated tool install |
 | Git | 2.25+ | Recommended for repository work and reviewing changes |
@@ -132,7 +132,7 @@ Optional tools depend on your workflow:
     ```bash
     git clone https://github.com/SuperagenticAI/superqode.git
     cd superqode
-    uv sync --extra dev --extra docs
+    uv sync --locked --python 3.13 --extra dev --extra docs
     uv run superqode --version
     ```
 

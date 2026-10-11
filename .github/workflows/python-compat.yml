@@ -1,0 +1,83 @@
+name: Python and uv compatibility
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "src/**"
+      - "tests/test_thinking_session_timing.py"
+      - "scripts/check_python_compatibility.py"
+      - ".github/workflows/python-compat.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supported:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.12", uv: "0.13.0"}
+          - {os: ubuntu-latest, python: "3.13", uv: "0.13.0"}
+          - {os: macos-latest, python: "3.13", uv: "0.13.0"}
+          - {os: windows-latest, python: "3.13", uv: "0.13.0"}
+          - {os: ubuntu-latest, python: "3.12", uv: "0.8.0"}
+          - {os: ubuntu-latest, python: "3.13", uv: "0.13.0", current: true}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: ${{ matrix.uv }}
+          python-version: ${{ matrix.python }}
+      - name: Validate lockfile and install
+        run: uv sync --locked --python ${{ matrix.python }} --extra dev
+      - name: Check current allowed dependency releases
+        if: matrix.current == true
+        run: uv pip install --upgrade --editable ".[dev]"
+      - name: Check installed dependencies
+        run: uv pip check
+      - name: Runtime contracts in Python development mode
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --locked --no-sync python -X dev -m pytest -p pytest_asyncio.plugin
+          tests/test_thinking_session_timing.py tests/test_cli_contract.py
+          tests/test_headless.py tests/test_runtime_builtin.py tests/test_mcp.py
+          tests/test_config_loader.py tests/test_tools.py
+          tests/test_core_tool_history.py tests/test_tool_call_repair.py
+          tests/test_streaming_tool_calls.py
+          tests/test_release_metadata.py tests/test_version.py -q
+      - name: Build distribution
+        run: uv build --python ${{ matrix.python }}
+
+  # Advisory probes intentionally bypass the package's Python bound. Enable
+  # full runtime tests only after builds and dependency consistency pass.
+  candidate-probe:
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    timeout-minutes: 15
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.14", "3.15"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.0"
+      - name: Probe candidate dependency builds
+        run: >-
+          uv run --no-project --python 3.12 python scripts/check_python_compatibility.py
+          --python ${{ matrix.python }} --extra dev --output candidate-dependencies.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python${{ matrix.python }}-dependencies
+          path: candidate-dependencies.json

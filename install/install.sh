@@ -459,6 +459,7 @@ note "$install_message"
 if ! run_step "$LABEL_START" \
     "$uv_bin" tool install \
         --no-config \
+        --python 3.13 \
         --upgrade \
         --force \
         --with "$LITELLM_CONSTRAINT" \

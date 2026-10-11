@@ -13,7 +13,7 @@ Provides transparency into how the model reasons about problems.
 
 from __future__ import annotations
 
-import asyncio
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -619,9 +619,9 @@ class UnifiedThinkingManager:
         """Start a new thinking session."""
         self._current_source = source
         self._stats = ThinkingStats(source=source)
-        self._start_time = (
-            asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else None
-        )
+        # Session timing also works outside an event loop. Python 3.14+ no
+        # longer creates a loop implicitly for synchronous callers.
+        self._start_time = time.monotonic()
         self._is_streaming = False
         self.panel.clear()
         if self.extended_panel:
@@ -629,13 +629,8 @@ class UnifiedThinkingManager:
 
     def end_session(self) -> ThinkingStats:
         """End the current thinking session and return stats."""
-        if self._start_time:
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    self._stats.duration_ms = (loop.time() - self._start_time) * 1000
-            except RuntimeError:
-                pass
+        if self._start_time is not None:
+            self._stats.duration_ms = (time.monotonic() - self._start_time) * 1000
 
         if self._is_streaming:
             self.panel.complete_thought()

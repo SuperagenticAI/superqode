@@ -422,7 +422,8 @@ def _read_toml_registry(*, include_user: bool = True) -> dict[str, AgentMetadata
             continue
         for path in sorted(search_path.glob("*.toml")):
             try:
-                data = tomllib.load(path.open("rb"))
+                with path.open("rb") as stream:
+                    data = tomllib.load(stream)
             except Exception:
                 continue
             if not data.get("active", True):
