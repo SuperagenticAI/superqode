@@ -602,7 +602,6 @@ COMMANDS = [
     ":files",
     ":find",
     ":sidebar",
-    ":sodebar",
     ":toggle_thinking",
     ":home",
     # Init command

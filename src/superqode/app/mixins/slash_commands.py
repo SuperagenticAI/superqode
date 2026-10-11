@@ -562,7 +562,7 @@ class SlashCommandMixin:
             self._show_files(log)
         elif c == "find":
             self._find_files(args, log)
-        elif c in ("sidebar", "sodebar"):
+        elif c == "sidebar":
             self.action_toggle_sidebar()
         elif c == "toggle_thinking":
             # Allow users to type :toggle_thinking to toggle logs

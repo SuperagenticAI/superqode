@@ -313,7 +313,6 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":stash", "Restore a stashed prompt draft (Ctrl+G to stash)", category="workflow"),
     SlashCommand(":stash list", "List stashed prompt drafts", category="workflow"),
     SlashCommand(":sidebar", "Toggle the sidebar", category="workflow"),
-    SlashCommand(":sodebar", "Alias for :sidebar", category="workflow"),
     SlashCommand(":session", "Show current session info", category="workflow"),
     SlashCommand(":session rename", "Rename the current session", category="workflow"),
     SlashCommand(":update", "Check for a newer SuperQode release", category="workflow"),

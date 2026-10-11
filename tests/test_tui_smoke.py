@@ -1872,7 +1872,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":timeline" in COMMANDS
     assert ":tree" in COMMANDS
     assert ":sidebar" in COMMANDS
-    assert ":sodebar" in COMMANDS
+    assert ":sodebar" not in COMMANDS
     assert ":sessions" in COMMANDS
     assert ":sessions resume" in COMMANDS
     assert ":resume" in COMMANDS
@@ -1939,7 +1939,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":timeline" in slash_values
     assert ":tree" in slash_values
     assert ":sidebar" in slash_values
-    assert ":sodebar" in slash_values
+    assert ":sodebar" not in slash_values
     assert ":sessions" in slash_values
     assert ":sessions resume" in slash_values
     assert ":resume" in slash_values
@@ -2950,9 +2950,8 @@ def test_sidebar_commands_toggle_sidebar(monkeypatch):
     monkeypatch.setattr(app, "action_toggle_sidebar", lambda: calls.append("sidebar"))
 
     app._handle_command(":sidebar", log)
-    app._handle_command(":sodebar", log)
 
-    assert calls == ["sidebar", "sidebar"]
+    assert calls == ["sidebar"]
 
 
 def test_export_writes_markdown_and_json_transcripts(tmp_path, monkeypatch):

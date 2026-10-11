@@ -331,9 +331,6 @@ show status, or display its local help where supported.
 | Configuration and services | `:init`, `:config`, `:a2a-keys`, `:serve`, `:daemon`, `:export`, `:theme` |
 | Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |
 
-`:sodebar` is retained as a compatibility alias for `:sidebar`. New
-documentation and scripts should use `:sidebar`.
-
 ### Discovering What Is Available
 
 Two commands exist so the product does not have to be explained before it can

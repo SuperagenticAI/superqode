@@ -218,7 +218,7 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             name="sidebar",
             description="Toggle the sidebar",
             handler=handlers.get("sidebar", lambda _: None),
-            aliases=["sodebar"],
+            aliases=[],
             category="session",
         )
     )
