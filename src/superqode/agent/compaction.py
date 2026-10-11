@@ -90,6 +90,7 @@ async def compact_history(
     gateway: GatewayInterface,
     provider: str,
     model: str,
+    instructions: str = "",
 ) -> Optional[str]:
     """Ask the model to produce a structured summary of ``messages``.
 
@@ -104,7 +105,11 @@ async def compact_history(
         return None
 
     request_messages = [
-        Message(role="system", content=COMPACTION_PROMPT),
+        Message(
+            role="system",
+            content=COMPACTION_PROMPT
+            + ("\n\nAdditional summary instructions:\n" + instructions if instructions else ""),
+        ),
         Message(role="user", content=transcript),
     ]
     try:

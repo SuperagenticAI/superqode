@@ -20,3 +20,11 @@ class RuntimeNotImplementedError(RuntimeError_):
 
 class UnknownRuntimeError(RuntimeError_):
     """Requested runtime name is not registered."""
+
+
+class HeadlessSetupError(ValueError):
+    """Controlled setup guidance suitable for public CLI output."""
+
+
+class RuntimePolicyError(RuntimeError):
+    """A runtime cannot enforce the selected host policy."""

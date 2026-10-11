@@ -1,5 +1,9 @@
 # Pi theme comparison: 9 October 2026
 
+See the [11 October upstream update](upstream-tui-delta-2026-10-11.md) for the
+current release/source comparison, stricter Pi schema compatibility results,
+and the next developer-experience priorities.
+
 The initial review compared the SuperQode 2.10.1 checkout with released Pi source
 and current community packages. It found incomplete repainting, fixed syntax
 and export colors, and missing light/system/custom themes. The implementation

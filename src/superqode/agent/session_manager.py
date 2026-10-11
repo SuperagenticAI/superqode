@@ -8,6 +8,7 @@ and easy resumption of previous sessions.
 from __future__ import annotations
 
 import json
+import uuid
 import os
 import tempfile
 from collections import deque
@@ -56,6 +57,7 @@ class SessionMetadata:
     backend_usage: Dict[str, Any] = field(default_factory=dict)
     backend_resume_ready: bool = False
     archived: bool = False
+    context_compaction: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -286,6 +288,7 @@ class SessionStore:
         shorter history, so resending the edited message continues cleanly from
         that point. Returns the number of stored messages removed.
         """
+        self.last_rewind_backup = ""
         path = self._session_path(session_id)
         if occurrence < 1 or not path.exists():
             return 0
@@ -312,15 +315,47 @@ class SessionStore:
         if removed <= 0:
             return 0
 
-        with open(path, "w", encoding="utf-8") as f:
-            for line in raw_lines[:cut]:
-                f.write(line + "\n")
+        # Keep the original conversation as a recoverable branch before the
+        # atomic replacement. Rewind never discards the only copy of history.
+        backup_id = f"{session_id}-rewind-{uuid.uuid4().hex[:8]}"
+        self.fork_session(session_id, backup_id)
+        self.last_rewind_backup = backup_id
+        import tempfile
+
+        descriptor, temporary = tempfile.mkstemp(prefix=".rewind-", dir=path.parent)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write("".join(line + "\n" for line in raw_lines[:cut]))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
 
         metadata = self.get_metadata(session_id)
         if metadata:
+            metadata.context_compaction = {}
             metadata.message_count = max(0, metadata.message_count - removed)
             metadata.updated_at = datetime.now().isoformat()
-            self._save_metadata(metadata)
+            try:
+                self._save_metadata(metadata)
+            except OSError:
+                # Metadata and history must describe the same active session.
+                # The recovery branch remains available if rollback also fails.
+                descriptor, temporary = tempfile.mkstemp(
+                    prefix=".rewind-rollback-", dir=path.parent
+                )
+                try:
+                    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                        stream.write("".join(line + "\n" for line in raw_lines))
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.replace(temporary, path)
+                finally:
+                    if os.path.exists(temporary):
+                        os.unlink(temporary)
+                raise
             self._record_graph(metadata)
         return removed
 
@@ -510,6 +545,53 @@ class SessionManager:
         if not self._current_session_id:
             return []
         return self.store.get_messages(self._current_session_id, limit=limit)
+
+    def save_compaction(self, summary: str, boundary: int) -> None:
+        """Save model context separately; the original transcript is retained."""
+        import hashlib
+
+        metadata = self.get_session_info(self.current_session_id)
+        if metadata is None:
+            raise ValueError("No stored session is available for compaction.")
+        history = self.get_messages()
+        prefix = json.dumps([message.__dict__ for message in history[:boundary]], sort_keys=True)
+        metadata.context_compaction = {
+            "summary": summary,
+            "boundary": boundary,
+            "prefix_digest": hashlib.sha256(prefix.encode()).hexdigest(),
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.store._save_metadata(metadata)
+
+    def context_messages(self, limit: int | None = None) -> List[SessionMessage]:
+        import hashlib
+
+        if limit is not None and limit <= 0:
+            return []
+        history = self.get_messages()
+        metadata = (
+            self.get_session_info(self.current_session_id) if self.current_session_id else None
+        )
+        compact = metadata.context_compaction if metadata else {}
+        compact = compact if isinstance(compact, dict) else {}
+        boundary = compact.get("boundary", 0)
+        if (
+            isinstance(boundary, int)
+            and 0 < boundary <= len(history)
+            and isinstance(compact.get("summary"), str)
+            and compact["summary"]
+        ):
+            prefix = json.dumps(
+                [message.__dict__ for message in history[:boundary]], sort_keys=True
+            )
+            if hashlib.sha256(prefix.encode()).hexdigest() == compact.get("prefix_digest"):
+                return [
+                    SessionMessage(
+                        role="system",
+                        content="[Earlier conversation summary]\n\n" + compact["summary"],
+                    )
+                ] + history[boundary:]
+        return history[-limit:] if limit else history
 
     def rewind_to_user_message(self, occurrence: int) -> int:
         """Rewind the current session to before the Nth (1-based) user message.

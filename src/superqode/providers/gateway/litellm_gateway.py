@@ -100,6 +100,7 @@ def _load_litellm():
 
             litellm.drop_params = True  # Drop unsupported params
             litellm.set_verbose = False
+            litellm.suppress_debug_info = True
             _litellm_module = litellm
             _prewarm_complete.set()
     return _litellm_module

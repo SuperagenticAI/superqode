@@ -10,8 +10,6 @@ Usage::
 Available runtimes: see :func:`list_runtimes`.
 """
 
-from .base import AgentRuntime
-from .builtin import BuiltinRuntime
 from .errors import (
     RuntimeNotImplementedError,
     RuntimeNotInstalledError,
@@ -45,3 +43,15 @@ __all__ = [
     "runtime_documentation_url",
     "runtime_extra",
 ]
+
+
+def __getattr__(name):
+    if name == "AgentRuntime":
+        from .base import AgentRuntime
+
+        return AgentRuntime
+    if name == "BuiltinRuntime":
+        from .builtin import BuiltinRuntime
+
+        return BuiltinRuntime
+    raise AttributeError(name)

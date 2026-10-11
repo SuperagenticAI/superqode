@@ -162,9 +162,11 @@ def test_bare_agy_shows_help_without_running_account_commands():
 
 
 def test_colon_agy_dispatches_to_native_namespace_not_route_alias():
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
+
     calls = []
 
-    class Stub:
+    class Stub(SlashCommandMixin):
         _acp_client = None
 
         def _record_ex_command(self, *_args):

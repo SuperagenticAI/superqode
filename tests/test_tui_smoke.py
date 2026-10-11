@@ -2083,7 +2083,9 @@ def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
     def walk(command, prefix=()):
         rows = []
         if isinstance(command, click.Group):
-            for name, subcommand in command.commands.items():
+            context = click.Context(command)
+            for name in command.list_commands(context):
+                subcommand = command.get_command(context, name)
                 if subcommand.hidden:
                     continue
                 path = prefix + (name,)
@@ -2700,20 +2702,26 @@ def test_tui_help_surfaces_developer_workflows():
 
     text = render_plain(log.items[-1])
     assert "Developer Workflows" in text
-    assert ":share create" in text
-    assert ":share export" in text
-    assert ":share list" in text
-    assert ":share revoke" in text
-    assert ":trust doctor" in text
-    assert ":trust yes|no" in text
-    assert ":plugins doctor" in text
-    assert ":memory remember" in text
-    assert ":memory search specmem" in text
-    assert ":codex status" in text
-    assert ":claude status" in text
-    assert ":antigravity status" in text
+    for command in (
+        ":share",
+        ":trust",
+        ":plugins",
+        ":memory",
+        ":codex",
+        ":claude",
+        ":antigravity",
+        ":compact",
+        ":hotkeys",
+        ":approval",
+    ):
+        assert command in text
     assert "Optional Vim Navigation" in text
     assert ":vim tutor" in text
+    app._show_help(log, "share")
+    text = render_plain(log.items[-1])
+    assert ":share create" in text
+    assert ":share export" in text
+    assert ":share revoke" in text
 
 
 def test_vim_mode_toggle_and_set_aliases(tmp_path, monkeypatch):
@@ -5712,7 +5720,36 @@ def test_permissions_command_shows_mode_pending_and_learned_rules():
     assert "Edit app.py" in rendered
     assert "README.md" in rendered
     assert "secrets.env" in rendered
-    assert ":mode auto|ask|deny" in rendered
+    assert ":approval ask|auto|deny" in rendered
+
+
+def test_approval_commands_are_discoverable_and_distinct_from_interaction_mode():
+    from superqode.app.constants import COMMANDS
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+    app = make_app()
+    commands = {command.command for command in DEFAULT_COMMANDS}
+    palette = {command.id: command for command in app._build_palette_commands()}
+    assert palette["mode"].shortcut == ":mode"
+    assert palette["mode"].label == "Interaction Mode"
+    assert palette["approval"].shortcut == ":approval"
+    assert ":approvals" in commands
+    for mode in ("ask", "auto", "deny"):
+        assert f":approval {mode}" in COMMANDS
+        assert f":approval {mode}" in commands
+        assert f":mode {mode}" not in COMMANDS
+        assert f":mode {mode}" not in commands
+
+    app._runtime_permission_allow_all = True
+    log = FakeLog()
+    app._handle_command(":approval invalid", log)
+    assert app.approval_mode == "ask"
+    assert app._runtime_permission_allow_all
+    assert "Usage: :approval [ask|auto|deny]" in log.items
+
+    app._handle_command(":mode auto", log)
+    assert app.approval_mode == "ask"
+    assert "Use :approval auto to change tool approval policy." in log.items
 
 
 def test_pending_approvals_render_as_card():

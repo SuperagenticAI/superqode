@@ -31,39 +31,19 @@ class PaletteCommand:
     prefill: bool = False
 
 
-# Default palette commands
+# Standalone palettes use the same discoverable commands as the application.
+from superqode.command_registry import command_metadata
+
 DEFAULT_PALETTE_COMMANDS: list[PaletteCommand] = [
-    # Agent commands
     PaletteCommand(
-        "connect_agent",
-        "Connect to Agent",
-        "Connect to an AI coding agent",
-        "🤖",
-        "Ctrl+A",
-        "agents",
-    ),
-    PaletteCommand(
-        "agent_store", "Agent Store", "Browse available agents", "🛍️", "Ctrl+S", "agents"
-    ),
-    PaletteCommand(
-        "disconnect", "Disconnect", "Disconnect from current agent", "🔌", "Ctrl+D", "agents"
-    ),
-    # File commands
-    PaletteCommand("open_file", "Open File", "Open a file from project", "📁", "", "files"),
-    PaletteCommand("find_file", "Find File", "Fuzzy search for files", "🔍", "Ctrl+F", "files"),
-    PaletteCommand("recent_files", "Recent Files", "Show recently opened files", "📋", "", "files"),
-    PaletteCommand("bookmarks", "Bookmarks", "Manage file bookmarks", "🔖", "", "files"),
-    # Workflow commands
-    PaletteCommand("a2a", "A2A Workflows", "Show agent-to-agent workflows", "🤝", "", "workflow"),
-    PaletteCommand(
-        "context", "View Context", "Show current work context", "📋", "Ctrl+I", "workflow"
-    ),
-    PaletteCommand("approve", "Approve Work", "Approve work for deployment", "✅", "", "workflow"),
-    PaletteCommand("sessions", "View Sessions", "Show saved sessions", "📂", "", "workflow"),
-    # System commands
-    PaletteCommand("settings", "Settings", "Open settings", "⚙️", "Ctrl+,", "system"),
-    PaletteCommand("help", "Help", "Show help documentation", "❓", "?", "system"),
-    PaletteCommand("exit", "Exit", "Exit SuperQode", "🚪", ":exit", "system"),
+        "registry:" + value,
+        value,
+        metadata.description,
+        shortcut=value,
+        category=metadata.category,
+        command=value,
+    )
+    for value, metadata in command_metadata().items()
 ]
 
 

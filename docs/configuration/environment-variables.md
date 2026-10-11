@@ -242,3 +242,13 @@ See [Themes](../advanced/themes.md) for system detection and named light/dark pa
 - Boolean variables accept `1/true/yes/on` and `0/false/no/off`.
 - Env vars set in the shell that launches SuperQode are inherited by spawned subprocesses (ACP clients, shell sessions) unless the env policy filters them.
 - The [Agent Loop guide](../advanced/agent-loop.md) explains the behavior behind each loop variable.
+
+### Local diagnostic logging
+
+| Variable | Meaning |
+| --- | --- |
+| `SUPERQODE_DEBUG` | Set to `1` by `--debug` after private diagnostic logging is configured. |
+| `SUPERQODE_LOG_FILE` | The log path selected by `--log-file` or the local debug default. |
+
+Use the CLI options to configure the logger. Setting these reporting variables
+alone does not open a log file or enable provider SDK request dumps.

@@ -2479,7 +2479,20 @@ class TestHeadlessCommand:
 
         monkeypatch.setattr(headless, "run_headless", fake_run_headless)
 
-        result = runner.invoke(cli_main, ["-p", "--profile", "review", "summarize", "repo"])
+        result = runner.invoke(
+            cli_main,
+            [
+                "-p",
+                "--provider",
+                "openai",
+                "--model",
+                "gpt-5.4",
+                "--profile",
+                "review",
+                "summarize",
+                "repo",
+            ],
+        )
 
         assert result.exit_code == 0
         assert result.output.strip() == "summary"
@@ -2556,10 +2569,13 @@ class TestHeadlessCommand:
 
         monkeypatch.setattr(headless, "run_headless", fake_run_headless)
 
-        result = runner.invoke(cli_main, ["-p", "hello"])
+        result = runner.invoke(
+            cli_main, ["-p", "--provider", "openai", "--model", "gpt-5.4", "hello"]
+        )
 
         assert result.exit_code == 1
-        assert "Missing credentials for openai/gpt-5.4" in result.output
+        assert "Error:" in result.output
+        assert "superqode doctor" in result.output
 
     def test_model_aware_harness_supplies_default_provider_and_model(self, runner, monkeypatch):
         """A family harness should run directly without duplicate model flags."""

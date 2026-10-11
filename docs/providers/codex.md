@@ -148,14 +148,14 @@ Start a fresh conversation before recording:
 ```text
 :connect codex
 :codex new
-:mode ask
+:approval ask
 :codex permissions untrusted
 :codex sandbox read-only
 :codex status
 ```
 
 Check the host mode, blanket Allow all state, requested policy and effective
-policy separately. Selecting `:mode ask` clears an earlier blanket Allow all
+policy separately. Selecting `:approval ask` clears an earlier blanket Allow all
 grant; existing approvals for an exact session scope remain valid. A new Codex
 conversation clears those scopes. Policy and sandbox changes apply on the next
 turn, so effective settings may still describe the previous turn.

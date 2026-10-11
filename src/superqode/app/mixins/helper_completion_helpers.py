@@ -168,11 +168,25 @@ class HelperCompletionHelpersMixin:
     def _static_command_candidates(self, value: str) -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
 
+        from superqode.command_registry import COMMAND_ROUTES, command_metadata
+        from superqode.project_commands import discover_project_commands
+
+        project_commands = discover_project_commands(Path.cwd(), COMMAND_ROUTES)
+        shared_metadata = command_metadata()
         lowered = value.lower()
-        all_commands = self._completion_command_values()
+        all_commands = (
+            *self._completion_command_values(),
+            *(":" + name for name in project_commands),
+        )
         agent_metadata = self._agent_command_metadata()
 
         def description(command: str) -> str:
+            project_command = project_commands.get(command.removeprefix(":"))
+            if project_command:
+                return project_command.description
+            metadata = shared_metadata.get(command)
+            if metadata and metadata.description != "SuperQode TUI command":
+                return metadata.description
             runtime = getattr(getattr(self, "_pure_mode", None), "_extension_runtime", None)
             runtime = runtime or getattr(self, "_completion_extension_runtime", None)
             extension_command = runtime.commands.get(command.removeprefix(":")) if runtime else None

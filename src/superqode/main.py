@@ -26,7 +26,6 @@ import click
 
 from superqode import __version__
 from superqode.runtime import known_runtime_names
-from superqode.providers.connection_profiles import connection_profile_ids
 
 current_mode: str = "home"  # Start in neutral home state
 interactive_modes: dict[str, dict[str, object]] = {}
@@ -550,14 +549,116 @@ def _stdin_has_input() -> bool:
         return True
 
 
+class ConnectionChoice(click.Choice):
+    """Resolve the connection catalog only when choosing a source."""
+
+    def __init__(self):
+        self.case_sensitive = True
+
+    @property
+    def choices(self):
+        from superqode.providers.connection_profiles import connection_profile_ids
+
+        return tuple(connection_profile_ids(include_legacy=True))
+
+
 class SuperQodeGroup(click.Group):
     """Click group that allows headless prompts where subcommands normally go."""
+
+    def main(self, args=None, **kwargs):
+        argv = list(args if args is not None else sys.argv[1:])
+        machine_mode = None
+        for index, arg in enumerate(argv):
+            if arg.startswith("--mode="):
+                machine_mode = arg.split("=", 1)[1]
+            elif arg == "--mode" and index + 1 < len(argv):
+                machine_mode = argv[index + 1]
+        if machine_mode not in {"json", "jsonl"} or "--help" in argv or "--version" in argv:
+            return super().main(args=args, **kwargs)
+        from superqode.cli_output import EventWriter, machine_events, public_error
+
+        writer = EventWriter(sys.stdout) if machine_mode == "jsonl" else None
+        token = machine_events.set(writer)
+        try:
+            standalone = kwargs.pop("standalone_mode", True)
+            try:
+                result = super().main(args=args, standalone_mode=False, **kwargs)
+            except (click.ClickException, click.Abort) as exc:
+                status = getattr(exc, "exit_code", 130 if isinstance(exc, click.Abort) else 2)
+                payload = {
+                    "success": False,
+                    **public_error(exc, usage=isinstance(exc, click.ClickException)),
+                }
+                if isinstance(exc, click.Abort):
+                    payload.update(error_code="cancelled", error="Request cancelled.")
+                if machine_mode == "jsonl":
+                    writer("error", payload)
+                else:
+                    click.echo(json.dumps({"type": "superqode.error", **payload}))
+                if standalone:
+                    raise SystemExit(status) from None
+                raise click.exceptions.Exit(status) from None
+            except Exception as exc:
+                payload = {"success": False, **public_error(exc)}
+                if machine_mode == "jsonl":
+                    writer("error", payload)
+                else:
+                    click.echo(json.dumps({"type": "superqode.error", **payload}))
+                if standalone:
+                    raise SystemExit(1) from None
+                raise click.exceptions.Exit(1) from None
+            if standalone:
+                raise SystemExit(result if isinstance(result, int) else 0)
+            return result
+
+        finally:
+            machine_events.reset(token)
+
+    def register_lazy(self, name, module, attribute, help_text, short_help=None, hidden=False):
+        if not hasattr(self, "lazy_commands"):
+            self.lazy_commands = {}
+        self.lazy_commands[name] = (module, attribute, help_text, short_help, hidden)
+
+    def list_commands(self, ctx):
+        return sorted(set(self.commands) | set(getattr(self, "lazy_commands", {})))
+
+    def get_command(self, ctx, name):
+        command = super().get_command(ctx, name)
+        if command is None and name in getattr(self, "lazy_commands", {}):
+            import importlib
+
+            module, attribute, _, _, _ = self.lazy_commands[name]
+            command = getattr(importlib.import_module(module), attribute)
+            self.add_command(command, name)
+        return command
+
+    def format_commands(self, ctx, formatter):
+        # Root help uses the same Click metadata without importing agent SDKs,
+        # renderers, or command implementations. Execution loads only its route.
+        rows = []
+        limit = formatter.width - 6 - max(map(len, self.list_commands(ctx)), default=0)
+        for name in self.list_commands(ctx):
+            if name in self.commands:
+                command = self.commands[name]
+                if not command.hidden:
+                    rows.append((name, command.get_short_help_str(limit)))
+            else:
+                _, _, help_text, short_help, hidden = self.lazy_commands[name]
+                if not hidden:
+                    rows.append(
+                        (name, short_help or click.utils.make_default_short_help(help_text, limit))
+                    )
+        if rows:
+            with formatter.section("Commands"):
+                formatter.write_dl(rows)
 
     def resolve_command(self, ctx, args):
         try:
             return super().resolve_command(ctx, args)
         except click.UsageError:
-            if args and (ctx.params.get("print_mode") or ctx.params.get("output_mode") == "json"):
+            if args and (
+                ctx.params.get("print_mode") or ctx.params.get("output_mode") in {"json", "jsonl"}
+            ):
                 ctx.params["_headless_messages"] = tuple(args)
                 return "__headless__", click.Command("__headless__", hidden=True), []
             raise
@@ -574,7 +675,7 @@ class SuperQodeGroup(click.Group):
 @click.option(
     "--mode",
     "output_mode",
-    type=click.Choice(["text", "json"]),
+    type=click.Choice(["text", "json", "jsonl"]),
     default="text",
     help="Headless output mode",
 )
@@ -597,10 +698,8 @@ class SuperQodeGroup(click.Group):
     default=None,
     help="Rubric text (or @file) the answer is self-graded against before finishing",
 )
-@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", help="Model provider")
-@click.option(
-    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", help="Model name"
-)
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default=None, help="Model provider")
+@click.option("--model", "model_name", envvar="SUPERQODE_MODEL", default=None, help="Model name")
 @click.option(
     "--harness",
     "harness_path",
@@ -612,10 +711,22 @@ class SuperQodeGroup(click.Group):
     "--resume", help="Resume a stored session; opens the TUI unless a headless prompt is supplied"
 )
 @click.option(
+    "--continue",
+    "continue_session",
+    is_flag=True,
+    help="Continue the latest session in this project",
+)
+@click.option("--debug", is_flag=True, help="Write redacted diagnostics to a private local log")
+@click.option(
+    "--log-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Diagnostic log path (implies --debug)",
+)
+@click.option(
     "--approval-mode",
     type=click.Choice(["ask", "auto", "deny"]),
     default=None,
-    help="Tool approval policy for the interactive TUI",
+    help="Tool approval policy for the TUI and supported headless runtimes",
 )
 @click.option(
     "--interaction-mode",
@@ -693,7 +804,8 @@ class SuperQodeGroup(click.Group):
     "--connect",
     "connect_name",
     default=None,
-    type=click.Choice(connection_profile_ids(include_legacy=True)),
+    type=ConnectionChoice(),
+    metavar="SOURCE",
     show_choices=False,
     help=(
         "Connection source to start with: agents / models / build, a method "
@@ -726,6 +838,9 @@ def cli_main(
     connect_name=None,
     theme_selection=None,
     _headless_messages=None,
+    continue_session=False,
+    debug=False,
+    log_file=None,
 ):
     # Tool-output verbosity propagates through env so the TUI widget
     # picks it up at construction time without us threading another
@@ -741,12 +856,15 @@ def cli_main(
 
     # A prompt/output flag means this invocation will not enter the TUI. This is
     # needed while resolving dynamic connection profiles below.
-    headless_intent = bool(print_mode or output_mode == "json" or _headless_messages or ctx.args)
+    headless_intent = bool(
+        print_mode or output_mode in {"json", "jsonl"} or _headless_messages or ctx.args
+    )
 
     # Runtime precedence: CLI flag > superqode.yaml > env > default. We resolve
     # the YAML value here (best-effort: ignore failures so a broken config
     # doesn't crash startup) and set the env var so downstream code that uses
     # resolve_runtime_name() picks it up.
+    loaded_config = None
     yaml_runtime: Optional[str] = None
     yaml_harness: Optional[str] = None
     try:
@@ -758,7 +876,7 @@ def cli_main(
     except Exception:  # noqa: BLE001 — startup must remain resilient
         yaml_runtime = None
         yaml_harness = None
-    effective_runtime = runtime_name or yaml_runtime
+    effective_runtime = runtime_name or yaml_runtime or _os.environ.get("SUPERQODE_RUNTIME")
     requested_billing = "agent-managed"
     # A connection profile (e.g. --connect codex) can imply a runtime backend.
     if connect_name:
@@ -843,81 +961,194 @@ def cli_main(
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
     """
 
+    if sum(bool(value) for value in (resume, fork_from, continue_session)) > 1:
+        raise click.UsageError("Choose one of --resume, --continue, or --fork.")
+    messages = tuple(_headless_messages or ()) or tuple(ctx.args)
+    headless_requested = print_mode or output_mode in {"json", "jsonl"} or bool(messages)
+    prompt = ""
+    if headless_requested and not tui and (ctx.invoked_subcommand is None or messages):
+        prompt_parts = [" ".join(messages).strip()]
+        if not sys.stdin.isatty() and _stdin_has_input():
+            stdin_text = sys.stdin.read().strip()
+            if stdin_text:
+                prompt_parts.insert(0, stdin_text)
+        prompt = "\n\n".join(part for part in prompt_parts if part)
+        if not prompt:
+            raise click.UsageError("Headless mode requires a prompt or piped stdin.")
+    if continue_session:
+        from superqode.headless import list_sessions
+
+        recent = list_sessions(limit=1000, storage_dir=str(Path.cwd() / ".superqode" / "sessions"))
+        recent = [
+            item
+            for item in recent
+            if not item.archived
+            and (item.message_count or item.backend_resume_ready)
+            and (
+                not item.working_directory
+                or Path(item.working_directory).resolve() == Path.cwd().resolve()
+            )
+        ]
+        if not recent:
+            raise click.UsageError("No saved session in this project. Start a task first.")
+        resume = recent[0].session_id
+    if (resume or fork_from) and headless_intent:
+        from superqode.headless import get_session_messages
+
+        try:
+            metadata, _ = get_session_messages(resume or fork_from)
+        except (OSError, ValueError) as exc:
+            raise click.UsageError(
+                "Saved session is unavailable. Check superqode sessions list."
+            ) from exc
+        if ctx.get_parameter_source("harness_path") == ParameterSource.DEFAULT:
+            effective_harness = (
+                metadata.harness_path
+                or (metadata.harness_id if metadata.harness_source != "runtime" else "")
+                or ("core" if metadata.harness_source == "runtime" else effective_harness)
+            )
+        if ctx.get_parameter_source("runtime_name") != ParameterSource.COMMANDLINE:
+            effective_runtime = metadata.runtime or (
+                effective_runtime if metadata.harness_session else "builtin"
+            )
+        if ctx.get_parameter_source("provider") == ParameterSource.DEFAULT:
+            provider = metadata.provider or provider
+        if ctx.get_parameter_source("model_name") == ParameterSource.DEFAULT:
+            model_name = metadata.model or model_name
+        requested_billing = metadata.billing_requested or requested_billing
     if resume and fork_from:
         raise click.UsageError("Use either --resume or --fork, not both.")
     if connect_name and (resume or fork_from):
         raise click.UsageError("A saved session restores its connection; omit --connect.")
+    ctx.meta["native_model_options"] = {"provider": provider, "model": model_name}
 
-    messages = tuple(_headless_messages or ()) or tuple(ctx.args)
     if plan_only:
         profile = "plan"
-    headless_requested = print_mode or output_mode == "json" or bool(messages)
+
+    if debug or log_file:
+        from superqode.debug_logging import configure_debug_log
+
+        try:
+            configure_debug_log(log_file or Path.cwd() / ".superqode" / "logs" / "debug.log")
+        except OSError as exc:
+            raise click.UsageError(
+                "Could not open the diagnostic log. Choose a writable file with --log-file."
+            ) from exc
+
+    if (ctx.invoked_subcommand is None or tui or messages) and effective_runtime in {
+        None,
+        "",
+        "builtin",
+        "adk",
+        "openai-agents",
+        "pydanticai",
+    }:
+        from superqode.providers.default_model import resolve_default_model
+
+        saved = getattr(getattr(loaded_config, "gateway", None), "byok", None)
+        target = resolve_default_model(
+            provider,
+            model_name,
+            saved_provider=getattr(saved, "last_provider", ""),
+            saved_model=getattr(saved, "last_model", ""),
+        )
+        if target:
+            provider, model_name = target.provider, target.model
+        elif (
+            headless_requested
+            and (effective_runtime or "builtin") == "builtin"
+            and not (provider and model_name)
+        ):
+            raise click.UsageError(
+                "No configured model is available. Start a local server with an installed model, or choose --provider and --model after configuring a credential. Run superqode doctor for setup help."
+            )
 
     # If no command is provided, launch Textual app (default behavior)
     if ctx.invoked_subcommand is None or tui or messages:
         if headless_requested and not tui:
             import asyncio
-            import sys
 
+            from contextlib import redirect_stdout, redirect_stderr
+            from superqode.cli_output import (
+                DiagnosticStream,
+                EventWriter,
+                machine_events,
+                public_error,
+            )
             from superqode.headless import response_to_json, run_headless
+
+            events = (
+                (machine_events.get() or EventWriter(sys.stdout))
+                if output_mode == "jsonl"
+                else None
+            )
             from superqode.workspace.change_summary import (
                 capture_workspace_changes,
                 render_change_summary,
                 summarize_workspace_changes,
             )
 
-            prompt_parts = [" ".join(messages).strip()]
-            if not sys.stdin.isatty() and _stdin_has_input():
-                stdin_text = sys.stdin.read().strip()
-                if stdin_text:
-                    prompt_parts.insert(0, stdin_text)
-
-            prompt = "\n\n".join(part for part in prompt_parts if part)
-            if not prompt:
-                raise click.UsageError("Headless mode requires a prompt or piped stdin.")
-
             # --rubric accepts inline text or @path-to-file.
             rubric_text = rubric
             if rubric_text and rubric_text.startswith("@"):
-                rubric_text = Path(rubric_text[1:]).expanduser().read_text(encoding="utf-8")
+                try:
+                    rubric_text = Path(rubric_text[1:]).expanduser().read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    raise click.UsageError(
+                        "Could not read the rubric file. Check the @path argument."
+                    ) from exc
 
             change_baseline = capture_workspace_changes(Path.cwd())
             try:
-                response = asyncio.run(
-                    run_headless(
-                        prompt=prompt,
-                        provider=provider,
-                        model=model_name,
-                        profile_name=profile or effective_harness,
-                        session_id=resume,
-                        fork_from=fork_from,
-                        sandbox_backend=sandbox_backend,
-                        runtime=effective_runtime,
-                        **(
-                            {"billing_requested": requested_billing}
-                            if requested_billing == "subscription"
-                            else {}
-                        ),
-                        output_schema=output_schema,
-                        rubric=rubric_text,
+                if events:
+                    events(
+                        "session_start",
+                        {
+                            "profile": profile or effective_harness,
+                            "provider": provider,
+                            "model": model_name,
+                        },
                     )
-                )
-            except Exception as e:
-                if output_mode == "json":
-                    click.echo(
-                        json.dumps(
-                            {
-                                "type": "superqode.error",
-                                "profile": profile or effective_harness,
-                                "provider": provider,
-                                "model": model_name,
-                                "error": str(e),
-                                "success": False,
-                            }
+                diagnostics = DiagnosticStream(sys.stderr)
+                with redirect_stdout(diagnostics), redirect_stderr(diagnostics):
+                    try:
+                        response = asyncio.run(
+                            run_headless(
+                                prompt=prompt,
+                                provider=provider,
+                                model=model_name,
+                                profile_name=profile or effective_harness,
+                                session_id=resume,
+                                fork_from=fork_from,
+                                sandbox_backend=sandbox_backend,
+                                runtime=effective_runtime,
+                                **(
+                                    {"billing_requested": requested_billing}
+                                    if requested_billing == "subscription"
+                                    else {}
+                                ),
+                                output_schema=output_schema,
+                                rubric=rubric_text,
+                                **({"approval_mode": approval_mode} if approval_mode else {}),
+                                **({"on_event": events} if events else {}),
+                            )
                         )
-                    )
+                    finally:
+                        diagnostics.flush()
+            except Exception as e:
+                payload = {
+                    "profile": profile or effective_harness,
+                    "provider": provider,
+                    "model": model_name,
+                    "success": False,
+                    **public_error(e),
+                }
+                if events:
+                    events("error", payload)
+                elif output_mode == "json":
+                    click.echo(json.dumps({"type": "superqode.error", **payload}))
                 else:
-                    click.echo(f"Error: {e}", err=True)
+                    click.echo(f"Error: {payload['error']}", err=True)
                 ctx.exit(1)
 
             change_summary = summarize_workspace_changes(
@@ -925,17 +1156,26 @@ def cli_main(
                 before=change_baseline,
                 include_diff=changes == "diff",
             )
-            if output_mode == "json":
-                click.echo(
-                    response_to_json(
-                        response,
-                        provider,
-                        model_name,
-                        profile or effective_harness,
-                        change_summary=change_summary.to_dict(),
-                    )
+            if output_mode in {"json", "jsonl"}:
+                serialized = response_to_json(
+                    response,
+                    provider,
+                    model_name,
+                    profile or effective_harness,
+                    change_summary=change_summary.to_dict(),
                 )
+                if events:
+                    payload = json.loads(serialized)
+                    payload.pop("type")
+                    events("result", payload)
+                else:
+                    click.echo(serialized)
             else:
+                if response.stopped_reason == "needs_approval":
+                    click.echo(
+                        "Tool approval is required. Review the task in the TUI or choose an explicit --approval-mode for this run.",
+                        err=True,
+                    )
                 if output_schema and response.schema_errors is not None:
                     if response.schema_errors:
                         click.echo(response.content)
@@ -950,7 +1190,7 @@ def cli_main(
                 # rather than raising, so the error has to be printed here.
                 # Without this the caller saw an empty line and a bare exit 1.
                 if response.error:
-                    click.echo(f"Error: {response.error}", err=True)
+                    click.echo(f"Error: {public_error(response.error)['error']}", err=True)
                 rendered_changes = render_change_summary(change_summary, changes)
                 if rendered_changes:
                     click.echo()
@@ -959,26 +1199,21 @@ def cli_main(
                 getattr(response, "rubric_result", None)
                 and response.rubric_result.get("verdict") != "satisfied"
             ):
-                if output_mode != "json":
+                if output_mode not in {"json", "jsonl"}:
                     click.echo(f"Rubric review: {response.rubric_result.get('verdict')}", err=True)
                 ctx.exit(2)
             if output_schema and response.schema_errors:
                 ctx.exit(2)
+            if response.stopped_reason == "cancelled":
+                ctx.exit(130)
             ctx.exit(0 if response.stopped_reason == "complete" and not response.error else 1)
-
-        import time
-
-        # Show simple loading message before TUI starts
-        print("🚀 Starting SuperQode...", end="", flush=True)
-        time.sleep(0.5)
-
-        # Clear the loading message before TUI takes over
-        print("\r" + " " * 50 + "\r", end="", flush=True)
 
         # Import and run the TUI
         _os.environ["SUPERQODE_HARNESS"] = effective_harness
-        _os.environ["SUPERQODE_PROVIDER"] = provider
-        _os.environ["SUPERQODE_MODEL"] = model_name
+        if provider:
+            _os.environ["SUPERQODE_PROVIDER"] = provider
+        if model_name:
+            _os.environ["SUPERQODE_MODEL"] = model_name
         from superqode.app import run_textual_app
 
         startup = {}
@@ -1189,7 +1424,8 @@ def theme_init(path, name, base):
 
 @cli_main.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def doctor(json_output):
+@click.pass_context
+def doctor(ctx, json_output):
     """Check basic SuperQode developer setup."""
     from superqode.headless import list_sessions
     from superqode.providers.recommendations import provider_doctor_cards, recommend_models
@@ -1197,11 +1433,84 @@ def doctor(json_output):
     provider_cards = provider_doctor_cards(["ds4", "ollama", "openai", "anthropic", "google"])
     ready_providers = [card["provider"] for card in provider_cards if card["configured"]]
     sessions = list_sessions(limit=5)
-    recommendations = recommend_models("coding", limit=3)
+    from superqode.providers.default_model import configured_target, resolve_default_model
+    from superqode.terminal_diagnostics import terminal_report
+
+    try:
+        from superqode.config.loader import load_config
+
+        saved = load_config().superqode.gateway.byok
+    except Exception:
+        saved = None
+    selected = ctx.find_root().meta.get("native_model_options", {})
+    target = resolve_default_model(
+        selected.get("provider"),
+        selected.get("model"),
+        saved_provider=getattr(saved, "last_provider", ""),
+        saved_model=getattr(saved, "last_model", ""),
+    )
+    verified_configuration = bool(target and configured_target(target.provider, target.model))
+    recommendations = [
+        item
+        for item in recommend_models("coding", limit=100)
+        if item.setup.configured and item.provider in ready_providers
+    ][:3]
+    import importlib.metadata
+    import importlib.util
+    import shlex
+    import shutil
+
+    dependencies = {}
+    for name, module in (
+        ("click", "click"),
+        ("textual", "textual"),
+        ("litellm", "litellm"),
+        ("PyYAML", "yaml"),
+        ("rich", "rich"),
+    ):
+        dependencies[name] = {"installed": importlib.util.find_spec(module) is not None}
+        try:
+            dependencies[name]["version"] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            pass
+    try:
+        from superqode.config.loader import find_config_file, load_config
+
+        config_path = find_config_file()
+        load_config()
+        configuration = {"valid": True, "path": str(config_path) if config_path else None}
+    except Exception:
+        configuration = {
+            "valid": False,
+            "message": "Configuration could not be loaded. Run superqode config validate.",
+        }
+    executable_tools = {name: bool(shutil.which(name)) for name in ("git", "uv", "tmux")}
+    setup_step = "superqode auth login <provider>"
+    if target and not verified_configuration:
+        from superqode.providers.dynamic import resolve_provider_def
+        from superqode.providers.registry import ProviderCategory
+
+        definition = resolve_provider_def(target.provider)
+        if definition and definition.category == ProviderCategory.LOCAL:
+            setup_step = f"Start {target.provider} and install or load model {target.model}."
+        elif definition:
+            setup_step = f"superqode auth login {shlex.quote(target.provider)}"
+        else:
+            setup_step = "superqode providers list"
     payload = {
         "version": __version__,
         "cwd": str(Path.cwd()),
-        "ready": bool(ready_providers),
+        "ready": verified_configuration
+        and configuration["valid"]
+        and all(item["installed"] for item in dependencies.values()),
+        "configuration": configuration,
+        "dependencies": dependencies,
+        "tools": executable_tools,
+        "python": {"version": sys.version.split()[0], "supported": sys.version_info >= (3, 12)},
+        "inference_verified": False,
+        "selected_route_configured": verified_configuration,
+        "default_model": target.to_dict() if target else None,
+        "terminal": terminal_report(),
         "ready_providers": ready_providers,
         "providers": provider_cards,
         "recent_sessions": [
@@ -1218,7 +1527,11 @@ def doctor(json_output):
         "next_steps": [
             "superqode",
             "superqode providers recommend coding",
-            "superqode -p 'summarize this repo'",
+            (
+                f"superqode -p --provider {shlex.quote(target.provider)} --model {shlex.quote(target.model)} 'summarize this repo'"
+                if verified_configuration
+                else setup_step
+            ),
         ],
     }
     if json_output:
@@ -1238,10 +1551,15 @@ def doctor(json_output):
         ]
         if missing:
             click.echo(f"Setup: {', '.join(missing[:3])}")
-    if recommendations:
-        top = recommendations[0]
-        click.echo(f"Suggested coding model: {top.provider}/{top.model}")
-    click.echo("Next: run `superqode` for the TUI or `superqode -p 'summarize this repo'`.")
+    if target:
+        click.echo(f"Default model: {target.provider}/{target.model} ({target.source})")
+        if not verified_configuration:
+            click.echo(
+                "Selected route is not configured; start its local model server or add its credential."
+            )
+        click.echo(f"Next: {payload['next_steps'][-1]}")
+    else:
+        click.echo("Next: start a local model server or run `superqode auth login <provider>`.")
 
 
 @cli_main.group("mcp", invoke_without_command=True)
@@ -1364,102 +1682,202 @@ except Exception:
     pass
 
 
-from superqode.commands.sessions import sessions
-
-cli_main.add_command(sessions, name="sessions")
-
-
-from superqode.commands.factory import factory
-
-cli_main.add_command(factory, name="factory")
-
-
-from superqode.commands.work import work
-
-cli_main.add_command(work, name="work")
+cli_main.register_lazy(
+    "sessions",
+    "superqode.commands.sessions",
+    "sessions",
+    "Manage stored SuperQode coding sessions.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.policy import policy
-
-cli_main.add_command(policy, name="policy")
-
-
-from superqode.commands.share import share
-
-cli_main.add_command(share, name="share")
-
-
-from superqode.commands.trust import trust
-
-cli_main.add_command(trust, name="trust")
-
-from superqode.commands.update import update
-
-cli_main.add_command(update, name="update")
+cli_main.register_lazy(
+    "factory",
+    "superqode.commands.factory",
+    "factory",
+    "Model- and harness-independent Code Factory commands.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.memory import memory
-
-cli_main.add_command(memory, name="memory")
-
-from superqode.commands.a2a_keys import a2a_keys
-
-cli_main.add_command(a2a_keys, name="a2a-keys")
-
-
-from superqode.commands.skillopt import skillopt
-
-cli_main.add_command(skillopt, name="skillopt")
+cli_main.register_lazy(
+    "work",
+    "superqode.commands.work",
+    "work",
+    "Create, schedule, inspect, and decide durable WorkOrders.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.skills import skills
-
-cli_main.add_command(skills, name="skills")
-
-
-from superqode.commands.harness import harness
-
-cli_main.add_command(harness, name="harness")
-
-
-from superqode.commands.gauge import gauge
-
-cli_main.add_command(gauge, name="gauge")
+cli_main.register_lazy(
+    "policy",
+    "superqode.commands.policy",
+    "policy",
+    "Explain contextual policy and credential-safe execution controls.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.hub import hub
-
-cli_main.add_command(hub, name="hub")
-
-
-from superqode.commands.plugins import plugins
-
-cli_main.add_command(plugins, name="plugins")
-
-
-from superqode.commands.sandbox import sandbox
-
-cli_main.add_command(sandbox, name="sandbox")
+cli_main.register_lazy(
+    "share",
+    "superqode.commands.share",
+    "share",
+    "Create and import local portable session share artifacts.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.benchmark import benchmark
+cli_main.register_lazy(
+    "trust",
+    "superqode.commands.trust",
+    "trust",
+    "Manage local project trust.",
+    short_help=None,
+    hidden=False,
+)
 
-cli_main.add_command(benchmark, name="benchmark")
+cli_main.register_lazy(
+    "update",
+    "superqode.commands.update",
+    "update",
+    "Update SuperQode to the latest released version.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.profiles import profiles
+cli_main.register_lazy(
+    "memory",
+    "superqode.commands.memory",
+    "memory",
+    "Manage SuperQode agent memory.",
+    short_help=None,
+    hidden=False,
+)
 
-cli_main.add_command(profiles, name="profiles")
+cli_main.register_lazy(
+    "a2a-keys",
+    "superqode.commands.a2a_keys",
+    "a2a_keys",
+    "Issue, inspect, and revoke A2A agent API keys.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.tools import tools
+cli_main.register_lazy(
+    "skillopt",
+    "superqode.commands.skillopt",
+    "skillopt",
+    "Optimize markdown skills with bounded edits and eval gates.",
+    short_help=None,
+    hidden=False,
+)
 
-cli_main.add_command(tools, name="tools")
+
+cli_main.register_lazy(
+    "skills",
+    "superqode.commands.skills",
+    "skills",
+    "Manage and optimize SuperQode markdown skills.",
+    short_help=None,
+    hidden=False,
+)
 
 
-from superqode.commands.models import models
+cli_main.register_lazy(
+    "harness",
+    "superqode.commands.harness",
+    "harness",
+    "Create, validate, and run SuperQode harness specs.",
+    short_help=None,
+    hidden=False,
+)
 
-cli_main.add_command(models, name="models")
+
+cli_main.register_lazy(
+    "gauge",
+    "superqode.commands.gauge",
+    "gauge",
+    "Emit and check Agent Quality Records.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "hub",
+    "superqode.commands.hub",
+    "hub",
+    "Discover every harness available through SuperQode.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "plugins",
+    "superqode.commands.plugins",
+    "plugins",
+    "Inspect SuperQode plugin manifests.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "sandbox",
+    "superqode.commands.sandbox",
+    "sandbox",
+    "Inspect and run sandbox execution backends.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "benchmark",
+    "superqode.commands.benchmark",
+    "benchmark",
+    "Run coding harness benchmarks.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "profiles",
+    "superqode.commands.profiles",
+    "profiles",
+    "List built-in SuperQode harness profiles.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "tools",
+    "superqode.commands.tools",
+    "tools",
+    "Inspect coding harness tools.",
+    short_help=None,
+    hidden=False,
+)
+
+
+cli_main.register_lazy(
+    "models",
+    "superqode.commands.models",
+    "models",
+    "Browse the full models.dev catalog (5000+ models, 130+ providers).\n\nWith no subcommand this lists/searches models. See `models providers`.\n",
+    short_help=None,
+    hidden=False,
+)
 
 
 @config.command("init")
@@ -1519,14 +1937,24 @@ def init_command(force):
     click.echo("    superqode harness validate .superqode/harnesses/coding.yaml")
 
 
-from superqode.commands.agents import agents
+cli_main.register_lazy(
+    "agents",
+    "superqode.commands.agents",
+    "agents",
+    "Manage ACP (Agent-Client Protocol) coding agents.",
+    short_help=None,
+    hidden=False,
+)
 
-cli_main.add_command(agents, name="agents")
 
-
-from superqode.commands.connect import connect
-
-cli_main.add_command(connect, name="connect")
+cli_main.register_lazy(
+    "connect",
+    "superqode.commands.connect",
+    "connect",
+    "Connect to ACP agents, BYOK or LOCAL providers, a UHP server, or an A2A agent.",
+    short_help=None,
+    hidden=False,
+)
 
 
 # Alias for backward compatibility
@@ -1551,32 +1979,6 @@ def show_toast(message: str, toast_type: str) -> None:
         _console.print(f"[yellow]⚠️ {message}[/yellow]")
     else:
         _console.print(f"[blue]ℹ️ {message}[/blue]")
-
-
-from rich.text import Text
-from rich.panel import Panel
-from rich.live import Live
-from rich.spinner import Spinner
-from rich.markdown import Markdown
-from rich.syntax import Syntax
-from rich.align import Align
-from rich.box import DOUBLE, ROUNDED
-from rich.columns import Columns
-from rich.table import Table
-from rich.markup import escape
-import rich.box
-
-from superqode.providers import ProviderManager
-from superqode.dialogs import ProviderDialog, ModelDialog, ConnectDialog
-
-# LLM provider management
-from superqode.providers.manager import ProviderManager
-
-# Register new BYOK provider and agent commands
-from superqode.commands.providers import providers as providers_cmd
-from superqode.commands.auth import auth as auth_cmd
-from superqode.commands.serve import serve as serve_cmd
-from superqode.commands.optimize import optimize as optimize_cmd
 
 
 @cli_main.command("help")
@@ -1736,7 +2138,7 @@ def help_command():
         '    [cyan]superqode -p "<prompt>"[/cyan]         [dim]Run once and print response[/dim]'
     )
     console.print(
-        '    [cyan]superqode -p --json "<prompt>"[/cyan]  [dim]Run once with JSON output[/dim]'
+        '    [cyan]superqode -p --mode json "<prompt>"[/cyan]  [dim]Run once with JSON output[/dim]'
     )
     console.print(
         "    [cyan]superqode --resume <id>[/cyan]         [dim]Resume a stored session[/dim]"
@@ -1751,31 +2153,63 @@ def help_command():
 
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)
-cli_main.add_command(providers_cmd, name="providers")
+cli_main.register_lazy(
+    "providers",
+    "superqode.commands.providers",
+    "providers",
+    "Manage BYOK (Bring Your Own Key) providers.",
+)
 
 # Add auth commands (superqode auth info, superqode auth check, etc.)
-cli_main.add_command(auth_cmd, name="auth")
+cli_main.register_lazy(
+    "auth",
+    "superqode.commands.auth",
+    "auth",
+    "Manage API keys and view authentication status.\n\nSuperQode supports three auth modes:\n\n\x08\n1. BYOK (env vars)  - Primary, set ANTHROPIC_API_KEY etc.\n2. Local storage    - Optional, stored in ~/.superqode/auth.json\n3. ACP (agents)     - Delegated to coding agents\n\nEnvironment variables always take precedence over local storage.\n",
+)
 
 # Add Server commands (superqode serve lsp, superqode serve web, etc.)
-cli_main.add_command(serve_cmd, name="serve")
+cli_main.register_lazy(
+    "serve", "superqode.commands.serve", "serve", "Server commands for IDE and web integration."
+)
 
 # Add cross-harness tool-schema optimization commands.
-cli_main.add_command(optimize_cmd, name="optimize")
+cli_main.register_lazy(
+    "optimize",
+    "superqode.commands.optimize",
+    "optimize",
+    "Jev Tool Routing for local coding harnesses.",
+)
 
 # Add runtime management commands (superqode runtime list, superqode runtime doctor)
-from superqode.commands.runtime import runtime_cmd  # noqa: E402
-
-cli_main.add_command(runtime_cmd, name="runtime")
+cli_main.register_lazy(
+    "runtime",
+    "superqode.commands.runtime",
+    "runtime_cmd",
+    "Manage the agent runtime backend.",
+    short_help=None,
+    hidden=False,
+)
 
 # Add local stack commands (superqode local doctor, superqode local bench)
-from superqode.commands.local import local as local_cmd  # noqa: E402
-
-cli_main.add_command(local_cmd, name="local")
+cli_main.register_lazy(
+    "local",
+    "superqode.commands.local",
+    "local",
+    "Local Agentic Coding: tune SuperQode for the machine in front of you.",
+    short_help=None,
+    hidden=False,
+)
 
 # Add the channel daemon (superqode daemon: Telegram/Slack/Discord remote control)
-from superqode.commands.daemon import daemon as daemon_cmd  # noqa: E402
-
-cli_main.add_command(daemon_cmd, name="daemon")
+cli_main.register_lazy(
+    "daemon",
+    "superqode.commands.daemon",
+    "daemon",
+    "Run the SuperQode channel daemon (Telegram, Slack, Discord).\n\nChats become a remote control for local agent runs: prompts, progress,\ntool-approval relay, mid-run steering, and session commands. Configure\ntokens and chat allowlists in ~/.superqode/channels.yaml; by default\nevery channel with a token starts.\n\nSecurity: chats not in the allowlist only ever receive pairing\ninstructions. The agent never runs for unknown chats.\n",
+    short_help=None,
+    hidden=False,
+)
 
 # Note: agents command already exists, so we add the new one with a different approach
 # The existing agents command handles ACP agents, we'll enhance it

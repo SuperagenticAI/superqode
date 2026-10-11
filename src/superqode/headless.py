@@ -6,13 +6,13 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .agent.loop import AgentConfig, AgentResponse
 from .agent.loop_policy import core_loop_policy, workbench_loop_policy
 from .runtime import create_runtime, resolve_runtime_name
+from .runtime.errors import HeadlessSetupError
 from .agent.session_manager import SessionManager, SessionMessage, SessionMetadata
 from .agent.system_prompts import SystemPromptLevel
 from .providers.gateway.litellm_gateway import LiteLLMGateway
@@ -166,6 +166,8 @@ async def run_headless(
     output_schema: Optional[Path] = None,
     rubric: Optional[str] = None,
     billing_requested: str = "agent-managed",
+    on_event: Callable[[str, dict], None] | None = None,
+    approval_mode: str | None = None,
 ) -> AgentResponse:
     """Run a single non-interactive SuperQode request.
 
@@ -188,7 +190,7 @@ async def run_headless(
             custom_harness = resolve_harness(profile_name, root=working_directory or Path.cwd())
         except (FileNotFoundError, ValueError) as exc:
             valid = ", ".join(sorted(profiles))
-            raise ValueError(
+            raise HeadlessSetupError(
                 f"Unknown harness or profile '{profile_name}'. Built-in profiles: {valid}"
             ) from exc
 
@@ -201,7 +203,7 @@ async def run_headless(
                 "true",
                 "yes",
             ):
-                raise ValueError(
+                raise HeadlessSetupError(
                     f"Harness '{custom_harness.id}' runs tools with the permissions of this "
                     "process: no approval prompts, no sandbox, no network policy. Running it "
                     "unattended needs an explicit opt in. Set "
@@ -217,16 +219,27 @@ async def run_headless(
         prompt = prompt + schema_instruction(schema)
 
     profile = profiles.get(profile_name)
-    storage_dir = ".superqode/sessions"
     requested_working_directory = working_directory or Path.cwd()
+    storage_dir = str((requested_working_directory / ".superqode" / "sessions").resolve())
     active_working_directory = requested_working_directory
     worktree_info = None
+    runtime_name = resolve_runtime_name(cli=runtime)
+    backend_fork_from = None
 
     if fork_from:
-        manager = SessionManager(storage_dir=storage_dir)
-        fork_id = session_id or f"{fork_from}-fork-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        manager.start_session(session_id=fork_from)
-        session_id = manager.fork_current_session(fork_id)
+        fork_from = resolve_session_id(fork_from, storage_dir)
+        if custom_harness is not None or runtime_name not in {"builtin", "codex-cli"}:
+            raise HeadlessSetupError(
+                "Headless --fork supports native SuperQode and Codex CLI sessions. Use the selected harness or runtime's own fork command for this session."
+            )
+        if runtime_name == "codex-cli":
+            backend_fork_from = fork_from
+            session_id = None
+        else:
+            manager = SessionManager(storage_dir=storage_dir)
+            fork_id = session_id or f"{fork_from}-fork-{uuid.uuid4().hex[:8]}"
+            manager.start_session(session_id=fork_from)
+            session_id = manager.fork_current_session(fork_id)
 
     if sandbox_backend == "git-worktree":
         from .workspace.worktree import GitWorktreeManager
@@ -243,6 +256,10 @@ async def run_headless(
         session_id = session_id or worktree_session_id
 
     if custom_harness is not None:
+        if approval_mode is not None:
+            raise HeadlessSetupError(
+                "Custom harnesses own their permission policy. Set permissions in the harness spec; --approval-mode applies to native profiles."
+            )
         from .harness import create_harness_store, init_harness
 
         spec = custom_harness.spec
@@ -256,7 +273,20 @@ async def run_headless(
                     else Path(spec.context.session_storage)
                 ),
             )
-            kernel = await init_harness(spec, store=store)
+            kernel = await init_harness(
+                spec,
+                store=store,
+                **(
+                    {
+                        "event_callback": lambda event: on_event(
+                            "harness_event",
+                            {"event": event.type, "data": _public_event_data(event.data)},
+                        )
+                    }
+                    if on_event
+                    else {}
+                ),
+            )
             harness_session = await kernel.session(session_id)
             result = await harness_session.prompt(
                 prompt,
@@ -328,18 +358,80 @@ async def run_headless(
         harness_spec=harness_spec,
     )
 
-    runtime_name = resolve_runtime_name(cli=runtime)
     runtime_kwargs: dict[str, Any] = {}
     if runtime_name in {"codex-cli", "codex-sdk"}:
         runtime_kwargs["billing_requested"] = billing_requested
     if runtime_name == "builtin":
         runtime_kwargs["hooks"] = extension_runtime.build_hooks()
+        if on_event:
+            runtime_kwargs["on_tool_call"] = lambda name, args: on_event(
+                "tool_start", {"tool": name}
+            )
+            runtime_kwargs["on_tool_result"] = lambda name, result: on_event(
+                "tool_end", {"tool": name, "success": result.success}
+            )
+
+            async def report_thinking(text):
+                # Runtime progress only; reasoning and tool payloads are omitted.
+                on_event("progress", {"message": "Working"})
+
+            runtime_kwargs["on_thinking"] = report_thinking
     permissions = apply_backend_permissions(profile.permissions, sandbox_backend)
     if runtime_name == "codex-cli":
         from .tools.permissions import load_permission_config
 
         permissions = load_permission_config(active_working_directory)
         if profile.name in {"plan", "review", "no-tool"}:
+            runtime_kwargs["sandbox_backend"] = "read-only"
+    if approval_mode:
+        from dataclasses import replace
+        from .tools.permissions import Permission
+        from .runtime.registry import is_vendor_cli_runtime, _vendor_cli_spec
+
+        if approval_mode not in {"ask", "auto", "deny"}:
+            raise HeadlessSetupError("Approval mode must be ask, auto, or deny.")
+        if is_vendor_cli_runtime(runtime_name):
+            vendor = _vendor_cli_spec(runtime_name)
+            if approval_mode != "auto" and (
+                approval_mode not in vendor.permission_flags
+                or vendor.flags_for_approval(approval_mode) == vendor.flags_for_approval("auto")
+            ):
+                raise HeadlessSetupError(
+                    "This vendor CLI cannot enforce the selected headless approval mode. Use its interactive ACP connection or configure its own policy."
+                )
+            runtime_kwargs["approval_mode"] = approval_mode
+        elif runtime_name not in {
+            "builtin",
+            "adk",
+            "openai-agents",
+            "pydanticai",
+            "codex-cli",
+            "codex-sdk",
+            "claude-agent-sdk",
+            "copilot-sdk",
+        }:
+            raise HeadlessSetupError(
+                "This runtime owns its approval policy and cannot enforce --approval-mode. Configure its policy directly."
+            )
+
+        def narrowed(permission):
+            if permission == Permission.DENY or approval_mode == "deny":
+                return Permission.DENY
+            if permission == Permission.ASK and approval_mode == "auto":
+                return Permission.ALLOW
+            if approval_mode == "ask":
+                return Permission.ASK
+            return permission
+
+        permissions = replace(
+            permissions,
+            default=narrowed(permissions.default),
+            groups={group: narrowed(value) for group, value in permissions.groups.items()},
+            tools={name: narrowed(value) for name, value in permissions.tools.items()},
+            allow_patterns=list(permissions.allow_patterns) if approval_mode == "auto" else [],
+            deny_patterns=list(permissions.deny_patterns),
+        )
+        if runtime_name == "codex-cli" and approval_mode == "deny":
             runtime_kwargs["sandbox_backend"] = "read-only"
     runtime_obj = create_runtime(
         runtime_name,
@@ -352,6 +444,16 @@ async def run_headless(
         **runtime_kwargs,
     )
     try:
+        if backend_fork_from:
+            await runtime_obj.fork_thread(backend_fork_from)
+        if on_event:
+            on_event(
+                "runtime_start",
+                {
+                    "runtime": runtime_name,
+                    "event_detail": "tools" if runtime_name == "builtin" else "final",
+                },
+            )
         response = await runtime_obj.run(prompt)
         if schema is not None:
             from .agent.structured_output import check_output, correction_prompt
@@ -388,8 +490,8 @@ def resolve_session_id(session_id_or_prefix: str, storage_dir: str = ".superqode
     if len(matches) == 1:
         return matches[0]
     if not matches:
-        raise ValueError(f"Session not found: {session_id_or_prefix}")
-    raise ValueError(f"Ambiguous session prefix: {session_id_or_prefix}")
+        raise HeadlessSetupError(f"Session not found: {session_id_or_prefix}")
+    raise HeadlessSetupError(f"Ambiguous session prefix: {session_id_or_prefix}")
 
 
 def list_sessions(
@@ -429,7 +531,7 @@ def get_session_messages(
     manager = SessionManager(storage_dir=storage_dir)
     metadata = manager.get_session_info(session_id)
     if not metadata:
-        raise ValueError(f"Session not found: {session_id_or_prefix}")
+        raise HeadlessSetupError(f"Session not found: {session_id_or_prefix}")
     manager.start_session(session_id=session_id)
     return metadata, manager.get_messages()
 
@@ -461,7 +563,7 @@ def export_session(
     if fmt == "html":
         return _render_session_html(metadata, messages)
     if fmt != "markdown":
-        raise ValueError("format must be markdown, json, or html")
+        raise HeadlessSetupError("format must be markdown, json, or html")
 
     lines = [
         f"# SuperQode Session {metadata.session_id}",
@@ -556,7 +658,16 @@ def response_to_json(
         "success": response.stopped_reason == "complete" and not response.error,
     }
     if response.error:
-        payload["error"] = response.error
+        from .cli_output import public_error
+
+        payload.update(public_error(response.error))
+    if response.stopped_reason == "needs_approval":
+        payload.update(
+            error_code="needs_approval",
+            error="Tool approval is required. Review the task in the interactive TUI or choose an explicit headless approval policy.",
+        )
+    elif response.stopped_reason in {"cancelled", "canceled", "interrupted"}:
+        payload.update(error_code="cancelled", error="Request cancelled.")
     if change_summary is not None:
         payload["changes"] = change_summary
     if getattr(response, "rubric_result", None) is not None:
@@ -570,3 +681,26 @@ def response_to_json(
         if response.schema_errors:
             payload["success"] = False
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _public_event_data(data):
+    """Avoid serializing prompts, credentials, tool arguments or runtime objects."""
+    from .cli_output import sanitize_diagnostic
+
+    allowed = {
+        "runtime",
+        "backend",
+        "tool_name",
+        "success",
+        "stopped_reason",
+        "iterations",
+        "tool_calls_made",
+        "text",
+    }
+    return sanitize_diagnostic(
+        {
+            key: value
+            for key, value in data.items()
+            if key in allowed and isinstance(value, (str, int, float, bool, type(None)))
+        }
+    )

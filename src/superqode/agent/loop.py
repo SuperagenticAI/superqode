@@ -1299,7 +1299,13 @@ class AgentLoop:
         if version != self._cached_tool_defs_version:
             self._cached_tool_defs = self._compute_tool_definitions()
             self._cached_tool_defs_version = version
-        return self._cached_tool_defs
+        from superqode.project_commands import command_tool_allowed
+
+        return [
+            definition
+            for definition in self._cached_tool_defs
+            if command_tool_allowed(definition.name)
+        ]
 
     def _convert_message(self, m: AgentMessage) -> Message:
         """Convert a single message with caching."""
@@ -1329,7 +1335,9 @@ class AgentLoop:
             return []
 
         restored: List[AgentMessage] = []
-        for message in self._session_manager.get_messages(limit=self.config.session_history_limit):
+        for message in self._session_manager.context_messages(
+            limit=self.config.session_history_limit
+        ):
             restored.append(
                 AgentMessage(
                     role=message.role,
@@ -1618,6 +1626,14 @@ class AgentLoop:
         5. Manager **allow** passes through; otherwise (ASK) we honour a hook,
            rule, or System One allow, or fall back to the pause/prompt flow.
         """
+        from superqode.project_commands import command_tool_allowed
+
+        if not command_tool_allowed(name):
+            return ToolResult(
+                success=False,
+                output="",
+                error="Tool is outside this project command's allowed_tools.",
+            )
         from .hooks import PERMISSION_REQUEST
 
         verdict = await self.hooks.fire_decision(
@@ -2199,6 +2215,56 @@ class AgentLoop:
             )
         return new_messages, saved
 
+    async def compact_now(self, instructions: str = "") -> Dict[str, Any]:
+        """Summarize earlier turns now without altering transcript history."""
+        if self.run_active:
+            return {
+                "success": False,
+                "message": "Wait for the active turn to finish before compacting.",
+            }
+        if not self._session_manager:
+            return {"success": False, "message": "This runtime has no stored context to compact."}
+        history = self._session_manager.context_messages()
+        user_indices = [index for index, message in enumerate(history) if message.role == "user"]
+        if len(user_indices) < 2:
+            return {
+                "success": False,
+                "message": "There is not enough earlier conversation to compact yet.",
+            }
+        split = user_indices[-1]
+        head = [
+            AgentMessage(
+                role=m.role,
+                content=m.content,
+                tool_calls=m.tool_calls,
+                tool_call_id=m.tool_call_id,
+                name=m.tool_name,
+            )
+            for m in history[:split]
+        ]
+        from .compaction import compact_history
+
+        summary = await compact_history(
+            head, self.gateway, self.config.provider, self.config.model, instructions=instructions
+        )
+        if not summary:
+            return {
+                "success": False,
+                "message": "The summary request failed; the original context is unchanged.",
+            }
+        tail_count = len(history) - split
+        raw = self._session_manager.get_messages()
+        self._session_manager.save_compaction(summary, len(raw) - tail_count)
+        self._current_messages = self._load_stored_messages()
+        self.config.enable_summarization = True
+        return {
+            "success": True,
+            "message": "Earlier conversation compacted; full history remains available.",
+            "session_id": self.session_id,
+            "message_count": len(raw),
+            "context_messages": len(self._current_messages),
+        }
+
     async def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
         """Compact or prune messages when context approaches the model's window.
 
@@ -2774,6 +2840,11 @@ class AgentLoop:
                     cost_currency if response.cost_currency is None else response.cost_currency
                 )
             self.run_active = False
+            if response.stopped_reason == "complete" and response.content:
+                # Non-streaming turns must retain the final answer as well as
+                # user messages and tool results for resume and fork context.
+                if self._session_manager:
+                    self._session_manager.add_assistant_message(response.content)
             await self.hooks.fire(STOP, self._lifecycle_context(), response)
             # Opt-in automatic memory extraction, off the hot path.
             try:

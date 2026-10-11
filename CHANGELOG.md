@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-10-11
+
+### Added
+
+- Ordered JSONL headless lifecycle events, machine-readable setup errors,
+  project-scoped `--continue`, private redacted debug logs and terminal diagnostics.
+- Searchable `:hotkeys` with scoped overrides for declared app, composer and
+  modal actions. Remove the ambiguous application Ctrl+D log shortcut.
+- Trusted Markdown project commands with literal arguments and permission
+  scopes that can only narrow native harness tool access.
+
+### Changed
+
+- Share command metadata between dispatch, completion, help and the palette;
+  remove shadowed routes and make `:help <command>` searchable by command root.
+- Resolve native model defaults from configured credentials and installed
+  local models, and make doctor report the same selection and setup state.
+- Load command implementations lazily for fast version/help output and remove
+  the fixed half-second TUI launch delay.
+- Make `:compact` summarize immediately with optional instructions while
+  retaining the full transcript and resuming from saved compacted context.
+
+### Fixed
+
+- Replace destructive Git-based checkpoints and the incomplete redo path with
+  durable guarded task snapshots. Preserve earlier edits, index state and
+  commit history; refuse to overwrite newer file edits.
+- Persist file-by-file review undo alongside whole-task recovery, and roll
+  restoration back when checkpoint storage fails.
+- Preserve the launch profile and billing choice when continuing native
+  Codex sessions; distinguish vendor identity from runnable harness names.
+- Use native Codex branching for headless forks and retain the source session.
+  Restore the saved runtime when general project or environment defaults change.
+- Persist final replies in non-streaming native sessions so continued tasks
+  and forks retain the complete conversation.
+- Apply explicit headless approval choices through supported permission
+  adapters, reject unenforceable modes, and report approval blocks clearly.
+- Support debug logging on Windows with Python 3.12 as well as 3.13.
+- Save an original-history recovery branch before a successful rewind.
+- Keep the transcript and draft intact when rewinding stored session history
+  fails, and report the error without a success notification.
+- Use `:approval ask|auto|deny` for tool approval policy, with consistent help,
+  completion and command-palette entries. Show the current policy in the header
+  separately from Chat, Build or Plan mode.
+
 ## [2.13.0] - 2026-10-10
 
 ### Added

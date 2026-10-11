@@ -168,9 +168,7 @@ class CodexMixin(CodexControlsMixin):
         if "model" in lowered and ("unavailable" in lowered or "not found" in lowered):
             return "Use `:codex status` to list models available to your Codex account."
         if "approval" in lowered or "permission" in lowered:
-            return (
-                "Use the TUI approval prompt, set `:mode auto`, or adjust Codex policy in ~/.codex."
-            )
+            return "Use the TUI approval prompt, check `:approval`, or adjust Codex policy in ~/.codex."
         if "turn/completed" in lowered:
             return "The Codex app-server stream ended unexpectedly. Retry; if it repeats, run `:codex status`."
         return "Run `:codex status` for CLI, app-server, auth, and model diagnostics."
@@ -1269,7 +1267,9 @@ class CodexMixin(CodexControlsMixin):
             )
             text.append(f"  Host mode   {self.approval_mode}\n")
             blanket = getattr(self, "_runtime_permission_allow_all", False)
-            text.append(f"  Allow all   {'active; :mode ask resets it' if blanket else 'off'}\n")
+            text.append(
+                f"  Allow all   {'active; :approval ask resets it' if blanket else 'off'}\n"
+            )
             text.append(
                 f"  Session scopes {len(getattr(runtime, '_session_consents', ()))} approved\n"
             )

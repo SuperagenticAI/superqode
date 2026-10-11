@@ -122,6 +122,14 @@ def provider_setup_hint(provider_id: str) -> ProviderSetupHint:
             configured_vars.append(env_var)
             configured = True
 
+    if provider.category != ProviderCategory.LOCAL and provider.env_vars:
+        from .credentials import provider_api_key
+
+        configured = bool(provider_api_key(provider))
+    if provider.category == ProviderCategory.LOCAL and provider_id != "ds4":
+        from .default_model import installed_models
+
+        configured = bool(installed_models(provider_id))
     setup_hint = "Ready"
     if provider_id == "ds4":
         base_url = os.environ.get(provider.base_url_env or "", provider.default_base_url or "")
@@ -144,7 +152,9 @@ def provider_setup_hint(provider_id: str) -> ProviderSetupHint:
             setup_hint=setup_hint,
         )
 
-    if not configured and provider.env_vars:
+    if not configured and provider.category == ProviderCategory.LOCAL:
+        setup_hint = "Start the local server and install or load a model"
+    elif not configured and provider.env_vars:
         setup_hint = f"Set {' or '.join(provider.env_vars)}"
     elif provider.base_url_env and not os.environ.get(provider.base_url_env):
         setup_hint = f"Optional: set {provider.base_url_env} for a custom endpoint"

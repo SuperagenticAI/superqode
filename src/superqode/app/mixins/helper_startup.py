@@ -80,37 +80,26 @@ class HelperStartupMixin:
         ]
 
     def _load_custom_keybindings(self) -> None:
-        """Apply user keybinding overrides from ~/.superqode/keybindings.json.
+        from superqode.keymap import Keymap
 
-        Format: a JSON object of {"action_name": "key"} for any action in
-        ``_REBINDABLE_ACTIONS`` (e.g. {"toggle_sidebar": "f2"}).
-        """
-        path = Path.home() / ".superqode" / "keybindings.json"
-        try:
-            if not path.exists():
-                return
-            import json
+        self._keymap = Keymap(Path.home() / ".superqode" / "keybindings.json")
+        self._keymap.apply(self, scope="app")
+        self._apply_screen_keybindings()
+        for warning in self._keymap.warnings:
+            self.query_one("#log", ConversationLog).add_info(warning)
 
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return
-        if not isinstance(data, dict):
-            return
-        applied = 0
-        for action, key in data.items():
-            if action in self._REBINDABLE_ACTIONS and isinstance(key, str) and key.strip():
-                try:
-                    self.bind(key.strip(), action)
-                    applied += 1
-                except Exception:
-                    pass
-        if applied:
-            try:
-                self.query_one("#log", ConversationLog).add_info(
-                    f"⌨ Applied {applied} custom keybinding(s) from {path}."
-                )
-            except Exception:
-                pass
+    def _apply_screen_keybindings(self):
+        keymap = getattr(self, "_keymap", None)
+        if keymap and self.screen_stack:
+            for node in [self.screen, *self.screen.walk_children()]:
+                keymap.apply(node)
+
+    def _hotkeys_cmd(self, log):
+        from superqode.keymap import Keymap
+        from superqode.widgets.hotkeys import HotkeysScreen
+
+        keymap = getattr(self, "_keymap", None)
+        self.push_screen(HotkeysScreen(Keymap.inventory(self), keymap.warnings if keymap else ()))
 
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
@@ -604,10 +593,18 @@ class HelperStartupMixin:
             ),
             PaletteCommand(
                 "mode",
-                "Approval Mode",
-                "Show or change tool approval mode",
-                "🔐",
+                "Interaction Mode",
+                "Choose Chat, Build or Plan",
+                "◈",
                 ":mode",
+                "harness",
+            ),
+            PaletteCommand(
+                "approval",
+                "Approval Policy",
+                "Show or change tool approval policy",
+                "🔐",
+                ":approval",
                 "safety",
             ),
             PaletteCommand(
@@ -689,6 +686,40 @@ class HelperStartupMixin:
             }
         next(command for command in commands if command.id == "clear").command = ":clear"
         next(command for command in commands if command.id == "quit").command = ":quit"
+        from superqode.command_registry import command_metadata
+
+        metadata = command_metadata()
+        for command in commands:
+            value = (
+                ":" + command.command[1:] if command.command.startswith("/") else command.command
+            )
+            if value in metadata:
+                command.description = metadata[value].description
+            action = {"sidebar": "toggle_sidebar", "clear": "clear_screen"}.get(command.id)
+            if action:
+                command.shortcut = next(
+                    (
+                        binding.key
+                        for bindings in self._bindings.key_to_bindings.values()
+                        for binding in bindings
+                        if binding.action == action
+                    ),
+                    "",
+                )
+        existing = {command.command for command in commands}
+        for value, entry in metadata.items():
+            if value not in existing:
+                commands.append(
+                    PaletteCommand(
+                        "registry:" + value,
+                        value,
+                        entry.description,
+                        "",
+                        value,
+                        entry.category,
+                        command=value,
+                    )
+                )
         return commands
 
     def _init_undo_manager(self):
@@ -770,6 +801,7 @@ class HelperStartupMixin:
 
             status = self.query_one("#status-bar", ColorfulStatusBar)
             status.can_go_back = self._history.can_go_back
+            status.approval_mode = self.approval_mode
         except Exception:
             pass
         try:

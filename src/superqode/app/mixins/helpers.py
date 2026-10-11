@@ -589,15 +589,22 @@ class HelpersMixin(
         if session_manager is not None:
             try:
                 removed = session_manager.rewind_to_user_message(occurrence)
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 log.add_error(f"Could not rewind stored history: {exc}")
+                backup = getattr(getattr(session_manager, "store", None), "last_rewind_backup", "")
+                if backup:
+                    log.add_info(f"Original history is available with :resume {backup}.")
+                return
 
         # Trim the in-memory transcript record to the chosen point so future
         # rewinds, copies and transcripts reflect the rewound conversation.
         self._trim_transcript_to_user_occurrence(log, occurrence)
 
         self._set_prompt_prefill(target_text)
-        suffix = f" — cleared {removed} stored message(s)" if removed else ""
+        backup = getattr(getattr(session_manager, "store", None), "last_rewind_backup", "")
+        suffix = f" - cleared {removed} stored message(s)" if removed else ""
+        if backup:
+            log.add_info(f"Original history saved as {backup}. Use :resume {backup} to recover it.")
         log.add_info(
             f"↩ Rewound to message {occurrence}/{total}{suffix}. Edit and press Enter to resend."
         )

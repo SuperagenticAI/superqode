@@ -241,6 +241,10 @@ class PermissionManager:
 
         Returns the permission level (ALLOW, DENY, or ASK).
         """
+        from superqode.project_commands import command_tool_allowed
+
+        if not command_tool_allowed(tool_name):
+            return Permission.DENY
         # Check deny patterns first
         if self._matches_deny_pattern(tool_name, arguments):
             return Permission.DENY
@@ -410,6 +414,10 @@ class PermissionManager:
 
         Returns True if approved, False if denied.
         """
+        from superqode.project_commands import command_tool_allowed
+
+        if not command_tool_allowed(tool_name):
+            return False
         # Check session cache
         cache_key = f"{tool_name}:{hash(str(sorted(arguments.items())))}"
         if cache_key in self._session_approvals:

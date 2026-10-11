@@ -26,21 +26,22 @@ def candidate_errors(expected_version: str | None = None) -> list[str]:
         "work": {"worker", "watch", "usage", "policy", "prepare", "merge", "rollback"},
         "harness": {"bench", "bench-verify", "promote", "eval", "audit-candidate"},
     }
+    context = click.Context(cli_main)
     for group_name, expected in required_commands.items():
-        group = cli_main.commands.get(group_name)
+        group = cli_main.get_command(context, group_name)
         if not isinstance(group, click.Group):
             errors.append(f"missing command group: {group_name}")
             continue
-        missing = sorted(expected - set(group.commands))
+        missing = sorted(expected - set(group.list_commands(context)))
         if missing:
             errors.append(f"{group_name} is missing commands: {', '.join(missing)}")
-    harness = cli_main.commands.get("harness")
-    promote = harness.commands.get("promote") if isinstance(harness, click.Group) else None
+    harness = cli_main.get_command(context, "harness")
+    promote = harness.get_command(context, "promote") if isinstance(harness, click.Group) else None
     expected_promote = {"stage", "canary", "activate", "rollback", "status", "select"}
     if not isinstance(promote, click.Group):
         errors.append("missing harness promote group")
     else:
-        missing = sorted(expected_promote - set(promote.commands))
+        missing = sorted(expected_promote - set(promote.list_commands(context)))
         if missing:
             errors.append(f"harness promote is missing: {', '.join(missing)}")
 

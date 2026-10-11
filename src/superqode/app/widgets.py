@@ -209,6 +209,7 @@ class ColorfulStatusBar(Static):
     active_session: reactive[str] = reactive("")
     can_go_back: reactive[bool] = reactive(False)
     interaction_mode: reactive[str] = reactive("build")
+    approval_mode: reactive[str] = reactive("ask")
     plan_state: reactive[str] = reactive("")
     vim_state: reactive[str] = reactive("")
     #: Non-empty while a catalogue refresh is in flight, so the first
@@ -391,6 +392,18 @@ class ColorfulStatusBar(Static):
                     "build": THEME["success"],
                 }.get(mode, THEME["purple"])
                 right.append(mode_label, style=f"bold {mode_color}")
+
+            approval = (self.approval_mode or "ask").strip().lower()
+            approval_color = {
+                "ask": THEME["warning"],
+                "auto": THEME["success"],
+                "deny": THEME["error"],
+            }.get(approval, THEME["muted"])
+            if right.plain:
+                right.append(" │ " if medium else " ", style=THEME["dim"])
+            if wide:
+                right.append("approval ", style=THEME["muted"])
+            right.append(approval.upper(), style=f"bold {approval_color}")
 
             # Keep the interaction mode and the optional input mode distinct.
             vim_state = (self.vim_state or "").strip().lower()

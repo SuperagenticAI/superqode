@@ -436,394 +436,28 @@ class SlashCommandMixin:
         if self._acp_client is not None and self._try_acp_slash_command(c, args, log):
             return
 
-        if c == "help":
-            self._show_help(log)
-        elif c == "keys":
-            self._keys_cmd(log)
-        elif c == "search":
-            self._search_cmd(args, log)
-        elif c == "edit":
-            self._edit_last_message(log)
-        elif c == "vim":
-            self._vim_cmd(args, log)
-        elif c == "set":
-            self._set_cmd(args, log)
-        elif c == "clear":
-            self.action_clear_screen()
-        elif c in ("exit", "quit", "q"):
-            self._do_exit(log)
-        elif c == "init":
-            self._init_config(args, log)
-        elif c == "config":
-            self._run_cli_group("config", args or "show", log, "Config command")
-        elif c == "auth":
-            self._run_cli_group("auth", args or "info", log, "Auth command")
-        elif c == "serve":
-            self._run_cli_group("serve", args or "status", log, "Serve command")
-        elif c == "a2a-keys":
-            self._run_cli_group("a2a-keys", args or "status", log, "A2A keys command")
-        elif c == "daemon":
-            self._run_cli_group("daemon", args, log, "Daemon command")
-        elif c == "profiles":
-            self._run_cli_group("profiles", args or "list", log, "Profiles command")
-        elif c == "home":
-            self._go_home(log)
-        elif c == "activity":
-            self._activity_cmd(log)
-        elif c == "blocks":
-            self.action_preview_composer_block(args.strip())
-        elif c == "output":
-            self.action_preview_shell_output()
-        elif c in {"runs", "approvals", "delivery"}:
-            try:
-                self._open_supervision(c, args)
-            except ValueError as exc:
-                log.add_error(str(exc))
-        elif c == "disconnect":
-            self._disconnect_everything(log)
-        elif c == "acp":
-            self._acp_cmd(args, log)
-        elif c == "agent":
-            if not args.strip():
-                self.action_return_to_agent()
-            else:
-                self._agents_cmd(args, log)
-        elif c == "agents":
-            self._agents_cmd(args, log)
-        elif c == "a2a":
-            self.run_worker(self._a2a_cmd(args, log))
-        elif c == "runtime":
-            self._runtime_cmd(args, log)
-        elif c == "codex":
-            self._codex_cmd(args, log)
-        elif c == "copilot":
-            self._copilot_cmd(args, log)
-        elif c == "tau":
-            self._tau_cmd(args, log)
-        elif c in ("pipy", "pi"):
-            self._pipy_cmd(args, log)
-        elif c == "rlm":
-            self._rlm_cmd(args, log)
-        elif c == "claude":
-            self._claude_cmd(args, log)
-        elif c in ("grok", "xai-grok"):
-            self._grok_cmd(args, log)
-        elif c in ("prime", "prime-agent"):
-            self._prime_cmd(args, log)
-        elif c == "antigravity":
-            self._antigravity_cmd(args, log)
-        elif c in ("muse", "muse-code"):
-            self._muse_cmd(args, log)
-        elif c == "fx":
-            self._fx_cmd(args, log)
-        elif c == "agy":
-            self._agy_cmd(args, log)
-        elif c == "approve":
-            self.run_worker(self._approval_cmd("approve", args, log))
-        elif c == "reject":
-            self.run_worker(self._approval_cmd("reject", args, log))
-        elif c == "mcp":
-            self.run_worker(self._mcp_cmd(args, log))
-        elif c == "chat":
-            self._chat_cmd(args, log)
-        elif c == "build":
-            self._build_cmd(args, log)
-        elif c == "mode":
-            self._mode_cmd(args, log)
-        elif c == "hub":
-            self._hub_cmd(args, log)
-        elif c == "optimize":
-            self._jev_optimize_cmd(args, log)
-        elif c == "context":
-            if args.strip().lower() == "evidence":
-                self._open_context_evidence(log)
-            elif args.strip().lower() == "next":
-                self._preview_next_context(log)
-            else:
-                self._show_context(log)
-        elif c == "status":
-            self._show_harness_status(log)
-        elif c == "harness":
-            self._harness_cmd(args, log)
-        elif c in ("workflow", "workflows"):
-            self.run_worker(self._workflow_cmd(args, log))
-        elif c == "retry":
-            self._retry_last_message(log)
-        elif c in ("doctor", "doctor-current"):
-            self._doctor_cmd(args, log)
-        elif c in ("session", "sessions-current"):
-            self._session_cmd(args, log)
-        elif c == "work" and args.strip():
-            if not self._open_work_inspector(args, log):
-                self._run_cli_group("work", args, log, "WorkOrder")
-        elif c in ("work", "summary"):
-            self._work_cmd(args, log)
-        elif c == "files":
-            self._show_files(log)
-        elif c == "find":
-            self._find_files(args, log)
-        elif c == "sidebar":
-            self.action_toggle_sidebar()
-        elif c == "toggle_thinking":
-            # Allow users to type :toggle_thinking to toggle logs
-            self.action_toggle_thinking()
-        # Copy/Open/Edit commands
-        elif c == "copy":
-            self._handle_copy(log, args)
-        elif c == "yank":
-            self._handle_copy(log, "code")
-        elif c in ("history-search", "search-history"):
-            self.action_search_history()
-        elif c == "open":
-            self._handle_open(log)
-        elif c == "select":
-            self._handle_select(log, args)
-        elif c == "edit":
-            self._handle_edit(log)
-        elif c == "diagnostics":
-            self._handle_diagnostics(args, log)
-        elif c == "theme":
-            self._handle_theme(args, log)
-        elif c in {"settings", "appearance"}:
-            self._appearance_cmd(log)
-        elif c == "trial":
-            self._trial_cmd(log)
-        elif c == "feedback":
-            self._feedback_cmd(log)
-        # New coding agent commands
-        elif c == "approve":
-            self._handle_approve(args, log)
-        elif c == "reject":
-            self._handle_reject(args, log)
-        elif c in ("models", "catalog"):
-            self._models_cmd(args, log)
-        elif c in ("permissions", "policy"):
-            self._handle_permissions(log)
-        elif c == "diff":
-            self._handle_diff(args, log)
-        elif c == "plan":
-            self._handle_plan(args, log)
-        elif c == "undo":
-            self._handle_undo(log)
-        elif c == "history":
-            if args.strip() in {"earlier", "later"}:
-                if not getattr(self, "is_busy", False) and not self._in_selection_mode():
-                    if args.strip() == "earlier":
-                        log.load_earlier_history()
-                    else:
-                        log.load_later_history()
-            else:
-                self._handle_history(args, log)
-        elif c == "transcript":
-            self._handle_select(log, "transcript")
-        elif c == "timeline":
-            self._handle_timeline(log)
-        elif c == "rewind":
-            self._handle_rewind(args, log)
-        elif c == "tree":
-            self._show_session_tree(log)
-        elif c == "share":
-            self._handle_share(args, log)
-        elif c == "trust":
-            self._handle_trust(args, log)
-        elif c == "export":
-            self._handle_export(args, log)
-        elif c == "w":
-            self._handle_export(args, log)
-        elif c == "sandbox":
-            self._handle_sandbox(args, log)
-        elif c == "compare":
-            self.run_worker(self._compare_cmd(args, log))
-        elif c in ("paste", "image", "img"):
-            self._handle_paste_image(args, log)
-        elif c in ("voice", "dictate"):
-            if args.strip().lower() in {"off", "hide", "close"}:
-                self.query_one("#dictation-guide").remove_class("visible")
-                self._ensure_input_focus()
-            else:
-                self.action_voice_input()
-        elif c == "queue":
-            self._handle_queue(args, log)
-        elif c == "steer":
-            self._steer_message(args, log)
-        elif c == "stash":
-            self._handle_stash(args, log)
-        elif c == "view":
-            self._handle_view(args, log)
-        elif c == "e":
-            self._handle_view(args, log)
-        elif c == "search":
-            self._handle_search(args, log)
-        elif c == "grep":
-            self._handle_search(args, log)
-        elif c == "tools":
-            self._show_tools(args, log)
-        elif c == "skills":
-            self._skills_cmd(args, log)
-        elif c == "skillopt":
-            self._skillopt_cmd(args, log)
-        elif c in ("recipe", "recipes", "workflow", "workflows"):
-            self.run_worker(self._recipe_cmd(args, log))
-        elif c == "attach":
-            self._attach_cmd(args, log)
-        elif c == "prompt":
-            self._prompt_file_cmd(args, log)
-        elif c in ("switchboard", "sw"):
-            self._handle_switchboard(args, log)
-        elif c == "factory":
-            self._handle_factory(args, log)
-        elif c == "sessions":
-            self._handle_sessions_command(args, log)
-        elif c == "ls":
-            self._show_sessions(log)
-        elif c == "session":
-            self._handle_session(args, log)
-        elif c == "resume":
-            self._handle_resume_session(args, log)
-        elif c == "update":
-            self._handle_update(args, log)
-        elif c in ("fork", "clone"):
-            self._handle_fork_session(args, log)
-        elif c == "compact":
-            self._handle_compact(log)
-        elif c == "connect" and (args == "systemone" or args.startswith("systemone ")):
-            self._systemone_cmd("connect " + args[len("systemone") :].strip(), log)
-        elif c == "connect":
-            if (
-                args
-                and args.split()[0].casefold() in {"search", "status", "test", "retry"}
-                and self._connection_tools_command(args, log)
-            ):
-                return
-            # Parse subcommand: :connect [acp|byok|local] [args...]
-            if not args:
-                # Clear any BYOK state before showing connection type picker
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                if hasattr(self, "_byok_selected_provider"):
-                    delattr(self, "_byok_selected_provider")
-                # A leftover Open-row session would hide Plan on the next
-                # SuperQode harness switch. Bare :connect starts over.
-                self._clear_key_harness_session()
-                # Show picker to choose acp, byok, or local
-                self._show_connect_type_picker(log)
-            else:
-                from superqode.providers.connection_profiles import get_connection_profile
+        from superqode.command_registry import COMMAND_ROUTES
 
-                parts = args.split(maxsplit=1)
-                subcmd = parts[0].lower().strip()
-                subargs = parts[1].strip() if len(parts) > 1 else ""
-                bare_profile = get_connection_profile(subcmd) if not subargs else None
-
-                # Explicitly handle known subcommands
-                if subcmd == "acp":
-                    # Route to ACP connection (current :acp connect behavior)
-                    self._connect_acp_cmd(subargs, log)
-                elif subcmd == "byok":
-                    # Route to BYOK connection - always show provider picker if no args
-                    self._connect_byok_cmd(subargs, log)
-                elif subcmd == "local":
-                    # Route to LOCAL connection
-                    self._connect_local_cmd(subargs, log)
-                elif subcmd == "uhp":
-                    # Needs its own branch: any argument clears bare_profile,
-                    # and the fallthrough would read "uhp" as a BYOK provider.
-                    self._show_uhp_harnesses(log, subargs)
-                elif subcmd == "a2a":
-                    # Same reason as uhp: "a2a" is not a connection profile id
-                    # (that is protocol-a2a), and arguments would otherwise
-                    # fall through to BYOK.
-                    self._show_a2a_agent(log, subargs)
-                elif subcmd == "setup":
-                    try:
-                        setup_tokens = shlex.split(subargs or "")
-                    except ValueError as exc:
-                        log.add_error(f"Could not parse :connect setup arguments: {exc}")
-                        return
-                    self._run_cli_passthrough(
-                        ["connect", "setup", *setup_tokens],
-                        log,
-                        "Connect setup",
-                    )
-                elif bare_profile is not None:
-                    # Product/runtime connection profiles (Codex, Claude, Grok,
-                    # Gemini CLI, Devin, …) and the Subscriptions submenu. With
-                    # arguments (`:connect zai glm-4.6`) the BYOK path below
-                    # keeps handling provider/model pairs.
-                    self._dispatch_connection_profile(bare_profile, log)
-                else:
-                    # Try to parse as BYOK provider/model (backward compatibility)
-                    # But first check if it's a known subcommand that was missed
-                    if subcmd in ("", "help", "?"):
-                        # Show connection type picker if empty or help
-                        self._show_connect_type_picker(log)
-                    else:
-                        # Treat as provider/model
-                        self._connect_byok_cmd(args, log)
-        elif c == "models":
-            self._models_cmd(args, log)
-        elif c == "model":
-            self._model_cmd(args, log)
-        elif c in ("providers", "provider"):
-            self._providers_cmd(args, log)
-        elif c == "free":
-            self.run_worker(self._free_cmd(args, log))
-        elif c in ("recommend", "model-guide"):
-            self._recommend_cmd(args, log)
-        elif c == "sandbox":
-            self._sandbox_cmd(args, log)
-        elif c in ("plugins", "plugin"):
-            self._plugins_cmd(args, log)
-        elif c == "memory":
-            self._memory_cmd(args, log)
-        elif c in ("explore", "capabilities"):
-            self._explore_cmd(args, log)
-        elif c == "tour":
-            self._tour_cmd(args, log)
-        elif c == "local":
-            self._local_cmd(args, log)
-        elif c in ("eval", "evals"):
-            self._eval_cmd(args, log)
-        elif c in ("benchmark", "benchmarks"):
-            self._benchmark_cmd(args, log)
-        elif c == "usage":
-            self._usage_cmd(args, log)
-        elif c == "health":
-            self._health_cmd(args, log)
-        elif c == "mode":
-            self._set_approval_mode(args, log)
-        elif c == "systemone":
-            self._systemone_cmd(args, log)
-        elif c == "discovery":
-            self._discovery_cmd(args, log)
-        elif c == "log":
-            self._handle_log_verbosity(args, log)
-        elif c == "thinking":
-            self._handle_thinking_verbosity(args, log)
-        elif c == "workspace":
-            self._handle_workspace(args, log)
-        elif c == "context":
-            self._handle_context(args, log)
-        elif c == "redo":
-            self._handle_redo(log)
-        elif c == "checkpoints":
-            self._handle_checkpoints(log)
-        elif c == "demo":
-            self._show_superqode_demo(log)
-        elif c == "local":
-            self._local_cmd(args, log)
-        elif c == "hf":
-            self._hf_cmd(args, log)
+        handler = COMMAND_ROUTES.get(c)
+        if handler:
+            getattr(self, handler)(args, log, cmd, c)
         else:
-            # Python extensions receive unknown commands before the legacy
-            # agent-shortcut fallback. Creating PureMode here also applies the
-            # same project-trust gate used for extension tools and hooks.
+            from superqode.project_commands import discover_project_commands
+
+            project_commands = discover_project_commands(Path.cwd(), COMMAND_ROUTES)
+            if c in project_commands:
+                self.run_worker(
+                    self._invoke_project_command(c, args, log),
+                    group="project-command",
+                    exclusive=True,
+                    exit_on_error=False,
+                )
+                return
             pure = self._ensure_pure_mode()
             extension_runtime = getattr(pure, "_extension_runtime", None)
             if extension_runtime is not None and c in extension_runtime.commands:
                 self.run_worker(self._invoke_extension_command(c, args, log))
             else:
-                # Agent shortcut
                 agent_commands = self._agent_command_metadata()
                 if c in agent_commands:
                     self._connect_agent(c)
@@ -834,6 +468,520 @@ class SlashCommandMixin:
         # Always return focus to input after command completes
         # Use a small delay to ensure command output is displayed first
         self.set_timer(0.1, self._ensure_input_focus)
+
+    def _dispatch_help(self, args, log, cmd, c):
+        if args:
+            self._show_help(log, args)
+        else:
+            self._show_help(log)
+
+    def _dispatch_keys(self, args, log, cmd, c):
+        self._keys_cmd(log)
+
+    def _dispatch_search(self, args, log, cmd, c):
+        self._search_cmd(args, log)
+
+    def _dispatch_edit(self, args, log, cmd, c):
+        self._edit_last_message(log)
+
+    def _dispatch_vim(self, args, log, cmd, c):
+        self._vim_cmd(args, log)
+
+    def _dispatch_set(self, args, log, cmd, c):
+        self._set_cmd(args, log)
+
+    def _dispatch_clear(self, args, log, cmd, c):
+        self.action_clear_screen()
+
+    def _dispatch_exit(self, args, log, cmd, c):
+        self._do_exit(log)
+
+    def _dispatch_init(self, args, log, cmd, c):
+        self._init_config(args, log)
+
+    def _dispatch_config(self, args, log, cmd, c):
+        self._run_cli_group("config", args or "show", log, "Config command")
+
+    def _dispatch_auth(self, args, log, cmd, c):
+        self._run_cli_group("auth", args or "info", log, "Auth command")
+
+    def _dispatch_serve(self, args, log, cmd, c):
+        self._run_cli_group("serve", args or "status", log, "Serve command")
+
+    def _dispatch_a2a_keys(self, args, log, cmd, c):
+        self._run_cli_group("a2a-keys", args or "status", log, "A2A keys command")
+
+    def _dispatch_daemon(self, args, log, cmd, c):
+        self._run_cli_group("daemon", args, log, "Daemon command")
+
+    def _dispatch_profiles(self, args, log, cmd, c):
+        self._run_cli_group("profiles", args or "list", log, "Profiles command")
+
+    def _dispatch_home(self, args, log, cmd, c):
+        self._go_home(log)
+
+    def _dispatch_activity(self, args, log, cmd, c):
+        self._activity_cmd(log)
+
+    def _dispatch_blocks(self, args, log, cmd, c):
+        self.action_preview_composer_block(args.strip())
+
+    def _dispatch_output(self, args, log, cmd, c):
+        self.action_preview_shell_output()
+
+    def _dispatch_runs(self, args, log, cmd, c):
+        try:
+            self._open_supervision(c, args)
+        except ValueError as exc:
+            log.add_error(str(exc))
+
+    def _dispatch_disconnect(self, args, log, cmd, c):
+        self._disconnect_everything(log)
+
+    def _dispatch_acp(self, args, log, cmd, c):
+        self._acp_cmd(args, log)
+
+    def _dispatch_agent(self, args, log, cmd, c):
+        if not args.strip():
+            self.action_return_to_agent()
+        else:
+            self._agents_cmd(args, log)
+
+    def _dispatch_agents(self, args, log, cmd, c):
+        self._agents_cmd(args, log)
+
+    def _dispatch_a2a(self, args, log, cmd, c):
+        self.run_worker(self._a2a_cmd(args, log))
+
+    def _dispatch_runtime(self, args, log, cmd, c):
+        self._runtime_cmd(args, log)
+
+    def _dispatch_codex(self, args, log, cmd, c):
+        self._codex_cmd(args, log)
+
+    def _dispatch_copilot(self, args, log, cmd, c):
+        self._copilot_cmd(args, log)
+
+    def _dispatch_tau(self, args, log, cmd, c):
+        self._tau_cmd(args, log)
+
+    def _dispatch_pipy(self, args, log, cmd, c):
+        self._pipy_cmd(args, log)
+
+    def _dispatch_rlm(self, args, log, cmd, c):
+        self._rlm_cmd(args, log)
+
+    def _dispatch_claude(self, args, log, cmd, c):
+        self._claude_cmd(args, log)
+
+    def _dispatch_grok(self, args, log, cmd, c):
+        self._grok_cmd(args, log)
+
+    def _dispatch_prime(self, args, log, cmd, c):
+        self._prime_cmd(args, log)
+
+    def _dispatch_antigravity(self, args, log, cmd, c):
+        self._antigravity_cmd(args, log)
+
+    def _dispatch_muse(self, args, log, cmd, c):
+        self._muse_cmd(args, log)
+
+    def _dispatch_fx(self, args, log, cmd, c):
+        self._fx_cmd(args, log)
+
+    def _dispatch_agy(self, args, log, cmd, c):
+        self._agy_cmd(args, log)
+
+    def _dispatch_approve(self, args, log, cmd, c):
+        self.run_worker(self._approval_cmd("approve", args, log))
+
+    def _dispatch_reject(self, args, log, cmd, c):
+        self.run_worker(self._approval_cmd("reject", args, log))
+
+    def _dispatch_mcp(self, args, log, cmd, c):
+        self.run_worker(self._mcp_cmd(args, log))
+
+    def _dispatch_chat(self, args, log, cmd, c):
+        self._chat_cmd(args, log)
+
+    def _dispatch_build(self, args, log, cmd, c):
+        self._build_cmd(args, log)
+
+    def _dispatch_mode(self, args, log, cmd, c):
+        self._mode_cmd(args, log)
+
+    def _dispatch_approval(self, args, log, cmd, c):
+        self._set_approval_mode(args, log)
+
+    def _dispatch_hub(self, args, log, cmd, c):
+        self._hub_cmd(args, log)
+
+    def _dispatch_optimize(self, args, log, cmd, c):
+        self._jev_optimize_cmd(args, log)
+
+    def _dispatch_context(self, args, log, cmd, c):
+        if args.strip().lower() == "evidence":
+            self._open_context_evidence(log)
+        elif args.strip().lower() == "next":
+            self._preview_next_context(log)
+        elif args.strip().lower() in {"auto", "show", "status"} or args.strip().isdigit():
+            self._handle_context(args, log)
+        else:
+            self._show_context(log)
+
+    def _dispatch_status(self, args, log, cmd, c):
+        self._show_harness_status(log)
+
+    def _dispatch_harness(self, args, log, cmd, c):
+        self._harness_cmd(args, log)
+
+    def _dispatch_workflow(self, args, log, cmd, c):
+        self.run_worker(self._workflow_cmd(args, log))
+
+    def _dispatch_retry(self, args, log, cmd, c):
+        self._retry_last_message(log)
+
+    def _dispatch_doctor(self, args, log, cmd, c):
+        self._doctor_cmd(args, log)
+
+    def _dispatch_session(self, args, log, cmd, c):
+        self._session_cmd(args, log)
+
+    def _dispatch_work(self, args, log, cmd, c):
+        if c == "work" and args.strip():
+            if not self._open_work_inspector(args, log):
+                self._run_cli_group("work", args, log, "WorkOrder")
+        elif c in ("work", "summary"):
+            self._work_cmd(args, log)
+
+    def _dispatch_summary(self, args, log, cmd, c):
+        self._work_cmd(args, log)
+
+    def _dispatch_files(self, args, log, cmd, c):
+        self._show_files(log)
+
+    def _dispatch_find(self, args, log, cmd, c):
+        self._find_files(args, log)
+
+    def _dispatch_sidebar(self, args, log, cmd, c):
+        self.action_toggle_sidebar()
+
+    def _dispatch_toggle_thinking(self, args, log, cmd, c):
+        self.action_toggle_thinking()
+
+    def _dispatch_copy(self, args, log, cmd, c):
+        self._handle_copy(log, args)
+
+    def _dispatch_yank(self, args, log, cmd, c):
+        self._handle_copy(log, "code")
+
+    def _dispatch_history_search(self, args, log, cmd, c):
+        self.action_search_history()
+
+    def _dispatch_open(self, args, log, cmd, c):
+        self._handle_open(log)
+
+    def _dispatch_select(self, args, log, cmd, c):
+        self._handle_select(log, args)
+
+    def _dispatch_diagnostics(self, args, log, cmd, c):
+        self._handle_diagnostics(args, log)
+
+    def _dispatch_theme(self, args, log, cmd, c):
+        self._handle_theme(args, log)
+
+    def _dispatch_settings(self, args, log, cmd, c):
+        self._appearance_cmd(log)
+
+    def _dispatch_trial(self, args, log, cmd, c):
+        self._trial_cmd(log)
+
+    def _dispatch_feedback(self, args, log, cmd, c):
+        self._feedback_cmd(log)
+
+    def _dispatch_models(self, args, log, cmd, c):
+        self._models_cmd(args, log)
+
+    def _dispatch_permissions(self, args, log, cmd, c):
+        self._handle_permissions(log)
+
+    def _dispatch_diff(self, args, log, cmd, c):
+        self._handle_diff(args, log)
+
+    def _dispatch_plan(self, args, log, cmd, c):
+        self._handle_plan(args, log)
+
+    def _dispatch_undo(self, args, log, cmd, c):
+        self._handle_undo(log)
+
+    def _dispatch_history(self, args, log, cmd, c):
+        if args.strip() in {"earlier", "later"}:
+            if not getattr(self, "is_busy", False) and (not self._in_selection_mode()):
+                if args.strip() == "earlier":
+                    log.load_earlier_history()
+                else:
+                    log.load_later_history()
+        else:
+            self._handle_history(args, log)
+
+    def _dispatch_transcript(self, args, log, cmd, c):
+        self._handle_select(log, "transcript")
+
+    def _dispatch_timeline(self, args, log, cmd, c):
+        self._handle_timeline(log)
+
+    def _dispatch_rewind(self, args, log, cmd, c):
+        self._handle_rewind(args, log)
+
+    def _dispatch_tree(self, args, log, cmd, c):
+        self._show_session_tree(log)
+
+    def _dispatch_share(self, args, log, cmd, c):
+        self._handle_share(args, log)
+
+    def _dispatch_trust(self, args, log, cmd, c):
+        self._handle_trust(args, log)
+
+    def _dispatch_export(self, args, log, cmd, c):
+        self._handle_export(args, log)
+
+    def _dispatch_w(self, args, log, cmd, c):
+        self._handle_export(args, log)
+
+    def _dispatch_sandbox(self, args, log, cmd, c):
+        self._handle_sandbox(args, log)
+
+    def _dispatch_compare(self, args, log, cmd, c):
+        self.run_worker(self._compare_cmd(args, log))
+
+    def _dispatch_paste(self, args, log, cmd, c):
+        self._handle_paste_image(args, log)
+
+    def _dispatch_voice(self, args, log, cmd, c):
+        if args.strip().lower() in {"off", "hide", "close"}:
+            self.query_one("#dictation-guide").remove_class("visible")
+            self._ensure_input_focus()
+        else:
+            self.action_voice_input()
+
+    def _dispatch_queue(self, args, log, cmd, c):
+        self._handle_queue(args, log)
+
+    def _dispatch_steer(self, args, log, cmd, c):
+        self._steer_message(args, log)
+
+    def _dispatch_stash(self, args, log, cmd, c):
+        self._handle_stash(args, log)
+
+    def _dispatch_view(self, args, log, cmd, c):
+        self._handle_view(args, log)
+
+    def _dispatch_e(self, args, log, cmd, c):
+        self._handle_view(args, log)
+
+    def _dispatch_grep(self, args, log, cmd, c):
+        self._handle_search(args, log)
+
+    def _dispatch_tools(self, args, log, cmd, c):
+        self._show_tools(args, log)
+
+    def _dispatch_skills(self, args, log, cmd, c):
+        self._skills_cmd(args, log)
+
+    def _dispatch_skillopt(self, args, log, cmd, c):
+        self._skillopt_cmd(args, log)
+
+    def _dispatch_recipe(self, args, log, cmd, c):
+        self.run_worker(self._recipe_cmd(args, log))
+
+    def _dispatch_attach(self, args, log, cmd, c):
+        self._attach_cmd(args, log)
+
+    def _dispatch_prompt(self, args, log, cmd, c):
+        self._prompt_file_cmd(args, log)
+
+    def _dispatch_switchboard(self, args, log, cmd, c):
+        self._handle_switchboard(args, log)
+
+    def _dispatch_factory(self, args, log, cmd, c):
+        self._handle_factory(args, log)
+
+    def _dispatch_sessions(self, args, log, cmd, c):
+        self._handle_sessions_command(args, log)
+
+    def _dispatch_ls(self, args, log, cmd, c):
+        self._show_sessions(log)
+
+    def _dispatch_resume(self, args, log, cmd, c):
+        self._handle_resume_session(args, log)
+
+    def _dispatch_update(self, args, log, cmd, c):
+        self._handle_update(args, log)
+
+    def _dispatch_fork(self, args, log, cmd, c):
+        self._handle_fork_session(args, log)
+
+    def _dispatch_compact(self, args, log, cmd, c):
+        self._handle_compact(log, args)
+
+    def _dispatch_connect(self, args, log, cmd, c):
+        if c == "connect" and (args == "systemone" or args.startswith("systemone ")):
+            self._systemone_cmd("connect " + args[len("systemone") :].strip(), log)
+        elif c == "connect":
+            if (
+                args
+                and args.split()[0].casefold() in {"search", "status", "test", "retry"}
+                and self._connection_tools_command(args, log)
+            ):
+                return
+            if not args:
+                self._awaiting_byok_provider = False
+                self._awaiting_byok_model = False
+                if hasattr(self, "_byok_selected_provider"):
+                    delattr(self, "_byok_selected_provider")
+                self._clear_key_harness_session()
+                self._show_connect_type_picker(log)
+            else:
+                from superqode.providers.connection_profiles import get_connection_profile
+
+                parts = args.split(maxsplit=1)
+                subcmd = parts[0].lower().strip()
+                subargs = parts[1].strip() if len(parts) > 1 else ""
+                bare_profile = get_connection_profile(subcmd) if not subargs else None
+                if subcmd == "acp":
+                    self._connect_acp_cmd(subargs, log)
+                elif subcmd == "byok":
+                    self._connect_byok_cmd(subargs, log)
+                elif subcmd == "local":
+                    self._connect_local_cmd(subargs, log)
+                elif subcmd == "uhp":
+                    self._show_uhp_harnesses(log, subargs)
+                elif subcmd == "a2a":
+                    self._show_a2a_agent(log, subargs)
+                elif subcmd == "setup":
+                    try:
+                        setup_tokens = shlex.split(subargs or "")
+                    except ValueError as exc:
+                        log.add_error(f"Could not parse :connect setup arguments: {exc}")
+                        return
+                    self._run_cli_passthrough(
+                        ["connect", "setup", *setup_tokens], log, "Connect setup"
+                    )
+                elif bare_profile is not None:
+                    self._dispatch_connection_profile(bare_profile, log)
+                elif subcmd in ("", "help", "?"):
+                    self._show_connect_type_picker(log)
+                else:
+                    self._connect_byok_cmd(args, log)
+
+    def _dispatch_model(self, args, log, cmd, c):
+        self._model_cmd(args, log)
+
+    def _dispatch_providers(self, args, log, cmd, c):
+        self._providers_cmd(args, log)
+
+    def _dispatch_free(self, args, log, cmd, c):
+        self.run_worker(self._free_cmd(args, log))
+
+    def _dispatch_recommend(self, args, log, cmd, c):
+        self._recommend_cmd(args, log)
+
+    def _dispatch_plugins(self, args, log, cmd, c):
+        self._plugins_cmd(args, log)
+
+    def _dispatch_memory(self, args, log, cmd, c):
+        self._memory_cmd(args, log)
+
+    def _dispatch_explore(self, args, log, cmd, c):
+        self._explore_cmd(args, log)
+
+    def _dispatch_tour(self, args, log, cmd, c):
+        self._tour_cmd(args, log)
+
+    def _dispatch_local(self, args, log, cmd, c):
+        self._local_cmd(args, log)
+
+    def _dispatch_eval(self, args, log, cmd, c):
+        self._eval_cmd(args, log)
+
+    def _dispatch_benchmark(self, args, log, cmd, c):
+        self._benchmark_cmd(args, log)
+
+    def _dispatch_usage(self, args, log, cmd, c):
+        self._usage_cmd(args, log)
+
+    def _dispatch_health(self, args, log, cmd, c):
+        self._health_cmd(args, log)
+
+    def _dispatch_systemone(self, args, log, cmd, c):
+        self._systemone_cmd(args, log)
+
+    def _dispatch_discovery(self, args, log, cmd, c):
+        self._discovery_cmd(args, log)
+
+    def _dispatch_log(self, args, log, cmd, c):
+        self._handle_log_verbosity(args, log)
+
+    def _dispatch_thinking(self, args, log, cmd, c):
+        self._handle_thinking_verbosity(args, log)
+
+    def _dispatch_workspace(self, args, log, cmd, c):
+        self._handle_workspace(args, log)
+
+    def _dispatch_redo(self, args, log, cmd, c):
+        self._handle_redo(log)
+
+    def _dispatch_checkpoints(self, args, log, cmd, c):
+        self._handle_checkpoints(log)
+
+    def _dispatch_demo(self, args, log, cmd, c):
+        self._show_superqode_demo(log)
+
+    def _dispatch_hf(self, args, log, cmd, c):
+        self._hf_cmd(args, log)
+
+    def _dispatch_hotkeys(self, args, log, cmd, c):
+        self._hotkeys_cmd(log)
+
+    def _dispatch_gauge(self, args, log, cmd, c):
+        self._run_cli_group("gauge", args, log, "Gauge command")
+
+    async def _invoke_project_command(self, name, args, log):
+        from superqode.command_registry import COMMAND_ROUTES
+        from superqode.project_commands import command_scope, discover_project_commands
+
+        command = discover_project_commands(Path.cwd(), COMMAND_ROUTES).get(name)
+        if command is None:
+            log.add_error(
+                "This project command is unavailable. Check project trust and its Markdown file."
+            )
+            return
+        pure = getattr(self, "_pure_mode", None)
+        if (
+            not pure
+            or not pure.session.connected
+            or not pure._agent
+            or pure.runtime_name != "builtin"
+        ):
+            log.add_info(
+                "Connect a native SuperQode harness to run project commands with its permission policy."
+            )
+            return
+        if self.is_busy:
+            log.add_info("Wait for the current turn before running a project command.")
+            return
+        prompt = command.expand(args)
+        log.add_user(prompt)
+        with command_scope(command.allowed_tools):
+            worker = self._send_to_pure_mode(prompt, log)
+            from textual.worker import WorkerCancelled, WorkerFailed
+
+            try:
+                await worker.wait()
+            except WorkerCancelled:
+                return
+            except WorkerFailed:
+                log.add_error("Project command failed. Check the run details and retry.")
 
     async def _invoke_extension_command(
         self, command: str, args: str, log: ConversationLog
@@ -1970,21 +2118,39 @@ class SlashCommandMixin:
 
         sync(self)
 
-    def _handle_compact(self, log: ConversationLog):
-        """Compact or enable compaction for the active local provider session."""
-        if not hasattr(self, "_pure_mode") or not self._pure_mode.session.connected:
-            log.add_error("No active local provider session to compact.")
-            log.add_info("Use :connect byok or :connect local first.")
+    def _handle_compact(self, log: ConversationLog, instructions: str = ""):
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the active turn to finish before compacting.")
             return
+        pure = getattr(self, "_pure_mode", None)
+        if pure is None or not pure.session.connected:
+            log.add_error("Connect a model before compacting its context.")
+            return
+        self.run_worker(
+            self._compact_context_worker(pure, instructions, log),
+            group="compaction",
+            exclusive=True,
+        )
 
-        result = self._pure_mode.compact()
-        if result.get("success"):
-            log.add_info(result["message"])
-            log.add_info(
-                f"Session {result.get('session_id', '')[:8]}: {result.get('message_count', 0)} stored messages, max context {result.get('max_context_tokens')} tokens."
-            )
-        else:
-            log.add_error(result.get("message", "Compaction is not available."))
+    async def _compact_context_worker(self, pure, instructions: str, log: ConversationLog):
+        self.is_busy = True
+        try:
+            result = await pure.compact_now(instructions)
+            if result.get("success"):
+                self._announce_transition(
+                    title="Context compacted",
+                    primary=result["message"],
+                    detail="Full transcript retained",
+                    severity="success",
+                    log=log,
+                    dedupe_key="context-compact",
+                )
+            else:
+                log.add_info(result.get("message", "Compaction is unavailable."))
+        except Exception:
+            log.add_error("Could not compact context. The stored conversation remains available.")
+        finally:
+            self.is_busy = False
 
     def _handle_context(self, args: str, log: ConversationLog):
         """Show or override the context window used for adaptive compaction.
@@ -2760,7 +2926,7 @@ class SlashCommandMixin:
             if self.approval_mode == "deny":
                 self._call_ui(self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log)
                 self._call_ui(log.add_error, f"🛑 Tool blocked: {tool_name}")
-                self._call_ui(log.add_info, "💡 Use :mode auto or :mode ask to allow tools")
+                self._call_ui(log.add_info, "💡 Use :approval ask to review tool requests")
                 process.terminate()
             elif self.approval_mode == "ask":
                 needs_permission = self._tool_needs_permission(tool_name, tool_input)
@@ -4125,7 +4291,7 @@ class SlashCommandMixin:
         t.append("\n")
 
         t.append("\n  Commands: ", style=THEME["muted"])
-        t.append(":mode auto|ask|deny", style=THEME["cyan"])
+        t.append(":approval ask|auto|deny", style=THEME["cyan"])
         t.append(", ", style=THEME["muted"])
         t.append(":diff", style=THEME["cyan"])
         t.append(", ", style=THEME["muted"])
@@ -4338,6 +4504,9 @@ class SlashCommandMixin:
 
     def _handle_undo(self, log: ConversationLog):
         """Handle :undo command - uses enhanced undo manager."""
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the active turn before undoing files.")
+            return
         # Try enhanced undo manager first
         if hasattr(self, "_undo_manager") and self._undo_manager:
             result = self._undo_manager.undo()
@@ -4350,6 +4519,10 @@ class SlashCommandMixin:
                     text.append(f" ({len(result.files_changed)} files)", style=SQ_COLORS.text_dim)
                 text.append("\n", style="")
                 log.write(text)
+                return
+
+            if self._undo_manager.last_error:
+                log.add_error(self._undo_manager.last_error)
                 return
 
         # Fallback to file manager undo, when one exists.
@@ -4368,6 +4541,9 @@ class SlashCommandMixin:
 
     def _handle_redo(self, log: ConversationLog):
         """Handle :redo command."""
+        if getattr(self, "is_busy", False):
+            log.add_info("Wait for the active turn before redoing files.")
+            return
         if hasattr(self, "_undo_manager") and self._undo_manager:
             result = self._undo_manager.redo()
             if result:
@@ -4377,6 +4553,9 @@ class SlashCommandMixin:
                 text.append(result.name, style=f"bold {SQ_COLORS.text_primary}")
                 text.append("\n", style="")
                 log.write(text)
+                return
+            if self._undo_manager.last_error:
+                log.add_error(self._undo_manager.last_error)
                 return
         log.add_info("◇ Nothing to redo")
 

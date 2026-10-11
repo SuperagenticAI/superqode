@@ -644,8 +644,8 @@ class AgentRunMixin:
             return
         elif text.strip().startswith("/compact"):
             if hasattr(self, "_pure_mode") and hasattr(self._pure_mode, "compact"):
-                self._pure_mode.compact()
-                log.add_info("Context compacted.")
+                result = await self._pure_mode.compact_now(text.strip()[len("/compact") :].strip())
+                log.add_info(result["message"])
             return
 
         begin_changes = getattr(self, "_begin_task_changes", None)

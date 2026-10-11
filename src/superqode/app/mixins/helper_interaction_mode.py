@@ -72,15 +72,15 @@ class HelperInteractionModeMixin:
             t.append("  (read, write, edit, bash, search, etc.)\n\n", style=THEME["muted"])
 
             modes = [
-                ("auto", "🟢", THEME["success"], "Allow all tools without prompts"),
-                ("ask", "🟡", THEME["warning"], "Prompt for external/outside-project tools"),
-                ("deny", "🔴", THEME["error"], "Block ALL tools (read-only)"),
+                ("ask", "🟡", THEME["warning"], "Ask before approving tool requests"),
+                ("auto", "🟢", THEME["success"], "Auto-approve tool requests"),
+                ("deny", "🔴", THEME["error"], "Deny tool permission requests"),
             ]
 
             for m, icon, color, desc in modes:
                 current = " ◀ current" if self.approval_mode == m else ""
                 t.append(f"    {icon} ", style=color)
-                t.append(f":mode {m:<6}", style=f"bold {color}")
+                t.append(f":approval {m:<6}", style=f"bold {color}")
                 t.append(f" - {desc}", style=THEME["muted"])
                 if current:
                     t.append(current, style=f"bold {color}")
@@ -88,10 +88,17 @@ class HelperInteractionModeMixin:
 
             t.append(f"\n  💡 ", style=THEME["muted"])
             t.append(
-                "ASK mode prompts for external tools & files outside project.\n", style=THEME["dim"]
+                "ASK requests consent for project edits, shell commands and external tools.\n",
+                style=THEME["dim"],
             )
-            t.append("     Tools within project directory are auto-allowed.\n", style=THEME["dim"])
-            t.append("     DENY blocks ALL tools. AUTO allows everything.\n", style=THEME["dim"])
+            t.append(
+                "     External harnesses control which requests reach SuperQode.\n",
+                style=THEME["dim"],
+            )
+            t.append(
+                "     Harness policy, sandbox and plan restrictions still apply.\n",
+                style=THEME["dim"],
+            )
 
             self._show_command_output(log, t)
             return
@@ -104,11 +111,10 @@ class HelperInteractionModeMixin:
             self._sync_approval_mode()
 
             icons = {"auto": "🟢", "ask": "🟡", "deny": "🔴"}
-            colors = {"auto": THEME["success"], "ask": THEME["warning"], "deny": THEME["error"]}
             descs = {
-                "auto": "All tools allowed without prompts",
-                "ask": "Prompts for external tools & files outside project",
-                "deny": "ALL tool calls will be blocked (read-only)",
+                "auto": "Tool permission requests are auto-approved; harness restrictions still apply.",
+                "ask": "Ask before approving tool requests; external harnesses control which requests are sent.",
+                "deny": "Tool permission requests are denied; harness restrictions still apply.",
             }
 
             log.add_success(f"{icons[mode]} Approval mode set to {mode.upper()}")
@@ -121,8 +127,8 @@ class HelperInteractionModeMixin:
                     "existing approvals for a specific session scope remain valid."
                 )
         else:
-            log.add_error(f"Invalid mode: {mode}")
-            log.add_system("Valid modes: auto, ask, deny")
+            log.add_error(f"Invalid approval policy: {mode}")
+            log.add_system("Usage: :approval [ask|auto|deny]")
 
     def _current_interaction_mode_name(self) -> str:
         if getattr(self, "_chat_mode", False):

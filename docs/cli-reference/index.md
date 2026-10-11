@@ -70,13 +70,17 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `--tui` | superqode | Force the Textual TUI (default) |
 | `-p`, `--print` | superqode | Run one headless coding task and print the response |
 | `--mode json` | superqode | Run one headless task and emit structured JSON |
+| `--mode jsonl` | superqode | Emit ordered, flushed progress events and a final result as JSON Lines |
+| `--continue` | superqode | Continue the latest non-archived session in this project |
+| `--debug` | superqode | Write redacted diagnostics to `.superqode/logs/debug.log` |
+| `--log-file` | superqode | Choose a private diagnostic log file; implies `--debug` |
 | `--harness` | superqode | Select `core` (default), `workbench`, or a HarnessSpec path |
 | `--profile` | superqode | Select a legacy task profile such as `plan` or `review` |
 | `--provider` | superqode | Override provider for headless mode |
 | `--model` | superqode | Override model for headless mode |
 | `--resume` | superqode | Reopen a stored session interactively, or continue it with a headless prompt |
 | `--fork` | superqode | Fork a stored session interactively, or continue the fork with a headless prompt |
-| `--approval-mode` | superqode | Set the startup TUI approval policy: `ask`, `auto`, or `deny` |
+| `--approval-mode` | superqode | Set the TUI or supported headless approval policy: `ask`, `auto`, or `deny` |
 | `--interaction-mode` | superqode | Set the startup TUI interaction mode: `build` or `plan` |
 | `--theme`, `--use-theme` | superqode | Select a palette, light/dark pair, or explicit JSON path for this launch |
 | `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
@@ -93,8 +97,34 @@ superqode -p --changes files "make the small docs fix"
 superqode -p --changes none "answer without a change footer"
 superqode --mode json --profile plan "plan the auth refactor"
 superqode -p --resume abc123 "continue from the last turn"
+superqode --continue -p "continue the most recent task"
+superqode --mode jsonl "review this repository"
 superqode -p --fork abc123 "try a safer implementation"
 ```
+
+Continuation restores the saved connection; explicit provider and model
+selections still take precedence. The saved runtime overrides general defaults
+unless `--runtime` is supplied. Headless forks support native SuperQode and
+Codex CLI sessions: native history is copied into a branch, while Codex creates
+a separate native thread. Other backends require their own fork command and
+produce setup guidance rather than a partial local copy.
+
+For an unattended task, `--approval-mode` applies to supported host permission
+adapters. `ask` stops when consent is required and reports `needs_approval`;
+`auto` approves otherwise permitted requests while retaining deny rules and
+profile restrictions; `deny` blocks tool access. The choice applies to this
+invocation, so continuation needs an explicit choice again. For example:
+
+```bash
+superqode -p --connect codex --approval-mode auto "make the requested small edit"
+superqode -p --continue --approval-mode auto "verify the previous edit"
+```
+
+Custom HarnessSpecs own their permission policy, and runtimes that cannot
+enforce the selected mode reject the option before starting a task. Vendor
+CLI modes are projected to the vendor's own flags when supported. Codex
+cannot enforce every host deny rule through its approval protocol; it refuses
+such policies and directs you to a governed runtime or managed requirements.
 
 Profiles:
 
@@ -115,6 +145,31 @@ superqode tools list --profile plan --json
 `repo_search` is available in coding profiles for broad codebase exploration. It combines ranked file matches, literal content matches, and symbol matches into one compact tool result.
 
 Headless runs keep output clean by default. SuperQode prints the model response and then a compact change footer like `Changes: 2 files (+18 -3)` when the agent modified the workspace. Use `--changes files` to show the file list, `--changes diff` to show the patch, or `--changes none` to hide the footer.
+
+Model selection respects explicit flags and environment variables, model-aware
+harness targets, and saved session connections. Otherwise it uses a saved
+configured connection, a provider with a configured credential, or an installed
+model discovered from a running local server. With no configured model,
+headless mode stops with setup guidance. `superqode doctor --json` reports the
+same default selection. A configured credential is not proof that inference
+will succeed; doctor does not generate text or execute agent tools.
+
+In `json` mode, stdout contains one result or error object. In `jsonl` mode,
+every line is a JSON object with `type`, `sequence` and `timestamp`. Records
+include `superqode.session_start`, `superqode.runtime_start`, native
+`superqode.tool_start`/`superqode.tool_end`, `superqode.progress`, and a terminal
+`superqode.result` or `superqode.error`. This is a lifecycle event stream;
+model text is delivered in the final result. External runtimes currently
+report final results, while custom harnesses can also report normalized
+`superqode.harness_event` records. Tool arguments, tool output and extended
+reasoning are omitted from the diagnostic stream.
+
+Dependency output belongs on stderr. Public errors include `error_code` and a
+safe `error` message, without raw SDK request payloads. Debug logs are local
+and redacted, with owner-only file permissions on POSIX systems. Windows
+access depends on the directory's ACL; Python's file mode only controls the
+read-only flag there. See [Python's permission documentation](https://docs.python.org/3.13/library/os.html#os.chmod).
+Logs can still contain developer context; review them before sharing.
 
 Session commands:
 
@@ -582,7 +637,8 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Error or findings detected |
+| `1` | Execution error, unavailable runtime, or findings detected |
+| `2` | Invalid usage, schema validation failure, or unmet rubric |
 | `130` | Interrupted (Ctrl+C) |
 
 ---

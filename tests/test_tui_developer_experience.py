@@ -1,5 +1,6 @@
 """Mounted developer workflows: drafts, setup continuity, review and history."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -69,6 +70,104 @@ async def test_approval_preserves_draft_and_cannot_queue_an_invalid_answer():
         assert prompt.value == "my next task"
         app.is_busy = False
         await pilot.pause()
+
+
+@pytest.mark.parametrize("theme", ["superqode", "light"])
+@pytest.mark.parametrize("size", [(58, 24), (80, 24), (120, 40)])
+async def test_approval_command_updates_header_and_runtime_decisions_without_losing_draft(
+    theme, size
+):
+    from rich.cells import cell_len
+
+    app = SuperQodeApp(theme_selection=theme)
+    async with app.run_test(size=size) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        log = app.query_one("#log", ConversationLog)
+        status = app.query_one("#status-bar", ColorfulStatusBar)
+        draft = "next task\nkeep this draft"
+        prompt.value = draft
+        prompt.cursor_position = 4
+        pure = SimpleNamespace(_agent=object(), _runtime=SimpleNamespace(name="builtin"))
+        app._pure_mode = pure
+        app._install_pure_permission_bridge(pure, log)
+
+        app._handle_command(":mode plan", log)
+        assert app._current_interaction_mode_name() == "plan"
+        assert app.approval_mode == "ask"
+        app._handle_command(":mode build", log)
+
+        for mode in ("auto", "deny", "ask"):
+            app._runtime_permission_allow_all = True
+            app._handle_command(f":approval {mode}", log)
+            await pilot.pause()
+            assert app.approval_mode == mode
+            assert not app._runtime_permission_allow_all
+            assert app._current_interaction_mode_name() == "build"
+            assert prompt.value == draft
+            assert prompt.cursor_position == 4
+            assert status.approval_mode == mode
+            rendered = status._render_for_width(size[0]).plain
+            assert mode.upper() in rendered
+            assert "BUILD" in rendered
+            assert all(cell_len(line) <= size[0] for line in rendered.splitlines())
+
+            if mode == "ask":
+                decision = asyncio.create_task(
+                    pure.on_permission_request_async("bash", {"command": "pytest -q"})
+                )
+                try:
+                    await pilot.pause()
+                    assert app._permission_pending
+                    assert not decision.done()
+                    assert app._handle_permission_input("n")
+                    assert await asyncio.wait_for(decision, timeout=1) is False
+                finally:
+                    if not decision.done():
+                        decision.cancel()
+                        await asyncio.gather(decision, return_exceptions=True)
+                assert prompt.value == draft
+                assert prompt.cursor_position == 4
+            else:
+                assert await pure.on_permission_request_async("bash", {"command": "pytest -q"}) is (
+                    mode == "auto"
+                )
+
+
+async def test_failed_rewind_keeps_transcript_and_unsent_draft(monkeypatch):
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        log = app.query_one("#log", ConversationLog)
+        log.add_user("First task")
+        log.add_agent("First response", "Agent")
+        log.add_user("Next task")
+        original = list(log._messages)
+        prompt.value = "Unsent draft"
+        prompt.cursor_position = 4
+        errors, notices, calls = [], [], []
+
+        def fail_rewind(occurrence):
+            calls.append(occurrence)
+            raise OSError("Session store unavailable")
+
+        monkeypatch.setattr(
+            app,
+            "_pure_mode",
+            SimpleNamespace(_session_manager=SimpleNamespace(rewind_to_user_message=fail_rewind)),
+            raising=False,
+        )
+        monkeypatch.setattr(log, "add_error", errors.append)
+        monkeypatch.setattr(log, "add_info", notices.append)
+        app._handle_rewind("1", log)
+        await pilot.pause()
+        assert calls == [1]
+        assert log._messages == original
+        assert app._user_message_history(log) == ["First task", "Next task"]
+        assert prompt.value == "Unsent draft"
+        assert prompt.cursor_position == 4
+        assert errors == ["Could not rewind stored history: Session store unavailable"]
+        assert not any("Rewound" in notice for notice in notices)
 
 
 async def test_queue_delivery_preserves_unsent_draft_and_cancel_pauses_delivery():

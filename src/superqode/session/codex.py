@@ -37,9 +37,15 @@ def record_thread(runtime, thread, *, persisted=False):
     )
     meta = sessions.get_session_info(sid)
     meta.runtime = "codex-cli"
+    if runtime.config.harness_source in {"built-in", "profile"} and runtime.config.harness_id:
+        # The display identity "codex" is not a runnable host profile. Keep
+        # the launch profile so headless resume retains review/plan restrictions.
+        meta.harness_path = runtime.config.harness_id
     meta.backend_session_id = sid
     meta.backend_native_session_id = getattr(runtime, "native_session_id", None) or ""
     meta.backend_forked_from_id = getattr(runtime, "forked_from_id", None) or ""
+    if meta.backend_forked_from_id:
+        meta.parent_session_id = meta.backend_forked_from_id
     meta.backend_home = codex_home()
     meta.backend_resume_ready = meta.backend_resume_ready or persisted
     meta.billing_requested = runtime.billing_requested

@@ -38,9 +38,15 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "2.13.0"
+__version__ = "2.14.0"
+
 
 # Stable, lightweight public extension surface.  Importing this package does
 # not discover or execute third-party extensions; discovery happens only when
 # a native harness runtime is constructed.
-from .extensions import Extension, ExtensionCompatibility, ExtensionContext
+def __getattr__(name):
+    if name in {"Extension", "ExtensionCompatibility", "ExtensionContext"}:
+        from . import extensions
+
+        return getattr(extensions, name)
+    raise AttributeError(name)

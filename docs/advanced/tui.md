@@ -325,11 +325,17 @@ show status, or display its local help where supported.
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
 | Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks`, `:systemone`, `:discovery` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
-| Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
+| Execution control | `:approval`, `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a`, `:connect protocols` |
 | Local systems and memory | `:local`, `:memory` |
 | Configuration and services | `:init`, `:config`, `:a2a-keys`, `:serve`, `:daemon`, `:export`, `:theme` |
 | Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |
+
+Use `:mode chat|build|plan` to choose how prompts run. Use `:approval` to inspect
+the tool approval policy, or `:approval ask|auto|deny` to change it. The header
+shows ASK, AUTO or DENY separately from the interaction mode. `:approvals` opens
+pending requests. External harnesses decide which approval requests they send;
+their execution policy and sandbox restrictions still apply.
 
 ### Discovering What Is Available
 
@@ -1244,3 +1250,70 @@ Terminal/iTerm2, a Linux terminal, Windows Terminal, tmux and an SSH session:
 Record terminal versions and any extended-key or clipboard settings with the
 results. CI saves PTY reports, but acceptance of OSC 52 by a real terminal and
 remote clipboard policy require the live checks above.
+
+## Command discovery and recovery
+
+`:help` shows implemented command roots, `:help theme` lists theme actions,
+and Ctrl+K searches the same command registry used by completion and dispatch.
+`:hotkeys` searches effective shortcuts in the app, composer and active modal.
+Ctrl+D is no longer an application shortcut; Ctrl+T toggles logs.
+
+All declared binding actions can be customized by scope in
+`~/.superqode/keybindings.json`. Existing flat action-to-key files still work.
+For example:
+
+```json
+{
+  "app": {"toggle_sidebar": "f2", "focus_input": "f6"},
+  "SelectionAwareInput": {"clear_prompt": "alt+u"},
+  "HotkeysScreen": {"close": "escape"}
+}
+```
+
+Use the action and scope names from `:hotkeys`. Unknown actions, empty bindings
+and conflicting keys are reported instead of silently applied. Fixed text
+editing and contextual navigation gestures remain available alongside these
+declared actions. Overrides retain their action's priority and apply when a
+modal opens.
+
+`:compact` summarizes earlier turns immediately while keeping the latest user
+turn and its replies. Add instructions, such as `:compact focus on pending
+tests and exact file paths`. The full transcript remains stored separately,
+and resumed native sessions use the summary. A failed or cancelled summary
+leaves the stored conversation available. Native context compaction requires
+an idle connected model; external harnesses use their own context commands.
+
+`:undo` and `:redo` restore saved task states, including file creation,
+deletion and binary changes, while preserving pre-task edits and Git's index.
+If a task file has newer edits, the whole operation stops before changing any
+file. Checkpoints and recovery actions are stored locally so redo survives a
+restart. Retention keeps up to 50 recent checkpoints within a bounded local
+manifest; snapshots contain file content and stay on this machine. Oversized
+files or unavailable baselines cannot be restored. Rewind
+saves the original conversation as a separate recovery branch before trimming
+active history; its notification includes the session ID to resume.
+
+## Trusted project commands
+
+Place Markdown prompts in `.superqode/commands/<name>.md`, then explicitly
+trust the project with `:trust yes`. Commands appear in completion and execute
+through a connected native SuperQode harness. Untrusted projects do not load
+these files. Project commands cannot shadow built-in commands or select a
+runtime, model, sandbox or approval policy.
+
+```markdown
+---
+description: Review the selected code
+allowed_tools: [read]
+---
+Review $ARGUMENTS for correctness. Give file references and suggested fixes.
+```
+
+Run this example with `:review src`. `$ARGUMENTS` is literal prompt
+substitution, not shell evaluation. `allowed_tools` is optional: when present,
+it can only restrict the current harness, including remembered grants and
+nested tool scopes. Omitting it preserves the harness's existing policy;
+it never grants new permissions. Trust is checked again before execution,
+and symlinked files, malformed headers and permission-widening metadata are
+rejected. Use `:settings` for appearance, `:trial` for connection validation
+and a first task, and `:feedback` for a reviewed diagnostic export.

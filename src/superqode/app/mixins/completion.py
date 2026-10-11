@@ -447,6 +447,10 @@ class CompletionMixin:
             known.update(f":{name}" for name in runtime.commands)
         except Exception:
             pass
+        from superqode.command_registry import COMMAND_ROUTES
+        from superqode.project_commands import discover_project_commands
+
+        known.update(":" + name for name in discover_project_commands(Path.cwd(), COMMAND_ROUTES))
         return lowered in known
 
     def _selected_prompt_completion_value(self) -> str:

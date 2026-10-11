@@ -166,6 +166,12 @@ def test_headless_codex_ignores_project_defaults_but_keeps_explicit_harness(
         return await Runtime(None).run(kwargs["prompt"])
 
     monkeypatch.setattr("superqode.headless.run_headless", run)
+    monkeypatch.setattr(
+        "superqode.providers.default_model.resolve_default_model",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Self-contained Codex must not inherit another provider's default")
+        ),
+    )
     args = ["--connect", profile, "--print"]
     if explicit_harness:
         args += ["--harness", str(project_harness)]
@@ -173,7 +179,9 @@ def test_headless_codex_ignores_project_defaults_but_keeps_explicit_harness(
     assert result.exit_code == 0, result.output
     assert calls[0]["runtime"] == runtime_name
     assert calls[0]["profile_name"] == (str(project_harness) if explicit_harness else "core")
-    assert calls[0]["provider"] == ("anthropic" if explicit_harness else "openai")
+    # Self-contained runtimes choose their own model unless a harness supplies
+    # an explicit pair. An unconfigured cloud provider is never fabricated.
+    assert calls[0]["provider"] == ("anthropic" if explicit_harness else None)
 
 
 @pytest.mark.parametrize("runtime_name", ["codex-cli", "codex-sdk"])

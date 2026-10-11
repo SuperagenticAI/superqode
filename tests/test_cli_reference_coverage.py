@@ -26,7 +26,8 @@ def _click_command_paths(command: click.Command, prefix: str = "") -> list[str]:
     paths: list[str] = []
     if not isinstance(command, click.Group):
         return paths
-    for name, child in sorted(command.commands.items()):
+    for name in command.list_commands(click.Context(command)):
+        child = command.get_command(click.Context(command), name)
         path = f"{prefix} {name}".strip()
         paths.append(path)
         paths.extend(_click_command_paths(child, path))
@@ -65,7 +66,7 @@ def test_top_level_cli_groups_have_reference_docs():
         documented_groups.update(filename_aliases.get(filename, set()))
 
     missing = []
-    for name in sorted(cli_main.commands):
+    for name in cli_main.list_commands(click.Context(cli_main)):
         if name in intentionally_inline:
             continue
         if name not in documented_groups:

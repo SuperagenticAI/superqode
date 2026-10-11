@@ -1671,6 +1671,14 @@ class PureMode:
             self._agent.config.session_id = fork_id
         return fork_id
 
+    async def compact_now(self, instructions: str = "") -> Dict[str, Any]:
+        if not self._agent:
+            return {
+                "success": False,
+                "message": "This harness owns its context. Use its native compaction command.",
+            }
+        return await self._agent.compact_now(instructions)
+
     def compact(self) -> Dict[str, Any]:
         """Enable context compaction for the active agent and report current state."""
         if not self._agent:

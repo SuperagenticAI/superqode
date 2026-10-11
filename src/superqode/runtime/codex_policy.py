@@ -2,13 +2,14 @@
 
 from superqode.governance import active_governance, load_governance
 from superqode.tools.permissions import Permission, load_permission_config
+from .errors import RuntimePolicyError
 
 
 def preflight(config, permission_manager):
     from superqode.agent.network_policy import strict_mode
 
     if strict_mode():
-        raise RuntimeError(
+        raise RuntimePolicyError(
             "Codex cannot guarantee SuperQode strict network policy for actions that do not request approval. Use Codex managed network requirements or a SuperQode-governed runtime. No Codex task was started."
         )
     bundle = load_governance(config.working_directory)
@@ -28,7 +29,7 @@ def preflight(config, permission_manager):
             for layer in policy.engine.layers
         )
         if constrained:
-            raise RuntimeError(
+            raise RuntimePolicyError(
                 "Codex CLI cannot guarantee this SuperQode organization/project policy for every tool call. Use a SuperQode-governed runtime or enforce the policy through Codex managed requirements. No Codex task was started."
             )
     # Re-read the project policy before every turn, including while connected.
@@ -42,6 +43,6 @@ def preflight(config, permission_manager):
             or Permission.DENY in permissions.tools.values()
             or Permission.DENY in permissions.groups.values()
         ):
-            raise RuntimeError(
+            raise RuntimePolicyError(
                 "Codex CLI cannot guarantee SuperQode tool/path deny rules for actions that do not request approval. Use a SuperQode-governed runtime or Codex managed requirements. No Codex task was started."
             )

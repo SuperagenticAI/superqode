@@ -15,10 +15,10 @@ import importlib
 import importlib.util
 import os
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
-from .base import AgentRuntime
-from .builtin import BuiltinRuntime
+if TYPE_CHECKING:
+    from .base import AgentRuntime
 from .errors import RuntimeNotInstalledError, UnknownRuntimeError
 
 _DEFAULT = "builtin"
@@ -42,6 +42,8 @@ class RuntimeInfo:
 
 
 def _builtin_factory(**kwargs) -> AgentRuntime:
+    from .builtin import BuiltinRuntime
+
     return BuiltinRuntime(**kwargs)
 
 

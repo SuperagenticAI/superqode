@@ -52,6 +52,8 @@ class TaskChanges:
         return result.stdout
 
     def _path(self, name: str) -> Path:
+        if Path(name).is_absolute() or ".git" in Path(name).parts:
+            raise ValueError("Git metadata is outside task restoration.")
         if any(character in name for character in "\n\r\t\0"):
             raise ValueError("This file name cannot be represented safely in task review.")
         path = self.root / name
@@ -74,7 +76,7 @@ class TaskChanges:
         paths.update(
             self._git("ls-files", "--others", "--exclude-standard", "-z").decode().split("\0")
         )
-        return paths - {""}
+        return {name for name in paths if name and not name.startswith(".superqode/checkpoints/")}
 
     def capture(self) -> TaskChanges:
         try:
@@ -83,6 +85,8 @@ class TaskChanges:
                 if not row:
                     continue
                 meta, name = row.split("\t", 1)
+                if name.startswith(".superqode/checkpoints/"):
+                    continue
                 mode, oid, stage = meta.split()
                 if stage != "0" or mode not in {"100644", "100755"}:
                     self.before[name] = None
@@ -160,7 +164,9 @@ class TaskChanges:
                     relative = str(path.absolute().relative_to(self.root))
                     names.add(relative)
                     reported_names.add(relative)
-            for name in sorted(names - {""}):
+            for name in sorted(
+                name for name in names if name and not name.startswith(".superqode/checkpoints/")
+            ):
                 try:
                     before, after = self._baseline(name), self._read(name)
                     if before is None:

@@ -17,6 +17,12 @@ class HelperDiffReviewMixin:
         from superqode.app.task_changes import TaskChanges
 
         self._task_changes_current = TaskChanges(Path.cwd()).capture()
+        manager = getattr(self, "_undo_manager", None)
+        if manager is not None:
+            try:
+                manager.register_task(self._task_changes_current)
+            except (OSError, ValueError):
+                pass
         bind_trial = getattr(self, "_bind_trial_task", None)
         if callable(bind_trial):
             bind_trial(self._task_changes_current.id)
@@ -43,6 +49,11 @@ class HelperDiffReviewMixin:
         task = getattr(self, "_task_changes_history", {}).get(task_id)
         if task is None:
             return "This task baseline is no longer available."
+        manager = getattr(self, "_undo_manager", None)
+        if manager is not None and task.id in manager._tasks:
+            if manager.restore_file(task.id, name):
+                return f"Undid task changes in {name}."
+            return manager.last_error or "No restorable task change for this file."
         try:
             return task.undo(name)
         except (OSError, ValueError) as exc:
@@ -56,6 +67,12 @@ class HelperDiffReviewMixin:
         task = getattr(self, "_task_changes_current", None)
         if task is not None and task.available:
             file_diffs = task.finish(files_modified)
+            manager = getattr(self, "_undo_manager", None)
+            if manager is not None:
+                try:
+                    manager.seal_task(task)
+                except (OSError, ValueError):
+                    pass
             files_modified[:] = list(file_diffs)
             history = getattr(self, "_task_changes_history", {})
             history[task.id] = task

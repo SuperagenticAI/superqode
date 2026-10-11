@@ -1346,8 +1346,9 @@ def test_dispatch_local_routes_to_local_picker(_dispatch):
 def test_connect_subcommands_route_to_specific_pickers():
     """Exact connect subcommands must not fall back to the top-level picker."""
     from superqode.app_main import SuperQodeApp
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
 
-    class Stub(_DispatchStub):
+    class Stub(_DispatchStub, SlashCommandMixin):
         def _show_connect_type_picker(self, log, clear_log=True, menu=None):
             self.calls.append(("connect-picker", menu))
 
@@ -1382,8 +1383,9 @@ def test_connect_subcommands_route_to_specific_pickers():
 def test_connect_command_routes_every_profile_id_and_keeps_byok_pairs():
     """Bare profile ids dispatch; `provider model` pairs still go to BYOK."""
     from superqode.app_main import SuperQodeApp
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
 
-    class Stub(_DispatchStub):
+    class Stub(_DispatchStub, SlashCommandMixin):
         def _show_connect_type_picker(self, log, clear_log=True, menu=None):
             self.calls.append(("connect-picker", menu))
 

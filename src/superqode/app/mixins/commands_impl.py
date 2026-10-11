@@ -6745,6 +6745,9 @@ class CommandImplMixin:
         if mode in {"", "pick", "switch", "toggle"}:
             self._show_mode_picker(log)
             return
+        if mode in {"ask", "auto", "deny"}:
+            log.add_info(f"Use :approval {mode} to change tool approval policy.")
+            return
         log.add_info("Usage: :mode [chat|build|plan]")
 
     def _providers_cmd(self, args: str, log: ConversationLog):

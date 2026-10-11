@@ -157,7 +157,11 @@ EXPECTED_COMMAND_COUNT = 319
 # 2.4.44. This audit changes no Click commands or CLI options.
 # Theme management adds one group and four commands; startup adds --theme/--use-theme.
 # The offline theme gallery adds browse and install, and refreshes group help.
-EXPECTED_HELP_TREE_SHA256 = "7a74d66cac25ff1bb933a7a867901fe5c645754ef2d4fa42aa5edefc55d652de"
+# Rebaselined for JSONL, project continuation, debug logging, configured model
+# defaults and the readable --connect SOURCE metavar. Lazy commands are visited
+# through Click's public list/get API in canonical order; all 319 routes remain.
+# --approval-mode now documents supported headless runtimes as well as the TUI.
+EXPECTED_HELP_TREE_SHA256 = "9dc5d0a4a87aa16c8ebadfe5b9a4a1910d76e61bf2a346c042a657b13a005297"
 
 
 def _render_help_tree() -> tuple[int, str]:
@@ -168,7 +172,9 @@ def _render_help_tree() -> tuple[int, str]:
         blocks.append(f"$ {' '.join((*path, '--help'))}\n{command.get_help(context)}")
         if not isinstance(command, click.Group):
             return
-        for name, child in command.commands.items():
+        for name in command.list_commands(context):
+            child = command.get_command(context, name)
+            assert child is not None
             child_context = click.Context(child, info_name=name, parent=context)
             visit(child, child_context, (*path, name))
 

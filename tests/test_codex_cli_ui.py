@@ -172,7 +172,7 @@ def test_native_status_exposes_silent_approval_flags(native_app):
     app._codex_cli_status(log)
     text = "\n".join(log.items)
     assert "Host mode   ask" in text
-    assert "Allow all   active; :mode ask resets it" in text
+    assert "Allow all   active; :approval ask resets it" in text
     assert "Received approvals are accepted without prompting" in text
 
 

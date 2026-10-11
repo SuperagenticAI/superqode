@@ -240,7 +240,6 @@ class SuperQodeApp(
         Binding("ctrl+home", "scroll_log_home", "Top", show=False),
         Binding("ctrl+end", "scroll_log_end", "Bottom", show=False),
         Binding("ctrl+g", "stash_draft", "Stash draft", show=False),
-        Binding("ctrl+d", "toggle_thinking", "Hide Logs", show=False),
         # Number keys for model selection (1-9)
         Binding("1", "select_model_1", "Model 1", show=False),
         Binding("2", "select_model_2", "Model 2", show=False),
@@ -314,6 +313,11 @@ class SuperQodeApp(
         # Leader key
         Binding("ctrl+x", "leader_key", "Leader", show=False),
     ]
+
+    def push_screen(self, *args, **kwargs):
+        result = super().push_screen(*args, **kwargs)
+        self.call_after_refresh(self._apply_screen_keybindings)
+        return result
 
     # State
     current_mode = reactive("home")
@@ -738,6 +742,7 @@ class SuperQodeApp(
     def watch_approval_mode(self, mode: str) -> None:
         from superqode.app.herdr import sync
 
+        self._sync_approval_mode()
         sync(self)
 
     def watch__permission_pending(self, pending: bool) -> None:
@@ -767,24 +772,7 @@ class SuperQodeApp(
             pass
 
     # Actions users may safely rebind via ~/.superqode/keybindings.json
-    _REBINDABLE_ACTIONS = {
-        "toggle_sidebar",
-        "toggle_thinking",
-        "command_palette",
-        "clear_screen",
-        "stash_draft",
-        "scroll_log_page_up",
-        "scroll_log_page_down",
-        "scroll_log_home",
-        "scroll_log_end",
-        "cancel_agent",
-        "interrupt",
-        "undo_action",
-        "redo_action",
-        "toggle_split_view",
-        "create_checkpoint",
-        "rewind",
-    }
+    _REBINDABLE_ACTIONS = {binding.action for binding in BINDINGS}
 
     def _sidebar_has_focus(self) -> bool:
         if not self.screen_stack or not self.sidebar_visible:
@@ -916,6 +904,7 @@ class SuperQodeApp(
         """Open the command palette (Ctrl+K)."""
         try:
             palette = self.query_one("#command-palette", CommandPalette)
+            palette.commands = self._build_palette_commands()
             palette.toggle()
         except Exception:
             self._ensure_input_focus()
