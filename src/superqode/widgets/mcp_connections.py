@@ -54,7 +54,9 @@ class MCPConnectionsScreen(PanelShortcutMixin, ModalScreen[None]):
             )
             with Horizontal(id="mcp-controls"):
                 for action in ("connect", "retry", "login", "disconnect", "cancel", "back"):
-                    yield Button(action.capitalize(), id=f"mcp-action-{action}")
+                    yield Button(
+                        action.capitalize(), id=f"mcp-action-{action}", disabled=action != "back"
+                    )
             yield PanelShortcuts(
                 {"mcp-servers": "↑↓ Select · Tab Controls · Esc Back"},
                 "Tab Next control · Enter Activate · Esc Back",
@@ -62,7 +64,7 @@ class MCPConnectionsScreen(PanelShortcutMixin, ModalScreen[None]):
 
     def on_mount(self):
         self.manager.on_state_change(self._listener)
-        self.call_after_refresh(self.refresh_servers)
+        self.refresh_servers()
         self.set_interval(1, self.refresh_servers)
         self.query_one("#mcp-servers", OptionList).focus()
 
@@ -109,7 +111,9 @@ class MCPConnectionsScreen(PanelShortcutMixin, ModalScreen[None]):
         return sanitize_diagnostic(value, extra_secrets=secrets)
 
     def refresh_servers(self):
-        if not self.is_mounted or self not in self.app.screen_stack:
+        # Mount handlers run before is_mounted becomes true; their child
+        # controls are already attached and can be initialized safely.
+        if not self.is_attached or self not in self.app.screen_stack:
             return
         configs = self.manager.get_server_configs()
         previous = self.selected()

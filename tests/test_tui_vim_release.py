@@ -1,5 +1,6 @@
 """Vim preferences and panel navigation preserve developer data and decisions."""
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -66,6 +67,7 @@ def test_vim_load_accepts_json_booleans_only(value, enabled, monkeypatch):
         b"\xff",
         b" " * (theme_bridge.MAX_CONFIG_BYTES + 1),
     ],
+    ids=["incomplete-object", "array", "null", "invalid-utf8", "oversized"],
 )
 def test_vim_save_retains_invalid_configuration(content):
     path = config_file(content)
@@ -136,9 +138,12 @@ async def test_panel_vim_navigation_preserves_draft_and_original_mode(kind, size
     async with app.run_test(size=size) as pilot:
         draft = app.query_one("#prompt-input", SelectionAwareInput)
         draft.value = "Keep my next task\nand its formatting"
-        app.push_screen(panel_for(kind))
-        for _ in range(4):
-            await pilot.pause()
+        await app.push_screen(panel_for(kind))
+        if kind == "connections":
+            async with asyncio.timeout(10):
+                while not app.screen.catalog_loaded:
+                    await pilot.pause(0.1)
+        await pilot.pause()
         options = app.screen.query_one(OptionList)
         if kind == "hotkeys":
             assert options.highlighted == 0
@@ -193,7 +198,7 @@ async def test_vim_panel_search_is_text_and_hidden_decisions_remain_pending():
 async def test_vim_read_only_detail_scrolls_without_changing_content():
     app = SuperQodeApp()
     async with app.run_test(size=(80, 24)) as pilot:
-        app.push_screen(panel_for("context"))
+        await app.push_screen(panel_for("context"))
         await pilot.pause()
         detail = app.screen.query_one(TextArea)
         content = detail.text

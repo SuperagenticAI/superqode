@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accidental overwrites, including Pi-format colour conversion.
 - Expose theme export and compatibility consistently in CLI help, TUI help,
   completion and the command palette.
+- Initialize MCP status and controls when the panel opens, and apply Vim
+  preview jumps immediately so delayed refreshes cannot reorder navigation.
 
 ## [2.14.0] - 2026-10-11
 

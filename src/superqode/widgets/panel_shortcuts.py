@@ -38,8 +38,10 @@ def navigate_panel(focused, motion: str) -> None:
         if motion in {"down", "up"}:
             scroller.scroll_relative(y=1 if motion == "down" else -1, animate=False)
         elif motion in {"first", "last"}:
-            scroller.scroll_home(animate=False) if motion == "first" else scroller.scroll_end(
-                animate=False
+            # Navigation must take effect in key order, even before another
+            # screen refresh. Deferred jumps can otherwise overtake later keys.
+            scroller.scroll_home(animate=False, immediate=True) if motion == "first" else (
+                scroller.scroll_end(animate=False, immediate=True)
             )
         else:
             scroller.scroll_page_up(

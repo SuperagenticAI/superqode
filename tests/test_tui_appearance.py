@@ -355,7 +355,7 @@ async def test_mcp_panel_close_reopen_and_cancel_preserve_transport_ownership(si
         async with app.run_test(size=size) as pilot:
             prompt = app.query_one("#prompt-input", SelectionAwareInput)
             prompt.value = "keep my draft"
-            app.push_screen(MCPConnectionsScreen(manager))
+            await app.push_screen(MCPConnectionsScreen(manager))
             await pilot.pause()
             panel = app.screen
             assert panel.query_one("#mcp-action-back", Button).region.bottom <= size[1]
@@ -371,7 +371,7 @@ async def test_mcp_panel_close_reopen_and_cancel_preserve_transport_ownership(si
                 "slow" in manager._owners
             )  # Closing cancels the waiter, not the shared transport.
             assert prompt.value == "keep my draft"
-            app.push_screen(MCPConnectionsScreen(manager))
+            await app.push_screen(MCPConnectionsScreen(manager))
             await pilot.pause()
             panel = app.screen
             await pilot.click("#mcp-action-cancel")
