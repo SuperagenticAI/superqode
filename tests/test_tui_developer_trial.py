@@ -1,21 +1,30 @@
 """First-session recovery and interrupt behavior in the mounted terminal UI."""
 
+import asyncio
 import concurrent.futures
+from pathlib import Path
 import threading
 from types import SimpleNamespace
 
 import pytest
 from textual.document._document import Selection
+from textual.screen import ModalScreen
+from textual.widgets import Button, Input, OptionList, Static, TextArea
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp
 from superqode.app.widgets import ConversationLog
+from superqode.widgets.connection_browser import ConnectionBrowserScreen
+from superqode.widgets.developer_trial import DeveloperTrialScreen
 
 
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr("superqode.app.theme_bridge._CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path / "progress"))
     for name in (
         "_start_models_dev_refresh",
         "_start_acp_registry_refresh",
@@ -24,6 +33,159 @@ def isolated(monkeypatch, tmp_path):
         "_prewarm_litellm",
     ):
         monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None)
+
+
+class PendingModelScreen(ModalScreen):
+    def compose(self):
+        yield Static("Model selection is still finishing")
+
+
+async def wait_for_guide(app, pilot):
+    async with asyncio.timeout(5):
+        while not isinstance(app.screen, DeveloperTrialScreen):
+            await pilot.pause(0.1)
+
+
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+async def test_help_palette_and_completion_have_actionable_shared_descriptions(size, monkeypatch):
+    from superqode.command_registry import COMMAND_ROUTES, command_metadata
+
+    app = SuperQodeApp()
+    async with app.run_test(size=size) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        rendered = []
+        monkeypatch.setattr(
+            app, "_show_command_output", lambda log, value: rendered.append(value.plain)
+        )
+        app._handle_command(":help", log)
+        text = rendered[-1]
+        assert "SuperQode TUI command" not in text
+        assert "Export the conversation to a file" in text
+        assert "Browse product capabilities" in text
+        for root in COMMAND_ROUTES:
+            assert f"    :{root}  " in text
+        metadata = command_metadata()
+        palette = {item.command: item.description for item in app._build_palette_commands()}
+        for name in (":work", ":export", ":explore", ":rlm", ":connect status"):
+            assert palette[name] == metadata[name].description
+            candidates = app._static_command_candidates(name[:-1])
+            candidate = next((item for item in candidates if item.value == name), None)
+            assert candidate is not None, (name, [item.value for item in candidates])
+            assert candidate.description == metadata[name].description
+        app._handle_command(":help work", log)
+        assert "    :work  " in rendered[-1]
+        assert ":workspace" not in rendered[-1] and ":workflow" not in rendered[-1]
+        app._handle_command(":help  MODEL  ", log)
+        assert ":model reasoning" in rendered[-1]
+        await pilot.pause()
+
+
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+async def test_guide_returns_after_connection_picker_finishes_and_requires_explicit_run(
+    size, tmp_path, monkeypatch
+):
+    (tmp_path / "README.md").write_text("Project documentation")
+    app = SuperQodeApp()
+    runs = []
+    route = ["disconnected"]
+    monkeypatch.setattr(app, "_connection_target", lambda: ("runtime", "codex", "model"))
+    monkeypatch.setattr(app, "_connection_fingerprint", lambda: tuple(route))
+    monkeypatch.setattr(app, "_has_live_connection", lambda: route[0] != "disconnected")
+    monkeypatch.setattr(app, "_handle_message", lambda text, log: runs.append(text))
+
+    def connected(profile, log):
+        assert profile.id == "codex"
+        route[0] = "connected"
+        app._awaiting_codex_model = True
+        app.push_screen(PendingModelScreen())
+        app._mark_onboarding_complete()
+
+    monkeypatch.setattr(app, "_dispatch_connection_profile", connected)
+    async with app.run_test(size=size) as pilot:
+        draft = app.query_one("#prompt-input", SelectionAwareInput)
+        draft.value = "Keep my existing task"
+        app._handle_command(":trial", app.query_one("#log", ConversationLog))
+        await pilot.pause()
+        custom_task = "Read the attached README and explain the test command."
+        app.screen.query_one("#trial-task", TextArea).load_text(custom_task)
+        app.screen.query_one("#trial-connect", Button).press()
+        await pilot.pause()
+        assert isinstance(app.screen, ConnectionBrowserScreen)
+        browser = app.screen
+        async with asyncio.timeout(10):
+            while not browser.catalog_loaded:
+                await pilot.pause(0.1)
+        browser.query_one("#connection-search", Input).value = "Codex CLI"
+        await pilot.pause()
+        options = browser.query_one("#connection-results", OptionList)
+        options.highlighted = next(
+            i for i, profile in enumerate(browser.matching_profiles) if profile.id == "codex"
+        )
+        options.focus()
+        await pilot.press("enter")
+        await pilot.pause(0.4)  # Longer than the original one-shot handoff timer.
+        assert isinstance(app.screen, PendingModelScreen)
+        assert app._trial_state().awaiting_connection
+        assert not runs
+        route[0] = "model-selected"  # Selecting the final model is part of setup.
+        app._awaiting_codex_model = False
+        app.screen.dismiss(None)
+        await wait_for_guide(app, pilot)
+        guide = app.screen
+        assert guide.query_one("#trial-task", TextArea).text == custom_task
+        assert guide.query_one("#trial-run", Button).disabled
+        assert not app._trial_state().awaiting_connection
+        assert draft.value == "Keep my existing task"
+        assert not runs
+        await guide.validate_setup().wait()
+        guide.attach_context()
+        await pilot.pause()
+        assert not guide.query_one("#trial-run", Button).disabled
+        assert not runs
+        guide.action_run()
+        await pilot.pause()
+        assert len(runs) == 1 and custom_task in runs[0]
+        assert "@README.md" in runs[0]
+        assert "Keep my existing task" in app._draft_stash[-1]
+
+
+async def test_cancelling_guide_connection_does_not_reopen_it_on_an_unrelated_connection(
+    monkeypatch,
+):
+    app = SuperQodeApp()
+    monkeypatch.setattr(app, "_has_live_connection", lambda: True)
+    async with app.run_test() as pilot:
+        app._handle_command(":trial", app.query_one("#log", ConversationLog))
+        await pilot.pause()
+        app.screen.query_one("#trial-connect", Button).press()
+        await pilot.pause()
+        assert isinstance(app.screen, ConnectionBrowserScreen)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not app._trial_state().awaiting_connection
+        app._mark_onboarding_complete()
+        await pilot.pause(0.3)
+        assert app.screen is app.default_screen
+
+
+async def test_guide_waits_for_approval_and_busy_state_without_consuming_the_return(monkeypatch):
+    app = SuperQodeApp()
+    monkeypatch.setattr(app, "_has_live_connection", lambda: True)
+    async with app.run_test() as pilot:
+        state = app._trial_state()
+        state.awaiting_connection = True
+        app.is_busy = True
+        app._permission_pending = True
+        app._mark_onboarding_complete()
+        await pilot.pause(0.3)
+        assert app.screen is app.default_screen and state.awaiting_connection
+        app.is_busy = False
+        await pilot.pause(0.2)
+        assert app.screen is app.default_screen and state.awaiting_connection
+        app._permission_pending = False
+        await wait_for_guide(app, pilot)
+        await pilot.pause(0.3)
+        assert len(app.screen_stack) == 2
 
 
 @pytest.mark.parametrize("size", [(80, 24), (120, 40)])

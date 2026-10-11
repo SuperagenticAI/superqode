@@ -544,7 +544,7 @@ class LocalModelsMixin:
                     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
                     if not quiet:
                         log.add_info(f"Ollama host: {ollama_host}")
-                    if os.getenv("SUPERQODE_LOCAL_WARMUP", "1").strip().lower() in {
+                    if os.getenv("SUPERQODE_LOCAL_WARMUP", "0").strip().lower() in {
                         "1",
                         "true",
                         "yes",
@@ -694,7 +694,7 @@ class LocalModelsMixin:
         import os
         import time
 
-        if os.getenv("SUPERQODE_LOCAL_WARMUP", "1").strip().lower() not in {
+        if os.getenv("SUPERQODE_LOCAL_WARMUP", "0").strip().lower() not in {
             "1",
             "true",
             "yes",

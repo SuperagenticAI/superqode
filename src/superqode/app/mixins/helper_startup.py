@@ -1177,16 +1177,15 @@ class HelperStartupMixin:
     async def _warmup_ds4(self, client, model: str, log: ConversationLog) -> None:
         """Pre-load the DS4 model on connect, with a live elapsed-time indicator.
 
-        DS4's first inference pays a large one-time cost paging the ~81GB model
-        in from disk; doing it here (visibly) keeps the user's first prompt
-        fast. Opt out with ``SUPERQODE_DS4_WARMUP=0``. Never fails the connect:
+        DS4's first inference can page a large model in from disk. Opt in
+        with ``SUPERQODE_DS4_WARMUP=1`` when preloading is desired. Never fails the connect:
         a slow/failed warmup just leaves the model to load on first prompt.
         """
         import asyncio
         import os
         import time
 
-        if os.getenv("SUPERQODE_DS4_WARMUP", "1").strip().lower() in ("0", "false", "no", "off"):
+        if os.getenv("SUPERQODE_DS4_WARMUP", "0").strip().lower() not in ("1", "true", "yes", "on"):
             return
 
         self._call_ui(self._start_thinking, "Loading DS4 model…")

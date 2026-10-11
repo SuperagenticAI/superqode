@@ -143,12 +143,18 @@ class EventHandlerMixin:
     def on_unmount(self) -> None:
         from superqode.app.herdr import close
 
+        self._cleanup_on_exit()
         close(self)
         disable = getattr(self, "_disable_scheme_notifications", None)
         if callable(disable):
             disable()
         self._stop_wave_bursts()
         self._flush_draft_recovery()
+
+    def on_terminal_input_closed(self) -> None:
+        # App.exit sets Textual's exit state before posting its shutdown
+        # message, so pending layout/refresh work also stops immediately.
+        self.exit()
 
     def on_command_palette_command_selected(self, event: CommandPalette.CommandSelected) -> None:
         # Name-based dispatch also works when this handler lives on a plain mixin.

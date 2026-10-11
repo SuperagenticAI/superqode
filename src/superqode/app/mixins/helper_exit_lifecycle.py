@@ -366,6 +366,9 @@ class HelperExitLifecycleMixin:
 
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""
+        if getattr(self, "_exit_cleanup_done", False):
+            return
+        self._exit_cleanup_done = True
         self._cancel_pending_decisions()
         self._flush_draft_recovery()
         # Cancel any pending operations
@@ -424,6 +427,10 @@ class HelperExitLifecycleMixin:
         if self._permission_pulse_timer:
             self._permission_pulse_timer.stop()
             self._permission_pulse_timer = None
+
+        animation_manager = getattr(self, "_animation_manager", None)
+        if animation_manager is not None:
+            animation_manager.stop()
 
         # Clear busy state
         self.is_busy = False

@@ -123,9 +123,11 @@ class DeveloperTrialScreen(ModalScreen[None]):
             self.action_close()
 
             def connect():
-                self.app._open_connection_browser(log)
+                self.app._open_connection_browser(
+                    log, on_cancel=self.app._trial_connection_cancelled
+                )
                 log.add_info(
-                    "After connecting, use :trial to validate and continue your first task."
+                    "After connection setup finishes, this guide returns so you can validate and run your first task."
                 )
 
             self.app.call_later(connect)

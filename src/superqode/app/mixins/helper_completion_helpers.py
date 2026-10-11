@@ -185,7 +185,7 @@ class HelperCompletionHelpersMixin:
             if project_command:
                 return project_command.description
             metadata = shared_metadata.get(command)
-            if metadata and metadata.description != "SuperQode TUI command":
+            if metadata:
                 return metadata.description
             runtime = getattr(getattr(self, "_pure_mode", None), "_extension_runtime", None)
             runtime = runtime or getattr(self, "_completion_extension_runtime", None)
@@ -247,31 +247,13 @@ class HelperCompletionHelpersMixin:
 
     @staticmethod
     def _command_description(command: str) -> str:
-        descriptions = {
-            ":mcp": "manage Model Context Protocol servers",
-            ":skills": "manage local project skills",
-            ":recipe": "run reusable local workflows",
-            ":recipes": "list and run reusable local workflows",
-            ":attach": "stage files or URLs for the next prompt",
-            ":prompt": "load a prompt file into the input buffer",
-            ":model": "inspect or switch active provider/model",
-            ":connect": "connect local, ACP, BYOK, or a subscription",
-            ":exit": "exit SuperQode",
-            ":quit": "exit SuperQode",
-            ":vim": "optional Vim-style terminal navigation",
-            ":vim tutor": "show Vim mode keys and scope",
-            ":set": "set optional TUI modes",
-            ":w": "export the current transcript",
-            ":e": "view a file",
-            ":ls": "list saved sessions",
-            ":switchboard": "open durable session graph, handoffs, approvals, and share tree",
-            ":sw": "alias for :switchboard",
-            ":factory": "switch models, harnesses, and routes without vendor lock-in",
-            ":grep": "search the workspace",
-            ":status": "show harness status",
-            ":tools": "show tool profiles",
-        }
-        for prefix, description in descriptions.items():
-            if command.startswith(prefix):
-                return description
+        from superqode.command_registry import command_metadata
+
+        metadata = command_metadata()
+        words = command.split()
+        while words:
+            entry = metadata.get(" ".join(words))
+            if entry is not None:
+                return entry.description
+            words.pop()
         return ""

@@ -38,13 +38,13 @@ The installer is the recommended path because it handles the `uv` bootstrap for
 you. If uv is already installed, the direct equivalent is:
 
 ```bash
-uv tool install --upgrade --force superqode
+uv tool install --python 3.13 --upgrade --force superqode
 ```
 
 Or run once without installing:
 
 ```bash
-uvx superqode
+uvx --python 3.13 superqode
 ```
 
 Both are fully supported, so pick whichever fits your setup. See
@@ -65,7 +65,7 @@ sq harness list
 
 `sq` is the short alias for every `superqode` command. The longer
 name remains the clearest choice for documentation, automation, and agents. For a
-one-off shorthand invocation without installing, use `uvx --from superqode sq`;
+one-off shorthand invocation without installing, use `uvx --python 3.13 --from superqode sq`;
 `uvx sq` refers to a package named `sq`, not to SuperQode. If another application
 already owns `sq` on your `PATH`, continue using the unambiguous `superqode`
 command.
@@ -220,8 +220,8 @@ environment until you run that command explicitly:
 
 | Running from | Command shape |
 | --- | --- |
-| `uv tool install superqode` | `uv tool install "superqode[<extra>]"` |
-| SuperQode source checkout (contributors) | `uv sync --extra <extra>` |
+| `uv tool install --python 3.13 superqode` | `uv tool install --python 3.13 "superqode[<extra>]"` |
+| SuperQode source checkout (contributors) | `uv sync --python 3.13 --extra <extra>` |
 
 Do not add SuperQode to an unrelated application's dependencies merely to
 enable a CLI integration.
@@ -232,7 +232,7 @@ installation because the vendor packages are large and many users need only one
 of them.
 
 ```bash
-uv tool install "superqode[vendor-sdks]"
+uv tool install --python 3.13 "superqode[vendor-sdks]"
 superqode runtime setup
 ```
 
@@ -324,7 +324,7 @@ superqode providers test anthropic
 Install an extra into the same environment that runs SuperQode:
 
 ```bash
-uv tool install "superqode[<extra>]"
+uv tool install --python 3.13 "superqode[<extra>]"
 ```
 
 | Extra | Capability |
@@ -528,7 +528,7 @@ $ superqode auth info
     **Solution:** Install with uv:
 
     ```bash
-    uv tool install superqode
+    uv tool install --python 3.13 superqode
     ```
 
 ??? question "SSL certificate errors"

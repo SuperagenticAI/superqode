@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+from superqode.command_descriptions import COMMAND_DESCRIPTIONS
 from superqode.codex_commands import CODEX_COMMANDS
 
 COMMANDS = [
@@ -236,7 +237,6 @@ COMMANDS = [
     ":agents store",
     ":agents install",
     ":agents free-models",
-    ":agents model",
     ":providers",
     ":providers list",
     ":providers doctor",
@@ -1219,17 +1219,6 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":quit", "Exit SuperQode", category="system"),
 ]
 
-# The colon-command list is authoritative for the live TUI.  Supplement this
-# older overlay catalog automatically so newly added commands and aliases do
-# not disappear from one of the two completion surfaces.
-_default_command_values = {command.command for command in DEFAULT_COMMANDS}
-DEFAULT_COMMANDS.extend(
-    SlashCommand(command, "SuperQode TUI command", category="system")
-    for command in COMMANDS
-    if command.startswith(":") and command not in _default_command_values
-)
-
-
 COMMAND_ROUTES = {
     "gauge": "_dispatch_gauge",
     "help": "_dispatch_help",
@@ -1411,12 +1400,6 @@ DEFAULT_COMMANDS[:] = [
     if command.command.lstrip(":/").split()[0] in COMMAND_ROUTES
     or command.command.lstrip(":/").split()[0] in _CONTEXTUAL
 ]
-_known = {command.command for command in DEFAULT_COMMANDS}
-DEFAULT_COMMANDS.extend(
-    SlashCommand(command, "SuperQode TUI command", category="system")
-    for command in COMMANDS
-    if command not in _known
-)
 # Descriptions for common recovery and automation commands must be actionable.
 _DESCRIPTIONS = {
     ":compact": "Compact context now; optional summary instructions",
@@ -1428,6 +1411,22 @@ _DESCRIPTIONS = {
     ":mode": "Choose Chat, Build or Plan",
     ":approval": "Show or change tool approval policy",
 }
+_known = {command.command for command in DEFAULT_COMMANDS}
+_existing_descriptions = {
+    ":" + command.command.lstrip(":/"): command.description for command in DEFAULT_COMMANDS
+}
+_existing_descriptions.update(_DESCRIPTIONS)
+# Preserve slash aliases while giving every advertised colon command a real
+# description. Missing metadata fails here and in the registry contract test.
+DEFAULT_COMMANDS.extend(
+    SlashCommand(
+        command,
+        _existing_descriptions.get(command) or COMMAND_DESCRIPTIONS[command],
+        category="system",
+    )
+    for command in COMMANDS
+    if command not in _known
+)
 for command in DEFAULT_COMMANDS:
     if command.command in _DESCRIPTIONS:
         command.description = _DESCRIPTIONS[command.command]

@@ -85,6 +85,14 @@ jobs:
           tests/test_theme_repaint.py tests/test_tui_developer_trial.py
           tests/test_tui_navigation.py tests/test_tui_vim_release.py tests/test_tui_developer_experience.py
           tests/test_tui_background_io.py tests/test_tui_feedback.py -q
+      - name: Terminal resource and local-model release contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_tui_exit.py tests/test_tui_resource_lifecycle.py
+          tests/test_navigation_history.py tests/test_terminal_output_limits.py
+          tests/test_tui_local_latency.py tests/test_local_model_optimizations.py -q
       - name: Theme real-terminal input and rendering
         run: uv run --frozen python scripts/check_tui_terminal.py --output tui-terminal.json
       - name: Codex protocol, session, policy and TUI release contracts

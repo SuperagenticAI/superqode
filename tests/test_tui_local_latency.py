@@ -27,8 +27,10 @@ def quiet(monkeypatch, tmp_path):
         monkeypatch.setattr(SuperQodeApp, name, lambda *a, **k: None)
 
 
-async def test_ollama_explicit_warmup_optout_checks_once_without_generation(monkeypatch):
-    monkeypatch.setenv("SUPERQODE_LOCAL_WARMUP", "0")
+@pytest.mark.parametrize("warmup", [None, "0"])
+async def test_ollama_default_or_explicit_optout_checks_without_generation(monkeypatch, warmup):
+    if warmup is not None:
+        monkeypatch.setenv("SUPERQODE_LOCAL_WARMUP", warmup)
     requests, sent = [], []
     health_started, health_release = asyncio.Event(), asyncio.Event()
 
@@ -115,7 +117,8 @@ async def test_explicit_warmup_preserved_but_does_not_interrupt_active_turn(monk
 
 
 @pytest.mark.parametrize("failed", [False, True])
-async def test_default_warmup_holds_first_question_until_model_ready(monkeypatch, failed):
+async def test_optin_warmup_holds_first_question_until_model_ready(monkeypatch, failed):
+    monkeypatch.setenv("SUPERQODE_LOCAL_WARMUP", "1")
     from textual.widgets import Static
     from superqode.app.widgets import StreamingThinkingIndicator
 

@@ -227,7 +227,9 @@ class ConnectMixin:
 
     """Local/BYOK/ACP connection flows and catalog refresh."""
 
-    def _open_connection_browser(self, log: ConversationLog, query: str = "") -> None:
+    def _open_connection_browser(
+        self, log: ConversationLog, query: str = "", *, on_cancel=None
+    ) -> None:
         from superqode.widgets.connection_browser import ConnectionBrowserScreen
 
         def chosen(profile_id):
@@ -244,6 +246,8 @@ class ConnectMixin:
                 profile = get_connection_profile(profile_id)
                 if profile:
                     self._dispatch_connection_profile(profile, log)
+            elif on_cancel is not None:
+                on_cancel()
 
         self.push_screen(ConnectionBrowserScreen(query=query), callback=chosen)
 

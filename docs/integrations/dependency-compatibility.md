@@ -64,6 +64,25 @@ and retains a uv 0.8.0 regression job. Manual advisory probes check Python
 3.14 and 3.15 separately and upload dependency reports. The existing lockfile
 and package pins are preserved.
 
+For normal contributor setup, use the committed lockfile with `uv sync --locked`
+rather than deleting it or regenerating it for every launch. `uv lock` resolves
+all optional extras, including integrations you do not plan to install. Use
+uv 0.13 or newer when intentionally regenerating it.
+
+The repository limits simultaneous source builds to one, downloads to eight,
+and install/unpacking workers to two. These settings reduce concurrent build
+pressure on smaller machines; they do not impose a hard memory limit on the
+resolver or a local model. For an external environment, equivalent settings
+can be applied to one command:
+
+```bash
+UV_CONCURRENT_BUILDS=1 UV_CONCURRENT_DOWNLOADS=8 UV_CONCURRENT_INSTALLS=2 \
+  uv tool install --python 3.13 superqode
+```
+
+See [uv resolution](https://docs.astral.sh/uv/concepts/resolution/) and
+[concurrency settings](https://docs.astral.sh/uv/reference/settings/#concurrent-builds).
+
 Use `scripts/check_python_compatibility.py` to perform real dependency
 installation and consistency checks without altering `.venv`. It supports
 `--locked`, `--extra <name>`, `--wheels-only`, and JSON reports. Runtime tests
@@ -75,6 +94,9 @@ also passed its dependency consistency check. Click 8.5 changes optional-command
 and case-insensitive-choice help formatting; the CLI contract recognizes both
 verified renders while still checking all 321 commands. Lazy help now uses
 Click's public command API instead of its deprecated utility helper.
+The workflow also checks the guided first task and headless output contracts;
+their CLI test runner supports both older Click releases and the newer API
+that separates stdout and stderr automatically.
 
 Python's `-X dev` mode exposed unclosed TOML files in agent discovery and the
 registry; those handles now close after parsing. Thinking-session timing uses

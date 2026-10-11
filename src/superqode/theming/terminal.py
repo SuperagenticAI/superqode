@@ -9,6 +9,11 @@ import time
 
 from textual.message import Message
 
+
+class TerminalInputClosed(Message):
+    """The terminal input reached EOF or its file descriptor was detached."""
+
+
 QUERY = "\x1b]10;?\x07\x1b]11;?\x07" + "".join(f"\x1b]4;{index};?\x07" for index in range(16))
 # DEC mode 2031: the terminal sends CSI ? 997 ; 1 n (dark) or ; 2 n (light)
 # when its colour scheme changes. CSI ? 996 n asks for the current scheme.
@@ -223,10 +228,11 @@ class ColorInputFilter:
 
 
 def terminal_driver():
-    """Use native Textual drivers for Windows, web and non-terminal hosts."""
-    if sys.platform == "win32" or not sys.stdin.isatty():
+    """Keep Windows/web drivers native; handle POSIX input loss explicitly."""
+    if sys.platform == "win32" or os.environ.get("TEXTUAL_DRIVER"):
         return None
     from codecs import getincrementaldecoder
+    import errno
     import selectors
     from textual._xterm_parser import XTermParser
     from textual.drivers.linux_driver import LinuxDriver
@@ -252,8 +258,18 @@ def terminal_driver():
                 selector.register(self.fileno, selectors.EVENT_READ)
                 while not self.exit_event.is_set():
                     for _key, _mask in selector.select(0.05):
-                        chunk = os.read(self.fileno, 4096)
+                        try:
+                            chunk = os.read(self.fileno, 4096)
+                        except OSError as exc:
+                            if exc.errno not in {errno.EIO, errno.EBADF, errno.ENXIO}:
+                                raise
+                            self.send_message(TerminalInputClosed())
+                            return
                         if not chunk:
+                            # EOF remains readable forever. Exit the app as
+                            # well as its reader, rather than spinning or
+                            # leaving an invisible session alive indefinitely.
+                            self.send_message(TerminalInputClosed())
                             return
                         data = framing.feed(decode(chunk))
                         if data:

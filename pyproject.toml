@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.15.0"
+version = "2.15.1"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -302,6 +302,11 @@ superqode = [
 ]
 
 [tool.uv]
+# Keep dependency installation usable on laptops and smaller machines.
+# These limit builds/downloads/unpacking, not resolver memory or model RAM.
+concurrent-builds = 1
+concurrent-downloads = 8
+concurrent-installs = 2
 # google-antigravity 0.1.8 ships protobuf 7.35-generated descriptors, while
 # mem0ai currently requires protobuf <7. Keep uv from selecting a combination
 # that installs successfully but cannot import the Antigravity SDK.

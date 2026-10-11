@@ -3018,9 +3018,15 @@ class DialogsMixin:
             "  Search with Ctrl+K. Use :help <command> for subcommands.\n\n", style=THEME["muted"]
         )
         text.append("  Developer Workflows\n\n", style=f"bold {THEME['gold']}")
-        prefix = ":" + query.strip().lstrip(":/") if query.strip() else ""
+        prefix = ":" + " ".join(query.strip().lstrip(":/").lower().split()) if query.strip() else ""
         values = (
-            [value for value in metadata if value.startswith(prefix)]
+            [
+                value
+                for value in metadata
+                if value == prefix
+                or value.startswith(prefix + " ")
+                or (prefix not in metadata and value.startswith(prefix))
+            ]
             if prefix
             else [":" + root for root in COMMAND_ROUTES]
         )

@@ -61,6 +61,7 @@ class DeveloperExperienceMixin:
                 "Finish the connection or approval prompt first, then use :trial to continue."
             )
             return
+        self._trial_connection_cancelled()
         self.push_screen(
             DeveloperTrialScreen(self._trial_state()), callback=lambda _: self._ensure_input_focus()
         )
@@ -74,19 +75,36 @@ class DeveloperExperienceMixin:
         state = getattr(self, "_developer_trial", None)
         if not state or not state.awaiting_connection:
             return
-        state.awaiting_connection = False
+        if getattr(self, "_trial_resume_timer", None) is not None:
+            return
 
         def resume():
-            from superqode.app.widgets import ConversationLog
-
+            self._trial_resume_timer = None
+            if not state.awaiting_connection:
+                return
             if (
-                self.screen is self.default_screen
-                and not self.is_busy
-                and not self._trial_setup_pending()
+                self.screen is not self.default_screen
+                or self.is_busy
+                or self._trial_setup_pending()
+                or self.default_screen.has_class("connection-setup")
             ):
-                self._trial_cmd(self.query_one("#log", ConversationLog))
+                self._trial_resume_timer = self.set_timer(0.1, resume)
+                return
+            if not self._has_live_connection():
+                self._trial_connection_cancelled()
+                return
+            self._trial_cmd(self.query_one("#log", ConversationLog))
 
-        self.set_timer(0.2, resume)
+        self._trial_resume_timer = self.set_timer(0.2, resume)
+
+    def _trial_connection_cancelled(self) -> None:
+        state = getattr(self, "_developer_trial", None)
+        if state is not None:
+            state.awaiting_connection = False
+        timer = getattr(self, "_trial_resume_timer", None)
+        if timer is not None:
+            timer.stop()
+            self._trial_resume_timer = None
 
     def _trial_route_identity(self) -> tuple:
         fingerprint = self._connection_fingerprint()

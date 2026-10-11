@@ -1,6 +1,7 @@
 """Automation framing, configured defaults, recovery, and trusted command regressions."""
 
 import asyncio
+import inspect
 import io
 import json
 import os
@@ -26,6 +27,14 @@ from superqode.undo_manager import UndoManager
 from test_agent_loop_harness import ScriptedGateway
 
 
+def _separate_cli_runner() -> CliRunner:
+    # Click 8.2+ separates streams automatically and removed this option.
+    options = (
+        {"mix_stderr": False} if "mix_stderr" in inspect.signature(CliRunner).parameters else {}
+    )
+    return CliRunner(**options)
+
+
 @pytest.fixture
 def native_default(monkeypatch):
     monkeypatch.setattr(
@@ -37,7 +46,7 @@ def native_default(monkeypatch):
 @pytest.mark.parametrize("mode", ["json", "jsonl"])
 def test_machine_setup_failures_are_json(mode, native_default, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    result = CliRunner(mix_stderr=False).invoke(cli_main, ["-p", "--mode", mode], input="")
+    result = _separate_cli_runner().invoke(cli_main, ["-p", "--mode", mode], input="")
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["type"] == "superqode.error"
@@ -62,7 +71,7 @@ def test_output_remains_machine_readable_when_dependency_prints(
         return AgentResponse("done", [], 1, 1, "complete")
 
     monkeypatch.setattr("superqode.headless.run_headless", run)
-    result = CliRunner(mix_stderr=False).invoke(
+    result = _separate_cli_runner().invoke(
         cli_main, ["-p", "--mode", mode, "--changes", "none", "hello"]
     )
     assert result.exit_code == 0, result.output
@@ -91,7 +100,7 @@ def test_raw_sdk_errors_do_not_leak_secrets(native_default, tmp_path, monkeypatc
         )
 
     monkeypatch.setattr("superqode.headless.run_headless", run)
-    result = CliRunner(mix_stderr=False).invoke(cli_main, ["-p", "--mode", "json", "hello"])
+    result = _separate_cli_runner().invoke(cli_main, ["-p", "--mode", "json", "hello"])
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert "superqode doctor" in payload["error"]
@@ -183,7 +192,7 @@ def test_continue_restores_project_connection(native_default, tmp_path, monkeypa
     monkeypatch.delenv("SUPERQODE_MODEL", raising=False)
     monkeypatch.setenv("SUPERQODE_RUNTIME", "codex-cli")
     monkeypatch.setattr("superqode.headless.run_headless", run)
-    result = CliRunner(mix_stderr=False).invoke(
+    result = _separate_cli_runner().invoke(
         cli_main, ["--continue", "-p", "--mode", "json", "continue this task"]
     )
     assert result.exit_code == 0, result.output
@@ -392,10 +401,17 @@ def test_registry_drives_routes_help_and_palette():
         assert ":" + root in COMMANDS
         assert ":" + root in metadata
         assert ":" + root in palette
+    for value, entry in metadata.items():
+        assert entry.description.strip(), value
+        assert entry.description != "SuperQode TUI command", value
+    assert metadata[":export"].description == "Export the conversation to a file"
+    assert metadata[":explore"].description == "Browse product capabilities and how to use them"
+    assert metadata[":work"].description == "Show the current task and its recorded changes"
+    assert ":agents model" not in COMMANDS  # Neither the TUI nor CLI implements this route.
 
 
 def test_version_and_help_do_not_import_agent_or_ui_implementations():
-    script = "from superqode.main import cli_main; import sys; from click.testing import CliRunner; r=CliRunner(mix_stderr=False).invoke(cli_main,['--help']); assert r.exit_code == 0; assert 'superqode.agent.loop' not in sys.modules; assert 'superqode.app.widgets' not in sys.modules; assert 'aiohttp' not in sys.modules"
+    script = "from superqode.main import cli_main; import sys; from click.testing import CliRunner; r=CliRunner().invoke(cli_main,['--help']); assert r.exit_code == 0; assert 'superqode.agent.loop' not in sys.modules; assert 'superqode.app.widgets' not in sys.modules; assert 'aiohttp' not in sys.modules"
     result = subprocess.run([os.sys.executable, "-c", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
@@ -606,7 +622,7 @@ def test_jsonl_sequence_survives_finalization_failure(native_default, tmp_path, 
 
     monkeypatch.setattr("superqode.headless.run_headless", run)
     monkeypatch.setattr("superqode.workspace.change_summary.summarize_workspace_changes", fail)
-    result = CliRunner(mix_stderr=False).invoke(cli_main, ["-p", "--mode", "jsonl", "hello"])
+    result = _separate_cli_runner().invoke(cli_main, ["-p", "--mode", "jsonl", "hello"])
     assert result.exit_code == 1
     rows = [json.loads(line) for line in result.stdout.splitlines()]
     assert [row["sequence"] for row in rows] == [1, 2, 3]
@@ -616,7 +632,7 @@ def test_jsonl_sequence_survives_finalization_failure(native_default, tmp_path, 
 @pytest.mark.parametrize("mode", ["json", "jsonl"])
 def test_missing_rubric_has_machine_setup_guidance(mode, native_default, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    result = CliRunner(mix_stderr=False).invoke(
+    result = _separate_cli_runner().invoke(
         cli_main, ["-p", "--mode", mode, "--rubric", "@missing.md", "hello"]
     )
     assert result.exit_code == 2
@@ -884,7 +900,7 @@ def test_thrown_sdk_value_error_does_not_expose_request(native_default, tmp_path
         raise ValueError("SDK request={'prompt':'private task', 'token':'opaque-private-value'}")
 
     monkeypatch.setattr("superqode.headless.run_headless", run)
-    result = CliRunner(mix_stderr=False).invoke(cli_main, ["-p", "--mode", "json", "hello"])
+    result = _separate_cli_runner().invoke(cli_main, ["-p", "--mode", "json", "hello"])
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["success"] is False

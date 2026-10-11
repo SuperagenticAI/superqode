@@ -118,14 +118,14 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `SUPERQODE_OLLAMA_NUM_CTX` | int | unset | Request this context length from Ollama per call. Ollama's MLX backend honors only Modelfile-baked values. |
-| `SUPERQODE_OLLAMA_KEEP_ALIVE` | duration | `30m` | How long Ollama keeps the model loaded between calls. |
+| `SUPERQODE_OLLAMA_KEEP_ALIVE` | duration | unset | Optional override for Ollama model residency. When unset, the server's keep-alive policy applies. Set `0` to unload after each response. |
 | `SUPERQODE_CAPABILITY_TIMEOUT` | seconds | `2` | Maximum wait when asking a local runtime what a model supports (for example Ollama's capability list). On timeout the model is treated as tool-capable rather than silently downgraded. |
 | `SUPERQODE_DISABLE_LOCAL_SHAPING` | `0`/`1` | off | Skip local-request shaping (num_ctx, keep-alive, tool-temperature clamps). |
 | `SUPERQODE_DISABLE_PROMPT_CACHE` | `0`/`1` | off | Disable prompt-cache annotations on outgoing requests. |
 | `SUPERQODE_DS4_THINKING` | mode | unset | Force the DS4 thinking mode instead of the per-model default. |
 | `SUPERQODE_DS4_TOOL_MODE` | `always`/`auto`/`never` | `always` | Control whether DS4 requests include tools. `never` also accepts off/false/0. |
-| `SUPERQODE_DS4_WARMUP` | `0`/`1` | on | Send a small best-effort DS4 warmup request after connecting. |
-| `SUPERQODE_LOCAL_WARMUP` | `0`/`1` | on | Send a small best-effort warmup request after connecting to a local model. DS4 has a separate setting. |
+| `SUPERQODE_DS4_WARMUP` | `0`/`1` | off | Opt into a DS4 warmup request after connecting. Preloading can consume substantial RAM and power. |
+| `SUPERQODE_LOCAL_WARMUP` | `0`/`1` | off | Opt into a warmup request after connecting to a local model. Default setup checks omit warmup generation. Starting a model server can still load weights; DS4 has a separate setting. |
 | `SUPERQODE_LOCAL_WARMUP_TIMEOUT` | seconds | `45` | Maximum wait for automatic local-model warmup. |
 | `SUPERQODE_LAGUNA_GGUF` | absolute path | unset | Pin the Laguna S 2.1 GGUF file instead of using automatic cache discovery. |
 | `SUPERQODE_MLX_INPROCESS` | `0`/`1` | on | Serve MLX models in-process; set `0` to require an external server. |

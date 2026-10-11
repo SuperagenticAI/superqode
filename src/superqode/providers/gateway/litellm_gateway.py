@@ -997,9 +997,8 @@ class LiteLLMGateway(GatewayInterface):
 
         Ollama-specific:
         - ``num_ctx`` — see ``_ollama_num_ctx_for``.
-        - ``keep_alive`` — hold the model resident between turns so the
-          prompt prefix stays warm in KV cache (huge latency win on a
-          multi-turn loop).
+        - ``keep_alive`` — use an explicit caller/environment value when
+          supplied; otherwise retain the server's memory residency policy.
         - Clamp temperature to ≤0.2 when tools are in play; small local
           models lose tool-call discipline at higher temperatures.
 
@@ -1028,9 +1027,10 @@ class LiteLLMGateway(GatewayInterface):
                 request_kwargs["temperature"] = 0.2
 
         if provider == "ollama":
-            keep_alive = os.environ.get("SUPERQODE_OLLAMA_KEEP_ALIVE", "30m")
+            keep_alive = os.environ.get("SUPERQODE_OLLAMA_KEEP_ALIVE", "").strip()
             # LiteLLM forwards unknown kwargs into Ollama's "options" payload.
-            request_kwargs.setdefault("keep_alive", keep_alive)
+            if keep_alive:
+                request_kwargs.setdefault("keep_alive", keep_alive)
             request_kwargs.setdefault("num_ctx", self._ollama_num_ctx_for(model))
 
     # Patterns the in-band extractor recognizes. Order matters: try the

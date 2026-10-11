@@ -48,7 +48,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 UV_PROJECT_ENVIRONMENT=/tmp/superqode-py313 \
   tests/test_headless.py tests/test_runtime_builtin.py tests/test_mcp.py \
   tests/test_config_loader.py tests/test_tools.py tests/test_core_tool_history.py \
   tests/test_tool_call_repair.py tests/test_streaming_tool_calls.py \
-  tests/test_release_metadata.py tests/test_version.py -q
+  tests/test_release_metadata.py tests/test_version.py tests/test_install_script.py \
+  tests/test_dx_completion.py tests/test_tui_developer_trial.py -q
 ```
 
 To check an interpreter beyond the package's declared range, use the dependency

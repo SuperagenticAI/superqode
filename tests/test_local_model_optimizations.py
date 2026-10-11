@@ -119,11 +119,12 @@ def test_ollama_num_ctx_unknown_model_falls_back_to_safe_default():
     assert gw._ollama_num_ctx_for("some-exotic-model:latest") == 8192
 
 
-def test_shaping_sets_keep_alive_and_num_ctx_for_ollama():
+def test_shaping_keeps_server_residency_policy_and_sets_num_ctx(monkeypatch):
+    monkeypatch.delenv("SUPERQODE_OLLAMA_KEEP_ALIVE", raising=False)
     gw = LiteLLMGateway()
     kwargs: dict = {}
     gw._apply_local_request_shaping("ollama", "qwen2.5-coder:7b", kwargs, has_tools=True)
-    assert kwargs["keep_alive"] == "30m"
+    assert "keep_alive" not in kwargs
     assert kwargs["num_ctx"] == 32768
 
 
@@ -178,12 +179,21 @@ def test_shaping_keep_alive_env_override(monkeypatch):
     assert kwargs["keep_alive"] == "2h"
 
 
+@pytest.mark.parametrize("keep_alive", [0, "1m", -1])
+def test_shaping_preserves_explicit_residency_even_with_env_override(monkeypatch, keep_alive):
+    monkeypatch.setenv("SUPERQODE_OLLAMA_KEEP_ALIVE", "30m")
+    kwargs = {"keep_alive": keep_alive}
+    LiteLLMGateway()._apply_local_request_shaping("ollama", "fixture", kwargs, has_tools=True)
+    assert kwargs["keep_alive"] == keep_alive
+
+
 @pytest.mark.parametrize("stream", [False, True])
-def test_ollama_adapter_receives_flat_options_on_the_wire(stream):
+def test_ollama_adapter_receives_flat_options_on_the_wire(stream, monkeypatch):
     """Exercise LiteLLM's real serialization, not just our shaping dictionary."""
     from litellm.utils import get_optional_params
     from litellm.llms.ollama.chat.transformation import OllamaChatConfig
 
+    monkeypatch.delenv("SUPERQODE_OLLAMA_KEEP_ALIVE", raising=False)
     kwargs = {"options": {"num_ctx": 8192, "num_gpu": 1}, "stream": stream}
     LiteLLMGateway()._apply_local_request_shaping("ollama", "fixture", kwargs, has_tools=False)
     optional = get_optional_params(model="fixture", custom_llm_provider="ollama_chat", **kwargs)
@@ -197,7 +207,7 @@ def test_ollama_adapter_receives_flat_options_on_the_wire(stream):
     assert wire["options"]["num_ctx"] == 8192
     assert wire["options"]["num_gpu"] == 1
     assert "options" not in wire["options"]
-    assert wire["keep_alive"] == "30m"
+    assert "keep_alive" not in wire or wire["keep_alive"] is None
     assert wire["stream"] is stream
 
 

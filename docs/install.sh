@@ -435,7 +435,7 @@ fi
 
 if [ -z "$uv_bin" ]; then
     printf '%s\n' "Error: uv was installed but its executable could not be found." >&2
-    printf '%s\n' "Open a new terminal and run: uv tool install superqode" >&2
+    printf '%s\n' "Open a new terminal and run: uv tool install --python 3.13 superqode" >&2
     exit 1
 fi
 

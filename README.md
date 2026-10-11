@@ -354,7 +354,7 @@ Serving needs the `uhp` extra (FastAPI and uvicorn). The client side needs
 nothing extra.
 
 ```bash
-uv tool install 'superqode[uhp]'
+uv tool install --python 3.13 'superqode[uhp]'
 superqode serve uhp --spec harness.yaml --port 8787
 superqode connect uhp --base-url http://127.0.0.1:8787
 superqode harness run uhp --prompt "summarise this repository"

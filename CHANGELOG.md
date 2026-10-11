@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] - 2026-10-12
+
+### Added
+
+- Python and uv compatibility checks across supported Python 3.12–3.13,
+  operating systems and current allowed dependencies, with advisory probes
+  for newer interpreters.
+
+### Fixed
+
+- Replace generic TUI command descriptions with actionable help shared by
+  `:help`, autocomplete and the command palette. Keep command-root searches
+  separate from commands that merely share a prefix.
+- Return to the guided first task after connection, login and model selection
+  finish, preserving the task and workspace draft. Cancelling the connection
+  browser clears the pending return; running still requires validation,
+  attached project context and an explicit Run action.
+- Use a published, pinned setup-uv action in Python compatibility checks and
+  exercise installer contracts in that workflow. Keep installation examples
+  and recovery instructions on the supported Python 3.13 interpreter.
+- Keep the headless output regression tests compatible with both older and
+  current Click releases, including independent stdout and stderr capture.
+- Select Python 3.13 in the installer, use monotonic timing without requiring
+  an active event loop, and close agent configuration file handles promptly.
+- Exit and clean up the TUI when terminal input closes, including piped input
+  and detached POSIX terminals, instead of retaining an invisible session.
+- Bound the live transcript to 3,000 rendered lines while retaining recorded
+  messages for copy and export, and adjust reading anchors when lines roll off.
+- Make local-model and DS4 warmup opt-in and preserve Ollama's server keep-alive
+  policy unless a caller or environment setting explicitly overrides it.
+- Reduce concurrent dependency builds, downloads and unpacking for contributor
+  environments on laptops and smaller machines.
+
 ## [2.15.0] - 2026-10-11
 
 ### Added

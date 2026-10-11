@@ -1663,6 +1663,9 @@ class ConversationLog(RichLog):
         # Remove any width-related kwargs that might limit display
         kwargs.pop("max_width", None)
         kwargs.pop("width", None)
+        # Styled terminal strips are much larger than the recorded plain
+        # messages. Bound the live display; copy/export still use _messages.
+        kwargs.setdefault("max_lines", 3000)
         super().__init__(*args, **kwargs)
         # Track messages for copy functionality
         self._messages: list[tuple[str, str, str]] = []  # (role, text, agent_name)
@@ -1843,7 +1846,7 @@ class ConversationLog(RichLog):
         self.add_agent(text, agent)
 
     def write(self, *args, **kwargs):
-        """Override write to ensure console width is always correct - NO LIMITS."""
+        """Keep wrapping, viewport anchors and the bounded display in sync."""
         # A tall feedback card is deliberately anchored at its heading. Resume
         # normal transcript following when the *next* piece of output arrives,
         # rather than immediately jumping this card to its bottom edge.
@@ -1863,6 +1866,7 @@ class ConversationLog(RichLog):
             self.auto_scroll = False
         lines_before = len(self.lines)
         start_line_before = self._start_line
+        scroll_before = self.scroll_y
 
         # Ensure console width is updated before writing
         self._update_console_width()
@@ -1879,11 +1883,18 @@ class ConversationLog(RichLog):
         result = super().write(*processed_args, **kwargs)
         from superqode.app.theme_bridge import bind_strip
 
-        first_new = max(0, lines_before - (self._start_line - start_line_before))
+        removed = self._start_line - start_line_before
+        for key in ("_response_start_y", "_response_end_y"):
+            value = getattr(self, key, None)
+            if value is not None and removed:
+                setattr(self, key, max(0, value - removed))
+        first_new = max(0, lines_before - removed)
         self.lines[first_new:] = [bind_strip(strip) for strip in self.lines[first_new:]]
         if user_locked:
             self.auto_scroll = False
-            self._unread_output_lines += max(1, len(self.lines) - lines_before)
+            self._unread_output_lines += max(1, len(self.lines) - lines_before + removed)
+            if removed:
+                self.scroll_to(y=max(0, scroll_before - removed), animate=False, force=True)
             self._sync_unread_indicator()
         return result
 
@@ -2001,6 +2012,7 @@ class ConversationLog(RichLog):
             return
 
         start_y = len(self.lines)
+        start_line_before = self._start_line
         first_line = next((line.strip() for line in content.plain.splitlines() if line.strip()), "")
         marker_start = next(
             (index for index, character in enumerate(first_line) if character.isalnum()), 0
@@ -2010,6 +2022,7 @@ class ConversationLog(RichLog):
         self._writing_feedback = True
         try:
             self.write(content, scroll_end=False)
+            start_y = max(0, start_y - (self._start_line - start_line_before))
         finally:
             self._writing_feedback = False
         self._feedback_anchor_active = True
@@ -2598,6 +2611,7 @@ class ConversationLog(RichLog):
         self._restored_history = []
         self._history_start = 0
         self._history_end = 0
+        self._bounded_history_view = False
         self._navigation_view = None
         self.clear()
         self._messages.clear()
@@ -2654,10 +2668,31 @@ class ConversationLog(RichLog):
             else:
                 writer = getattr(self, f"add_{role}", self.add_info)
                 writer(body)
+        if start and earlier and self.lines and "Load earlier" not in self.lines[0].text:
+            # A long page may roll its heading out of the bounded display.
+            # Keep paging reachable even when the body fills the line budget.
+            self.write(
+                Text(
+                    "  Load earlier ↗\n", style=f"{THEME['cyan']} {command_link('history-earlier')}"
+                )
+            )
         if end < len(self._restored_history):
             self.write(
                 Text("  Load later ↗\n", style=f"{THEME['cyan']} {command_link('history-later')}")
             )
+
+    def _replace_history_page(self, start: int, end: int) -> None:
+        """Keep older-history browsing within the live rendering budget."""
+        messages, response = self._messages, self._last_response
+        self.clear()
+        self._history_start, self._history_end = start, end
+        self._write_history_page(start, end)
+        self._messages, self._last_response = messages, response
+        self._bounded_history_view = True
+        self._response_start_y = self._response_end_y = None
+        self._pending_response_reveal_token = None
+        self._set_viewport_mode("user_locked")
+        self.call_after_refresh(self.scroll_home, animate=False)
 
     def focus_history_match(self, message_index: int) -> bool:
         """Expose an unloaded search match without rendering the entire history."""
@@ -2682,6 +2717,8 @@ class ConversationLog(RichLog):
         return True
 
     def load_later_history(self) -> None:
+        if self._restored_history and len(self._messages) > len(self._restored_history):
+            self._restored_history = list(self._messages)
         end = getattr(self, "_history_end", 0)
         if not end or end >= len(self._restored_history):
             return
@@ -2690,8 +2727,15 @@ class ConversationLog(RichLog):
         if self.lines and "Load later" in self.lines[-1].text:
             self.lines.pop()
         next_end = min(len(self._restored_history), end + self.HISTORY_PAGE_SIZE)
+        if getattr(self, "_bounded_history_view", False):
+            self._replace_history_page(end, next_end)
+            return
+        start_line_before = self._start_line
         self._write_history_page(end, next_end, earlier=False)
         self._messages, self._last_response = messages, response
+        if self._start_line != start_line_before:
+            self._replace_history_page(end, next_end)
+            return
         self._history_end = next_end
         self._pending_response_reveal_token = None
         self._set_viewport_mode("user_locked")
@@ -2699,10 +2743,15 @@ class ConversationLog(RichLog):
 
     def load_earlier_history(self) -> None:
         """Prepend one page, retaining new turns and the reader's viewport."""
+        if self._restored_history and len(self._messages) > len(self._restored_history):
+            self._restored_history = list(self._messages)
         end = getattr(self, "_history_start", 0)
         if not end or getattr(self, "_navigation_view", None) is not None:
             return
         start = max(0, end - self.HISTORY_PAGE_SIZE)
+        if getattr(self, "_bounded_history_view", False):
+            self._replace_history_page(start, end)
+            return
         lines, messages = self.lines, self._messages
         removed = 0
         if lines and "Load earlier" in lines[0].text:
@@ -2717,6 +2766,10 @@ class ConversationLog(RichLog):
         if self.lines and "Load later" in self.lines[-1].text:
             self.lines.pop()
         added = len(self.lines)
+        if self.max_lines is not None and added + len(lines) > self.max_lines:
+            self._messages, self._last_response = messages, last_response
+            self._replace_history_page(start, end)
+            return
         self.lines.extend(lines)
         self._messages = messages
         self._last_response = last_response
