@@ -278,7 +278,52 @@ class HelperVimMixin:
 
     def _vim_focus_main_pane(self) -> None:
         """Return keyboard focus to the main terminal prompt."""
-        self._ensure_input_focus()
+        # This is an explicit focus request. The ordinary post-operation guard
+        # deliberately leaves sidebar focus alone and must keep doing so.
+        if len(self.screen_stack) != 1 or self.query("CommandPalette.show-palette"):
+            return
+        picker = getattr(self, "_model_picker_widget", None)
+        if picker is not None and picker.is_attached:
+            return
+        self._restore_vim_draft()
+        self.query_one("#prompt-input").focus()
+
+    def _vim_workspace_navigation_active(self, key: str = "") -> bool:
+        """Reserve pane keys only in Vim Normal mode outside editable fields."""
+        from textual.widgets import Input, TextArea
+
+        if (
+            not self._vim_enabled()
+            or getattr(self, "_vim_input_mode", "insert") != "normal"
+            or len(self.screen_stack) != 1
+            or getattr(self, "_permission_pending", False)
+            or self._vim_picker_active()
+            or self._vim_requires_text_entry()
+            or self.query("CommandPalette.show-palette")
+        ):
+            return False
+        focused = self.focused
+        if focused is None:
+            return False
+        if focused.id == "prompt-input":
+            return key == "ctrl+f"
+        if not self._sidebar_has_focus() and focused.id != "log":
+            return False
+        return not isinstance(focused, Input) and not (
+            isinstance(focused, TextArea) and not focused.read_only
+        )
+
+    def _vim_editor_shortcut_active(self) -> bool:
+        return (
+            self._vim_enabled()
+            and len(self.screen_stack) == 1
+            and self.focused is not None
+            and self.focused.id == "prompt-input"
+            and not self._vim_picker_active()
+            and not self._vim_requires_text_entry()
+            and not self._in_selection_mode()
+            and not getattr(self, "_permission_pending", False)
+        )
 
     def _vim_move_focused_tree(self, direction: int) -> bool:
         """Apply j or k to the focused repository tree instead of the log."""
@@ -296,20 +341,141 @@ class HelperVimMixin:
         return True
 
     def _begin_vim_line_mode(self, prefix: str, state: str, prompt) -> None:
+        if getattr(self, "_vim_suspended_draft", None) is None:
+            self._vim_suspended_draft = (
+                prompt.value,
+                prompt.cursor_position,
+                getattr(prompt, "selection", None),
+            )
+        self._vim_line_mode = state
         self._set_vim_state(state)
         prompt.value = prefix
         prompt.cursor_position = len(prefix)
         prompt.focus()
+
+    def _restore_vim_draft(self, prompt=None, *, cancel_line: bool = False) -> None:
+        """Restore the task after a Vim command, without filling a setup field."""
+        draft = getattr(self, "_vim_suspended_draft", None)
+        if draft is None:
+            return
+        if not cancel_line and (
+            getattr(self, "_vim_line_mode", None)
+            or self._vim_picker_active()
+            or self._vim_requires_text_entry()
+            or self._in_selection_mode()
+            or getattr(self, "_permission_pending", False)
+            or self.default_screen.has_class("connection-setup")
+        ):
+            return
+        if prompt is None:
+            prompt = self.default_screen.query_one("#prompt-input")
+        text, cursor, selection = draft
+        self._vim_suspended_draft = None
+        self._vim_line_mode = None
+        if prompt.value and not cancel_line:
+            # A command may intentionally install another draft (e.g. :stash).
+            # Keep that result and retain the previous task in the existing stash.
+            if text and prompt.value != text:
+                stash = getattr(self, "_draft_stash", [])
+                self._draft_stash = [*stash[-19:], text]
+            return
+        prompt.value = text
+        if selection is not None:
+            prompt.selection = selection
+        else:
+            prompt.cursor_position = cursor
 
     def _vim_after_submit(self) -> None:
         """Return to Normal mode after a prompt, Ex command, or search submits."""
         if self._vim_enabled():
             self._set_vim_state("normal")
 
+    def _vim_edit_task(self, log: ConversationLog, editor: str) -> None:
+        """Round-trip a Vim user's task through their editor before submission."""
+        import shlex
+        import subprocess
+        import tempfile
+
+        if (
+            self._vim_picker_active()
+            or self._vim_requires_text_entry()
+            or self._in_selection_mode()
+            or getattr(self, "_permission_pending", False)
+        ):
+            log.add_info("Return to the task prompt before opening the external editor.")
+            return
+        prompt = self.default_screen.query_one("#prompt-input")
+        draft = getattr(self, "_vim_suspended_draft", None)
+        original = draft[0] if draft is not None else prompt.value
+        temp_path = None
+        try:
+            args = shlex.split(editor, posix=os.name != "nt")
+            if os.name == "nt":
+                args = [
+                    arg[1:-1] if arg[:1] in {"'", '"'} and arg[-1:] == arg[:1] else arg
+                    for arg in args
+                ]
+            if not args:
+                raise ValueError("Set $EDITOR to an editor command.")
+            if (
+                Path(args[0]).name.lower()
+                in {"code", "code-insiders", "code.cmd", "code-insiders.cmd"}
+                and "--wait" not in args
+            ):
+                args.append("--wait")
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="",
+                suffix=".md",
+                prefix="superqode_",
+                delete=False,
+            ) as source:
+                source.write(original)
+                temp_path = Path(source.name)
+            log.add_info(f"Opening {editor}… Save and close to return to your draft.")
+            with self.suspend():
+                result = subprocess.run([*args, str(temp_path)])
+            if result.returncode:
+                log.add_error(
+                    f"Editor exited with status {result.returncode}. Your draft was retained."
+                )
+                return
+            content = temp_path.read_text(encoding="utf-8")
+            self._vim_suspended_draft = None
+            self._vim_line_mode = None
+            prompt.value = content
+            prompt.cursor_position = len(content)
+            self._set_vim_state("insert")
+            prompt.focus()
+            log.add_info("Draft updated. Review it, then press Enter to send.")
+        except (OSError, ValueError) as exc:
+            log.add_error(f"Could not open editor: {exc}. Your draft was retained.")
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
     def _handle_vim_key(self, event, prompt=None) -> bool:
         """Handle one key in the optional modal terminal control layer."""
         if not self._vim_enabled():
             return False
+
+        if prompt is None:
+            from textual.widgets import Input, TextArea
+
+            focused = self.focused if self.screen_stack else None
+            if (
+                focused is not None
+                and focused.id != "prompt-input"
+                and (
+                    isinstance(focused, Input)
+                    or (isinstance(focused, TextArea) and not focused.read_only)
+                )
+            ):
+                return False
 
         key = str(getattr(event, "key", "") or "")
         character = getattr(event, "character", None)
@@ -345,8 +511,8 @@ class HelperVimMixin:
 
         if state in {"insert", "command", "search"}:
             if key in {"escape", "ctrl+["}:
-                if prompt is not None and state in {"command", "search"}:
-                    prompt.value = ""
+                if state in {"command", "search"}:
+                    self._restore_vim_draft(prompt, cancel_line=True)
                 self._set_vim_state("normal")
                 self._consume_vim_event(event)
                 return True
@@ -390,6 +556,7 @@ class HelperVimMixin:
                 prompt = None
 
         if token in {"i", "a", "o"}:
+            self._restore_vim_draft(prompt)
             self._set_vim_state("insert")
             if prompt is not None:
                 prompt.focus()

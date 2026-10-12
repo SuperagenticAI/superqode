@@ -40,6 +40,15 @@ The active Vim input mode is shown in the status bar and in the task prompt bord
 
 Submitting a task, command, or search returns the TUI to Normal mode. SuperQode temporarily permits ordinary text entry when an agent question or setup prompt requires a response.
 
+Entering `:`, `/`, or `?` from Normal mode keeps your task draft and its cursor
+or selection separately. `Escape` restores them; submitting the command or
+search restores them after it runs. Connection and setup fields stay empty for
+selection or answers, and your draft returns when you leave setup. Draft
+recovery saves the task while the command or search line is open.
+
+In Search mode, `/help` searches for the word `help`; it does not invoke the
+`/help` command. Enter commands with `:` or from Insert mode.
+
 ## Navigation
 
 ### Conversation
@@ -124,7 +133,17 @@ The Vim layer is designed for operating coding agents and inspecting their work.
 - Vim plugins or Vimscript
 - Exact Vim or Neovim compatibility
 
-Use `Ctrl+E` or `:edit` to compose a prompt in the editor configured by `$EDITOR`. Use SuperQode as an ACP agent from Neovim when editing inside Neovim is the primary workflow.
+With Vim mode enabled, `Ctrl+E` or `:edit external` opens your current task draft in the
+editor configured by `$EDITOR`. Editor arguments such as `nvim -f` are supported.
+Saving and closing returns the draft to Insert mode for review; press `Enter`
+when you want to send it. Markdown headings are preserved, and an editor error
+retains the original draft. With Vim mode disabled, the existing external-editor
+workflow is unchanged.
+
+The existing `:edit` command and `Ctrl+P` continue to load the previous task for
+rewording. `End` moves to the end of a prompt line in either mode.
+
+Use SuperQode as an ACP agent from Neovim when editing inside Neovim is the primary workflow.
 
 ## Recommended Product Description
 

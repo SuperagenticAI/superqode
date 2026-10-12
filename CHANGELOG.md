@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.1] - 2026-10-12
+
+### Added
+
+- In Vim mode, compose the current draft with `Ctrl+E` or `:edit external` in
+  your configured editor, retaining Markdown and returning to Insert mode for
+  review before sending. Respect external-editor shortcut overrides.
+
+### Fixed
+
+- Preserve task drafts, cursor positions and selections across Vim commands
+  and transcript searches, including Escape, connection setup and disabling
+  Vim. Save the task rather than the temporary command line for draft recovery.
+- Make Vim pane return (`l` or `Ctrl+W l`) work from the sidebar, keep editable
+  search fields on their own typing keys, and honor `Ctrl+F` paging in Normal
+  mode. Vim-off navigation, shortcut configuration, approvals and the
+  `:connect` workflow retain their existing behavior.
+- Interpret `/help` and other command-like text as transcript searches when
+  explicitly entered in Vim Search mode.
+
 ## [2.17.0] - 2026-10-12
 
 ### Added

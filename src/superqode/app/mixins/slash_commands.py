@@ -482,6 +482,9 @@ class SlashCommandMixin:
         self._search_cmd(args, log)
 
     def _dispatch_edit(self, args, log, cmd, c):
+        if self._vim_enabled() and args.strip().lower() == "external":
+            self._handle_edit(log)
+            return
         self._edit_last_message(log)
 
     def _dispatch_vim(self, args, log, cmd, c):
@@ -3954,6 +3957,10 @@ class SlashCommandMixin:
                 editor = "nano"
             else:
                 editor = "notepad"
+
+        if self._vim_enabled():
+            self._vim_edit_task(log, editor)
+            return
 
         # Create temp file
         with tempfile.NamedTemporaryFile(

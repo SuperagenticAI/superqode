@@ -73,6 +73,9 @@ class EventHandlerMixin:
         if decision is not None:
             text, (row, column) = decision
             cursor = sum(len(line) + 1 for line in text.split("\n")[:row]) + column
+        vim_draft = getattr(self, "_vim_suspended_draft", None)
+        if vim_draft is not None:
+            text, cursor, _selection = vim_draft
         self._draft_revision += 1
         state = {
             "text": text,
@@ -332,6 +335,20 @@ class EventHandlerMixin:
         self._view_file(str(event.path), log)
 
     def on_input_submitted(self, event: Input.Submitted):
+        """Dispatch normally, restoring a task suspended by Vim's command line."""
+        if event.input.id != "prompt-input":
+            return
+        vim_line_mode = getattr(self, "_vim_line_mode", None)
+        if vim_line_mode is None:
+            self._process_prompt_submission(event)
+            return
+        self._vim_line_mode = None
+        try:
+            self._process_prompt_submission(event, vim_line_mode=vim_line_mode)
+        finally:
+            self._restore_vim_draft(event.input)
+
+    def _process_prompt_submission(self, event: Input.Submitted, *, vim_line_mode=None):
         """Handle input submission - only processes on Enter, doesn't interfere with typing."""
         if event.input.id != "prompt-input":
             return
@@ -529,6 +546,9 @@ class EventHandlerMixin:
 
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
         # Supports both : (vim-style) and / prefix
+        if vim_line_mode == "search":
+            self._vim_search(log, text[1:].strip(), reverse=text.startswith("?"))
+            return
         if self._vim_enabled() and text in {"q:", "@:"}:
             if text == "q:":
                 self._vim_command_history(log)

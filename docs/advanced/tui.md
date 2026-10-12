@@ -808,9 +808,24 @@ h / l             # sidebar or main prompt
 :grep <term>
 q:
 @:
+:edit external    # compose the current draft in your editor (Vim mode)
 ```
 
 The active input state is shown in the status bar and task prompt. The preference is persisted in `~/.superqode/config.json`. See [Vim-Like Terminal Navigation](vim-mode.md) for the complete key reference, safety behavior, and supported scope.
+
+In Vim Normal mode, entering `:`, `/`, or `?` keeps your task draft, cursor and
+selection separately. Escape restores them, and submitting the command or
+search restores them after it runs. Connection setup keeps its selection and
+answer fields clear, then restores the task when you return. Draft recovery
+saves the task while a command or search line is open. Search mode interprets
+`/help` as a search for `help`; use `:` or Insert mode for commands.
+
+With Vim enabled, `Ctrl+E` or `:edit external` opens the current task in your
+configured editor and returns to Insert mode for review before sending.
+Markdown headings are retained, editor arguments and shortcut overrides are
+supported, and an editor error leaves the original draft intact. The existing
+`:edit` and `Ctrl+P` actions still load the previous task for rewording. Vim-off
+shortcuts, approvals and the `:connect` workflow retain their existing behavior.
 
 ## Compare Models
 

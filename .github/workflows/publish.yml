@@ -183,14 +183,22 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           tag="${{ needs.resolve.outputs.tag }}"
           version="${tag#v}"
           python scripts/changelog_notes.py "$tag" > "${RUNNER_TEMP}/notes.md"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/* --clobber
-            gh release edit "$tag" --notes-file "${RUNNER_TEMP}/notes.md"
-          else
-            gh release create "$tag" dist/* --title "$version" --notes-file "${RUNNER_TEMP}/notes.md"
-          fi
+          for attempt in 1 2 3; do
+            if gh release view "$tag" >/dev/null 2>&1; then
+              if gh release upload "$tag" dist/* --clobber &&
+                 gh release edit "$tag" --draft=false --notes-file "${RUNNER_TEMP}/notes.md"; then
+                exit 0
+              fi
+            elif gh release create "$tag" dist/* --verify-tag --title "$version" --notes-file "${RUNNER_TEMP}/notes.md"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::GitHub release publication failed after three attempts."
+          exit 1

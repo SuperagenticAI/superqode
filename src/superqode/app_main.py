@@ -788,6 +788,28 @@ class SuperQodeApp(
             return available
         return super().check_action(action, parameters)
 
+    async def on_event(self, event: events.Event) -> None:
+        # Apply Vim's optional key priority before widget bindings. Registering
+        # these letters globally would conflict with Vim-off keymap overrides.
+        if isinstance(event, events.Key) and not event.is_forwarded and self._vim_enabled():
+            if event.key in {
+                "h",
+                "l",
+                "ctrl+w",
+                "ctrl+f",
+            } and self._vim_workspace_navigation_active(event.key):
+                if self._handle_vim_key(event):
+                    return
+            if self._vim_editor_shortcut_active() and any(
+                binding.action == "open_editor"
+                for binding in self._bindings.key_to_bindings.get(event.key, [])
+            ):
+                event.stop()
+                event.prevent_default()
+                self.action_open_editor()
+                return
+        await super().on_event(event)
+
     def _sidebar_has_focus(self) -> bool:
         if not self.screen_stack or not self.sidebar_visible:
             return False
@@ -832,6 +854,8 @@ class SuperQodeApp(
         picker = getattr(self, "_model_picker_widget", None)
         if picker is not None and picker.is_attached:
             return
+        if getattr(self, "_vim_suspended_draft", None) is not None:
+            self._restore_vim_draft()
         if self._sidebar_has_focus():
             return
         try:

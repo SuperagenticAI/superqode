@@ -870,6 +870,8 @@ class CommandImplMixin:
                 log.add_warning(save_error)
             return
         if arg in {"off", "0", "false", "no"}:
+            if getattr(self, "_vim_line_mode", None) is not None:
+                self._restore_vim_draft(cancel_line=True)
             self._vim_experience_enabled = False
             save_error = self._save_vim_preference(False)
             self._set_vim_state("insert")
@@ -919,7 +921,7 @@ class CommandImplMixin:
             (
                 "Modes",
                 (
-                    ("Esc", "return to Normal mode"),
+                    ("Esc", "return to Normal; restore task after command/search"),
                     ("i / a / o", "enter Insert mode"),
                     (":", "enter an Ex command"),
                     ("/ or ?", "search the transcript"),
@@ -953,6 +955,10 @@ class CommandImplMixin:
                     ("j / k", "move through an active picker"),
                     ("q:", "show Ex command history"),
                     ("@:", "repeat the latest Ex command"),
+                    (
+                        "Ctrl+E / :edit external",
+                        "edit the current task externally; review before sending",
+                    ),
                 ),
             ),
         )

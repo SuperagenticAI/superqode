@@ -353,6 +353,17 @@ class SelectionAwareInput(TextArea):
             event.prevent_default()
             return
 
+        # Dismiss the Vim command/search line as one unit, including completion.
+        # Ordinary composer completion and Escape behavior stay unchanged.
+        if (
+            event.key in {"escape", "ctrl+["}
+            and getattr(app, "_vim_enabled", lambda: False)()
+            and getattr(app, "_vim_input_mode", "insert") in {"command", "search"}
+            and app._handle_vim_key(event, self)
+        ):
+            app._hide_prompt_completion_panel()
+            return
+
         if getattr(app, "_prompt_completion_visible", False):
             vim_token = getattr(event, "character", None) or event.key
             if (
