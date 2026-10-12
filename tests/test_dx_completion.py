@@ -290,6 +290,47 @@ def test_undo_redo_are_durable_and_preserve_index_and_later_edits(git_project):
     assert git("rev-parse", "HEAD") == head
 
 
+def test_windows_permission_modes_allow_redo_and_storage_failure_rollback(git_project, monkeypatch):
+    from superqode.app import task_changes
+
+    root, _ = git_project
+    monkeypatch.setattr(task_changes, "os", SimpleNamespace(name="nt"))
+    actual_read = task_changes.TaskChanges._read
+
+    def windows_read(self, name):
+        state = actual_read(self, name)
+        mode = 0o666 if state.mode & 0o200 else 0o444
+        return task_changes.FileState(state.content, mode)
+
+    monkeypatch.setattr(task_changes.TaskChanges, "_read", windows_read)
+    file = root / "file.txt"
+    manager = UndoManager(root)
+    assert manager.initialize()
+    task = task_changes.TaskChanges(root).capture()
+    manager.register_task(task)
+    file.write_text("agent result")
+    task.finish([])
+    manager.seal_task(task)
+    assert manager.undo() and file.read_text() == "original"
+    assert manager.redo() and file.read_text() == "agent result"
+    save = manager._save
+    calls = 0
+
+    def fail_final_save(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("Disk is full")
+        return save(*args, **kwargs)
+
+    monkeypatch.setattr(manager, "_save", fail_final_save)
+    assert not manager.restore(task.id)
+    assert file.read_text() == "agent result"
+    assert "rolled back" in manager.last_error
+    assert task_changes.FileState(b"x", 0o755).mode == 0o644
+    assert task_changes.FileState(b"x", 0o444).mode == 0o444
+
+
 def test_review_file_undo_survives_restart_and_leaves_other_changes(git_project):
     from superqode.app.task_changes import TaskChanges
     from superqode.app.mixins.helper_diff_review import HelperDiffReviewMixin
@@ -480,6 +521,7 @@ async def test_effective_hotkeys_support_scope_and_preserve_draft(theme, tmp_pat
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     settings = tmp_path / ".superqode" / "keybindings.json"
     settings.parent.mkdir()
     settings.write_text(

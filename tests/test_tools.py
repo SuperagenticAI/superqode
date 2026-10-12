@@ -6,7 +6,9 @@ import asyncio
 import json
 import pytest
 import tempfile
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 from superqode.tools.base import ToolRegistry, ToolContext
 from superqode.tools.file_tools import (
@@ -216,6 +218,42 @@ async def test_bash_timeout_result_includes_failure_metadata(tool_context):
     assert result.metadata["timed_out"] is True
     assert result.metadata["timeout"] == 0.01
     assert "python3" in result.metadata["command"]
+
+
+async def test_repo_search_keeps_content_without_native_windows_grep(tmp_path, monkeypatch):
+    from superqode.tools import search_tools
+
+    (tmp_path / "provider.py").write_text("class ProviderManager:\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(search_tools, "os", SimpleNamespace(name="nt", environ=os.environ))
+    monkeypatch.setattr(
+        search_tools.shutil, "which", lambda name: "posix-grep" if name == "grep" else None
+    )
+    context = ToolContext(session_id="windows-search", working_directory=tmp_path)
+    result = await RepoSearchTool().execute({"query": "ProviderManager"}, context)
+    assert result.success
+    assert "Content:" in result.output
+    assert "provider.py:1:class ProviderManager:" in result.output
+
+
+@pytest.mark.parametrize("tool", [RepoSearchTool(), LocalCodeSearchTool()])
+def test_search_content_paths_preserve_drive_letters_and_content_colons(tool, monkeypatch):
+    from superqode.tools import search_tools
+
+    paths = []
+
+    def label(path, *args):
+        paths.append(path)
+        return "src/provider.py"
+
+    line = r"C:\project\src\provider.py:12:class ProviderManager:"
+    if isinstance(tool, RepoSearchTool):
+        monkeypatch.setattr(tool, "_relative_display", label)
+        result = tool._relative_match_line(line, Path("."))
+    else:
+        monkeypatch.setattr(search_tools, "_label_match_path", label)
+        result = tool._label_content_line(line, [Path(".")], Path("."), False)
+    assert paths == [r"C:\project\src\provider.py"]
+    assert result == "src/provider.py:12:class ProviderManager:"
 
 
 class TestReadFileTool:

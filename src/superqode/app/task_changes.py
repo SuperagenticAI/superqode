@@ -17,6 +17,13 @@ class FileState:
     content: bytes | None
     mode: int = 0o644
 
+    def __post_init__(self) -> None:
+        if os.name == "nt":
+            # Windows chmod preserves the read-only flag, not POSIX execute
+            # or group bits. Normalize both captured and persisted states so
+            # a successful restore remains eligible for redo and rollback.
+            object.__setattr__(self, "mode", 0o644 if self.mode & stat.S_IWRITE else 0o444)
+
 
 class TaskChanges:
     """Compare against the pre-task working tree without touching Git's index.

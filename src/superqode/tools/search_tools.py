@@ -106,13 +106,13 @@ def _label_match_path(file_text: str, targets: List[Path], cwd: Path, multi: boo
     for root in targets:
         try:
             rel = fp.relative_to(Path(root).resolve())
-            return f"{root.name}/{rel}" if multi else str(rel)
+            return f"{root.name}/{rel.as_posix()}" if multi else rel.as_posix()
         except ValueError:
             continue
     try:
-        return str(fp.relative_to(cwd))
+        return fp.relative_to(cwd).as_posix()
     except ValueError:
-        return str(fp)
+        return fp.as_posix()
 
 
 try:
@@ -1106,7 +1106,7 @@ class RepoSearchTool(Tool):
 
         # Fallback: use grep or pure-Python search
         grep_path = shutil.which("grep")
-        if grep_path:
+        if grep_path and os.name != "nt":
             command = [grep_path, "-rni", "--include", include or "*", "-F", query, str(path)]
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -1162,16 +1162,17 @@ class RepoSearchTool(Tool):
         path = Path(file_name)
         try:
             if path.is_absolute():
-                return str(path.relative_to(root))
+                return path.relative_to(root).as_posix()
         except ValueError:
             pass
-        return file_name
+        return path.as_posix()
 
     def _relative_match_line(self, line: str, root: Path) -> str:
-        file_name, separator, rest = line.partition(":")
-        if not separator:
+        match = re.match(r"^(.+?):(\d+):(.*)$", line)
+        if match is None:
             return line
-        return f"{self._relative_display(file_name, root)}:{rest}"
+        file_name, number, rest = match.groups()
+        return f"{self._relative_display(file_name, root)}:{number}:{rest}"
 
 
 class LocalCodeSearchTool(Tool):
@@ -1604,7 +1605,8 @@ class LocalCodeSearchTool(Tool):
         return symbols
 
     def _label_content_line(self, line: str, targets: List[Path], cwd: Path, multi: bool) -> str:
-        file_name, sep, rest = line.partition(":")
-        if not sep:
+        match = re.match(r"^(.+?):(\d+):(.*)$", line)
+        if match is None:
             return line
-        return f"{_label_match_path(file_name, targets, cwd, multi)}:{rest}"
+        file_name, number, rest = match.groups()
+        return f"{_label_match_path(file_name, targets, cwd, multi)}:{number}:{rest}"

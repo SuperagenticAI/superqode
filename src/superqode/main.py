@@ -524,6 +524,53 @@ _STDIN_WAIT_ENV = "SUPERQODE_STDIN_WAIT"
 _STDIN_DEFAULT_WAIT = 0.2
 
 
+def _windows_stdin_has_input(wait: float) -> bool:
+    """Poll native Windows pipes without consuming input or blocking on read."""
+    import ctypes
+    from ctypes import wintypes
+    import io
+    import msvcrt
+    import time
+
+    try:
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+    except (io.UnsupportedOperation, AttributeError):
+        # In-memory streams used by embedders and Click can be read directly.
+        return True
+    except (OSError, ValueError):
+        return False
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_type = kernel.GetFileType
+    get_type.argtypes = [wintypes.HANDLE]
+    get_type.restype = wintypes.DWORD
+    kind = get_type(handle)
+    if kind == 1:  # FILE_TYPE_DISK: regular redirected input cannot wait on a writer.
+        return True
+    if kind != 3:  # FILE_TYPE_PIPE
+        return False
+    peek = kernel.PeekNamedPipe
+    peek.argtypes = [
+        wintypes.HANDLE,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.LPDWORD,
+        wintypes.LPDWORD,
+        wintypes.LPDWORD,
+    ]
+    peek.restype = wintypes.BOOL
+    available = wintypes.DWORD()
+    deadline = time.monotonic() + wait
+    while True:
+        if not peek(handle, None, 0, None, ctypes.byref(available), None):
+            return False  # Closed or invalid pipe.
+        if available.value:
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
+
+
 def _stdin_has_input() -> bool:
     """Whether piped stdin actually has data, without blocking indefinitely.
 
@@ -540,12 +587,13 @@ def _stdin_has_input() -> bool:
         wait = float(os.environ.get(_STDIN_WAIT_ENV, "") or _STDIN_DEFAULT_WAIT)
     except ValueError:
         wait = _STDIN_DEFAULT_WAIT
+    if os.name == "nt":
+        return _windows_stdin_has_input(max(0.0, wait))
     try:
         readable, _, _ = select.select([sys.stdin], [], [], max(0.0, wait))
         return bool(readable)
     except (OSError, ValueError, TypeError):
-        # select() cannot poll this handle (notably Windows pipes). Preserve the
-        # historical read rather than silently dropping piped input.
+        # Preserve finite in-memory streams supplied by CLI embedders.
         return True
 
 

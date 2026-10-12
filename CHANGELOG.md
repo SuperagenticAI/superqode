@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy unless a caller or environment setting explicitly overrides it.
 - Reduce concurrent dependency builds, downloads and unpacking for contributor
   environments on laptops and smaller machines.
+- Keep Windows task undo, redo and storage-failure rollback consistent with
+  native file permissions. Poll idle Windows stdin pipes without blocking,
+  and retain code-search content when only Git's POSIX grep is installed.
 
 ## [2.15.0] - 2026-10-11
 

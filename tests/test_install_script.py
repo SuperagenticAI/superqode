@@ -14,7 +14,10 @@ INSTALLER = ROOT / "install" / "install.sh"
 HOSTED_INSTALLER = ROOT / "docs" / "install.sh"
 WRAPPER = ROOT / "scripts" / "install.sh"
 
-pytestmark = pytest.mark.skipif(shutil.which("sh") is None, reason="POSIX sh is required")
+pytestmark = pytest.mark.skipif(
+    os.name != "posix" or shutil.which("sh") is None,
+    reason="The shell installer targets macOS, Linux and WSL with POSIX sh",
+)
 
 
 def _write_executable(path: Path, content: str) -> None:

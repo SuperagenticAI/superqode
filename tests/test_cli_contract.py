@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import ExitStack
+from pathlib import PurePath
 from unittest import mock
 
 import click
@@ -175,7 +177,15 @@ def _render_help_tree() -> tuple[int, str]:
     blocks: list[str] = []
 
     def visit(command: click.Command, context: click.Context, path: tuple[str, ...]) -> None:
-        blocks.append(f"$ {' '.join((*path, '--help'))}\n{command.get_help(context)}")
+        # Path defaults legitimately use backslashes on Windows. Canonicalize
+        # only those defaults, leaving help prose and escapes under contract.
+        with ExitStack() as stack:
+            for parameter in command.params:
+                if isinstance(parameter.default, PurePath):
+                    stack.enter_context(
+                        mock.patch.object(parameter, "default", parameter.default.as_posix())
+                    )
+            blocks.append(f"$ {' '.join((*path, '--help'))}\n{command.get_help(context)}")
         if not isinstance(command, click.Group):
             return
         for name in command.list_commands(context):
@@ -184,7 +194,7 @@ def _render_help_tree() -> tuple[int, str]:
             child_context = click.Context(child, info_name=name, parent=context)
             visit(child, child_context, (*path, name))
 
-    root_context = click.Context(cli_main, info_name="superqode")
+    root_context = click.Context(cli_main, info_name="superqode", terminal_width=78)
     visit(cli_main, root_context, ("superqode",))
     payload = "\n".join(blocks).encode()
     return len(blocks), hashlib.sha256(payload).hexdigest()
@@ -199,6 +209,16 @@ def test_cli_help_tree_matches_refactor_baseline():
 
 
 class TestHeadlessStdinNeverBlocks:
+    def test_redirected_file_input_is_still_read(self, tmp_path):
+        from superqode.main import _stdin_has_input
+
+        path = tmp_path / "prompt.txt"
+        path.write_text("piped project context", encoding="utf-8")
+        with path.open(encoding="utf-8") as handle:
+            with mock.patch("superqode.main.sys.stdin", handle):
+                assert _stdin_has_input() is True
+                assert handle.read() == "piped project context"
+
     """`superqode -p` must not hang on an inherited stdin that never sends EOF."""
 
     def test_idle_pipe_is_not_treated_as_input(self):
