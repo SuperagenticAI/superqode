@@ -210,6 +210,12 @@ class BrowserApp(App):
         )
 
 
+async def wait_for_browser_state(pilot, ready):
+    async with asyncio.timeout(5):
+        while not ready():
+            await pilot.pause(0.1)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("size", [(60, 18), (80, 24), (120, 40)])
 async def test_browser_search_favorite_escape_and_small_screen(tmp_path, size):
@@ -221,16 +227,22 @@ async def test_browser_search_favorite_escape_and_small_screen(tmp_path, size):
         assert screen.query_one("#connection-results", OptionList).region.height >= 2
         search = screen.query_one("#connection-search", Input)
         search.value = "codex sdk"
-        await pilot.pause()
+        await wait_for_browser_state(
+            pilot, lambda: [p.id for p in screen.matching_profiles] == ["codex"]
+        )
         assert [p.id for p in screen.matching_profiles] == ["codex"]
         await pilot.press("ctrl+s")
+        await wait_for_browser_state(
+            pilot, lambda: get_connection_preferences(tmp_path)[0] == ["codex"]
+        )
         assert get_connection_preferences(tmp_path)[0] == ["codex"]
         search.value = "nothing matches"
-        await pilot.pause()
+        await wait_for_browser_state(pilot, lambda: not screen.matching_profiles)
         assert screen.query_one("#connection-select", Button).disabled
         await pilot.press("enter")
         assert app.chosen == []
         await pilot.press("escape")
+        await wait_for_browser_state(pilot, lambda: app.chosen == [None])
         assert app.chosen == [None]
         assert app.query_one("#draft", Input).value == "My unfinished prompt"
 
@@ -242,10 +254,14 @@ async def test_browser_keyboard_and_click_select_same_profile(tmp_path, mouse):
     async with app.run_test(size=(80, 30)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
+        await wait_for_browser_state(
+            pilot, lambda: [p.id for p in app.screen.matching_profiles] == ["codex"]
+        )
         if mouse:
             await pilot.click("#connection-select")
         else:
             await pilot.press("enter")
+        await wait_for_browser_state(pilot, lambda: app.chosen == ["codex"])
         assert app.chosen == ["codex"]
 
 
@@ -266,7 +282,9 @@ async def test_browser_typing_during_loading_is_not_lost(tmp_path):
         app.screen.query_one("#connection-search", Input).value = "local"
         finish.set()
         await app.workers.wait_for_complete()
-        await pilot.pause()
+        await wait_for_browser_state(
+            pilot, lambda: [p.id for p in app.screen.matching_profiles] == ["local"]
+        )
         assert [p.id for p in app.screen.matching_profiles] == ["local"]
 
 
