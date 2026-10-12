@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   task baselines, plus file search, go-to-line, section paging, copy and reload.
   Narrow terminals use a temporary full-width navigator. Vim motions scroll
   the visible reader when Vim mode is enabled.
+- Black sidebar surfaces in dark themes and bold language icons/badges in file,
+  search, context and change lists, without requiring a patched terminal font.
 
 ### Fixed
 

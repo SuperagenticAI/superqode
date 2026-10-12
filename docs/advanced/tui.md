@@ -1134,6 +1134,9 @@ and `Enter` to preview a file; mouse selection uses the same preview. Files open
 in a read-only viewer in the main workspace, leaving the tree available for
 the next selection. The sidebar's labeled section selector exposes Files,
 Git changes, Search contents, Context, Harness, Agent, History, and Task changes.
+Dark themes use a black navigator background; light themes keep a readable light
+background. File, search, context and change lists use colored language symbols
+and badges (such as Python, JS, TS, C++ and Rust) without requiring a Nerd Font.
 `Ctrl+F`
 searches filenames while focus is in the sidebar. Use `Up` / `Down` to choose a
 result, then `Enter`, or click the result. All returned filename matches are

@@ -1123,6 +1123,8 @@ def test_sidebar_text_and_file_icons_are_readable_in_every_palette(tmp_path):
                 color = style.color.get_truecolor()
                 foreground = f"#{color.red:02x}{color.green:02x}{color.blue:02x}"
                 backgrounds = [THEME["bg"], THEME["surface"]]
+                if theme.appearance == "dark":
+                    backgrounds.append("#000000")
                 if style.bgcolor:
                     bg = style.bgcolor.get_truecolor()
                     backgrounds = [f"#{bg.red:02x}{bg.green:02x}{bg.blue:02x}"]
@@ -1174,6 +1176,12 @@ async def test_open_sidebar_repaints_retained_content_without_resetting_navigati
             assert preview.current_file == path
             assert preview.query_one("#preview-syntax", Static).content.code == original_code
             assert prompt.value == "Keep this task draft"
+            expected_bg = "#000000" if ds.get_theme().appearance == "dark" else THEME["bg"]
+            assert sidebar.styles.background.hex.lower() == expected_bg
+            assert tree.styles.background.hex.lower() == expected_bg
+            assert (
+                sidebar.query_one("#sidebar-section").styles.background.hex.lower() == expected_bg
+            )
             assert sidebar.query_one(".sidebar-title", Static).content == sidebar._render_title()
             assert agent.query_one("#agent-status", Static).content == agent._render_status()
             assert harness.query_one("#panel-header", Static).content == harness._render_header()

@@ -301,7 +301,10 @@ def load_project_theme(path: Path) -> str:
 
 
 def css_variables() -> dict[str, str]:
-    return {"sq-" + key.replace("_", "-"): value for key, value in THEME.items()}
+    return {
+        **{"sq-" + key.replace("_", "-"): value for key, value in THEME.items()},
+        "sq-sidebar-bg": "#000000" if ds.get_theme().appearance == "dark" else THEME["bg"],
+    }
 
 
 def textual_theme():

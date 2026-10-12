@@ -106,6 +106,12 @@ CollapsibleSidebar SidebarTabs { height: 3; }
 CollapsibleSidebar SidebarTabs Select { width: 100%; height: 3; }
 CollapsibleSidebar SidebarTabs SelectCurrent { background: $sq-surface; color: $sq-text; }
 
+/* Keep the navigator black in dark palettes, including its section contents. */
+#sidebar, #sidebar Container, #sidebar Static, #sidebar DirectoryTree,
+#sidebar Select, #sidebar SelectCurrent, #sidebar SelectOverlay {
+    background: $sq-sidebar-bg;
+}
+
 CollapsibleSidebar #file-search.-hidden {
     display: none;
 }

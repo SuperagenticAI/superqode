@@ -489,9 +489,13 @@ class ContextPanel(ThemeAwarePanel):
             text.append("  Files are added automatically\n", style=SQ_COLORS.text_ghost)
             return text
 
+        from superqode.sidebar import get_file_icon
+
         text = Text()
         for f in self._files:
             text.append("  ↳ ", style=SQ_COLORS.info)
+            icon, color = get_file_icon(Path(f.path))
+            text.append(f"{icon} ", style=f"bold {color}")
 
             # File name
             name = f.name if len(f.name) <= 20 else f.name[:17] + "..."
@@ -843,6 +847,8 @@ class DiffPanel(ThemeAwarePanel):
             text.append("\n  No pending changes\n", style=SQ_COLORS.text_ghost)
             return text
 
+        from superqode.sidebar import get_file_icon
+
         text = Text()
         for i, f in enumerate(self._files):
             start = len(text)
@@ -865,6 +871,8 @@ class DiffPanel(ThemeAwarePanel):
                 text.append("  ", style="")
 
             text.append(f"{icon} ", style=f"bold {color}")
+            file_icon, file_color = get_file_icon(Path(f.path))
+            text.append(f"{file_icon} ", style=f"bold {file_color}")
             text.append(
                 f"{f.name}", style=SQ_COLORS.text_secondary if is_selected else SQ_COLORS.text_muted
             )

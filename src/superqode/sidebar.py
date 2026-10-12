@@ -62,7 +62,7 @@ def _brand_code_bg() -> str:
 
 
 # ============================================================================
-# FILE TYPE ICONS - Nerd Font style icons with colors
+# FILE TYPE ICONS - language symbols and badges requiring no patched font
 # ============================================================================
 
 FILE_ICONS = {
@@ -73,21 +73,23 @@ FILE_ICONS = {
     ".pyx": ("🐍", "#3776ab"),
     ".ipynb": ("📓", "#f37626"),
     # JavaScript/TypeScript
-    ".js": ("📜", "#f7df1e"),
-    ".jsx": ("⚛️", "#61dafb"),
-    ".ts": ("💠", "#3178c6"),
-    ".tsx": ("⚛️", "#61dafb"),
-    ".mjs": ("📜", "#f7df1e"),
-    ".cjs": ("📜", "#f7df1e"),
-    ".vue": ("💚", "#42b883"),
-    ".svelte": ("🔥", "#ff3e00"),
+    ".js": ("JS", "#f7df1e"),
+    ".jsx": ("JSX", "#61dafb"),
+    ".ts": ("TS", "#3178c6"),
+    ".tsx": ("TSX", "#61dafb"),
+    ".mjs": ("JS", "#f7df1e"),
+    ".cjs": ("JS", "#f7df1e"),
+    ".mts": ("TS", "#3178c6"),
+    ".cts": ("TS", "#3178c6"),
+    ".vue": ("Vue", "#42b883"),
+    ".svelte": ("Sv", "#ff3e00"),
     # Web
-    ".html": ("🌐", "#e34f26"),
-    ".htm": ("🌐", "#e34f26"),
-    ".css": ("🎨", "#1572b6"),
-    ".scss": ("🎨", "#cc6699"),
-    ".sass": ("🎨", "#cc6699"),
-    ".less": ("🎨", "#1d365d"),
+    ".html": ("</>", "#e34f26"),
+    ".htm": ("</>", "#e34f26"),
+    ".css": ("CSS", "#1572b6"),
+    ".scss": ("Scs", "#cc6699"),
+    ".sass": ("Sas", "#cc6699"),
+    ".less": ("Les", "#1d365d"),
     # Data formats
     ".json": ("📋", "#cbcb41"),
     ".yaml": ("⚙️", "#cb171e"),
@@ -96,43 +98,51 @@ FILE_ICONS = {
     ".xml": ("📰", "#e37933"),
     ".csv": ("📊", "#217346"),
     # Shell
-    ".sh": ("💻", "#4eaa25"),
-    ".bash": ("💻", "#4eaa25"),
-    ".zsh": ("💻", "#4eaa25"),
+    ".sh": ("$_", "#4eaa25"),
+    ".bash": ("$_", "#4eaa25"),
+    ".zsh": ("$_", "#4eaa25"),
     ".fish": ("🐟", "#4eaa25"),
-    ".ps1": ("💻", "#012456"),
-    ".bat": ("💻", "#c1f12e"),
-    ".cmd": ("💻", "#c1f12e"),
+    ".ps1": ("PS", "#012456"),
+    ".bat": (">_", "#c1f12e"),
+    ".cmd": (">_", "#c1f12e"),
     # Systems languages
-    ".c": ("🔷", "#555555"),
-    ".h": ("🔷", "#555555"),
-    ".cpp": ("🔷", "#f34b7d"),
-    ".hpp": ("🔷", "#f34b7d"),
-    ".cc": ("🔷", "#f34b7d"),
-    ".cxx": ("🔷", "#f34b7d"),
+    ".c": ("C", "#555555"),
+    ".h": ("C", "#555555"),
+    ".cpp": ("C++", "#f34b7d"),
+    ".hpp": ("C++", "#f34b7d"),
+    ".cc": ("C++", "#f34b7d"),
+    ".cxx": ("C++", "#f34b7d"),
+    ".hh": ("C++", "#f34b7d"),
+    ".hxx": ("C++", "#f34b7d"),
+    ".cs": ("C#", "#9b4f96"),
     ".rs": ("🦀", "#dea584"),
     ".go": ("🐹", "#00add8"),
     ".java": ("☕", "#b07219"),
-    ".kt": ("🟣", "#a97bff"),
-    ".kts": ("🟣", "#a97bff"),
-    ".scala": ("🔴", "#c22d40"),
-    ".swift": ("🍎", "#f05138"),
+    ".kt": ("Kt", "#a97bff"),
+    ".kts": ("Kt", "#a97bff"),
+    ".scala": ("Sc", "#c22d40"),
+    ".swift": ("Sw", "#f05138"),
+    ".dart": ("Dt", "#0175c2"),
+    ".zig": ("Zg", "#f7a41d"),
     # Other languages
     ".rb": ("💎", "#cc342d"),
     ".php": ("🐘", "#777bb4"),
     ".pl": ("🐪", "#0298c3"),
-    ".lua": ("🌙", "#000080"),
-    ".r": ("📊", "#198ce7"),
-    ".R": ("📊", "#198ce7"),
-    ".jl": ("🔮", "#9558b2"),
-    ".ex": ("💧", "#6e4a7e"),
-    ".exs": ("💧", "#6e4a7e"),
-    ".erl": ("📡", "#b83998"),
+    ".lua": ("Lua", "#000080"),
+    ".r": ("R", "#198ce7"),
+    ".jl": ("Jl", "#9558b2"),
+    ".ex": ("El", "#6e4a7e"),
+    ".exs": ("El", "#6e4a7e"),
+    ".erl": ("Er", "#b83998"),
     ".hs": ("λ", "#5e5086"),
-    ".ml": ("🐫", "#dc6b1f"),
-    ".fs": ("🔷", "#b845fc"),
-    ".clj": ("🟢", "#63b132"),
-    ".lisp": ("🟢", "#3fb68b"),
+    ".ml": ("OC", "#dc6b1f"),
+    ".mli": ("OC", "#dc6b1f"),
+    ".fs": ("F#", "#b845fc"),
+    ".fsx": ("F#", "#b845fc"),
+    ".clj": ("Clj", "#63b132"),
+    ".cljs": ("Clj", "#63b132"),
+    ".cljc": ("Clj", "#63b132"),
+    ".lisp": ("λ", "#3fb68b"),
     # Config files
     ".ini": ("⚙️", "#6d8086"),
     ".cfg": ("⚙️", "#6d8086"),
@@ -463,7 +473,7 @@ class ColorfulDirectoryTree(DirectoryTree):
         else:
             # File with icon
             icon, color = get_file_icon(path)
-            label.append(f"{icon} ", style=color)
+            label.append(f"{icon} ", style=f"bold {color}")
             label.append(path.name, style=THEME["text"])
             if self._session_change_count(path):
                 label.append("  ●", style=f"bold {THEME['pink']}")
@@ -1470,7 +1480,7 @@ class FileSearchResults(Container):
 
             # File icon
             icon, color = get_file_icon(path)
-            t.append(f"{icon} ", style=color)
+            t.append(f"{icon} ", style=f"bold {color}")
 
             # Path (relative, truncated)
             root = getattr(self.parent, "root_path", None)
@@ -2656,6 +2666,8 @@ class GitChangesPanel(Container):
 
         # File path - show full path (no truncation)
         path = change.path
+        icon, color = get_file_icon(Path(path))
+        t.append(f"{icon} ", style=f"bold {color}")
 
         if index == self.selected_index:
             t.append(path, style=f"bold {THEME['text']}")
