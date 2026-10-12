@@ -6,6 +6,7 @@ from time import monotonic
 from types import SimpleNamespace
 
 import pytest
+from textual import events
 from textual.widgets import Button
 
 from superqode.app_main import SuperQodeApp, SelectionAwareInput
@@ -84,6 +85,142 @@ async def back(app, pilot, method):
     else:
         await pilot.press(method)
     await pilot.pause()
+
+
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+@pytest.mark.parametrize("vim", [False, True])
+async def test_connect_agents_keyboard_selects_the_visible_agent(size, vim, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1" if vim else "0")
+    app = SuperQodeApp()
+    connected = []
+    monkeypatch.setattr(app, "_connect_agent", lambda agent: connected.append(agent))
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda agent: True)
+    async with app.run_test(size=size) as pilot:
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        await command(app, pilot, ":connect")
+        # XTermParser includes CR on a real Enter key; Pilot.press does not.
+        prompt.post_message(events.Key("enter", "\r"))
+        await until(pilot, lambda: app._connect_menu == "agents")
+        await pilot.press("down")
+        await pilot.pause()
+        assert app._byok_highlighted_connect_type_index == 1
+        await command(app, pilot, ":connect acp")
+        await until(
+            pilot, lambda: app._awaiting_acp_agent_selection and len(app._acp_agent_list) == 2
+        )
+        await pilot.press("down")
+        await until(pilot, lambda: app._acp_highlighted_agent_index == 1)
+        prompt.post_message(events.Key("enter", "\r"))
+        await pilot.pause()
+        assert connected == ["review-b"]
+
+
+async def test_vim_normal_picker_accepts_number_and_terminal_enter(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    app = SuperQodeApp()
+    connected = []
+    monkeypatch.setattr(app, "_connect_agent", lambda agent: connected.append(agent))
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda agent: True)
+    async with app.run_test() as pilot:
+        await command(app, pilot, ":connect acp")
+        await until(pilot, lambda: app._awaiting_acp_agent_selection)
+        assert app._vim_input_mode == "normal"
+        await pilot.press("j", "k", "2")
+        await pilot.pause()
+        app.query_one("#prompt-input").post_message(events.Key("enter", "\r"))
+        await until(pilot, lambda: connected == ["review-b"])
+
+
+@pytest.mark.parametrize("vim", [False, True])
+async def test_agent_number_ten_accepts_zero_in_the_numeric_buffer(vim, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1" if vim else "0")
+    app = SuperQodeApp()
+    agents = {
+        f"review-{i:02}": {"name": f"Agent {i:02}", "short_name": f"review-{i:02}"}
+        for i in range(1, 11)
+    }
+    connected = []
+
+    async def catalog(reuse_snapshot=False):
+        app._acp_picker_snapshot = agents, set(agents)
+        app._acp_picker_snapshot_at = monotonic()
+        return app._acp_picker_snapshot
+
+    monkeypatch.setattr(app, "_acp_picker_catalog", catalog)
+    monkeypatch.setattr(app, "_connect_agent", connected.append)
+    monkeypatch.setattr("superqode.commands.acp.check_agent_installed", lambda agent: True)
+    async with app.run_test() as pilot:
+        await command(app, pilot, ":connect acp all")
+        await until(pilot, lambda: len(app._acp_agent_list) == 10)
+        await pilot.press("1", "0")
+        app.query_one("#prompt-input").post_message(events.Key("enter", "\r"))
+        await until(pilot, lambda: connected == ["review-10"])
+
+
+@pytest.mark.parametrize("method", ["j-enter", "number"])
+async def test_vim_routes_registered_picker_keys_to_the_visible_prompt(method, monkeypatch):
+    from superqode.app.prompt_stack import PromptSpec
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    app = SuperQodeApp()
+    selected = []
+    async with app.run_test() as pilot:
+        app._prompts.push(
+            PromptSpec(
+                "test-picker", options=lambda: ["first", "second"], on_select=selected.append
+            )
+        )
+        app._set_vim_state("normal")
+        if method == "number":
+            await pilot.press("2")
+        else:
+            await pilot.press("j")
+            app.query_one("#prompt-input").post_message(events.Key("enter", "\r"))
+        await until(pilot, lambda: selected == ["second"])
+
+
+async def test_vim_setup_text_prompt_remains_editable(monkeypatch):
+    from superqode.app.prompt_stack import PromptSpec
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    app = SuperQodeApp()
+    answers = []
+    async with app.run_test() as pilot:
+        app._prompts.push(
+            PromptSpec(
+                "test-text", kind="text", on_text=lambda value: answers.append(value) or True
+            )
+        )
+        app._set_vim_state("normal")
+        await pilot.press("h", "i")
+        prompt = app.query_one("#prompt-input")
+        assert not prompt.read_only
+        assert prompt.value == "hi"
+        prompt.post_message(events.Key("enter", "\r"))
+        await until(pilot, lambda: answers == ["hi"])
+
+
+async def test_connection_status_keeps_the_sidebar_under_user_control():
+    from superqode.sidebar import CollapsibleSidebar
+
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        log = app.query_one("#log", ConversationLog)
+        sidebar = app.query_one("#sidebar", CollapsibleSidebar)
+        app.current_agent = "review-a"
+        app.current_mode = "agent"
+        app._refresh_harness_panel()
+        app._show_harness_status(log)
+        await pilot.pause()
+        assert not app.sidebar_visible
+        assert not sidebar.has_class("visible")
+        assert app.focused.id == "prompt-input"
+        app.action_sidebar_files()
+        await pilot.pause()
+        app._show_harness_status(log)
+        await pilot.pause()
+        assert app.sidebar_visible
+        assert sidebar.current_view == "files"
 
 
 @pytest.mark.parametrize("size", [(80, 24), (120, 40)])

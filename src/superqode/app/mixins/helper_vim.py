@@ -60,6 +60,7 @@ class HelperVimMixin:
             "action_navigate_harness_down",
         ),
         ("_awaiting_mode_selection", "action_navigate_mode_up", "action_navigate_mode_down"),
+        ("_awaiting_free_selection", "action_navigate_free_up", "action_navigate_free_down"),
         (
             "_awaiting_local_provider",
             "action_navigate_local_provider_up",
@@ -190,7 +191,7 @@ class HelperVimMixin:
 
         try:
             status = self.query_one("#status-bar")
-            status.vim_state = state if enabled else ""
+            status.vim_state = state if enabled else "off"
         except Exception:
             pass
 
@@ -214,10 +215,16 @@ class HelperVimMixin:
             pass
 
     def _vim_picker_active(self) -> bool:
+        active = getattr(getattr(self, "_prompts", None), "active", None)
+        if active is not None:
+            return active.kind == "picker"
         return any(bool(getattr(self, flag, False)) for flag, _, _ in self._VIM_PICKER_ACTIONS)
 
     def _vim_picker_move(self, direction: int) -> bool:
         """Move the active picker with Normal-mode j or k."""
+        prompts = getattr(self, "_prompts", None)
+        if prompts is not None and prompts.active is not None:
+            return prompts.navigate(direction)
         for flag, up_action, down_action in self._VIM_PICKER_ACTIONS:
             if not getattr(self, flag, False):
                 continue
@@ -236,6 +243,9 @@ class HelperVimMixin:
         return False
 
     def _vim_requires_text_entry(self) -> bool:
+        active = getattr(getattr(self, "_prompts", None), "active", None)
+        if active is not None:
+            return active.kind == "text"
         return any(bool(getattr(self, flag, False)) for flag in self._VIM_TEXT_ENTRY_FLAGS)
 
     @staticmethod
@@ -316,6 +326,11 @@ class HelperVimMixin:
             return False
 
         state = getattr(self, "_vim_input_mode", "normal")
+
+        # Picker numbers belong to selection, even in Normal mode. Enter and
+        # other terminal control keys must also reach their ordinary handlers.
+        if self._vim_picker_active() and len(key) == 1 and key in "0123456789":
+            return False
 
         if self._vim_picker_active() and state == "normal" and token in {"j", "k"}:
             if self._vim_picker_move(-1 if token == "k" else 1):
@@ -443,7 +458,7 @@ class HelperVimMixin:
             return True
 
         # Normal mode never inserts printable characters into the task prompt.
-        if len(token) == 1:
+        if len(token) == 1 and token.isprintable():
             self._consume_vim_event(event)
             return True
         return False

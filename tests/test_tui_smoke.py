@@ -1382,8 +1382,7 @@ def test_colorful_status_bar_shows_optional_vim_input_state():
     narrow = bar._render_for_width(58).plain
 
     assert "VIM NORMAL" in medium
-    assert "VIM" not in narrow
-    assert "N" in narrow
+    assert "VIM NORMAL" in narrow
 
 
 def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):

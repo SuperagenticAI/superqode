@@ -211,7 +211,7 @@ class ColorfulStatusBar(Static):
     interaction_mode: reactive[str] = reactive("build")
     approval_mode: reactive[str] = reactive("ask")
     plan_state: reactive[str] = reactive("")
-    vim_state: reactive[str] = reactive("")
+    vim_state: reactive[str] = reactive("off")
     #: Non-empty while a catalogue refresh is in flight, so the first
     #: seconds after launch read as work in progress rather than a stall.
     catalog_state: reactive[str] = reactive("")
@@ -250,6 +250,22 @@ class ColorfulStatusBar(Static):
         # terminal — the two clusters use the full width instead of hugging
         # the left edge.
         right = Text()
+
+        # Input mode changes what keys do. Keep the full, explicit label first
+        # in the state cluster, including when Vim is disabled or a harness
+        # hides the ordinary task-mode controls.
+        vim_state = (self.vim_state or "off").strip().lower()
+        vim_color = {
+            "off": THEME["muted"],
+            "normal": THEME["purple"],
+            "insert": THEME["cyan"],
+            "command": THEME["gold"],
+            "search": THEME["pink"],
+        }.get(vim_state, THEME["purple"])
+        right.append("VIM ", style=THEME["muted"])
+        right.append(vim_state.upper(), style=f"bold {vim_color}")
+        vim_width = cell_len(right.plain)
+        priority_width = vim_width
 
         def separator() -> None:
             # The state cluster no longer opens the row, so it only needs a
@@ -391,6 +407,8 @@ class ColorfulStatusBar(Static):
                     "plan": THEME["gold"],
                     "build": THEME["success"],
                 }.get(mode, THEME["purple"])
+                if right.plain:
+                    right_separator()
                 right.append(mode_label, style=f"bold {mode_color}")
 
             approval = (self.approval_mode or "ask").strip().lower()
@@ -404,29 +422,7 @@ class ColorfulStatusBar(Static):
             if wide:
                 right.append("approval ", style=THEME["muted"])
             right.append(approval.upper(), style=f"bold {approval_color}")
-
-            # Keep the interaction mode and the optional input mode distinct.
-            vim_state = (self.vim_state or "").strip().lower()
-            if vim_state:
-                vim_label = {
-                    "normal": "NORMAL",
-                    "insert": "INSERT",
-                    "command": "COMMAND",
-                    "search": "SEARCH",
-                }.get(vim_state, vim_state.upper())
-                vim_color = {
-                    "normal": THEME["purple"],
-                    "insert": THEME["cyan"],
-                    "command": THEME["gold"],
-                    "search": THEME["pink"],
-                }.get(vim_state, THEME["purple"])
-                if right.plain:
-                    right_separator()
-                if medium:
-                    right.append("VIM ", style=THEME["muted"])
-                    right.append(vim_label, style=f"bold {vim_color}")
-                else:
-                    right.append(vim_label[:1], style=f"bold {vim_color}")
+            priority_width = cell_len(right.plain)
 
             # Usage remains visible whenever known. Figures compact on narrower
             # terminals, while connection/runtime/mode retain priority.
@@ -610,6 +606,7 @@ class ColorfulStatusBar(Static):
         def second_row(line: Text) -> Text:
             line.truncate(width, overflow="ellipsis")
             line.append("\n")
+            theme.truncate(max(0, width - priority_width - 2), overflow="ellipsis")
             self._append_theme_indicator(line, theme, row=1)
             state_width = max(0, width - cell_len(theme.plain) - 2)
             if state_width:
@@ -618,11 +615,15 @@ class ColorfulStatusBar(Static):
                 state = result.copy()
                 # Preserve mode/usage at the right edge while long connection
                 # names compact. Both clusters fit without an implicit wrap.
-                right_width = min(cell_len(right.plain), max(0, state_width // 2))
-                right.truncate(right_width, overflow="ellipsis")
+                right_width = min(
+                    cell_len(right.plain), state_width, max(priority_width, state_width // 2)
+                )
+                right.truncate(
+                    right_width, overflow="crop" if right_width <= priority_width else "ellipsis"
+                )
+                connection_width = max(0, state_width - right_width - (2 if right_width else 0))
                 state.truncate(
-                    max(0, state_width - right_width - (2 if right_width else 0)),
-                    overflow="ellipsis",
+                    connection_width, overflow="ellipsis" if connection_width else "crop"
                 )
                 line.append(state)
                 visible_connection_end = min(conn_end, cell_len(state.plain))
@@ -635,7 +636,7 @@ class ColorfulStatusBar(Static):
                     )
                 if right_width:
                     gap = width - cell_len(line.plain.rsplit("\n", 1)[-1]) - right_width
-                    line.append(" " * max(2, gap))
+                    line.append(" " * max(0, gap))
                     line.append(right)
             return line
 

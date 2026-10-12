@@ -1,5 +1,6 @@
 """Theme changes are cosmetic: preserve tasks while repainting every surface."""
 
+import asyncio
 import json
 import os
 import re
@@ -1076,6 +1077,105 @@ def test_welcome_and_navigation_text_are_readable_in_every_palette():
                         foreground,
                         background,
                     )
+
+
+def test_sidebar_text_and_file_icons_are_readable_in_every_palette(tmp_path):
+    from superqode.sidebar import (
+        CollapsibleSidebar,
+        FilePreview,
+        GitChangesPanel,
+        CodeSearchResults,
+        get_file_icon,
+    )
+    from superqode.widgets.sidebar_panels import AgentPanel, HarnessPanel, HistoryPanel
+    from superqode.theming.library import catalog, library_theme
+
+    themes = [*ds.THEMES.values(), *(library_theme(name) for name in catalog()["themes"])]
+    sidebar = CollapsibleSidebar(tmp_path)
+    preview = FilePreview()
+    changes = GitChangesPanel(tmp_path)
+    search = CodeSearchResults()
+    agent = AgentPanel()
+    history = HistoryPanel()
+    harness = HarnessPanel()
+    console = Console(width=100, color_system="truecolor")
+    for theme in themes:
+        ds.THEMES[theme.name] = theme
+        assert bridge.apply_theme(theme.name)
+        surfaces = (
+            sidebar._render_title(),
+            preview._render_header(),
+            preview._render_hints(),
+            preview._render_empty(),
+            changes._render_header(),
+            changes._render_diff("@@ -1 +1 @@\n-old\n+new\n unchanged"),
+            search._render_results(),
+            agent._render_header(),
+            agent._render_status(),
+            history._render_messages(),
+            harness._render_header(),
+        )
+        for rendered in surfaces:
+            for segment in console.render(rendered):
+                style = segment.style
+                if not segment.text.strip() or not style or not style.color:
+                    continue
+                color = style.color.get_truecolor()
+                foreground = f"#{color.red:02x}{color.green:02x}{color.blue:02x}"
+                backgrounds = [THEME["bg"], THEME["surface"]]
+                if style.bgcolor:
+                    bg = style.bgcolor.get_truecolor()
+                    backgrounds = [f"#{bg.red:02x}{bg.green:02x}{bg.blue:02x}"]
+                assert all(contrast(foreground, bg) >= 4.5 for bg in backgrounds), (
+                    theme.name,
+                    segment.text,
+                    foreground,
+                    backgrounds,
+                )
+        for filename in ("pyproject.toml", "README.md", "index.ts", "unknown.xyz"):
+            _, color = get_file_icon(tmp_path / filename)
+            assert contrast(color, THEME["bg"]) >= 4.5
+
+
+async def test_open_sidebar_repaints_retained_content_without_resetting_navigation(tmp_path):
+    from rich.syntax import Syntax
+    from textual.widgets import Static
+    from superqode.sidebar import CollapsibleSidebar, FilePreview, ColorfulDirectoryTree
+    from superqode.widgets.sidebar_panels import AgentPanel, HarnessPanel
+
+    path = tmp_path / "example.py"
+    path.write_text("print('example')\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        sidebar = app.query_one("#sidebar", CollapsibleSidebar)
+        preview = sidebar.query_one(FilePreview)
+        agent = sidebar.query_one(AgentPanel)
+        harness = sidebar.query_one(HarnessPanel)
+        agent.update_agent(name="Example Agent", model="example", connected=True)
+        preview.set_file(path)
+        async with asyncio.timeout(5):
+            while not isinstance(preview.query_one("#preview-syntax", Static).content, Syntax):
+                await pilot.pause(0.05)
+        app.action_sidebar_files()
+        await pilot.pause()
+        tree = sidebar.query_one(ColorfulDirectoryTree)
+        node = tree.cursor_node
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        prompt.value = "Keep this task draft"
+        for name in ("light", "dracula", "superqode"):
+            assert bridge.apply_theme(name)
+            app._refresh_theme_view()
+            await pilot.pause()
+            assert app.sidebar_visible
+            assert sidebar.current_view == "files"
+            assert app.focused is tree
+            assert tree.cursor_node is node
+            assert preview.current_file == path
+            assert preview.query_one("#preview-syntax", Static).content.code == path.read_text()
+            assert prompt.value == "Keep this task draft"
+            assert sidebar.query_one(".sidebar-title", Static).content == sidebar._render_title()
+            assert agent.query_one("#agent-status", Static).content == agent._render_status()
+            assert harness.query_one("#panel-header", Static).content == harness._render_header()
 
 
 def test_retained_welcome_repaints_headline_repository_and_logo():

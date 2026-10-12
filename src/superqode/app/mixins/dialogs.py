@@ -3025,14 +3025,6 @@ class DialogsMixin:
         t.append("  ", style=THEME["muted"])
         t.append(":copy error\n", style=THEME["cyan"])
 
-        try:
-            sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-            sidebar.current_view = "harness"
-            if not self.sidebar_visible:
-                self.action_toggle_sidebar()
-        except Exception:
-            pass
-
         self._show_command_output(log, t)
 
     def _show_help(self, log: ConversationLog, query: str = ""):

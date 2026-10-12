@@ -148,7 +148,15 @@ class AgentInfo:
         return f"{mins}m {secs}s"
 
 
-class AgentPanel(Container):
+class ThemeAwarePanel(Container):
+    """Rebuild retained Rich content when the workspace palette changes."""
+
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#panel-header", Static).update(self._render_header())
+        self._refresh()
+
+
+class AgentPanel(ThemeAwarePanel):
     """
     Panel showing connected agent information.
 
@@ -357,7 +365,7 @@ class ContextFile:
     added_at: Optional[datetime] = None
 
 
-class ContextPanel(Container):
+class ContextPanel(ThemeAwarePanel):
     """
     Panel showing files in agent context.
 
@@ -543,7 +551,7 @@ class ContextPanel(Container):
 # ============================================================================
 
 
-class TerminalPanel(Container):
+class TerminalPanel(ThemeAwarePanel):
     """
     Panel with embedded terminal.
 
@@ -699,7 +707,7 @@ class FileDiff:
     diff_text: str = ""
 
 
-class DiffPanel(Container):
+class DiffPanel(ThemeAwarePanel):
     """
     Panel showing pending file changes.
 
@@ -959,7 +967,7 @@ class HistoryMessage:
     token_count: int = 0
 
 
-class HistoryPanel(Container):
+class HistoryPanel(ThemeAwarePanel):
     """
     Panel showing conversation history.
 
@@ -1650,6 +1658,10 @@ class HarnessPanel(Container):
             self.query_one("#harness-content", Static).update(self._render_summary())
         except Exception:
             pass
+
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#panel-header", Static).update(self._render_header())
+        self.refresh_summary()
 
 
 # ============================================================================

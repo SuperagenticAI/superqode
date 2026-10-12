@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 from typing import Optional, Callable, List
 from dataclasses import dataclass
+from functools import lru_cache
 
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
@@ -37,6 +38,9 @@ from rich.cells import cell_len
 from rich.syntax import Syntax
 from rich.panel import Panel
 from rich.box import ROUNDED
+
+from superqode.app.constants import THEME
+from superqode.theming import readable
 
 
 def _brand_code_theme() -> str:
@@ -282,15 +286,19 @@ def get_file_icon(path: Path) -> tuple[str, str]:
     name = path.name
     ext = path.suffix.lower()
 
-    # Check special filenames first
-    if name in SPECIAL_FILES:
-        return SPECIAL_FILES[name]
+    icon, color = SPECIAL_FILES.get(name, FILE_ICONS.get(ext, DEFAULT_FILE_ICON))
+    return icon, _readable_icon_color(color)
 
-    # Check extension
-    if ext in FILE_ICONS:
-        return FILE_ICONS[ext]
 
-    return DEFAULT_FILE_ICON
+def _readable_icon_color(color: str) -> str:
+    return _icon_color_for_surfaces(
+        color, tuple(THEME[key] for key in ("bg", "surface", "surface2", "active"))
+    )
+
+
+@lru_cache(maxsize=1024)
+def _icon_color_for_surfaces(color: str, backgrounds: tuple[str, ...]) -> str:
+    return readable(color, list(backgrounds))
 
 
 def get_folder_icon(name: str, is_open: bool = False) -> tuple[str, str]:
@@ -302,9 +310,10 @@ def get_folder_icon(name: str, is_open: bool = False) -> tuple[str, str]:
         # Use open folder variant if expanded
         if is_open and icon == "📁":
             icon = "📂"
-        return icon, color
+        return icon, _readable_icon_color(color)
 
-    return DEFAULT_FOLDER_OPEN_ICON if is_open else DEFAULT_FOLDER_ICON
+    icon, color = DEFAULT_FOLDER_OPEN_ICON if is_open else DEFAULT_FOLDER_ICON
+    return icon, _readable_icon_color(color)
 
 
 # ============================================================================
@@ -450,16 +459,20 @@ class ColorfulDirectoryTree(DirectoryTree):
             label.append(path.name, style=f"{color}")
             changed_count = self._session_change_count(path)
             if changed_count:
-                label.append(f"  ●{changed_count}", style="bold #ec4899")
+                label.append(f"  ●{changed_count}", style=f"bold {THEME['pink']}")
         else:
             # File with icon
             icon, color = get_file_icon(path)
             label.append(f"{icon} ", style=color)
-            label.append(path.name, style="white")
+            label.append(path.name, style=THEME["text"])
             if self._session_change_count(path):
-                label.append("  ●", style="bold #ec4899")
+                label.append("  ●", style=f"bold {THEME['pink']}")
 
         return label
+
+    def refresh_theme_colors(self) -> None:
+        self._clear_line_cache()
+        self.refresh()
 
     def filter_paths(self, paths):
         """Filter out hidden and ignored paths."""
@@ -627,9 +640,33 @@ class FilePreview(Container):
 
     def _show_preview(self, generation: int, content: Text | Syntax) -> None:
         if self.is_mounted and generation == self._preview_generation:
+            if isinstance(content, Syntax):
+                content = self._themed_syntax(content)
             self.query_one("#preview-syntax", Static).update(content)
             if isinstance(content, Syntax) and self._preview_line > 1:
                 self.call_after_refresh(self._reveal_preview_line, generation, content)
+
+    @staticmethod
+    def _themed_syntax(content: Syntax) -> Syntax:
+        return Syntax(
+            content.code,
+            content.lexer,
+            theme=_brand_code_theme(),
+            line_numbers=content.line_numbers,
+            word_wrap=content.word_wrap,
+            start_line=content.start_line,
+            background_color=_brand_code_bg(),
+            highlight_lines=content.highlight_lines,
+        )
+
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#preview-header", Static).update(self._render_header())
+        self.query_one("#preview-hints", Static).update(self._render_hints())
+        widget = self.query_one("#preview-syntax", Static)
+        if isinstance(widget.content, Syntax):
+            widget.update(self._themed_syntax(widget.content))
+        elif self.current_file is None:
+            widget.update(self._render_empty())
 
     def _reveal_preview_line(self, generation: int, content: Syntax) -> None:
         if generation != self._preview_generation or not self.is_mounted:
@@ -652,21 +689,21 @@ class FilePreview(Container):
         t = Text()
 
         if self.current_file is None:
-            t.append("\n  📄 ", style="bold #a855f7")
-            t.append("No file selected", style="#a1a1aa")
+            t.append("\n  📄 ", style=f"bold {THEME['purple']}")
+            t.append("No file selected", style=THEME["muted"])
             return t
 
         path = self.current_file
         icon, color = get_file_icon(path)
 
         t.append(f"\n  {icon} ", style=f"bold {color}")
-        t.append(path.name, style=f"bold white")
+        t.append(path.name, style=f"bold {THEME['text']}")
 
         # File info
         try:
             size = path.stat().st_size
             size_str = self._format_size(size)
-            t.append(f"  [{size_str}]", style="#a1a1aa")
+            t.append(f"  [{size_str}]", style=THEME["muted"])
         except Exception:
             pass
 
@@ -679,24 +716,24 @@ class FilePreview(Container):
 
         if self.current_file is not None:
             # File is open - show file-specific hints
-            t.append("↑↓", style="bold #ec4899")
-            t.append(" scroll  ", style="#a1a1aa")
-            t.append("e", style="bold #22c55e")
-            t.append(" edit  ", style="#a1a1aa")
-            t.append("o", style="bold #06b6d4")
-            t.append(" open in chat  ", style="#a1a1aa")
-            t.append("r", style="bold #06b6d4")
-            t.append(" reload  ", style="#a1a1aa")
-            t.append("q", style="bold #f59e0b")
-            t.append(" close", style="#a1a1aa")
+            t.append("↑↓", style=f"bold {THEME['pink']}")
+            t.append(" scroll  ", style=THEME["muted"])
+            t.append("e", style=f"bold {THEME['success']}")
+            t.append(" edit  ", style=THEME["muted"])
+            t.append("o", style=f"bold {THEME['cyan']}")
+            t.append(" open in chat  ", style=THEME["muted"])
+            t.append("r", style=f"bold {THEME['cyan']}")
+            t.append(" reload  ", style=THEME["muted"])
+            t.append("q", style=f"bold {THEME['warning']}")
+            t.append(" close", style=THEME["muted"])
         else:
             # No file - show navigation hints
-            t.append("↑↓", style="bold #ec4899")
-            t.append(" navigate  ", style="#a1a1aa")
-            t.append("Enter", style="bold #ec4899")
-            t.append(" select  ", style="#a1a1aa")
-            t.append("Ctrl+B", style="bold #f59e0b")
-            t.append(" close sidebar", style="#a1a1aa")
+            t.append("↑↓", style=f"bold {THEME['pink']}")
+            t.append(" navigate  ", style=THEME["muted"])
+            t.append("Enter", style=f"bold {THEME['pink']}")
+            t.append(" select  ", style=THEME["muted"])
+            t.append("Ctrl+B", style=f"bold {THEME['warning']}")
+            t.append(" close sidebar", style=THEME["muted"])
 
         return t
 
@@ -711,21 +748,21 @@ class FilePreview(Container):
         """Render empty state."""
         t = Text()
         t.append("\n\n", style="")
-        t.append("  👆 ", style="bold #a855f7")
-        t.append("Select a file from the tree\n\n", style="#a1a1aa")
-        t.append("  📁 ", style="#ec4899")
-        t.append("Click folders to expand\n", style="#71717a")
-        t.append("  📄 ", style="#ec4899")
-        t.append("Click files to preview\n", style="#71717a")
+        t.append("  👆 ", style=f"bold {THEME['purple']}")
+        t.append("Select a file from the tree\n\n", style=THEME["muted"])
+        t.append("  📁 ", style=THEME["pink"])
+        t.append("Click folders to expand\n", style=THEME["dim"])
+        t.append("  📄 ", style=THEME["pink"])
+        t.append("Click files to preview\n", style=THEME["dim"])
         return t
 
     def _render_file_content(self, path: Path, line_no: int = 1) -> Text | Syntax:
         """Render file content with syntax highlighting."""
         try:
             if not path.is_file():
-                return Text("File is no longer available", style="#f59e0b")
+                return Text("File is no longer available", style=THEME["warning"])
             if self._is_binary(path):
-                return Text("Binary file — cannot display content", style="#f59e0b")
+                return Text("Binary file — cannot display content", style=THEME["warning"])
             # Bound both I/O and Rich layout work, including single-line minified files.
             with path.open("rb") as stream:
                 data = stream.read(65537)
@@ -751,9 +788,9 @@ class FilePreview(Container):
 
         except Exception as e:
             t = Text()
-            t.append(f"\n  ❌ ", style="bold #ef4444")
-            t.append("Error reading file\n\n", style="#ef4444")
-            t.append(f"  {str(e)}\n", style="#a1a1aa")
+            t.append(f"\n  ❌ ", style=f"bold {THEME['error']}")
+            t.append("Error reading file\n\n", style=THEME["error"])
+            t.append(f"  {str(e)}\n", style=THEME["muted"])
             return t
 
     def _is_binary(self, path: Path) -> bool:
@@ -931,11 +968,11 @@ class EnhancedSidebar(Container):
     def _render_header(self) -> Text:
         """Render the sidebar header with hints."""
         t = Text()
-        t.append("📁 ", style="bold #ec4899")
-        t.append(self.root_path.name or "Files", style="bold #a855f7")
+        t.append("📁 ", style=f"bold {THEME['pink']}")
+        t.append(self.root_path.name or "Files", style=f"bold {THEME['purple']}")
         t.append("  ", style="")
-        t.append("Ctrl+B", style="bold #a1a1aa")
-        t.append(" close", style="#71717a")
+        t.append("Ctrl+B", style=f"bold {THEME['muted']}")
+        t.append(" close", style=THEME["dim"])
         return t
 
     @on(DirectoryTree.FileSelected)
@@ -1041,8 +1078,8 @@ class CompactSidebar(Container):
     def compose(self) -> ComposeResult:
         """Compose the compact sidebar."""
         header = Text()
-        header.append("📁 ", style="bold #ec4899")
-        header.append("Files", style="bold #a855f7")
+        header.append("📁 ", style=f"bold {THEME['pink']}")
+        header.append("Files", style=f"bold {THEME['purple']}")
         yield Static(header, id="compact-header")
         yield ColorfulDirectoryTree(self.root_path, id="compact-tree")
 
@@ -1184,8 +1221,8 @@ class GitStatusWidget(Static):
         # Loading state
         if self._loading:
             t.append("\n", style="")
-            t.append("  ⎇ ", style="bold #a855f7")
-            t.append("Loading git status...", style="#71717a italic")
+            t.append("  ⎇ ", style=f"bold {THEME['purple']}")
+            t.append("Loading git status...", style=f"{THEME['dim']} italic")
             return t
 
         status = self.status
@@ -1193,31 +1230,31 @@ class GitStatusWidget(Static):
         t.append("\n", style="")
 
         if not status.is_repo:
-            t.append("  📁 ", style="#a1a1aa")
-            t.append("Not a git repository", style="#71717a")
+            t.append("  📁 ", style=THEME["muted"])
+            t.append("Not a git repository", style=THEME["dim"])
             return t
 
         # Branch icon and name
-        t.append("  ⎇ ", style="bold #a855f7")
-        t.append(status.branch[:20], style="bold #a855f7")
+        t.append("  ⎇ ", style=f"bold {THEME['purple']}")
+        t.append(status.branch[:20], style=f"bold {THEME['purple']}")
 
         # Status counts with icons
         if status.staged > 0:
-            t.append(f"  ✓{status.staged}", style="bold #22c55e")
+            t.append(f"  ✓{status.staged}", style=f"bold {THEME['success']}")
         if status.modified > 0:
-            t.append(f"  ●{status.modified}", style="bold #f97316")
+            t.append(f"  ●{status.modified}", style=f"bold {THEME['warning']}")
         if status.untracked > 0:
-            t.append(f"  +{status.untracked}", style="#a1a1aa")
+            t.append(f"  +{status.untracked}", style=THEME["muted"])
 
         # Ahead/behind with arrows
         if status.ahead > 0:
-            t.append(f"  ↑{status.ahead}", style="bold #06b6d4")
+            t.append(f"  ↑{status.ahead}", style=f"bold {THEME['cyan']}")
         if status.behind > 0:
-            t.append(f"  ↓{status.behind}", style="bold #ec4899")
+            t.append(f"  ↓{status.behind}", style=f"bold {THEME['pink']}")
 
         # Show clean state if nothing to commit
         if status.staged == 0 and status.modified == 0 and status.untracked == 0:
-            t.append("  ✓ clean", style="#22c55e")
+            t.append("  ✓ clean", style=THEME["success"])
 
         return t
 
@@ -1284,38 +1321,41 @@ class PlanPanel(Container):
         except Exception:
             pass
 
+    def refresh_theme_colors(self) -> None:
+        self.watch_tasks(self.tasks)
+
     def _render_tasks(self) -> Text:
         """Render task list."""
         t = Text()
 
         if not self.tasks:
-            t.append("  No active tasks\n", style="italic #71717a")
-            t.append("  Start a conversation to see plan", style="#3f3f46")
+            t.append("  No active tasks\n", style=f"italic {THEME['dim']}")
+            t.append("  Start a conversation to see plan", style=THEME["dim"])
             return t
 
         for task in self.tasks[:8]:  # Show max 8 tasks
             # Status icon
             if task.status == "completed":
-                t.append(" ✓ ", style="bold #22c55e")
+                t.append(" ✓ ", style=f"bold {THEME['success']}")
             elif task.status == "in_progress":
-                t.append(" ● ", style="bold #f97316")
+                t.append(" ● ", style=f"bold {THEME['warning']}")
             else:
-                t.append(" ○ ", style="#a1a1aa")
+                t.append(" ○ ", style=THEME["muted"])
 
             # Task content (truncated)
             content = task.content[:40] + "..." if len(task.content) > 40 else task.content
 
             if task.status == "completed":
-                t.append(content, style="#71717a")
+                t.append(content, style=THEME["dim"])
             elif task.status == "in_progress":
-                t.append(content, style="#f97316")
+                t.append(content, style=THEME["warning"])
             else:
-                t.append(content, style="#a1a1aa")
+                t.append(content, style=THEME["muted"])
 
             t.append("\n")
 
         if len(self.tasks) > 8:
-            t.append(f"  +{len(self.tasks) - 8} more tasks...", style="#71717a")
+            t.append(f"  +{len(self.tasks) - 8} more tasks...", style=THEME["dim"])
 
         return t
 
@@ -1386,6 +1426,9 @@ class FileSearchResults(Container):
         """Compose search results."""
         yield Static(self._render_results(), id="search-results-content")
 
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#search-results-content", Static).update(self._render_results())
+
     def watch_results(self, results: List[Path]) -> None:
         """Update when results change."""
         self.selected_index = 0
@@ -1409,7 +1452,7 @@ class FileSearchResults(Container):
         t = Text()
 
         if not self.results:
-            t.append("  No matches found", style="italic #71717a")
+            t.append("  No matches found", style=f"italic {THEME['dim']}")
             return t
 
         start = max(0, self.selected_index - 9)
@@ -1418,7 +1461,7 @@ class FileSearchResults(Container):
             row_start = len(t)
             # Selection indicator
             if i == self.selected_index:
-                t.append("▸ ", style="bold #a855f7")
+                t.append("▸ ", style=f"bold {THEME['purple']}")
             else:
                 t.append("  ", style="")
 
@@ -1439,9 +1482,9 @@ class FileSearchResults(Container):
             rel_path = label.plain
 
             if i == self.selected_index:
-                t.append(rel_path, style="bold white")
+                t.append(rel_path, style=f"bold {THEME['text']}")
             else:
-                t.append(rel_path, style="#a1a1aa")
+                t.append(rel_path, style=THEME["muted"])
 
             t.stylize(Style(meta={"file_index": i}), row_start, len(t))
             t.append("\n")
@@ -1449,7 +1492,7 @@ class FileSearchResults(Container):
         if len(self.results) > 10:
             t.append(
                 f"  {start + 1}–{min(start + 10, len(self.results))} of {len(self.results)} matches",
-                style="#71717a",
+                style=THEME["dim"],
             )
 
         return t
@@ -1827,6 +1870,9 @@ class CodeSearchResults(Container):
         except Exception:
             pass
 
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#code-results-content", Static).update(self._render_results())
+
     def on_resize(self, event: events.Resize) -> None:
         self.watch_selected_index(self.selected_index)
 
@@ -1835,7 +1881,7 @@ class CodeSearchResults(Container):
         t = Text()
 
         if not self.results:
-            t.append("  No matches found", style="italic #71717a")
+            t.append("  No matches found", style=f"italic {THEME['dim']}")
             return t
 
         # Group by file
@@ -1865,30 +1911,33 @@ class CodeSearchResults(Container):
                 label = Text(rel_path)
                 label.truncate(available, overflow="ellipsis")
                 t.append(f"  {icon} ", style=color)
-                t.append(label.plain + "\n", style="bold #a1a1aa")
+                t.append(label.plain + "\n", style=f"bold {THEME['muted']}")
 
             row_start = len(t)
             # Result line
             if i == self.selected_index:
-                t.append("  ▸ ", style="bold #a855f7")
+                t.append("  ▸ ", style=f"bold {THEME['purple']}")
             else:
                 t.append("    ", style="")
 
             # Line number
-            t.append(f"{result.line_no:>4}:", style="#71717a")
+            t.append(f"{result.line_no:>4}:", style=THEME["dim"])
 
             # Line content with highlight
             line = result.line_content[:80]
             if result.match_start < len(line):
                 # Before match
-                t.append(line[: result.match_start], style="#a1a1aa")
+                t.append(line[: result.match_start], style=THEME["muted"])
                 # Match (highlighted)
                 match_end = min(result.match_end, len(line))
-                t.append(line[result.match_start : match_end], style="bold #fbbf24 on #1a1a1a")
+                t.append(
+                    line[result.match_start : match_end],
+                    style=f"bold {THEME['search_text']} on {THEME['search_bg']}",
+                )
                 # After match
-                t.append(line[match_end:], style="#a1a1aa")
+                t.append(line[match_end:], style=THEME["muted"])
             else:
-                t.append(line, style="#a1a1aa")
+                t.append(line, style=THEME["muted"])
 
             row = t[row_start:]
             row.truncate(max(8, self.size.width), overflow="ellipsis")
@@ -1900,7 +1949,7 @@ class CodeSearchResults(Container):
         if len(self.results) > 6:
             t.append(
                 f"\n  {start + 1}–{min(start + 6, len(self.results))} of {len(self.results)} matches",
-                style="#71717a",
+                style=THEME["dim"],
             )
 
         return t
@@ -2449,10 +2498,10 @@ class GitChangesPanel(Container):
         """Render the header."""
         t = Text()
         t.append("\n", style="")
-        t.append("📊 Git Changes", style="bold #a855f7")
+        t.append("📊 Git Changes", style=f"bold {THEME['purple']}")
         t.append("  ", style="")
-        t.append("r", style="bold #71717a")
-        t.append(" refresh", style="#3f3f46")
+        t.append("r", style=f"bold {THEME['dim']}")
+        t.append(" refresh", style=THEME["dim"])
         return t
 
     def _render_changes(self) -> Text:
@@ -2464,14 +2513,14 @@ class GitChangesPanel(Container):
         unstaged = [c for c in self.changes if not c.staged]
 
         if staged:
-            t.append("  Staged Changes\n", style="bold #22c55e")
+            t.append("  Staged Changes\n", style=f"bold {THEME['success']}")
             for i, change in enumerate(staged):
                 self._render_change_item(t, change, i)
 
         if unstaged:
             if staged:
                 t.append("\n", style="")
-            t.append("  Unstaged Changes\n", style="bold #f97316")
+            t.append("  Unstaged Changes\n", style=f"bold {THEME['warning']}")
             for i, change in enumerate(unstaged, len(staged)):
                 self._render_change_item(t, change, i)
 
@@ -2481,21 +2530,21 @@ class GitChangesPanel(Container):
         """Render a single change item."""
         # Selection indicator
         if index == self.selected_index:
-            t.append("  ▸ ", style="bold #a855f7")
+            t.append("  ▸ ", style=f"bold {THEME['purple']}")
         else:
             t.append("    ", style="")
 
         # Status icon
         if change.status == "M":
-            t.append("● ", style="bold #f97316")
+            t.append("● ", style=f"bold {THEME['warning']}")
         elif change.status == "A":
-            t.append("+ ", style="bold #22c55e")
+            t.append("+ ", style=f"bold {THEME['success']}")
         elif change.status == "D":
-            t.append("- ", style="bold #ef4444")
+            t.append("- ", style=f"bold {THEME['error']}")
         elif change.status == "?":
-            t.append("? ", style="#a1a1aa")
+            t.append("? ", style=THEME["muted"])
         elif change.status == "R":
-            t.append("→ ", style="bold #06b6d4")
+            t.append("→ ", style=f"bold {THEME['cyan']}")
         else:
             t.append("  ", style="")
 
@@ -2503,9 +2552,9 @@ class GitChangesPanel(Container):
         path = change.path
 
         if index == self.selected_index:
-            t.append(path, style="bold white")
+            t.append(path, style=f"bold {THEME['text']}")
         else:
-            t.append(path, style="#a1a1aa")
+            t.append(path, style=THEME["muted"])
 
         t.append("\n", style="")
 
@@ -2533,6 +2582,7 @@ class GitChangesPanel(Container):
 
     def _show_diff(self, diff: str) -> None:
         """Show diff content."""
+        self._current_diff = diff
         try:
             diff_view = self.query_one("#diff-view", ScrollableContainer)
             diff_content = self.query_one("#diff-content", Static)
@@ -2545,21 +2595,26 @@ class GitChangesPanel(Container):
         except Exception:
             pass
 
+    def refresh_theme_colors(self) -> None:
+        self.query_one("#changes-header", Static).update(self._render_header())
+        self.query_one("#changes-content", Static).update(self._render_changes())
+        self.query_one("#diff-content", Static).update(self._render_diff(self._current_diff))
+
     def _render_diff(self, diff: str) -> Text:
         """Render diff content with colors."""
         t = Text()
 
         for line in diff.split("\n"):
             if line.startswith("+++") or line.startswith("---"):
-                t.append(line + "\n", style="bold #a1a1aa")
+                t.append(line + "\n", style=f"bold {THEME['muted']}")
             elif line.startswith("@@"):
-                t.append(line + "\n", style="bold #06b6d4")
+                t.append(line + "\n", style=f"bold {THEME['cyan']}")
             elif line.startswith("+"):
-                t.append(line + "\n", style="#22c55e on #22c55e15")
+                t.append(line + "\n", style=f"{THEME['diff_add']} on {THEME['surface']}")
             elif line.startswith("-"):
-                t.append(line + "\n", style="#ef4444 on #ef444415")
+                t.append(line + "\n", style=f"{THEME['diff_remove']} on {THEME['surface']}")
             else:
-                t.append(line + "\n", style="#a1a1aa")
+                t.append(line + "\n", style=THEME["muted"])
 
         return t
 
@@ -2961,21 +3016,24 @@ class CollapsibleSidebar(Container):
 
         t = Text()
         t.append("\n", style="")
-        t.append("📁 ", style="bold #ec4899")
+        t.append("📁 ", style=f"bold {THEME['pink']}")
         project = self.root_path.name or "Project"
         if len(project) > 13:
             project = project[:12].rstrip() + "…"
-        t.append(project, style="bold #a855f7")
+        t.append(project, style=f"bold {THEME['purple']}")
         if self._session_modified_files:
             count = len(self._session_modified_files)
-            t.append(f"  ●{count}", style="bold #ec4899")
-        t.append("  [", style="#3f3f46")
+            t.append(f"  ●{count}", style=f"bold {THEME['pink']}")
+        t.append("  [", style=THEME["dim"])
         t.append(
             "× Close ↗",
-            style=f"bold #f472b6 {command_link('workspace-close')}",
+            style=f"bold {THEME['pink']} {command_link('workspace-close')}",
         )
-        t.append("]", style="#3f3f46")
+        t.append("]", style=THEME["dim"])
         return t
+
+    def refresh_theme_colors(self) -> None:
+        self.query_one(".sidebar-title", Static).update(self._render_title())
 
     def mark_session_modified(self, files: List[str]) -> None:
         """Accumulate session edits and refresh tree/preview without changing tabs."""

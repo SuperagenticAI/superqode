@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-10-12
+
+### Added
+
+- Show an explicit Vim input state in the header: OFF, NORMAL, INSERT,
+  COMMAND or SEARCH. Keep the state visible alongside task and approval modes
+  in narrow terminals and connected sessions.
+
+### Fixed
+
+- Let real terminal Enter and control keys reach their normal handlers in Vim
+  Normal mode, restoring keyboard selection in `:connect` without changing
+  the connection workflow. Route Vim navigation and numeric choices to the
+  visible picker, and keep setup text prompts editable.
+- Accept zero in buffered numeric choices so rows such as 10 can be selected
+  with the keyboard, with Vim enabled or disabled.
+- Keep sidebar visibility under user control. Connection updates and session
+  or harness status pages no longer open the sidebar or switch its active tab.
+- Use readable theme colours for sidebar filenames, file icons, folder names,
+  preview labels, search results and Git changes. Repaint retained sidebar
+  panels and code previews when themes change while preserving focus,
+  selected files, the current view and prompt drafts.
+
 ## [2.16.0] - 2026-10-12
 
 ### Fixed

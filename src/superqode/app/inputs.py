@@ -503,7 +503,7 @@ class SelectionAwareInput(TextArea):
             return
 
         # Handle number keys during selection modes
-        if event.key in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
+        if event.key in ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"):
             # Commands may legitimately contain digits (for example
             # ``:local stop ds4``). Once the prompt starts as a command or
             # shell line, digits are text and must never be diverted into the

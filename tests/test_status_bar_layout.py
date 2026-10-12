@@ -8,6 +8,7 @@ plan, usage) is now a second cluster right-aligned to the far edge.
 from __future__ import annotations
 
 from rich.cells import cell_len
+import pytest
 
 from superqode.app.widgets import ColorfulStatusBar
 
@@ -17,6 +18,31 @@ def _bar(**attrs) -> ColorfulStatusBar:
     for name, value in attrs.items():
         setattr(bar, name, value)
     return bar
+
+
+@pytest.mark.parametrize("width", [40, 58, 80, 120, 180])
+@pytest.mark.parametrize("state", ["off", "normal", "insert", "command", "search"])
+@pytest.mark.parametrize("runtime", ["codex-sdk", "systemone"])
+@pytest.mark.parametrize("theme_name", ["superqode", "light", "long-custom-theme-name"])
+def test_vim_input_mode_remains_explicit_in_a_crowded_header(
+    width, state, runtime, theme_name, monkeypatch
+):
+    monkeypatch.setattr("superqode.app.widgets.active_theme_name", lambda: theme_name)
+    bar = _bar(
+        vim_state=state,
+        active_runtime=runtime,
+        active_model="gpt-extended-model-name",
+        active_harness="long-harness-name",
+        byok_cost=1.23,
+        context_used=98000,
+        context_window=200000,
+    )
+    rendered = bar._render_for_width(width)
+    assert f"VIM {state.upper()}" in rendered.plain
+    if runtime != "systemone":
+        assert "BUILD" in rendered.plain
+        assert "ASK" in rendered.plain
+    assert all(cell_len(row) <= width for row in rendered.plain.splitlines())
 
 
 class TestFullWidthUsage:
