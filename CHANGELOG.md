@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while retaining the guide's return after successful setup.
 - Retain keyboard focus inside an active interactive model picker, and remove
   the previous picker when another page replaces it.
+- Stop and reap shell command trees on timeout or cancellation so child
+  commands cannot keep running or hold Windows working directories open.
 
 ## [2.15.1] - 2026-10-12
 

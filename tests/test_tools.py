@@ -7,6 +7,9 @@ import json
 import pytest
 import tempfile
 import os
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -207,17 +210,80 @@ class TestWebTools:
         assert calls == [("https://example.com/page", 10, 256 * 1024)]
 
 
+def _python_command(code):
+    args = [sys.executable, "-c", code]
+    return subprocess.list2cmdline(args) if os.name == "nt" else shlex.join(args)
+
+
 @pytest.mark.asyncio
 async def test_bash_timeout_result_includes_failure_metadata(tool_context):
     result = await BashTool().execute(
-        {"command": "python3 -c 'import time; time.sleep(2)'", "timeout": 0.01},
+        {"command": _python_command("import time; time.sleep(2)"), "timeout": 0.01},
         tool_context,
     )
 
     assert result.success is False
     assert result.metadata["timed_out"] is True
     assert result.metadata["timeout"] == 0.01
-    assert "python3" in result.metadata["command"]
+    assert sys.executable in result.metadata["command"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("stop", ["timeout", "cancel"])
+async def test_bash_stops_child_commands_before_returning(tmp_path, monkeypatch, streaming, stop):
+    ready = tmp_path / "ready"
+    survived = tmp_path / "survived"
+    child = (
+        f"from pathlib import Path; import time; Path({str(ready)!r}).touch(); "
+        f"time.sleep(0.4); Path({str(survived)!r}).touch()"
+    )
+    command = _python_command(
+        f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+        "time.sleep(5)"
+    )
+    tool = BashTool(git_guard_enabled=False)
+    spawn = tool._spawn
+    started = asyncio.Event()
+    processes = []
+
+    async def spawn_ready(command, cwd):
+        process = await spawn(command, cwd)
+        processes.append(process)
+        deadline = asyncio.get_running_loop().time() + 5
+        while not ready.exists():
+            assert asyncio.get_running_loop().time() < deadline, "Child command did not start"
+            await asyncio.sleep(0.01)
+        started.set()
+        return process
+
+    monkeypatch.setattr(tool, "_spawn", spawn_ready)
+    ctx = ToolContext(
+        session_id="shell-cleanup",
+        working_directory=tmp_path,
+        on_output=(lambda text: None) if streaming else None,
+    )
+    task = asyncio.create_task(
+        tool.execute({"command": command, "timeout": 0.02 if stop == "timeout" else 5}, ctx)
+    )
+    try:
+        await asyncio.wait_for(started.wait(), timeout=6)
+        if stop == "cancel":
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            result = await asyncio.wait_for(task, timeout=5)
+            assert result.metadata["timed_out"] is True
+        assert processes[0].returncode is not None
+        await asyncio.sleep(0.5)
+        assert not survived.exists(), "The child kept running after the command was stopped"
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        for process in processes:
+            await tool._stop_process(process)
 
 
 async def test_repo_search_keeps_content_without_native_windows_grep(tmp_path, monkeypatch):

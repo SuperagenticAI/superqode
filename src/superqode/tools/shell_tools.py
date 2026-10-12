@@ -13,6 +13,8 @@ Performance features:
 """
 
 import asyncio
+import os
+import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -188,6 +190,7 @@ class BashTool(Tool):
         from .env_policy import build_shell_env
 
         env = build_shell_env()
+        process_options = {"start_new_session": True} if os.name != "nt" else {}
         if plan is not None and plan.applied:
             return await asyncio.create_subprocess_exec(
                 *plan.argv,
@@ -195,6 +198,7 @@ class BashTool(Tool):
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd),
                 env=env,
+                **process_options,
             )
         return await asyncio.create_subprocess_shell(
             command,
@@ -202,7 +206,37 @@ class BashTool(Tool):
             stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd),
             env=env,
+            **process_options,
         )
+
+    @staticmethod
+    async def _stop_process(process):
+        """Stop the command tree and reap it before returning to the caller."""
+        if os.name == "nt":
+            try:
+                cleanup = await asyncio.create_subprocess_exec(
+                    "taskkill",
+                    "/PID",
+                    str(process.pid),
+                    "/T",
+                    "/F",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await cleanup.wait()
+            except OSError:
+                pass
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if process.returncode is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        await process.communicate()
 
     async def _execute_buffered(
         self,
@@ -217,7 +251,7 @@ class BashTool(Tool):
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
-            process.kill()
+            await self._stop_process(process)
             return ToolResult(
                 success=False,
                 output="",
@@ -229,6 +263,9 @@ class BashTool(Tool):
                     "timeout": timeout,
                 },
             )
+        except asyncio.CancelledError:
+            await self._stop_process(process)
+            raise
 
         # Decode output
         stdout_str = stdout.decode("utf-8", errors="replace")
@@ -334,19 +371,23 @@ class BashTool(Tool):
 
         # Create timeout task
         timed_out = False
-        try:
-            # Read both streams concurrently
-            await asyncio.wait_for(
-                asyncio.gather(
-                    read_stream(process.stdout, is_stderr=False),
-                    read_stream(process.stderr, is_stderr=True),
-                ),
-                timeout=timeout,
+
+        async def collect_output():
+            await asyncio.gather(
+                read_stream(process.stdout, is_stderr=False),
+                read_stream(process.stderr, is_stderr=True),
             )
             await process.wait()
+
+        try:
+            # Read both streams concurrently
+            await asyncio.wait_for(collect_output(), timeout=timeout)
         except asyncio.TimeoutError:
-            process.kill()
+            await self._stop_process(process)
             timed_out = True
+        except asyncio.CancelledError:
+            await self._stop_process(process)
+            raise
 
         output = "".join(output_chunks)
         if dropped:
