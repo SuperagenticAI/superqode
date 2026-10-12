@@ -24,7 +24,7 @@ from functools import lru_cache
 
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Static, DirectoryTree, Tree, Label, Input, Collapsible, Select
+from textual.widgets import Static, DirectoryTree, Tree, Label, Input, Collapsible, Select, Button
 from textual.widgets.tree import TreeNode
 from textual.widgets._directory_tree import DirEntry
 from textual.reactive import reactive
@@ -2857,6 +2857,18 @@ class CollapsibleSidebar(Container):
         padding: 0;
     }
 
+    CollapsibleSidebar #sidebar-width-controls { height: 1; padding: 0 1; }
+    CollapsibleSidebar #sidebar-width-label { width: auto; padding: 0 1 0 0; color: $sq-muted; }
+    CollapsibleSidebar .sidebar-width-button {
+        height: 1; min-height: 1; min-width: 0; width: auto;
+        border: none !important; padding: 0 1;
+        background: $sq-surface; color: $sq-text;
+    }
+    CollapsibleSidebar .sidebar-width-button:hover { background: $sq-hover; }
+    CollapsibleSidebar .sidebar-width-button:focus {
+        background: $sq-selected-bg; color: $sq-selected-text;
+    }
+
     CollapsibleSidebar .sidebar-title {
         height: 2;
         padding: 0 1;
@@ -3093,6 +3105,11 @@ class CollapsibleSidebar(Container):
 
         pass
 
+    class WidthRequested(Message):
+        def __init__(self, delta: int):
+            self.delta = delta
+            super().__init__()
+
     def __init__(
         self,
         path: Path | str = ".",
@@ -3121,6 +3138,20 @@ class CollapsibleSidebar(Container):
         with Container(id="sidebar-header"):
             yield Static(self._render_title(), classes="sidebar-title")
             yield GitStatusWidget(self.root_path, id="git-status")
+            with Horizontal(id="sidebar-width-controls"):
+                yield Static("Width", id="sidebar-width-label")
+                yield Button(
+                    "Narrow",
+                    id="sidebar-narrow",
+                    classes="sidebar-width-button",
+                    tooltip="Make the sidebar narrower · Ctrl+[",
+                )
+                yield Button(
+                    "Widen",
+                    id="sidebar-widen",
+                    classes="sidebar-width-button",
+                    tooltip="Make the sidebar wider · Ctrl+]",
+                )
 
         # File search (hidden by default)
         yield FileSearch(self.root_path, id="file-search", classes="-hidden")
@@ -3168,6 +3199,11 @@ class CollapsibleSidebar(Container):
             # NEW: History panel
             with Container(id="history-view"):
                 yield HistoryPanel(id="history-panel")
+
+    @on(Button.Pressed, ".sidebar-width-button")
+    def request_width(self, event: Button.Pressed):
+        event.stop()
+        self.post_message(self.WidthRequested(-10 if event.button.id == "sidebar-narrow" else 10))
 
     def _render_title(self) -> Text:
         """Render the sidebar title."""

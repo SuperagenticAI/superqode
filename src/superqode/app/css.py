@@ -370,17 +370,21 @@ ColorfulDirectoryTree > .tree--highlight { background: $sq-hover; color: $sq-tex
 
 /* Resizable Sidebar Divider */
 #sidebar-divider {
-    width: 1;
+    width: 3;
     height: 100%;
-    background: #1a1a1a;
+    background: $sq-surface;
+    color: $sq-muted;
 }
 
 #sidebar-divider:hover {
-    background: #7c3aed;
+    background: $sq-selected-bg;
+    color: $sq-selected-text;
 }
 
 #sidebar-divider.dragging {
-    background: #a855f7;
+    background: $sq-selected-bg;
+    color: $sq-selected-text;
+    text-style: bold;
 }
 
 #sidebar-divider.-hidden {

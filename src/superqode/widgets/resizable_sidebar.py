@@ -58,22 +58,25 @@ class ResizableDivider(Static):
     """
     Draggable divider for resizing adjacent panels.
 
-    SuperQode style: Minimal, purple highlight on hover/drag.
+    A wide grab area with a visible grip and theme-aligned hover feedback.
     """
 
     DEFAULT_CSS = """
     ResizableDivider {
-        width: 1;
+        width: 3;
         height: 100%;
-        background: #1a1a1a;
+        background: $surface;
+        color: $text-muted;
     }
 
     ResizableDivider:hover {
-        background: #7c3aed;
+        background: $primary;
+        color: $text;
     }
 
     ResizableDivider.dragging {
-        background: #a855f7;
+        background: $primary;
+        color: $text;
     }
     """
 
@@ -101,6 +104,7 @@ class ResizableDivider(Static):
 
     def __init__(self, **kwargs):
         super().__init__("", **kwargs)
+        self.tooltip = "Drag left or right to resize · Sidebar Narrow / Widen buttons also work"
         self._start_x: int = 0
         self._last_x: int = 0
 
@@ -113,6 +117,8 @@ class ResizableDivider(Static):
 
     def on_mouse_down(self, event: MouseDown) -> None:
         """Start dragging."""
+        if event.button != 1:
+            return
         self.dragging = True
         self._start_x = event.screen_x
         self._last_x = event.screen_x
@@ -139,8 +145,10 @@ class ResizableDivider(Static):
 
     def render(self) -> Text:
         """Render the divider."""
-        # Just a vertical line character
-        return Text("│", style=SQ_COLORS.primary if self.dragging else SQ_COLORS.border_subtle)
+        height = max(1, self.size.height)
+        lines = [" | "] * height
+        lines[height // 2] = "< >"
+        return Text("\n".join(lines))
 
 
 # ============================================================================

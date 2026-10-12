@@ -37,18 +37,21 @@ class SidebarMixin:
         output = self.query_one("#workspace-output")
         output.set_class(visible, "reviewing")
         self.query_one("#content").set_class(visible, "reviewing-file")
-        prompt_visible = visible and getattr(self, "_workspace_prompt_visible", False)
+        prompt_visible = visible and getattr(self, "_workspace_prompt_visible", True)
         self.query_one("#content").set_class(prompt_visible, "with-workspace-prompt")
         if viewer.is_mounted:
             button = viewer.query_one("#workspace-prompt", Button)
-            button.label = "Hide prompt" if prompt_visible else "Prompt"
+            button.label = "Hide prompt · F4" if prompt_visible else "Show prompt · F4"
             button.set_class(prompt_visible, "active")
         output.set_class(
             visible and width >= 160 and getattr(self, "_workspace_split", False), "split"
         )
-        self.query_one("#main-grid").set_class(
-            visible and self.sidebar_visible and width < 100, "workspace-drawer"
-        )
+        drawer = visible and self.sidebar_visible and width < 100
+        self.query_one("#main-grid").set_class(drawer, "workspace-drawer")
+        sidebar = self.query_one(CollapsibleSidebar)
+        if sidebar.is_mounted:
+            for button in sidebar.query(".sidebar-width-button"):
+                button.disabled = drawer
         preferred = getattr(self, "_preferred_sidebar_width", 34)
         self._set_sidebar_width(preferred, width)
         self.query_one("#status-bar").sidebar_open = self.sidebar_visible
@@ -84,7 +87,7 @@ class SidebarMixin:
         if not self.check_action("toggle_workspace_prompt", ()):
             return
         visible = self.query_one("#main-grid").has_class("workspace-drawer") or not getattr(
-            self, "_workspace_prompt_visible", False
+            self, "_workspace_prompt_visible", True
         )
         if self._vim_enabled():
             self._restore_vim_draft(cancel_line=True)
@@ -129,6 +132,13 @@ class SidebarMixin:
         if self.sidebar_visible:
             self.action_toggle_sidebar()
 
+    def on_collapsible_sidebar_width_requested(self, event: CollapsibleSidebar.WidthRequested):
+        event.stop()
+        if self.query_one("#main-grid").has_class("workspace-drawer"):
+            return
+        sidebar = self.query_one(CollapsibleSidebar)
+        self._set_sidebar_width(sidebar._width + event.delta, persist=True)
+
     def _init_sidebar_resize(self):
         """Initialize sidebar resize handling."""
         try:
@@ -150,7 +160,7 @@ class SidebarMixin:
     ) -> None:
         """Keep space for the prompt and transcript when the terminal narrows."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
-        maximum = max(30, min(150, (terminal_width or self.size.width) - 41))
+        maximum = max(30, min(150, (terminal_width or self.size.width) - 43))
         width = max(30, min(maximum, requested))
         if self.query_one("#main-grid").has_class("workspace-drawer"):
             width = terminal_width or self.size.width

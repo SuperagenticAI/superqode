@@ -1137,6 +1137,11 @@ the next selection. The sidebar's labeled section selector exposes Files,
 Git changes, Search contents, Context, Harness, Agent, History, and Task changes.
 Click the section selector, or focus it with `Tab`, press `Enter`, choose with
 `Up` / `Down`, and press `Enter` again. All sections are available either way.
+Use the sidebar's **Narrow** / **Widen** buttons to adjust its width, or drag
+the wider separator with the visible `< >` grip. The entire separator is a
+drag target. Width changes keep room for the main workspace and are saved per
+project. In a narrow terminal's temporary full-width navigator, resizing is
+disabled until you return to the file view.
 Dark themes use a black navigator background; light themes keep a readable light
 background. File, search, context and change lists use colored language symbols
 and badges (such as Python, JS, TS, C++ and Rust) without requiring a Nerd Font.
@@ -1169,9 +1174,10 @@ or unstaged entry opens that specific comparison. Browsing never stages,
 accepts, rejects, or writes files.
 
 **Pin** keeps up to four files in the file selector. **Chat** or **Close** returns
-to the conversation. The prompt box is hidden by default during source/diff
-inspection. Click **Prompt** or press `F4` to compose while keeping the file
-open; **Hide prompt** or `F4` hides it again. `Ctrl+I` also reveals and focuses
+to the conversation. The prompt box stays visible by default during source/diff
+inspection. The **Hide prompt · F4** button at the top of the file view lets you
+hide it for more reading space; **Show prompt · F4** or `F4` brings it back
+while keeping the file open. `Ctrl+I` also reveals and focuses
 the prompt. The choice is retained while browsing during the current session,
 and the draft, cursor and file position remain intact. Sending a task or command
 returns to Chat to show its results; reopening the file restores its position.

@@ -180,6 +180,7 @@ class WorkspaceViewer(Container):
     WorkspaceViewer Select > SelectCurrent { background: $sq-surface; color: $sq-text; }
     WorkspaceViewer #workspace-files { width: 1fr; }
     WorkspaceViewer #workspace-baseline { width: 19; }
+    WorkspaceViewer #workspace-path { width: 1fr; }
     WorkspaceViewer #workspace-path { height: 1; color: $sq-muted; padding: 0 1; }
     WorkspaceViewer #workspace-reader { height: 1fr; background: $sq-code-bg; }
     WorkspaceViewer #workspace-source { height: auto; padding: 0 1; background: $sq-code-bg; }
@@ -225,7 +226,11 @@ class WorkspaceViewer(Container):
             yield Button("Pin", id="workspace-pin")
             yield Button("Split", id="workspace-split")
             yield Button("Close", id="workspace-close")
-        yield Static("", id="workspace-path")
+        with Horizontal(id="workspace-heading"):
+            yield Static("", id="workspace-path")
+            yield Button(
+                "Hide prompt · F4", id="workspace-prompt", tooltip="Show or hide the prompt · F4"
+            )
         with Horizontal(id="workspace-controls"):
             yield Button("Contents", id="workspace-contents")
             yield Button("Changes", id="workspace-changes")
@@ -236,7 +241,6 @@ class WorkspaceViewer(Container):
                 id="workspace-baseline",
             )
         with Horizontal(id="workspace-tools"):
-            yield Button("Prompt", id="workspace-prompt", tooltip="Show or hide the prompt · F4")
             yield Button("Find", id="workspace-find")
             yield Button("Line", id="workspace-line")
             yield Button("Copy", id="workspace-copy")

@@ -178,7 +178,7 @@ async def test_main_viewer_preserves_draft_tree_and_chat(tmp_path, width):
         assert sidebar.current_view == "files"
         assert app.focused.id == "workspace-reader"
         assert viewer.size.width > 45
-        assert not app.query_one("#prompt-area").display
+        assert app.query_one("#prompt-area").display
         assert not prompt.has_focus
         assert viewer.query_one("#workspace-copy-path").region.right <= viewer.region.right
         assert prompt.value == "My unsubmitted task" and prompt.cursor_position == 4
@@ -401,7 +401,7 @@ async def test_viewer_vim_focus_and_connection_return(tmp_path, monkeypatch, vim
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("width", [80, 120, 180])
-async def test_header_sidebar_toggle_and_hidden_composer_preserve_review(tmp_path, width):
+async def test_header_sidebar_toggle_and_visible_composer_preserve_review(tmp_path, width):
     path = tmp_path / "source.py"
     path.write_text("pass\n" * 150)
     app = SuperQodeApp()
@@ -427,7 +427,7 @@ async def test_header_sidebar_toggle_and_hidden_composer_preserve_review(tmp_pat
         reader = viewer.query_one("#workspace-reader")
         reader.scroll_to(y=12, animate=False)
         await pilot.pause()
-        assert not app.query_one("#prompt-area").display
+        assert app.query_one("#prompt-area").display
         await click_toggle()
         assert app.sidebar_visible == (width < 100)
         assert bar.sidebar_open == app.sidebar_visible
@@ -436,7 +436,7 @@ async def test_header_sidebar_toggle_and_hidden_composer_preserve_review(tmp_pat
         assert app.sidebar_visible == (width >= 100)
         assert viewer.has_class("visible") and viewer.path == path
         assert reader.scroll_y == 12
-        assert not app.query_one("#prompt-area").display
+        assert app.query_one("#prompt-area").display
         await pilot.click("#workspace-chat")
         await pilot.pause()
         assert app.query_one("#prompt-area").display
@@ -453,6 +453,8 @@ async def test_connect_header_action_reveals_composer_from_file(tmp_path):
         app._open_workspace_file(path)
         viewer = app.query_one(WorkspaceViewer)
         await settled(viewer, pilot)
+        app.action_toggle_workspace_prompt()
+        await pilot.pause()
         assert not app.query_one("#prompt-area").display
         bar = app.query_one(ColorfulStatusBar)
         bar.render()
@@ -534,7 +536,15 @@ async def test_prompt_toggle_keeps_file_and_draft(tmp_path, monkeypatch, width, 
         reader = viewer.query_one("#workspace-reader")
         reader.scroll_to(y=12, animate=False)
         await pilot.pause()
+        assert app.query_one("#prompt-area").display
+        toggle = viewer.query_one("#workspace-prompt")
+        assert str(toggle.label) == "Hide prompt · F4"
+        assert toggle.region.bottom <= reader.region.y
+        assert toggle.region.right <= viewer.region.right
+        await pilot.click("#workspace-prompt")
+        await pilot.pause(0.25)
         assert not app.query_one("#prompt-area").display
+        assert str(toggle.label) == "Show prompt · F4"
         await pilot.click("#workspace-prompt")
         await pilot.pause()
         assert app.query_one("#prompt-area").display and app.focused is prompt
@@ -563,6 +573,11 @@ async def test_prompt_toggle_keeps_file_and_draft(tmp_path, monkeypatch, width, 
         assert not app.query_one("#prompt-area").display and app.focused is reader
         assert prompt.value == "Keep Xmy task draft" and prompt.cursor_position == 6
         assert reader.scroll_y == 12 and path.read_text() == contents
+        app._open_workspace_file(path)
+        await settled(viewer, pilot)
+        assert not app.query_one("#prompt-area").display  # Keep the user's explicit choice.
+        assert prompt.value == "Keep Xmy task draft" and prompt.cursor_position == 6
+        assert reader.scroll_y == 12
 
 
 @pytest.mark.asyncio
@@ -576,6 +591,8 @@ async def test_prompt_focus_and_narrow_drawer_keep_file_open(tmp_path, monkeypat
         app._open_workspace_file(path)
         viewer = app.query_one(WorkspaceViewer)
         await settled(viewer, pilot)
+        await pilot.press("f4")
+        await pilot.pause()
         await pilot.press("ctrl+k")
         await pilot.pause()
         assert app.query("CommandPalette.show-palette")
@@ -593,6 +610,7 @@ async def test_prompt_focus_and_narrow_drawer_keep_file_open(tmp_path, monkeypat
         await pilot.press("ctrl+b")
         await pilot.pause()
         assert app.query_one("#main-grid").has_class("workspace-drawer")
+        assert app.query_one("#sidebar-widen").disabled
         await pilot.press("f4")
         await pilot.pause()
         assert not app.sidebar_visible
@@ -606,6 +624,72 @@ async def test_prompt_focus_and_narrow_drawer_keep_file_open(tmp_path, monkeypat
         await pilot.press("ctrl+i", "enter")
         await pilot.pause()
         assert not viewer.has_class("visible") and app._in_selection_mode()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("theme", ["superqode", "light"])
+async def test_sidebar_width_buttons_and_wide_drag_target_preserve_workspace(tmp_path, theme):
+    from textual import events
+    from superqode.app import theme_bridge as bridge
+    from superqode.app.project_ui_state import get_sidebar_width
+    from superqode.theming import contrast
+
+    path = tmp_path / "a_long_source_filename_with_many_characters.py"
+    path.write_text("pass\n" * 150)
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 36)) as pilot:
+        bridge.apply_theme(theme)
+        app._refresh_theme_view()
+        await pilot.pause()
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.value = "Keep this task draft"
+        app.action_sidebar_files()
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        reader = viewer.query_one("#workspace-reader")
+        reader.scroll_to(y=12, animate=False)
+        await pilot.pause()
+        sidebar = app.query_one(CollapsibleSidebar)
+        divider = app.query_one("#sidebar-divider")
+        assert divider.size.width == 3 and "< >" in divider.render().plain
+        assert "Drag" in divider.tooltip
+        await pilot.click("#sidebar-widen")
+        await pilot.pause()
+        assert sidebar._width == 44 and get_sidebar_width() == 44
+        await pilot.click("#sidebar-narrow")
+        await pilot.pause()
+        assert sidebar._width == 34 and get_sidebar_width() == 34
+        app.query_one("#sidebar-widen").focus()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert sidebar._width == 44 and get_sidebar_width() == 44
+        for edge in (0, 2):  # Both edges of the grab area accept drags.
+            old_width = sidebar._width
+            x = divider.region.x + edge
+            y = divider.region.y + divider.region.height // 2
+            await pilot._post_mouse_events([events.MouseDown], offset=(x, y), button=1)
+            assert divider.dragging
+            await pilot._post_mouse_events([events.MouseMove], offset=(x + 8, y), button=1)
+            await pilot.pause()
+            assert sidebar._width == old_width + 8
+            assert get_sidebar_width() == old_width  # Save only when the drag finishes.
+            await pilot._post_mouse_events([events.MouseUp], offset=(x + 8, y), button=1)
+            await pilot.pause()
+            assert not divider.dragging and get_sidebar_width() == old_width + 8
+        await pilot.hover("#workspace-path")
+        await pilot.pause()
+        old_background = divider.styles.background
+        bridge.apply_theme("light" if theme == "superqode" else "superqode")
+        app._refresh_theme_view()
+        await pilot.pause()
+        assert divider.styles.background != old_background
+        assert contrast(divider.styles.color.hex, divider.styles.background.hex) >= 3
+        assert prompt.value == "Keep this task draft" and app.query_one("#prompt-area").display
+        assert viewer.has_class("visible") and viewer.path == path
+        assert reader.scroll_y == 12
+        assert viewer.query_one("#workspace-prompt").region.right <= viewer.region.right
+        assert app.query_one("#content").size.width >= 40
 
 
 @pytest.mark.asyncio

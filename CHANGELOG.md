@@ -19,10 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Black sidebar surfaces in dark themes and bold language icons/badges in file,
   search, context and change lists, without requiring a patched terminal font.
 - A persistent Sidebar toggle in the header, also available with `Ctrl+B`.
-  Hide the composer during read-only source/diff inspection; Chat or Escape
-  restores it with the task draft intact.
-- A Prompt toggle in the file viewer and `F4` shortcut to show or hide the
-  composer alongside an open file, preserving the draft and reading position.
+- Keep the composer visible when files open. A labeled Show / Hide prompt
+  button at the top of the file viewer and `F4` shortcut toggle it alongside
+  an open file, preserving the draft and reading position.
+- A wider sidebar resize target with a visible grip and Narrow / Widen buttons
+  for adjusting its width without dragging. Resize colors follow the theme.
 
 ### Fixed
 
