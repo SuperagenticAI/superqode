@@ -331,8 +331,7 @@ class EventHandlerMixin:
     def on_tree_file_open_requested(self, event: ColorfulDirectoryTree.FileOpenRequested) -> None:
         """Handle file open request from tree directly."""
         event.stop()
-        log = self.query_one("#log", ConversationLog)
-        self._view_file(str(event.path), log)
+        self._open_workspace_file(event.path)
 
     def on_input_submitted(self, event: Input.Submitted):
         """Dispatch normally, restoring a task suspended by Vim's command line."""
@@ -358,6 +357,13 @@ class EventHandlerMixin:
         self._welcome_active = False
 
         text = event.value.strip()
+        if text:
+            from superqode.widgets.workspace_viewer import WorkspaceViewer
+
+            viewer = self.query_one(WorkspaceViewer)
+            if viewer.has_class("visible"):
+                viewer.suspend()
+                self._layout_workspace_viewer()
         # If a selection digit buffer is active, clear its timer to avoid double-select
         if hasattr(self, "_selection_digit_timer") and self._selection_digit_timer:
             try:

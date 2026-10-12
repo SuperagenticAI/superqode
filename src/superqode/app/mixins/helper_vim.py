@@ -285,6 +285,14 @@ class HelperVimMixin:
         picker = getattr(self, "_model_picker_widget", None)
         if picker is not None and picker.is_attached:
             return
+        from superqode.widgets.workspace_viewer import WorkspaceViewer
+
+        viewer = self.query_one(WorkspaceViewer)
+        if self._sidebar_has_focus() and viewer.has_class("visible"):
+            if self.query_one("#main-grid").has_class("workspace-drawer"):
+                self.action_toggle_sidebar()
+            viewer.focus_reader()
+            return
         self._restore_vim_draft()
         self.query_one("#prompt-input").focus()
 
@@ -307,7 +315,13 @@ class HelperVimMixin:
             return False
         if focused.id == "prompt-input":
             return key == "ctrl+f"
-        if not self._sidebar_has_focus() and focused.id != "log":
+        if self._workspace_has_focus() and key == "ctrl+f":
+            return False
+        if (
+            not self._sidebar_has_focus()
+            and not self._workspace_has_focus()
+            and focused.id != "log"
+        ):
             return False
         return not isinstance(focused, Input) and not (
             isinstance(focused, TextArea) and not focused.read_only
@@ -331,6 +345,10 @@ class HelperVimMixin:
             focused = self.focused
         except Exception:
             return False
+        if getattr(focused, "id", "") in {"git-changes", "diff-panel"}:
+            action = focused.action_previous if direction < 0 else focused.action_next
+            action()
+            return True
         if getattr(focused, "id", "") != "file-tree":
             return False
         action_name = "action_cursor_up" if direction < 0 else "action_cursor_down"
@@ -480,6 +498,12 @@ class HelperVimMixin:
         key = str(getattr(event, "key", "") or "")
         character = getattr(event, "character", None)
         token = character if isinstance(character, str) and character else key
+
+        # The visible file reader owns its scrolling, search and Escape keys.
+        # Only pane changes and explicitly entering the task/command line are
+        # shared with the optional Vim layer.
+        if self._workspace_has_focus() and token not in {"h", "l", "i", "a", "o", ":", "ctrl+w"}:
+            return False
 
         # Approval and cancellation paths retain priority over modal navigation.
         if getattr(self, "_permission_pending", False):

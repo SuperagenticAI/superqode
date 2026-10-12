@@ -24,7 +24,7 @@ from functools import lru_cache
 
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Static, DirectoryTree, Tree, Label, Input, Collapsible
+from textual.widgets import Static, DirectoryTree, Tree, Label, Input, Collapsible, Select
 from textual.widgets.tree import TreeNode
 from textual.widgets._directory_tree import DirEntry
 from textual.reactive import reactive
@@ -1003,6 +1003,9 @@ class EnhancedSidebar(Container):
     def on_edit_requested(self, event: FilePreview.EditRequested) -> None:
         """Edit without leaving the conversation or launching a competing terminal."""
         event.stop()
+        if hasattr(self.app, "_open_workspace_file"):
+            self.app._open_workspace_file(event.path)
+            return
         from superqode.widgets.file_editor import FileEditorScreen
 
         def closed(saved: bool | None) -> None:
@@ -2135,13 +2138,15 @@ class CodebaseSearch(Container):
         result = results.get_selected()
         if result:
             self.post_message(self.ResultSelected(result.path, result.line_no))
-            self.action_close_search()
+            if not hasattr(self.app, "_open_workspace_file"):
+                self.action_close_search()
 
     @on(CodeSearchResults.ResultSelected)
     def on_result_selected(self, event: CodeSearchResults.ResultSelected) -> None:
         event.stop()
         self.post_message(self.ResultSelected(event.result.path, event.result.line_no))
-        self.action_close_search()
+        if not hasattr(self.app, "_open_workspace_file"):
+            self.action_close_search()
 
 
 # ============================================================================
@@ -2226,16 +2231,29 @@ class SidebarTabs(Container):
 
     def compose(self) -> ComposeResult:
         """Compose tab bar with all tabs."""
-        # Primary tabs (always shown) - Colorful symbols with hints
-        yield Static(self.TABS["harness"], id="tab-harness", classes="tab")
-        yield Static(self.TABS["files"], id="tab-files", classes="tab active")
-        yield Static(self.TABS["code"], id="tab-code", classes="tab")
-        yield Static(self.TABS["changes"], id="tab-changes", classes="tab")
-        yield Static(self.TABS["search"], id="tab-search", classes="tab")
-        yield Static(self.TABS["agent"], id="tab-agent", classes="tab")
-        yield Static(self.TABS["context"], id="tab-context", classes="tab")
-        yield Static(self.TABS["diff"], id="tab-diff", classes="tab")
-        yield Static(self.TABS["history"], id="tab-history", classes="tab")
+        labels = {
+            "files": "Files",
+            "changes": "Git changes",
+            "search": "Search contents",
+            "context": "Context",
+            "harness": "Harness",
+            "agent": "Agent",
+            "history": "History",
+            "diff": "Task changes",
+            "code": "Current file",
+        }
+        yield Select(
+            [(label, key) for key, label in labels.items()],
+            value="files",
+            allow_blank=False,
+            id="sidebar-section",
+        )
+
+    @on(Select.Changed, "#sidebar-section")
+    def on_section_changed(self, event):
+        event.stop()
+        if event.value in self.TABS and event.value == event.select.value:
+            self.active_tab = event.value
 
     def on_mount(self) -> None:
         """Set tooltips after widgets are mounted."""
@@ -2259,6 +2277,7 @@ class SidebarTabs(Container):
     def watch_active_tab(self, tab: str) -> None:
         """Update tab styles when active tab changes."""
         try:
+            self.query_one("#sidebar-section", Select).value = tab
             # Remove active class from all tabs
             for tab_name in self.TABS:
                 try:
@@ -2299,51 +2318,108 @@ class GitChange:
 
 
 def get_git_changes(root_path: Path) -> List[GitChange]:
-    """Get list of changed files from git."""
+    """Parse NUL-delimited status without stripping status columns or quoting paths."""
     changes = []
     try:
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain=v1", "-z"],
             cwd=root_path,
             capture_output=True,
-            text=True,
             timeout=5,
         )
-        if result.returncode == 0:
-            for line in result.stdout.strip().split("\n"):
-                if not line:
-                    continue
-                status = line[:2]
-                path = line[3:]
-
-                # Parse status
-                staged = status[0] != " " and status[0] != "?"
-                if status[0] in "MADRCU":
+        if result.returncode:
+            return changes
+        records = iter(result.stdout.split(b"\0"))
+        for record in records:
+            if len(record) < 4:
+                continue
+            status = record[:2].decode("ascii", errors="replace")
+            path = os.fsdecode(record[3:])
+            if "R" in status or "C" in status:
+                next(records, b"")  # -z puts the original name in the next record.
+            if status == "??":
+                changes.append(GitChange(path=path, status="?"))
+            elif "U" in status or status in {"AA", "DD"}:
+                changes.append(GitChange(path=path, status="U"))
+            else:
+                if status[0] in "MADRC":
                     changes.append(GitChange(path=path, status=status[0], staged=True))
-                if status[1] in "MD":
+                if status[1] in "MADRC":
                     changes.append(GitChange(path=path, status=status[1], staged=False))
-                if status == "??":
-                    changes.append(GitChange(path=path, status="?", staged=False))
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         pass
-    return changes
+    return sorted(changes, key=lambda change: not change.staged)
 
 
 def get_file_diff(root_path: Path, file_path: str, staged: bool = False) -> str:
-    """Get diff for a specific file."""
+    """Read a bounded patch, including untracked text files, without changing Git."""
+    import tempfile
+
+    maximum = 1024 * 1024
     try:
-        cmd = ["git", "diff"]
+        cmd = ["git", "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv"]
         if staged:
             cmd.append("--cached")
-        cmd.append("--")
-        cmd.append(file_path)
-
-        result = subprocess.run(cmd, cwd=root_path, capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            return result.stdout
-    except Exception:
+        cmd.extend(["--", file_path])
+        with tempfile.TemporaryFile() as output:
+            result = subprocess.run(
+                cmd, cwd=root_path, stdout=output, stderr=subprocess.DEVNULL, timeout=10
+            )
+            output.seek(0)
+            data = output.read(maximum + 1)
+        if result.returncode:
+            return ""
+        if data:
+            text = data[:maximum].decode("utf-8", errors="replace")
+            if len(data) > maximum:
+                text += "\n# Diff preview limited to 1 MiB.\n"
+            return text
+        if staged:
+            return ""
+        tracked = subprocess.run(
+            ["git", "--literal-pathspecs", "ls-files", "--error-unmatch", "--", file_path],
+            cwd=root_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        path = root_path / file_path
+        if tracked.returncode == 1 and path.is_file():
+            with path.open("rb") as source:
+                content = source.read(65_537)
+            if b"\0" in content:
+                return f"Binary new file: {file_path}\n"
+            lines = content[:65_536].decode("utf-8", errors="replace").splitlines()
+            added = "\n".join("+" + line for line in lines)
+            suffix = "\n# New file preview limited to 64 KiB." if len(content) > 65_536 else ""
+            return (
+                f"diff --git a/{file_path} b/{file_path}\nnew file mode 100644\n"
+                f"--- /dev/null\n+++ b/{file_path}\n@@ -0,0 +1,{len(lines)} @@\n"
+                f"{added}{suffix}\n"
+            )
+    except (OSError, subprocess.SubprocessError):
         pass
     return ""
+
+
+def reveal_change_row(container, text: Text, metadata: str, selected: int) -> None:
+    """Keep a selected, possibly wrapped file row inside the visible list."""
+    from textual.geometry import Region
+
+    width = max(1, container.content_size.width)
+    start = None
+    end = 0
+    for row, line in enumerate(text.wrap(container.app.console, width)):
+        if (
+            line
+            and line.get_style_at_offset(container.app.console, 0).meta.get(metadata) == selected
+        ):
+            start = row if start is None else start
+            end = row + 1
+        elif start is not None:
+            break
+    if start is not None:
+        container.scroll_to_region(Region(0, start, width, end - start), animate=False)
 
 
 class GitChangesPanel(Container):
@@ -2385,7 +2461,7 @@ class GitChangesPanel(Container):
         background: #a855f720;
     }
 
-    GitChangesPanel #diff-view {
+    GitChangesPanel #git-diff-preview {
         height: 1fr;
         background: #000000;
         border-top: solid #1a1a1a;
@@ -2395,7 +2471,7 @@ class GitChangesPanel(Container):
         display: none;
     }
 
-    GitChangesPanel #diff-view.visible {
+    GitChangesPanel #git-diff-preview.visible {
         display: block;
     }
 
@@ -2417,6 +2493,13 @@ class GitChangesPanel(Container):
     changes: reactive[List[GitChange]] = reactive(list)
     selected_index: reactive[int] = reactive(-1)
     _loading: bool = True
+    can_focus = True
+    BINDINGS = [
+        Binding("up", "previous", "Previous"),
+        Binding("down", "next", "Next"),
+        Binding("enter", "open_change", "View changes"),
+        Binding("r", "refresh", "Refresh"),
+    ]
 
     class FileSelected(Message):
         """Message when a file is selected for diff viewing."""
@@ -2431,6 +2514,8 @@ class GitChangesPanel(Container):
         self.root_path = root_path
         self._loading = True
         self._current_diff = ""
+        self._refresh_generation = 0
+        self._diff_generation = 0
 
     def compose(self) -> ComposeResult:
         """Compose the changes panel."""
@@ -2438,24 +2523,42 @@ class GitChangesPanel(Container):
         yield Static("Loading changes...", id="loading")
         with ScrollableContainer(id="changes-list"):
             yield Static("", id="changes-content")
-        with ScrollableContainer(id="diff-view"):
+        with ScrollableContainer(id="git-diff-preview"):
             yield Static("", id="diff-content")
         yield Static("✓ No changes\nWorking tree clean", id="no-changes")
 
     def on_mount(self) -> None:
         """Load changes on mount."""
-        self.refresh_changes()
+        if not hasattr(self.app, "_open_workspace_file"):
+            self.refresh_changes()
 
-    @work(thread=True)
     def refresh_changes(self) -> None:
         """Refresh git changes in background."""
+        self._refresh_generation += 1
+        self._refresh_worker = self._refresh_changes(self._refresh_generation)
+
+    @work(thread=True, exclusive=True, group="sidebar-git-status")
+    def _refresh_changes(self, generation):
         changes = get_git_changes(self.root_path)
-        self.app.call_from_thread(self._update_changes, changes)
+        self.app.call_from_thread(self._apply_changes, generation, changes)
+
+    def _apply_changes(self, generation, changes):
+        if generation == self._refresh_generation and self.is_mounted:
+            self._update_changes(changes)
 
     def _update_changes(self, changes: List[GitChange]) -> None:
         """Update changes from thread."""
         self._loading = False
-        self.changes = changes
+        selected = (
+            self.changes[self.selected_index]
+            if 0 <= self.selected_index < len(self.changes)
+            else None
+        )
+        self.changes = sorted(changes, key=lambda change: not change.staged)
+        self.selected_index = next(
+            (i for i, change in enumerate(self.changes) if change == selected),
+            0 if self.changes else -1,
+        )
 
         # Reset selection if current selection is out of bounds
         if self.selected_index >= len(self.changes):
@@ -2469,7 +2572,7 @@ class GitChangesPanel(Container):
             loading = self.query_one("#loading", Static)
             no_changes = self.query_one("#no-changes", Static)
             changes_list = self.query_one("#changes-list", ScrollableContainer)
-            diff_view = self.query_one("#diff-view", ScrollableContainer)
+            diff_view = self.query_one("#git-diff-preview", ScrollableContainer)
 
             loading.display = False
 
@@ -2485,7 +2588,9 @@ class GitChangesPanel(Container):
                 self.query_one("#changes-content", Static).update(self._render_changes())
 
                 # If we have a valid selection, ensure diff is loaded
-                if 0 <= self.selected_index < len(self.changes):
+                if 0 <= self.selected_index < len(self.changes) and not hasattr(
+                    self.app, "_open_workspace_file"
+                ):
                     change = self.changes[self.selected_index]
                     self._load_diff(change.path, change.staged)
                 else:
@@ -2528,6 +2633,7 @@ class GitChangesPanel(Container):
 
     def _render_change_item(self, t: Text, change: GitChange, index: int) -> None:
         """Render a single change item."""
+        row_start = len(t)
         # Selection indicator
         if index == self.selected_index:
             t.append("  ▸ ", style=f"bold {THEME['purple']}")
@@ -2557,6 +2663,7 @@ class GitChangesPanel(Container):
             t.append(path, style=THEME["muted"])
 
         t.append("\n", style="")
+        t.stylize(Style(meta={"change_index": index}), row_start, len(t))
 
     def watch_changes(self, changes: List[GitChange]) -> None:
         """Update when changes change."""
@@ -2566,25 +2673,43 @@ class GitChangesPanel(Container):
         """Update when selection changes."""
         try:
             self.query_one("#changes-content", Static).update(self._render_changes())
+            self.call_after_refresh(self._reveal_selection)
 
             # Load diff for selected file
-            if 0 <= index < len(self.changes):
+            if 0 <= index < len(self.changes) and not hasattr(self.app, "_open_workspace_file"):
                 change = self.changes[index]
                 self._load_diff(change.path, change.staged)
         except Exception:
             pass
 
-    @work(thread=True)
+    def _reveal_selection(self):
+        if self.is_mounted and self.selected_index >= 0:
+            reveal_change_row(
+                self.query_one("#changes-list"),
+                self._render_changes(),
+                "change_index",
+                self.selected_index,
+            )
+
     def _load_diff(self, path: str, staged: bool) -> None:
         """Load diff for a file in background."""
+        self._diff_generation += 1
+        return self._read_diff(path, staged, self._diff_generation)
+
+    @work(thread=True, exclusive=True, group="sidebar-file-diff")
+    def _read_diff(self, path, staged, generation):
         diff = get_file_diff(self.root_path, path, staged)
-        self.app.call_from_thread(self._show_diff, diff)
+        self.app.call_from_thread(self._apply_diff, generation, diff)
+
+    def _apply_diff(self, generation, diff):
+        if generation == self._diff_generation and self.is_mounted:
+            self._show_diff(diff)
 
     def _show_diff(self, diff: str) -> None:
         """Show diff content."""
         self._current_diff = diff
         try:
-            diff_view = self.query_one("#diff-view", ScrollableContainer)
+            diff_view = self.query_one("#git-diff-preview", ScrollableContainer)
             diff_content = self.query_one("#diff-content", Static)
 
             if diff:
@@ -2620,16 +2745,22 @@ class GitChangesPanel(Container):
 
     def on_click(self, event) -> None:
         """Handle clicks on change items."""
-        # Calculate which item was clicked based on y position
-        try:
-            changes_list = self.query_one("#changes-list", ScrollableContainer)
-            if changes_list in event.widget.ancestors or event.widget == changes_list:
-                # Rough calculation of clicked index
-                y = event.y - 3  # Offset for header
-                if 0 <= y < len(self.changes) + 4:  # Account for section headers
-                    self.selected_index = max(0, min(y - 1, len(self.changes) - 1))
-        except Exception:
-            pass
+        index = event.style.meta.get("change_index")
+        if isinstance(index, int) and 0 <= index < len(self.changes):
+            event.stop()
+            self.selected_index = index
+            self.action_open_change()
+
+    def action_open_change(self):
+        if 0 <= self.selected_index < len(self.changes):
+            change = self.changes[self.selected_index]
+            self.post_message(self.FileSelected(change.path, change.staged))
+
+    def action_next(self):
+        self.select_next()
+
+    def action_previous(self):
+        self.select_prev()
 
     def action_refresh(self) -> None:
         """Refresh changes."""
@@ -2673,15 +2804,7 @@ class GitChangesPanel(Container):
 
 class CollapsibleSidebar(Container):
     """
-    Clean tabbed sidebar with Files, Code, and Changes views.
-
-    Features:
-    - Git status indicator (always visible)
-    - File search (Ctrl+F)
-    - Tab switching: Files | Code | Changes
-    - Click file to view code in sidebar
-    - Git diff view for changed files
-    - Dark black background
+    Repository navigator with labeled sections and a shared main-area viewer.
     """
 
     DEFAULT_CSS = """
@@ -3076,6 +3199,11 @@ class CollapsibleSidebar(Container):
 
     def watch_current_view(self, view: str) -> None:
         """Switch between all sidebar views."""
+        if view == "code" and hasattr(self.app, "_open_workspace_file"):
+            self.current_view = "files"
+            if self._current_file is not None:
+                self.app._open_workspace_file(self._current_file)
+            return
         try:
             tabs = self.query_one("#sidebar-tabs", SidebarTabs)
 
@@ -3146,6 +3274,8 @@ class CollapsibleSidebar(Container):
     def on_tab_changed(self, event: SidebarTabs.TabChanged) -> None:
         """Handle tab changes."""
         event.stop()
+        if event.tab != self.query_one(SidebarTabs).active_tab:
+            return
         self.current_view = event.tab
 
     def action_toggle_search(self) -> None:
@@ -3268,6 +3398,10 @@ class CollapsibleSidebar(Container):
         path = event.path
         self._current_file = path
 
+        if hasattr(self.app, "_open_workspace_file"):
+            self.app._open_workspace_file(path)
+            return
+
         # Set file in preview
         preview = self.query_one("#file-preview", FilePreview)
         preview.set_file(path)
@@ -3288,6 +3422,11 @@ class CollapsibleSidebar(Container):
         path = event.path
         self._current_file = path
 
+        if hasattr(self.app, "_open_workspace_file"):
+            self.query_one("#file-search").add_class("-hidden")
+            self.app._open_workspace_file(path)
+            return
+
         # Set file in preview and switch to code view
         preview = self.query_one("#file-preview", FilePreview)
         preview.set_file(path)
@@ -3307,6 +3446,10 @@ class CollapsibleSidebar(Container):
         path = event.path
         self._current_file = path
 
+        if hasattr(self.app, "_open_workspace_file"):
+            self.app._open_workspace_file(path, line=event.line_no)
+            return
+
         # Set file in preview and switch to code view
         preview = self.query_one("#file-preview", FilePreview)
         preview.set_file(path, line_no=event.line_no)
@@ -3323,6 +3466,9 @@ class CollapsibleSidebar(Container):
     def on_edit_requested(self, event: FilePreview.EditRequested) -> None:
         """Edit without leaving the conversation or launching a competing terminal."""
         event.stop()
+        if hasattr(self.app, "_open_workspace_file"):
+            self.app._open_workspace_file(event.path)
+            return
         from superqode.widgets.file_editor import FileEditorScreen
 
         def closed(saved: bool | None) -> None:
@@ -3363,6 +3509,10 @@ class CollapsibleSidebar(Container):
 
     def focus_current_view(self) -> None:
         """Restore focus without throwing away the selected tab or tree cursor."""
+        if self.current_view == "harness":
+            panel = self.get_harness_panel()
+            if panel is not None:
+                panel.refresh_summary()
         search = self.query_one("#file-search", FileSearch)
         if not search.has_class("-hidden"):
             search.start_search()

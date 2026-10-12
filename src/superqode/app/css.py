@@ -102,6 +102,9 @@ CollapsibleSidebar {
     width: 100%;
     height: 100%;
 }
+CollapsibleSidebar SidebarTabs { height: 3; }
+CollapsibleSidebar SidebarTabs Select { width: 100%; height: 3; }
+CollapsibleSidebar SidebarTabs SelectCurrent { background: $sq-surface; color: $sq-text; }
 
 CollapsibleSidebar #file-search.-hidden {
     display: none;
@@ -123,6 +126,13 @@ CollapsibleSidebar CollapsibleTitle:hover {
 
 /* Main content - Warp style layout */
 #content { width: 1fr; layout: vertical; }
+#workspace-output { height: 1fr; width: 100%; }
+#workspace-output.reviewing #conversation { display: none; }
+#workspace-output.split #conversation { display: block; width: 40%; }
+#workspace-output.split #workspace-viewer { width: 60%; }
+#main-grid.workspace-drawer #content { display: none; }
+#main-grid.workspace-drawer #sidebar { width: 100%; }
+#main-grid.workspace-drawer #sidebar-divider { display: none; }
 
 /* Status bar - ALWAYS visible at top, never hidden */
 #status-bar {

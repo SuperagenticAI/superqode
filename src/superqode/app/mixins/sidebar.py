@@ -1,19 +1,81 @@
 """Sidebar panel updates, resize handling, and sidebar keybinding actions for SuperQodeApp."""
 
 from __future__ import annotations
-from textual import on
-from superqode.app.widgets import (
-    ConversationLog,
-)
+from pathlib import Path
 from superqode.sidebar import (
     CollapsibleSidebar,
 )
+from superqode.widgets.workspace_viewer import WorkspaceViewer
 
 # --- helpers extracted from app_main (A1) ---
 
 
 class SidebarMixin:
     """Sidebar panels, resize, and Ctrl+1..6 / toggle sidebar actions."""
+
+    def _workspace_has_focus(self):
+        if not self.screen_stack:
+            return False
+        focused = self.focused
+        return focused is not None and any(
+            isinstance(node, WorkspaceViewer) for node in focused.ancestors_with_self
+        )
+
+    def _open_workspace_file(self, path, *, line=1, mode="contents", baseline="working"):
+        viewer = self.query_one(WorkspaceViewer)
+        viewer.open_file(Path(path), line=line, mode=mode, baseline=baseline)
+        if self.size.width < 100 and self.sidebar_visible:
+            self.action_toggle_sidebar()
+        self._layout_workspace_viewer()
+        viewer.call_after_refresh(viewer.focus_reader)
+
+    def _layout_workspace_viewer(self, terminal_width=None):
+        viewer = self.query_one(WorkspaceViewer)
+        width = terminal_width or self.size.width
+        visible = viewer.has_class("visible")
+        output = self.query_one("#workspace-output")
+        output.set_class(visible, "reviewing")
+        output.set_class(
+            visible and width >= 160 and getattr(self, "_workspace_split", False), "split"
+        )
+        self.query_one("#main-grid").set_class(
+            visible and self.sidebar_visible and width < 100, "workspace-drawer"
+        )
+        preferred = getattr(self, "_preferred_sidebar_width", 34)
+        self._set_sidebar_width(preferred, width)
+
+    def on_workspace_viewer_chat_requested(self, event):
+        event.stop()
+        self.query_one(WorkspaceViewer).remove_class("visible")
+        self._layout_workspace_viewer()
+        sidebar = self.query_one(CollapsibleSidebar)
+        if self.sidebar_visible:
+            sidebar.call_after_refresh(sidebar.focus_current_view)
+        else:
+            self.call_after_refresh(self.query_one("#prompt-input").focus)
+
+    def on_workspace_viewer_split_requested(self, event):
+        event.stop()
+        self._workspace_split = not getattr(self, "_workspace_split", False)
+        self._layout_workspace_viewer()
+        if self._workspace_split and self.size.width < 160:
+            self.notify("Split enabled for terminals at least 160 columns wide")
+
+    def on_git_changes_panel_file_selected(self, event):
+        event.stop()
+        self._open_workspace_file(
+            self.query_one(CollapsibleSidebar).root_path / event.path,
+            mode="changes",
+            baseline="staged" if event.staged else "working",
+        )
+
+    def on_diff_panel_file_selected(self, event):
+        event.stop()
+        self._open_workspace_file(
+            self.query_one(CollapsibleSidebar).root_path / event.path,
+            mode="changes",
+            baseline="task",
+        )
 
     def on_collapsible_sidebar_dismiss(self, event: CollapsibleSidebar.Dismiss) -> None:
         event.stop()
@@ -43,6 +105,8 @@ class SidebarMixin:
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         maximum = max(30, min(150, (terminal_width or self.size.width) - 41))
         width = max(30, min(maximum, requested))
+        if self.query_one("#main-grid").has_class("workspace-drawer"):
+            width = terminal_width or self.size.width
         sidebar.styles.width = width
         sidebar._width = width
         if persist:
@@ -153,6 +217,9 @@ class SidebarMixin:
         """Update live session markers without navigating the sidebar."""
         try:
             self.query_one("#sidebar", CollapsibleSidebar).mark_session_modified(files)
+            viewer = self.query_one(WorkspaceViewer)
+            if viewer.has_class("visible") and viewer.relative(viewer.path) in files:
+                viewer.reload()
         except Exception:
             pass
 
@@ -174,8 +241,13 @@ class SidebarMixin:
             sidebar.remove_class("visible")
             divider.add_class("-hidden")
             # Return focus to input when sidebar is closed
-            self.query_one("#prompt-input").focus()
-            self.set_timer(0.1, self._ensure_input_focus)
+            viewer = self.query_one(WorkspaceViewer)
+            if viewer.has_class("visible"):
+                viewer.call_after_refresh(viewer.focus_reader)
+            else:
+                self.query_one("#prompt-input").focus()
+                self.set_timer(0.1, self._ensure_input_focus)
+        self._layout_workspace_viewer()
 
     def action_shrink_sidebar(self):
         """Shrink sidebar width."""
@@ -245,9 +317,10 @@ class SidebarMixin:
             self.action_toggle_sidebar()
         sidebar.focus_current_view()
 
-    @on(CollapsibleSidebar.FileOpened)
+    def on_collapsible_sidebar_file_opened(self, event: CollapsibleSidebar.FileOpened) -> None:
+        self.on_sidebar_file_opened(event)
+
     def on_sidebar_file_opened(self, event: CollapsibleSidebar.FileOpened) -> None:
         """Handle file opened from sidebar - show in conversation."""
         event.stop()
-        log = self.query_one("#log", ConversationLog)
-        self._view_file(str(event.path), log)
+        self._open_workspace_file(event.path)

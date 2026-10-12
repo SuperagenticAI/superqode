@@ -319,6 +319,11 @@ class MiscActionsMixin:
         from superqode.app.inputs import SelectionAwareInput
 
         from superqode.sidebar import CollapsibleSidebar
+        from superqode.widgets.workspace_viewer import WorkspaceViewer
+
+        if self._workspace_has_focus():
+            self.query_one(WorkspaceViewer).show_search("find")
+            return
 
         focused = getattr(self, "focused", None)
         if focused is not None:

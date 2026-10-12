@@ -23,12 +23,14 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 from rich.text import Text
 from rich.syntax import Syntax
 from rich.progress_bar import ProgressBar
+from rich.style import Style
 
 from textual.widgets import Static, Button, Input
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.reactive import reactive
 from textual.message import Message
 from textual import on
+from textual.binding import Binding
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -718,6 +720,18 @@ class DiffPanel(ThemeAwarePanel):
     - Stage for commit
     """
 
+    can_focus = True
+    BINDINGS = [
+        Binding("up", "previous", "Previous file"),
+        Binding("down", "next", "Next file"),
+        Binding("enter", "open_file", "View changes"),
+    ]
+
+    class FileSelected(Message):
+        def __init__(self, path: str):
+            self.path = path
+            super().__init__()
+
     DEFAULT_CSS = (
         PANEL_CSS
         + """
@@ -802,6 +816,12 @@ class DiffPanel(ThemeAwarePanel):
             yield Button("Accept All", id="accept-all-btn", variant="success")
             yield Button("Reject All", id="reject-all-btn", variant="error")
 
+    def on_mount(self):
+        if hasattr(self.app, "_open_workspace_file"):
+            self.query_one("#diff-files").styles.height = "1fr"
+            self.query_one("#diff-preview").display = False
+            self.query_one("#diff-actions").display = False
+
     def _render_header(self) -> Text:
         """Render panel header."""
         text = Text()
@@ -825,6 +845,7 @@ class DiffPanel(ThemeAwarePanel):
 
         text = Text()
         for i, f in enumerate(self._files):
+            start = len(text)
             is_selected = i == self._selected_index
 
             # Status icon
@@ -849,6 +870,7 @@ class DiffPanel(ThemeAwarePanel):
             )
             text.append(f"  +{f.additions}", style=SQ_COLORS.success)
             text.append(f" -{f.deletions}\n", style=SQ_COLORS.error)
+            text.stylize(Style(meta={"task_file_index": i}), start, len(text))
 
         return text
 
@@ -923,6 +945,35 @@ class DiffPanel(ThemeAwarePanel):
         if 0 <= index < len(self._files):
             self._selected_index = index
             self._refresh()
+            self.call_after_refresh(self._reveal_selection)
+
+    def _reveal_selection(self):
+        from superqode.sidebar import reveal_change_row
+
+        if self.is_mounted and self._selected_index >= 0:
+            reveal_change_row(
+                self.query_one("#diff-files"),
+                self._render_files(),
+                "task_file_index",
+                self._selected_index,
+            )
+
+    def on_click(self, event):
+        index = event.style.meta.get("task_file_index")
+        if isinstance(index, int) and 0 <= index < len(self._files):
+            event.stop()
+            self.select_file(index)
+            self.action_open_file()
+
+    def action_next(self):
+        self.select_file(min(len(self._files) - 1, self._selected_index + 1))
+
+    def action_previous(self):
+        self.select_file(max(0, self._selected_index - 1))
+
+    def action_open_file(self):
+        if 0 <= self._selected_index < len(self._files):
+            self.post_message(self.FileSelected(self._files[self._selected_index].path))
 
     def clear(self) -> None:
         """Clear all files."""
@@ -935,7 +986,8 @@ class DiffPanel(ThemeAwarePanel):
         try:
             self.query_one("#panel-header", Static).update(self._render_header())
             self.query_one("#files-list", Static).update(self._render_files())
-            self.query_one("#preview-content", Static).update(self._render_preview())
+            if not hasattr(self.app, "_open_workspace_file"):
+                self.query_one("#preview-content", Static).update(self._render_preview())
         except Exception:
             pass
 
@@ -1192,7 +1244,7 @@ class HarnessPanel(Container):
         """Compose the harness overview panel."""
         yield Static(self._render_header(), id="panel-header", classes="panel-header")
         with ScrollableContainer(id="harness-summary", classes="panel-content"):
-            yield Static(self._render_summary(), id="harness-content")
+            yield Static("Open Harness to inspect the active connection.", id="harness-content")
 
     def on_mount(self) -> None:
         """Refresh after mount so filesystem/provider state is current."""
@@ -1654,6 +1706,10 @@ class HarnessPanel(Container):
 
     def refresh_summary(self) -> None:
         """Refresh panel content."""
+        if hasattr(self.app, "_open_workspace_file") and (
+            not getattr(self.app, "sidebar_visible", False) or self.parent.has_class("-hidden")
+        ):
+            return
         try:
             self.query_one("#harness-content", Static).update(self._render_summary())
         except Exception:

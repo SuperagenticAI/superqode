@@ -1,5 +1,6 @@
 """Keyboard, pointer, and asynchronous search behavior in existing TUI surfaces."""
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from textual.widgets import Input, Static
 
 from superqode.app.inputs import SelectionAwareInput
 from superqode.app_main import SuperQodeApp
+from superqode.widgets.workspace_viewer import WorkspaceViewer, WorkspaceReadPane
 from superqode.sidebar import (
     CodebaseSearch,
     CodeSearchResult,
@@ -93,13 +95,14 @@ async def test_sidebar_keyboard_search_preview_back_and_draft(tmp_path, size):
         await pilot.press("enter")
         await pilot.pause()
         sidebar = app.query_one(CollapsibleSidebar)
-        assert sidebar.current_view == "code"
+        assert sidebar.current_view == "files"
         assert sidebar._current_file == selected
-        assert isinstance(app.focused, FilePreviewScroll)
+        assert isinstance(app.focused, WorkspaceReadPane)
         await pilot.press("escape")
         assert sidebar.current_view == "files"
-        assert isinstance(app.focused, ColorfulDirectoryTree)
-        await pilot.press("escape")
+        if size[0] >= 100:
+            assert isinstance(app.focused, ColorfulDirectoryTree)
+            await pilot.press("escape")
         await pilot.pause()
         assert not app.sidebar_visible
         assert app.focused is prompt
@@ -120,11 +123,12 @@ async def test_file_search_mouse_selection_and_sidebar_reopen(tmp_path):
         await pilot.click("#search-results-content", offset=(5, 0))
         await pilot.pause()
         sidebar = app.query_one(CollapsibleSidebar)
-        assert sidebar.current_view == "code"
+        assert sidebar.current_view == "files"
         assert sidebar._current_file == path
         await pilot.press("ctrl+b", "ctrl+b")
-        assert sidebar.current_view == "code"
-        assert isinstance(app.focused, FilePreviewScroll)
+        assert sidebar.current_view == "files"
+        assert isinstance(app.focused, ColorfulDirectoryTree)
+        assert app.query_one(WorkspaceViewer).path == path
 
 
 @pytest.mark.asyncio
@@ -214,9 +218,7 @@ async def test_code_search_debounces_and_ignores_stale_results(tmp_path, monkeyp
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_mouse", [False, True])
-async def test_code_search_opens_matching_line_in_existing_preview(
-    tmp_path, monkeypatch, use_mouse
-):
+async def test_code_search_opens_matching_line_in_main_preview(tmp_path, monkeypatch, use_mouse):
     path = tmp_path / "source.py"
     path.write_text("\n".join(f"value_{i} = {i}" for i in range(100)))
     monkeypatch.setattr(CodebaseSearch, "_do_search", lambda self, query: None)
@@ -237,16 +239,18 @@ async def test_code_search_opens_matching_line_in_existing_preview(
         else:
             await pilot.press("enter")
         await pilot.pause()
-        preview = sidebar.query_one(FilePreview)
-        await preview._preview_worker.wait()
+        preview = app.query_one(WorkspaceViewer)
+        async with asyncio.timeout(5):
+            while preview._page.line != 50:
+                await pilot.pause(0.02)
         await pilot.pause()
-        assert sidebar.current_view == "code"
-        assert preview.current_file == path
-        assert preview._preview_line == 50
-        assert isinstance(app.focused, FilePreviewScroll)
-        assert app.focused.scroll_y > 0
+        assert sidebar.current_view == "search"
+        assert preview.path == path
+        assert preview._page.line == 50
+        assert isinstance(app.focused, WorkspaceReadPane)
+        assert preview._page.text.startswith("value_49")
         await pilot.press("escape")
-        assert sidebar.current_view == "files"
+        assert sidebar.current_view == "search"
 
 
 def test_code_search_prunes_ignored_trees_and_supports_cancellation(tmp_path, monkeypatch):

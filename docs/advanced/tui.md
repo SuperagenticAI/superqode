@@ -1129,40 +1129,65 @@ and activity time from the backend record; only the session you resume is
 registered for future use. Selected session id and sidebar width are persisted
 per project under `.superqode/ui-state.json`.
 
-Open Files with `Ctrl+2`. Use arrow keys to browse, expand or collapse folders,
-and `Enter` to preview a file; mouse selection uses the same preview. `Ctrl+F`
+Open Files with `Ctrl+2` or `:sidebar`. Use arrow keys to browse, expand or collapse folders,
+and `Enter` to preview a file; mouse selection uses the same preview. Files open
+in a read-only viewer in the main workspace, leaving the tree available for
+the next selection. The sidebar's labeled section selector exposes Files,
+Git changes, Search contents, Context, Harness, Agent, History, and Task changes.
+`Ctrl+F`
 searches filenames while focus is in the sidebar. Use `Up` / `Down` to choose a
 result, then `Enter`, or click the result. All returned filename matches are
 keyboard-accessible through the scrolling result window.
 
-`Esc` closes file search, returns from a preview to Files, then closes the
+`Esc` closes file search, returns from the main viewer to Chat, then closes the
 sidebar and restores prompt focus. `Ctrl+B` hides or reopens the sidebar without
-resetting its selected tab. Browsing leaves the prompt draft intact. Outside
-the sidebar, `Ctrl+F` starts transcript search and saves an existing draft in
+resetting its selected section. Browsing retains the prompt draft and cursor,
+the transcript's reading position, and the recent file reading positions.
+The sidebar opens only when requested. Outside
+the sidebar and file viewer, `Ctrl+F` starts transcript search and saves an existing draft in
 `:stash` before prefilling the search command.
 
 The existing Search tab searches file contents after a short typing pause.
 Ignored dependency and build directories are skipped before traversal, and
 outdated searches cannot overwrite newer results. Select a code-search result
-with the keyboard or mouse to reveal its matching line in the existing preview,
+with the keyboard or mouse to reveal its matching line in the main viewer,
 within the preview limits below.
 
-With the preview focused:
+The viewer has **Contents** and **Changes** controls. Changes explicitly selects
+**Working tree**, **Staged**, or **Latest task**; task changes are relative to the
+recorded task baseline. Git changes includes untracked files. Selecting a staged
+or unstaged entry opens that specific comparison. Browsing never stages,
+accepts, rejects, or writes files.
+
+**Pin** keeps up to four files in the file selector. **Chat** or **Close** returns
+to the conversation. **Split** enables source and conversation side by side in
+terminals at least 160 columns wide. Below 100 columns, opening a file hides the
+navigator; `Ctrl+B` temporarily shows it at full width for another selection.
+
+With the file reader focused:
 
 | Key | Action |
 | --- | --- |
-| `e` | Open the in-app editor |
 | `r` | Reload the preview from disk |
-| `o` | Show the file in the conversation |
-| `q` or `Esc` | Return to Files |
+| `Ctrl+F` or `/` | Find text in the file |
+| `n` | Find next match, or next diff hunk in Changes |
+| `p` | Previous diff hunk in the displayed section |
+| `Ctrl+G` | Go to line |
+| `[` / `]` | Previous / next section |
+| `y` | Copy the displayed section |
+| `q` or `Esc` | Return to Chat |
 
-In the editor, `Ctrl+S` saves and `Esc` returns to the conversation. With unsaved
-changes, the first `Esc` warns and a second `Esc` discards the draft. If an agent
-or another editor changes the file on disk, saving stops and retains your draft.
-Copy your draft before closing and reopening to resolve the conflict.
+The toolbar also exposes Find, Line, Copy, and Path. Vim Normal mode adds `j` /
+`k`, `gg` / `G`, and `Ctrl+U` / `Ctrl+D` within the visible file reader. `h` focuses
+the file tree; `l` returns from the tree to the open reader. Search fields keep
+ordinary typing behavior. With Vim disabled, existing navigation remains active.
 
-Previews show up to 400 lines or 64 KB. The editor supports UTF-8 text files up
-to 1 MB; use an external editor for larger files or other encodings.
+Source previews read at most 400 lines or 64 KiB per section. Next/Previous
+navigates larger files without loading their entire contents. Source search and
+line lookup scan the first 8 MiB; beyond that, use Next. Git diff previews are
+capped at 1 MiB and displayed in sections. Binary files show an explanation.
+The source cache retains at most four sections and eight file reading positions.
+Use your own editor for file edits.
 
 ## Agent catalog and command completion
 

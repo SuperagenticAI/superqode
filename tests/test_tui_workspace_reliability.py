@@ -172,10 +172,11 @@ async def test_preview_reload_same_file(tmp_path):
         assert preview.query_one("#preview-syntax").content.code == "after\n"
 
 
-async def test_sidebar_opens_editor_and_refreshes_after_save(tmp_path, monkeypatch):
+async def test_sidebar_file_browser_is_read_only_and_keeps_workspace(tmp_path, monkeypatch):
     from superqode.app_main import SuperQodeApp
     from superqode.sidebar import CollapsibleSidebar
     from superqode.app.widgets import ConversationLog
+    from superqode.widgets.workspace_viewer import WorkspaceViewer
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
@@ -195,28 +196,26 @@ async def test_sidebar_opens_editor_and_refreshes_after_save(tmp_path, monkeypat
         sidebar = app.query_one(CollapsibleSidebar)
         if not app.sidebar_visible:
             app.action_toggle_sidebar()
-        preview = sidebar.query_one(FilePreview)
-        preview.set_file(path)
-        sidebar.current_view = "code"
-        workers = [w for w in app.workers if w.group == "file-preview"]
+        app._open_workspace_file(path)
+        preview = app.query_one(WorkspaceViewer)
+        workers = [w for w in app.workers if w.group == "workspace-preview"]
         if workers:
             await app.workers.wait_for_complete(workers)
         await pilot.pause()
         log = app.query_one(ConversationLog)
         await pilot.press("e")
         await pilot.pause()
-        assert isinstance(app.screen, FileEditorScreen)
-        app.screen.query_one(TextArea).load_text("new\n")
+        assert len(app.screen_stack) == 1
         await pilot.press("ctrl+s")
         await pilot.pause()
         await pilot.press("escape")
-        workers = [w for w in app.workers if w.group == "file-preview"]
+        workers = [w for w in app.workers if w.group == "workspace-preview"]
         if workers:
             await app.workers.wait_for_complete(workers)
         await pilot.pause()
         assert app.query_one(ConversationLog) is log
-        assert path.read_text() == "new\n"
-        assert preview.query_one("#preview-syntax").content.code == "new\n"
+        assert path.read_text() == "old\n"
+        assert preview._page.text == "old\n"
         await pilot.resize_terminal(80, 30)
         await pilot.pause()
         assert app.query_one("#content").size.width >= 40

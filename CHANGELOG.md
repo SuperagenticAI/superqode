@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Read-only file and diff browsing in the main workspace, with a persistent
+  file navigator, labeled sidebar sections, four pinned previews, per-file
+  reading positions, and optional source/conversation split on wide terminals.
+- Contents and Changes controls with explicit working-tree, staged and latest
+  task baselines, plus file search, go-to-line, section paging, copy and reload.
+  Narrow terminals use a temporary full-width navigator. Vim motions scroll
+  the visible reader when Vim mode is enabled.
+
+### Fixed
+
+- Parse Git status without dropping filename characters or misclassifying
+  unstaged files. Preserve spaces, Unicode and renamed paths; preview untracked
+  text files and select the correct change row with mouse or keyboard.
+- Ignore stale file/diff loads after another selection or return to Chat.
+  Preserve task drafts and transcript reading positions while browsing.
+- Bound source loading and preview caches, and defer hidden harness discovery.
+  Keep the sidebar opt-in and the existing connection workflow.
+
 ## [2.17.1] - 2026-10-12
 
 ### Added

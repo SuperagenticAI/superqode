@@ -522,17 +522,20 @@ class SuperQodeApp(
                 yield TopScanningLine(id="thinking-wave")
 
                 # Conversation/Response area - main content (expandable)
-                with Container(id="conversation"):
-                    # Initialize with wrap=True and no width constraints
-                    yield ConversationLog(
-                        id="log",
-                        highlight=True,
-                        markup=True,
-                        wrap=True,
-                        min_width=1,
-                        max_width=None,
-                    )
-                    yield NewOutputIndicator("", id="new-output-indicator")
+                with Horizontal(id="workspace-output"):
+                    from superqode.widgets.workspace_viewer import WorkspaceViewer
+
+                    yield WorkspaceViewer(Path.cwd(), id="workspace-viewer")
+                    with Container(id="conversation"):
+                        yield ConversationLog(
+                            id="log",
+                            highlight=True,
+                            markup=True,
+                            wrap=True,
+                            min_width=1,
+                            max_width=None,
+                        )
+                        yield NewOutputIndicator("", id="new-output-indicator")
 
                 # Pinned, auto-updating plan/todo checklist (from todo_write).
                 yield Static("", id="plan-review-panel")
@@ -832,7 +835,7 @@ class SuperQodeApp(
         # Opening the sidebar requests focus after layout. The startup timer
         # can run before that request settles; respect the visible navigation
         # intent instead of racing it back to the composer.
-        if self.sidebar_visible:
+        if self.sidebar_visible or self._workspace_has_focus():
             return
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
@@ -857,6 +860,8 @@ class SuperQodeApp(
         if getattr(self, "_vim_suspended_draft", None) is not None:
             self._restore_vim_draft()
         if self._sidebar_has_focus():
+            return
+        if self._workspace_has_focus():
             return
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
@@ -905,6 +910,7 @@ class SuperQodeApp(
                 getattr(sidebar, "_width", 34),
             )
             self._set_sidebar_width(preferred, event.size.width)
+            self._layout_workspace_viewer(event.size.width)
         except Exception:
             pass  # Resize may arrive before compose finishes.
         if not getattr(self, "_welcome_active", False):
