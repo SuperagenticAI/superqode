@@ -1169,10 +1169,14 @@ or unstaged entry opens that specific comparison. Browsing never stages,
 accepts, rejects, or writes files.
 
 **Pin** keeps up to four files in the file selector. **Chat** or **Close** returns
-to the conversation. The prompt box is hidden during source/diff inspection,
-giving the reader more room; returning to Chat restores the draft and cursor.
+to the conversation. The prompt box is hidden by default during source/diff
+inspection. Click **Prompt** or press `F4` to compose while keeping the file
+open; **Hide prompt** or `F4` hides it again. `Ctrl+I` also reveals and focuses
+the prompt. The choice is retained while browsing during the current session,
+and the draft, cursor and file position remain intact. Sending a task or command
+returns to Chat to show its results; reopening the file restores its position.
 The viewer supports understanding and reviewing agent changes without editing
-source files. Return to Chat to ask the agent to make a change.
+source files. Use the prompt to ask the agent to make a change.
 An approval request or agent question returns to Chat so the decision and its
 input remain visible.
 **Split** enables source and conversation side by side in
@@ -1183,6 +1187,7 @@ With the file reader focused:
 
 | Key | Action |
 | --- | --- |
+| `F4` | Show / hide the prompt while keeping the file open |
 | `r` | Reload the preview from disk |
 | `Ctrl+F` or `/` | Find text in the file |
 | `n` | Find next match, or next diff hunk in Changes |

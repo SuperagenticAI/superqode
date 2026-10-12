@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A persistent Sidebar toggle in the header, also available with `Ctrl+B`.
   Hide the composer during read-only source/diff inspection; Chat or Escape
   restores it with the task draft intact.
+- A Prompt toggle in the file viewer and `F4` shortcut to show or hide the
+  composer alongside an open file, preserving the draft and reading position.
 
 ### Fixed
 

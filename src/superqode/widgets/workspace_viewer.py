@@ -196,6 +196,9 @@ class WorkspaceViewer(Container):
     class SplitRequested(Message):
         pass
 
+    class PromptRequested(Message):
+        pass
+
     def __init__(self, root: Path, **kwargs):
         super().__init__(**kwargs)
         self.root = root
@@ -233,6 +236,7 @@ class WorkspaceViewer(Container):
                 id="workspace-baseline",
             )
         with Horizontal(id="workspace-tools"):
+            yield Button("Prompt", id="workspace-prompt", tooltip="Show or hide the prompt · F4")
             yield Button("Find", id="workspace-find")
             yield Button("Line", id="workspace-line")
             yield Button("Copy", id="workspace-copy")
@@ -245,7 +249,9 @@ class WorkspaceViewer(Container):
             yield Button("Previous", id="workspace-previous")
             yield Static("", id="workspace-page-label")
             yield Button("Next", id="workspace-next")
-        yield Static("Esc Chat · Ctrl+F find · Ctrl+G line · [ ] sections", id="workspace-note")
+        yield Static(
+            "F4 prompt · Esc Chat · Ctrl+F find · Ctrl+G line · [ ] sections", id="workspace-note"
+        )
 
     def on_mount(self):
         self.query_one("#workspace-search").display = False
@@ -618,6 +624,8 @@ class WorkspaceViewer(Container):
             self.action_chat()
         elif action == "split":
             self.post_message(self.SplitRequested())
+        elif action == "prompt":
+            self.post_message(self.PromptRequested())
         elif action in ("contents", "changes"):
             if self.mode != action:
                 self.mode = action

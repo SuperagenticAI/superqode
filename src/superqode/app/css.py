@@ -133,6 +133,7 @@ CollapsibleSidebar CollapsibleTitle:hover {
 /* Main content - Warp style layout */
 #content { width: 1fr; layout: vertical; }
 #content.reviewing-file #prompt-area { display: none; }
+#content.reviewing-file.with-workspace-prompt #prompt-area { display: block; }
 #workspace-output { height: 1fr; width: 100%; }
 #workspace-output.reviewing #conversation { display: none; }
 #workspace-output.split #conversation { display: block; width: 40%; }

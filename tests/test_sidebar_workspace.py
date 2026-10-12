@@ -514,6 +514,101 @@ async def test_agent_decision_returns_to_visible_composer(tmp_path, pending):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("width", [80, 120, 180])
+@pytest.mark.parametrize("vim", [False, True])
+async def test_prompt_toggle_keeps_file_and_draft(tmp_path, monkeypatch, width, vim):
+    from superqode.app import theme_bridge as bridge
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1" if vim else "0")
+    path = tmp_path / "source.py"
+    contents = "pass\n" * 150
+    path.write_text(contents)
+    app = SuperQodeApp()
+    async with app.run_test(size=(width, 36)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.value = "Keep my task draft"
+        prompt.cursor_position = 5
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        reader = viewer.query_one("#workspace-reader")
+        reader.scroll_to(y=12, animate=False)
+        await pilot.pause()
+        assert not app.query_one("#prompt-area").display
+        await pilot.click("#workspace-prompt")
+        await pilot.pause()
+        assert app.query_one("#prompt-area").display and app.focused is prompt
+        assert viewer.has_class("visible") and viewer.path == path
+        assert reader.scroll_y == 12
+        if vim:
+            assert app._vim_input_mode == "insert"
+        await pilot.press("X")
+        assert prompt.value == "Keep Xmy task draft" and prompt.cursor_position == 6
+        assert bridge.apply_theme("light")
+        app._refresh_theme_view()
+        await pilot.pause()
+        assert app.query_one("#prompt-area").display and app.focused is prompt
+        assert viewer.query_one("#workspace-prompt").has_class("active")
+        assert viewer.query_one("#workspace-copy-path").region.right <= viewer.region.right
+        await pilot.press("f4")
+        await pilot.pause()
+        assert not app.query_one("#prompt-area").display and app.focused is reader
+        if vim:
+            assert app._vim_input_mode == "normal"
+        await pilot.press("f4")
+        await pilot.pause()
+        assert app.query_one("#prompt-area").display and app.focused is prompt
+        await pilot.click("#workspace-prompt")
+        await pilot.pause()
+        assert not app.query_one("#prompt-area").display and app.focused is reader
+        assert prompt.value == "Keep Xmy task draft" and prompt.cursor_position == 6
+        assert reader.scroll_y == 12 and path.read_text() == contents
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("vim", [False, True])
+async def test_prompt_focus_and_narrow_drawer_keep_file_open(tmp_path, monkeypatch, vim):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1" if vim else "0")
+    path = tmp_path / "source.py"
+    path.write_text("pass\n" * 150)
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 36)) as pilot:
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        await pilot.press("ctrl+k")
+        await pilot.pause()
+        assert app.query("CommandPalette.show-palette")
+        await pilot.press("f4")
+        assert not app.query_one("#prompt-area").display
+        assert viewer.has_class("visible")
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("ctrl+i")
+        await pilot.pause()
+        assert viewer.has_class("visible") and app.query_one("#prompt-area").display
+        assert app.focused.id == "prompt-input"
+        if vim:
+            assert app._vim_input_mode == "insert"
+        await pilot.press("ctrl+b")
+        await pilot.pause()
+        assert app.query_one("#main-grid").has_class("workspace-drawer")
+        await pilot.press("f4")
+        await pilot.pause()
+        assert not app.sidebar_visible
+        assert app.query_one("#prompt-area").display and viewer.has_class("visible")
+        assert app.focused.id == "prompt-input"
+        app.action_sidebar_files()
+        app._open_workspace_file(path)
+        await settled(viewer, pilot)
+        assert app.query_one("#prompt-area").display  # retain the session choice
+        app.query_one(SelectionAwareInput).value = ":connect"
+        await pilot.press("ctrl+i", "enter")
+        await pilot.pause()
+        assert not viewer.has_class("visible") and app._in_selection_mode()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("vim", [False, True])
 @pytest.mark.parametrize("mouse", [False, True])
 async def test_every_sidebar_section_with_keyboard_and_mouse(tmp_path, monkeypatch, vim, mouse):

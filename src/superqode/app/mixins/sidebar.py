@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from pathlib import Path
+from textual.widgets import Button
 from superqode.sidebar import (
     CollapsibleSidebar,
 )
@@ -36,6 +37,12 @@ class SidebarMixin:
         output = self.query_one("#workspace-output")
         output.set_class(visible, "reviewing")
         self.query_one("#content").set_class(visible, "reviewing-file")
+        prompt_visible = visible and getattr(self, "_workspace_prompt_visible", False)
+        self.query_one("#content").set_class(prompt_visible, "with-workspace-prompt")
+        if viewer.is_mounted:
+            button = viewer.query_one("#workspace-prompt", Button)
+            button.label = "Hide prompt" if prompt_visible else "Prompt"
+            button.set_class(prompt_visible, "active")
         output.set_class(
             visible and width >= 160 and getattr(self, "_workspace_split", False), "split"
         )
@@ -63,6 +70,36 @@ class SidebarMixin:
             sidebar.call_after_refresh(sidebar.focus_current_view)
         else:
             self.call_after_refresh(self.query_one("#prompt-input").focus)
+
+    def _show_workspace_prompt(self):
+        """Expose the composer while retaining the current source/diff view."""
+        self._workspace_prompt_visible = True
+        if self.query_one("#main-grid").has_class("workspace-drawer"):
+            self.action_toggle_sidebar(focus=False)
+        self._layout_workspace_viewer()
+        prompt = self.query_one("#prompt-input")
+        prompt.call_after_refresh(prompt.focus)
+
+    def action_toggle_workspace_prompt(self):
+        if not self.check_action("toggle_workspace_prompt", ()):
+            return
+        visible = self.query_one("#main-grid").has_class("workspace-drawer") or not getattr(
+            self, "_workspace_prompt_visible", False
+        )
+        if self._vim_enabled():
+            self._restore_vim_draft(cancel_line=True)
+            self._set_vim_state("insert" if visible else "normal")
+        if visible:
+            self._show_workspace_prompt()
+        else:
+            self._workspace_prompt_visible = False
+            self._layout_workspace_viewer()
+            viewer = self.query_one(WorkspaceViewer)
+            viewer.call_after_refresh(viewer.focus_reader)
+
+    def on_workspace_viewer_prompt_requested(self, event):
+        event.stop()
+        self.action_toggle_workspace_prompt()
 
     def on_workspace_viewer_split_requested(self, event):
         event.stop()
@@ -239,22 +276,23 @@ class SidebarMixin:
         except Exception:
             pass
 
-    def action_toggle_sidebar(self):
+    def action_toggle_sidebar(self, *, focus=True):
         self.sidebar_visible = not self.sidebar_visible
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         divider = self.query_one("#sidebar-divider")
         if self.sidebar_visible:
             sidebar.add_class("visible")
             divider.remove_class("-hidden")
-            sidebar.focus_current_view()
+            if focus:
+                sidebar.focus_current_view()
         else:
             sidebar.remove_class("visible")
             divider.add_class("-hidden")
             # Return focus to input when sidebar is closed
             viewer = self.query_one(WorkspaceViewer)
-            if viewer.has_class("visible"):
+            if focus and viewer.has_class("visible"):
                 viewer.call_after_refresh(viewer.focus_reader)
-            else:
+            elif focus:
                 self.query_one("#prompt-input").focus()
                 self.set_timer(0.1, self._ensure_input_focus)
         self._layout_workspace_viewer()

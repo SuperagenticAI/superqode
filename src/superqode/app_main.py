@@ -234,6 +234,7 @@ class SuperQodeApp(
         Binding("ctrl+c", "interrupt", "Interrupt", show=True),
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
+        Binding("f4", "toggle_workspace_prompt", "Show/hide prompt", show=False, priority=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
         Binding("ctrl+k", "command_palette", "Commands", show=True, priority=True),
         Binding("ctrl+o", "run_overview", "Runs", show=False, priority=True),
@@ -784,6 +785,12 @@ class SuperQodeApp(
     _REBINDABLE_ACTIONS = {binding.action for binding in BINDINGS}
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "toggle_workspace_prompt":
+            return bool(
+                len(self.screen_stack) == 1
+                and not self.query("CommandPalette.show-palette")
+                and self.query("WorkspaceViewer.visible")
+            )
         if action.startswith("panel_vim_"):
             available = self._panel_vim_target() is not None
             if not available:
@@ -1487,7 +1494,13 @@ class SuperQodeApp(
         picker = getattr(self, "_model_picker_widget", None)
         if picker is not None and picker.is_attached:
             return
-        self._show_workspace_chat()
+        if self.query("WorkspaceViewer.visible"):
+            if self._vim_enabled():
+                self._restore_vim_draft(cancel_line=True)
+                self._set_vim_state("insert")
+            self._show_workspace_prompt()
+        else:
+            self._show_workspace_chat()
         prompt = self.query_one("#prompt-input", SelectionAwareInput)
         prompt.call_after_refresh(prompt.focus)
 
