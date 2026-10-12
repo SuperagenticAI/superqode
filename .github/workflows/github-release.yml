@@ -82,7 +82,7 @@ jobs:
           for attempt in 1 2 3; do
             if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
               if gh release upload "$RELEASE_TAG" dist/* --clobber &&
-                 gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"; then
+                 gh release edit "$RELEASE_TAG" --draft=false --notes-file "$RUNNER_TEMP/notes.md"; then
                 exit 0
               fi
             elif gh release create "$RELEASE_TAG" dist/* --verify-tag --title "${RELEASE_TAG#v}" --notes-file "$RUNNER_TEMP/notes.md"; then
