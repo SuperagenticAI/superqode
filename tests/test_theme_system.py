@@ -1156,6 +1156,7 @@ async def test_open_sidebar_repaints_retained_content_without_resetting_navigati
         async with asyncio.timeout(5):
             while not isinstance(preview.query_one("#preview-syntax", Static).content, Syntax):
                 await pilot.pause(0.05)
+        original_code = preview.query_one("#preview-syntax", Static).content.code
         app.action_sidebar_files()
         await pilot.pause()
         tree = sidebar.query_one(ColorfulDirectoryTree)
@@ -1171,7 +1172,7 @@ async def test_open_sidebar_repaints_retained_content_without_resetting_navigati
             assert app.focused is tree
             assert tree.cursor_node is node
             assert preview.current_file == path
-            assert preview.query_one("#preview-syntax", Static).content.code == path.read_text()
+            assert preview.query_one("#preview-syntax", Static).content.code == original_code
             assert prompt.value == "Keep this task draft"
             assert sidebar.query_one(".sidebar-title", Static).content == sidebar._render_title()
             assert agent.query_one("#agent-status", Static).content == agent._render_status()

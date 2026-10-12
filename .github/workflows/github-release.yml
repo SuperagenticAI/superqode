@@ -1,0 +1,101 @@
+name: Recover GitHub release
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/github-release.yml"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag already published to PyPI
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve the existing release tag
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          python - <<'PY'
+          import os, re, tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+          tag = os.environ.get('REQUESTED_TAG', '').strip() or 'v' + version
+          if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+              raise SystemExit('Expected an existing stable release tag')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('tag=' + tag + '\n')
+          PY
+      - name: Check out the published tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+      - name: Validate tag metadata
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: python scripts/check_release_metadata.py --tag "$RELEASE_TAG"
+      - name: Download and verify the published PyPI artifacts
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, urllib.request, zipfile
+          from pathlib import Path
+          version = os.environ['RELEASE_TAG'].removeprefix('v')
+          with urllib.request.urlopen('https://pypi.org/pypi/superqode/' + version + '/json', timeout=30) as response:
+              package = json.load(response)
+          assert package['info']['version'] == version
+          expected = {'superqode-' + version + '-py3-none-any.whl', 'superqode-' + version + '.tar.gz'}
+          assert {entry['filename'] for entry in package['urls']} == expected
+          Path('dist').mkdir(exist_ok=True)
+          for entry in package['urls']:
+              assert entry['url'].startswith('https://files.pythonhosted.org/')
+              with urllib.request.urlopen(entry['url'], timeout=60) as response:
+                  data = response.read()
+              assert hashlib.sha256(data).hexdigest() == entry['digests']['sha256']
+              target = Path('dist') / entry['filename']
+              target.write_bytes(data)
+              if target.suffix == '.whl':
+                  with zipfile.ZipFile(target) as wheel:
+                      for name in wheel.namelist():
+                          if name.startswith('superqode/'):
+                              source = Path('src') / name
+                              if source.is_file():
+                                  assert wheel.read(name) == source.read_bytes(), name
+          PY
+      - name: Create or repair the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          exec > >(tee "$RUNNER_TEMP/github-release.log") 2>&1
+          python scripts/changelog_notes.py "$RELEASE_TAG" > "$RUNNER_TEMP/notes.md"
+          for attempt in 1 2 3; do
+            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              if gh release upload "$RELEASE_TAG" dist/* --clobber &&
+                 gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"; then
+                exit 0
+              fi
+            elif gh release create "$RELEASE_TAG" dist/* --verify-tag --title "${RELEASE_TAG#v}" --notes-file "$RUNNER_TEMP/notes.md"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          details = (Path(os.environ['RUNNER_TEMP']) / 'github-release.log').read_text()[-2500:]
+          details = details.replace(os.environ['GH_TOKEN'], '[redacted]')
+          details = details.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error::GitHub release publication failed after three attempts: ' + details)
+          PY
+          exit 1

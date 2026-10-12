@@ -316,6 +316,8 @@ async def test_mouse_provider_choice_discards_digits_from_the_previous_page(size
         await pilot.pause()
         assert app._selection_digit_buffer == ""
         assert app.query_one("#prompt-input").value == ""
+        # Keyboard input follows the mouse transition's deferred focus return.
+        await until(pilot, lambda: app.focused is app.query_one("#prompt-input"))
         await pilot.press("down")
         await pilot.pause()
         model = app._byok_model_list[app._byok_highlighted_model_index]
