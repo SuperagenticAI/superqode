@@ -294,6 +294,9 @@ class HelperVimMixin:
             viewer.focus_reader()
             return
         self._restore_vim_draft()
+        show_chat = getattr(self, "_show_workspace_chat", None)
+        if callable(show_chat):
+            show_chat()
         self.query_one("#prompt-input").focus()
 
     def _vim_workspace_navigation_active(self, key: str = "") -> bool:
@@ -359,6 +362,9 @@ class HelperVimMixin:
         return True
 
     def _begin_vim_line_mode(self, prefix: str, state: str, prompt) -> None:
+        show_chat = getattr(self, "_show_workspace_chat", None)
+        if callable(show_chat):
+            show_chat()
         if getattr(self, "_vim_suspended_draft", None) is None:
             self._vim_suspended_draft = (
                 prompt.value,
@@ -582,6 +588,9 @@ class HelperVimMixin:
         if token in {"i", "a", "o"}:
             self._restore_vim_draft(prompt)
             self._set_vim_state("insert")
+            show_chat = getattr(self, "_show_workspace_chat", None)
+            if callable(show_chat):
+                show_chat()
             if prompt is not None:
                 prompt.focus()
             self._consume_vim_event(event)

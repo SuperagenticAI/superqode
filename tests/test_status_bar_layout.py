@@ -51,7 +51,9 @@ class TestFullWidthUsage:
 
         line = bar._render_for_width(150)
 
-        assert cell_len(line.plain) == 150
+        # The extra Sidebar control may wrap chrome onto its own row. The
+        # session-state row still uses the complete width and right edge.
+        assert cell_len(line.plain.splitlines()[-1]) == 150
         # The session-state cluster reaches the far edge rather than hugging
         # the left. The connect/disconnect control is the last thing on it.
         assert "BUILD" in line.plain

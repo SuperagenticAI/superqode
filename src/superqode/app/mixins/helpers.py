@@ -426,6 +426,10 @@ class HelpersMixin(
 
     def _set_composer_working_state(self, working: bool, *, interactive: bool = False) -> None:
         """Keep drafts editable during work; submissions use the message queue."""
+        if interactive:
+            show_chat = getattr(self, "_show_workspace_chat", None)
+            if callable(show_chat):
+                show_chat()
         try:
             prompt_area = self.query_one("#prompt-area")
             prompt_area.set_class(working and not interactive, "working")

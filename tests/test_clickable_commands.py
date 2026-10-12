@@ -212,7 +212,7 @@ def test_the_controls_sit_beside_the_identity():
 
     # Identity keeps the corner; the controls sit beside it, still on the left.
     assert rendered.plain.startswith("SuperQode")
-    assert "[⏏ Disconnect ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain
+    assert "[⏏ Disconnect ↑] [Sidebar ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain
     assert rendered.plain.index("[⏏") < rendered.plain.index("openai")
 
 
@@ -264,7 +264,8 @@ def test_theme_and_connection_hit_targets_follow_their_header_row(width):
 def test_narrow_header_keeps_hub_and_exit_accessible():
     bar = _bar(active_harness="core", interaction_mode="build")
     rendered = bar._render_for_width(78)
-    assert "[🔌 Connect ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain.splitlines()[0]
+    assert "[🔌 Connect ↑] [Sidebar ↑] [⚓ Hub ↑] [⏻ Exit ↑]" in rendered.plain.splitlines()[0]
+    assert _hit(bar, rendered, "[Sidebar ↑]") == "sidebar"
     assert _hit(bar, rendered, "[⚓ Hub ↑]") == "hub"
     assert _hit(bar, rendered, "[⏻ Exit ↑]") == "exit"
     assert "BUILD" in rendered.plain.splitlines()[1]
@@ -307,6 +308,9 @@ def test_no_command_ever_asks_when_idle(command):
         assert app.commands == []
     elif command == "workspace-files":
         assert app.sidebar_actions == ["files"]
+        assert app.commands == []
+    elif command == "sidebar":
+        assert app.sidebar_actions == ["close"]
         assert app.commands == []
     elif command.startswith("plan-"):
         assert app.commands == [f":plan {command.removeprefix('plan-')}"]

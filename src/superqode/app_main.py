@@ -1482,7 +1482,14 @@ class SuperQodeApp(
 
     def action_focus_input(self):
         """Focus the input box - always available via Ctrl+I or when needed."""
-        self._ensure_input_focus()
+        if len(self.screen_stack) != 1 or self.query("CommandPalette.show-palette"):
+            return
+        picker = getattr(self, "_model_picker_widget", None)
+        if picker is not None and picker.is_attached:
+            return
+        self._show_workspace_chat()
+        prompt = self.query_one("#prompt-input", SelectionAwareInput)
+        prompt.call_after_refresh(prompt.focus)
 
     # ========================================================================
     # Enhanced Thinking Animation

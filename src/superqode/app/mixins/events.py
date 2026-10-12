@@ -358,12 +358,7 @@ class EventHandlerMixin:
 
         text = event.value.strip()
         if text:
-            from superqode.widgets.workspace_viewer import WorkspaceViewer
-
-            viewer = self.query_one(WorkspaceViewer)
-            if viewer.has_class("visible"):
-                viewer.suspend()
-                self._layout_workspace_viewer()
+            self._show_workspace_chat()
         # If a selection digit buffer is active, clear its timer to avoid double-select
         if hasattr(self, "_selection_digit_timer") and self._selection_digit_timer:
             try:

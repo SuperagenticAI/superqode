@@ -11,7 +11,7 @@ from textual.widgets import Input, Select, Static
 
 from superqode.app_main import SuperQodeApp
 from superqode.app.inputs import SelectionAwareInput
-from superqode.app.widgets import ConversationLog
+from superqode.app.widgets import ColorfulStatusBar, ConversationLog
 from superqode.sidebar import CollapsibleSidebar, GitChangesPanel, get_git_changes, get_file_diff
 from superqode.sidebar import ColorfulDirectoryTree
 from superqode.sidebar import GitChange
@@ -178,6 +178,8 @@ async def test_main_viewer_preserves_draft_tree_and_chat(tmp_path, width):
         assert sidebar.current_view == "files"
         assert app.focused.id == "workspace-reader"
         assert viewer.size.width > 45
+        assert not app.query_one("#prompt-area").display
+        assert not prompt.has_focus
         assert viewer.query_one("#workspace-copy-path").region.right <= viewer.region.right
         assert prompt.value == "My unsubmitted task" and prompt.cursor_position == 4
         assert app.sidebar_visible == (width >= 100)
@@ -188,6 +190,7 @@ async def test_main_viewer_preserves_draft_tree_and_chat(tmp_path, width):
         await pilot.press("escape")
         await pilot.pause()
         assert not viewer.has_class("visible")
+        assert app.query_one("#prompt-area").display
         assert app.query_one(ConversationLog) is log and log.scroll_y == old_scroll
         assert prompt.value == "My unsubmitted task" and prompt.cursor_position == 4
         if app.sidebar_visible:
@@ -380,13 +383,181 @@ async def test_viewer_vim_focus_and_connection_return(tmp_path, monkeypatch, vim
             await pilot.press("escape")
             assert app.focused is reader and viewer.has_class("visible")
         prompt = app.query_one(SelectionAwareInput)
-        prompt.focus()
-        prompt.value = ":connect"
-        await pilot.press("enter")
+        if vim:
+            await pilot.press(":")
+            assert prompt.value == ":"
+            await pilot.press(*"connect", "enter")
+        else:
+            app.action_focus_input()
+            await pilot.pause()
+            prompt.value = ":connect"
+            await pilot.press("enter")
         await pilot.pause()
         assert not viewer.has_class("visible")
         assert app._in_selection_mode()
         assert app.sidebar_visible  # explicitly opened before :connect
+        assert app.query_one("#prompt-area").display
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("width", [80, 120, 180])
+async def test_header_sidebar_toggle_and_hidden_composer_preserve_review(tmp_path, width):
+    path = tmp_path / "source.py"
+    path.write_text("pass\n" * 150)
+    app = SuperQodeApp()
+    async with app.run_test(size=(width, 36)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.value = "Keep this task draft"
+        prompt.cursor_position = 5
+        bar = app.query_one(ColorfulStatusBar)
+
+        async def click_toggle():
+            bar.render()
+            start, _, _ = next(hit for hit in bar._hits if hit[2] == "sidebar")
+            await pilot.click(
+                "#status-bar", offset=(start + 1 + bar.content_offset.x, bar.content_offset.y)
+            )
+            await pilot.pause()
+
+        await click_toggle()
+        assert app.sidebar_visible and bar.sidebar_open
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        reader = viewer.query_one("#workspace-reader")
+        reader.scroll_to(y=12, animate=False)
+        await pilot.pause()
+        assert not app.query_one("#prompt-area").display
+        await click_toggle()
+        assert app.sidebar_visible == (width < 100)
+        assert bar.sidebar_open == app.sidebar_visible
+        await pilot.press("ctrl+b")
+        await pilot.pause()
+        assert app.sidebar_visible == (width >= 100)
+        assert viewer.has_class("visible") and viewer.path == path
+        assert reader.scroll_y == 12
+        assert not app.query_one("#prompt-area").display
+        await pilot.click("#workspace-chat")
+        await pilot.pause()
+        assert app.query_one("#prompt-area").display
+        assert prompt.value == "Keep this task draft" and prompt.cursor_position == 5
+        assert path.read_text() == "pass\n" * 150
+
+
+@pytest.mark.asyncio
+async def test_connect_header_action_reveals_composer_from_file(tmp_path):
+    path = tmp_path / "source.py"
+    path.write_text("pass\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 36)) as pilot:
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        assert not app.query_one("#prompt-area").display
+        bar = app.query_one(ColorfulStatusBar)
+        bar.render()
+        start, _, _ = next(hit for hit in bar._hits if hit[2] == "connect")
+        await pilot.click(
+            "#status-bar", offset=(start + 1 + bar.content_offset.x, bar.content_offset.y)
+        )
+        await pilot.pause()
+        assert not viewer.has_class("visible")
+        assert app.query_one("#prompt-area").display
+        assert app._in_selection_mode()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", ["i", "a", "o"])
+async def test_vim_compose_from_read_only_view_restores_draft(tmp_path, monkeypatch, key):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    path = tmp_path / "source.py"
+    path.write_text("pass\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 36)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.value = "My task draft"
+        prompt.cursor_position = 6
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        await pilot.press(key)
+        await pilot.pause()
+        assert not viewer.has_class("visible")
+        assert app.query_one("#prompt-area").display
+        assert app.focused is prompt and app._vim_input_mode == "insert"
+        assert prompt.value == "My task draft" and prompt.cursor_position == 6
+        assert path.read_text() == "pass\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pending", ["_permission_pending", "_awaiting_agent_question"])
+async def test_agent_decision_returns_to_visible_composer(tmp_path, pending):
+    path = tmp_path / "source.py"
+    path.write_text("pass\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 36)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.value = "Keep my task"
+        app._open_workspace_file(path)
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        setattr(app, pending, True)
+        app.is_busy = True
+        await pilot.pause()
+        assert not viewer.has_class("visible")
+        assert app.query_one("#prompt-area").display
+        assert app._decision_draft[0] == "Keep my task"
+        setattr(app, pending, False)
+        app.is_busy = False
+        await pilot.pause()
+        assert prompt.value == "Keep my task"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("vim", [False, True])
+@pytest.mark.parametrize("mouse", [False, True])
+async def test_every_sidebar_section_with_keyboard_and_mouse(tmp_path, monkeypatch, vim, mouse):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1" if vim else "0")
+    monkeypatch.setattr(HarnessPanel, "refresh_summary", lambda self: None)
+    path = tmp_path / "source.py"
+    path.write_text("pass\n")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 36)) as pilot:
+        app.action_sidebar_files()
+        sidebar = app.query_one(CollapsibleSidebar)
+        sidebar._current_file = path
+        selector = sidebar.query_one("#sidebar-section", Select)
+        sections = (
+            "files",
+            "changes",
+            "search",
+            "context",
+            "harness",
+            "agent",
+            "history",
+            "diff",
+            "code",
+        )
+        for index, section in enumerate(sections):
+            selector.focus()
+            await pilot.pause()
+            if mouse:
+                await pilot.click("#sidebar-section SelectCurrent", offset=(3, 1))
+                await pilot.pause()
+                overlay = selector.query_one("SelectOverlay")
+                await pilot.click(
+                    "#sidebar-section SelectOverlay", offset=(3, overlay.content_offset.y + index)
+                )
+            else:
+                await pilot.press("enter", "home", *(["down"] * index), "enter")
+            await pilot.pause()
+            expected = "files" if section == "code" else section
+            assert sidebar.current_view == expected, (vim, mouse, section)
+            assert sidebar.query_one(f"#{expected}-view").has_class("visible")
+            assert selector.region.right <= sidebar.region.right
+        viewer = app.query_one(WorkspaceViewer)
+        await settled(viewer, pilot)
+        assert viewer.has_class("visible") and viewer.path == path
 
 
 @pytest.mark.asyncio

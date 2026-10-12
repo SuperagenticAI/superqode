@@ -208,6 +208,7 @@ class ColorfulStatusBar(Static):
     # Short session title/id shown after resume so the active chat is obvious.
     active_session: reactive[str] = reactive("")
     can_go_back: reactive[bool] = reactive(False)
+    sidebar_open: reactive[bool] = reactive(False)
     interaction_mode: reactive[str] = reactive("build")
     approval_mode: reactive[str] = reactive("ask")
     plan_state: reactive[str] = reactive("")
@@ -501,7 +502,7 @@ class ColorfulStatusBar(Static):
             else ("🔌", "Connect", THEME["success"], "connect")
         )
         toolbar_width = sum(
-            cell_len(label) + 5 for label in (f"{icon} {word}", "⚓ Hub", "⏻ Exit")
+            cell_len(label) + 5 for label in (f"{icon} {word}", "Sidebar", "⚓ Hub", "⏻ Exit")
         ) + (11 if self.can_go_back else 0)
         two_rows = width < (
             cell_len(identity.plain)
@@ -552,9 +553,11 @@ class ColorfulStatusBar(Static):
                     break
 
         placed = False
+        compact_sidebar_cost = cell_len("▣") + chrome
+        compact_exit_cost = cell_len("⏻") + chrome
         for label in (f"{icon} {word}", f"{icon} {word[:4]}", icon):
             cost = cell_len(label) + chrome
-            if room >= cost:
+            if room >= cost + compact_sidebar_cost + compact_exit_cost:
                 self._append_button(
                     controls,
                     label,
@@ -569,9 +572,22 @@ class ColorfulStatusBar(Static):
                 break
 
         if placed:
+            for label in ("Sidebar", "▣"):
+                cost = cell_len(label) + chrome
+                if room >= cost + compact_exit_cost:
+                    self._append_button(
+                        controls,
+                        label,
+                        THEME["pink"] if self.sidebar_open else THEME["cyan"],
+                        "sidebar",
+                        separator=False,
+                        gap=True,
+                        hits=control_hits,
+                    )
+                    room -= cost
+                    break
             # Keep enough room for the compact Exit control. On a busy row the
             # Hub label compacts to its icon before Exit disappears.
-            compact_exit_cost = cell_len("⏻") + chrome
             for label in ("⚓ Hub", "⚓"):
                 cost = cell_len(label) + chrome
                 if room >= cost + compact_exit_cost:

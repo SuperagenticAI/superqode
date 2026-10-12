@@ -54,6 +54,9 @@ def begin_inline_view(app, *, selection_flags=(), clear_input: bool = True) -> i
     retained. Generations distinguish an old load from a later visit to the
     same page, including navigation Back to that page.
     """
+    show_chat = getattr(app, "_show_workspace_chat", None)
+    if callable(show_chat):
+        show_chat()
     generation = getattr(app, "_inline_view_generation", 0) + 1
     app._inline_view_generation = generation
     if clear_input:

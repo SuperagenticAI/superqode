@@ -19,6 +19,7 @@ CLICKABLE_COMMANDS: frozenset[str] = frozenset(
         "activity",
         "appearance",
         "settings",
+        "sidebar",
         "trial",
         "feedback",
         "history-earlier",
@@ -188,6 +189,17 @@ class ClickableCommandMixin:
             return
         if command not in CLICKABLE_COMMANDS:
             return
+        if command not in {
+            "sidebar",
+            "workspace-files",
+            "workspace-close",
+            "theme",
+            "appearance",
+            "settings",
+        }:
+            show_chat = getattr(self, "_show_workspace_chat", None)
+            if callable(show_chat):
+                show_chat()
         if command == "back":
             if not self._navigate_back():
                 self._clicked_command_log().add_info("Nothing to go back to.")
@@ -204,6 +216,9 @@ class ClickableCommandMixin:
             return
         if command == "workspace-files":
             self.action_sidebar_files()
+            return
+        if command == "sidebar":
+            self.action_toggle_sidebar()
             return
         if command == "workspace-close":
             if getattr(self, "sidebar_visible", False):

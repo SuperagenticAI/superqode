@@ -1129,11 +1129,14 @@ and activity time from the backend record; only the session you resume is
 registered for future use. Selected session id and sidebar width are persisted
 per project under `.superqode/ui-state.json`.
 
-Open Files with `Ctrl+2` or `:sidebar`. Use arrow keys to browse, expand or collapse folders,
+Toggle the navigator with **Sidebar** in the header or `Ctrl+B`. Open Files with
+`Ctrl+2` or `:sidebar`. Use arrow keys to browse, expand or collapse folders,
 and `Enter` to preview a file; mouse selection uses the same preview. Files open
 in a read-only viewer in the main workspace, leaving the tree available for
 the next selection. The sidebar's labeled section selector exposes Files,
 Git changes, Search contents, Context, Harness, Agent, History, and Task changes.
+Click the section selector, or focus it with `Tab`, press `Enter`, choose with
+`Up` / `Down`, and press `Enter` again. All sections are available either way.
 Dark themes use a black navigator background; light themes keep a readable light
 background. File, search, context and change lists use colored language symbols
 and badges (such as Python, JS, TS, C++ and Rust) without requiring a Nerd Font.
@@ -1166,7 +1169,13 @@ or unstaged entry opens that specific comparison. Browsing never stages,
 accepts, rejects, or writes files.
 
 **Pin** keeps up to four files in the file selector. **Chat** or **Close** returns
-to the conversation. **Split** enables source and conversation side by side in
+to the conversation. The prompt box is hidden during source/diff inspection,
+giving the reader more room; returning to Chat restores the draft and cursor.
+The viewer supports understanding and reviewing agent changes without editing
+source files. Return to Chat to ask the agent to make a change.
+An approval request or agent question returns to Chat so the decision and its
+input remain visible.
+**Split** enables source and conversation side by side in
 terminals at least 160 columns wide. Below 100 columns, opening a file hides the
 navigator; `Ctrl+B` temporarily shows it at full width for another selection.
 

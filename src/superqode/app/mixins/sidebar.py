@@ -35,6 +35,7 @@ class SidebarMixin:
         visible = viewer.has_class("visible")
         output = self.query_one("#workspace-output")
         output.set_class(visible, "reviewing")
+        self.query_one("#content").set_class(visible, "reviewing-file")
         output.set_class(
             visible and width >= 160 and getattr(self, "_workspace_split", False), "split"
         )
@@ -43,11 +44,20 @@ class SidebarMixin:
         )
         preferred = getattr(self, "_preferred_sidebar_width", 34)
         self._set_sidebar_width(preferred, width)
+        self.query_one("#status-bar").sidebar_open = self.sidebar_visible
+
+    def _show_workspace_chat(self):
+        """Return from source inspection without changing the task draft."""
+        if not self.is_running:
+            return
+        viewer = self.query_one(WorkspaceViewer)
+        if viewer.has_class("visible"):
+            viewer.suspend()
+        self._layout_workspace_viewer()
 
     def on_workspace_viewer_chat_requested(self, event):
         event.stop()
-        self.query_one(WorkspaceViewer).remove_class("visible")
-        self._layout_workspace_viewer()
+        self._show_workspace_chat()
         sidebar = self.query_one(CollapsibleSidebar)
         if self.sidebar_visible:
             sidebar.call_after_refresh(sidebar.focus_current_view)

@@ -2280,6 +2280,7 @@ class SidebarTabs(Container):
             value="files",
             allow_blank=False,
             id="sidebar-section",
+            tooltip="Switch sections: Enter, ↑/↓, Enter · Tab moves between controls",
         )
 
     @on(Select.Changed, "#sidebar-section")

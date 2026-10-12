@@ -18,9 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the visible reader when Vim mode is enabled.
 - Black sidebar surfaces in dark themes and bold language icons/badges in file,
   search, context and change lists, without requiring a patched terminal font.
+- A persistent Sidebar toggle in the header, also available with `Ctrl+B`.
+  Hide the composer during read-only source/diff inspection; Chat or Escape
+  restores it with the task draft intact.
 
 ### Fixed
 
+- Keep approval requests, agent questions, and connection setup visible when
+  returning from file review, while preserving the task draft.
 - Keep sidebar selection, source syntax, code backgrounds and line numbers
   aligned with the active theme, including live theme changes. Recognize more
   source filenames instead of falling back to plain text.
