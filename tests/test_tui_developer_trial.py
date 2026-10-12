@@ -40,10 +40,14 @@ class PendingModelScreen(ModalScreen):
         yield Static("Model selection is still finishing")
 
 
-async def wait_for_guide(app, pilot):
+async def wait_for_screen(app, pilot, expected):
     async with asyncio.timeout(5):
-        while not isinstance(app.screen, DeveloperTrialScreen):
+        while not isinstance(app.screen, expected) or not app.screen.is_mounted:
             await pilot.pause(0.1)
+
+
+async def wait_for_guide(app, pilot):
+    await wait_for_screen(app, pilot, DeveloperTrialScreen)
 
 
 @pytest.mark.parametrize("size", [(80, 24), (120, 40)])
@@ -109,7 +113,7 @@ async def test_guide_returns_after_connection_picker_finishes_and_requires_expli
         custom_task = "Read the attached README and explain the test command."
         app.screen.query_one("#trial-task", TextArea).load_text(custom_task)
         app.screen.query_one("#trial-connect", Button).press()
-        await pilot.pause()
+        await wait_for_screen(app, pilot, ConnectionBrowserScreen)
         assert isinstance(app.screen, ConnectionBrowserScreen)
         browser = app.screen
         async with asyncio.timeout(10):
@@ -123,6 +127,7 @@ async def test_guide_returns_after_connection_picker_finishes_and_requires_expli
         )
         options.focus()
         await pilot.press("enter")
+        await wait_for_screen(app, pilot, PendingModelScreen)
         await pilot.pause(0.4)  # Longer than the original one-shot handoff timer.
         assert isinstance(app.screen, PendingModelScreen)
         assert app._trial_state().awaiting_connection
@@ -143,7 +148,9 @@ async def test_guide_returns_after_connection_picker_finishes_and_requires_expli
         assert not guide.query_one("#trial-run", Button).disabled
         assert not runs
         guide.action_run()
-        await pilot.pause()
+        async with asyncio.timeout(5):
+            while not runs:
+                await pilot.pause(0.1)
         assert len(runs) == 1 and custom_task in runs[0]
         assert "@README.md" in runs[0]
         assert "Keep my existing task" in app._draft_stash[-1]
@@ -158,10 +165,12 @@ async def test_cancelling_guide_connection_does_not_reopen_it_on_an_unrelated_co
         app._handle_command(":trial", app.query_one("#log", ConversationLog))
         await pilot.pause()
         app.screen.query_one("#trial-connect", Button).press()
-        await pilot.pause()
+        await wait_for_screen(app, pilot, ConnectionBrowserScreen)
         assert isinstance(app.screen, ConnectionBrowserScreen)
         await pilot.press("escape")
-        await pilot.pause()
+        async with asyncio.timeout(5):
+            while app.screen is not app.default_screen or app._trial_state().awaiting_connection:
+                await pilot.pause(0.1)
         assert not app._trial_state().awaiting_connection
         app._mark_onboarding_complete()
         await pilot.pause(0.3)
