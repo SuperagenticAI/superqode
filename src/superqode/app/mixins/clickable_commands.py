@@ -89,6 +89,11 @@ class ClickableCommandMixin:
         if getattr(self, "is_busy", False):
             self._sync_navigation_controls()
             return False
+        if not self._history.can_go_back:
+            return False
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
         moved = self._history.back()
         self._sync_navigation_controls()
         return moved

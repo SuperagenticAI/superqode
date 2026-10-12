@@ -6970,6 +6970,7 @@ class CommandImplMixin:
                 offer_status,
                 highlighted_index=self._free_highlighted_index,
             ),
+            selection_flags=("_awaiting_free_selection",),
         )
         self._keep_free_picker_at_top(log)
 
@@ -7021,6 +7022,7 @@ class CommandImplMixin:
                 highlighted_index=getattr(self, "_free_highlighted_index", 0),
             ),
             clear_log=False,
+            selection_flags=("_awaiting_free_selection",),
         )
         self._scroll_to_highlighted_item(
             log,
@@ -7187,7 +7189,7 @@ class CommandImplMixin:
         t.append("  Type a number to connect, or use ", style=THEME["muted"])
         t.append(":connect <provider>/<model>", style=THEME["cyan"])
         t.append(".\n", style=THEME["muted"])
-        self._show_command_output(log, t)
+        self._show_command_output(log, t, selection_flags=("_awaiting_recommendation_selection",))
 
     def _sandbox_cmd(self, args: str, log: ConversationLog):
         """Show sandbox provider readiness in the TUI."""

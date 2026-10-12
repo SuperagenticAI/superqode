@@ -2515,6 +2515,11 @@ class DialogsMixin:
         reuse_snapshot: bool = False,
     ):
         """Show the curated ACP picker or a requested catalog tier."""
+        from superqode.app.view_state import begin_inline_view
+
+        generation = begin_inline_view(
+            self, selection_flags=("_awaiting_acp_agent_selection",), clear_input=clear_log
+        )
         self._begin_connection_view(log)
         # Recorded so back from a connected agent returns to this listing
         # rather than skipping past it to the category screen above.
@@ -2537,6 +2542,7 @@ class DialogsMixin:
             include_all=include_all,
             catalog_tier=catalog_tier,
             reuse_snapshot=reuse_snapshot,
+            view_generation=generation,
         )
 
     async def _acp_picker_catalog(self, reuse_snapshot: bool) -> tuple[dict, set[str]]:
@@ -2583,6 +2589,9 @@ class DialogsMixin:
         check, but it must not hide the result either, so the redraw paints from
         the snapshot and this runs afterwards.
         """
+        from superqode.app.view_state import inline_view_current
+
+        generation = getattr(self, "_inline_view_generation", 0)
         if (
             time.monotonic() - getattr(self, "_acp_picker_snapshot_at", 0.0)
             < ACP_CATALOG_TTL_SECONDS
@@ -2597,6 +2606,9 @@ class DialogsMixin:
         try:
             agents, installed_ids = await self._build_acp_picker_catalog()
         except Exception:  # noqa: BLE001 - a background check must never break the picker
+            return
+
+        if not inline_view_current(self, generation):
             return
 
         # The user may have chosen an agent while the rebuild was in flight.
@@ -2614,7 +2626,7 @@ class DialogsMixin:
             return
         self._reshow_acp_agents(log)
 
-    @work(exclusive=True)
+    @work(exclusive=True, group="acp-picker")
     async def _show_agents_async(
         self,
         log: ConversationLog,
@@ -2623,16 +2635,29 @@ class DialogsMixin:
         include_all: bool = True,
         catalog_tier: str = "all",
         reuse_snapshot: bool = False,
+        view_generation: int | None = None,
     ):
         """Show ACP agents with installed agents first and catalog grouping."""
         import traceback
         from superqode.agents.registry import get_agent_installation_info
+        from superqode.app.view_state import inline_view_current
+
+        generation = (
+            getattr(self, "_inline_view_generation", 0)
+            if view_generation is None
+            else view_generation
+        )
 
         try:
             agents, installed_ids = await self._acp_picker_catalog(reuse_snapshot)
         except Exception as e:
+            if not inline_view_current(self, generation):
+                return
             log.add_error(f"Error loading agents: {e}")
             log.add_error(f"Details: {traceback.format_exc()}")
+            return
+
+        if not inline_view_current(self, generation):
             return
 
         if not agents:
@@ -2864,7 +2889,9 @@ class DialogsMixin:
         t.append("superqode serve acp", style=f"bold {THEME['cyan']}")
         t.append("  drive it from Zed or any ACP client\n", style=THEME["muted"])
 
-        self._show_command_output(log, t, clear_log=clear_log)
+        self._show_command_output(
+            log, t, clear_log=clear_log, selection_flags=("_awaiting_acp_agent_selection",)
+        )
 
         if reuse_snapshot:
             # The rows are on screen; now go and check whether they are stale.
@@ -3043,7 +3070,9 @@ class DialogsMixin:
         )
         self._show_command_output(log, text)
 
-    def _show_command_output(self, log: ConversationLog, content, clear_log: bool = True):
+    def _show_command_output(
+        self, log: ConversationLog, content, clear_log: bool = True, *, selection_flags=()
+    ):
         """Clear screen and show command output cleanly, scrolled to top.
 
         Args:
@@ -3051,7 +3080,19 @@ class DialogsMixin:
             content: The content to display (Text or string)
             clear_log: If True, clear the log before writing (default: True).
                       Set to False when updating during navigation to reduce flickering.
+            selection_flags: Picker state owned by this render. Informational
+                             pages leave this empty so previous pickers release input.
         """
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self, selection_flags=selection_flags, clear_input=clear_log)
+        if not selection_flags:
+            history = getattr(self, "_navigation_history", None)
+            if history is not None:
+                history.detach()
+                sync = getattr(self, "_sync_navigation_controls", None)
+                if callable(sync):
+                    sync()
         if clear_log:
             log.clear()
             log.auto_scroll = False

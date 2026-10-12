@@ -186,7 +186,7 @@ class ConnectMixin:
 
     def _finish_successful_connection_view(self, log: ConversationLog) -> bool:
         """Restore a conversation after setup, but dismiss the welcome on success."""
-        restored = self._end_connection_view(log)
+        restored = self._end_connection_view(log, cancelled=False)
         if getattr(self, "_welcome_present", False) or getattr(self, "_welcome_active", False):
             self._welcome_active = False
             self._welcome_present = False
@@ -197,11 +197,13 @@ class ConnectMixin:
                 self._workspace_intro_visible = True
         return restored
 
-    def _end_connection_view(self, log: ConversationLog) -> bool:
+    def _end_connection_view(self, log: ConversationLog, *, cancelled: bool = True) -> bool:
         if not isinstance(log, ConversationLog) or not log.is_mounted:
             return False
         if not log.restore_navigation_view():
             return False
+        if cancelled:
+            self._trial_connection_cancelled()
         self.default_screen.remove_class("connection-setup")
         self._reset_connect_selection_states()
         self._prompts.clear()
@@ -524,6 +526,9 @@ class ConnectMixin:
             from superqode.providers.models_dev import get_models_dev
 
             client = get_models_dev()
+            from superqode.app.view_state import inline_view_current
+
+            generation = getattr(self, "_inline_view_generation", 0)
 
             t = Text()
             t.append("\n  🔄 ", style=THEME["success"])
@@ -533,6 +538,8 @@ class ConnectMixin:
             log.write(t)
 
             def on_refresh_complete(success: bool):
+                if not inline_view_current(self, generation):
+                    return
                 log = self.query_one("#log", ConversationLog)
                 if success:
                     t = Text()
@@ -546,7 +553,11 @@ class ConnectMixin:
                     log.write(t)
 
                 # Re-show the provider picker
-                self.set_timer(0.3, lambda: self._show_connect_picker(log, clear_log=True))
+                def redraw():
+                    if inline_view_current(self, generation):
+                        self._show_connect_picker(log, clear_log=True)
+
+                self.set_timer(0.3, redraw)
 
             # Trigger async refresh - it will call on_refresh_complete when done
             import asyncio
@@ -557,7 +568,9 @@ class ConnectMixin:
                     self._apply_live_models(client)
                 self.call_later(lambda: on_refresh_complete(success))
 
-            asyncio.create_task(do_refresh())
+            self.run_worker(
+                do_refresh(), group="byok-model-refresh", exclusive=True, exit_on_error=False
+            )
 
         except Exception as e:
             log = self.query_one("#log", ConversationLog)
@@ -1824,6 +1837,9 @@ class ConnectMixin:
         successful connect, an explicit cancel, or Esc back to the agents menu.
         """
         from superqode.providers.connection_profiles import CONNECT_MENU_ROOT
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
 
         self._awaiting_connect_type = False
         self._connect_menu = CONNECT_MENU_ROOT
@@ -1885,6 +1901,9 @@ class ConnectMixin:
         """
         if log is None:
             return
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
         begin = getattr(self, "_begin_connection_view", None)
         if callable(begin):
             begin(log)
@@ -4151,6 +4170,9 @@ class ConnectMixin:
             # redraws (clear_log=False) stay on the screen being navigated.
             menu = CONNECT_MENU_ROOT if clear_log else current_menu
         menu = normalize_menu(menu)
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self, clear_input=clear_log)
         if menu != current_menu:
             self._byok_highlighted_connect_type_index = 0
         self._connect_menu = menu
@@ -4397,6 +4419,9 @@ class ConnectMixin:
 
     def _show_connect_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive provider picker with model counts and API key guidance."""
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self, selection_flags=("_awaiting_byok_provider",), clear_input=clear_log)
         self._begin_connection_view(log)
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_free_providers
         from superqode.providers.dynamic import connect_provider_ids, resolve_provider_def
@@ -5136,6 +5161,9 @@ class ConnectMixin:
 
     @work(exclusive=True)
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
         log = self.query_one("#log", ConversationLog)
         self._connection_retry_target = ("acp", (agent_id, model_hint))
         self._connection_attempt_state = "Connecting"

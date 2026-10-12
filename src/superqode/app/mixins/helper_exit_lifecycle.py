@@ -55,6 +55,9 @@ class HelperExitLifecycleMixin:
 
     def _begin_conversation_transcript(self, log: ConversationLog) -> None:
         """Replace temporary connection/setup content with the first turn."""
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
         self._welcome_active = False
         self._welcome_present = False
         # A live conversation is the new navigation root. Stale connection
@@ -176,6 +179,7 @@ class HelperExitLifecycleMixin:
         )
 
     def _go_home(self, log: ConversationLog):
+        self._trial_connection_cancelled()
         self._end_connection_view(log)
         cancel = getattr(self, "_cancel_harness_wizard", None)
         if callable(cancel):

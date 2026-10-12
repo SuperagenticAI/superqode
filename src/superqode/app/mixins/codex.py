@@ -765,7 +765,9 @@ class CodexMixin(CodexControlsMixin):
         text.append(" goes back  •  ", style=THEME["dim"])
         text.append(":codex model-list", style=THEME["cyan"])
         text.append(" prints the catalog\n", style=THEME["dim"])
-        self._show_command_output(log, text, clear_log=clear_log)
+        self._show_command_output(
+            log, text, clear_log=clear_log, selection_flags=("_awaiting_codex_model",)
+        )
 
     def _show_codex_effort_picker(
         self, log, *, clear_log: bool = True, refetch: bool = True
@@ -819,7 +821,9 @@ class CodexMixin(CodexControlsMixin):
             style=THEME["muted"],
         )
         text.append("  Esc cancels.\n", style=THEME["muted"])
-        self._show_command_output(log, text, clear_log=clear_log)
+        self._show_command_output(
+            log, text, clear_log=clear_log, selection_flags=("_awaiting_codex_effort",)
+        )
 
     def _handle_codex_model_selection(self, selection: str, log) -> bool:
         if not getattr(self, "_awaiting_codex_model", False):

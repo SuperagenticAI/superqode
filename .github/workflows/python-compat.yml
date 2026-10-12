@@ -13,6 +13,7 @@ on:
       - "tests/test_install_script.py"
       - "tests/test_dx_completion.py"
       - "tests/test_tui_developer_trial.py"
+      - "tests/test_tui_navigation_state.py"
       - "tests/test_tui_exit.py"
       - "tests/test_tui_resource_lifecycle.py"
       - "tests/test_tui_local_latency.py"
@@ -63,7 +64,7 @@ jobs:
           tests/test_core_tool_history.py tests/test_tool_call_repair.py
           tests/test_streaming_tool_calls.py
           tests/test_release_metadata.py tests/test_version.py tests/test_install_script.py
-          tests/test_dx_completion.py tests/test_tui_developer_trial.py
+          tests/test_dx_completion.py tests/test_tui_developer_trial.py tests/test_tui_navigation_state.py
           tests/test_tui_exit.py tests/test_tui_resource_lifecycle.py
           tests/test_tui_local_latency.py tests/test_local_model_optimizations.py -q
           --junitxml=python-compat-tests.xml

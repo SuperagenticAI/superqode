@@ -1525,7 +1525,9 @@ def test_work_command_renders_last_run_trace():
     log = FakeLog()
     app.current_provider = "ds4"
     app.current_model = "deepseek-v4-flash"
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app._last_run_summary = {
         "provider": "ds4",
         "model": "deepseek-v4-flash",
@@ -1746,7 +1748,9 @@ context:
 
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd(f"events {run.run_id}", log)
 
@@ -1795,7 +1799,9 @@ context:
 
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd(f"replay {run.run_id}", log)
     replay_text = render_plain(log.items[-1])
@@ -2104,7 +2110,9 @@ def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd(
         "wizard demo --starter coding --provider ollama --model qwen3-coder --output demo.yaml --load",
@@ -2563,7 +2571,9 @@ def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypat
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     assert app._awaiting_harness_wizard is True
@@ -2603,7 +2613,9 @@ def test_tui_harness_wizard_enter_defaults_create_runnable_spec(tmp_path, monkey
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     for _ in range(10):
@@ -2623,7 +2635,9 @@ def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     for _ in range(9):
@@ -2649,7 +2663,9 @@ def test_tui_harness_wizard_yes_on_output_step_loads_default_path(tmp_path, monk
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     for _ in range(8):
@@ -2679,7 +2695,9 @@ def test_tui_harness_wizard_defaults_use_next_available_output(tmp_path, monkeyp
     (tmp_path / "harness.yaml").write_text("existing: true\n")
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     for _ in range(10):
@@ -3473,7 +3491,9 @@ def test_skills_command_creates_and_lists_local_skill(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._skills_cmd("add repo-review Repository review workflow", log)
     assert (tmp_path / ".agents" / "skills" / "repo-review" / "SKILL.md").exists()
@@ -3509,7 +3529,9 @@ def test_attach_command_lists_removes_and_clears_refs(tmp_path, monkeypatch):
     log = FakeLog()
     captured = []
     app._set_prompt_prefill = lambda value: captured.append(value)
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._attach_cmd("README.md https://example.com/spec", log)
     assert app._attached_refs == ["@README.md", "https://example.com/spec"]
@@ -3535,7 +3557,9 @@ def test_skills_doctor_reports_missing_description(tmp_path, monkeypatch):
     (skill_dir / "SKILL.md").write_text("---\nname: thin\nenabled: true\n---\n\n# Thin\n")
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._skills_cmd("doctor", log)
     text = render_plain(log.items[-1])
@@ -3580,7 +3604,9 @@ def test_recipes_command_lists_and_doctors_local_recipe(tmp_path, monkeypatch):
     )
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     asyncio.run(app._recipe_cmd("list", log))
     text = render_plain(log.items[-1])
@@ -3761,7 +3787,9 @@ def test_workflow_center_renders_active_harness():
     app._active_harness_spec = lambda: (spec, "superqode.yaml")
     app.current_provider = "anthropic"
     app.current_model = "claude-sonnet"
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._show_workflow_center(log)
     text = render_plain(log.items[-1])
@@ -3776,7 +3804,9 @@ def test_workflow_center_renders_active_harness():
 def test_workflow_presets_command_lists_builtin_presets():
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._show_workflow_presets(log)
     text = render_plain(log.items[-1])
@@ -3796,7 +3826,9 @@ def test_workflow_preview_renders_readiness():
     app._active_harness_spec = lambda: (spec, "superqode.yaml")
     app.current_provider = "anthropic"
     app.current_model = "claude-sonnet"
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._show_workflow_preview(log, "fix auth bug")
     text = render_plain(log.items[-1])
@@ -3815,7 +3847,9 @@ def test_workflow_preview_reports_missing_model():
     log = FakeLog()
     spec = HarnessSpec(name="blocked-flow", workflow=WorkflowSpec(mode=WorkflowMode.CHAIN))
     app._active_harness_spec = lambda: (spec, "")
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._show_workflow_preview(log, "ship it")
     text = render_plain(log.items[-1])
@@ -3871,7 +3905,9 @@ def test_doctor_tui_dashboard_renders_readiness(tmp_path, monkeypatch):
     log = FakeLog()
     app.current_provider = "anthropic"
     app.current_model = "claude-sonnet"
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._doctor_cmd("connection", log)
     text = render_plain(log.items[-1])
@@ -3896,7 +3932,9 @@ def test_doctor_tui_dashboard_recognizes_an_acp_agent(tmp_path, monkeypatch):
     app.current_agent = "opencode"
     app.current_provider = ""
     app.current_model = ""
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._doctor_cmd("tui", log)
     text = render_plain(log.items[-1])
@@ -6327,7 +6365,9 @@ def test_cleanup_on_exit_cancels_and_tears_down_local_runtime():
 def test_recommend_command_renders_actionable_picker(monkeypatch):
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     recommendation = SimpleNamespace(
         provider="ds4",
@@ -6378,7 +6418,9 @@ def test_free_command_opens_actionable_picker_without_replacing_harness():
     log = FakeLog()
     active_harness = object()
     app._pure_mode = active_harness
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     asyncio.run(app._free_cmd("", log))
 
@@ -6430,7 +6472,9 @@ def test_free_live_openrouter_choice_connects_through_openrouter(monkeypatch):
     app = make_app()
     log = FakeLog()
     connected = []
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app._connect_byok_mode = lambda provider, model, target_log: connected.append((provider, model))
     candidate = LiveFreeInferenceCandidate(
         source="openrouter",
@@ -7138,7 +7182,9 @@ def test_tui_local_smoke_command_renders_mvp_readiness(monkeypatch):
 
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app.run_worker = lambda coro: asyncio.run(coro)
 
     def fake_run_smoke(**kwargs):
@@ -7172,7 +7218,9 @@ def test_tui_local_init_writes_harness(monkeypatch, tmp_path):
 
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app.run_worker = lambda coro: asyncio.run(coro)
 
     candidate = ModelCandidate(
@@ -7479,7 +7527,9 @@ def test_tui_local_no_model_hints_avoid_llama(monkeypatch):
 def test_providers_smoke_command_renders_local_health(monkeypatch):
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app.run_worker = lambda coro: asyncio.run(coro)
 
     async def fake_smoke_local_provider(provider, model=None, **kwargs):
@@ -7519,7 +7569,9 @@ def test_providers_smoke_command_renders_local_health(monkeypatch):
 def test_doctor_live_routes_to_provider_smoke(monkeypatch):
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app.run_worker = lambda coro: asyncio.run(coro)
 
     async def fake_smoke_local_provider(provider, model=None, **kwargs):
@@ -7557,7 +7609,9 @@ def test_doctor_live_routes_to_provider_smoke(monkeypatch):
 def test_acp_doctor_command_renders_agent_status(monkeypatch):
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     app.run_worker = lambda coro: asyncio.run(coro)
 
     async def fake_acp_doctor(agent=None, **kwargs):
@@ -7618,7 +7672,9 @@ def test_wizard_lets_typed_commands_through_to_dispatcher(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     app = make_app()
     log = FakeLog()
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
 
     app._harness_cmd("wizard", log)
     assert app._awaiting_harness_wizard is True
@@ -8386,7 +8442,9 @@ def test_sessions_list_groups_by_harness(tmp_path, monkeypatch):
     app = make_app()
     log = FakeLog()
     pushed = []
-    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app._show_command_output = (
+        lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
+    )
     monkeypatch.setattr(
         app,
         "push_screen",

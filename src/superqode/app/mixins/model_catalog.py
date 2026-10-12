@@ -1535,6 +1535,9 @@ class ModelCatalogMixin:
             log.add_error(f"Unknown provider: {provider_id}")
             return
 
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self, selection_flags=("_awaiting_byok_model",), clear_input=clear_log)
         t = Text()
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
@@ -2258,7 +2261,15 @@ class ModelCatalogMixin:
 
         # Use textual's message watching
 
-        self.set_timer(0.1, lambda: self._setup_picker_handlers(picker, provider_id, log))
+        from superqode.app.view_state import inline_view_current
+
+        generation = getattr(self, "_inline_view_generation", 0)
+
+        def setup_handlers():
+            if inline_view_current(self, generation) and self._model_picker_widget is picker:
+                self._setup_picker_handlers(picker, provider_id, log)
+
+        self.set_timer(0.1, setup_handlers)
 
         # Mount picker to the app
         self.mount(picker)

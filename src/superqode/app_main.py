@@ -804,6 +804,9 @@ class SuperQodeApp(
             return
         if self.query("CommandPalette.show-palette"):
             return
+        picker = getattr(self, "_model_picker_widget", None)
+        if picker is not None and picker.is_attached:
+            return
         # Opening the sidebar requests focus after layout. The startup timer
         # can run before that request settles; respect the visible navigation
         # intent instead of racing it back to the composer.
@@ -825,6 +828,9 @@ class SuperQodeApp(
         if len(self.screen_stack) != 1:
             return
         if self.query("CommandPalette.show-palette"):
+            return
+        picker = getattr(self, "_model_picker_widget", None)
+        if picker is not None and picker.is_attached:
             return
         if self._sidebar_has_focus():
             return
@@ -1510,6 +1516,10 @@ class SuperQodeApp(
     )
 
     def action_clear_screen(self):
+        from superqode.app.view_state import begin_inline_view
+
+        begin_inline_view(self)
+        self._trial_connection_cancelled()
         log = self.query_one("#log", ConversationLog)
         log.clear()
         team_name = Path.cwd().name or "SuperQode"

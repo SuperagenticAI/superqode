@@ -209,7 +209,7 @@ class FormattingMixin:
             t.append("  Default: yes\n", style=THEME["muted"])
             t.append("  Answer: yes or no\n", style=THEME["text"])
 
-        self._show_command_output(log, t)
+        self._show_command_output(log, t, selection_flags=("_awaiting_harness_wizard",))
 
     def _write_chat_stats(self, log: ConversationLog, ttft, tps, tokens: int, total: float) -> None:
         """One muted metrics line under a chat reply."""

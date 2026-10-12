@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep keyboard and mouse selection on the visible TUI page after Back, Help
+  and picker transitions. Discard buffered numbers from a previous mouse-selected
+  page without removing prompt drafts.
+- Ignore catalogue loads and delayed provider refreshes after their page is
+  closed or replaced, including later visits to the same catalogue.
+- Cancel pending first-task guide returns when connection setup is abandoned,
+  while retaining the guide's return after successful setup.
+
 ## [2.15.1] - 2026-10-12
 
 ### Added

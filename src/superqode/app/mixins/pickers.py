@@ -15,6 +15,7 @@ from superqode.app.widgets import (
 
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.inputs import SelectionAwareInput
+from superqode.app.view_state import PICKER_FLAGS, clear_picker_input
 
 
 class PickerNavigationMixin:
@@ -311,28 +312,7 @@ class PickerNavigationMixin:
         return False
 
     #: Every flag that means "a numbered list is on screen awaiting a choice".
-    _PICKER_AWAITING_FLAGS = (
-        "_awaiting_connect_type",
-        "_awaiting_acp_agent_selection",
-        "_awaiting_byok_provider",
-        "_awaiting_byok_model",
-        "_awaiting_local_provider",
-        "_awaiting_local_model",
-        "_awaiting_codex_model",
-        "_awaiting_codex_effort",
-        "_awaiting_session_resume",
-        "_awaiting_mode_selection",
-        "_awaiting_harness_selection",
-        "_awaiting_runtime_selection",
-        "_awaiting_recommendation_selection",
-        "_awaiting_free_selection",
-        "_awaiting_harness_wizard",
-        # The ACP model pickers (OpenCode, Gemini, Claude, Codex, OpenHands)
-        # all raise this one. Without it a click on a model row was not
-        # recognised as a pick at all, so the terminal drag-selected the text
-        # instead and the list appeared to do nothing.
-        "_awaiting_model_selection",
-    )
+    _PICKER_AWAITING_FLAGS = PICKER_FLAGS
 
     #: A row opens with an optional box border and marker, then its bracketed
     #: number. The ACP model pickers draw their rows inside a box, so the
@@ -407,6 +387,7 @@ class PickerNavigationMixin:
         target number, so they should execute the selection immediately.
         """
         log = self.query_one("#log", ConversationLog)
+        clear_picker_input(self)
 
         # Screens without an explicit branch below fall through to
         # _select_by_number_universal, whose first branch buffers digits into
