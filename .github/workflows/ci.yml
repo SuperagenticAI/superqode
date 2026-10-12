@@ -40,7 +40,7 @@ jobs:
       - name: TUI keyboard and draft checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_productivity.py tests/test_tui_draft_recovery.py tests/test_tui_developer_trial.py tests/test_tui_navigation_state.py tests/test_status_bar_layout.py tests/test_tui_exit.py tests/test_tui_resource_lifecycle.py tests/test_tui_vim_release.py tests/test_theme_system.py tests/test_theme_export.py tests/test_tui_appearance.py tests/test_theme_detection_and_safety.py -q
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_productivity.py tests/test_tui_draft_recovery.py tests/test_tui_developer_trial.py tests/test_tui_navigation_state.py tests/test_status_bar_layout.py tests/test_tui_exit.py tests/test_tui_resource_lifecycle.py tests/test_tui_vim_release.py tests/test_theme_system.py tests/test_theme_export.py tests/test_tui_appearance.py tests/test_theme_detection_and_safety.py tests/test_sidebar_workspace.py -q
       - name: Core provider tool-history checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
