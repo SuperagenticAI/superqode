@@ -81,7 +81,7 @@ def register() -> None:
 register()
 
 
-from rich.syntax import SyntaxTheme
+from rich.syntax import Syntax, SyntaxTheme
 from rich.style import Style as RichStyle
 
 
@@ -130,3 +130,17 @@ class SemanticSyntaxTheme(SyntaxTheme):
 
     def get_background_style(self):
         return RichStyle(bgcolor=self._palette()["code_bg"], meta={"sq_bg": "code_bg"})
+
+
+class SourceSyntax(Syntax):
+    """Source previews with readable, theme-aligned line numbers."""
+
+    def _get_number_styles(self, console):
+        from superqode.app.constants import THEME
+
+        background = self._get_base_style()
+        number = background + RichStyle(color=THEME["muted"], meta={"sq_fg": "muted"})
+        highlighted = background + RichStyle(
+            color=THEME["purple"], bold=True, meta={"sq_fg": "purple"}
+        )
+        return background, number, highlighted

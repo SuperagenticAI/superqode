@@ -1,6 +1,7 @@
 """Read-only workspace navigation, Git fidelity, and bounded previews."""
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
 from threading import Event
@@ -14,6 +15,7 @@ from superqode.app.widgets import ConversationLog
 from superqode.sidebar import CollapsibleSidebar, GitChangesPanel, get_git_changes, get_file_diff
 from superqode.sidebar import ColorfulDirectoryTree
 from superqode.sidebar import GitChange
+from superqode.sidebar import detect_language
 from superqode.widgets.sidebar_panels import DiffPanel, HarnessPanel
 from superqode.widgets.workspace_viewer import (
     PAGE_BYTES,
@@ -26,8 +28,12 @@ from superqode.widgets.workspace_viewer import (
 
 @pytest.fixture(autouse=True)
 def isolate(monkeypatch, tmp_path):
+    from superqode.app import theme_bridge as bridge
+
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    monkeypatch.setattr(bridge, "_CONFIG_PATH", tmp_path / "settings.json")
+    bridge.apply_theme("superqode")
     for name in (
         "_prewarm_litellm",
         "_start_models_dev_refresh",
@@ -36,6 +42,8 @@ def isolate(monkeypatch, tmp_path):
         "_run_startup_connect",
     ):
         monkeypatch.setattr(SuperQodeApp, name, lambda self: None)
+    yield
+    bridge.apply_theme("superqode")
 
 
 async def settled(viewer, pilot):
@@ -106,6 +114,41 @@ def test_source_paging_is_bounded_and_lossless(tmp_path, text):
     assert output == text
     path.write_bytes(b"binary\0file")
     assert "Binary" in read_source_page(path).note
+
+
+@pytest.mark.parametrize(
+    "filename, code, language",
+    [
+        ("source.py", "return 'hello'", "python"),
+        ("app.tsx", "export const App = () => <div>hello</div>", "tsx"),
+        ("module.mts", "export const greeting: string = 'hello'", "typescript"),
+        ("module.cts", "export const greeting: string = 'hello'", "typescript"),
+        ("module.cjs", "const greeting = 'hello'", "javascript"),
+        ("Program.cs", 'public class Example { string greeting = "hello"; }', "csharp"),
+        ("main.dart", "class Example { String greeting = 'hello'; }", "dart"),
+        ("main.zig", 'const greeting = "hello";', "zig"),
+        ("build.nix", 'let greeting = "hello"; in greeting', "nixos"),
+        ("Dockerfile.dev", "FROM python:3.13\nRUN echo 'hello'", "dockerfile"),
+        ("Containerfile", "FROM python:3.13\nRUN echo 'hello'", "dockerfile"),
+        ("App.svelte", '<script>const greeting = "hello";</script><h1>Hello</h1>', "html"),
+    ],
+)
+def test_source_filename_detection_produces_syntax_colors(filename, code, language):
+    from rich.console import Console
+    from superqode.app.constants import THEME
+    from superqode.code_theme import SemanticSyntaxTheme, SourceSyntax
+
+    assert detect_language(Path(filename)) == language
+    syntax = SourceSyntax(code, detect_language(Path(filename)), theme=SemanticSyntaxTheme())
+    segments = list(Console(width=100, color_system="truecolor").render(syntax))
+    assert any(
+        segment.text.strip()
+        and segment.style
+        and segment.style.meta.get("sq_fg") == "syntax_keyword"
+        and segment.style.color.name == THEME["syntax_keyword"]
+        for segment in segments
+    )
+    assert detect_language(Path("unknown.extension-with-no-lexer")) == "text"
 
 
 @pytest.mark.asyncio
@@ -347,26 +390,96 @@ async def test_viewer_vim_focus_and_connection_return(tmp_path, monkeypatch, vim
 
 
 @pytest.mark.asyncio
-async def test_reader_theme_and_toolbar_remain_usable(tmp_path):
+async def test_reader_theme_and_toolbar_remain_usable(tmp_path, monkeypatch):
     from rich.syntax import Syntax
+    from textual.geometry import Region
+    from superqode import design_system as ds
+    from superqode.app.constants import THEME
     from superqode.app import theme_bridge as bridge
+    from superqode.theming import load_theme_file, contrast
+
+    # The tool environment disables colors. Check the terminal's actual
+    # colored strips, rather than only checking the Syntax object's content.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    custom = tmp_path / "theme.json"
+    custom.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "name": "workspace-custom",
+                "appearance": "dark",
+                "colors": {"code_bg": "#131722"},
+                "tokens": {
+                    "syntax_keyword": "#ff81b7",
+                    "syntax_string": "#98e89c",
+                    "syntax_number": "#ffd580",
+                },
+            }
+        )
+    )
+    custom_theme = load_theme_file(custom)
+    monkeypatch.setitem(ds.THEMES, custom_theme.name, custom_theme)
 
     path = tmp_path / "source.py"
-    path.write_text("print('first')\nprint('second')\n")
+    path.write_text(
+        '# first comment\ndef greet(name):\n    return "hello" + str(42)\n' + "pass\n" * 100
+    )
     app = SuperQodeApp()
     async with app.run_test(size=(100, 30)) as pilot:
+        app.action_sidebar_files()
+        await pilot.pause()
+        tree = app.query_one(ColorfulDirectoryTree)
+        node = next(node for node in tree.root.children if node.data.path == path)
+        tree.move_cursor(node)
         app._open_workspace_file(path)
         viewer = app.query_one(WorkspaceViewer)
         await settled(viewer, pilot)
         reader = viewer.query_one("#workspace-reader")
-        for name in ("light", "dracula", "superqode"):
+        reader.scroll_to(y=20, animate=False)
+        await pilot.pause()
+        for name in ("light", "dracula", "workspace-custom", "superqode"):
             assert bridge.apply_theme(name)
             app._refresh_theme_view()
             await pilot.pause()
-            rendered = viewer.query_one("#workspace-source", Static).content
+            source = viewer.query_one("#workspace-source", Static)
+            rendered = source.content
             assert isinstance(rendered, Syntax) and rendered.code == path.read_text()
+            assert source.styles.background.hex.lower() == THEME["code_bg"]
+            assert reader.styles.background.hex.lower() == THEME["code_bg"]
+            assert reader.scroll_y == 20
             assert app.focused is reader
             assert viewer.query_one("#workspace-copy-path").region.right <= viewer.region.right
+            segments = [
+                segment
+                for strip in source.render_lines(Region(0, 0, source.size.width, 4))
+                for segment in strip
+                if segment.text.strip() and segment.style
+            ]
+            for role in (
+                "syntax_keyword",
+                "syntax_function",
+                "syntax_string",
+                "syntax_number",
+                "syntax_comment",
+            ):
+                assert any(
+                    segment.style.meta.get("sq_fg") == role
+                    and segment.style.color.name == THEME[role]
+                    and segment.style.bgcolor.name == THEME["code_bg"]
+                    for segment in segments
+                ), (name, role)
+            number = next(segment for segment in segments if segment.text.strip() == "1")
+            assert number.style.color.name == THEME["muted"]
+            assert contrast(number.style.color.name, THEME["code_bg"]) >= 4.5
+            assert tree.cursor_node is node
+            rows = [
+                segment
+                for strip in tree.render_lines(tree.region.reset_offset)
+                for segment in strip
+            ]
+            filename = next(segment for segment in rows if segment.text == path.name)
+            assert filename.style.color.name == THEME["selected_text"]
+            assert filename.style.bgcolor.name == THEME["selected_bg"]
         await pilot.click("#workspace-find")
         query = viewer.query_one("#workspace-query", Input)
         assert app.focused is query

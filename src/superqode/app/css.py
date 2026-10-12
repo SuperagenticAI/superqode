@@ -350,18 +350,21 @@ ColorfulDirectoryTree > .tree--guides {
 }
 
 ColorfulDirectoryTree > .tree--cursor {
-    background: #3f3f46;
-    color: #ec4899;
+    background: $sq-selected-bg;
+    color: $sq-selected-text;
     text-style: bold;
     border-left: tall #a855f7;
 }
 
 ColorfulDirectoryTree:focus > .tree--cursor {
-    background: #71717a;
-    color: #ec4899;
+    background: $sq-selected-bg;
+    color: $sq-selected-text;
     text-style: bold;
     border-left: tall #a855f7;
 }
+
+ColorfulDirectoryTree > .tree--highlight-line { background: $sq-hover; }
+ColorfulDirectoryTree > .tree--highlight { background: $sq-hover; color: $sq-text; }
 
 /* Resizable Sidebar Divider */
 #sidebar-divider {

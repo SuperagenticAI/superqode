@@ -35,21 +35,17 @@ from textual.binding import Binding
 from rich.text import Text
 from rich.style import Style
 from rich.cells import cell_len
-from rich.syntax import Syntax
+from rich.syntax import Syntax, SyntaxTheme
 from rich.panel import Panel
 from rich.box import ROUNDED
 
 from superqode.app.constants import THEME
+from superqode.code_theme import SemanticSyntaxTheme, SourceSyntax
 from superqode.theming import readable
 
 
-def _brand_code_theme() -> str:
-    try:
-        from superqode.rendering.markdown import active_code_theme
-
-        return active_code_theme()
-    except Exception:
-        return "superqode"
+def _brand_code_theme() -> SyntaxTheme:
+    return SemanticSyntaxTheme()
 
 
 def _brand_code_bg() -> str:
@@ -337,7 +333,10 @@ LANGUAGE_MAP = {
     ".js": "javascript",
     ".jsx": "jsx",
     ".mjs": "javascript",
+    ".cjs": "javascript",
     ".ts": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
     ".tsx": "tsx",
     ".html": "html",
     ".htm": "html",
@@ -374,24 +373,42 @@ LANGUAGE_MAP = {
     ".tf": "terraform",
     ".hcl": "hcl",
     ".vue": "vue",
-    ".svelte": "svelte",
+    # Pygments has no Svelte lexer. HTML still highlights its markup and
+    # embedded script/style blocks instead of silently rendering plain text.
+    ".svelte": "html",
 }
 
 
 def detect_language(path: Path) -> str:
-    """Detect programming language from file path."""
-    name = path.name.lower()
-    ext = path.suffix.lower()
+    """Select an installed lexer by filename, without reading the file."""
+    return _filename_language(path.name)
+
+
+@lru_cache(maxsize=256)
+def _filename_language(filename: str) -> str:
+    from pygments.lexers import get_lexer_for_filename
+    from pygments.util import ClassNotFound
+
+    name = filename.lower()
+    ext = Path(name).suffix
 
     # Special filenames
-    if name == "dockerfile":
+    if name in ("dockerfile", "containerfile") or name.startswith(
+        ("dockerfile.", "containerfile.")
+    ):
         return "dockerfile"
     if name == "makefile":
         return "makefile"
     if name in ("gemfile", "rakefile", "vagrantfile"):
         return "ruby"
 
-    return LANGUAGE_MAP.get(ext, "text")
+    if ext in LANGUAGE_MAP:
+        return LANGUAGE_MAP[ext]
+    try:
+        lexer = get_lexer_for_filename(filename)
+    except ClassNotFound:
+        return "text"
+    return lexer.aliases[0] if lexer.aliases else "text"
 
 
 # ============================================================================
@@ -457,7 +474,7 @@ class ColorfulDirectoryTree(DirectoryTree):
         path = node.data.path if node.data else None
 
         if path is None:
-            return Text(str(node.label))
+            return Text(str(node.label), style=style)
 
         label = Text()
 
@@ -478,6 +495,12 @@ class ColorfulDirectoryTree(DirectoryTree):
             if self._session_change_count(path):
                 label.append("  ●", style=f"bold {THEME['pink']}")
 
+        # Tree passes the current hover/selection style here; ignoring it
+        # leaves the selected file invisible even when CSS is theme-aware.
+        label.stylize(style)
+        if style.bgcolor and not style.bgcolor.is_system_defined:
+            color = _icon_color_for_surfaces(color, (style.bgcolor.get_truecolor().hex,))
+        label.stylize(Style(color=color, bold=True), 0, len(icon) + 1)
         return label
 
     def refresh_theme_colors(self) -> None:
@@ -658,7 +681,7 @@ class FilePreview(Container):
 
     @staticmethod
     def _themed_syntax(content: Syntax) -> Syntax:
-        return Syntax(
+        return SourceSyntax(
             content.code,
             content.lexer,
             theme=_brand_code_theme(),
@@ -784,7 +807,7 @@ class FilePreview(Container):
                 text += "\n\n… Preview limited to 400 lines / 64 KB. Press e to edit."
 
             language = detect_language(path)
-            syntax = Syntax(
+            syntax = SourceSyntax(
                 text,
                 language,
                 theme=_brand_code_theme(),

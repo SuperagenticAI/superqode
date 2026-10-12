@@ -1137,6 +1137,9 @@ Git changes, Search contents, Context, Harness, Agent, History, and Task changes
 Dark themes use a black navigator background; light themes keep a readable light
 background. File, search, context and change lists use colored language symbols
 and badges (such as Python, JS, TS, C++ and Rust) without requiring a Nerd Font.
+Sidebar selection and hover colors follow the active theme. The main Contents
+viewer uses the theme's syntax colors, code background and readable line
+numbers; switching themes updates an open file without resetting its position.
 `Ctrl+F`
 searches filenames while focus is in the sidebar. Use `Up` / `Down` to choose a
 result, then `Enter`, or click the result. All returned filename matches are

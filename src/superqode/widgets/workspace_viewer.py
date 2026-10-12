@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
-from rich.syntax import Syntax
 from rich.text import Text
 from textual import on, work
 from textual.binding import Binding
@@ -18,6 +17,7 @@ from textual.widgets import Button, Input, Select, Static
 from textual.worker import get_current_worker
 
 from superqode.app.constants import THEME
+from superqode.code_theme import SourceSyntax
 from superqode.sidebar import FilePreviewScroll, _brand_code_bg, _brand_code_theme, detect_language
 
 PAGE_BYTES = 65_536
@@ -181,8 +181,8 @@ class WorkspaceViewer(Container):
     WorkspaceViewer #workspace-files { width: 1fr; }
     WorkspaceViewer #workspace-baseline { width: 19; }
     WorkspaceViewer #workspace-path { height: 1; color: $sq-muted; padding: 0 1; }
-    WorkspaceViewer #workspace-reader { height: 1fr; background: $sq-bg; }
-    WorkspaceViewer #workspace-source { height: auto; padding: 0 1; background: $sq-bg; }
+    WorkspaceViewer #workspace-reader { height: 1fr; background: $sq-code-bg; }
+    WorkspaceViewer #workspace-source { height: auto; padding: 0 1; background: $sq-code-bg; }
     WorkspaceViewer #workspace-search { height: 3; }
     WorkspaceViewer #workspace-search Input { height: 3; width: 1fr; }
     WorkspaceViewer #workspace-note { height: 1; color: $sq-muted; padding: 0 1; }
@@ -421,7 +421,7 @@ class WorkspaceViewer(Container):
         if page.note:
             rendered = Text(page.note, style=THEME["muted"])
         elif self.mode == "contents" and self.path is not None:
-            rendered = Syntax(
+            rendered = SourceSyntax(
                 page.text,
                 detect_language(self.path),
                 theme=_brand_code_theme(),

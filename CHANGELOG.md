@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep sidebar selection, source syntax, code backgrounds and line numbers
+  aligned with the active theme, including live theme changes. Recognize more
+  source filenames instead of falling back to plain text.
 - Parse Git status without dropping filename characters or misclassifying
   unstaged files. Preserve spaces, Unicode and renamed paths; preview untracked
   text files and select the correct change row with mouse or keyboard.
