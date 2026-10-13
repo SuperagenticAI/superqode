@@ -215,12 +215,7 @@ phase_label() {
     elif grep -q 'Prepared' "$STEP_LOG" 2>/dev/null; then
         printf '%s' "$LABEL_BUILD"
     elif grep -q 'Resolved' "$STEP_LOG" 2>/dev/null; then
-        pl_count=$(grep -o 'Resolved [0-9]* package' "$STEP_LOG" 2>/dev/null | head -n 1 | tr -dc '0-9')
-        if [ -n "$pl_count" ] && [ "$COLUMNS_AVAILABLE" -ge 72 ]; then
-            printf 'Downloading %s components' "$pl_count"
-        else
-            printf '%s' "$LABEL_FETCH"
-        fi
+        printf '%s' "$LABEL_FETCH"
     else
         printf '%s' "$pl_default"
     fi
