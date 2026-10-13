@@ -25,12 +25,21 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Install CodeGem system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep bash
+          rg --version
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
       - name: Public documentation style
         run: uv run python scripts/check_public_docs_style.py
+      - name: CodeGem runtime checks
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_codegem.py tests/test_codegem_cli.py -q
       - name: CLI and environment reference coverage
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
@@ -91,6 +100,11 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Install CodeGem system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep bash
+          rg --version
       - name: Pytest
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
