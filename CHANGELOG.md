@@ -9,12 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.20.0] - 2026-10-13
 
+This CodeGem release brings together the Gemini and Gemma coding harness
+introduced in 2.19.0 with terminal integration, Gemini 4 Argon support, and
+local Gemma improvements.
+
 ### Added
 
+- CodeGem, a native Python harness dedicated to Gemini and Gemma coding, with
+  six bounded tools: read, write, edit, search, Python, and Bash.
+- Gemini-native conversation handling, resumable sessions, and Gemma tool-call
+  capability detection with a validated JSON fallback.
 - CodeGem in the terminal connection menu alongside Core, RLM, PiPy, Workbench
   and SystemOne, with focused Gemini and local Gemma model choices.
-- Multi-file coding validation with API compatibility and input validation checks.
 - Gemini 4 Argon in the Google model catalog and terminal model lists.
+- Optional local EmbeddingGemma semantic code search, plus reproducible setup,
+  cross-runtime validation, and benchmark guides for Ollama, LM Studio, and
+  llama.cpp.
+- Installed `superqode-codegem-index` and `superqode-codegem-download` commands
+  for local retrieval and verified model downloads without a source checkout.
+- CodeGem quick starts, model/runtime configuration guidance, transparent
+  evaluation notes, and catalog metadata for first-time users.
+- Multi-file coding validation with API compatibility and input validation checks.
+
+### Changed
+
+- Use the cross-platform Ollama `gemma4:12b` model in the CodeGem example;
+  Apple Silicon users can select the MLX-specific tag when it is available.
 
 ### Fixed
 
@@ -26,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support semantic search scoped to one file and ignore stale or replaced source paths.
 - Recognize the native RLM Python tools and Monty boundary in harness diagnostics.
 - Include Gemini thinking tokens in estimated API costs rather than displaying zero.
+- Preserve source-view scroll position across file reloads, theme refreshes,
+  and workspace resize events.
 
 ## [2.19.0] - 2026-10-13
 
