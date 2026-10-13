@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-08T07:35:34.194368+00:00",
-  "count": 103,
+  "generated_at": "2026-10-13T07:55:40.556509+00:00",
+  "count": 104,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -308,6 +308,77 @@
       "language": "Python",
       "language_confidence": "confirmed",
       "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
+    },
+    {
+      "id": "codegem",
+      "name": "CodeGem",
+      "description": "Google-focused six-tool coding harness for Gemini API and local Gemma, with optional local EmbeddingGemma code search.",
+      "category": "SuperQode harnesses",
+      "kind": "harness",
+      "runtime": "codegem",
+      "source": "built-in",
+      "readiness": "ready",
+      "integration_level": "native",
+      "continuity": "exact-resume",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "CodeGem tools run with host process permissions, without an OS sandbox or approval prompts.",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/advanced/codegem/",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch codegem",
+        ":harness show codegem",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run codegem \"Describe your task\"",
+        "superqode harness show codegem"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "search",
+        "python",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: none",
+        "Approvals: none",
+        "Shell: allowed",
+        "Network: allowed",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "codegem",
+      "popularity_rank": 245,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Native SuperQode Python harness for Gemini and Gemma."
     },
     {
       "id": "systemone",
