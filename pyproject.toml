@@ -4,13 +4,7 @@ version = "2.19.0"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
-# Declared rather than left to setuptools' default glob, so NOTICE cannot
-# silently stop shipping if that default changes. NOTICE carries the MIT
-# attribution that superqode.pipy requires.
 license-files = ["LICENSE", "NOTICE"]
-# LiteLLM 1.91.5 and prime-agent-python-client 0.2 require Python <3.14.
-# Python 3.15 is also blocked by FastUUID's native build. See the dependency
-# compatibility guide before widening this range.
 requires-python = ">=3.12,<3.14"
 authors = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
@@ -32,81 +26,46 @@ classifiers = [
 dependencies = [
     "pyyaml>=6.0.3",
     "click>=8.0.0",
-    # 1.92+ stopped publishing macOS wheels and requires a local Rust build.
-    # Keep installs one-command and cross-platform until macOS wheels return.
     "litellm>=1.83.14,<1.92",
-    # Actively evolving protocol library: 0.11 removed session/set_model and its
-    # schema types. Code supports 0.10 and 0.11; cap to avoid surprise breakage
-    # in released artifacts.
     "agent-client-protocol>=0.10.0,<0.12",
     "prompt_toolkit>=3.0.52",
     "rich>=15.0.0",
-    # The TUI uses modern Content and Select APIs. The old 0.47 floor cannot
-    # import it; require the version verified by the terminal/journey checks.
     "textual>=8.2.8",
-    "coloraide>=8.13", # Perceptual colour conversion for custom and Pi themes.
-    # Keep the stable MCP v1 line while FastMCP 4 / MCP SDK v2 are prerelease.
-    # The standalone framework replaces the FastMCP 1.0 copy bundled in mcp v1.
+    "coloraide>=8.13",
     "fastmcp==3.4.4",
     "mcp>=1.27.1,<2",
     "anyio>=4.0.0",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
-    "websockets>=15,<16", # Local Codex daemon attachment, also used by FastMCP.
-    # Local tool-schema gateway. FastMCP already uses the same ASGI stack;
-    # declaring it directly keeps `superqode serve optimize` one-install.
+    "websockets>=15,<16",
     "starlette>=0.41.0",
     "uvicorn>=0.32.0",
-    # PiPy validates tool-call arguments against each tool's JSON Schema before
-    # execution, the way pi validates against TypeBox. Already present through
-    # mcp/fastmcp; declared because superqode.pipy imports it directly.
     "jsonschema>=4.20.0",
-    # Typed System One packs and answers. Already imported by harness/output.py;
-    # declared because superqode.systemone uses it as the I/O contract.
     "pydantic>=2.0,<3",
     "python-frontmatter>=1.1.0",
     "superopt>=0.1.1",
-    # Native asyncio host for Prime Agent's public RPC mode. Kept as a small,
-    # reusable package so non-SuperQode Python applications can use it too.
     "prime-agent-python-client>=0.2.0,<0.3.0",
 ]
 
 [project.optional-dependencies]
 hf = [
-    # Hugging Face Hub search + download (hf_xet gives chunk-dedup fast transfers).
     "huggingface_hub[hf_xet]>=1.0.0",
 ]
 mlx = [
-    # >=0.31 adds the Gemma 4 (gemma4 / Gemma4ForConditionalGeneration) model
-    # class needed to load/convert Gemma 4 weights. Older builds raise
-    # "Model type gemma4 not supported".
     "mlx-lm>=0.31.0,<0.32.0; python_version < '3.14'",
-    # mlx-vlm handles multimodal models that mlx-lm can't (e.g. plain gemma4
-    # VLMs). Capped <0.6 because 0.6.x requires starlette>=1.0.1, which clashes
-    # with superqode's fastapi/starlette. Newer arches like gemma4_unified that
-    # only 0.6.x supports are converted in an isolated env, not the main venv.
     "mlx-vlm>=0.5.0,<0.6.0; python_version < '3.14'",
 ]
 monty = [
-    # Monty 1.x is the supported research/eval and python_repl extra.
-    # Saved programs additionally pin API version and actual worker bytes;
-    # the major-version bound alone is not snapshot compatibility evidence.
     "pydantic-monty>=1.0.0,<2",
 ]
 semantic = [
-    # Optional AST-based semantic code search dependencies.
     "cocoindex-code>=0.2.35,<0.3",
 ]
 semantic-local = [
-    # Google's documented local EmbeddingGemma inference runtime. PyTorch
-    # installs its platform-specific CPU, CUDA, or Metal backend as available.
-    # Gemma 4's processor imports Pillow and torchvision even for text-only input.
     "sentence-transformers[image]>=6.1.0,<7",
     "torchvision>=0.29.1",
 ]
 channels = [
-    # Slack Socket Mode and the Discord Gateway are websocket transports;
-    # Telegram long polling is stdlib-only and needs no extra.
     "websocket-client>=1.6.0",
 ]
 sandbox-e2b = [
@@ -135,9 +94,6 @@ a2a = [
     "uvicorn>=0.32.0",
 ]
 uhp = [
-    # `serve uhp` only. The UHP client needs nothing extra: httpx and
-    # httpx-sse are core. Deliberately no a2a-sdk, so hosting a UHP harness
-    # does not drag in an unrelated protocol stack.
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
 ]
@@ -149,33 +105,19 @@ openai-agents = [
     "openai-agents[litellm]>=0.17.4",
 ]
 codex-sdk = [
-    # openai-codex jumped from the 0.1.0bN betas straight to 0.144.4, its first
-    # stable release, and now tracks the Codex CLI version line. A cap of <0.2.0
-    # left only pre-releases in range: uv refuses pre-releases for transitive
-    # dependencies, so `uv tool install "superqode[codex-sdk]"` backtracked past
-    # every current release to an ancient superqode instead of failing loudly.
     "openai-codex>=0.144.4,<1.0.0",
 ]
 copilot-sdk = [
-    # Official GitHub Copilot SDK. The Python wheel manages a pinned Copilot
-    # runtime and uses the user's Copilot login or an explicit GitHub token.
     "github-copilot-sdk>=1.0.8,<2.0.0",
 ]
 claude-agent-sdk = [
-    # Anthropic Claude Agent SDK (drives the local Claude Code CLI; API-key auth
-    # via ANTHROPIC_API_KEY). Adapter maps SDK message/block + permission shapes.
     "claude-agent-sdk>=0.2.9,<0.3.0",
 ]
 antigravity-sdk = [
     "google-antigravity>=0.1.8,<0.2.0",
-    # The SDK ships edition-2024 generated descriptors but its own protobuf
-    # lower bound is too loose; its 7.35 gencode requires protobuf 7.35+.
     "protobuf>=7.35.0",
 ]
-# Convenience bundle for users who actively use all supported vendor SDK
-# runtimes. Vendor CLIs such as Grok and agy remain separate installations.
 vendor-sdks = [
-    # Keep in step with the codex-sdk extra above.
     "openai-codex>=0.144.4,<1.0.0",
     "github-copilot-sdk>=1.0.8,<2.0.0",
     "claude-agent-sdk>=0.2.9,<0.3.0",
@@ -184,9 +126,6 @@ vendor-sdks = [
 ]
 deepagents = [
     "deepagents>=0.7.0,<0.8.0",
-    # Provider clients LangChain's init_chat_model needs at agent-build time.
-    # Without these, ollama/local models fail with
-    # "Initializing ChatOllama requires the langchain-ollama package".
     "langchain-ollama>=0.3.0",
     "langchain-openai>=0.3.0",
 ]
@@ -201,15 +140,9 @@ rlm-code = [
     "rlm-code[llm-all]>=0.1.11,<0.2.0",
 ]
 tau = [
-    # Hugging Face's Python port of Pi. Keep the fast-moving pre-1.0 API
-    # bounded to the adapter version tested by SuperQode.
     "tau-ai>=0.3.3,<0.4.0",
 ]
 deepseek-harness = [
-    # DeepSeek Harness, driven over JSON-RPC. The SDK pulls a same-version
-    # platform wheel carrying the compiled runtime, which DeepSeek publishes
-    # only for macOS arm64 and Linux x86_64/aarch64. The marker keeps the extra
-    # installable on other platforms instead of failing to resolve there.
     "deepseek-harness-sdk>=0.1.0rc6,<0.2.0; (sys_platform == 'darwin' and platform_machine == 'arm64') or (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64')",
 ]
 mem0 = [
@@ -309,17 +242,10 @@ superqode = [
 ]
 
 [tool.uv]
-# Keep dependency installation usable on laptops and smaller machines.
-# These limit builds/downloads/unpacking, not resolver memory or model RAM.
 concurrent-builds = 1
 concurrent-downloads = 8
 concurrent-installs = 2
-# google-antigravity 0.1.8 ships protobuf 7.35-generated descriptors, while
-# mem0ai currently requires protobuf <7. Keep uv from selecting a combination
-# that installs successfully but cannot import the Antigravity SDK.
 conflicts = [
-    # a2a-sdk 1.x currently requires protobuf <7, while Antigravity's generated
-    # descriptors require protobuf 7.35+.
     [
         { extra = "a2a" },
         { extra = "antigravity-sdk" },
@@ -411,18 +337,18 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "F",      # pyflakes
+    "E",
+    "F",
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
-    "E402",   # module-import-not-at-top-of-file
-    "F401",   # unused import
-    "F541",   # f-string missing placeholders
-    "F811",   # redefined while unused
-    "F821",   # undefined name
-    "F823",   # undefined local
-    "F841",   # unused variable
+    "E501",
+    "E402",
+    "F401",
+    "F541",
+    "F811",
+    "F821",
+    "F823",
+    "F841",
 ]
 
 [tool.ruff.lint.isort]
@@ -451,4 +377,4 @@ markers = [
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "docs", "scripts", "reference_code", "site"]
-skips = ["B101"]  # Skip assert_used test (tests use assert)
+skips = ["B101"]
