@@ -86,6 +86,7 @@ class CodingSessionOptions:
     steering_mode: QueueMode = "one-at-a-time"
     follow_up_mode: QueueMode = "one-at-a-time"
     compaction_settings: CompactionSettings | None = None
+    max_turns: int = 0
 
 
 @dataclass(slots=True)
@@ -209,6 +210,7 @@ class PiPyCodingSession:
             follow_up_mode=options.follow_up_mode,
             resources=HarnessResources(skills=tuple(skills), prompt_templates=tuple(templates)),
             compaction_settings=options.compaction_settings,
+            max_turns=options.max_turns,
         )
         return instance
 

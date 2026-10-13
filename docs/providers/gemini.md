@@ -21,6 +21,8 @@ model:
 ```
 
 Set `GEMINI_API_KEY` or `GOOGLE_API_KEY`. See [Bring Your Own Key](byok.md).
+For the Google-focused native harness, its six tools, and a headless first run,
+see [CodeGem](../advanced/codegem.md).
 
 ## Related documentation
 

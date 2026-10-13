@@ -104,6 +104,7 @@ superqode harness init my-coder -t qwen-coding
 | --- | --- |
 | `core` | Lean native harness with read, write, edit, and shell tools |
 | `workbench` | Complete native coding workbench |
+| `codegem` | Six-tool coding harness optimized for Google's Gemma and Gemini models |
 | `systemone` | Progressive tool discovery and Jev-backed typed decisions |
 | `rlm` | Native one-tool RLM harness with a persistent Python environment |
 | `rlm-hybrid` | Experimental persistent Python+Bash RLM on the host |

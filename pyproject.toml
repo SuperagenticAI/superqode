@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.18.0"
+version = "2.19.0"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -18,7 +18,7 @@ authors = [
 maintainers = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
 ]
-keywords = ["ai", "agent-engineering", "code-engineering", "code-factory", "harness-engineering", "coding-agents", "agent-harness", "multi-agent", "orchestration", "evaluation", "optimization", "acp", "mcp", "automation", "superqode"]
+keywords = ["ai", "agent-engineering", "code-engineering", "code-factory", "harness-engineering", "coding-agents", "agent-harness", "multi-agent", "orchestration", "evaluation", "optimization", "acp", "mcp", "automation", "superqode", "codegem", "gemini", "gemma", "embeddinggemma"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -94,10 +94,15 @@ monty = [
     "pydantic-monty>=1.0.0,<2",
 ]
 semantic = [
-    # AST-based semantic code search client. The default integration stays slim:
-    # use LiteLLM/Ollama embeddings locally, or install cocoindex-code[full]
-    # separately if you want sentence-transformers in the same environment.
+    # Optional AST-based semantic code search dependencies.
     "cocoindex-code>=0.2.35,<0.3",
+]
+semantic-local = [
+    # Google's documented local EmbeddingGemma inference runtime. PyTorch
+    # installs its platform-specific CPU, CUDA, or Metal backend as available.
+    # Gemma 4's processor imports Pillow and torchvision even for text-only input.
+    "sentence-transformers[image]>=6.1.0,<7",
+    "torchvision>=0.29.1",
 ]
 channels = [
     # Slack Socket Mode and the Discord Gateway are websocket transports;
@@ -277,6 +282,8 @@ Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
 [project.scripts]
 superqode = "superqode.main:cli_main"
 sq = "superqode.main:cli_main"
+superqode-codegem-index = "superqode.codegem.index_cli:main"
+superqode-codegem-download = "superqode.codegem.download_cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]

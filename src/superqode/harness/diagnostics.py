@@ -1209,6 +1209,10 @@ def _agent_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
         for registry in (ToolRegistry.full(), ToolRegistry.core())
         for tool in registry.list()
     }
+    if spec.runtime.backend == "codegem":
+        from superqode.codegem.tools import TOOL_NAMES
+
+        known_tools = set(TOOL_NAMES)
     for agent in spec.agents:
         missing_tools = [
             tool for tool in agent.tools if tool not in known_tools and not tool.startswith("mcp_")
@@ -1354,6 +1358,10 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
         for registry in (ToolRegistry.full(), ToolRegistry.core())
         for tool in registry.list()
     }
+    if spec.runtime.backend == "codegem":
+        from superqode.codegem.tools import TOOL_NAMES
+
+        available = set(TOOL_NAMES)
     missing = [tool for tool in requested if tool not in available and not tool.startswith("mcp_")]
     mcp_tools = [tool for tool in requested if tool.startswith("mcp_")]
     warnings = []

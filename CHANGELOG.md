@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-10-13
+
+### Added
+
+- CodeGem, a native Python harness dedicated to Gemini and Gemma coding, with
+  six bounded tools, Gemini-native conversation handling, and Gemma tool-call
+  capability detection plus a validated JSON fallback.
+- Optional local EmbeddingGemma semantic code search and reproducible setup,
+  cross-runtime validation, and benchmark guides for Ollama, LM Studio, and
+  llama.cpp.
+- Installed `superqode-codegem-index` and `superqode-codegem-download` commands
+  for local retrieval and verified model downloads without a source checkout.
+- CodeGem quick starts, model/runtime configuration guidance, transparent
+  evaluation notes, and catalog metadata for first-time users.
+
+### Changed
+
+- Use the cross-platform Ollama `gemma4:12b` model in the CodeGem example;
+  Apple Silicon users can select the MLX-specific tag when it is available.
+
+### Fixed
+
+- Preserve source-view scroll position across file reloads, theme refreshes,
+  and workspace resize events.
+
 ## [2.18.0] - 2026-10-12
 
 ### Added

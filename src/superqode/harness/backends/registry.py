@@ -32,12 +32,14 @@ from .runtime import (
     RuntimeHarnessBackend,
 )
 from .pipy import PiPyHarnessBackend
+from .codegem import CodeGemHarnessBackend
 from .tau import TauHarnessBackend
 from .uhp import UHPHarnessBackend
 from .systemone import SystemOneHarnessBackend
 
 _RUNTIME_BACKENDS = {"builtin", "systemone"}
 _OPTIONAL_BACKENDS = {
+    "codegem",
     "adk",
     "anthropic-managed",
     "openai-agents",
@@ -91,6 +93,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return RLMHarnessBackend()
     if resolved == "pipy":
         return PiPyHarnessBackend()
+    if resolved == "codegem":
+        return CodeGemHarnessBackend()
     if resolved == "tau":
         return TauHarnessBackend()
     if resolved == "uhp":

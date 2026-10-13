@@ -73,6 +73,7 @@ jobs:
           tests/test_dx_completion.py tests/test_cli_contract.py
           tests/test_headless.py tests/test_compaction.py
           tests/test_tools.py tests/test_search_roots.py
+          tests/test_codegem.py tests/test_codegem_cli.py
           tests/test_runtime_builtin.py tests/test_release_metadata.py
           tests/test_version.py -q
       - name: Theme and developer journey release contracts

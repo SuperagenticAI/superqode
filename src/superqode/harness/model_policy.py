@@ -46,6 +46,37 @@ def resolve_harness_model_policy(
     model id) layer family-tuned defaults on top of the base profile, and
     ``model_policy.config`` overrides everything else.
     """
+    if spec.runtime.backend == "codegem":
+        from superqode.codegem.profiles import resolve_profile
+
+        target = model or spec.model_policy.primary or ""
+        selected_provider = provider or ""
+        if "/" in target and not selected_provider:
+            selected_provider, target = target.split("/", 1)
+        family = (
+            resolve_profile(target, selected_provider) if target and selected_provider else None
+        )
+        config = spec.runtime.config
+        temperature = spec.model_policy.temperature
+        if temperature is None:
+            temperature = config.get("temperature", family.temperature if family else None)
+        return EffectiveModelPolicy(
+            profile="codegem",
+            family=family.family if family else "gemini/gemma",
+            temperature=temperature,
+            system_level=SystemPromptLevel.CORE,
+            tool_profile="codegem",
+            tool_call_format="native"
+            if family and family.family == "gemini"
+            else config.get("tool_mode", "auto"),
+            reasoning=spec.model_policy.reasoning
+            or ("on" if config.get("thinking", family.thinking if family else False) else "off")
+            if family and family.family == "gemma"
+            else spec.model_policy.reasoning or (family.thinking_level if family else None),
+            parallel_tools=False,
+            max_iterations=int(config.get("max_turns", 64)),
+            session_history_limit=0,
+        )
     profile = _select_profile(spec, provider=provider, model=model)
     policy = _base_policy(spec, profile)
     policy = _apply_pack(policy, spec, provider=provider, model=model)

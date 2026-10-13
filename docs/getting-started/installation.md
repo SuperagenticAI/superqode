@@ -176,6 +176,13 @@ curl -fsSL https://superqode.dev/install.sh |
   SUPERQODE_EXTRAS=tau,vendor-sdks sh
 ```
 
+For CodeGem's direct local EmbeddingGemma 2 runtime, install the optional
+`semantic-local` extra (PyTorch, Sentence Transformers, Pillow and torchvision):
+
+```bash
+uv tool install "superqode[semantic-local]"
+```
+
 Release automation can install an exact published version with
 `SUPERQODE_VERSION=0.2.68`.
 

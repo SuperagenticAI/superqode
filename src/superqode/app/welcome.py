@@ -323,7 +323,12 @@ def render_welcome(
 
 
 #: Harness ids whose product name is not simply the id capitalised.
-_HARNESS_NAME_OVERRIDES = {"pipy": "PiPy", "prime-agent": "Prime Agent", "rlm": "RLM"}
+_HARNESS_NAME_OVERRIDES = {
+    "pipy": "PiPy",
+    "prime-agent": "Prime Agent",
+    "rlm": "RLM",
+    "codegem": "CodeGem",
+}
 
 
 def _harness_display_name(name) -> str:

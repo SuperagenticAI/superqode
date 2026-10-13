@@ -42,6 +42,21 @@ def release_metadata_errors(tag: str | None = None) -> list[str]:
     if locked_versions != [version]:
         errors.append(f"uv.lock has SuperQode versions {locked_versions!r}, expected [{version!r}]")
 
+    project_extras = set(pyproject.get("project", {}).get("optional-dependencies", {}))
+    lock_packages = lock.get("package", [])
+    locked_project = next(
+        (package for package in lock_packages if package.get("name") == "superqode"),
+        {},
+    )
+    lock_extras = set(locked_project.get("optional-dependencies", {}))
+    if project_extras != lock_extras:
+        missing = sorted(project_extras - lock_extras)
+        stale = sorted(lock_extras - project_extras)
+        errors.append(
+            "uv.lock optional dependencies differ from pyproject.toml "
+            f"(missing={missing!r}, stale={stale!r})"
+        )
+
     registry = json.loads(
         (ROOT / "install/acp-registry/superqode/agent.json").read_text(encoding="utf-8")
     )

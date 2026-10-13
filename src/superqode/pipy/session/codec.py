@@ -216,6 +216,7 @@ def encode_message(message: AgentMessage) -> dict[str, Any]:
                 "usage": encode_usage(message.usage),
                 "stopReason": message.stop_reason,
                 "errorMessage": message.error_message,
+                "providerContent": message.provider_content,
                 "timestamp": message.timestamp,
             }
         )
@@ -290,6 +291,7 @@ def decode_message(payload: Any) -> AgentMessage:
             usage=decode_usage(payload.get("usage")) or Usage(),
             stop_reason=payload.get("stopReason") or "stop",
             error_message=payload.get("errorMessage"),
+            provider_content=payload.get("providerContent"),
             timestamp=timestamp,
         )
     if role == "toolResult":

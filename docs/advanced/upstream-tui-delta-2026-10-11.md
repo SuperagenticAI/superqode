@@ -168,6 +168,6 @@ installed or benchmarked. Actual SSH/tmux, IME, native clipboard and signed-in
 harness behavior still need live acceptance checks.
 
 Use this review with the [appearance workflow review](appearance-workflow-review.md)
-and the [earlier Pi comparison](pi-theme-comparison.md). The immediate next patch
+and the [earlier Pi comparison](https://github.com/SuperagenticAI/superqode/blob/main/docs/advanced/pi-theme-comparison.md). The immediate next patch
 should focus on safe rewind/recovery, compatibility diagnostics, terminal
 diagnosis and live MCP control, followed by model favorites and review scopes.

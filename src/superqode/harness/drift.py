@@ -288,6 +288,10 @@ def _tool_checks(spec: HarnessSpec) -> list[DriftCheck]:
         ]
     try:
         known = {"python"} if spec.runtime.backend == "rlm" else _known_tool_names()
+        if spec.runtime.backend == "codegem":
+            from superqode.codegem.tools import TOOL_NAMES
+
+            known = set(TOOL_NAMES)
     except Exception as exc:  # noqa: BLE001 - reporting beats crashing
         return [
             DriftCheck(

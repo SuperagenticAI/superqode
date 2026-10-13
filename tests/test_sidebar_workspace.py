@@ -48,7 +48,10 @@ def isolate(monkeypatch, tmp_path):
 
 async def settled(viewer, pilot):
     async with asyncio.timeout(5):
-        while any(w.is_running for w in viewer.workers if w.node is viewer):
+        while (
+            any(w.is_running for w in viewer.workers if w.node is viewer)
+            or getattr(viewer, "_pending_scroll_restore", None) is not None
+        ):
             await pilot.pause(0.02)
     await pilot.pause()
 

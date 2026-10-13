@@ -1,0 +1,42 @@
+version: 1
+name: codegem-gemma4-26b-local
+description: CodeGem with Google's Gemma 4 26B-A4B QAT Q4_0 model
+flavor: coding
+runtime:
+  backend: codegem
+  config:
+    tool_mode: auto
+    thinking: true
+    temperature: 1.0
+    context_window: 32768
+    max_output_tokens: 8192
+    max_turns: 64
+    embedding:
+      provider: sentence-transformers
+      model: google/embeddinggemma-2
+      dimensions: 256
+      device: auto
+model_policy:
+  primary: ollama/gemma4-codegem-26b-q4
+  profile: codegem
+  config:
+    system_level: core
+    tool_profile: core
+execution_policy:
+  sandbox: none
+  approval_profile: none
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: true
+agents:
+  - id: codegem
+    role: implementation
+    tools: [read, write, edit, search, python, bash]
+checks:
+  enabled: false
+metadata:
+  example: codegem-gemma4-26b-local
+  rich_stream_events: true
+  pure_permissions: true
+  continuity: exact-resume

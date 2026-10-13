@@ -133,6 +133,8 @@ class AssistantMessage:
     stop_reason: StopReason = "stop"
     error_message: str | None = None
     timestamp: int = field(default_factory=current_timestamp_ms)
+    #: Opaque native response content, retained for providers with signed parts.
+    provider_content: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.content, str):

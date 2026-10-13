@@ -45,6 +45,7 @@ the complete model-provider catalog.
 | DwarfStar | Install and start a compatible DwarfStar server | Select the discovered local route | `superqode local doctor` | [Local Providers](../providers/local.md#dwarfstar-ds4) |
 | Apple Foundation Models | Install `apple-fm-sdk` on supported Apple Silicon with Apple Intelligence | Set `SUPERQODE_UTILITY_PROVIDER=apple-fm` | `superqode local doctor` | [Local Stack Doctor](../advanced/local-stack.md) |
 | Transformers | Install `transformers`, `accelerate`, and the required compute framework | Select the local Transformers route | `superqode local doctor` | [Local Stack Doctor](../advanced/local-stack.md) |
+| EmbeddingGemma 2 for CodeGem | `uv tool install "superqode[semantic-local]"`; weights download from Google/Hugging Face on first use | Set CodeGem `embedding.provider` to `sentence-transformers` | Use `superqode-codegem-index . --provider sentence-transformers --query "your code question"` | [CodeGem](../advanced/codegem.md#add-local-embeddinggemma-search) |
 
 Generate a repository-owned local harness after the server is ready:
 
@@ -52,4 +53,3 @@ Generate a repository-owned local harness after the server is ready:
 superqode local init --repo .
 superqode --harness superqode.local.yaml
 ```
-

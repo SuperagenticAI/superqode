@@ -9,7 +9,7 @@ from pathlib import Path
 from time import monotonic
 
 from rich.text import Text
-from textual import on, work
+from textual import events, on, work
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.message import Message
@@ -98,6 +98,25 @@ class WorkspaceReadPane(FilePreviewScroll):
 
     def _viewer(self) -> WorkspaceViewer:
         return self.parent
+
+    def scroll_to(self, x=None, y=None, **kwargs):
+        if y is not None and self.is_mounted:
+            viewer = self._viewer()
+            requested = max(0, int(y))
+            viewer._scroll_position = requested
+            pending = viewer._pending_scroll_restore
+            if pending is not None and pending[0] != requested:
+                viewer._pending_scroll_restore = None
+        return super().scroll_to(x, y, **kwargs)
+
+    def on_resize(self, event: events.Resize) -> None:
+        viewer = self._viewer()
+        if viewer.path is not None:
+            self.call_after_refresh(
+                viewer._restore_reader_scroll,
+                viewer._scroll_position,
+                viewer._generation,
+            )
 
     def check_action(self, action, parameters):
         if action.startswith("vim_"):
@@ -218,6 +237,8 @@ class WorkspaceViewer(Container):
         self._find_position = -1
         self._search_kind = "find"
         self._hunk = -1
+        self._scroll_position = 0
+        self._pending_scroll_restore: tuple[int, int] | None = None
 
     def compose(self):
         with Horizontal(id="workspace-tabs"):
@@ -270,7 +291,7 @@ class WorkspaceViewer(Container):
             "offset": self._page.offset,
             "line": self._page.line,
             "pages": self._pages[:],
-            "scroll": self.query_one("#workspace-reader").scroll_y,
+            "scroll": self._scroll_position,
         }
         self._states.move_to_end(self.path)
         while len(self._states) > 8:
@@ -288,6 +309,7 @@ class WorkspaceViewer(Container):
         same_view = saved.get("mode") == mode and saved.get("baseline") == baseline
         offset = saved.get("offset", 0) if same_view and line == 1 else 0
         start = saved.get("line", 1) if same_view and line == 1 else 1
+        self._scroll_position = saved.get("scroll", 0) if same_view else 0
         self._page = SourcePage("", offset=offset, line=start)
         self._patch = ""
         self.add_class("visible")
@@ -347,8 +369,10 @@ class WorkspaceViewer(Container):
     def _load(self, offset=0, line=1, *, scroll=0):
         if self.path is None:
             return
+        self._scroll_position = max(0, int(scroll))
         self._generation += 1
         generation = self._generation
+        self._pending_scroll_restore = (self._scroll_position, generation)
         self._hunk = -1
         self.query_one("#workspace-source", Static).update("Loading…")
         self._load_worker = self._read(
@@ -409,7 +433,7 @@ class WorkspaceViewer(Container):
             self._cache.move_to_end(cache_key)
             while len(self._cache) > 4:
                 self._cache.popitem(last=False)
-        self.refresh_theme_colors()
+        self.refresh_theme_colors(restore_scroll=False)
         self.query_one("#workspace-previous", Button).disabled = not self._pages
         self.query_one("#workspace-next", Button).disabled = page.next_offset is None
         label = (
@@ -420,11 +444,23 @@ class WorkspaceViewer(Container):
         if page.next_offset is not None:
             label += " · More available"
         self.query_one("#workspace-page-label", Static).update(label)
-        self.call_after_refresh(
-            self.query_one("#workspace-reader").scroll_to, y=scroll, animate=False
-        )
+        self.call_after_refresh(self._restore_reader_scroll, scroll, generation)
 
-    def refresh_theme_colors(self):
+    def _restore_reader_scroll(self, scroll: int, generation: int, *, final: bool = False):
+        """Restore position after the source widget has completed its layout."""
+        if generation != self._generation or scroll != self._scroll_position:
+            return
+        reader = self.query_one("#workspace-reader")
+        reader.scroll_to(y=scroll, animate=False)
+        if final:
+            if self._pending_scroll_restore == (scroll, generation):
+                self._pending_scroll_restore = None
+        else:
+            # Updating the source Static schedules another layout pass. Defer a
+            # second restore until that pass has measured the wrapped lines.
+            reader.call_after_refresh(self._restore_reader_scroll, scroll, generation, final=True)
+
+    def refresh_theme_colors(self, *, restore_scroll: bool = True):
         if not self.is_mounted:
             return
         page = self._page
@@ -455,6 +491,12 @@ class WorkspaceViewer(Container):
                 rendered.append(line, style=THEME[role])
         self.query_one("#workspace-source", Static).update(rendered)
         self._controls()
+        if restore_scroll and self.path is not None:
+            self.call_after_refresh(
+                self._restore_reader_scroll,
+                self._scroll_position,
+                self._generation,
+            )
 
     def next_page(self):
         if self._page.next_offset is not None:
@@ -592,6 +634,7 @@ class WorkspaceViewer(Container):
         """Invalidate pending loads before another workspace flow takes over."""
         self._remember()
         self._generation += 1
+        self._pending_scroll_restore = None
         self.workers.cancel_group(self, "workspace-preview")
         self.workers.cancel_group(self, "workspace-seek")
         self.remove_class("visible")

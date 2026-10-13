@@ -122,6 +122,7 @@ _DOCS_BY_ID = {
     "rlm": f"{DOCS_BASE}advanced/rlm/",
     "rlm-code": f"{DOCS_BASE}advanced/rlm-code/",
     "pipy": f"{DOCS_BASE}advanced/pipy/",
+    "codegem": f"{DOCS_BASE}advanced/codegem/",
     "tau": f"{DOCS_BASE}advanced/tau/",
     "uhp": f"{DOCS_BASE}providers/uhp/",
     "deepseek-harness": f"{DOCS_BASE}advanced/deepseek-harness/",
@@ -721,6 +722,9 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
     ),
+    "codegem": HubLanguage(
+        "Python", "confirmed", "Native SuperQode Python harness for Gemini and Gemma."
+    ),
     "prime-agent": HubLanguage(
         "TypeScript",
         "confirmed",
@@ -973,6 +977,7 @@ _POPULARITY_RANK = {
     "core": 220,
     "workbench": 230,
     "pipy": 240,
+    "codegem": 245,
     "rlm": 250,
     "rlm-code": 252,
     "deepagents": 255,

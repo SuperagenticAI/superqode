@@ -181,6 +181,41 @@ def no_tool_template(*, name: str = "superqode-no-tool", backend: str = "builtin
     )
 
 
+def codegem_template(*, name: str = "codegem") -> HarnessSpec:
+    """Six-tool native Python harness exclusively for Google's model families."""
+    from superqode.codegem.tools import TOOL_NAMES
+
+    return HarnessSpec(
+        name=name,
+        description="Minimal six-tool Python coding harness for Gemini and Gemma.",
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="codegem", config={"max_turns": 64, "tool_mode": "auto"}),
+        model_policy=ModelPolicySpec(
+            profile="codegem", config={"system_level": "core", "tool_profile": "core"}
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="none",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(AgentSpec(id="codegem", role="implementation", tools=TOOL_NAMES),),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "codegem",
+            "builtin_harness": True,
+            "pure_permissions": True,
+            "rich_stream_events": True,
+            "continuity": "exact-resume",
+            "session_format": "codegem-jsonl-v1",
+            "model_families": ["gemini", "gemma"],
+            "selection_warning": "CodeGem tools run with host process permissions, without an OS sandbox or approval prompts.",
+        },
+    )
+
+
 def pipy_template(*, name: str = "pipy") -> HarnessSpec:
     """Native Python harness. Runs with the permissions of the process.
 
@@ -1020,6 +1055,7 @@ BUILTIN_TEMPLATES = {
     "no-tool": no_tool_template,
     "no_tool": no_tool_template,
     "pipy": pipy_template,
+    "codegem": codegem_template,
     "rlm": rlm_template,
     "rlm-docker": rlm_docker_template,
     "rlm-hybrid": rlm_hybrid_template,

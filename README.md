@@ -121,6 +121,33 @@ import` opens a preview dialog for your own JSON file. Use `superqode theme
 install --all` to install the whole collection. See [Themes](docs/advanced/themes.md)
 for light/system modes, custom palettes, and live reload.
 
+## CodeGem for Gemini and Gemma
+
+CodeGem is SuperQode's native six-tool Python harness for Google's model
+families. Use Gemini through the Google API or run Gemma locally; add local
+EmbeddingGemma when semantic code search helps. The same harness exposes
+`read`, `write`, `edit`, `search`, `python`, and `bash`.
+
+For a quick local demo, install [Ollama](https://ollama.com), download Gemma 4,
+then run CodeGem in your own project. No SuperQode source checkout is needed:
+
+```bash
+ollama pull gemma4:12b
+cd your-project
+superqode harness run codegem "Explain the project and suggest one small improvement" \
+  --provider ollama --model gemma4:12b --working-dir .
+```
+
+For Gemini, set `GEMINI_API_KEY` or `GOOGLE_API_KEY` and set
+`GEMINI_MODEL` to a current model ID, then use `--provider google --model "$GEMINI_MODEL"`.
+EmbeddingGemma is an optional local
+dependency (`superqode[semantic-local]`) for semantic indexing and retrieval;
+the ordinary CodeGem install does not download embedding weights. CodeGem runs
+its tools with the SuperQode process's host permissions, so review the task and
+use a trusted checkout. See the [CodeGem setup and validation guide](docs/advanced/codegem.md)
+for Gemini setup, alternative Gemma runtimes, hardware tuning, and measured
+results.
+
 ## The Harness Hub
 
 `:hub` opens a browsable catalog of **115 harnesses**: SuperQode's native

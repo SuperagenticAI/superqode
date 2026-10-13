@@ -67,6 +67,7 @@ def test_harnesses_with_execution_caveats_carry_warnings():
 
     assert warned == {
         "pipy",
+        "codegem",
         "prime-agent-python",
         "rlm",
         "rlm-docker",

@@ -65,6 +65,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     "glob": ToolGroup.READ,
     "local_code_search": ToolGroup.SEARCH,
     "repo_search": ToolGroup.SEARCH,
+    "search": ToolGroup.READ,  # CodeGem's ripgrep-only discovery tool.
     # Write operations
     "write_file": ToolGroup.WRITE,
     "edit_file": ToolGroup.WRITE,
@@ -75,6 +76,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     "multi_edit": ToolGroup.WRITE,
     # Shell
     "bash": ToolGroup.SHELL,
+    "python": ToolGroup.SHELL,  # CodeGem's host Python subprocess.
     # Network
     "fetch": ToolGroup.NETWORK,
     "download": ToolGroup.NETWORK,

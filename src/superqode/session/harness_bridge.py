@@ -28,6 +28,7 @@ HARNESS_STORE_ROOTS = (".superqode/sessions", ".superqode/harness")
 
 _HARNESS_DISPLAY = {
     "pipy": "PiPy",
+    "codegem": "CodeGem",
     "prime-agent": "Prime Agent",
     "rlm": "RLM",
     "core": "Core",

@@ -65,6 +65,7 @@ def discover_harness_adapters(
         from .catalog import builtin_harnesses
         from .backends.rlm_code import rlm_code_installation_status
         from .rlm_adapter import RLMHarnessProtocolAdapter
+        from .codegem_adapter import CodeGemHarnessProtocolAdapter
         from .rlm_code_adapter import RLMCodeHarnessProtocolAdapter
         from .tau_adapter import TauHarnessProtocolAdapter, tau_installation_status
 
@@ -77,6 +78,8 @@ def discover_harness_adapters(
             adapter = (
                 RLMHarnessProtocolAdapter()
                 if harness.id == "rlm"
+                else CodeGemHarnessProtocolAdapter()
+                if harness.id == "codegem"
                 else CoreHarnessProtocolAdapter(harness.spec, adapter_id=harness.id)
             )
             entries.append(

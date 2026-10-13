@@ -2171,11 +2171,12 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     picker_ids = [entry.id for entry in app._harness_selection_list]
     # RLM and PiPy sit with the other native coding harnesses, ahead of the
     # optional integrations.
-    assert picker_ids[:9] == [
+    assert picker_ids[:10] == [
         "core",
         "rlm",
         "pipy",
         "workbench",
+        "codegem",
         "systemone",
         "no-tool",
         "codex",
@@ -2232,6 +2233,7 @@ def test_harness_switch_completion_includes_vendor_agents_and_all_presets():
     registry_agent = app._prompt_completion_candidates_for(":harness switch acp:stak")
 
     assert [candidate.value for candidate in codex] == [
+        ":harness switch codegem",
         ":harness switch codex",
         ":harness switch codex-sdk",
     ]

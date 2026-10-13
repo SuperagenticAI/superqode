@@ -24,6 +24,7 @@ from .templates import (
     deepseek_harness_template,
     no_tool_template,
     pipy_template,
+    codegem_template,
     rlm_code_template,
     rlm_template,
     tau_template,
@@ -154,6 +155,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     systemone = systemone_template()
     no_tool = no_tool_template(name="no-tool")
     pipy = pipy_template()
+    codegem = codegem_template()
     rlm = rlm_template()
     rlm_code = rlm_code_template()
     tau = tau_template()
@@ -212,6 +214,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=workbench,
             loop_policy=workbench_loop_policy(),
             aliases=("coding", "native", "build"),
+        ),
+        HarnessDefinition(
+            id="codegem",
+            display_name="CodeGem",
+            description=codegem.description,
+            runtime="codegem",
+            source="built-in",
+            spec=codegem,
+            loop_policy=core_loop_policy(),
+            aliases=("code-gem",),
         ),
         HarnessDefinition(
             id="systemone",

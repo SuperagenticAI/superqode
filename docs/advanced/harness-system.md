@@ -160,6 +160,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `rlm` | built-in | You want a native RLM loop where the model receives one persistent Python tool and builds context through code |
 | `rlm-code` | optional | You want RLM Code v0.1.11+ recursive REPL execution, LID context isolation, and native trajectory evidence behind a HarnessSpec |
 | `pipy` | built-in | You want parallel tools, a session tree, and pure host permissions with no approval or sandbox layer |
+| `codegem` | built-in | You want a six-tool Python coding loop for Gemini and local Gemma, with native signed Gemini history |
 | `tau` | optional | You want Hugging Face Tau's event-first Python harness and native JSONL sessions behind Harness Protocol |
 
 The `rlm-code` backend delegates recursive execution to RLM Code and maps its context record, steps,
