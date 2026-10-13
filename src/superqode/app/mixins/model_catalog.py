@@ -22,6 +22,7 @@ from superqode.design_system import (
     GRADIENT_PURPLE,
 )
 from superqode.providers.models import (
+    LATEST_GOOGLE_ARGON_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
@@ -140,6 +141,13 @@ class ModelCatalogMixin:
         """Get Gemini models list - synced with providers/models.py."""
         return [
             {
+                "id": LATEST_GOOGLE_ARGON_MODEL,
+                "name": "Gemini 4 Argon",
+                "context": 1048576,
+                "desc": "Gemini 4 Argon - account access required",
+                "recommended": True,
+            },
+            {
                 "id": LATEST_GOOGLE_FLASH_MODEL,
                 "name": "Gemini 3.8 Flash",
                 "context": 1000000,
@@ -156,8 +164,8 @@ class ModelCatalogMixin:
             {
                 "id": LATEST_GOOGLE_PRO_MODEL,
                 "name": "Gemini 3.1 Pro Preview",
-                "context": 2000000,
-                "desc": "Latest Gemini Pro from models.dev - 2M context",
+                "context": 1048576,
+                "desc": "Gemini 3.1 Pro Preview - 1M context",
                 "recommended": True,
             },
             {
@@ -245,13 +253,18 @@ class ModelCatalogMixin:
                 "context": 1000000,
             },
             {
+                "id": LATEST_GOOGLE_ARGON_MODEL,
+                "name": "Gemini 4 Argon",
+                "context": 1048576,
+            },
+            {
                 "id": LATEST_GOOGLE_PRO_MODEL,
                 "name": "Gemini 3.1 Pro Preview (Latest Pro)",
-                "context": 2000000,
+                "context": 1048576,
             },
             {
                 "id": LATEST_GOOGLE_FLASH_MODEL,
-                "name": "Gemini 3.6 Flash",
+                "name": "Gemini 3.8 Flash",
                 "context": 1000000,
             },
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
@@ -1603,6 +1616,14 @@ class ModelCatalogMixin:
 
         # Get models from database
         db_models = get_models_for_provider(provider_id)
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
+            from superqode.codegem.profiles import supports_model
+
+            db_models = {
+                mid: info for mid, info in db_models.items() if supports_model(mid, provider_id)
+            }
 
         if clear_log:
             self._byok_highlighted_model_index = 0
@@ -2315,6 +2336,13 @@ class ModelCatalogMixin:
         except Exception:
             ids = []
         models = [m for m in ids if not is_embedding_model(m)]
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        codegem = getattr(getattr(spec, "runtime", None), "backend", "") == "codegem"
+        if codegem:
+            from superqode.codegem.profiles import supports_model
+
+            models = [m for m in models if supports_model(m, provider_id)]
 
         if not models:
             # No server is up. For llama.cpp, cached GGUF files are launchable
@@ -2334,6 +2362,8 @@ class ModelCatalogMixin:
                 )
 
                 gguf = await asyncio.to_thread(discover_gguf_models)
+                if codegem:
+                    gguf = [item for item in gguf if supports_model(item["path"], provider_id)]
                 gguf.sort(key=lambda item: (not is_laguna_model(item["path"]), item["id"].lower()))
                 t = Text()
                 t.append("\n  🟡 ", style=THEME["warning"])
@@ -2371,6 +2401,14 @@ class ModelCatalogMixin:
                     self.set_timer(0.05, self._ensure_input_focus)
                     return
                 else:
+                    if codegem:
+                        log.add_info(
+                            "CodeGem needs a Gemma GGUF. Download one with superqode-codegem-download "
+                            "--models coding, then retry :connect local llamacpp."
+                        )
+                        self._awaiting_local_model = False
+                        self._awaiting_local_provider = False
+                        return
                     t.append(
                         "  No cached GGUF models found. Download Laguna S 2.1 with:\n",
                         style=THEME["muted"],

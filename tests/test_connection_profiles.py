@@ -177,6 +177,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "harness-core",
     "harness-rlm",
     "harness-pipy",
+    "harness-codegem",
     "harness-workbench",
     "harness-systemone",
     "harness-presets",

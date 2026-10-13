@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-13
+
+### Added
+
+- CodeGem in the terminal connection menu alongside Core, RLM, PiPy, Workbench
+  and SystemOne, with focused Gemini and local Gemma model choices.
+- Multi-file coding validation with API compatibility and input validation checks.
+- Gemini 4 Argon in the Google model catalog and terminal model lists.
+
+### Fixed
+
+- Cancel CodeGem requests using the active terminal session ID.
+- Preserve tool-result IDs when compatible servers receive results in a different order.
+- Route terminal image attachments to CodeGem's Gemini and Ollama providers.
+- Keep local context, output and compaction budgets bounded for imported Gemma models.
+- Run local EmbeddingGemma inference outside the terminal event loop.
+- Support semantic search scoped to one file and ignore stale or replaced source paths.
+- Recognize the native RLM Python tools and Monty boundary in harness diagnostics.
+- Include Gemini thinking tokens in estimated API costs rather than displaying zero.
+
 ## [2.19.0] - 2026-10-13
 
 ### Added

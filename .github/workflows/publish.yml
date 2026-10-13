@@ -79,6 +79,8 @@ jobs:
           tests/test_headless.py tests/test_compaction.py
           tests/test_tools.py tests/test_search_roots.py
           tests/test_codegem.py tests/test_codegem_cli.py
+          tests/test_connect_harness_screen.py
+          tests/test_tui_mounted.py::test_codegem_connect_row_selects_real_harness_and_model_step
           tests/test_runtime_builtin.py tests/test_release_metadata.py
           tests/test_version.py -q
       - name: Theme and developer journey release contracts

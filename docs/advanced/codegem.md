@@ -25,9 +25,18 @@ Ollama build is available. Install ripgrep (`rg`) and Bash for the search and
 shell tools. See [Installation](../getting-started/installation.md) for the
 hosted installer and platform requirements.
 
-For an interactive session, start `superqode` in your project, connect your
-local model, and select `:harness codegem`. For a small coding demo, ask it to
-read a failing test, fix the implementation, and run the test.
+For an interactive session, start `superqode` in your project, open `:connect`,
+choose **Connect a harness with your model**, then **CodeGem**. Choose **Local**
+for Gemma with Ollama, LM Studio or llama.cpp, or **BYOK** for Gemini with your
+Google API key. `:connect harness-codegem` opens the same flow directly.
+For a small coding demo, ask it to read a failing test, fix the implementation,
+and run the test.
+
+Local Gemma sessions default to at most 32,768 context tokens, with smaller
+output and compaction budgets for smaller contexts. Set `context_window` in
+your harness configuration to use a different budget, and load compatible
+servers with the same context size. Local EmbeddingGemma inference runs in a
+worker thread so semantic search keeps the terminal responsive.
 
 ## Use Gemini through the Google API
 

@@ -63,6 +63,34 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
+async def test_codegem_connect_row_selects_real_harness_and_model_step(tmp_path, monkeypatch):
+    from superqode.providers.connection_profiles import CONNECT_MENU_HARNESS, CONNECT_MENU_MODELS
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setattr(SuperQodeApp, "_run_startup_connect", lambda self: None)
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 35)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log, menu=CONNECT_MENU_HARNESS)
+        await pilot.pause()
+        profiles = app._connect_menu_profiles()
+        row = next(p for p in profiles if p.id == "harness-codegem")
+        assert row.label == "CodeGem"
+        app._byok_highlighted_connect_type_index = profiles.index(row)
+        app.action_select_highlighted_connect_type()
+        await pilot.pause()
+        assert app._pure_mode.session.harness_name == "CodeGem"
+        assert app._pure_mode._harness_spec.runtime.backend == "codegem"
+        assert app._connect_menu == CONNECT_MENU_MODELS
+        assert [p.id for p in app._connect_menu_profiles()] == ["local", "byok"]
+        assert "Gemma" in app._connect_menu_profiles()[0].description
+        assert "Google" in app._connect_menu_profiles()[1].description
+        bar = app.query_one("#status-bar", ColorfulStatusBar)
+        assert bar.active_harness == "codegem"
+        assert "CodeGem" in bar.render().plain
+
+
 async def test_terminal_resize_clamps_without_losing_preferred_sidebar_width(tmp_path, monkeypatch):
     from superqode.app.project_ui_state import get_sidebar_width, set_sidebar_width
     from superqode.sidebar import CollapsibleSidebar

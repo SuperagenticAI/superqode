@@ -33,6 +33,14 @@ CASES = {
         },
         "prompt": "Use search to find the test file, read it, then write slug.py implementing slugify. Use Python to check an example and Bash to run the tests. Do not change the test file.",
     },
+    "refactor": {
+        "files": {
+            "pricing.py": "def subtotal(prices):\n    return sum(prices)\n",
+            "invoice.py": "from pricing import subtotal\n\ndef total(prices, tax_rate):\n    return subtotal(prices) * (1 + tax_rate)\n",
+            "test_invoice.py": "import pytest\nfrom invoice import total\nfrom pricing import subtotal\n\ndef test_existing_api():\n    assert total([10, 5], 0.2) == pytest.approx(18)\n\ndef test_discount_before_tax():\n    assert total([100], 0.2, discount_percent=10) == pytest.approx(108)\n\ndef test_empty():\n    assert total([], 0.2, discount_percent=10) == 0\n\ndef test_negative_price():\n    with pytest.raises(ValueError):\n        subtotal([10, -1])\n\n@pytest.mark.parametrize('discount', [-1, 101])\ndef test_invalid_discount(discount):\n    with pytest.raises(ValueError):\n        total([100], 0.2, discount_percent=discount)\n",
+        },
+        "prompt": "Add optional discount_percent=0 to invoice.total, apply the discount before tax, and reject discounts outside 0..100 with ValueError. Make pricing.subtotal reject negative prices with ValueError. Preserve existing calls, imports and behavior for valid inputs. Inspect both modules, edit both, and run the test suite. Do not change tests.",
+    },
 }
 
 
@@ -86,10 +94,14 @@ async def run(args):
                     )
             # Run immutable reference tests through the current interpreter.
             tests_unchanged = all(
-                (root / f).read_text() == c
+                (root / f).is_file() and (root / f).read_text() == c
                 for f, c in case["files"].items()
                 if f.startswith("test_")
             )
+            # Score original tests even if the model removed or rewrote them.
+            for file, original in case["files"].items():
+                if file.startswith("test_"):
+                    (root / file).write_text(original)
             import sys
 
             proc = await asyncio.create_subprocess_exec(
@@ -102,7 +114,12 @@ async def run(args):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            output, _ = await proc.communicate()
+            try:
+                output, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+            except TimeoutError:
+                proc.kill()
+                output, _ = await proc.communicate()
+                output += b"\nReference tests timed out after 60 seconds."
             result = {
                 "case": name,
                 "harness": args.harness,

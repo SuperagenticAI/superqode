@@ -114,7 +114,7 @@ def test_root_names_native_superqode_harnesses_in_the_model_route():
     model_route = next(p for p in profiles if p.id == "models")
     assert (
         model_route.description
-        == "Connect with Native SuperQode harnesses like Core, RLM, PiPy, Workbench or Build Your own"
+        == "Core, RLM, PiPy, CodeGem for Gemini and Gemma, Workbench or Build Your own"
     )
     copy = " ".join(f"{p.label} {p.description}" for p in profiles if p.id != "models").lower()
 
@@ -131,6 +131,7 @@ def test_harness_step_lists_the_built_in_harnesses_with_core_first():
         "harness-core",
         "harness-rlm",
         "harness-pipy",
+        "harness-codegem",
         "harness-workbench",
         "harness-systemone",
         "harness-presets",
@@ -151,6 +152,17 @@ def test_choosing_a_harness_activates_it():
     assert dispatch("harness-rlm").menus == [CONNECT_MENU_RLM]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
     assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
+    assert dispatch("harness-codegem").harness_commands == ["switch codegem"]
+
+
+def test_codegem_provider_choices_match_its_execution_contract():
+    from types import SimpleNamespace
+    from superqode.app.mixins.connect import ConnectMixin
+    from superqode.harness.templates import codegem_template
+
+    stub = SimpleNamespace(_pure_mode=SimpleNamespace(_harness_spec=codegem_template()))
+    assert ConnectMixin._key_harness_allowlist(stub, "local") == {"ollama", "lmstudio", "llamacpp"}
+    assert ConnectMixin._key_harness_allowlist(stub, "byok") == {"google"}
 
 
 def test_rlm_options_offer_local_boundaries_and_explicit_routing():
@@ -1315,6 +1327,7 @@ def test_new_harness_rows_are_addressable_by_name():
         "harness-rlm",
         "harness-workbench",
         "harness-pipy",
+        "harness-codegem",
         "harness-systemone",
         "harness-presets",
         "harness-repo",

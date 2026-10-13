@@ -4867,6 +4867,17 @@ class CommandImplMixin:
         # a local model would collect a setting the run never uses.
         server_owned = str(entry.spec.metadata.get("policy_owner") or "") == "server"
         needs_model = False
+        if entry.runtime == "codegem" and was_connected:
+            from superqode.codegem.profiles import resolve_profile
+
+            try:
+                resolve_profile(previous_model, previous_provider)
+            except ValueError:
+                pure.disconnect()
+                was_connected = False
+                log.add_info(
+                    "Choose Gemini with Google, or local Gemma with Ollama, LM Studio or llama.cpp."
+                )
         key_session = getattr(self, "_key_harness_session", None)
         if key_session is not None and not self._key_harness_session_matches(entry.id):
             self._clear_key_harness_session()

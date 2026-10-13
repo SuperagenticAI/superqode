@@ -38,6 +38,7 @@ from pathlib import Path
     [
         ("gemini-3.1-pro-preview", "google", "gemini", True),
         ("gemini-4-preview", "google", "gemini", True),
+        ("gemini-4-argon", "google", "gemini", True),
         ("gemma4:12b-mlx", "ollama", "gemma", True),
         ("gemma4-codegem-26b-q4", "llamacpp", "gemma", True),
         ("hf.co/google/gemma-3-4b-it:Q4", "ollama", "gemma", False),
@@ -51,6 +52,7 @@ def test_family_profiles(model, provider, family, native):
     assert profile.native_tools == native
     if model.startswith("gemini-4"):
         assert profile.thinking_level is None
+        assert profile.thinking is True
 
 
 @pytest.mark.parametrize(
@@ -711,3 +713,272 @@ async def test_resuming_different_model_is_rejected(tmp_path, monkeypatch):
     await CodeGemHarnessBackend().run(request)
     with pytest.raises(ValueError, match="changing the model"):
         await CodeGemHarnessBackend().run(replace(request, model="gemma4:31b"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("context_window,expected", [(None, 32768), (4096, 4096), (65536, 65536)])
+async def test_local_context_and_output_are_bounded_for_imported_models(
+    tmp_path, context_window, expected
+):
+    config = {} if context_window is None else {"context_window": context_window}
+    adapter = CodeGemHarnessProtocolAdapter()
+    ref = await adapter.create(
+        HarnessCreateRequest(
+            "codegem",
+            "ollama",
+            "gemma4-imported-q4",
+            tmp_path,
+            metadata={"runtime_config": config},
+        )
+    )
+    coding = adapter._sessions[ref.session_id]
+    assert coding.options.model.context_window == expected
+    assert coding.options.stream_fn.config["max_output_tokens"] == min(8192, expected // 4)
+    assert coding.options.compaction_settings.reserve_tokens <= expected // 4
+    assert coding.options.compaction_settings.keep_recent_tokens <= expected // 4
+    await adapter.close(ref)
+
+
+def test_incompatible_model_cannot_replace_connected_codegem_session(tmp_path, monkeypatch):
+    from superqode.pure_mode import PureMode
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "codegem")
+    pure = PureMode()
+    pure.connect("ollama", "gemma4:12b")
+    with pytest.raises(ValueError, match="only Gemini and Gemma"):
+        pure.connect("ollama", "qwen3:8b")
+    assert pure.session.connected and pure.session.model == "gemma4:12b"
+    pure.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_compatible_tool_results_keep_ids_when_completion_order_changes(tmp_path):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "Done"},
+                    }
+                ]
+            },
+        )
+
+    model = Model("gemma4:12b", "llamacpp")
+    context = Context(
+        "instructions",
+        [
+            UserMessage("Inspect both files"),
+            AssistantMessage(
+                model=model.id,
+                provider=model.provider,
+                stop_reason="toolUse",
+                content=[
+                    ToolCall("first", "read", {"path": "a.py"}),
+                    ToolCall("second", "read", {"path": "b.py"}),
+                ],
+            ),
+            ToolResultMessage("second", "read", "b"),
+            ToolResultMessage("first", "read", "a"),
+        ],
+        create_tools(tmp_path),
+    )
+    events = [
+        e
+        async for e in CodeGemStream(transport=httpx.MockTransport(handler))(
+            model, context, StreamOptions()
+        )
+    ]
+    assert events[-1].message.text == "Done"
+    results = [m for m in requests[0]["messages"] if m["role"] == "tool"]
+    assert [(m["tool_call_id"], m["content"]) for m in results] == [("second", "b"), ("first", "a")]
+
+
+@pytest.mark.asyncio
+async def test_semantic_file_scope_and_replaced_symlinks(tmp_path):
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    source = tmp_path / "source.py"
+    source.write_text("def answer():\n    return 42\n")
+
+    class Client:
+        identity = "test"
+
+        async def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        async def query(self, text):
+            return [1.0, 0.0]
+
+    index = CodeGemIndex(tmp_path, {"scope": "source.py"}, client=Client())
+    assert (await index.build())["chunks"] == 1
+    assert (await index.search("answer"))[0]["path"] == "source.py"
+    target = tmp_path / "target.py"
+    target.write_text(source.read_text())
+    source.unlink()
+    source.symlink_to(target)
+    assert await index.search("answer") == []
+
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    directory = project / "src"
+    directory.mkdir()
+    (directory / "outside.py").write_text("def private_context():\n    return 123\n")
+    subprocess.run(["git", "add", "src/outside.py"], cwd=project, check=True)
+    outside = tmp_path / "outside"
+    directory.rename(outside)
+    directory.symlink_to(outside, target_is_directory=True)
+    assert CodeGemIndex(project, client=Client()).chunks() == []
+
+
+@pytest.mark.asyncio
+async def test_metal_embedding_does_not_block_terminal_event_loop(monkeypatch):
+    import threading
+
+    release = threading.Event()
+    started = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    threads = []
+
+    def embed(model, texts, config):
+        threads.append(threading.get_ident())
+        loop.call_soon_threadsafe(started.set)
+        release.wait(timeout=5)
+        return [[1.0, *([0.0] * 127)]]
+
+    monkeypatch.setattr(retrieval, "_sentence_transformers_embed", embed)
+    client = EmbeddingClient(
+        {"provider": "sentence-transformers", "device": "mps", "dimensions": 128}
+    )
+    task = asyncio.create_task(client.query("resume"))
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        assert not task.done()
+        assert len(threads) == 1 and threads[0] != threading.get_ident()
+    finally:
+        release.set()
+        await task
+
+
+@pytest.mark.asyncio
+async def test_cancel_by_public_session_id_interrupts_provider_request(tmp_path, monkeypatch):
+    started = asyncio.Event()
+
+    async def handler(request):
+        started.set()
+        await asyncio.sleep(60)
+        return httpx.Response(200, json={"done": True, "message": {"content": "Done"}})
+
+    monkeypatch.setattr(
+        "superqode.codegem.provider.CodeGemStream",
+        lambda config: CodeGemStream(
+            {**config, "tool_mode": "native"},
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    backend = CodeGemHarnessBackend()
+    task = asyncio.create_task(
+        backend.run(
+            HarnessBackendRequest(
+                codegem_template(),
+                "go",
+                "ollama",
+                "gemma4:12b",
+                tmp_path,
+                session_id="public/id",
+            )
+        )
+    )
+    await asyncio.wait_for(started.wait(), 2)
+    try:
+        await backend.cancel("another-session")
+        assert not task.done()
+        await backend.cancel("public/id")
+        result = await asyncio.wait_for(task, 2)
+        assert result.response.stopped_reason == "error"
+        assert "aborted" in result.response.error.lower()
+        assert backend._active_ref is None
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_composer_images_reach_codegem_through_pure_mode(tmp_path, monkeypatch, streaming):
+    from superqode.pure_mode import PureMode
+
+    requests = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        return httpx.Response(200, json={"done": True, "message": {"content": "Image reviewed"}})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "codegem")
+    monkeypatch.setattr(
+        "superqode.codegem.provider.CodeGemStream",
+        lambda config: CodeGemStream(
+            {**config, "tool_mode": "native"},
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    pure = PureMode()
+    pure.connect("ollama", "gemma4:12b-mlx")
+    image = ImageContent("aW1hZ2U=", "image/png")
+    if streaming:
+        text = "".join([chunk async for chunk in pure.run_streaming("Review", images=[image])])
+    else:
+        text = (await pure.run("Review", images=[image])).content
+    assert text == "Image reviewed"
+    assert requests[0]["messages"][-1]["images"] == [image.data]
+    pure.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_gemini4_usage_estimate_includes_thinking_and_discounted_cache():
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "Done"}],
+                        },
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 1000,
+                    "cachedContentTokenCount": 200,
+                    "candidatesTokenCount": 100,
+                    "thoughtsTokenCount": 50,
+                    "totalTokenCount": 1150,
+                },
+            },
+        )
+
+    events = [
+        e
+        async for e in CodeGemStream(transport=httpx.MockTransport(handler))(
+            Model("gemini-4-argon", "google"),
+            Context("instructions", [UserMessage("go")]),
+            StreamOptions(api_key="fixture"),
+        )
+    ]
+    usage = events[-1].message.usage
+    assert usage.cost.input == pytest.approx(0.0016)
+    assert usage.cost.output == pytest.approx(0.0015)
+    assert usage.cost.cache_read == pytest.approx(0.00002)
+    assert usage.cost.total == pytest.approx(0.00312)

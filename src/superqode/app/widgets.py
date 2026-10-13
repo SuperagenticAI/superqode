@@ -379,6 +379,8 @@ class ColorfulStatusBar(Static):
 
             harness = (self.active_harness or "").strip()
             if harness:
+                if harness.casefold() == "codegem":
+                    harness = "CodeGem"
                 separator()
                 result.append("harness " if wide else "h ", style=THEME["dim"])
                 harness_limit = 18 if wide else 10 if medium else 6
@@ -420,7 +422,7 @@ class ColorfulStatusBar(Static):
             }.get(approval, THEME["muted"])
             if right.plain:
                 right.append(" │ " if medium else " ", style=THEME["dim"])
-            if wide:
+            if width >= 140:
                 right.append("approval ", style=THEME["muted"])
             right.append(approval.upper(), style=f"bold {approval_color}")
             priority_width = cell_len(right.plain)

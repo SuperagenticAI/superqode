@@ -39,10 +39,19 @@ def resolve_profile(model: str, provider: str) -> CodeGemProfile:
             True,
             True,
             1.0,
-            generation in {2, 3},
+            generation in {2, 3, 4},
             "high" if generation == 3 else None,
         )
     if provider.lower() not in {"ollama", "lmstudio", "llamacpp"}:
         raise ValueError("CodeGem local Gemma requires ollama, lmstudio, or llamacpp")
     modern = generation == 4
     return CodeGemProfile(family, generation, modern, modern, 1.0 if modern else 0.2, modern)
+
+
+def supports_model(model: str, provider: str) -> bool:
+    """Use the execution contract when filtering model pickers."""
+    try:
+        resolve_profile(model, provider)
+    except ValueError:
+        return False
+    return True

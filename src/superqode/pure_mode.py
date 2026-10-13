@@ -376,6 +376,11 @@ class PureMode:
         """
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        if self._harness_spec is not None and self._harness_spec.runtime.backend == "codegem":
+            from superqode.codegem.profiles import resolve_profile
+
+            # Reject incompatible routes before changing a connected session.
+            resolve_profile(model, provider)
         if self.runtime_name == "codex-cli" and self._harness_spec is None:
             from superqode.session.codex import latest_thread, manager
 
@@ -688,7 +693,10 @@ class PureMode:
     ) -> AgentResponse:
         """Run a task in Pure Mode."""
         if images and (
-            (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
+            (
+                self._harness_spec is not None
+                and self._harness_spec.runtime.backend not in {"pipy", "codegem"}
+            )
             or (
                 self._harness_spec is None
                 and self._agent is None
@@ -696,7 +704,7 @@ class PureMode:
             )
         ):
             raise ValueError(
-                "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
+                "This runtime does not support composer image input. Use CodeGem, PiPy, built-in coding or direct Chat."
             )
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
@@ -762,7 +770,10 @@ class PureMode:
         # left over from the previous turn.
         self._last_stats = {}
         if images and (
-            (self._harness_spec is not None and self._harness_spec.runtime.backend != "pipy")
+            (
+                self._harness_spec is not None
+                and self._harness_spec.runtime.backend not in {"pipy", "codegem"}
+            )
             or (
                 self._harness_spec is None
                 and self._agent is None
@@ -770,7 +781,7 @@ class PureMode:
             )
         ):
             raise ValueError(
-                "This runtime does not support composer image input. Use PiPy, built-in coding or direct Chat."
+                "This runtime does not support composer image input. Use CodeGem, PiPy, built-in coding or direct Chat."
             )
         self._cancel_requested = False
         if self._harness_spec is not None:

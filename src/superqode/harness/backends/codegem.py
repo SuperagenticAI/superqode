@@ -3,7 +3,7 @@
 from dataclasses import replace
 from uuid import uuid4
 
-from .pipy import PiPyHarnessBackend, _session_ref
+from .pipy import PiPyHarnessBackend, _session_ref, _safe_session_id
 from ..codegem_adapter import CodeGemHarnessProtocolAdapter
 
 
@@ -18,6 +18,17 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
 
     def __init__(self, *, adapter=None):
         super().__init__(adapter=adapter or CodeGemHarnessProtocolAdapter())
+
+    async def cancel(self, session_id=None):
+        ref = self._active_ref
+        if ref is None:
+            return
+        # The kernel cancels by its public ID, while this backend namespaces
+        # storage IDs. The adapter's external ID belongs to the JSONL session.
+        if session_id and session_id not in {ref.session_id, ref.external_session_id}:
+            if "codegem-" + _safe_session_id(session_id) != ref.session_id:
+                return
+        await self.adapter.cancel(ref)
 
     async def _events(self, request):
         # Namespace kernel IDs; requests without an ID always open a fresh session.

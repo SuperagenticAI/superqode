@@ -25,6 +25,7 @@ from superqode.pipy.messages import (
     ImageContent,
     ToolCall,
     Usage,
+    UsageCost,
 )
 from superqode.pipy.provider_events import (
     AssistantStartEvent,
@@ -433,6 +434,32 @@ class CodeGemStream:
             reasoning=usage.get("thoughtsTokenCount"),
             total_tokens=usage.get("totalTokenCount", 0),
         )
+        from superqode.providers.models import get_model_info
+
+        info = get_model_info("google", model.id)
+        if info is not None:
+            # Catalog prices are estimates, not a provider billing receipt.
+            # Google bills thinking tokens at the output rate. Argon's
+            # announced introductory cached-input rate is 95% below input.
+            cached = min(message.usage.cache_read, message.usage.input)
+            input_cost = max(0, message.usage.input - cached) * info.input_price / 1_000_000
+            output_cost = (
+                (message.usage.output + (message.usage.reasoning or 0))
+                * info.output_price
+                / 1_000_000
+            )
+            cache_cost = (
+                cached
+                * info.input_price
+                * (0.05 if model.id == "gemini-4-argon" else 1.0)
+                / 1_000_000
+            )
+            message.usage.cost = UsageCost(
+                input=input_cost,
+                output=output_cost,
+                cache_read=cache_cost,
+                total=input_cost + output_cost + cache_cost,
+            )
         message.stop_reason = (
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
@@ -561,16 +588,19 @@ class CodeGemStream:
             for c in m.tool_calls
         ]
         cursor = 0
-        pending = []
+        result_ids = iter(
+            m.tool_call_id
+            for m in _reconcile_tools(context.messages)
+            if isinstance(m, ToolResultMessage)
+        )
         for entry in wire:
             for raw in entry.get("tool_calls", []):
                 call = calls[cursor]
                 cursor += 1
                 raw.update({"id": call.id, "type": "function"})
                 raw["function"]["arguments"] = json.dumps(raw["function"]["arguments"])
-                pending.append(call.id)
             if entry["role"] == "tool":
-                entry["tool_call_id"] = pending.pop(0)
+                entry["tool_call_id"] = next(result_ids)
                 entry.pop("tool_name", None)
             if "thinking" in entry:
                 entry["reasoning_content"] = entry.pop("thinking")

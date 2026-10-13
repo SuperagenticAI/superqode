@@ -39,7 +39,11 @@ jobs:
       - name: CodeGem runtime checks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_codegem.py tests/test_codegem_cli.py -q
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_codegem.py tests/test_codegem_cli.py
+          tests/test_connect_harness_screen.py
+          tests/test_tui_mounted.py::test_codegem_connect_row_selects_real_harness_and_model_step -q
       - name: CLI and environment reference coverage
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"

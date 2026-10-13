@@ -177,6 +177,7 @@ When SuperQode owns the loop, the harness step is also directly addressable:
 :connect harness-rlm
 :connect harness-workbench
 :connect harness-pipy
+:connect harness-codegem
 :connect harness-presets
 :connect harness-repo
 ```

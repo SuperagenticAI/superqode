@@ -586,12 +586,35 @@ class ConnectMixin:
         """
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_KEY_MODELS,
+            CONNECT_MENU_MODELS,
             CONNECT_MENU_ROOT,
             display_ordered_profiles,
         )
 
         menu = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
         profiles = display_ordered_profiles(menu)
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if (
+            menu == CONNECT_MENU_MODELS
+            and getattr(getattr(spec, "runtime", None), "backend", "") == "codegem"
+        ):
+            from dataclasses import replace
+            from superqode.providers.credentials import provider_api_key
+            from superqode.providers.registry import PROVIDERS
+
+            return [
+                replace(row, description="Local Gemma with Ollama, LM Studio or llama.cpp")
+                if row.id == "local"
+                else replace(
+                    row,
+                    description="Gemini with your Google API key",
+                    detect=lambda: bool(provider_api_key(PROVIDERS["google"])),
+                    unavailable_hint="Set GEMINI_API_KEY or GOOGLE_API_KEY, or select Google for setup",
+                )
+                for row in profiles
+                if row.id in {"local", "byok"}
+            ]
         if menu != CONNECT_MENU_KEY_MODELS:
             return profiles
         # A harness that allows no providers for a mode must not offer the row:
@@ -1046,6 +1069,10 @@ class ConnectMixin:
 
     def _key_harness_allowlist(self, mode: str) -> frozenset[str] | None:
         """Picker filter for the active key-harness. ``None`` means all native."""
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
+            return frozenset({"ollama", "lmstudio", "llamacpp"} if mode == "local" else {"google"})
         session = getattr(self, "_key_harness_session", None)
         if session is None:
             return None
@@ -3426,6 +3453,12 @@ class ConnectMixin:
 
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
+            from superqode.codegem.profiles import resolve_profile
+
+            resolve_profile(model, provider)
         cancel = getattr(self, "_cancel_harness_wizard", None)
         if callable(cancel):
             try:

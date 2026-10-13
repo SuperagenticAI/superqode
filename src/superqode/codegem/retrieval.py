@@ -122,23 +122,11 @@ class EmbeddingClient:
     async def embed(self, texts):
         provider = self.provider
         if provider == "sentence-transformers":
-            # PyTorch's macOS MPS backend must be initialized and invoked from
-            # the main thread on some macOS releases; CPU/CUDA work stays off-loop.
-            device = self.config.get("device", "auto")
-            use_mps = device == "mps"
-            if device == "auto" and sys.platform == "darwin":
-                try:
-                    import torch
-
-                    use_mps = torch.backends.mps.is_available()
-                except (ImportError, AttributeError):
-                    pass
-            if use_mps:
-                vectors = _sentence_transformers_embed(self.model, texts, self.config)
-            else:
-                vectors = await asyncio.to_thread(
-                    _sentence_transformers_embed, self.model, texts, self.config
-                )
+            # Model loading and GPU/CPU inference can take seconds. Metal,
+            # CUDA and CPU all run off the terminal's event loop.
+            vectors = await asyncio.to_thread(
+                _sentence_transformers_embed, self.model, texts, self.config
+            )
         else:
             async with httpx.AsyncClient(transport=self.transport, timeout=60) as client:
                 if provider == "ollama":
@@ -252,7 +240,7 @@ class CodeGemIndex:
         result = []
         for relative in paths:
             if not any(
-                scope == "." or relative.startswith(scope.rstrip("/") + "/")
+                scope == "." or relative == scope or relative.startswith(scope.rstrip("/") + "/")
                 for scope in self.scope_keys
             ):
                 continue
@@ -260,6 +248,7 @@ class CodeGemIndex:
             if (
                 path.suffix not in EXTENSIONS
                 or path.is_symlink()
+                or not path.resolve().is_relative_to(self.root)
                 or any(p.startswith(".") and p != ".github" for p in Path(relative).parts)
             ):
                 continue
@@ -384,11 +373,18 @@ class CodeGemIndex:
                 continue
             actual = self.root / path
             # Never present an old line reference as current code.
-            if not actual.exists():
+            if (
+                not actual.is_file()
+                or actual.is_symlink()
+                or not actual.resolve().is_relative_to(self.root)
+            ):
                 continue
-            current = "\n".join(actual.read_text(encoding="utf-8").splitlines()[start - 1 : end])[
-                :2000
-            ]
+            try:
+                current = "\n".join(
+                    actual.read_text(encoding="utf-8").splitlines()[start - 1 : end]
+                )[:2000]
+            except (OSError, UnicodeError):
+                continue
             if hashlib.sha256(current.encode()).hexdigest() != digest:
                 continue
             seen_paths.add(path)

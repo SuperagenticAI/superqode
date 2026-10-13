@@ -2514,6 +2514,26 @@ def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, mo
     assert pure.get_current_session_id() == "core-session-1234"
 
 
+def test_codegem_switch_from_incompatible_model_opens_model_picker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model")
+    menus = []
+    app._show_connect_type_picker = lambda log, **kwargs: menus.append(kwargs.get("menu"))
+
+    app._harness_cmd("switch codegem", log)
+
+    from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+
+    assert pure.session.harness_name == "CodeGem"
+    assert not pure.session.connected
+    assert menus == [CONNECT_MENU_MODELS]
+    assert any("Choose Gemini" in str(item) for item in log.items)
+
+
 def test_tui_harness_switch_can_fork_before_changing_harness(tmp_path, monkeypatch):
     from superqode.agent.session_manager import SessionManager
 
@@ -6666,7 +6686,7 @@ def test_connect_picker_explains_every_choice():
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Grok, Devin and more" in first
-    assert "Connect with Native SuperQode harnesses like Core, RLM, PiPy," in first
+    assert "Core, RLM, PiPy, CodeGem for Gemini and Gemma" in first
     assert "Import existing config" in first
     assert "ACP, A2A, or UHP" in first
     assert "Connect to an existing harness ↗" in first
@@ -6677,7 +6697,7 @@ def test_connect_picker_explains_every_choice():
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Grok, Devin and more" in second
-    assert "Core, RLM, PiPy, Workbench or Build Your own" in " ".join(second.split())
+    assert "Core, RLM, PiPy, CodeGem for Gemini and Gemma" in " ".join(second.split())
     assert "Import existing config" in second
     assert "Connect a harness with your model (Recommended) ↗" in second
     assert second.count("●") >= 1

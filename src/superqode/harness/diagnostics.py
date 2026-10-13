@@ -298,7 +298,7 @@ def doctor_harness(
     hooks_check = _hooks_check(spec)
     add("hooks", hooks_check["status"], hooks_check["message"], **hooks_check["data"])
 
-    sandbox_check = _sandbox_check(sandbox_name)
+    sandbox_check = _sandbox_check(sandbox_name, spec=spec)
     add("sandbox", sandbox_check["status"], sandbox_check["message"], **sandbox_check["data"])
 
     checks_check = _checks_check(spec, root)
@@ -1213,6 +1213,10 @@ def _agent_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
         from superqode.codegem.tools import TOOL_NAMES
 
         known_tools = set(TOOL_NAMES)
+    elif spec.runtime.backend == "rlm":
+        from superqode.rlm.profile import RLMProfile
+
+        known_tools = set(RLMProfile.from_config(spec.runtime.config).tools)
     for agent in spec.agents:
         missing_tools = [
             tool for tool in agent.tools if tool not in known_tools and not tool.startswith("mcp_")
@@ -1362,6 +1366,10 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
         from superqode.codegem.tools import TOOL_NAMES
 
         available = set(TOOL_NAMES)
+    elif spec.runtime.backend == "rlm":
+        from superqode.rlm.profile import RLMProfile
+
+        available = set(RLMProfile.from_config(spec.runtime.config).tools)
     missing = [tool for tool in requested if tool not in available and not tool.startswith("mcp_")]
     mcp_tools = [tool for tool in requested if tool.startswith("mcp_")]
     warnings = []
@@ -1710,7 +1718,34 @@ def _hooks_check(spec: HarnessSpec) -> dict[str, Any]:
     }
 
 
-def _sandbox_check(name: str) -> dict[str, Any]:
+def _sandbox_check(name: str, *, spec: HarnessSpec | None = None) -> dict[str, Any]:
+    if name == "monty" and spec is not None and spec.runtime.backend == "rlm":
+        import importlib.util
+        from superqode.rlm.profile import RLMProfile
+        from superqode.rlm.sandbox import RLMSandboxConfig
+
+        try:
+            config = RLMSandboxConfig.from_config(
+                {**spec.runtime.config, "sandbox": name},
+                execution_policy=spec.execution_policy,
+            )
+            RLMProfile.from_config(spec.runtime.config).validate_sandbox(config)
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc), "data": {"backend": name}}
+        installed = importlib.util.find_spec("pydantic_monty") is not None
+        return {
+            "status": "ok" if installed else "warning",
+            "message": "RLM Monty interpreter is available."
+            if installed
+            else "RLM Monty requires the optional monty extra before running.",
+            "data": {
+                "backend": name,
+                "can_write": False,
+                "can_shell": False,
+                "can_network": False,
+                "fix": "No action needed." if installed else "Install superqode[monty].",
+            },
+        }
     if name in {"", "none"}:
         return {
             "status": "ok",

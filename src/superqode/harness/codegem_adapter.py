@@ -71,6 +71,26 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
         if config.get("mcp") or config.get("mcp_servers"):
             raise ValueError("CodeGem has exactly six tools; MCP extensions are unsupported")
         profile = resolve_profile(request.model, request.provider)
+        model = resolve_model(
+            request.model,
+            provider=request.provider,
+            context_window=config.get("context_window"),
+            supports_reasoning=profile.thinking,
+        )
+        if profile.family == "gemma":
+            # A model's maximum context is not a sensible default KV allocation
+            # on a laptop. Keep local runs bounded and compaction enabled even
+            # for imported models absent from the catalog. Users can opt up.
+            if config.get("context_window") is None:
+                model = replace(model, context_window=min(model.context_window or 32768, 32768))
+            if model.context_window < 1024:
+                raise ValueError("CodeGem context_window must be at least 1024 tokens")
+            config.setdefault("max_output_tokens", min(8192, model.context_window // 4))
+        reserve = min(
+            int(config.get("reserve_tokens", 32768 if profile.family == "gemini" else 8192)),
+            model.context_window // 4 if model.context_window else 32768,
+        )
+        keep_recent = min(int(config.get("keep_recent_tokens", 8192)), reserve)
         tools = create_tools(working_directory, config=config)
         policy = config.get("execution_policy", {})
         guarded = []
@@ -92,12 +112,7 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
                 guarded.append(replace(tool, execute_fn=denied))
         options = CodingSessionOptions(
             cwd=working_directory,
-            model=resolve_model(
-                request.model,
-                provider=request.provider,
-                context_window=config.get("context_window"),
-                supports_reasoning=profile.thinking,
-            ),
+            model=model,
             stream_fn=CodeGemStream(config),
             tool_names=(),
             extra_tools=tuple(guarded),
@@ -116,10 +131,8 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             max_turns=int(config.get("max_turns", 64)),
             # Reserve output space without imposing Gemini-sized budgets on local Gemma.
             compaction_settings=CompactionSettings(
-                reserve_tokens=int(
-                    config.get("reserve_tokens", 32768 if profile.family == "gemini" else 8192)
-                ),
-                keep_recent_tokens=int(config.get("keep_recent_tokens", 8192)),
+                reserve_tokens=reserve,
+                keep_recent_tokens=keep_recent,
             ),
         )
         path = session_path or request.metadata.get("session_path")

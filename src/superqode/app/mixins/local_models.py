@@ -829,6 +829,16 @@ class LocalModelsMixin:
         already handled in _connect_byok_mode() via ProviderCategory.LOCAL.
         """
         # HuggingFace cached models need a local runtime (e.g., MLX/TGI), not HF Inference API
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
+            from superqode.codegem.profiles import resolve_profile
+
+            try:
+                resolve_profile(model, provider)
+            except ValueError as exc:
+                log.add_error(str(exc))
+                return
         if provider == "huggingface-local":
             model_lower = model.lower()
             if "mlx" in model_lower or model_lower.startswith("mlx-community/"):
@@ -1625,6 +1635,14 @@ class LocalModelsMixin:
 
         filtered_embeddings = [m for m in models if is_embedding_model(m.id, m.name)]
         models = [m for m in models if not is_embedding_model(m.id, m.name)]
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None)
+        if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
+            from superqode.codegem.profiles import supports_model
+
+            models = [m for m in models if supports_model(m.id, provider_id)]
+            if not models:
+                log.add_info("CodeGem needs a Gemma chat model. Install or load one, then retry.")
 
         if filtered_embeddings and not models and provider_id == "lmstudio":
             log.add_info(

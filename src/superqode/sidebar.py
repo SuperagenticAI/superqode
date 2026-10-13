@@ -497,9 +497,10 @@ class ColorfulDirectoryTree(DirectoryTree):
 
         # Tree passes the current hover/selection style here; ignoring it
         # leaves the selected file invisible even when CSS is theme-aware.
-        label.stylize(style)
-        if style.bgcolor and not style.bgcolor.is_system_defined:
-            color = _icon_color_for_surfaces(color, (style.bgcolor.get_truecolor().hex,))
+        if style is not None:
+            label.stylize(style)
+            if style.bgcolor and not style.bgcolor.is_system_defined:
+                color = _icon_color_for_surfaces(color, (style.bgcolor.get_truecolor().hex,))
         label.stylize(Style(color=color, bold=True), 0, len(icon) + 1)
         return label
 
