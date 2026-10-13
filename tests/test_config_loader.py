@@ -14,12 +14,13 @@ def test_default_openai_recommendations_and_aliases():
 
 
 def test_default_google_recommendations_and_aliases():
-    """Google BYOK defaults should track current models.dev Gemini IDs."""
+    """Google BYOK defaults should include the reviewed Gemini API models."""
     config = create_default_config()
 
     google = config.providers["google"]
 
-    assert google.recommended_models[:5] == [
+    assert google.recommended_models[:6] == [
+        "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.7-flash",
         "gemini-3.6-flash",
