@@ -12,6 +12,7 @@ on:
       - "scripts/install.sh"
       - "tests/test_install_script.py"
       - "tests/test_config_loader.py"
+      - "tests/test_cli_contract.py"
       - "tests/test_dx_completion.py"
       - "tests/test_tui_developer_trial.py"
       - "tests/test_tui_navigation_state.py"
