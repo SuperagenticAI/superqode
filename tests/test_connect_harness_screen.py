@@ -52,6 +52,11 @@ class DispatchStub:
     def _reset_connect_selection_states(self):
         pass
 
+    def _review_route_transition(self, runtime, connector, continuity, apply):
+        from superqode.app.mixins.feedback import FeedbackMixin
+
+        return FeedbackMixin._review_route_transition(self, runtime, connector, continuity, apply)
+
     def _clear_key_harness_session(self):
         # The app always has this; a stub that dispatches has to model it.
         self._key_harness_session = None

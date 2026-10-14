@@ -164,11 +164,12 @@ EXPECTED_COMMAND_COUNT = 321
 # through Click's public list/get API in canonical order; all 319 routes remain.
 # --approval-mode now documents supported headless runtimes as well as the TUI.
 # Rebaselined for theme compatibility and native/Pi JSON export (319 -> 321).
-EXPECTED_HELP_TREE_SHA256 = "31bbc93b2f5f636cbcc2be2092ece5afa0e4481d806ed8aaa2b5964efdebf172"
+# Benchmark comparison adds --dry-run and --artifacts without changing commands.
+EXPECTED_HELP_TREE_SHA256 = "1da460c732da280e21a14b383f8c2fc86b9fc6c7ebfa93419ef8e01a26fef6a7"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "a7c272d31fbf1af88b6de7d730e3d2910f1ddbf08d2a68a30d6e5858bf374cf9"
+    "518e08b0251c1d69464c34e0c2973e63db72f1bb71cbfc2abca826649cfc459f"
 )
 
 
