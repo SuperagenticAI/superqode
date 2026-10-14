@@ -1,73 +1,65 @@
-# Benchmark Runner
+# Graded coding comparisons
 
-## Overview
+Use `superqode benchmark compare` for coding quality comparisons. Each attempt
+receives an isolated copy of the task seed. Independent executable checks grade
+the resulting code. An agent's successful process exit alone does not establish
+coding correctness. The separate HarnessBench response-text checks are useful
+for smoke testing, but should not be reported as solved coding tasks.
 
-The benchmark harness compares coding agent performance across multiple targets (superqode, opencode, pi, deepagents) on the same task prompts. Each task in a tasks file is run against every selected target, and results are collected into a JSON report for analysis. The harness does not evaluate output correctness; it delegates pass/fail determination to each target CLI's exit code.
+## Prepare a manifest
 
-## Task File Format
-
-Tasks are defined in a JSON file with a `tasks` array:
+Paths in `cwd` are relative to the manifest. Commands are argument arrays; the
+runner appends the task prompt to each target command. Use explicit provider,
+model and pinned revision values for every target.
 
 ```json
 {
+  "targets": [
+    {"name": "candidate", "command": ["/absolute/path/to/candidate-wrapper"], "provider": "your-provider", "model": "your-model", "revision": "exact-revision"},
+    {"name": "baseline", "command": ["/absolute/path/to/baseline-wrapper"], "provider": "your-provider", "model": "your-model", "revision": "exact-revision"}
+  ],
   "tasks": [
-    {
-      "id": "task-001",
-      "prompt": "Implement a fibonacci function in Python",
-      "cwd": "/tmp/workspace",
-      "timeout_seconds": 300
-    }
+    {"id": "bug-fix", "prompt": "Fix the bug and run the tests.", "cwd": "fixtures/bug-fix", "timeout_seconds": 300, "checks": [["python3", "verify.py"]], "protected_paths": ["verify.py"]}
   ]
 }
 ```
 
-Field descriptions:
+Configure wrappers for the installed CLI versions. The declared models must
+match for a controlled harness comparison. Graders should exercise behavior,
+including negative cases, without depending on the assistant's prose. Protected
+paths detect grader modifications. A copied workspace is not a security sandbox;
+use an appropriate container or host boundary for untrusted agents.
 
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `id` | yes | | Unique task identifier |
-| `prompt` | yes | | Prompt text, passed as the last argument to the target CLI |
-| `cwd` | no | `.` | Working directory for the task |
-| `timeout_seconds` | no | `300` | Per task timeout in seconds |
-
-## CLI Usage
+## Validate and run
 
 ```bash
-superqode benchmark run tasks.json
-superqode benchmark run tasks.json --target superqode --target opencode
+superqode benchmark compare comparison.json --dry-run --output plan.json
+superqode benchmark compare comparison.json --repetitions 3 --output results.json
 ```
 
-The `--target` flag is repeatable. When omitted, all built-in targets are used.
+Dry runs inspect executable availability, task directories, graders and protected
+paths without starting agents, running graders, or checking accounts. They do
+not certify authentication or upstream behavior. A live run requires working
+provider access and can incur model charges.
 
-## Targets
+Reports contain per-attempt results, timing, source hashes, grader evidence and
+a scorecard. Review `comparison_ready` and `comparison_blockers` before making
+comparative claims. Missing usage is unknown, not free. Account for failed
+attempts, subagents and auxiliary model calls. Harness-reported costs are
+estimates rather than billing verification.
 
-Four built-in targets are available:
+Run both a matched-model comparison and a separate recommended-configuration
+product trial. Label them separately. Keep held-out tasks and use multiple
+trials. Small sample tasks alone do not establish performance on production
+repositories. Publish versions, operating system, task-level outcomes, costs and
+failures alongside any headline success rate.
 
-| Target | CLI Command |
-|--------|-------------|
-| superqode | `superqode -p` |
-| opencode | `opencode run` |
-| pi | `pi -p` |
-| deepagents | `deepagents` |
+## Inspecting attempt workspaces
 
-If a target's binary is not found on `PATH`, that target is reported as "skipped" in the results. Only targets present on `PATH` are executed.
-
-## Result Format
-
-Results are output as a JSON array. Each entry contains:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `target` | string | Name of the target that ran |
-| `task_id` | string | ID of the task that was run |
-| `status` | string | One of: `passed`, `failed`, `skipped`, `timeout` |
-| `returncode` | int | Exit code of the target CLI (absent on skip/timeout) |
-| `duration_seconds` | float | Wall clock time in seconds (absent on skip) |
-| `stdout_chars` | int | Character count of stdout (absent on skip/timeout) |
-| `stderr_chars` | int | Character count of stderr (absent on skip/timeout) |
-
-Pass/fail status is determined solely by the target CLI's exit code: exit code 0 produces `passed`, any non-zero exit produces `failed`. The benchmark harness does not inspect output for correctness.
-
-## Writing Custom Tasks
-
-Create a JSON file with a `tasks` array. Each task object must contain at least `id` and `prompt`. The prompt is appended as the last argument to the target's CLI command. The target is expected to solve the prompt and exit 0 on success. Use `cwd` to control where the target process runs and `timeout_seconds` to prevent runaway agents.
+Use `benchmark compare ... --artifacts /tmp/comparison-artifacts` to keep each
+attempt's workspace and result metadata after grading, including failed and
+timed-out attempts. The artifact directory must sit outside every seed task
+directory. Links created by an agent are retained as links, not followed during
+collection. Treat retained workspaces as agent output; inspect the patch before
+executing anything from them. Without this option, temporary attempt workspaces
+are removed as before.

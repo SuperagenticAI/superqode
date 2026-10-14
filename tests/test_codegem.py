@@ -136,6 +136,55 @@ async def test_old_ollama_embedding_error_has_a_supported_local_fallback():
         await client.embed(["test"])
 
 
+@pytest.mark.parametrize("existing_lock", [False, True])
+def test_local_embedding_progress_avoids_multiprocessing_under_tui_capture(
+    monkeypatch, existing_lock
+):
+    import io
+    import sys
+    import threading
+    from types import SimpleNamespace
+    from tqdm import tqdm
+    from tqdm.std import TqdmDefaultWriteLock
+
+    class CapturedStderr(io.StringIO):
+        def fileno(self):
+            return -1
+
+    def unexpected_process_lock(cls):
+        raise AssertionError("Model loading must not start a multiprocessing resource tracker")
+
+    class Model:
+        def __init__(self, name, **kwargs):
+            with tqdm(total=1, disable=True):
+                pass
+
+        def encode(self, texts, **kwargs):
+            return SimpleNamespace(tolist=lambda: [[1.0] * 128 for _ in texts])
+
+    monkeypatch.setattr(sys, "stderr", CapturedStderr())
+    monkeypatch.setattr(
+        TqdmDefaultWriteLock, "create_mp_lock", classmethod(unexpected_process_lock)
+    )
+    monkeypatch.setattr(retrieval, "_SENTENCE_TRANSFORMER_MODELS", {})
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace())
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=Model)
+    )
+    if existing_lock:
+        lock = threading.RLock()
+        monkeypatch.setattr(tqdm, "_lock", lock, raising=False)
+    else:
+        monkeypatch.delattr(tqdm, "_lock", raising=False)
+
+    vectors = retrieval._sentence_transformers_embed(
+        "google/embeddinggemma-2", ["invoice total"], {"device": "cpu"}
+    )
+    assert vectors == [[1.0] * 128]
+    if existing_lock:
+        assert tqdm.get_lock() is lock
+
+
 @pytest.mark.asyncio
 async def test_semantic_results_do_not_spend_result_window_on_duplicate_files(tmp_path):
     import subprocess

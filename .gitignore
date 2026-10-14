@@ -216,3 +216,12 @@ reference/
 # enough to reproduce any run.
 examples/bench/runs/
 examples/bench/results/
+
+# Local research notes and run evidence are not release content.
+/docs/research/
+/docs/advanced/appearance-workflow-review.md
+/docs/advanced/dx-findings-verification-2026-10-11.md
+/docs/advanced/upstream-tui-delta-2026-10-11.md
+/docs/advanced/tui-experience-review.md
+/docs/advanced/developer-trial-readiness-review.md
+/docs/advanced/pi-theme-comparison.md

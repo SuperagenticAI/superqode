@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import inspect
 import os
 import platform
 from pathlib import Path
@@ -109,6 +110,24 @@ async def probe(size):
         await pilot.press("h", "i")
         typing_ms = (perf_counter() - tick) * 1000
         assert prompt.value == "hi"
+        # Measure handler-to-headless-refresh separately from Pilot settling.
+        # This excludes OS input, terminal paint, and message dispatch latency.
+        from textual import events
+
+        refresh_samples = []
+        for key, character in [("x", "x")] * 10:
+            refreshed = asyncio.get_running_loop().create_future()
+            started = perf_counter()
+            result = prompt._on_key(events.Key(key, character))
+            if inspect.isawaitable(result):
+                await result
+            app.call_after_refresh(refreshed.set_result, None)
+            await asyncio.wait_for(refreshed, timeout=5)
+            refresh_samples.append((perf_counter() - started) * 1000)
+            assert prompt.value == "hix"
+            prompt.value = "hi"
+            prompt.cursor_position = 2
+        assert prompt.value == "hi"
         tick = perf_counter()
         log.scroll_home(animate=False)
         await pilot.pause()
@@ -157,6 +176,9 @@ async def probe(size):
             "chunk_and_yield_p95_ms": round(sorted(timings)[int(len(timings) * 0.95)], 3),
             "chunk_and_yield_max_ms": round(max(timings), 3),
             "typing_two_keys_ms": round(typing_ms, 2),
+            "key_handler_to_refresh_p95_ms": round(sorted(refresh_samples)[-1], 3),
+            "key_handler_to_refresh_samples_ms": [round(value, 3) for value in refresh_samples],
+            "input_measurement_scope": "Headless handler through refresh; excludes OS input, dispatch and terminal paint",
             "scroll_with_settle_ms": round(scroll_ms, 2),
             "resize_with_settle_ms": round(resize_ms, 2),
             "folded_paste_chars": len(pasted),

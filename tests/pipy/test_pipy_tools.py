@@ -176,11 +176,11 @@ async def test_write_creates_the_file_and_parents(tmp_path):
     assert text_of(result) == "Successfully wrote 5 bytes to nested/deep/a.txt"
 
 
-async def test_write_overwrites(tmp_path):
+async def test_write_overwrites_after_read(tmp_path):
     (tmp_path / "a.txt").write_text("old")
-    tool = create_tool("write", tmp_path)
-
-    await run(tool, path="a.txt", content="new")
+    tools = {tool.name: tool for tool in create_all_tools(tmp_path)}
+    await run(tools["read"], path="a.txt")
+    await run(tools["write"], path="a.txt", content="new")
 
     assert (tmp_path / "a.txt").read_text() == "new"
 
@@ -585,3 +585,28 @@ def test_no_pipy_module_imports_superqode_policy():
                     offenders.append(f"{path.relative_to(root)} imports {name}")
 
     assert offenders == []
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX process group contract")
+@pytest.mark.parametrize("close_output", [False, True])
+async def test_bash_abort_reaps_children_after_shell_exit(tmp_path, close_output):
+    import os
+    import shlex
+    import sys
+
+    tool = create_tool("bash", tmp_path)
+    controller = AbortController()
+    marker = tmp_path / "escaped-child"
+    code = f"import time; from pathlib import Path; time.sleep(0.8); Path({str(marker)!r}).write_text('alive')"
+    command = f"{shlex.quote(sys.executable)} -c {shlex.quote(code)} &"
+    if close_output:
+        command = f"exec >/dev/null 2>&1; {command} wait"
+    running = asyncio.create_task(
+        tool.execute("child", {"command": command, "timeout": 3}, controller.signal)
+    )
+    await asyncio.sleep(0.2)
+    controller.abort()
+    with pytest.raises(RuntimeError, match="aborted"):
+        await asyncio.wait_for(running, timeout=2)
+    await asyncio.sleep(0.8)
+    assert not marker.exists(), "A descendant survived Stop"

@@ -110,7 +110,7 @@ def _next_steps(state: WelcomeState) -> List[tuple[str, str, str]]:
             steps.append((":sessions", "browse saved sessions", THEME["cyan"]))
         steps.extend(
             [
-                (":connect", "choose who runs the coding loop", THEME["cyan"]),
+                (":connect", "connect an agent, API key, or local model", THEME["cyan"]),
                 (":help", "see every command", THEME["cyan"]),
             ]
         )
@@ -128,8 +128,8 @@ def _next_steps(state: WelcomeState) -> List[tuple[str, str, str]]:
     if "compared_harnesses" in milestones:
         return [(":eval", "score the harnesses you compared", THEME["cyan"])]
     if "task_completed" in milestones:
-        return [(":harness", "swap the tool loop, keep the session", THEME["cyan"])]
-    return [("just type", "describe what you want built", THEME["cyan"])]
+        return [(":diff", "review changes before your next task", THEME["cyan"])]
+    return [("just type", "ask for a small change and its tests", THEME["cyan"])]
 
 
 def render_welcome(

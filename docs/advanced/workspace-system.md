@@ -1,12 +1,12 @@
 # Workspace System
 
-The workspace system protects your repository by tracking all file changes, blocking destructive git operations, and reverting everything when the session ends. Only generated artifacts (patches, tests, reports) persist.
+The workspace system supplies file tracking, snapshots, guarded Git operations and optional reversion for workflows that explicitly activate it. Ordinary coding routes do not universally use these controls. See [Safety and permissions](safety-permissions.md) for route boundaries.
 
 ---
 
 ## Overview
 
-SuperQode's workspace system provides ephemeral edit isolation with an immutable repo guarantee during agent sessions. Every file change is captured against a baseline, destructive git commands are blocked at the shell level, and all modifications are reverted when the session completes. The repository itself is never permanently modified by an agent session only explicitly persisted artifacts survive.
+An active tracked workspace captures participating file changes against a baseline and can restore captured files when its workflow ends. GitGuard applies only to commands routed through it. External processes, arbitrary shell commands and third-party tools may fall outside this tracking. A worktree provides a separate checkout, but does not itself restrict host filesystem or network access.
 
 ---
 

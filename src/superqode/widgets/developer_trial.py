@@ -13,7 +13,12 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static, TextArea
 
-from superqode.app.developer_trial import default_context, project_context
+from superqode.app.developer_trial import (
+    FIRST_TASK,
+    FIRST_CODE_CHANGE,
+    default_context,
+    project_context,
+)
 from superqode.app.widgets import ConversationLog
 
 
@@ -44,7 +49,7 @@ class DeveloperTrialScreen(ModalScreen[None]):
                 yield Static(
                     "Use your own project and coding route. Esc returns to your draft; :trial reopens this guide."
                 )
-                yield Label("1. Choose a harness and model")
+                yield Label("1. Connect an agent, API key, or local model")
                 yield Static("", id="trial-route", markup=False)
                 yield Button("Choose connection", id="trial-connect")
                 yield Label("2. Validate the connection")
@@ -61,9 +66,12 @@ class DeveloperTrialScreen(ModalScreen[None]):
                 )
                 yield Button("Attach context", id="trial-attach")
                 yield Label("4. Run a small task")
+                with Horizontal():
+                    yield Button("Explore project", id="trial-explore")
+                    yield Button("Fix a small bug", id="trial-code")
                 yield TextArea(self.state.task, id="trial-task")
                 yield Static(
-                    "Run uses your selected route and may consume account usage. Your current approval policy applies; Esc cancels in the workspace."
+                    "Run uses your selected route and may consume account usage. Permissions depend on the selected route; Esc requests stop in the workspace."
                 )
                 yield Button("Run this task", id="trial-run", variant="primary", disabled=True)
                 yield Label("5. Review the result")
@@ -135,6 +143,12 @@ class DeveloperTrialScreen(ModalScreen[None]):
             self.validate_setup()
         elif action == "trial-attach":
             self.attach_context()
+        elif action in {"trial-explore", "trial-code"}:
+            self.state.task = FIRST_TASK if action == "trial-explore" else FIRST_CODE_CHANGE
+            self.query_one("#trial-task", TextArea).load_text(self.state.task)
+            self.query_one("#trial-status", Static).update(
+                "Edit the task above, then choose Run when ready."
+            )
         elif action == "trial-run":
             self.action_run()
         elif action in {"trial-answer", "trial-review"}:

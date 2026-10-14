@@ -378,3 +378,20 @@ async def test_full_hub_keeps_results_actions_and_filter_keyboard_reachable(size
         await pilot.pause()
         assert not screen.has_class("compact")
         assert language.value == screen.language_filter
+
+
+async def test_code_change_preset_is_editable_and_does_not_submit(monkeypatch):
+    from superqode.app.developer_trial import DeveloperTrial, FIRST_CODE_CHANGE, FIRST_TASK
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        state = DeveloperTrial()
+        app.push_screen(DeveloperTrialScreen(state))
+        await wait_for_guide(app, pilot)
+        guide = app.screen
+        guide.on_button_pressed(Button.Pressed(guide.query_one("#trial-code", Button)))
+        assert guide.query_one("#trial-task", TextArea).text == FIRST_CODE_CHANGE
+        assert not state.pending
+        assert guide.query_one("#trial-run", Button).disabled
+        guide.on_button_pressed(Button.Pressed(guide.query_one("#trial-explore", Button)))
+        assert guide.query_one("#trial-task", TextArea).text == FIRST_TASK

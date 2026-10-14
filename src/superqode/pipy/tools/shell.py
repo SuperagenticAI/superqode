@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal as process_signal
 import tempfile
 import time
 from pathlib import Path
@@ -166,6 +167,7 @@ def create_bash_tool(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
+            start_new_session=os.name == "posix",
         )
 
         async def pump() -> None:
@@ -177,12 +179,24 @@ def create_bash_tool(
                 output.append(chunk)
                 emit_update()
 
+        def kill_owned_processes():
+            try:
+                if os.name == "posix":
+                    os.killpg(process.pid, process_signal.SIGKILL)
+                elif process.returncode is None:
+                    process.kill()
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                if process.returncode is None:
+                    process.kill()
+
         async def watch_abort() -> None:
             # The signal is cooperative, so poll it rather than requiring the
             # caller to wire a callback into the subprocess.
-            while process.returncode is None:
+            while process.returncode is None or not pump_task.done():
                 if is_aborted(signal):
-                    process.kill()
+                    kill_owned_processes()
                     return
                 await asyncio.sleep(0.05)
 
@@ -191,14 +205,27 @@ def create_bash_tool(
         timed_out = False
         try:
             try:
-                await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
+                await asyncio.wait_for(
+                    asyncio.gather(process.wait(), pump_task), timeout=timeout_seconds
+                )
             except TimeoutError:
                 timed_out = True
-                process.kill()
-                await process.wait()
-            await pump_task
+                kill_owned_processes()
+        except BaseException:
+            kill_owned_processes()
+            raise
         finally:
+            if timed_out or is_aborted(signal):
+                kill_owned_processes()
             abort_task.cancel()
+            pump_task.cancel()
+            await asyncio.gather(abort_task, pump_task, return_exceptions=True)
+            # Reap the killed direct child before releasing its transport.
+            if timed_out or is_aborted(signal) or process.returncode is None:
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=1.0)
+                except TimeoutError:
+                    pass
 
         truncation, full_output_path = output.snapshot(persist_if_truncated=True)
         text = _format_output(truncation, full_output_path)
@@ -221,6 +248,8 @@ def create_bash_tool(
 
         return AgentToolResult(content=[TextContent(text=text)], details=details)
 
+    from superqode.workspace_evidence import instrument_check_tool
+
     return AgentTool(
         name="bash",
         label="bash",
@@ -235,7 +264,7 @@ def create_bash_tool(
             },
             ["command"],
         ),
-        execute_fn=execute,
+        execute_fn=instrument_check_tool(execute, cwd),
         prompt_snippet="Execute bash commands (ls, grep, find, etc.)",
     )
 

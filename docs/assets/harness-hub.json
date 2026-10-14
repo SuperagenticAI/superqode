@@ -1,6 +1,6 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-13T07:55:40.556509+00:00",
+  "generated_at": "2026-10-14T17:47:42.835818+00:00",
   "count": 104,
   "categories": [
     "SuperQode harnesses",
@@ -312,7 +312,7 @@
     {
       "id": "codegem",
       "name": "CodeGem",
-      "description": "Google-focused six-tool coding harness for Gemini API and local Gemma, with optional local EmbeddingGemma code search.",
+      "description": "Minimal six-tool Python coding harness for Gemini and Gemma.",
       "category": "SuperQode harnesses",
       "kind": "harness",
       "runtime": "codegem",
@@ -602,7 +602,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/codex/",
-      "install_command": "uv tool install \"superqode[codex-sdk]\"",
+      "install_command": "Install \"superqode[codex-sdk]\", then run `codex login`",
       "tui_commands": [
         ":connect codex-sdk",
         ":codex status",
@@ -631,9 +631,14 @@
       "popularity_rank": 10,
       "setup_steps": [
         {
-          "title": "Install the Codex SDK integration",
+          "title": "Install the Codex Python SDK integration",
           "command": "uv tool install \"superqode[codex-sdk]\"",
-          "description": "In the TUI, select Set up to install, verify, and continue without restarting."
+          "description": ""
+        },
+        {
+          "title": "Authenticate with your ChatGPT account",
+          "command": "codex login",
+          "description": ""
         }
       ],
       "openness": "open",
@@ -655,7 +660,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[claude-agent-sdk]\", then set ANTHROPIC_API_KEY",
+      "setup": "uv tool install \"superqode[claude-agent-sdk]\"",
       "warning": "",
       "project_path": "",
       "homepage": "https://www.anthropic.com/claude-code",
@@ -1053,7 +1058,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "uv pip install --python /Users/shashi/oss/superqode/.venv/bin/python -e \".[copilot-sdk]\"; or run `npm install -g @github/copilot`; then run `copilot login`",
+      "setup": "uv tool install \"superqode[copilot-sdk]\"",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/features/copilot",
@@ -4177,7 +4182,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "RLM Code is not installed; run uv tool install \"superqode[rlm-code]\"",
+      "setup": "uv tool install \"superqode[rlm-code]\"",
       "warning": "RLM Code executes generated Python inside its configured sandbox. Docker is the safe default; unsafe exec is never enabled by this preset.",
       "project_path": "",
       "homepage": "",
@@ -4321,7 +4326,7 @@
       "continuity": "exact-resume",
       "provider": "",
       "model": "",
-      "setup": "",
+      "setup": ":connect uhp",
       "warning": "",
       "project_path": "",
       "homepage": "",
@@ -4391,7 +4396,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "DeepSeek Harness SDK is not installed; run uv tool install \"superqode[deepseek-harness]\"",
+      "setup": "uv tool install \"superqode[deepseek-harness]\"",
       "warning": "DeepSeek Harness executes its own tools, so SuperQode approvals do not gate them. Routes come from DeepSeek's composition, not SuperQode's model catalog.",
       "project_path": "",
       "homepage": "",
@@ -6015,7 +6020,7 @@
       "repository": "https://github.com/laude-institute/headlong",
       "interface": "Named identity CLI",
       "support_note": "Not runnable from SuperQode, and a different case from jcode's: Headlong has no ACP server, MCP server, SDK, or task-runner API. `<agent> hello` is a one-shot observation sent into a standing mind that may choose not to reply, not a task call with a result contract. It has a Unix surface to attach to (start/stop the identity, tail its trajectory) but no run contract to speak of yet. See RLM Routes Compared for how its persistent inner-monologue loop differs from SuperQode's own RLM routes.",
-      "last_verified": "2026-08-14",
+      "last_verified": "",
       "aliases": [
         "headlong",
         "shellm",
@@ -6088,8 +6093,8 @@
       "homepage": "https://github.com/yc-software/qm",
       "repository": "https://github.com/yc-software/qm",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "Y Combinator QM",
         "multiplayer agent harness"
@@ -6133,8 +6138,8 @@
       "homepage": "https://www.harness.new/",
       "repository": "",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "Tensorlake Harness",
         "instant agent sandboxes"
@@ -6178,8 +6183,8 @@
       "homepage": "https://www.ycombinator.com/companies/replicas",
       "repository": "",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "background coding agents"
       ],
@@ -6222,8 +6227,8 @@
       "homepage": "https://www.ycombinator.com/companies/synth-3",
       "repository": "",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "coding harness optimization"
       ],
@@ -6266,8 +6271,8 @@
       "homepage": "https://github.com/QoderAI/better-harness",
       "repository": "https://github.com/QoderAI/better-harness",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "Qoder Better Harness"
       ],
@@ -6311,7 +6316,7 @@
       "repository": "https://github.com/1jehuang/jcode",
       "interface": "Terminal harness",
       "support_note": "Not yet runnable from SuperQode, but unlike a desktop-only harness jcode documents a headless `jcode run`, a TypeScript SDK, and a versioned harness API, so a SuperQode route is buildable once it is implemented and tested.",
-      "last_verified": "2026-08-14",
+      "last_verified": "",
       "aliases": [
         "jcode.sh",
         "Rust coding agent",
@@ -6381,7 +6386,7 @@
       "repository": "https://github.com/letta-ai/letta-code",
       "interface": "Terminal harness",
       "support_note": "Not yet launched from SuperQode. Letta Code is a published CLI (`npm install -g @letta-ai/letta-code`, then `letta`). Configure a provider with /connect or Letta Cloud with /login. SuperQode does not speak Letta ACP from this row yet.",
-      "last_verified": "2026-08-14",
+      "last_verified": "",
       "aliases": [
         "letta",
         "letta-code",
@@ -6452,7 +6457,7 @@
       "repository": "https://github.com/warpdotdev/warp",
       "interface": "Terminal harness",
       "support_note": "Ecosystem watch: SuperQode does not attach Warp. Warp Agent's loop runs server-side and the open client is AGPL-3.0, so there is nothing to embed and no protocol to speak. Warp has said it plans to support ACP (warpdotdev/warp#9233). SuperQode will revisit an attach when an ACP surface or licence terms make one clean. Run Warp directly meanwhile.",
-      "last_verified": "2026-08-14",
+      "last_verified": "",
       "aliases": [
         "warp",
         "warp agent cli",
@@ -6521,8 +6526,8 @@
       "homepage": "https://github.com/Aider-AI/aider",
       "repository": "https://github.com/Aider-AI/aider",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "aider",
         "AI pair programming",
@@ -6567,8 +6572,8 @@
       "homepage": "https://github.com/charmbracelet/crush",
       "repository": "https://github.com/charmbracelet/crush",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "charm crush",
         "glamourous agentic coding"
@@ -6612,8 +6617,8 @@
       "homepage": "https://github.com/plandex-ai/plandex",
       "repository": "https://github.com/plandex-ai/plandex",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "plandex",
         "large project coding agent"
@@ -6641,7 +6646,7 @@
     {
       "id": "ecosystem:roo-code",
       "name": "Roo Code",
-      "description": "Apache-2.0 editor-based harness offering a team of specialised agent modes inside the IDE.",
+      "description": "Historical reference: Roo Code shut down on May 15, 2026. Its Apache-2.0 source remains available; this is not a supported connection.",
       "category": "Ecosystem watch",
       "kind": "ecosystem",
       "runtime": "external",
@@ -6657,8 +6662,8 @@
       "homepage": "https://github.com/RooCodeInc/Roo-Code",
       "repository": "https://github.com/RooCodeInc/Roo-Code",
       "interface": "External project",
-      "support_note": "Not currently supported in SuperQode; tracked for future integration.",
-      "last_verified": "2026-08-14",
+      "support_note": "Reference only. No live SuperQode integration has been certified.",
+      "last_verified": "",
       "aliases": [
         "roo code",
         "roocode",

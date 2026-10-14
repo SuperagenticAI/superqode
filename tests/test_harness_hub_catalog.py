@@ -374,7 +374,9 @@ def test_full_public_hub_includes_model_access_inference_and_ecosystem(monkeypat
     by_id = {item["id"]: item for item in payload["items"]}
 
     assert by_id["ecosystem:qm"]["readiness"] == "not-supported"
-    assert "future integration" in by_id["ecosystem:qm"]["support_note"]
+    assert "Reference only" in by_id["ecosystem:qm"]["support_note"]
+    assert by_id["ecosystem:qm"]["last_verified"] == ""
+    assert "shut down" in by_id["ecosystem:roo-code"]["description"]
     assert by_id["ecosystem:zcode"]["readiness"] == "not-supported"
     assert by_id["ecosystem:zcode"]["runtime"] == "external"
     assert "terminal" in by_id["ecosystem:zcode"]["description"]
@@ -602,3 +604,18 @@ def test_public_hub_preserves_agent_repository_and_setup_metadata():
         item["repository"] != "https://github.com/agentclientprotocol/registry"
         for item in by_id.values()
     )
+
+
+def test_public_setup_does_not_publish_local_install_paths():
+    item = _item(
+        id="deepagents",
+        group="Optional integrations",
+        source="optional:deepagents",
+        kind="harness",
+        available=False,
+        install_extra="deepagents",
+        issue="uv pip install --python /Users/developer/private/.venv/bin/python -e .",
+    )
+    record = build_hub_index(items=[item], public=True)["items"][0]
+    assert record["setup"] == 'uv tool install "superqode[deepagents]"'
+    assert "/Users/" not in json.dumps(record)

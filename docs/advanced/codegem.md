@@ -251,5 +251,5 @@ API smoke test is still pending a valid key.
 - **Memory pressure:** reduce context and keep one concurrent session before
   trying a smaller quantized model.
 
-See the [research and validation report](../research/codegem-google-harness-2026-10-13.md)
-for sources, measured outcomes, and maintainer evaluation commands.
+Use the [graded benchmark runner](benchmark-runner.md) to compare coding results
+with your models and repositories.

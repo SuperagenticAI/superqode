@@ -55,7 +55,7 @@ async def _process(argv, cwd, args, signal=None, on_update=None):
             del retained[:-OUTPUT_BYTES]
 
     async def watch():
-        while proc.returncode is None:
+        while proc.returncode is None or not reader.done():
             if is_aborted(signal):
                 raise RuntimeError("Command aborted")
             await asyncio.sleep(0.05)
@@ -77,7 +77,7 @@ async def _process(argv, cwd, args, signal=None, on_update=None):
 
     reader = asyncio.create_task(pump())
     watcher = asyncio.create_task(watch())
-    waiter = asyncio.create_task(proc.wait())
+    waiter = asyncio.gather(proc.wait(), reader)
     try:
         done, _ = await asyncio.wait(
             (waiter, watcher), timeout=timeout, return_when=asyncio.FIRST_COMPLETED
@@ -86,11 +86,14 @@ async def _process(argv, cwd, args, signal=None, on_update=None):
             raise TimeoutError(f"Command timed out after {timeout:g}s")
         if watcher in done:
             watcher.result()
-        await asyncio.wait_for(reader, timeout=timeout)
+        await waiter
     except BaseException:
         kill()
-        await proc.wait()
         reader.cancel()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=1.0)
+        except TimeoutError:
+            pass
         raise
     finally:
         # Also reap background descendants retaining the output pipe.
@@ -112,7 +115,13 @@ async def _process(argv, cwd, args, signal=None, on_update=None):
 def create_tools(cwd: Path, *, config: dict | None = None) -> list[AgentTool]:
     """No MCP, delegation, or hidden model-callable helpers."""
     config = dict(config or {})
-    tools = [create_read_tool(cwd), create_write_tool(cwd), create_edit_tool(cwd)]
+    from superqode.file_observations import FileObservations
+
+    observations = FileObservations()
+    tools = [
+        factory(cwd, observations=observations)
+        for factory in (create_read_tool, create_write_tool, create_edit_tool)
+    ]
     for name in ("search", "python", "bash"):
         key = {"search": "pattern", "python": "code", "bash": "command"}[name]
         properties = {
@@ -213,13 +222,15 @@ def create_tools(cwd: Path, *, config: dict | None = None) -> list[AgentTool]:
             "python": "Execute Python code with the host Python interpreter in the working directory. Each call is a fresh process; use print for output. Prefer short checks, for example: import math; print(math.sqrt(9)). Preserve Python indentation in multiline code.",
             "bash": "Execute a Bash command in the working directory. Use for builds, tests and shell operations. Default timeout 60 seconds.",
         }
+        from superqode.workspace_evidence import instrument_check_tool
+
         tools.append(
             AgentTool(
                 name=name,
                 label=name,
                 description=descriptions[name],
                 parameters=json_schema(properties, [key]),
-                execute_fn=execute,
+                execute_fn=instrument_check_tool(execute, cwd) if name == "bash" else execute,
                 execution_mode="sequential",
                 replay_safe=name == "search",
             )

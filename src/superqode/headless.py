@@ -656,6 +656,12 @@ def response_to_json(
         "iterations": response.iterations,
         "stopped_reason": response.stopped_reason,
         "success": response.stopped_reason == "complete" and not response.error,
+        "input_tokens": getattr(response, "input_tokens", None),
+        "output_tokens": getattr(response, "output_tokens", None),
+        "total_tokens": getattr(response, "total_tokens", None),
+        "cost_usd": getattr(response, "cost_usd", None),
+        "cost_currency": getattr(response, "cost_currency", None),
+        "usage_complete": getattr(response, "usage_complete", None) is True,
     }
     if response.error:
         from .cli_output import public_error

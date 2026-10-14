@@ -5,7 +5,6 @@ Choose a palette without restarting your coding session. Theme changes repaint r
 **SuperQode is the default theme.** The header shows the current palette beside the navigation, or on a second header line in a narrow terminal. Click **Theme: … ↑** to open the gallery. Applying a theme shows the same confirmation card as a model connection and records the change in Activity. Your saved selection is restored on the next launch.
 
 See the [theme reliability review](theme-reliability-review.md) for bugs found during the follow-up audit and the validation coverage.
-See the [appearance workflow review](appearance-workflow-review.md) for workspace previews, settings, the customizer, guided tasks and feedback export.
 
 ## Choose and preview
 

@@ -1992,6 +1992,17 @@ class ConnectMixin:
             self._open_connect_screen(log)
             log.add_info(profile.unavailable_hint)
             return
+        if profile.connector in {
+            "runtime",
+            "acp",
+            "external-cli",
+        } and self._review_route_transition(
+            "acp" if profile.connector == "acp" else str(profile.runtime or profile.connector),
+            profile.connector,
+            "context-replay" if profile.connector == "acp" else "fresh-session",
+            lambda: self._dispatch_connection_profile(profile, log),
+        ):
+            return
         self._connection_retry_target = ("profile", (profile.id,))
         self._connection_attempt_state = "Setup"
         self._reset_connect_selection_states()
@@ -5144,6 +5155,11 @@ class ConnectMixin:
             return
         if command in {"refresh", "sync"}:
             self._refresh_acp_registry(log)
+            return
+
+        if self._review_route_transition(
+            "acp", "acp", "context-replay", lambda: self._connect_acp_cmd(args, log)
+        ):
             return
 
         # Typed `:connect acp <agent>` is the ACP catalog path. Dispatch of a

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from .execution_contract import execution_contract
+
 from dataclasses import replace
 from pathlib import Path
 
@@ -24,6 +26,9 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             metadata={
                 "tools": list(TOOL_NAMES),
                 "pure_permissions": True,
+                "execution_contract": execution_contract(
+                    runtime="codegem", continuity="native-resume"
+                ).to_dict(),
                 "session_format": "codegem-jsonl-v1",
             },
         )

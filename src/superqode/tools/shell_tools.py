@@ -164,10 +164,10 @@ class BashTool(Tool):
 
         try:
             # PERFORMANCE: Use streaming mode if callback is set
-            if ctx.on_output:
-                return await self._execute_streaming(command, cwd, timeout, ctx)
-            else:
-                return await self._execute_buffered(command, cwd, timeout, ctx)
+            from superqode.workspace_evidence import record_check
+
+            run = self._execute_streaming if ctx.on_output else self._execute_buffered
+            return await record_check(command, cwd, lambda: run(command, cwd, timeout, ctx))
 
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))

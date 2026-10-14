@@ -78,6 +78,16 @@ class OutcomeStore:
             self._read.discard(removed.id)
         return outcome
 
+    def replace(self, outcome_id: str, outcome: Outcome) -> bool:
+        """Update asynchronous evidence without adding duplicate activity rows."""
+        from dataclasses import replace
+
+        for index, current in enumerate(self._items):
+            if current.id == outcome_id:
+                self._items[index] = replace(outcome, id=outcome_id, created_at=current.created_at)
+                return True
+        return False
+
     def list(self) -> list[Outcome]:
         return list(reversed(self._items))
 

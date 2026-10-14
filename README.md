@@ -150,18 +150,18 @@ results.
 
 ## The Harness Hub
 
-`:hub` opens a browsable catalog of **115 harnesses**: SuperQode's native
+`:hub` opens a browsable catalog of available harnesses: SuperQode's native
 harnesses, vendor coding agents, the full ACP registry, optional runtimes,
 model presets, and the HarnessSpecs your own repository defines. The same
 catalog is on the web at [superqode.dev/hub](https://superqode.dev/hub).
 
 ```text
 :hub                    # browse, search, and filter every route
-:harness switch codex   # change harness mid-session, keeping the conversation
+:harness switch codex   # change harness; continuity depends on the route
 :harness switch rlm --fork   # or branch into an independent attempt
 ```
 
-**71 of those harnesses are open source**, across every route. Press `o` in the
+Filter the catalog to see which harnesses are open source. Press `o` in the
 Hub, or ask from the command line:
 
 ```bash

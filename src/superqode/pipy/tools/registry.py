@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from superqode.file_observations import FileObservations
+
 from .base import AgentTool
 from .files import create_edit_tool, create_read_tool, create_write_tool
 from .search import create_find_tool, create_grep_tool, create_ls_tool
@@ -32,15 +34,25 @@ _FACTORIES = {
 }
 
 
-def create_tool(name: str, cwd: str | Path) -> AgentTool:
+def create_tool(
+    name: str, cwd: str | Path, *, observations: FileObservations | None = None
+) -> AgentTool:
     factory = _FACTORIES.get(name)
     if factory is None:
         raise ValueError(f"Unknown tool name: {name}")
+    if name in {"read", "write", "edit"}:
+        return factory(cwd, observations=observations)
     return factory(cwd)
 
 
 def create_tools(names: tuple[str, ...], cwd: str | Path) -> list[AgentTool]:
-    return [create_tool(name, cwd) for name in names]
+    observations = FileObservations()
+    return [
+        _FACTORIES[name](cwd, observations=observations)
+        if name in {"read", "write", "edit"}
+        else create_tool(name, cwd)
+        for name in names
+    ]
 
 
 def create_coding_tools(cwd: str | Path) -> list[AgentTool]:

@@ -158,6 +158,9 @@ async def test_a_real_tool_runs_against_the_working_directory(tmp_path):
     (tmp_path / "target.txt").write_text("before\n")
     script = [
         tool_response(
+            ToolCall(id="read-before-write", name="read", arguments={"path": "target.txt"})
+        ),
+        tool_response(
             ToolCall(
                 id="c1",
                 name="write",

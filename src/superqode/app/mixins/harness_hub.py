@@ -242,6 +242,15 @@ class HarnessHubMixin:
             f"Continuity: {item.continuity.replace('-', ' ')}",
             f"Source: {item.source}",
         ]
+        from superqode.harness.execution_contract import execution_contract
+
+        details.extend(
+            execution_contract(
+                runtime=item.runtime,
+                connector="acp" if item.kind == "acp" else "",
+                continuity=item.continuity,
+            ).lines()
+        )
         if item.provider or item.model:
             details.append(f"Model route: {item.provider}/{item.model}")
         if item.issue and not item.available:

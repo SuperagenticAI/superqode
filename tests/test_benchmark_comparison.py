@@ -278,3 +278,47 @@ def test_invalid_reported_cost_cannot_be_treated_as_complete(matched_rows, cost)
     assert not card["comparison_ready"]
     assert card["targets"]["a"]["total_cost_usd"] is None
     assert card["targets"]["a"]["unknown_cost_attempts"] == 1
+
+
+def test_failed_attempt_workspace_is_retained_without_changing_seed(tmp_path):
+    from pathlib import Path
+
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    (seed / "answer").write_text("original")
+    task = BenchmarkTask(
+        "inspect", "do", seed, checks=((sys.executable, "-c", "raise SystemExit(1)"),)
+    )
+    rows = run_benchmark_suite([task], [target()], artifacts_dir=tmp_path / "artifacts")
+    assert rows[0]["status"] == "failed"
+    artifact = Path(rows[0]["artifact_directory"])
+    assert (artifact / "workspace/answer").read_text() == "correct"
+    assert json.loads((artifact / "result.json").read_text())["status"] == "failed"
+    assert (seed / "answer").read_text() == "original"
+
+
+def test_artifact_collection_cannot_recurse_into_seed(tmp_path):
+    with pytest.raises(ValueError, match="outside every task seed"):
+        run_benchmark_suite(
+            [BenchmarkTask("case", "do", tmp_path)],
+            [target()],
+            artifacts_dir=tmp_path / "artifacts",
+        )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Symlink privileges vary on Windows")
+def test_artifact_collection_preserves_symlinks_without_reading_targets(tmp_path):
+    from pathlib import Path
+
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    outside = tmp_path / "outside"
+    outside.write_text("external content")
+    script = f"from pathlib import Path; Path('link').symlink_to({str(outside)!r})"
+    link_target = BenchmarkTarget("link", [sys.executable, "-c", script])
+    rows = run_benchmark_suite(
+        [BenchmarkTask("case", "do", seed)], [link_target], artifacts_dir=tmp_path / "artifacts"
+    )
+    stored = Path(rows[0]["artifact_directory"]) / "workspace/link"
+    assert stored.is_symlink()
+    assert stored.readlink() == outside

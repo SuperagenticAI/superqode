@@ -51,11 +51,18 @@ def _sentence_transformers_embed(model_name, texts, config):
             try:
                 import torch
                 from sentence_transformers import SentenceTransformer
+                from tqdm import tqdm
             except ImportError as exc:
                 raise RuntimeError(
                     "Install CodeGem's local semantic extra with "
                     "`pip install 'superqode[semantic-local]'` to use EmbeddingGemma directly"
                 ) from exc
+            # Encoding runs in a thread in this process. tqdm's default
+            # multiprocessing lock starts a resource tracker on macOS, which
+            # fails when Textual captures stderr with fileno() == -1. Avoid
+            # that unused process lock without replacing an existing lock.
+            if not hasattr(tqdm, "_lock"):
+                tqdm.set_lock(threading.RLock())
             if device == "auto":
                 if torch.cuda.is_available():
                     device = "cuda"

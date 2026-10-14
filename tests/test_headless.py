@@ -189,3 +189,26 @@ def test_headless_accepts_a_harness_spec_path(tmp_path, monkeypatch):
     assert captured["session_id"] == "custom-session"
     assert captured["metadata"]["harness_source"] == "file"
     assert captured["metadata"]["harness_digest"].startswith("sha256:")
+
+
+def test_headless_json_keeps_reported_usage_and_marks_unknown_completeness():
+    import json
+
+    response = AgentResponse(
+        content="done",
+        messages=[],
+        tool_calls_made=1,
+        iterations=2,
+        stopped_reason="complete",
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+        cost_usd=0.01,
+        cost_currency="USD",
+    )
+    payload = json.loads(response_to_json(response, "fixture", "fixture", "core"))
+    assert payload["total_tokens"] == 120
+    assert payload["cost_usd"] == 0.01
+    assert payload["usage_complete"] is False
+    response.cost_usd = None
+    assert json.loads(response_to_json(response, "fixture", "fixture", "core"))["cost_usd"] is None

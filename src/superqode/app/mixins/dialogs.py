@@ -2332,7 +2332,12 @@ class DialogsMixin:
             task = getattr(self, "_task_changes_current", None)
             if task is not None and task.id in getattr(self, "_task_changes_history", {}):
                 summary = {**summary, "task_id": task.id}
-            self._outcome_store().add(task_review(summary, getattr(log, "_tool_calls", [])))
+            calls = list(getattr(log, "_tool_calls", []))
+            outcome = self._outcome_store().add(task_review(summary, calls))
+            if any((call.get("metadata") or {}).get("workspace_evidence") for call in calls):
+                self._capture_final_check_evidence(
+                    dict(summary), calls, outcome.id, getattr(task, "root", Path.cwd())
+                )
             from superqode.app.mixins.clickable_commands import command_link
 
             log.write(Text("  :activity ↗\n", style=f"{THEME['cyan']} {command_link('activity')}"))
@@ -2405,6 +2410,15 @@ class DialogsMixin:
             text.append(f"    {command:<{width}}  ", style=f"bold {THEME['success']}")
             text.append(f"{why}\n", style=THEME["muted"])
         text.append("\n", style="")
+
+    @work(group="final-check-evidence", exit_on_error=False)
+    async def _capture_final_check_evidence(self, summary, calls, outcome_id, root):
+        from superqode.workspace_evidence import capture_workspace
+        from superqode.app.task_review import task_review
+
+        # Capture this task's root, not a later connection's working directory.
+        summary["workspace_state"] = await asyncio.to_thread(capture_workspace, root)
+        self._outcome_store().replace(outcome_id, task_review(summary, calls))
 
     @staticmethod
     def _run_used_shell(summary: dict) -> bool:

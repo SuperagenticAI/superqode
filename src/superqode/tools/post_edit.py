@@ -218,6 +218,12 @@ async def verify_edit(result: ToolResult, file_path: Path, ctx) -> ToolResult:
         formatted = False
         if _format_enabled():
             formatted = await _format_file(path, cwd)
+            if formatted:
+                from .file_tracking import record_file_read
+
+                record_file_read(
+                    getattr(ctx, "session_id", "") or "", str(path), path.stat().st_mtime
+                )
 
         findings = await _diagnose(path, cwd) if _diagnostics_enabled() else []
 

@@ -17,7 +17,7 @@ import re
 
 from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
-from .file_tracking import check_file_unchanged
+from .file_tracking import check_file_unchanged, record_file_read
 from .diff_utils import build_unified_diff, diff_stats
 from .post_edit import verify_edit
 from ..agent.edit_strategies import replace_with_strategies
@@ -129,6 +129,11 @@ Usage:
                 try:
                     rel_path = file_path.relative_to(workspace.project_root)
                     workspace.write_file(str(rel_path), new_content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
                     return ToolResult(
                         success=True,
                         output=f"Replaced {replaced_count} occurrence(s) in {path} (tracked for revert)",
@@ -145,6 +150,9 @@ Usage:
 
             # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
+            record_file_read(
+                getattr(ctx, "session_id", "") or "", str(file_path), file_path.stat().st_mtime
+            )
 
             return await verify_edit(
                 ToolResult(
@@ -238,6 +246,11 @@ class InsertTextTool(Tool):
                 try:
                     rel_path = file_path.relative_to(workspace.project_root)
                     workspace.write_file(str(rel_path), new_content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
                     return ToolResult(
                         success=True,
                         output=f"Inserted text at line {line_num} in {path} (tracked for revert)",
@@ -253,6 +266,9 @@ class InsertTextTool(Tool):
 
             # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
+            record_file_read(
+                getattr(ctx, "session_id", "") or "", str(file_path), file_path.stat().st_mtime
+            )
 
             return await verify_edit(
                 ToolResult(
@@ -408,12 +424,27 @@ class PatchTool(Tool):
                     try:
                         rel_path = file_path.relative_to(workspace.project_root)
                         workspace.write_file(str(rel_path), new_content)
+                        record_file_read(
+                            getattr(ctx, "session_id", "") or "",
+                            str(file_path),
+                            file_path.stat().st_mtime,
+                        )
                     except ValueError:
                         file_path.parent.mkdir(parents=True, exist_ok=True)
                         file_path.write_text(new_content)
+                        record_file_read(
+                            getattr(ctx, "session_id", "") or "",
+                            str(file_path),
+                            file_path.stat().st_mtime,
+                        )
                 else:
                     file_path.parent.mkdir(parents=True, exist_ok=True)
                     file_path.write_text(new_content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
 
                 results.append(f"{file_path_str}:")
                 results.extend(hunk_results)
@@ -701,6 +732,11 @@ class MultiEditTool(Tool):
                 try:
                     rel_path = file_path.relative_to(workspace.project_root)
                     workspace.write_file(str(rel_path), content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
                     return ToolResult(
                         success=True,
                         output=f"Applied {len(edits)} edits to {path} (tracked for revert)",
@@ -715,6 +751,9 @@ class MultiEditTool(Tool):
                     pass
 
             file_path.write_text(content)
+            record_file_read(
+                getattr(ctx, "session_id", "") or "", str(file_path), file_path.stat().st_mtime
+            )
 
             return await verify_edit(
                 ToolResult(

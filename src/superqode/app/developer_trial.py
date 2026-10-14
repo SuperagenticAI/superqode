@@ -9,6 +9,15 @@ FIRST_TASK = (
 )
 
 
+FIRST_CODE_CHANGE = (
+    "Read the attached project context and relevant source. Find one small, concrete bug "
+    "with a reproducible example, add a regression test, and make the smallest fix. "
+    "Preserve existing uncommitted changes. Run the relevant tests after the final edit "
+    "and report the commands, results, and changed files. If you cannot establish a real "
+    "bug, explain what you checked without making speculative changes."
+)
+
+
 @dataclass
 class DeveloperTrial:
     checked_route: tuple | None = None

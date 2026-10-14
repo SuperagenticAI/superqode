@@ -28,6 +28,53 @@ class FeedbackMixin:
     }
     _TRANSITION_DEDUPE_SECONDS = 3.0
 
+    def _review_route_transition(self, runtime, connector, continuity, apply) -> bool:
+        """Return true while a boundary change awaits a source-bound decision."""
+        from superqode.harness.transitions import plan_transition
+        from superqode.widgets.route_transition import RouteTransitionScreen
+
+        pure = getattr(self, "_pure_mode", None)
+        session = getattr(pure, "session", None)
+        source = str(
+            getattr(session, "harness_runtime", "") or getattr(pure, "runtime_name", "builtin")
+        )
+        active = bool(getattr(session, "connected", False) or getattr(self, "_acp_client", None))
+        if getattr(self, "_acp_client", None):
+            source = "acp"
+        plan = plan_transition(
+            source, runtime, connector=connector, continuity=continuity, active=active
+        )
+        if not plan.requires_acknowledgement:
+            return False
+        fingerprint = self._connection_fingerprint()
+        key = (fingerprint, runtime, connector, continuity)
+        if getattr(self, "_route_transition_ack", None) == key:
+            # Nested dispatch (profile -> ACP) belongs to this same synchronous
+            # action. The callback finally block expires the acknowledgement.
+            return False
+        if getattr(self, "_route_transition_pending", False):
+            return True
+        self._route_transition_pending = True
+
+        def decided(accepted):
+            self._route_transition_pending = False
+            if not accepted:
+                return
+            if self.is_busy or self._connection_fingerprint() != fingerprint:
+                self.notify(
+                    "The active route changed. Select the route again to review its current boundary.",
+                    severity="warning",
+                )
+                return
+            self._route_transition_ack = key
+            try:
+                apply()
+            finally:
+                self._route_transition_ack = None
+
+        self.push_screen(RouteTransitionScreen(plan), decided)
+        return True
+
     def _outcome_store(self) -> OutcomeStore:
         """Return the session activity store, creating it lazily."""
         store = getattr(self, "_product_outcomes", None)

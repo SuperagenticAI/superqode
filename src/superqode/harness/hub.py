@@ -1686,7 +1686,9 @@ def hub_record(
         continuity=item.continuity,
         provider=item.provider,
         model=item.model,
-        setup=item.issue,
+        setup=str(details.get("install_command") or "")
+        if portable_install_commands
+        else item.issue,
         warning=item.warning,
         project_path=(str(item.path) if include_local_paths and item.path is not None else ""),
         homepage=str(details.get("homepage") or ""),
@@ -1827,7 +1829,7 @@ def _supplemental_records() -> list[HubRecord]:
         (
             "ecosystem:roo-code",
             "Roo Code",
-            "Apache-2.0 editor-based harness offering a team of specialised agent modes inside the IDE.",
+            "Historical reference: Roo Code shut down on May 15, 2026. Its Apache-2.0 source remains available; this is not a supported connection.",
             "https://github.com/RooCodeInc/Roo-Code",
             ("roo code", "roocode", "agent modes"),
         ),
@@ -1850,9 +1852,9 @@ def _supplemental_records() -> list[HubRecord]:
             interface=_ECOSYSTEM_DETAILS.get(item_id, {}).get("interface", "External project"),
             support_note=_ECOSYSTEM_DETAILS.get(item_id, {}).get(
                 "support_note",
-                "Not currently supported in SuperQode; tracked for future integration.",
+                "Reference only. No live SuperQode integration has been certified.",
             ),
-            last_verified=_ECOSYSTEM_DETAILS.get(item_id, {}).get("last_verified", "2026-08-14"),
+            last_verified=_ECOSYSTEM_DETAILS.get(item_id, {}).get("last_verified", ""),
             aliases=aliases,
             docs_url=_ECOSYSTEM_DETAILS.get(item_id, {}).get("docs_url", homepage),
             repository=_ECOSYSTEM_DETAILS.get(item_id, {}).get(

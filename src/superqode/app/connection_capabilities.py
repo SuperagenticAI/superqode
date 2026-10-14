@@ -16,6 +16,25 @@ def connection_capabilities(
     *, connector="", runtime="", acp_capabilities=None, codex=None, native_loop=None
 ):
     """Separate host features, negotiated agent features and unknown vendor state."""
+    if runtime in {"pipy", "codegem"}:
+        return (
+            ConnectionCapability(
+                "Permissions", "Host process", "No interactive tool approval or tool sandbox"
+            ),
+            ConnectionCapability(
+                "Continue", "Native session", "Conversation state; switching may replay context"
+            ),
+            ConnectionCapability(
+                "Live steering", "Supported", "Steering is delivered at the next supported boundary"
+            ),
+            ConnectionCapability(
+                "Compaction", "Harness-owned", "Selected runtime context management"
+            ),
+            ConnectionCapability(
+                "File recovery", "Not guaranteed", "Conversation checkpoints do not restore files"
+            ),
+            ConnectionCapability("Usage", "When reported", "Missing usage is unknown"),
+        )
     if connector == "external-cli":
         return (
             ConnectionCapability(

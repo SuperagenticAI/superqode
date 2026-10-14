@@ -8,15 +8,22 @@ we require the user/agent to re-read and try again.
 """
 
 from pathlib import Path
+from superqode.file_observations import FileObservations
 from typing import Dict, Optional, Tuple
 
 # (session_id, resolved_path_str) -> mtime at last read
 _file_read_times: Dict[Tuple[str, str], float] = {}
+_observations: Dict[str, FileObservations] = {}
+
+
+def session_observations(session_id: str) -> FileObservations:
+    return _observations.setdefault(session_id, FileObservations())
 
 
 def record_file_read(session_id: str, path: str, mtime: float) -> None:
     """Record that a file was read at the given mtime."""
     resolved = str(Path(path).resolve())
+    session_observations(session_id).record_path(Path(resolved))
     _file_read_times[(session_id, resolved)] = mtime
 
 
@@ -43,6 +50,10 @@ def check_file_unchanged(
     Returns (True, None) if ok to edit, or (False, error_message) if not.
     If the file was never read in this session, we allow the edit (no prior read to compare).
     """
+    try:
+        session_observations(session_id).check_path(Path(path))
+    except (ValueError, OSError) as error:
+        return False, str(error)
     stored = get_file_read_mtime(session_id, path)
     if stored is None:
         return (True, None)

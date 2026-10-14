@@ -9,6 +9,8 @@ this path by design; see ``superqode/pipy/permissions.py``.
 from __future__ import annotations
 
 import base64
+
+from superqode.file_observations import FileObservations
 from pathlib import Path
 
 from ..messages import ImageContent, TextContent
@@ -65,7 +67,9 @@ READ_DESCRIPTION = (
 )
 
 
-def create_read_tool(cwd: str | Path) -> AgentTool:
+def create_read_tool(cwd: str | Path, *, observations: FileObservations | None = None) -> AgentTool:
+    observations = observations if observations is not None else FileObservations()
+
     async def execute(
         tool_call_id: str,
         args: JSONObject,
@@ -79,6 +83,7 @@ def create_read_tool(cwd: str | Path) -> AgentTool:
         absolute = resolve_to_cwd(path_arg, cwd)
 
         data = absolute.read_bytes()
+        observations.record(absolute, data)
         mime_type = detect_image_mime_type(data)
         if mime_type:
             return AgentToolResult(
@@ -174,7 +179,11 @@ def create_read_tool(cwd: str | Path) -> AgentTool:
 # --------------------------------------------------------------------------- #
 
 
-def create_write_tool(cwd: str | Path) -> AgentTool:
+def create_write_tool(
+    cwd: str | Path, *, observations: FileObservations | None = None
+) -> AgentTool:
+    observations = observations if observations is not None else FileObservations()
+
     async def execute(
         tool_call_id: str,
         args: JSONObject,
@@ -188,13 +197,14 @@ def create_write_tool(cwd: str | Path) -> AgentTool:
 
         async def run() -> AgentToolResult:
             _abort_if_needed(signal)
-            absolute.parent.mkdir(parents=True, exist_ok=True)
-            absolute.write_text(content, encoding="utf-8")
+            observations.write(absolute, content.encode("utf-8"), require_read=True)
             return AgentToolResult(
                 content=[
-                    TextContent(text=f"Successfully wrote {len(content)} bytes to {path_arg}")
+                    TextContent(
+                        text=f"Successfully wrote {len(content.encode('utf-8'))} bytes to {path_arg}"
+                    )
                 ],
-                details={"path": str(absolute), "bytes": len(content)},
+                details={"path": str(absolute), "bytes": len(content.encode("utf-8"))},
             )
 
         return await with_file_mutation_queue(absolute, run)
@@ -204,7 +214,8 @@ def create_write_tool(cwd: str | Path) -> AgentTool:
         label="write",
         description=(
             "Write content to a file. Creates the file if it does not exist, "
-            "overwrites it if it does. Parent directories are created as needed."
+            "replaces it only after reading its current contents. Re-read after a conflict. "
+            "Parent directories are created as needed."
         ),
         parameters=json_schema(
             {
@@ -263,7 +274,9 @@ def _prepare_edit_arguments(args: JSONObject) -> JSONObject:
     return args
 
 
-def create_edit_tool(cwd: str | Path) -> AgentTool:
+def create_edit_tool(cwd: str | Path, *, observations: FileObservations | None = None) -> AgentTool:
+    observations = observations if observations is not None else FileObservations()
+
     async def execute(
         tool_call_id: str,
         args: JSONObject,
@@ -283,7 +296,9 @@ def create_edit_tool(cwd: str | Path) -> AgentTool:
             # Read and write bytes, not text. Python's universal newlines would
             # rewrite CRLF to LF on the way in, so the original ending could
             # never be detected and every edit would silently reformat the file.
-            raw = absolute.read_bytes().decode("utf-8")
+            data = absolute.read_bytes()
+            observations.check(absolute, data)
+            raw = data.decode("utf-8")
             bom, body = strip_bom(raw)
             ending = detect_line_ending(body)
             normalized = normalize_to_lf(body)
@@ -294,7 +309,11 @@ def create_edit_tool(cwd: str | Path) -> AgentTool:
             updated = apply_edits_normalized(path_arg, normalized, edits)
 
             _abort_if_needed(signal)
-            absolute.write_bytes((bom + restore_line_endings(updated, ending)).encode("utf-8"))
+            observations.write(
+                absolute,
+                (bom + restore_line_endings(updated, ending)).encode("utf-8"),
+                expected=data,
+            )
 
             return AgentToolResult(
                 content=[

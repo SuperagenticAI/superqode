@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-10-14
+
+This release improves file conflict handling, task verification, route switching,
+and stopping commands in the terminal.
+
+### Added
+
+- Editable first-task prompts for exploring a project or fixing a small bug.
+- A route review before switching an active connection to different execution
+  controls or transcript replay. Cancel keeps the current connection.
+- A task-review status showing when recorded checks match the final Git-visible
+  workspace snapshot, with explicit limits for ignored files and external state.
+- Benchmark dry runs to check setup before starting agents, and optional saved
+  attempt workspaces for inspecting successful, failed, or timed-out changes.
+
+### Fixed
+
+- Require a read before replacing existing files with Core, PiPy, and CodeGem
+  full-file write tools. Reject intervening content changes even when file
+  modification times are unchanged.
+- Preserve permission bits during supported atomic file replacements and avoid
+  overwriting a file that appeared during creation.
+- Stop ordinary descendant processes on POSIX when PiPy or CodeGem commands are
+  cancelled or time out, including when output and process lifetimes differ.
+- Keep test exit codes and workspace evidence available in PiPy task reviews.
+- Preserve reported token and cost fields in headless JSON without treating
+  missing costs or incomplete usage as verified totals.
+- Avoid a local embedding progress-lock failure when the terminal captures stderr.
+
+### Changed
+
+- Clarify approval ownership, filesystem access, resume behavior, and recovery
+  limits for each execution route.
+- Correct catalog lifecycle labels and remove misleading default verification dates.
+
 ## [2.20.0] - 2026-10-13
 
 This CodeGem release brings together the Gemini and Gemma coding harness

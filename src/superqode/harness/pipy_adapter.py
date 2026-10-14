@@ -11,6 +11,8 @@ pulling the whole agent brain in.
 from __future__ import annotations
 
 import json
+from .execution_contract import execution_contract
+
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -56,6 +58,9 @@ class PiPyHarnessProtocolAdapter:
             ),
             metadata={
                 "pure_permissions": True,
+                "execution_contract": execution_contract(
+                    runtime="pipy", continuity="native-resume"
+                ).to_dict(),
                 "tools": list(DEFAULT_TOOLS),
                 "session_format": "pi-jsonl-v3",
             },
@@ -356,10 +361,19 @@ def translate_event(event: Any, *, runtime: str = "pipy") -> list[HarnessEvent]:
         )
 
     if kind == "tool_execution_end":
+        details = getattr(event.result, "details", None)
+        evidence = {
+            key: details[key]
+            for key in ("exit_code", "workspace_evidence", "path", "bytes", "first_changed_line")
+            if isinstance(details, dict) and key in details
+        }
+        if isinstance(details, dict) and details.get("patch"):
+            evidence["diff_text"] = details["patch"]
         translated = [
             HarnessEvent(
                 type="tool_result",
                 data={
+                    **evidence,
                     "tool_name": event.tool_name,
                     "tool_call_id": event.tool_call_id,
                     "success": not event.is_error,

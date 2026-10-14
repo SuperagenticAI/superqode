@@ -4800,7 +4800,6 @@ class CommandImplMixin:
         if fresh_session:
             log.add_error("--fresh is for ACP switches. Use :sessions to manage native sessions.")
             return
-        self._clear_acp_extra_env()
         if not entry.available:
             from superqode.app.harness_picker import harness_install_extra
 
@@ -4831,6 +4830,12 @@ class CommandImplMixin:
         previous_working_directory = getattr(pure.session, "working_directory", Path.cwd())
         was_connected = bool(getattr(pure.session, "connected", False))
 
+        if self._review_route_transition(
+            entry.runtime, "", entry.continuity, lambda: self._harness_cmd(args, log)
+        ):
+            return
+
+        self._clear_acp_extra_env()
         source_session_id = previous_session_id
         if fork_session:
             if not previous_session_id:
@@ -5033,6 +5038,13 @@ class CommandImplMixin:
             rows: list[tuple[str, str, str]] = [
                 ("Runtime", f"{entry.runtime} · {spec.flavor.value}", THEME["text"]),
             ]
+            from superqode.harness.execution_contract import execution_contract
+
+            contract = execution_contract(runtime=entry.runtime, continuity=entry.continuity)
+            rows.extend(
+                (label.replace("_", " ").capitalize(), value, THEME["muted"])
+                for label, value in contract.to_dict().items()
+            )
             if tools:
                 shown = ", ".join(tools[:6])
                 more = f" +{len(tools) - 6} more" if len(tools) > 6 else ""
@@ -5065,7 +5077,16 @@ class CommandImplMixin:
                     THEME["text"],
                 )
             )
-            rows.append(("Sandbox", str(getattr(policy, "sandbox", "") or "local"), THEME["text"]))
+            if entry.runtime in {"pipy", "codegem"}:
+                rows = [row for row in rows if row[0] != "Can"]
+            else:
+                rows.append(
+                    (
+                        "Sandbox config",
+                        str(getattr(policy, "sandbox", "") or "local"),
+                        THEME["text"],
+                    )
+                )
             if entry.runtime == "rlm":
                 from superqode.rlm.delegation_policy import DelegationPolicy
 

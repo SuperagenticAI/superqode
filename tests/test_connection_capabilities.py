@@ -56,3 +56,22 @@ def test_model_picker_explains_harness_is_retained():
 @pytest.mark.parametrize("connector", ["acp-picker", "harness-picker", "protocols-menu"])
 def test_navigation_profiles_do_not_claim_execution_capabilities(connector):
     assert profile_capabilities(SimpleNamespace(connector=connector)) == ()
+
+
+@pytest.mark.parametrize("runtime", ["pipy", "codegem"])
+def test_pure_route_does_not_inherit_host_approval_or_file_recovery(runtime):
+    from superqode.harness.execution_contract import execution_contract
+
+    values = states(runtime=runtime, connector="local")
+    assert values["Permissions"] == "Host process"
+    assert values["File recovery"] == "Not guaranteed"
+    contract = execution_contract(runtime=runtime, continuity="context-replay")
+    assert "Transcript replay" in contract.resume_kind
+    assert "Conversation only" in contract.checkpoint_scope
+    assert "no tool sandbox" in contract.filesystem_isolation
+
+
+def test_unknown_route_has_no_inferred_isolation():
+    from superqode.harness.execution_contract import execution_contract
+
+    assert execution_contract(runtime="unknown-sdk").filesystem_isolation == "Not verified"

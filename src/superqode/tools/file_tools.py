@@ -5,7 +5,7 @@ NO fancy algorithms, NO hidden context, NO opinionated formatting.
 Just raw file operations that let the model do its thing.
 
 When a workspace tracking session is active, writes are routed through the WorkspaceManager
-to ensure the immutable repo guarantee.
+for that workflow's change tracking and recovery.
 """
 
 import os
@@ -17,7 +17,7 @@ from .validation import (
     validate_path_in_search_scope,
     validate_path_in_working_directory,
 )
-from .file_tracking import record_file_read
+from .file_tracking import record_file_read, session_observations
 from .diff_utils import build_unified_diff, diff_stats
 from .post_edit import verify_edit
 
@@ -300,7 +300,8 @@ class WriteFileTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Write content to a file. Creates the file and parent directories if they don't exist."
+            "Write content to a file. Read an existing file before replacing it, and re-read "
+            "after a conflict. Creates the file and parent directories if they do not exist."
         )
 
     @property
@@ -321,6 +322,9 @@ class WriteFileTool(Tool):
         try:
             # Validate and resolve path - ensures it stays within working directory
             file_path = validate_path_in_working_directory(path, ctx.working_directory)
+            observations = session_observations(getattr(ctx, "session_id", "") or "")
+            if file_path.exists():
+                observations.check(file_path, file_path.read_bytes(), require_read=True)
             old_content = file_path.read_text() if file_path.exists() else ""
             diff_text = build_unified_diff(old_content, content, path=path)
             additions, deletions = diff_stats(diff_text)
@@ -336,6 +340,11 @@ class WriteFileTool(Tool):
                 try:
                     rel_path = file_path.relative_to(workspace.project_root)
                     workspace.write_file(str(rel_path), content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
                     return ToolResult(
                         success=True,
                         output=f"Successfully wrote {len(content)} bytes to {path} (tracked for revert)",
@@ -352,7 +361,10 @@ class WriteFileTool(Tool):
 
             # Direct write (no workspace tracking or outside project)
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(content)
+            observations.write(file_path, content.encode("utf-8"), require_read=True)
+            record_file_read(
+                getattr(ctx, "session_id", "") or "", str(file_path), file_path.stat().st_mtime
+            )
 
             return await verify_edit(
                 ToolResult(
@@ -416,6 +428,11 @@ class CreateFileTool(Tool):
                 try:
                     rel_path = file_path.relative_to(workspace.project_root)
                     workspace.write_file(str(rel_path), content)
+                    record_file_read(
+                        getattr(ctx, "session_id", "") or "",
+                        str(file_path),
+                        file_path.stat().st_mtime,
+                    )
                     return ToolResult(
                         success=True,
                         output=f"Successfully created {path} ({len(content)} bytes, tracked for revert)",
@@ -430,7 +447,11 @@ class CreateFileTool(Tool):
                     pass
 
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(content)
+            with file_path.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+            record_file_read(
+                getattr(ctx, "session_id", "") or "", str(file_path), file_path.stat().st_mtime
+            )
 
             return await verify_edit(
                 ToolResult(

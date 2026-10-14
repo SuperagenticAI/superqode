@@ -164,7 +164,7 @@ class DeveloperExperienceMixin:
             outcome = task_review({**summary, "task_id": task.id}, calls)
             state.outcome = replace(
                 outcome,
-                title="Guided task result",
+                title=f"Guided task result: {outcome.title}",
                 source="First task",
                 details=("Answer\n" + response[:16000], *outcome.details),
             )

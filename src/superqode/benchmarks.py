@@ -144,7 +144,8 @@ def _metrics(stdout, target, *, completed):
                     "provider": value.get("provider"),
                     "model": value.get("model"),
                     "complete": value.get("stopped_reason")
-                    not in {"error", "failed", "recovery_required", "needs_approval"},
+                    not in {"error", "failed", "recovery_required", "needs_approval"}
+                    and value.get("usage_complete", True) is True,
                 }
             )
     valid = [m for m in measurements if _valid_cost(m["cost"])]
@@ -340,9 +341,15 @@ def run_benchmark_suite(
     targets: list[BenchmarkTarget] | None = None,
     *,
     repetitions: int = 1,
+    artifacts_dir: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     if not isinstance(repetitions, int) or not 1 <= repetitions <= 20:
         raise ValueError("repetitions requires an integer from 1 to 20")
+    artifacts = Path(artifacts_dir).resolve() if artifacts_dir is not None else None
+    if artifacts is not None:
+        if any(artifacts.is_relative_to(task.cwd.resolve()) for task in tasks):
+            raise ValueError("Artifact directory must be outside every task seed")
+        artifacts.mkdir(parents=True, exist_ok=True)
     selected = list(DEFAULT_TARGETS.values()) if targets is None else targets
     results = []
     ignored = shutil.ignore_patterns(
@@ -370,6 +377,15 @@ def run_benchmark_suite(
                             source_sha256=source_sha.hexdigest(),
                             repetition=repeat + 1,
                         )
+                        if artifacts is not None:
+                            destination = Path(tempfile.mkdtemp(prefix="attempt-", dir=artifacts))
+                            # Preserve links as links; never dereference an agent-created
+                            # symlink while collecting its workspace for inspection.
+                            shutil.copytree(workspace, destination / "workspace", symlinks=True)
+                            row["artifact_directory"] = str(destination)
+                            (destination / "result.json").write_text(
+                                json.dumps(row, indent=2) + "\n"
+                            )
                         results.append(row)
     return results
 
@@ -527,3 +543,48 @@ def _comparison_blockers(rows: list[dict[str, Any]]) -> list[str]:
             if len(fingerprints) != 1 or None in fingerprints or "" in fingerprints:
                 blockers.append(f"Task {task_id} requires matching {key} evidence")
     return blockers
+
+
+def comparison_plan(tasks, targets, *, repetitions: int) -> dict[str, Any]:
+    """Inspect a comparison without starting agents, graders or account probes."""
+    blockers = []
+    routes = []
+    for target in targets:
+        available = is_target_available(target)
+        routes.append(
+            {
+                "name": target.name,
+                "command": target.command,
+                "provider": target.provider,
+                "model": target.model,
+                "revision": target.revision,
+                "executable_available": available,
+            }
+        )
+        if not available:
+            blockers.append(f"{target.name}: executable unavailable: {target.command[0]}")
+    for task in tasks:
+        if not task.cwd.is_dir():
+            blockers.append(f"{task.id}: task workspace does not exist: {task.cwd}")
+        if task.timeout_seconds <= 0:
+            blockers.append(f"{task.id}: timeout must be positive")
+        for check in task.checks:
+            if not check or not check[0]:
+                blockers.append(f"{task.id}: empty grader command")
+            elif not shutil.which(check[0]) and not (task.cwd / check[0]).is_file():
+                blockers.append(f"{task.id}: grader executable unavailable: {check[0]}")
+        try:
+            _protected(task.cwd, task.protected_paths)
+        except ValueError as error:
+            blockers.append(f"{task.id}: {error}")
+    return {
+        "kind": "comparison_preflight",
+        "ready": not blockers,
+        "blockers": blockers,
+        "targets": routes,
+        "task_ids": [task.id for task in tasks],
+        "repetitions": repetitions,
+        "planned_attempts": len(tasks) * len(targets) * repetitions,
+        "account_access": "Not checked",
+        "live_certification": False,
+    }
