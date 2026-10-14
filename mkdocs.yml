@@ -18,6 +18,7 @@ edit_uri: edit/main/docs/
 # Local engineering notes are not part of the public site.
 exclude_docs: |
   research/
+  advanced/theme-reliability-review.md
   advanced/appearance-workflow-review.md
   advanced/dx-findings-verification-2026-10-11.md
   advanced/upstream-tui-delta-2026-10-11.md
@@ -261,7 +262,6 @@ nav:
   - 🛠️ Operate:
     - 🧭 Terminal User Interface: advanced/tui.md
     - 🎨 Themes: advanced/themes.md
-    - 🔎 Theme Reliability Review: advanced/theme-reliability-review.md
     - 📋 Session Management: advanced/session-management.md
     - 📤 Session Sharing: advanced/session-sharing.md
     - 🧰 Developer Workflows: developer-workflows.md
