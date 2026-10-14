@@ -507,7 +507,7 @@ def test_welcome_shows_workspace_state_with_a_single_next_step():
     # A home screen that still says ":connect" after connecting is telling the
     # user to redo the one thing they have already done.
     assert ":connect" not in text
-    assert "describe what you want built" in text
+    assert "ask for a small change and its tests" in text
     assert "Task" not in text
     assert ":explore" in text
     assert ":tour" in text
@@ -2500,7 +2500,15 @@ def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, mo
     pure = app._ensure_pure_mode()
     pure.connect("test", "model", session_id="core-session-1234")
 
+    reviews = []
+    app.push_screen = lambda screen, callback=None: reviews.append((screen, callback))
+
     app._harness_cmd("switch workbench", log)
+
+    assert pure.session.harness_name == "Core"
+    assert pure.get_current_session_id() == "core-session-1234"
+    assert len(reviews) == 1
+    reviews[0][1](True)
 
     saved = SessionManager(".superqode/sessions").get_session_info("core-session-1234")
     assert saved is not None
@@ -2524,7 +2532,16 @@ def test_codegem_switch_from_incompatible_model_opens_model_picker(tmp_path, mon
     menus = []
     app._show_connect_type_picker = lambda log, **kwargs: menus.append(kwargs.get("menu"))
 
+    reviews = []
+    app.push_screen = lambda screen, callback=None: reviews.append((screen, callback))
+
     app._harness_cmd("switch codegem", log)
+
+    assert pure.session.harness_name == "Core"
+    assert pure.session.connected
+    assert menus == []
+    assert len(reviews) == 1
+    reviews[0][1](True)
 
     from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
 
@@ -2545,7 +2562,15 @@ def test_tui_harness_switch_can_fork_before_changing_harness(tmp_path, monkeypat
     pure.connect("test", "model", session_id="source-session")
     pure._session_manager.add_user_message("preserve this context")
 
+    reviews = []
+    app.push_screen = lambda screen, callback=None: reviews.append((screen, callback))
+
     app._harness_cmd("switch workbench --fork", log)
+
+    assert pure.get_current_session_id() == "source-session"
+    assert pure.session.harness_name == "Core"
+    assert len(reviews) == 1
+    reviews[0][1](True)
 
     fork_id = pure.get_current_session_id()
     assert fork_id is not None

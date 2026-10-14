@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.1] - 2026-10-15
+
+Publishes the file protection, task verification, route review, and terminal
+improvements described under 2.21.0. Version 2.21.0 was tagged but was not
+published to PyPI; install 2.21.1 to receive these improvements.
+
 ## [2.21.0] - 2026-10-14
 
 This release improves file conflict handling, task verification, route switching,

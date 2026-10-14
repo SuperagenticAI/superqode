@@ -84,6 +84,10 @@ jobs:
           tests/test_headless.py
           tests/test_benchmark_preflight.py
           tests/test_connection_capabilities.py -q
+      - name: TUI release smoke contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_tui_smoke.py -q
       - name: TUI real-terminal input and rendering
         run: uv run --frozen python scripts/check_tui_terminal.py --output tui-terminal.json
       - name: TUI responsiveness budget
