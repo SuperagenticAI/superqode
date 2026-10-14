@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: docs-deployment
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -27,8 +31,18 @@ jobs:
         run: uv sync --extra docs
       - name: Check public documentation style
         run: uv run python scripts/check_public_docs_style.py
-      - name: Build and deploy
+      - name: Build documentation
+        run: uv run mkdocs build --clean
+      - name: Deploy documentation
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          uv run mkdocs gh-deploy --force --clean
+          if ! uv run mkdocs gh-deploy --force --clean > "$RUNNER_TEMP/docs-deploy.log" 2>&1; then
+            cat "$RUNNER_TEMP/docs-deploy.log"
+            tail -n 12 "$RUNNER_TEMP/docs-deploy.log" | while IFS= read -r line; do
+              line="${line//'%'/'%25'}"
+              echo "::error::$line"
+            done
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/docs-deploy.log"
