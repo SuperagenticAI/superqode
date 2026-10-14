@@ -845,6 +845,11 @@ def test_available_never_raises():
 
 
 class _DispatchStub:
+    def _review_route_transition(self, runtime, connector, continuity, apply):
+        from superqode.app.mixins.feedback import FeedbackMixin
+
+        return FeedbackMixin._review_route_transition(self, runtime, connector, continuity, apply)
+
     def __init__(self):
         self.calls = []
         self._acp_client = None

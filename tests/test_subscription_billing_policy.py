@@ -729,8 +729,9 @@ class TestFactoryKeyPath:
 
     def test_named_acp_and_disconnect_clear_extra_env(self):
         from superqode.app.mixins.connect import ConnectMixin
+        from superqode.app.mixins.feedback import FeedbackMixin
 
-        class Stub(ConnectMixin):
+        class Stub(ConnectMixin, FeedbackMixin):
             def __init__(self):
                 self.agents = []
 
