@@ -733,10 +733,6 @@ async def test_theme_timer_does_not_repaint_during_shutdown(tmp_path, monkeypatc
             app._running = True
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Flaky on Windows CI: Textual worker is cancelled before completing",
-)
 async def test_tui_install_all_runs_cli_and_discoverable_themes(tmp_path, monkeypatch):
     import asyncio
     import subprocess
@@ -768,7 +764,15 @@ async def test_tui_install_all_runs_cli_and_discoverable_themes(tmp_path, monkey
         app._handle_command(":theme install --all", log)
         workers = [worker for worker in app.workers if worker.name == "_superqode_cli_cmd"]
         assert len(workers) == 1
-        await asyncio.wait_for(app.workers.wait_for_complete(workers), timeout=10)
+        # Poll instead of asyncio.wait_for(worker.wait()): Worker.wait awaits the
+        # worker task directly, so a wait_for timeout cancels the worker itself and
+        # surfaces as WorkerCancelled. The real CLI subprocess is slow on Windows.
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 180
+        while not workers[0].is_finished:
+            assert loop.time() < deadline, "theme install worker did not finish in 180s"
+            await asyncio.sleep(0.1)
+        await workers[0].wait()
         await pilot.pause()
         assert any("Theme installation completed" in line.text for line in log.lines)
         assert bridge._CONFIG_PATH.read_bytes() == saved
