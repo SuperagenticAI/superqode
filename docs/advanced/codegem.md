@@ -27,7 +27,7 @@ hosted installer and platform requirements.
 
 For an interactive session, start `superqode` in your project, open `:connect`,
 choose **Connect a harness with your model**, then **CodeGem**. Choose **Local**
-for Gemma with Ollama, LM Studio or llama.cpp, or **BYOK** for Gemini with your
+for Gemma with Ollama, LM Studio, llama.cpp or vLLM, or **BYOK** for Gemini with your
 Google API key. `:connect harness-codegem` opens the same flow directly.
 For a small coding demo, ask it to read a failing test, fix the implementation,
 and run the test.
@@ -35,7 +35,9 @@ and run the test.
 Local Gemma sessions default to at most 32,768 context tokens, with smaller
 output and compaction budgets for smaller contexts. Set `context_window` in
 your harness configuration to use a different budget, and load compatible
-servers with the same context size. Local EmbeddingGemma inference runs in a
+servers with the same context size. With vLLM or llama.cpp, CodeGem reads the
+context size the running server reports (vLLM `max_model_len` from
+`/v1/models`, llama.cpp `n_ctx` from `/props`) when `context_window` is unset. Local EmbeddingGemma inference runs in a
 worker thread so semantic search keeps the terminal responsive.
 
 ## Use Gemini through the Google API
@@ -56,6 +58,25 @@ work. Keep keys in your environment rather than project configuration. Begin
 with a small task to control usage. CodeGem uses native Gemini GenerateContent
 requests and needs no additional Google SDK installation. See
 [Google's key guide](https://ai.google.dev/gemini-api/docs/api-key).
+
+Gemini replies stream by default through `streamGenerateContent` with
+server-sent events, so text appears as it is generated. Set `stream: false` in
+`runtime.config` to use one `generateContent` request per turn. The finished
+model turn keeps every part and thought signature exactly as received, and tool
+calls run only after the turn completes. Retries apply only before the first
+streamed chunk. Following Google's long decode guide, a stream that drops
+after a checkpoint resumes from the last checkpoint token and discards the
+chunks received since; a stream that drops after output began but before any
+checkpoint fails the turn rather than repeating it. Text shown live before a
+resumed checkpoint may appear twice on screen; the stored turn is correct.
+
+Gemma 4 is also available on the Gemini API as `gemma-4-31b-it` and
+`gemma-4-26b-a4b-it` with `--provider google`. Google documents thinking for
+these models as `high` (on) or `minimal` (off): set `thinking: true` or
+`false`, or `model_policy.reasoning` to `high` or `minimal`. Without a setting
+CodeGem sends no thinking level, so Google's default applies. Gemma sampling
+uses temperature 1.0, top_p 0.95 and top_k 64 unless you set any of them. The
+Gemini API lists Gemma as free tier only, so cost estimates are zero.
 
 ## Add local EmbeddingGemma search
 
@@ -138,9 +159,9 @@ superqode-codegem-index . --provider openai \
   --base-url http://127.0.0.1:8081 --model embeddinggemma-2 --scope src
 ```
 
-## Use LM Studio or llama.cpp
+## Use LM Studio, llama.cpp or vLLM
 
-CodeGem supports local Gemma through both servers' OpenAI-compatible endpoints.
+CodeGem supports local Gemma through these servers' OpenAI-compatible endpoints.
 Load your model with a Gemma-identifiable model ID and start the local server:
 
 ```bash
@@ -150,9 +171,51 @@ superqode harness run codegem "Explain this project and suggest one small fix" \
   --provider llamacpp --model gemma4-codegem-26b-q4 --working-dir .
 ```
 
-Default endpoints are `http://127.0.0.1:1234/v1` for LM Studio and
-`http://127.0.0.1:8080/v1` for llama.cpp. Set `LMSTUDIO_HOST` or `LLAMACPP_HOST`
-when your server uses another address.
+Default endpoints are `http://localhost:1234/v1` for LM Studio,
+`http://localhost:8080/v1` for llama.cpp and `http://localhost:8000/v1` for
+vLLM. Set `LMSTUDIO_HOST`, `LLAMACPP_HOST` or `VLLM_HOST` (or `base_url`) when
+your server uses another address.
+
+For vLLM, follow the vLLM Gemma 4 recipe: enable tool calling with the Gemma 4
+parsers and chat template, and set the context size explicitly so it fits your
+GPU memory. CodeGem reads that size back from `/v1/models`:
+
+```bash
+vllm serve google/gemma-4-31B-it --max-model-len 32768 \
+  --enable-auto-tool-choice --tool-call-parser gemma4 \
+  --reasoning-parser gemma4 \
+  --chat-template examples/tool_chat_template_gemma4.jinja
+superqode harness run codegem "Explain this project and suggest one small fix" \
+  --provider vllm --model google/gemma-4-31B-it --working-dir .
+```
+
+How CodeGem sends Gemma conversations:
+
+- Tool-call arguments are JSON objects on Ollama's native `/api/chat`, and JSON
+  strings on Chat Completions, as the OpenAI specification requires. vLLM and
+  llama.cpp convert those strings back to objects before rendering the Gemma 4
+  template, which rejects string arguments. LM Studio's handling is not
+  publicly documented.
+- Tool calls carry their IDs, and each tool result names its call with
+  `tool_call_id`. Results are paired by ID and re-sequenced into the call order;
+  a result without a call becomes plain user text, and a call without a result
+  gets an "interrupted" error result.
+- For Gemma 4, images returned by a tool stay inside that tool message (Ollama
+  `images`, or `image_url` parts on Chat Completions), which the Gemma 4
+  template renders within the tool response. Set
+  `tool_images_in_tool_message: false` to send them in a following user turn
+  instead.
+- Thinking is sent the same way on every route: Ollama `think` and Chat
+  Completions `chat_template_kwargs.enable_thinking`. The default is off,
+  matching the Gemma 4 template (`enable_thinking` defaults to false) and
+  Ollama's Gemma 4 renderer; set `thinking: true` to turn it on. Thinking from
+  turns before the latest user message is not resent; thinking within the
+  current tool sequence is.
+- Gemma 3 has no system role, so the system prompt is placed at the start of
+  the first user turn.
+- Sampling defaults to Ollama's official Gemma values (temperature 1.0, top_p
+  0.95, top_k 64) only when none of `temperature`, `top_p` or `top_k` is set.
+  If you set any of them, CodeGem sends only the values you set.
 
 For the same checksum-verified 26B-A4B QAT Q4_0 model tested across all three
 runtimes, the installed download command creates the GGUF and an Ollama Modelfile:
@@ -217,8 +280,8 @@ superqode harness validate codegem.yaml
 
 Useful `runtime.config` settings include `tool_mode` (`auto`, `native`, or
 `json` for Gemma), `max_turns`, `context_window`, `max_output_tokens`,
-`temperature`, `thinking`, and `embedding`. Use `base_url` for LM Studio or
-llama.cpp, `ollama_base_url` for Ollama, and native `thinking_config` for Gemini
+`temperature`, `thinking`, `stream` (Gemini), and `embedding`. Use `base_url`
+for LM Studio, llama.cpp or vLLM, `ollama_base_url` for Ollama, and native `thinking_config` for Gemini
 thinking controls. Start with defaults and tune against your own coding tasks.
 New model generations do not inherit guessed thinking controls or context limits.
 
@@ -239,16 +302,25 @@ errors up to `max_attempts` (default 4) with exponential backoff from
 `superqode.codegem` logger. A malformed function call or an empty response is
 retried once.
 
-For Gemini 4 Argon, CodeGem defaults to a 20 minute `timeout` and a 32,768
-token `max_output_tokens` (the non-streaming per-request cap), and follows long decode continuation tokens. A reply
+For Gemini 4 Argon, CodeGem defaults to a 20 minute `timeout` and a
+`max_output_tokens` of 65,536 when streaming or 32,768 with `stream: false`
+(Google's documented defaults for each), and follows long decode continuation
+tokens. A reply
 that reaches `max_output_tokens` with a continuation token resumes with a
 doubled limit up to `max_output_tokens_ceiling` (default 131,072 for Argon).
 Raise or lower the ceiling to control spend.
 
 Conversations live in `.superqode/codegem/sessions/`. Reuse `--session <id>` to
 continue a headless run. Start a fresh session when changing models, especially
-with Gemini signed history. Model text is emitted after a complete response;
-token-by-token provider streaming is not available in this release.
+with Gemini signed history. Gemini text streams live by default; local Gemma
+text is emitted after a complete response.
+
+Cost estimates use Google's published Standard prices: cached prompt tokens are
+charged at the published context-cache rate, Gemini 3.1 Pro prompts over 200k
+tokens use its long-context prices, and scheduled price changes (Argon from
+1 December 2026, Gemini 3.8 and 3.6 Flash from 1 January 2027) apply from their
+effective dates. Context-cache storage and audio input prices are not included.
+Estimates are not a billing statement.
 
 Tools run with the host process's permissions. CodeGem does not provide OS
 isolation or approval prompts, and rejects unsupported sandbox and approval

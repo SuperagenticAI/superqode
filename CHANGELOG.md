@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stream CodeGem Gemini replies with `streamGenerateContent` (server-sent
+  events), on by default and controlled by the `stream` setting. Text appears
+  live while the stored model turn keeps every part and thought signature as
+  received. Retries apply only before the first chunk, dropped streams resume
+  from the last long decode checkpoint, and continuation hops stream too.
+  Gemini 4 uses Google's 64K streaming output default.
+- Run CodeGem with Gemma 4 on the Gemini API (`gemma-4-31b-it`,
+  `gemma-4-26b-a4b-it`, google provider), with Google's documented `minimal`
+  and `high` thinking levels.
+- Run CodeGem local Gemma on vLLM, with the vLLM Gemma 4 recipe documented.
+  With vLLM and llama.cpp, CodeGem reads the server's real context size.
+- Add `gemini-3.1-flash-lite` and `gemini-3.1-pro-preview-customtools` to the
+  Google catalog.
+
+### Changed
+
+- Local Gemma tool calls carry IDs and tool results are paired by
+  `tool_call_id` and ordered to match the calls. Arguments are objects on
+  Ollama and JSON strings on Chat Completions, as the OpenAI spec requires.
+- Gemma 4 tool-returned images stay inside the tool message instead of a
+  synthetic user turn.
+- Gemma thinking is sent the same way on Ollama and Chat Completions routes
+  and defaults to off, matching the Gemma 4 template and Ollama. Thinking from
+  earlier user turns is no longer resent.
+- Gemma 3 system prompts are folded into the first user turn.
+- Gemma sampling uses Ollama's official defaults (temperature 1.0, top_p 0.95,
+  top_k 64) only when none is set; Gemma 3 previously used temperature 0.2.
+
+### Fixed
+
+- Gemini cost estimates charge cached tokens at Google's published cache rates,
+  apply the Gemini 3.1 Pro long-context tier, and follow scheduled price
+  changes for Argon, Gemini 3.8 Flash and Gemini 3.6 Flash.
+- Correct the Gemini 3.6 Flash price to $0.75 input and $3.75 output per 1M tokens.
+
 ## [2.22.0] - 2026-10-17
 
 This release makes CodeGem more reliable with Gemini and adds support for Gemini 4 Argon.
