@@ -516,8 +516,16 @@ async def test_new_commands_reach_their_views_without_starting_connections(monke
         assert "Fork: Unavailable" in output[-1]
         app._handle_command(":mcp panel", log)
         await pilot.pause()
-        assert isinstance(app.screen, MCPConnectionsScreen)
-        assert "No MCP servers configured" in app.screen.query_one("#mcp-detail", TextArea).text
+        # The panel is pushed from an async command handler and fills #mcp-detail
+        # on mount (plus a 1s refresh), which can lag a single pause on Windows CI.
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 30
+        while not (
+            isinstance(app.screen, MCPConnectionsScreen)
+            and "No MCP servers configured" in app.screen.query_one("#mcp-detail", TextArea).text
+        ):
+            assert loop.time() < deadline, "MCP panel detail did not render in 30s"
+            await pilot.pause(0.05)
         await pilot.press("escape")
 
 
