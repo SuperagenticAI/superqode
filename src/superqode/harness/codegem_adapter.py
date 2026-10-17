@@ -82,11 +82,22 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             context_window=config.get("context_window"),
             supports_reasoning=profile.thinking,
         )
-        if profile.family == "gemma":
-            # A model's maximum context is not a sensible default KV allocation
-            # on a laptop. Keep local runs bounded and compaction enabled even
-            # for imported models absent from the catalog. Users can opt up.
+        if profile.family == "gemma" and request.provider != "google":
+            server_context = None
             if config.get("context_window") is None:
+                from superqode.codegem.provider import discover_server_context
+
+                # vLLM and llama.cpp allocate context at server start; use
+                # the size the server reports when it reports one.
+                server_context = await discover_server_context(
+                    request.provider, config, request.model
+                )
+            if server_context:
+                model = replace(model, context_window=server_context)
+            elif config.get("context_window") is None:
+                # A model's maximum context is not a sensible default KV allocation
+                # on a laptop. Keep local runs bounded and compaction enabled even
+                # for imported models absent from the catalog. Users can opt up.
                 model = replace(model, context_window=min(model.context_window or 32768, 32768))
             if model.context_window < 1024:
                 raise ValueError("CodeGem context_window must be at least 1024 tokens")

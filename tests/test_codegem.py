@@ -847,7 +847,8 @@ async def test_compatible_tool_results_keep_ids_when_completion_order_changes(tm
     ]
     assert events[-1].message.text == "Done"
     results = [m for m in requests[0]["messages"] if m["role"] == "tool"]
-    assert [(m["tool_call_id"], m["content"]) for m in results] == [("second", "b"), ("first", "a")]
+    # Results are paired by ID and re-sequenced into the assistant's call order.
+    assert [(m["tool_call_id"], m["content"]) for m in results] == [("first", "a"), ("second", "b")]
 
 
 @pytest.mark.asyncio

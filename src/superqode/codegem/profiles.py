@@ -70,10 +70,21 @@ def resolve_profile(model: str, provider: str) -> CodeGemProfile:
             default,
             levels,
         )
-    if provider.lower() not in {"ollama", "lmstudio", "llamacpp"}:
-        raise ValueError("CodeGem local Gemma requires ollama, lmstudio, or llamacpp")
+    if provider.lower() in {"google", "gemini"}:
+        # Gemini API Gemma: thinking is "high" for enabled or "minimal" for
+        # disabled (ai.google.dev/gemma/docs/core/gemma_on_gemini_api).
+        if not name.startswith("gemma-4-"):
+            raise ValueError(
+                "CodeGem supports Gemma 4 Gemini API IDs (such as gemma-4-31b-it) on google"
+            )
+        return CodeGemProfile(family, 4, True, True, 1.0, True, None, ("minimal", "high"))
+    if provider.lower() not in {"ollama", "lmstudio", "llamacpp", "vllm"}:
+        raise ValueError(
+            "CodeGem Gemma requires ollama, lmstudio, llamacpp, vllm, or google (Gemma 4)"
+        )
     modern = generation == 4
-    return CodeGemProfile(family, generation, modern, modern, 1.0 if modern else 0.2, modern)
+    # Ollama's official gemma3 and gemma4 parameters both use temperature 1.0.
+    return CodeGemProfile(family, generation, modern, modern, 1.0, modern)
 
 
 def gemini_thinking_level(model: str, profile: CodeGemProfile, level: str) -> str:

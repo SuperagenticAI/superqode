@@ -246,10 +246,14 @@ async def test_argon_timeout_and_output_defaults(monkeypatch):
     stream, _ = _stream([httpx.Response(200, json=OK)] * 2, seen=seen)
     await _run(stream, "gemini-4-argon")
     await _run(stream, "gemini-3.8-flash")
+    plain, _ = _stream([httpx.Response(200, json=OK)], {"stream": False}, seen=seen)
+    await _run(plain, "gemini-4-argon")
     assert timeouts[0] >= 1200 and timeouts[1] == 180
-    assert seen[0]["generationConfig"]["maxOutputTokens"] == 32768
+    # Streaming default 64K for Gemini 4, non-streaming REST 32K.
+    assert seen[0]["generationConfig"]["maxOutputTokens"] == 65536
     assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
     assert seen[1]["generationConfig"]["maxOutputTokens"] == 32768
+    assert seen[2]["generationConfig"]["maxOutputTokens"] == 32768
 
 
 def _hop(parts, reason, token=None, thoughts=0):
@@ -311,7 +315,7 @@ async def test_max_tokens_with_token_resumes_with_higher_limit():
     assert events[-1].type == "done" and events[-1].message.stop_reason == "stop"
     assert events[-1].message.text == "part 1 part 2"
     assert seen[1]["continuationToken"] == "tok-9"
-    assert seen[1]["generationConfig"]["maxOutputTokens"] == 65536
+    assert seen[1]["generationConfig"]["maxOutputTokens"] == 131072
 
 
 @pytest.mark.asyncio

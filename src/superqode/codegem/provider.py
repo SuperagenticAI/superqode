@@ -1,7 +1,8 @@
-"""Google-native signed content and Ollama-native Gemma tool conversations.
+"""Google-native signed content and local Gemma tool conversations.
 
-Gemini responses are buffered per model turn to retain exact signed Content.
-Function arguments execute only after a successful, complete model response.
+Gemini text can stream live, but the model turn is stored exactly as the
+signed parts arrived. Function arguments execute only after a successful,
+complete model response.
 No parsing of prose or raw Python as a tool call is allowed.
 """
 
@@ -101,6 +102,8 @@ _RETRY_STATUS = {429, 500, 502, 503, 504}
 # per-request output cap of 32,768 tokens on non-streaming REST calls.
 _ARGON_TIMEOUT = 1200.0
 _NON_STREAMING_CAP = 32768
+# Long decode guide: "REST streamGenerateContent 64K" default for Gemini 4.
+_STREAMING_CAP = 65536
 _BLOCK_REASONS = {
     "SAFETY": "Gemini blocked the response for safety reasons",
     "RECITATION": "Gemini stopped because the response closely recited existing content",
@@ -115,6 +118,149 @@ _KNOWN_PART_KEYS = {"text", "functionCall"}
 
 class GeminiRetryableResponse(Exception):
     """A complete HTTP response that Google documents as worth one retry."""
+
+
+class _StreamDropped(Exception):
+    """A Gemini SSE stream closed before its finish reason."""
+
+
+async def parse_sse(lines):
+    """Yield the JSON payload of each server-sent event from an async line iterator.
+
+    Gemini's streamGenerateContent?alt=sse sends one GenerateContentResponse
+    per event as "data: {...}" lines separated by a blank line. Multi-line
+    data fields are joined with newlines; comments and other fields are
+    ignored.
+    """
+    data = []
+    async for line in lines:
+        line = line.rstrip("\r")
+        if not line:
+            if data:
+                yield json.loads("\n".join(data))
+                data = []
+            continue
+        if line.startswith(":"):
+            continue
+        field, _, value = line.partition(":")
+        if field == "data":
+            data.append(value[1:] if value.startswith(" ") else value)
+    if data:
+        yield json.loads("\n".join(data))
+
+
+async def _response_chunks(response):
+    """Stream chunks from SSE, or accept a JSON body (object or array) as-is."""
+    if "json" in response.headers.get("content-type", ""):
+        payload = json.loads(await response.aread())
+        for chunk in payload if isinstance(payload, list) else [payload]:
+            yield chunk
+        return
+    async for chunk in parse_sse(response.aiter_lines()):
+        yield chunk
+
+
+class _PartAssembler:
+    """Turn Gemini parts into display blocks, live or after the fact.
+
+    The signed parts themselves are kept verbatim in provider_content; this
+    only builds message.content. Adjacent text parts (and adjacent thought
+    parts) merge into one block, so streamed chunks form one block per run.
+    With live set, text and thinking events are returned as parts arrive.
+    """
+
+    def __init__(self, message, *, live: bool):
+        self.message = message
+        self.live = live
+        self.open = None
+
+    def close(self):
+        if self.open is None:
+            return []
+        index, self.open = self.open, None
+        block = self.message.content[index]
+        if not self.live:
+            return []
+        if isinstance(block, ThinkingContent):
+            return [ThinkingEndEvent(index, block.thinking, self.message)]
+        return [TextEndEvent(index, block.text, self.message)]
+
+    def rebuild(self, parts):
+        """Reset to a committed prefix after a stream resumes from a checkpoint."""
+        live, self.live = self.live, False
+        self.message.content.clear()
+        self.open = None
+        for part in parts:
+            self.add(part)
+        self.live = live
+
+    def add(self, part):
+        events = []
+        content = self.message.content
+        signature = part.get("thoughtSignature")
+        if "functionCall" in part:
+            events += self.close()
+            call = part["functionCall"]
+            arguments = call.get("args", {})
+            if not isinstance(arguments, dict):
+                raise ValueError("Gemini function arguments must be an object")
+            content.append(
+                ToolCall(
+                    call.get("id") or uuid4().hex,
+                    call["name"],
+                    arguments,
+                    thought_signature=signature,
+                )
+            )
+        elif "text" in part:
+            thought = bool(part.get("thought"))
+            kind = ThinkingContent if thought else TextContent
+            text = part["text"]
+            if self.open is not None and isinstance(content[self.open], kind):
+                index = self.open
+                block = content[index]
+                if thought:
+                    block.thinking += text
+                    block.thinking_signature = signature or block.thinking_signature
+                else:
+                    block.text += text
+                    block.text_signature = signature or block.text_signature
+                if text and self.live:
+                    events.append(
+                        ThinkingDeltaEvent(index, text, self.message)
+                        if thought
+                        else TextDeltaEvent(index, text, self.message)
+                    )
+            elif text:
+                # An empty text part carries only a signature; it stays in
+                # provider_content and needs no display block.
+                events += self.close()
+                content.append(
+                    ThinkingContent(text, thinking_signature=signature)
+                    if thought
+                    else TextContent(text, text_signature=signature)
+                )
+                self.open = index = len(content) - 1
+                if self.live:
+                    events += (
+                        [
+                            ThinkingStartEvent(index, self.message),
+                            ThinkingDeltaEvent(index, text, self.message),
+                        ]
+                        if thought
+                        else [
+                            TextStartEvent(index, self.message),
+                            TextDeltaEvent(index, text, self.message),
+                        ]
+                    )
+        elif set(part) - {"thoughtSignature", "thought"}:
+            # Unknown part kinds stay in provider_content, exactly as signed,
+            # and are skipped for display instead of aborting the turn.
+            logger.info(
+                "CodeGem skipped an unsupported Gemini part: %s",
+                ", ".join(sorted(set(part) - {"thoughtSignature", "thought"})),
+            )
+        return events
 
 
 def _retry_delay_from(response) -> float | None:
@@ -187,8 +333,14 @@ def _system(context):
 
 
 def _reconcile_tools(messages):
-    """Close interrupted tool batches without replaying an uncertain mutation."""
+    """Close interrupted tool batches without replaying an uncertain mutation.
+
+    Results pair with calls by tool_call_id, in any order. A result whose call
+    is not pending becomes user text, emitted after the open batch closes so
+    it never splits a batch. A call without a result gets an error result.
+    """
     pending = {}
+    deferred = []
 
     def interrupted():
         return [
@@ -201,10 +353,15 @@ def _reconcile_tools(messages):
             for call in pending.values()
         ]
 
+    def close():
+        yield from interrupted()
+        pending.clear()
+        yield from deferred
+        deferred.clear()
+
     for message in messages:
-        if isinstance(message, (UserMessage, AssistantMessage)) and pending:
-            yield from interrupted()
-            pending.clear()
+        if isinstance(message, (UserMessage, AssistantMessage)) and (pending or deferred):
+            yield from close()
         if isinstance(message, AssistantMessage) and message.stop_reason not in {
             "error",
             "aborted",
@@ -213,11 +370,15 @@ def _reconcile_tools(messages):
             pending.update({c.id: c for c in message.tool_calls})
         if isinstance(message, ToolResultMessage):
             if message.tool_call_id not in pending:
-                yield UserMessage(f"Earlier {message.tool_name} tool result: {message.text}")
+                orphan = UserMessage(f"Earlier {message.tool_name} tool result: {message.text}")
+                if pending:
+                    deferred.append(orphan)
+                else:
+                    yield orphan
                 continue
             pending.pop(message.tool_call_id)
         yield message
-    yield from interrupted()
+    yield from close()
 
 
 def gemini_contents(messages, model):
@@ -293,7 +454,104 @@ def gemini_contents(messages, model):
     return contents
 
 
-def ollama_messages(context, *, native: bool, system_role: bool):
+# Ollama's official gemma3 and gemma4 model parameters (ollama.com/library).
+_GEMMA_SAMPLING = {"temperature": 1.0, "top_p": 0.95, "top_k": 64}
+
+
+def _gemma_sampling(config) -> dict:
+    """Official defaults only when the user set none of the three; otherwise
+    send exactly what the user set and let the server default the rest."""
+    chosen = {k: config[k] for k in _GEMMA_SAMPLING if k in config}
+    return chosen or dict(_GEMMA_SAMPLING)
+
+
+def _gemma_thinking(config, profile) -> bool | None:
+    """One thinking value for every local route.
+
+    An explicit runtime "thinking" wins. Otherwise Gemma 4 sends the
+    documented default, off: the official chat template uses
+    enable_thinking | default(false) and Ollama's gemma4 renderer defaults
+    thinking to false. Models without thinking get nothing.
+    """
+    if "thinking" in config:
+        return bool(config["thinking"])
+    return False if profile.thinking else None
+
+
+def _batch_ordered(messages):
+    """Order each tool-result batch by its assistant's call order, keyed by ID.
+
+    _reconcile_tools has already paired every result with a pending call by
+    tool_call_id (orphans become user text, missing results are synthesised),
+    so results that arrived out of order are only re-sequenced here. Servers
+    that pair by ID and servers that pair by position then agree.
+    """
+    messages = list(messages)
+    out = []
+    index = 0
+    while index < len(messages):
+        message = messages[index]
+        out.append(message)
+        index += 1
+        if isinstance(message, AssistantMessage) and message.tool_calls:
+            batch = []
+            while index < len(messages) and isinstance(messages[index], ToolResultMessage):
+                batch.append(messages[index])
+                index += 1
+            order = {call.id: n for n, call in enumerate(message.tool_calls)}
+            out.extend(sorted(batch, key=lambda r: order.get(r.tool_call_id, len(order))))
+    return out
+
+
+def template_messages(wire):
+    """What a server hands the Gemma chat template for Chat Completions messages.
+
+    The OpenAI spec puts tool-call arguments on the wire as JSON strings; the
+    Gemma 4 template rejects strings and needs objects. vLLM
+    (_postprocess_messages) and llama.cpp (func_args_not_string) parse them
+    back to objects before rendering. This mirrors that conversion so tests
+    can render CodeGem's wire messages through the official template.
+    """
+    out = copy.deepcopy(wire)
+    for entry in out:
+        for call in entry.get("tool_calls") or []:
+            arguments = call.get("function", {}).get("arguments")
+            if isinstance(arguments, str):
+                call["function"]["arguments"] = json.loads(arguments)
+    return out
+
+
+def _data_url(block: ImageContent) -> str:
+    return f"data:{block.mime_type};base64,{block.data}"
+
+
+def ollama_messages(
+    context,
+    *,
+    native: bool,
+    system_role: bool,
+    route: str = "ollama",
+    tool_images: bool = True,
+):
+    """Build local Gemma chat messages for Ollama native or OpenAI-compatible routes.
+
+    route="ollama" emits Ollama /api/chat messages: tool-call arguments are
+    JSON objects, calls and results carry id / tool_call_id, and tool images
+    sit in the tool message's images field (Ollama's gemma4 renderer renders
+    them inside the tool response). route="openai" emits Chat Completions
+    messages: arguments stay JSON strings as the OpenAI spec requires (vLLM
+    and llama.cpp parse them back to objects before rendering the Gemma
+    template), and images are image_url content parts.
+
+    With tool_images, tool-returned images stay inside the tool message (the
+    Gemma 4 template renders tool image parts inside the tool response);
+    otherwise they follow the batch in one user message.
+
+    Without a system role (Gemma 3), the system text is folded into the first
+    user turn. Thinking is kept only on assistant tool-call turns after the
+    last user message, matching the Gemma 4 template's thinking gate.
+    """
+    openai = route == "openai"
     messages = []
     pending_images = []
     system = _system(context)
@@ -308,37 +566,52 @@ def ollama_messages(context, *, native: bool, system_role: bool):
             "Do not describe an action instead of calling its tool.\nTools: "
             + json.dumps(declarations)
         )
-    messages.append({"role": "system" if system_role else "user", "content": system})
-    for message in _reconcile_tools(context.messages):
-        if not isinstance(message, ToolResultMessage) and pending_images:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": "Images returned by the preceding tools.",
-                    "images": pending_images,
-                }
-            )
+    history = _batch_ordered(_reconcile_tools(context.messages))
+    last_user = max((n for n, m in enumerate(history) if isinstance(m, UserMessage)), default=-1)
+
+    def user_entry(text, images):
+        if not images:
+            return {"role": "user", "content": text}
+        if openai:
+            parts = [{"type": "text", "text": text}] if text else []
+            parts += [{"type": "image_url", "image_url": {"url": _data_url(b)}} for b in images]
+            return {"role": "user", "content": parts}
+        return {"role": "user", "content": text, "images": [b.data for b in images]}
+
+    def flush_images():
+        nonlocal pending_images
+        if pending_images:
+            messages.append(user_entry("Images returned by the preceding tools.", pending_images))
             pending_images = []
+
+    for position, message in enumerate(history):
+        if not isinstance(message, ToolResultMessage):
+            flush_images()
         if isinstance(message, UserMessage):
             blocks = message.content if isinstance(message.content, list) else []
-            entry = {"role": "user", "content": message.text}
-            images = [b.data for b in blocks if isinstance(b, ImageContent)]
-            if images:
-                entry["images"] = images
-            messages.append(entry)
+            images = [b for b in blocks if isinstance(b, ImageContent)]
+            messages.append(user_entry(message.text, images))
         elif isinstance(message, AssistantMessage):
             if message.stop_reason in {"error", "aborted", "length"}:
                 continue
-            calls = [
-                {"function": {"name": c.name, "arguments": dict(c.arguments)}}
-                for c in message.tool_calls
-            ]
             entry = {"role": "assistant", "content": message.text}
             if native:
-                if calls:
-                    entry["tool_calls"] = calls
-                if message.thinking_text and calls:
-                    entry["thinking"] = message.thinking_text
+                if message.tool_calls:
+                    entry["tool_calls"] = [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {
+                                "name": c.name,
+                                "arguments": json.dumps(dict(c.arguments))
+                                if openai
+                                else dict(c.arguments),
+                            },
+                        }
+                        for c in message.tool_calls
+                    ]
+                    if message.thinking_text and position > last_user:
+                        entry["reasoning_content" if openai else "thinking"] = message.thinking_text
             elif context.tools:
                 entry["content"] = json.dumps(
                     {
@@ -351,30 +624,47 @@ def ollama_messages(context, *, native: bool, system_role: bool):
                 )
             messages.append(entry)
         elif isinstance(message, ToolResultMessage):
-            pending_images.extend(b.data for b in message.content if isinstance(b, ImageContent))
-            messages.append(
-                {
-                    "role": "tool" if native else "user",
-                    "content": message.text
-                    if native
-                    else json.dumps(
-                        {
-                            "tool_result": message.tool_name,
-                            "error": message.is_error,
-                            "output": message.text,
-                        }
-                    ),
-                    **({"tool_name": message.tool_name} if native else {}),
-                }
-            )
-    if pending_images:
-        messages.append(
-            {
-                "role": "user",
-                "content": "Images returned by the preceding tools.",
-                "images": pending_images,
-            }
-        )
+            images = [b for b in message.content if isinstance(b, ImageContent)]
+            if not native:
+                pending_images.extend(images)
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "tool_result": message.tool_name,
+                                "error": message.is_error,
+                                "output": message.text,
+                            }
+                        ),
+                    }
+                )
+                continue
+            entry = {"role": "tool", "tool_call_id": message.tool_call_id, "content": message.text}
+            if not openai:
+                entry["tool_name"] = message.tool_name
+            if images and tool_images:
+                if openai:
+                    entry["content"] = [{"type": "text", "text": message.text}] + [
+                        {"type": "image_url", "image_url": {"url": _data_url(b)}} for b in images
+                    ]
+                else:
+                    entry["images"] = [b.data for b in images]
+            else:
+                pending_images.extend(images)
+            messages.append(entry)
+    flush_images()
+    if system_role:
+        messages.insert(0, {"role": "system", "content": system})
+    elif system:
+        # Gemma 3 has no system role: prepend the instructions to the first user turn.
+        first = next((m for m in messages if m["role"] == "user"), None)
+        if first is None:
+            messages.insert(0, {"role": "user", "content": system})
+        elif isinstance(first["content"], list):
+            first["content"].insert(0, {"type": "text", "text": system + "\n\n"})
+        else:
+            first["content"] = system + "\n\n" + first["content"] if first["content"] else system
     return messages
 
 
@@ -406,6 +696,49 @@ def gemini_cost(model_id: str, usage: Usage, prompt_tokens: int = 0, on: str | N
     )
 
 
+# Defaults match providers/registry.py.
+_COMPATIBLE_SERVERS = {
+    "lmstudio": ("LMSTUDIO_HOST", "http://localhost:1234/v1"),
+    "llamacpp": ("LLAMACPP_HOST", "http://localhost:8080/v1"),
+    "vllm": ("VLLM_HOST", "http://localhost:8000/v1"),
+}
+
+
+def compatible_base_url(provider: str, config) -> str:
+    env_name, default = _COMPATIBLE_SERVERS[provider]
+    base = str(config.get("base_url") or os.environ.get(env_name) or default).rstrip("/")
+    return base if base.endswith("/v1") else base + "/v1"
+
+
+async def discover_server_context(provider: str, config, model_id: str, *, transport=None):
+    """Read the context size a running server actually allocated, if it says.
+
+    vLLM: GET /v1/models, ModelCard.max_model_len (set by --max-model-len).
+    llama.cpp: GET /props, default_generation_settings.n_ctx.
+    Returns None when the server is unreachable or does not report it.
+    """
+    if provider not in {"vllm", "llamacpp"}:
+        return None
+    base = compatible_base_url(provider, config)
+    try:
+        async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
+            if provider == "vllm":
+                response = await client.get(f"{base}/models")
+                response.raise_for_status()
+                cards = response.json().get("data") or []
+                card = next((c for c in cards if c.get("id") == model_id), None)
+                if card is None and len(cards) == 1:
+                    card = cards[0]
+                value = (card or {}).get("max_model_len")
+            else:
+                response = await client.get(f"{base[: -len('/v1')]}/props")
+                response.raise_for_status()
+                value = (response.json().get("default_generation_settings") or {}).get("n_ctx")
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+    return int(value) if isinstance(value, int) and value > 0 else None
+
+
 class CodeGemStream:
     def __init__(self, config=None, *, transport=None):
         self.config = dict(config or {})
@@ -420,14 +753,22 @@ class CodeGemStream:
                 raise asyncio.CancelledError("CodeGem request aborted")
             await asyncio.sleep(min(0.05, remaining))
 
-    async def _send(self, client, method, url, *, signal=None, **kwargs):
-        task = asyncio.create_task(client.request(method, url, **kwargs))
+    async def _send(self, client, method, url, *, signal=None, stream=False, **kwargs):
+        if stream:
+            coro = client.send(client.build_request(method, url, **kwargs), stream=True)
+        else:
+            coro = client.request(method, url, **kwargs)
+        task = asyncio.create_task(coro)
         try:
             while not task.done():
                 if is_aborted(signal):
                     raise asyncio.CancelledError("CodeGem request aborted")
                 await asyncio.wait((task,), timeout=0.05)
             response = await task
+            if stream and response.is_error:
+                # Read the error body so retry hints and messages are available.
+                await response.aread()
+                await response.aclose()
             response.raise_for_status()
             return response
         finally:
@@ -478,6 +819,13 @@ class CodeGemStream:
             await self._sleep(delay, signal)
         raise AssertionError("unreachable")
 
+    def _tool_images(self, profile) -> bool:
+        return bool(
+            self.config.get(
+                "tool_images_in_tool_message", profile.family == "gemma" and profile.generation == 4
+            )
+        )
+
     async def __call__(self, model, context, options):
         message = AssistantMessage(model=model.id, provider=model.provider, api=model.api)
         yield AssistantStartEvent(message)
@@ -490,6 +838,7 @@ class CodeGemStream:
             profile = resolve_profile(model.id, model.provider)
             if is_aborted(options.signal):
                 raise asyncio.CancelledError("CodeGem request aborted")
+            live = set()  # Content indices already streamed to the caller.
             default_timeout = (
                 _ARGON_TIMEOUT if profile.family == "gemini" and profile.generation == 4 else 180
             )
@@ -497,8 +846,13 @@ class CodeGemStream:
                 transport=self.transport,
                 timeout=float(self.config.get("timeout", default_timeout)),
             ) as client:
-                if profile.family == "gemini":
-                    await self._gemini(client, model, context, options, profile, message)
+                if profile.family == "gemini" or model.provider in {"google", "gemini"}:
+                    async for event in self._gemini(
+                        client, model, context, options, profile, message
+                    ):
+                        if isinstance(event, (TextEndEvent, ThinkingEndEvent)):
+                            live.add(event.content_index)
+                        yield event
                 elif model.provider == "ollama":
                     await self._ollama(client, model, context, options, profile, message)
                 else:
@@ -511,6 +865,8 @@ class CodeGemStream:
             if len(call_ids) != len(set(call_ids)):
                 raise ValueError("CodeGem model returned duplicate tool call IDs")
             for index, block in enumerate(message.content):
+                if index in live:
+                    continue
                 if isinstance(block, TextContent) and block.text:
                     yield TextStartEvent(index, message)
                     yield TextDeltaEvent(index, block.text, message)
@@ -541,6 +897,11 @@ class CodeGemStream:
             yield AssistantErrorEvent(message.stop_reason, message)
 
     async def _gemini(self, client, model, context, options, profile, message):
+        """Gemini API turn (Gemini models and Gemma 4 on the google provider).
+
+        An async generator: with streaming on it yields live text and
+        thinking events; the final turn keeps every part exactly as received.
+        """
         key = (
             options.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         )
@@ -551,12 +912,22 @@ class CodeGemStream:
             key = provider_api_key(PROVIDERS["google"])
         if not key:
             raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY to run CodeGem with Gemini")
-        generation = {
-            # Non-streaming REST is capped at 32,768 per request; long decode and
-            # MAX_TOKENS resume carry Gemini 4 output beyond it.
-            "maxOutputTokens": int(self.config.get("max_output_tokens", _NON_STREAMING_CAP)),
-        }
-        if profile.generation == 4:
+        gemma = profile.family == "gemma"
+        gemini4 = profile.family == "gemini" and profile.generation == 4
+        stream = bool(self.config.get("stream", True))
+        generation = {}
+        if gemma:
+            # Google documents no Gemma output limit on the Gemini API, so
+            # only an explicit max_output_tokens is sent.
+            if "max_output_tokens" in self.config:
+                generation["maxOutputTokens"] = int(self.config["max_output_tokens"])
+        else:
+            # Gemini 4: "The default is 64K for streaming and SDK calls, and
+            # 32K for non-streaming REST calls" (long decode guide). Other
+            # models keep the 32,768 default.
+            cap = _STREAMING_CAP if stream and gemini4 else _NON_STREAMING_CAP
+            generation["maxOutputTokens"] = int(self.config.get("max_output_tokens", cap))
+        if gemini4:
             ignored = [k for k in _SAMPLING_KEYS if k in self.config]
             if ignored:
                 _warn_once(
@@ -566,9 +937,17 @@ class CodeGemStream:
                     ", ".join(ignored),
                     model.id,
                 )
+        elif gemma:
+            names = {"temperature": "temperature", "top_p": "topP", "top_k": "topK"}
+            for name, value in _gemma_sampling(self.config).items():
+                generation[names[name]] = value
         else:
             generation["temperature"] = self.config.get("temperature", profile.temperature)
-        thinking = _thinking_config(self.config.get("thinking_config") or {}, model.id, profile)
+        raw_thinking = dict(self.config.get("thinking_config") or {})
+        if gemma and not raw_thinking and "thinking" in self.config:
+            # Gemma on the Gemini API: "high" for enabled, "minimal" for disabled.
+            raw_thinking = {"thinkingLevel": "HIGH" if self.config["thinking"] else "MINIMAL"}
+        thinking = _thinking_config(raw_thinking, model.id, profile)
         if thinking:
             generation["thinkingConfig"] = thinking
         # Otherwise no thinking level is sent: Google's per-model default applies.
@@ -595,51 +974,46 @@ class CodeGemStream:
         base = self.config.get(
             "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta"
         ).rstrip("/")
-        url = f"{base}/models/{model.id}:generateContent"
+        url = (
+            f"{base}/models/{model.id}:streamGenerateContent?alt=sse"
+            if stream
+            else f"{base}/models/{model.id}:generateContent"
+        )
         headers = {"x-goog-api-key": key}
         # One extra request for MALFORMED_FUNCTION_CALL or an empty candidate.
+        # A retry after streamed output restarts the turn; the live view may
+        # then show the first attempt's text before the retried answer.
         for invalid_attempt in (1, 2):
+            assembler = _PartAssembler(message, live=stream)
+            message.content.clear()
+            done = None
             try:
-                parts, usage, reason = await self._gemini_hops(
-                    client, url, body, headers, options.signal, profile
-                )
+                async for item in self._gemini_hops(
+                    client, url, body, headers, options.signal, profile, stream
+                ):
+                    if item[0] == "parts":
+                        for part in item[1]:
+                            for event in assembler.add(part):
+                                yield event
+                    elif item[0] == "reset":
+                        assembler.rebuild(item[1])
+                    else:
+                        done = item
                 break
             except GeminiRetryableResponse as exc:
+                for event in assembler.close():
+                    yield event
                 if invalid_attempt == 2:
                     raise ValueError(f"{exc} (after one retry)") from None
                 logger.warning("CodeGem %s; retrying once", exc)
+        _, parts, usage, reason = done
+        if not stream:
+            for part in parts:
+                assembler.add(part)
+        for event in assembler.close():
+            yield event
         content = {"role": "model", "parts": parts}
         message.provider_content = copy.deepcopy(content)
-        for part in parts:
-            signature = part.get("thoughtSignature")
-            if "functionCall" in part:
-                call = part["functionCall"]
-                arguments = call.get("args", {})
-                if not isinstance(arguments, dict):
-                    raise ValueError("Gemini function arguments must be an object")
-                message.content.append(
-                    ToolCall(
-                        call.get("id") or uuid4().hex,
-                        call["name"],
-                        arguments,
-                        thought_signature=signature,
-                    )
-                )
-            elif "text" in part:
-                message.content.append(
-                    ThinkingContent(part["text"], thinking_signature=signature)
-                    if part.get("thought")
-                    else TextContent(part["text"], text_signature=signature)
-                )
-            elif not set(part) - {"thoughtSignature"}:
-                continue  # A bare signature part is replayed verbatim from provider_content.
-            else:
-                # Unknown part kinds stay in provider_content, exactly as signed,
-                # and are skipped for display instead of aborting the turn.
-                logger.info(
-                    "CodeGem skipped an unsupported Gemini part: %s",
-                    ", ".join(sorted(set(part) - {"thoughtSignature", "thought"})),
-                )
         message.usage = Usage(
             input=usage["input"],
             output=usage["output"],
@@ -652,8 +1026,8 @@ class CodeGemStream:
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
 
-    async def _gemini_hops(self, client, url, body, headers, signal, profile):
-        """Run generateContent, following Gemini long-decode continuation tokens.
+    async def _gemini_hops(self, client, url, body, headers, signal, profile, stream=False):
+        """Run (stream)GenerateContent, following long-decode continuation tokens.
 
         Per Google's long decode guide, each hop resends the same request plus
         only the latest continuationToken while finishReason is CONTINUATION,
@@ -661,6 +1035,10 @@ class CodeGemStream:
         token, the request resumes with a higher maxOutputTokens, up to
         max_output_tokens_ceiling. Usage fields are summed across hops for
         cost; the context size uses the first hop's prompt.
+
+        An async generator: yields ("parts", new_parts) as streamed parts
+        arrive, ("reset", committed_parts) when a dropped stream resumes from
+        a checkpoint, and finally ("done", parts, usage, finish_reason).
         """
         parts = []
         totals = {"input": 0, "output": 0, "cache_read": 0, "reasoning": None, "total": 0}
@@ -672,7 +1050,9 @@ class CodeGemStream:
         ceiling = int(
             self.config.get(
                 "max_output_tokens_ceiling",
-                131072 if profile.generation == 4 else generation["maxOutputTokens"],
+                131072
+                if profile.family == "gemini" and profile.generation == 4
+                else generation.get("maxOutputTokens", 0),
             )
         )
         max_hops = int(self.config.get("max_continuation_hops", 64))
@@ -681,10 +1061,18 @@ class CodeGemStream:
                 request["continuationToken"] = token
             else:
                 request.pop("continuationToken", None)
-            response = await self._request(
-                client, "POST", url, signal=signal, retry=True, json=request, headers=headers
-            )
-            data = response.json()
+            if stream:
+                data = None
+                async for item in self._stream_hop(client, url, request, headers, signal, parts):
+                    if item[0] == "hop":
+                        data = item[1]
+                    else:
+                        yield item
+            else:
+                response = await self._request(
+                    client, "POST", url, signal=signal, retry=True, json=request, headers=headers
+                )
+                data = response.json()
             usage = data.get("usageMetadata", {})
             if first_prompt is None:
                 first_prompt = usage.get("promptTokenCount", 0)
@@ -713,7 +1101,12 @@ class CodeGemStream:
             if reason == "CONTINUATION" and token:
                 hops += 1
                 continue
-            if reason == "MAX_TOKENS" and token and generation["maxOutputTokens"] < ceiling:
+            if (
+                reason == "MAX_TOKENS"
+                and token
+                and generation.get("maxOutputTokens")
+                and generation["maxOutputTokens"] < ceiling
+            ):
                 raised = min(ceiling, generation["maxOutputTokens"] * 2)
                 logger.info(
                     "Gemini reached maxOutputTokens=%d; resuming with %d",
@@ -738,8 +1131,121 @@ class CodeGemStream:
                 # Context size: the first hop's prompt plus all generated tokens.
                 totals["total"] = first_prompt + totals["output"] + (totals["reasoning"] or 0)
             totals["first_prompt"] = first_prompt
-            return parts, totals, reason
+            yield ("done", parts, totals, reason)
+            return
         raise ValueError(f"Gemini long decode exceeded {max_hops} continuation hops")
+
+    async def _stream_hop(self, client, url, request, headers, signal, earlier):
+        """One streamGenerateContent hop, folded into a generateContent shape.
+
+        Google's long decode guide: "Keep new chunks in a pending list. When a
+        chunk has a continuation_token, move the pending chunks to your
+        committed output and save the token. If the stream drops, discard the
+        pending chunks and resume from the last token." Usage is cumulative
+        within a stream, so the last value of each stream is kept and the
+        values are added across streams. Retries happen only before the first
+        chunk; a drop after output but before any checkpoint is an error.
+
+        Yields ("parts", parts), ("reset", earlier + committed) and finally
+        ("hop", response) where response has the assembled candidate.
+        """
+        committed, pending = [], []
+        checkpoint = None
+        usage_sum = {}
+        usage_at_checkpoint = {}
+        final = None
+        feedback = None
+        body = request
+        attempts = max(1, int(self.config.get("max_attempts", 4)))
+        quiet_drops = 0
+        resumes = 0
+
+        def add_usage(usage):
+            for k, v in usage.items():
+                if isinstance(v, int):
+                    usage_sum[k] = usage_sum.get(k, 0) + v
+
+        while True:
+            received = False
+            last_usage = {}
+            # Opening the stream uses the normal retry policy (429, 5xx, network).
+            response = await self._request(
+                client,
+                "POST",
+                url,
+                signal=signal,
+                retry=True,
+                json=body,
+                headers=headers,
+                stream=True,
+            )
+            try:
+                try:
+                    async for chunk in _response_chunks(response):
+                        received = True
+                        if is_aborted(signal):
+                            raise asyncio.CancelledError("CodeGem request aborted")
+                        if chunk.get("usageMetadata"):
+                            last_usage = chunk["usageMetadata"]
+                        if chunk.get("promptFeedback"):
+                            feedback = chunk["promptFeedback"]
+                        candidates = chunk.get("candidates") or []
+                        if not candidates:
+                            continue
+                        candidate = candidates[0]
+                        new = copy.deepcopy((candidate.get("content") or {}).get("parts") or [])
+                        pending.extend(new)
+                        if new:
+                            yield ("parts", new)
+                        if candidate.get("finishReason"):
+                            final = candidate
+                        if candidate.get("continuationToken") and not candidate.get("finishReason"):
+                            committed.extend(pending)
+                            pending = []
+                            checkpoint = candidate["continuationToken"]
+                            usage_at_checkpoint = dict(last_usage)
+                finally:
+                    await response.aclose()
+                if final is None and (not received or pending or committed or checkpoint):
+                    raise _StreamDropped("Gemini stream ended without a finish reason")
+            except (httpx.TransportError, _StreamDropped) as exc:
+                if checkpoint and resumes < int(self.config.get("max_stream_resumes", 8)):
+                    resumes += 1
+                    add_usage(usage_at_checkpoint)
+                    pending = []
+                    usage_at_checkpoint = {}
+                    logger.warning("CodeGem stream dropped (%s); resuming from checkpoint", exc)
+                    yield ("reset", [*earlier, *committed])
+                    body = {**request, "continuationToken": checkpoint}
+                    checkpoint = None
+                    continue
+                if not received and not committed and quiet_drops + 1 < attempts:
+                    quiet_drops += 1
+                    delay = min(
+                        float(self.config.get("retry_max_delay", 60.0)),
+                        float(self.config.get("retry_initial_delay", 1.0)) * 2 ** (quiet_drops - 1),
+                    )
+                    logger.warning(
+                        "CodeGem stream dropped before the first chunk (%s); retrying in %.1fs",
+                        exc,
+                        delay,
+                    )
+                    await self._sleep(delay, signal)
+                    continue
+                if received or committed:
+                    raise ValueError(
+                        "Gemini stream dropped after output began and before a checkpoint; "
+                        "the partial turn was discarded"
+                    ) from exc
+                raise
+            add_usage(last_usage)
+            candidate = dict(final or {})
+            candidate["content"] = {"role": "model", "parts": [*committed, *pending]}
+            hop = {"usageMetadata": usage_sum, "candidates": [candidate] if final else []}
+            if feedback:
+                hop["promptFeedback"] = feedback
+            yield ("hop", hop)
+            return
 
     async def _ollama(self, client, model, context, options, profile, message):
         base = self.config.get(
@@ -775,19 +1281,19 @@ class CodeGemStream:
                 context,
                 native=native,
                 system_role=self.config.get("system_role", profile.system_role),
+                tool_images=self._tool_images(profile),
             ),
             "options": {
-                "temperature": self.config.get("temperature", profile.temperature),
-                "top_p": self.config.get("top_p", 0.95),
-                "top_k": self.config.get("top_k", 64),
+                **_gemma_sampling(self.config),
                 "num_predict": int(self.config.get("max_output_tokens", 8192)),
                 **({"num_ctx": model.context_window} if model.context_window else {}),
             },
         }
-        if "thinking" in self.config:
-            body["think"] = bool(self.config["thinking"])
-        elif profile.thinking and (capabilities is None or "thinking" in capabilities):
-            body["think"] = True
+        think = _gemma_thinking(self.config, profile)
+        if think is not None and (
+            "thinking" in self.config or capabilities is None or "thinking" in capabilities
+        ):
+            body["think"] = think
         if native and context.tools:
             body["tools"] = [
                 {
@@ -841,57 +1347,27 @@ class CodeGemStream:
         message.stop_reason = "length" if length else "toolUse" if message.tool_calls else "stop"
 
     async def _compatible(self, client, model, context, options, profile, message):
-        """Gemma over LM Studio or llama.cpp, retaining IDs and tool thinking."""
-        default = (
-            "http://localhost:1234/v1"
-            if model.provider == "lmstudio"
-            else "http://localhost:8080/v1"
-        )
-        env_name = "LMSTUDIO_HOST" if model.provider == "lmstudio" else "LLAMACPP_HOST"
-        base = str(self.config.get("base_url") or os.environ.get(env_name) or default).rstrip("/")
-        if not base.endswith("/v1"):
-            base += "/v1"
+        """Gemma over LM Studio, llama.cpp or vLLM, retaining IDs and tool thinking."""
+        base = compatible_base_url(model.provider, self.config)
         mode = self.config.get("tool_mode", "auto")
         if mode not in {"auto", "native", "json"}:
             raise ValueError("CodeGem tool_mode must be auto, native, or json")
         fallback_key = (model.provider, base, model.id)
         native = mode != "json" and not (mode == "auto" and fallback_key in self._json_tool_compat)
-        wire = ollama_messages(context, native=native, system_role=profile.system_role)
-        calls = [
-            c
-            for m in _reconcile_tools(context.messages)
-            if isinstance(m, AssistantMessage)
-            and m.stop_reason not in {"error", "aborted", "length"}
-            for c in m.tool_calls
-        ]
-        cursor = 0
-        result_ids = iter(
-            m.tool_call_id
-            for m in _reconcile_tools(context.messages)
-            if isinstance(m, ToolResultMessage)
+        # Arguments stay JSON strings on the Chat Completions wire (OpenAI
+        # spec); vLLM and llama.cpp convert them to objects for the template.
+        wire = ollama_messages(
+            context,
+            native=native,
+            system_role=self.config.get("system_role", profile.system_role),
+            route="openai",
+            tool_images=self._tool_images(profile),
         )
-        for entry in wire:
-            for raw in entry.get("tool_calls", []):
-                call = calls[cursor]
-                cursor += 1
-                raw.update({"id": call.id, "type": "function"})
-                raw["function"]["arguments"] = json.dumps(raw["function"]["arguments"])
-            if entry["role"] == "tool":
-                entry["tool_call_id"] = next(result_ids)
-                entry.pop("tool_name", None)
-            if "thinking" in entry:
-                entry["reasoning_content"] = entry.pop("thinking")
-            if entry.get("images"):
-                raise ValueError(
-                    "CodeGem OpenAI-compatible image transport is not enabled; use the Gemini or Ollama image route"
-                )
         body = {
             "model": model.id,
             "messages": wire,
             "stream": False,
-            "temperature": self.config.get("temperature", profile.temperature),
-            "top_p": self.config.get("top_p", 0.95),
-            "top_k": self.config.get("top_k", 64),
+            **_gemma_sampling(self.config),
             "max_tokens": int(self.config.get("max_output_tokens", 8192)),
         }
         if native and context.tools:
@@ -916,8 +1392,9 @@ class CodeGemStream:
                     "schema": _TOOL_RESPONSE_SCHEMA,
                 },
             }
-        if "thinking" in self.config:
-            body["chat_template_kwargs"] = {"enable_thinking": bool(self.config["thinking"])}
+        think = _gemma_thinking(self.config, profile)
+        if think is not None:
+            body["chat_template_kwargs"] = {"enable_thinking": think}
         try:
             response = await self._request(
                 client, "POST", f"{base}/chat/completions", json=body, signal=options.signal
@@ -929,7 +1406,7 @@ class CodeGemStream:
             if (
                 mode == "auto"
                 and native
-                and model.provider in {"lmstudio", "llamacpp"}
+                and model.provider in {"lmstudio", "llamacpp", "vllm"}
                 and "error rendering prompt with jinja template" in exc.response.text.lower()
             ):
                 self._json_tool_compat.add(fallback_key)
