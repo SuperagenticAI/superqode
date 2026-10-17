@@ -402,3 +402,108 @@ async def test_unknown_parts_are_skipped_and_signatures_stay_exact(tmp_path):
     message = events[-1].message
     assert events[-1].type == "done" and message.text == "answer"
     assert message.provider_content["parts"] == parts
+
+
+# 5. Sampling, thinkingBudget and retired IDs ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_argon_omits_sampling_and_warns_once(caplog):
+    import superqode.codegem.provider as provider
+
+    provider._warned.clear()
+    config = {"temperature": 0.3, "top_p": 0.9, "top_k": 10, "candidate_count": 2}
+    for _ in range(2):
+        seen = []
+        stream, _ = _stream([httpx.Response(200, json=OK)], config, seen)
+        await _run(stream, model="gemini-4-argon")
+        gen = seen[0]["generationConfig"]
+        assert not {"temperature", "topP", "topK", "candidateCount"} & gen.keys()
+    warnings = [r for r in caplog.records if "sampling parameters are ignored" in r.message]
+    assert len(warnings) == 1
+    assert "temperature, top_p, top_k, candidate_count" in warnings[0].message
+
+
+@pytest.mark.asyncio
+async def test_gemini3_keeps_temperature():
+    seen = []
+    stream, _ = _stream([httpx.Response(200, json=OK)], {"temperature": 0.4}, seen)
+    await _run(stream)
+    assert seen[0]["generationConfig"]["temperature"] == 0.4
+
+
+@pytest.mark.asyncio
+async def test_local_gemma_keeps_sampling():
+    bodies = []
+
+    def handler(request):
+        if request.url.path.endswith("/show"):
+            return httpx.Response(200, json={})
+        bodies.append(json.loads(request.content))
+        return httpx.Response(500, json={})
+
+    stream = CodeGemStream({"top_p": 0.8, "top_k": 20}, transport=httpx.MockTransport(handler))
+    async for _ in stream(
+        Model("gemma4:31b", "ollama"), Context("", [UserMessage("go")], []), StreamOptions()
+    ):
+        pass
+    text = json.dumps(bodies[0])
+    assert '"top_p": 0.8' in text and '"top_k": 20' in text
+
+
+@pytest.mark.asyncio
+async def test_budget_and_level_keeps_level_and_warns(caplog):
+    import superqode.codegem.provider as provider
+
+    provider._warned.clear()
+    seen = []
+    raw = {"thinkingLevel": "LOW", "thinkingBudget": 1024}
+    stream, _ = _stream([httpx.Response(200, json=OK)], {"thinking_config": raw}, seen)
+    await _run(stream)
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "LOW"}
+    assert any("keeping thinkingLevel" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_gemini4_never_sends_budget():
+    seen = []
+    stream, _ = _stream(
+        [httpx.Response(200, json=OK)], {"thinking_config": {"thinkingBudget": 512}}, seen
+    )
+    await _run(stream, model="gemini-4-argon")
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
+
+
+@pytest.mark.asyncio
+async def test_budget_alone_still_allowed_for_gemini3():
+    seen = []
+    stream, _ = _stream(
+        [httpx.Response(200, json=OK)], {"thinking_config": {"thinkingBudget": 512}}, seen
+    )
+    await _run(stream)
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 512}
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [("gemini-3.7-flash", "gemini-3.8-flash"), ("gemini-3.5-flash", "gemini-3.6-flash")],
+)
+@pytest.mark.asyncio
+async def test_retired_ids_are_mapped(old, new, caplog):
+    from superqode.providers.model_specs import normalize_model_for_provider
+    from superqode.providers.models import LATEST_GOOGLE_MODEL_IDS
+
+    urls = []
+
+    def handler(request):
+        urls.append(str(request.url))
+        return httpx.Response(200, json=OK)
+
+    stream = CodeGemStream({}, transport=httpx.MockTransport(handler))
+    await _run(stream, model=old)
+    assert f"/models/{new}:" in urls[0]
+    assert normalize_model_for_provider("google", old) == new
+    assert (
+        normalize_model_for_provider("google", "gemini-3.5-flash-lite") == "gemini-3.5-flash-lite"
+    )
+    assert old not in LATEST_GOOGLE_MODEL_IDS

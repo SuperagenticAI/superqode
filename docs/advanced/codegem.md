@@ -226,6 +226,12 @@ Gemini requests leave Google's per-model default thinking level in place. Set
 `model_policy.reasoning` to `low`, `medium` or `high` (or `minimal` where the
 model documents it) to choose a level; unsupported levels are rejected with the
 supported list. Gemini 4 Argon requests send its documented `medium` default.
+Argon requests omit `temperature`, `top_p`, `top_k` and `candidate_count`,
+which Google says are ignored for Gemini 4; configured values are dropped with
+a one-time warning. `thinkingBudget` is never sent to Gemini 4 or alongside
+`thinkingLevel`; when a raw `thinking_config` has both, the level is kept.
+The deprecated `gemini-3.7-flash` and `gemini-3.5-flash` IDs are mapped to
+`gemini-3.8-flash` and `gemini-3.6-flash` with a notice.
 Gemini requests retry HTTP 429, 5xx and transient network
 errors up to `max_attempts` (default 4) with exponential backoff from
 `retry_initial_delay` (default 1 second), honouring Google's retry delay up to

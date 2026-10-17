@@ -8,11 +8,9 @@ from enum import Enum
 
 from .models import (
     LATEST_GOOGLE_FLASH_3_6_MODEL,
-    LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
-    LATEST_GOOGLE_STANDARD_FLASH_MODEL,
 )
 
 # litellm is imported lazily to avoid import errors when CWD doesn't exist
@@ -661,12 +659,6 @@ class ProviderManager:
                         context_size=1_048_576,
                     ),
                     ModelInfo(
-                        LATEST_GOOGLE_FLASH_3_7_MODEL,
-                        "Gemini 3.7 Flash",
-                        "google",
-                        context_size=1_048_576,
-                    ),
-                    ModelInfo(
                         LATEST_GOOGLE_FLASH_3_6_MODEL,
                         "Gemini 3.6 Flash",
                         "google",
@@ -675,12 +667,6 @@ class ProviderManager:
                     ModelInfo(
                         LATEST_GOOGLE_FLASH_LITE_MODEL,
                         "Gemini 3.5 Flash-Lite",
-                        "google",
-                        context_size=1_048_576,
-                    ),
-                    ModelInfo(
-                        LATEST_GOOGLE_STANDARD_FLASH_MODEL,
-                        "Gemini 3.5 Flash",
                         "google",
                         context_size=1_048_576,
                     ),

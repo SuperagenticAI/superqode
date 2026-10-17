@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 import email.utils
 import json
 import logging
@@ -47,6 +48,49 @@ from superqode.pipy.provider_events import (
 )
 from superqode.pipy.signals import is_aborted
 from .profiles import resolve_profile
+
+# Google's latest-model guide for Gemini 4: "Remove temperature, top_p, top_k,
+# and candidate_count ... sampling parameters are ignored".
+_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "candidate_count")
+_warned: set[str] = set()
+
+
+def _warn_once(key: str, message: str, *args) -> None:
+    if key not in _warned:
+        _warned.add(key)
+        logger.warning(message, *args)
+
+
+def _thinking_config(raw: dict, model_id: str, profile) -> dict | None:
+    """Return a thinkingConfig Google accepts.
+
+    Google: thinkingBudget is deprecated for Gemini 4, and "sending
+    thinkingBudget and thinkingLevel together returns a 400 error".
+    """
+    config = dict(raw)
+    budget_keys = [k for k in ("thinkingBudget", "thinking_budget") if k in config]
+    has_level = any(k in config for k in ("thinkingLevel", "thinking_level"))
+    if budget_keys and (has_level or profile.generation == 4):
+        for k in budget_keys:
+            config.pop(k)
+        if has_level:
+            _warn_once(
+                f"budget+level:{model_id}",
+                "CodeGem dropped thinkingBudget for %s: Google rejects it together "
+                "with thinkingLevel; keeping thinkingLevel",
+                model_id,
+            )
+        else:
+            _warn_once(
+                f"budget:{model_id}",
+                "CodeGem dropped thinkingBudget for %s: it is deprecated for Gemini 4; "
+                "use thinkingLevel instead",
+                model_id,
+            )
+    if profile.generation == 4 and not has_level and profile.thinking_level:
+        config["thinkingLevel"] = profile.thinking_level.upper()
+    return config or None
+
 
 logger = logging.getLogger("superqode.codegem")
 
@@ -410,6 +454,11 @@ class CodeGemStream:
         message = AssistantMessage(model=model.id, provider=model.provider, api=model.api)
         yield AssistantStartEvent(message)
         try:
+            from superqode.providers.models import retired_google_model
+
+            replacement = retired_google_model(model.id) if model.provider == "google" else None
+            if replacement:
+                model = dataclasses.replace(model, id=replacement)
             profile = resolve_profile(model.id, model.provider)
             if is_aborted(options.signal):
                 raise asyncio.CancelledError("CodeGem request aborted")
@@ -475,16 +524,25 @@ class CodeGemStream:
         if not key:
             raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY to run CodeGem with Gemini")
         generation = {
-            "temperature": self.config.get("temperature", profile.temperature),
             # Non-streaming REST is capped at 32,768 per request; long decode and
             # MAX_TOKENS resume carry Gemini 4 output beyond it.
             "maxOutputTokens": int(self.config.get("max_output_tokens", _NON_STREAMING_CAP)),
         }
-        if "thinking_config" in self.config:
-            generation["thinkingConfig"] = dict(self.config["thinking_config"])
-        elif profile.generation == 4 and profile.thinking_level:
-            # Google: thinkingLevel is "required for Gemini 4"; send its documented default.
-            generation["thinkingConfig"] = {"thinkingLevel": profile.thinking_level.upper()}
+        if profile.generation == 4:
+            ignored = [k for k in _SAMPLING_KEYS if k in self.config]
+            if ignored:
+                _warn_once(
+                    f"sampling:{model.id}",
+                    "CodeGem ignores %s for %s: Google says sampling parameters are "
+                    "ignored for Gemini 4",
+                    ", ".join(ignored),
+                    model.id,
+                )
+        else:
+            generation["temperature"] = self.config.get("temperature", profile.temperature)
+        thinking = _thinking_config(self.config.get("thinking_config") or {}, model.id, profile)
+        if thinking:
+            generation["thinkingConfig"] = thinking
         # Otherwise no thinking level is sent: Google's per-model default applies.
         body = {
             "contents": gemini_contents(context.messages, model),

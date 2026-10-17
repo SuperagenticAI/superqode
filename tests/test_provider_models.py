@@ -19,10 +19,8 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
     assert list(models) == [
         "gemini-4-argon",
         "gemini-3.8-flash",
-        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
         "gemini-3.1-pro-preview",
     ]
 
@@ -252,10 +250,8 @@ def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
     expected = [
         "gemini-4-argon",
         "gemini-3.8-flash",
-        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
         "gemini-3.1-pro-preview",
     ]
     assert list(models) == expected

@@ -30,6 +30,10 @@ def normalize_provider_id(provider: str | None) -> str:
 
 def normalize_model_for_provider(provider: str | None, model: str | None) -> str:
     value = (model or "").strip()
+    if normalize_provider_id(provider) == "google":
+        from .models import retired_google_model
+
+        return retired_google_model(value) or value
     if normalize_provider_id(provider) != HUGGINGFACE_PROVIDER:
         return value
     return normalize_huggingface_model(value)

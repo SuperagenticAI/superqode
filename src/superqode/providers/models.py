@@ -22,10 +22,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 LATEST_GOOGLE_ARGON_MODEL = "gemini-4-argon"
 LATEST_GOOGLE_FLASH_MODEL = "gemini-3.8-flash"
-LATEST_GOOGLE_FLASH_3_7_MODEL = "gemini-3.7-flash"
 LATEST_GOOGLE_FLASH_3_6_MODEL = "gemini-3.6-flash"
 LATEST_GOOGLE_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
-LATEST_GOOGLE_STANDARD_FLASH_MODEL = "gemini-3.5-flash"
+# Deprecated by Google on 8 Oct 2026 (Gemini API changelog). Saved configs
+# naming them are mapped to the current Flash models with a notice.
+RETIRED_GOOGLE_MODELS = {
+    "gemini-3.7-flash": LATEST_GOOGLE_FLASH_MODEL,
+    "gemini-3.5-flash": LATEST_GOOGLE_FLASH_3_6_MODEL,
+}
 LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
 # Deliberately concrete IDs rather than rolling aliases. Google's ListModels
 # endpoint retains superseded and even shut-down entries, so this tuple is the
@@ -33,10 +37,8 @@ LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
 LATEST_GOOGLE_MODEL_IDS = (
     LATEST_GOOGLE_ARGON_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
-    LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
-    LATEST_GOOGLE_STANDARD_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
 )
 CURRENT_MODEL_LIMIT = 6
@@ -677,27 +679,6 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             recommended_for=["coding", "agentic workflows", "complex workflows"],
             released="2026-09-02",
         ),
-        "gemini-3.7-flash": ModelInfo(
-            id="gemini-3.7-flash",
-            name="Gemini 3.7 Flash",
-            provider="google",
-            input_price=1.50,
-            output_price=7.50,
-            context_window=1_048_576,
-            max_output=65_536,
-            capabilities=[
-                ModelCapability.TOOLS,
-                ModelCapability.VISION,
-                ModelCapability.STREAMING,
-                ModelCapability.JSON_MODE,
-                ModelCapability.REASONING,
-                ModelCapability.CODE,
-                ModelCapability.LONG_CONTEXT,
-            ],
-            description="Previous-generation Gemini Flash model for coding and agentic execution",
-            recommended_for=["coding", "agentic workflows", "general"],
-            released="2026-08-01",
-        ),
         "gemini-3.6-flash": ModelInfo(
             id="gemini-3.6-flash",
             name="Gemini 3.6 Flash",
@@ -739,27 +720,6 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             description="Latest stable low-cost Gemini model for high-volume subagent work",
             recommended_for=["subagents", "high volume", "quick tasks"],
             released="2026-07-21",
-        ),
-        "gemini-3.5-flash": ModelInfo(
-            id="gemini-3.5-flash",
-            name="Gemini 3.5 Flash",
-            provider="google",
-            input_price=1.50,
-            output_price=9.00,
-            context_window=1_048_576,
-            max_output=65_536,
-            capabilities=[
-                ModelCapability.TOOLS,
-                ModelCapability.VISION,
-                ModelCapability.STREAMING,
-                ModelCapability.JSON_MODE,
-                ModelCapability.REASONING,
-                ModelCapability.CODE,
-                ModelCapability.LONG_CONTEXT,
-            ],
-            description="Stable Gemini model for multi-step and long-horizon agentic work",
-            recommended_for=["coding", "multi-step workflows", "general"],
-            released="2026-05-19",
         ),
         "gemini-3.1-pro-preview": ModelInfo(
             id="gemini-3.1-pro-preview",
@@ -1918,3 +1878,21 @@ __all__ = [
     "is_using_live_data",
     "get_data_source",
 ]
+
+
+_retired_noticed: set[str] = set()
+
+
+def retired_google_model(model_id: str | None) -> str | None:
+    """Return the replacement for a deprecated Gemini ID, logging a notice once."""
+    replacement = RETIRED_GOOGLE_MODELS.get((model_id or "").strip())
+    if replacement and model_id not in _retired_noticed:
+        _retired_noticed.add(model_id)
+        import logging
+
+        logging.getLogger("superqode.providers").warning(
+            "%s is deprecated by Google; using %s instead. Update your config.",
+            model_id,
+            replacement,
+        )
+    return replacement

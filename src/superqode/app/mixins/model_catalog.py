@@ -24,7 +24,6 @@ from superqode.design_system import (
 from superqode.providers.models import (
     LATEST_GOOGLE_ARGON_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
-    LATEST_GOOGLE_FLASH_3_7_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
 )
@@ -152,13 +151,6 @@ class ModelCatalogMixin:
                 "name": "Gemini 3.8 Flash",
                 "context": 1000000,
                 "desc": "Latest stable Gemini 3.8 Flash - 1M context",
-                "recommended": True,
-            },
-            {
-                "id": LATEST_GOOGLE_FLASH_3_7_MODEL,
-                "name": "Gemini 3.7 Flash",
-                "context": 1000000,
-                "desc": "Gemini 3.7 Flash - 1M context",
                 "recommended": True,
             },
             {

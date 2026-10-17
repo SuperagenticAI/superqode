@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty candidate is retried once. Safety, recitation, blocklist and blocked
   prompts report a readable reason. Unknown response parts are skipped instead
   of ending the turn, and are replayed exactly with their thought signatures.
+- Stop sending `temperature`, `top_p`, `top_k` and `candidate_count` to
+  Gemini 4 Argon, which Google documents as ignoring sampling parameters. A
+  configured value is dropped with a one-time warning. Local Gemma keeps its
+  sampling settings.
+- Never send `thinkingBudget` to Gemini 4, or together with `thinkingLevel` to
+  any model. A raw `thinking_config` with both keeps the level and warns.
+
+### Changed
+
+- Retire the deprecated `gemini-3.7-flash` and `gemini-3.5-flash` from the
+  Google catalog and pickers. Saved configs naming them are mapped to
+  `gemini-3.8-flash` and `gemini-3.6-flash` with a notice.
 
 ## [2.21.1] - 2026-10-15
 
