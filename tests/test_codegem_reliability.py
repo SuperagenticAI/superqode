@@ -58,7 +58,7 @@ async def _run(stream, model="gemini-3.8-flash", tools=None):
 # 1. Retry with backoff ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("status", [429, 499, 500, 503, 504])
+@pytest.mark.parametrize("status", [429, 500, 503, 504])
 @pytest.mark.asyncio
 async def test_transient_status_is_retried(status):
     stream, queue = _stream([httpx.Response(status, json={}), httpx.Response(200, json=OK)])
@@ -75,9 +75,10 @@ async def test_transient_network_error_is_retried():
 
 @pytest.mark.asyncio
 async def test_non_retryable_status_fails_once():
-    stream, queue = _stream([httpx.Response(400, json={}), httpx.Response(200, json=OK)])
-    events = await _run(stream)
-    assert events[-1].type == "error" and len(queue) == 1
+    for status in (400, 499):
+        stream, queue = _stream([httpx.Response(status, json={}), httpx.Response(200, json=OK)])
+        events = await _run(stream)
+        assert events[-1].type == "error" and len(queue) == 1
 
 
 @pytest.mark.asyncio
@@ -246,7 +247,8 @@ async def test_argon_timeout_and_output_defaults(monkeypatch):
     await _run(stream, "gemini-4-argon")
     await _run(stream, "gemini-3.8-flash")
     assert timeouts[0] >= 1200 and timeouts[1] == 180
-    assert seen[0]["generationConfig"]["maxOutputTokens"] == 65536
+    assert seen[0]["generationConfig"]["maxOutputTokens"] == 32768
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
     assert seen[1]["generationConfig"]["maxOutputTokens"] == 32768
 
 
@@ -309,7 +311,7 @@ async def test_max_tokens_with_token_resumes_with_higher_limit():
     assert events[-1].type == "done" and events[-1].message.stop_reason == "stop"
     assert events[-1].message.text == "part 1 part 2"
     assert seen[1]["continuationToken"] == "tok-9"
-    assert seen[1]["generationConfig"]["maxOutputTokens"] == 131072
+    assert seen[1]["generationConfig"]["maxOutputTokens"] == 65536
 
 
 @pytest.mark.asyncio
@@ -320,16 +322,6 @@ async def test_max_tokens_at_ceiling_reports_length():
     )
     events = await _run(stream, "gemini-4-argon")
     assert events[-1].message.stop_reason == "length" and len(queue) == 1
-
-
-@pytest.mark.asyncio
-async def test_rejected_large_first_hop_falls_back_to_documented_cap():
-    seen = []
-    rejected = httpx.Response(400, json={"error": {"message": "max_output_tokens too large"}})
-    stream, _ = _stream([rejected, httpx.Response(200, json=OK)], seen=seen)
-    events = await _run(stream, "gemini-4-argon")
-    assert events[-1].type == "done"
-    assert [s["generationConfig"]["maxOutputTokens"] for s in seen] == [65536, 32768]
 
 
 # 4. Finish reasons and parts ---------------------------------------------------

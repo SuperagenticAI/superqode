@@ -50,8 +50,9 @@ from .profiles import resolve_profile
 
 logger = logging.getLogger("superqode.codegem")
 
-# Google documents 429 RESOURCE_EXHAUSTED, 499 CANCELLED and 5xx as transient.
-_RETRY_STATUS = {429, 499, 500, 502, 503, 504}
+# Google's troubleshooting and API errors pages recommend retrying 429 and 5xx.
+# 499 means the client closed the request ("No action needed"), so it is final.
+_RETRY_STATUS = {429, 500, 502, 503, 504}
 # Gemini 4 Argon: Google asks for at least 20 minutes per call, and a
 # per-request output cap of 32,768 tokens on non-streaming REST calls.
 _ARGON_TIMEOUT = 1200.0
@@ -475,14 +476,15 @@ class CodeGemStream:
             raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY to run CodeGem with Gemini")
         generation = {
             "temperature": self.config.get("temperature", profile.temperature),
-            "maxOutputTokens": int(
-                self.config.get(
-                    "max_output_tokens", 65536 if profile.generation == 4 else _NON_STREAMING_CAP
-                )
-            ),
+            # Non-streaming REST is capped at 32,768 per request; long decode and
+            # MAX_TOKENS resume carry Gemini 4 output beyond it.
+            "maxOutputTokens": int(self.config.get("max_output_tokens", _NON_STREAMING_CAP)),
         }
         if "thinking_config" in self.config:
             generation["thinkingConfig"] = dict(self.config["thinking_config"])
+        elif profile.generation == 4 and profile.thinking_level:
+            # Google: thinkingLevel is "required for Gemini 4"; send its documented default.
+            generation["thinkingConfig"] = {"thinkingLevel": profile.thinking_level.upper()}
         # Otherwise no thinking level is sent: Google's per-model default applies.
         body = {
             "contents": gemini_contents(context.messages, model),
@@ -618,37 +620,9 @@ class CodeGemStream:
                 request["continuationToken"] = token
             else:
                 request.pop("continuationToken", None)
-            try:
-                response = await self._request(
-                    client,
-                    "POST",
-                    url,
-                    signal=signal,
-                    retry=True,
-                    json=request,
-                    headers=headers,
-                )
-            except httpx.HTTPStatusError as exc:
-                # Google's long decode guide states that a non-streaming REST
-                # call above 32,768 output tokens without a continuationToken
-                # returns 400, while its REST example sends a larger first hop.
-                # Fall back to the documented cap once if the first form fails.
-                if (
-                    exc.response.status_code == 400
-                    and not token
-                    and generation["maxOutputTokens"] > _NON_STREAMING_CAP
-                    and re.search(r"max_?output_?tokens", exc.response.text, re.I)
-                    and "max_output_tokens" not in self.config
-                ):
-                    logger.warning(
-                        "Gemini rejected maxOutputTokens=%d; retrying with %d",
-                        generation["maxOutputTokens"],
-                        _NON_STREAMING_CAP,
-                    )
-                    generation["maxOutputTokens"] = _NON_STREAMING_CAP
-                    ceiling = max(ceiling, _NON_STREAMING_CAP)
-                    continue
-                raise
+            response = await self._request(
+                client, "POST", url, signal=signal, retry=True, json=request, headers=headers
+            )
             data = response.json()
             usage = data.get("usageMetadata", {})
             if first_prompt is None:

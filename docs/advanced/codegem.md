@@ -225,15 +225,16 @@ New model generations do not inherit guessed thinking controls or context limits
 Gemini requests leave Google's per-model default thinking level in place. Set
 `model_policy.reasoning` to `low`, `medium` or `high` (or `minimal` where the
 model documents it) to choose a level; unsupported levels are rejected with the
-supported list. Gemini requests retry HTTP 429, 499, 5xx and transient network
+supported list. Gemini 4 Argon requests send its documented `medium` default.
+Gemini requests retry HTTP 429, 5xx and transient network
 errors up to `max_attempts` (default 4) with exponential backoff from
 `retry_initial_delay` (default 1 second), honouring Google's retry delay up to
 `retry_max_delay` (default 60 seconds). Each retry is logged on the
 `superqode.codegem` logger. A malformed function call or an empty response is
 retried once.
 
-For Gemini 4 Argon, CodeGem defaults to a 20 minute `timeout` and a 65,536
-token `max_output_tokens`, and follows long decode continuation tokens. A reply
+For Gemini 4 Argon, CodeGem defaults to a 20 minute `timeout` and a 32,768
+token `max_output_tokens` (the non-streaming per-request cap), and follows long decode continuation tokens. A reply
 that reaches `max_output_tokens` with a continuation token resumes with a
 doubled limit up to `max_output_tokens_ceiling` (default 131,072 for Argon).
 Raise or lower the ceiling to control spend.
