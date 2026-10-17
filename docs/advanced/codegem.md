@@ -59,6 +59,9 @@ with a small task to control usage. CodeGem uses native Gemini GenerateContent
 requests and needs no additional Google SDK installation. See
 [Google's key guide](https://ai.google.dev/gemini-api/docs/api-key).
 
+To choose a model and copy a starting configuration, see
+[CodeGem recommended models](codegem-models.md).
+
 Gemini replies stream by default through `streamGenerateContent` with
 server-sent events, so text appears as it is generated. Set `stream: false` in
 `runtime.config` to use one `generateContent` request per turn. The finished
