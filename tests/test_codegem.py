@@ -51,7 +51,8 @@ def test_family_profiles(model, provider, family, native):
     assert profile.family == family
     assert profile.native_tools == native
     if model.startswith("gemini-4"):
-        assert profile.thinking_level is None
+        # Google's documented default is reported for Argon, never guessed otherwise.
+        assert profile.thinking_level == ("medium" if model == "gemini-4-argon" else None)
         assert profile.thinking is True
 
 

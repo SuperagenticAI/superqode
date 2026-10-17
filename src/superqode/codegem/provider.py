@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import email.utils
 import json
+import logging
 import os
+import random
+import re
+import time
 from uuid import uuid4
 
 import httpx
@@ -42,6 +47,63 @@ from superqode.pipy.provider_events import (
 )
 from superqode.pipy.signals import is_aborted
 from .profiles import resolve_profile
+
+logger = logging.getLogger("superqode.codegem")
+
+# Google documents 429 RESOURCE_EXHAUSTED, 499 CANCELLED and 5xx as transient.
+_RETRY_STATUS = {429, 499, 500, 502, 503, 504}
+# Gemini 4 Argon: Google asks for at least 20 minutes per call, and a
+# per-request output cap of 32,768 tokens on non-streaming REST calls.
+_ARGON_TIMEOUT = 1200.0
+_NON_STREAMING_CAP = 32768
+_BLOCK_REASONS = {
+    "SAFETY": "Gemini blocked the response for safety reasons",
+    "RECITATION": "Gemini stopped because the response closely recited existing content",
+    "BLOCKLIST": "Gemini stopped because the response contained a blocklisted term",
+    "PROHIBITED_CONTENT": "Gemini blocked the response as prohibited content",
+    "SPII": "Gemini stopped because the response may contain sensitive personal information",
+    "IMAGE_SAFETY": "Gemini blocked a generated image for safety reasons",
+    "LANGUAGE": "Gemini stopped because the response language is unsupported",
+}
+_KNOWN_PART_KEYS = {"text", "functionCall"}
+
+
+class GeminiRetryableResponse(Exception):
+    """A complete HTTP response that Google documents as worth one retry."""
+
+
+def _retry_delay_from(response) -> float | None:
+    """Read google.rpc.RetryInfo retryDelay or the Retry-After header, in seconds."""
+    try:
+        details = (response.json().get("error") or {}).get("details") or []
+    except Exception:
+        details = []
+    for detail in details:
+        if isinstance(detail, dict) and str(detail.get("@type", "")).endswith("RetryInfo"):
+            match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)s\s*", str(detail.get("retryDelay", "")))
+            if match:
+                return float(match[1])
+    header = response.headers.get("retry-after")
+    if header:
+        header = header.strip()
+        if re.fullmatch(r"\d+(?:\.\d+)?", header):
+            return float(header)
+        try:
+            when = email.utils.parsedate_to_datetime(header)
+            return max(0.0, when.timestamp() - time.time())
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _safety_detail(candidate_or_feedback) -> str:
+    ratings = [
+        r.get("category", "UNKNOWN").replace("HARM_CATEGORY_", "").lower()
+        for r in candidate_or_feedback.get("safetyRatings") or []
+        if r.get("blocked") or r.get("probability") in {"HIGH", "MEDIUM"}
+    ]
+    return f" (categories: {', '.join(ratings)})" if ratings else ""
+
 
 _TOOL_RESPONSE_SCHEMA = {
     "type": "object",
@@ -278,7 +340,14 @@ class CodeGemStream:
         self._capabilities = {}
         self._json_tool_compat = set()
 
-    async def _request(self, client, method, url, *, signal=None, **kwargs):
+    async def _sleep(self, seconds, signal):
+        deadline = time.monotonic() + seconds
+        while (remaining := deadline - time.monotonic()) > 0:
+            if is_aborted(signal):
+                raise asyncio.CancelledError("CodeGem request aborted")
+            await asyncio.sleep(min(0.05, remaining))
+
+    async def _send(self, client, method, url, *, signal=None, **kwargs):
         task = asyncio.create_task(client.request(method, url, **kwargs))
         try:
             while not task.done():
@@ -293,6 +362,49 @@ class CodeGemStream:
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
+    async def _request(self, client, method, url, *, signal=None, retry=False, **kwargs):
+        """Send once, or with bounded jittered exponential backoff when retry is set.
+
+        Retries cover HTTP 429, 499 and 5xx plus transient network errors. A
+        server-supplied RetryInfo retryDelay or Retry-After wins over backoff,
+        unless it exceeds retry_max_delay, in which case the error is final.
+        """
+        attempts = max(1, int(self.config.get("max_attempts", 4))) if retry else 1
+        initial = float(self.config.get("retry_initial_delay", 1.0))
+        ceiling = float(self.config.get("retry_max_delay", 60.0))
+        for attempt in range(1, attempts + 1):
+            try:
+                response = await self._send(client, method, url, signal=signal, **kwargs)
+                if attempt > 1:
+                    logger.info("CodeGem request succeeded on attempt %d/%d", attempt, attempts)
+                return response
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in _RETRY_STATUS or attempt == attempts:
+                    exc.codegem_attempts = attempt
+                    raise
+                delay = _retry_delay_from(exc.response)
+                if delay is not None and delay > ceiling:
+                    exc.codegem_attempts = attempt
+                    raise
+                reason = f"HTTP {status}"
+            except httpx.TransportError as exc:
+                if attempt == attempts:
+                    exc.codegem_attempts = attempt
+                    raise
+                delay, reason = None, type(exc).__name__
+            if delay is None:
+                delay = min(ceiling, initial * 2 ** (attempt - 1)) * (0.5 + random.random() / 2)
+            logger.warning(
+                "CodeGem provider %s; retrying in %.1fs (attempt %d/%d)",
+                reason,
+                delay,
+                attempt + 1,
+                attempts,
+            )
+            await self._sleep(delay, signal)
+        raise AssertionError("unreachable")
+
     async def __call__(self, model, context, options):
         message = AssistantMessage(model=model.id, provider=model.provider, api=model.api)
         yield AssistantStartEvent(message)
@@ -300,8 +412,12 @@ class CodeGemStream:
             profile = resolve_profile(model.id, model.provider)
             if is_aborted(options.signal):
                 raise asyncio.CancelledError("CodeGem request aborted")
+            default_timeout = (
+                _ARGON_TIMEOUT if profile.family == "gemini" and profile.generation == 4 else 180
+            )
             async with httpx.AsyncClient(
-                transport=self.transport, timeout=float(self.config.get("timeout", 180))
+                transport=self.transport,
+                timeout=float(self.config.get("timeout", default_timeout)),
             ) as client:
                 if profile.family == "gemini":
                     await self._gemini(client, model, context, options, profile, message)
@@ -341,6 +457,9 @@ class CodeGemStream:
                 if isinstance(exc, httpx.HTTPStatusError)
                 else str(exc) or type(exc).__name__
             )
+            attempts = getattr(exc, "codegem_attempts", None)
+            if attempts and attempts > 1:
+                message.error_message += f" (after {attempts} attempts)"
             yield AssistantErrorEvent(message.stop_reason, message)
 
     async def _gemini(self, client, model, context, options, profile, message):
@@ -356,12 +475,15 @@ class CodeGemStream:
             raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY to run CodeGem with Gemini")
         generation = {
             "temperature": self.config.get("temperature", profile.temperature),
-            "maxOutputTokens": int(self.config.get("max_output_tokens", 32768)),
+            "maxOutputTokens": int(
+                self.config.get(
+                    "max_output_tokens", 65536 if profile.generation == 4 else _NON_STREAMING_CAP
+                )
+            ),
         }
         if "thinking_config" in self.config:
             generation["thinkingConfig"] = dict(self.config["thinking_config"])
-        elif profile.thinking_level:
-            generation["thinkingConfig"] = {"thinkingLevel": profile.thinking_level.upper()}
+        # Otherwise no thinking level is sent: Google's per-model default applies.
         body = {
             "contents": gemini_contents(context.messages, model),
             "systemInstruction": {"parts": [{"text": _system(context)}]},
@@ -385,33 +507,24 @@ class CodeGemStream:
         base = self.config.get(
             "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta"
         ).rstrip("/")
-        response = await self._request(
-            client,
-            "POST",
-            f"{base}/models/{model.id}:generateContent",
-            signal=options.signal,
-            json=body,
-            headers={"x-goog-api-key": key},
-        )
-        data = response.json()
-        candidates = data.get("candidates") or []
-        if not candidates:
-            raise ValueError(f"Gemini returned no candidate: {data.get('promptFeedback', {})}")
-        candidate = candidates[0]
-        reason = candidate.get("finishReason")
-        if reason not in {"STOP", "MAX_TOKENS"}:
-            raise ValueError(f"Gemini stopped without a complete response: {reason}")
-        content = candidate.get("content") or {}
-        message.provider_content = copy.deepcopy(content)
-        for part in content.get("parts", []):
-            signature = part.get("thoughtSignature")
-            if "text" in part:
-                message.content.append(
-                    ThinkingContent(part["text"], thinking_signature=signature)
-                    if part.get("thought")
-                    else TextContent(part["text"], text_signature=signature)
+        url = f"{base}/models/{model.id}:generateContent"
+        headers = {"x-goog-api-key": key}
+        # One extra request for MALFORMED_FUNCTION_CALL or an empty candidate.
+        for invalid_attempt in (1, 2):
+            try:
+                parts, usage, reason = await self._gemini_hops(
+                    client, url, body, headers, options.signal, profile
                 )
-            elif "functionCall" in part:
+                break
+            except GeminiRetryableResponse as exc:
+                if invalid_attempt == 2:
+                    raise ValueError(f"{exc} (after one retry)") from None
+                logger.warning("CodeGem %s; retrying once", exc)
+        content = {"role": "model", "parts": parts}
+        message.provider_content = copy.deepcopy(content)
+        for part in parts:
+            signature = part.get("thoughtSignature")
+            if "functionCall" in part:
                 call = part["functionCall"]
                 arguments = call.get("args", {})
                 if not isinstance(arguments, dict):
@@ -424,15 +537,27 @@ class CodeGemStream:
                         thought_signature=signature,
                     )
                 )
+            elif "text" in part:
+                message.content.append(
+                    ThinkingContent(part["text"], thinking_signature=signature)
+                    if part.get("thought")
+                    else TextContent(part["text"], text_signature=signature)
+                )
+            elif not set(part) - {"thoughtSignature"}:
+                continue  # A bare signature part is replayed verbatim from provider_content.
             else:
-                raise ValueError("Gemini returned an unsupported coding response part")
-        usage = data.get("usageMetadata", {})
+                # Unknown part kinds stay in provider_content, exactly as signed,
+                # and are skipped for display instead of aborting the turn.
+                logger.info(
+                    "CodeGem skipped an unsupported Gemini part: %s",
+                    ", ".join(sorted(set(part) - {"thoughtSignature", "thought"})),
+                )
         message.usage = Usage(
-            input=usage.get("promptTokenCount", 0),
-            output=usage.get("candidatesTokenCount", 0),
-            cache_read=usage.get("cachedContentTokenCount", 0),
-            reasoning=usage.get("thoughtsTokenCount"),
-            total_tokens=usage.get("totalTokenCount", 0),
+            input=usage["input"],
+            output=usage["output"],
+            cache_read=usage["cache_read"],
+            reasoning=usage["reasoning"],
+            total_tokens=usage["total"],
         )
         from superqode.providers.models import get_model_info
 
@@ -463,6 +588,122 @@ class CodeGemStream:
         message.stop_reason = (
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
+
+    async def _gemini_hops(self, client, url, body, headers, signal, profile):
+        """Run generateContent, following Gemini long-decode continuation tokens.
+
+        Per Google's long decode guide, each hop resends the same request plus
+        only the latest continuationToken while finishReason is CONTINUATION,
+        and the parts of all hops form one model turn. On MAX_TOKENS with a
+        token, the request resumes with a higher maxOutputTokens, up to
+        max_output_tokens_ceiling. Usage fields are summed across hops for
+        cost; the context size uses the first hop's prompt.
+        """
+        parts = []
+        totals = {"input": 0, "output": 0, "cache_read": 0, "reasoning": None, "total": 0}
+        first_prompt = None
+        hops = 0
+        token = None
+        request = copy.deepcopy(body)
+        generation = request["generationConfig"]
+        ceiling = int(
+            self.config.get(
+                "max_output_tokens_ceiling",
+                131072 if profile.generation == 4 else generation["maxOutputTokens"],
+            )
+        )
+        max_hops = int(self.config.get("max_continuation_hops", 64))
+        for _hop in range(max_hops):
+            if token:
+                request["continuationToken"] = token
+            else:
+                request.pop("continuationToken", None)
+            try:
+                response = await self._request(
+                    client,
+                    "POST",
+                    url,
+                    signal=signal,
+                    retry=True,
+                    json=request,
+                    headers=headers,
+                )
+            except httpx.HTTPStatusError as exc:
+                # Google's long decode guide states that a non-streaming REST
+                # call above 32,768 output tokens without a continuationToken
+                # returns 400, while its REST example sends a larger first hop.
+                # Fall back to the documented cap once if the first form fails.
+                if (
+                    exc.response.status_code == 400
+                    and not token
+                    and generation["maxOutputTokens"] > _NON_STREAMING_CAP
+                    and re.search(r"max_?output_?tokens", exc.response.text, re.I)
+                    and "max_output_tokens" not in self.config
+                ):
+                    logger.warning(
+                        "Gemini rejected maxOutputTokens=%d; retrying with %d",
+                        generation["maxOutputTokens"],
+                        _NON_STREAMING_CAP,
+                    )
+                    generation["maxOutputTokens"] = _NON_STREAMING_CAP
+                    ceiling = max(ceiling, _NON_STREAMING_CAP)
+                    continue
+                raise
+            data = response.json()
+            usage = data.get("usageMetadata", {})
+            if first_prompt is None:
+                first_prompt = usage.get("promptTokenCount", 0)
+            totals["input"] += usage.get("promptTokenCount", 0)
+            totals["output"] += usage.get("candidatesTokenCount", 0)
+            totals["cache_read"] += usage.get("cachedContentTokenCount", 0)
+            if usage.get("thoughtsTokenCount") is not None:
+                totals["reasoning"] = (totals["reasoning"] or 0) + usage["thoughtsTokenCount"]
+            candidates = data.get("candidates") or []
+            if not candidates:
+                feedback = data.get("promptFeedback") or {}
+                block = feedback.get("blockReason")
+                if block:
+                    raise ValueError(
+                        f"Gemini blocked the prompt ({block}){_safety_detail(feedback)}. "
+                        "Rephrase the request or remove the flagged content."
+                    )
+                if parts:
+                    raise ValueError("Gemini returned no candidate during long decode")
+                raise GeminiRetryableResponse("Gemini returned no candidate")
+            candidate = candidates[0]
+            reason = candidate.get("finishReason")
+            hop_parts = (candidate.get("content") or {}).get("parts") or []
+            parts.extend(copy.deepcopy(hop_parts))
+            token = candidate.get("continuationToken")
+            if reason == "CONTINUATION" and token:
+                hops += 1
+                continue
+            if reason == "MAX_TOKENS" and token and generation["maxOutputTokens"] < ceiling:
+                raised = min(ceiling, generation["maxOutputTokens"] * 2)
+                logger.info(
+                    "Gemini reached maxOutputTokens=%d; resuming with %d",
+                    generation["maxOutputTokens"],
+                    raised,
+                )
+                generation["maxOutputTokens"] = raised
+                hops += 1
+                continue
+            if reason == "MALFORMED_FUNCTION_CALL":
+                raise GeminiRetryableResponse("Gemini returned a malformed function call")
+            if reason in _BLOCK_REASONS:
+                raise ValueError(f"{_BLOCK_REASONS[reason]} ({reason}){_safety_detail(candidate)}.")
+            if reason not in {"STOP", "MAX_TOKENS"}:
+                raise ValueError(f"Gemini stopped without a complete response: {reason}")
+            if reason == "STOP" and not any(p.get("functionCall") or p.get("text") for p in parts):
+                raise GeminiRetryableResponse("Gemini returned an empty candidate")
+            hops += 1
+            if hops == 1:
+                totals["total"] = usage.get("totalTokenCount", 0)
+            else:
+                # Context size: the first hop's prompt plus all generated tokens.
+                totals["total"] = first_prompt + totals["output"] + (totals["reasoning"] or 0)
+            return parts, totals, reason
+        raise ValueError(f"Gemini long decode exceeded {max_hops} continuation hops")
 
     async def _ollama(self, client, model, context, options, profile, message):
         base = self.config.get(

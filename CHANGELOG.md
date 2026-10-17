@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry CodeGem Gemini requests on HTTP 429, 499 and 5xx and on transient
+  network errors, with bounded exponential backoff and jitter. Google's
+  `RetryInfo` delay and `Retry-After` are honoured. Attempts are configurable
+  with `max_attempts`, `retry_initial_delay` and `retry_max_delay`, logged per
+  attempt, and included in the final error message.
+- Stop forcing a high thinking level on Gemini 3 models. CodeGem now leaves
+  Google's per-model default in place, accepts `low`, `medium` and `high` for
+  Gemini 4 Argon through the normal reasoning setting, and rejects levels a
+  model does not document, such as `minimal` on Argon, with the supported list.
+  An explicit `thinking_config` still wins.
+- Prepare CodeGem for Gemini 4 Argon: a 20 minute default timeout, a 65,536
+  token default output limit, and long decode. `CONTINUATION` hops are joined
+  into one signed model turn, and a `MAX_TOKENS` reply with a continuation
+  token resumes with a higher limit up to `max_output_tokens_ceiling`.
+- Handle Gemini finish reasons explicitly. A malformed function call or an
+  empty candidate is retried once. Safety, recitation, blocklist and blocked
+  prompts report a readable reason. Unknown response parts are skipped instead
+  of ending the turn, and are replayed exactly with their thought signatures.
+
 ## [2.21.1] - 2026-10-15
 
 Publishes the file protection, task verification, route review, and terminal

@@ -70,20 +70,13 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
             if request.provider in {"ollama", "lmstudio", "llamacpp"}:
                 runtime_config["thinking"] = model_policy.reasoning != "off"
             else:
-                from superqode.codegem.profiles import resolve_profile
+                from superqode.codegem.profiles import gemini_thinking_level, resolve_profile
 
                 profile = resolve_profile(request.model, request.provider)
-                if profile.generation != 3 or model_policy.reasoning not in {
-                    "minimal",
-                    "low",
-                    "medium",
-                    "high",
-                }:
-                    raise ValueError(
-                        "Use CodeGem runtime.config.thinking_config for this Gemini model's native thinking controls"
-                    )
                 runtime_config["thinking_config"] = {
-                    "thinkingLevel": model_policy.reasoning.upper()
+                    "thinkingLevel": gemini_thinking_level(
+                        request.model, profile, model_policy.reasoning
+                    )
                 }
         ref = replace(
             ref,
