@@ -378,6 +378,34 @@ def ollama_messages(context, *, native: bool, system_role: bool):
     return messages
 
 
+def gemini_cost(model_id: str, usage: Usage, prompt_tokens: int = 0, on: str | None = None):
+    """Estimate cost from Google's published prices (not a billing receipt).
+
+    Thinking tokens bill at the output rate. Cached prompt tokens bill at the
+    published context-cache rate; a model without one falls back to the input
+    rate. Prompts above the long-context threshold use that tier, and dated
+    price changes apply from their effective day.
+    """
+    from superqode.providers.models import get_model_info, price_schedule
+
+    info = get_model_info("google", model_id)
+    if info is None:
+        return UsageCost()
+    input_price, output_price, cached_price = price_schedule(info, prompt_tokens, on)
+    if cached_price is None:
+        cached_price = input_price
+    cached = min(usage.cache_read, usage.input)
+    input_cost = max(0, usage.input - cached) * input_price / 1_000_000
+    output_cost = (usage.output + (usage.reasoning or 0)) * output_price / 1_000_000
+    cache_cost = cached * cached_price / 1_000_000
+    return UsageCost(
+        input=input_cost,
+        output=output_cost,
+        cache_read=cache_cost,
+        total=input_cost + output_cost + cache_cost,
+    )
+
+
 class CodeGemStream:
     def __init__(self, config=None, *, transport=None):
         self.config = dict(config or {})
@@ -619,32 +647,7 @@ class CodeGemStream:
             reasoning=usage["reasoning"],
             total_tokens=usage["total"],
         )
-        from superqode.providers.models import get_model_info
-
-        info = get_model_info("google", model.id)
-        if info is not None:
-            # Catalog prices are estimates, not a provider billing receipt.
-            # Google bills thinking tokens at the output rate. Argon's
-            # announced introductory cached-input rate is 95% below input.
-            cached = min(message.usage.cache_read, message.usage.input)
-            input_cost = max(0, message.usage.input - cached) * info.input_price / 1_000_000
-            output_cost = (
-                (message.usage.output + (message.usage.reasoning or 0))
-                * info.output_price
-                / 1_000_000
-            )
-            cache_cost = (
-                cached
-                * info.input_price
-                * (0.05 if model.id == "gemini-4-argon" else 1.0)
-                / 1_000_000
-            )
-            message.usage.cost = UsageCost(
-                input=input_cost,
-                output=output_cost,
-                cache_read=cache_cost,
-                total=input_cost + output_cost + cache_cost,
-            )
+        message.usage.cost = gemini_cost(model.id, message.usage, usage.get("first_prompt") or 0)
         message.stop_reason = (
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
@@ -734,6 +737,7 @@ class CodeGemStream:
             else:
                 # Context size: the first hop's prompt plus all generated tokens.
                 totals["total"] = first_prompt + totals["output"] + (totals["reasoning"] or 0)
+            totals["first_prompt"] = first_prompt
             return parts, totals, reason
         raise ValueError(f"Gemini long decode exceeded {max_hops} continuation hops")
 

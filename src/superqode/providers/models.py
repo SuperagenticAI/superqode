@@ -31,6 +31,9 @@ RETIRED_GOOGLE_MODELS = {
     "gemini-3.5-flash": LATEST_GOOGLE_FLASH_3_6_MODEL,
 }
 LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
+LATEST_GOOGLE_PRO_CUSTOMTOOLS_MODEL = "gemini-3.1-pro-preview-customtools"
+LATEST_GOOGLE_FLASH_LITE_3_1_MODEL = "gemini-3.1-flash-lite"
+GOOGLE_GEMMA_MODELS = ("gemma-4-31b-it", "gemma-4-26b-a4b-it")
 # Deliberately concrete IDs rather than rolling aliases. Google's ListModels
 # endpoint retains superseded and even shut-down entries, so this tuple is the
 # lifecycle-reviewed BYOK chat/coding catalog and its display order.
@@ -40,6 +43,9 @@ LATEST_GOOGLE_MODEL_IDS = (
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_LITE_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
+    LATEST_GOOGLE_PRO_CUSTOMTOOLS_MODEL,
+    LATEST_GOOGLE_FLASH_LITE_3_1_MODEL,
+    *GOOGLE_GEMMA_MODELS,
 )
 CURRENT_MODEL_LIMIT = 6
 LOCAL_MODEL_PROVIDERS = {
@@ -111,6 +117,16 @@ class ModelInfo:
     recommended_for: List[str] = field(default_factory=list)
     released: str = ""  # Release date
     pricing_known: bool = True
+
+    # Context-cache read price per 1M tokens; None means not published here.
+    cached_input_price: Optional[float] = None
+    # Long-context tier: prompts above this many tokens use these prices.
+    long_context_threshold: Optional[int] = None
+    long_context_input_price: Optional[float] = None
+    long_context_output_price: Optional[float] = None
+    long_context_cached_input_price: Optional[float] = None
+    # Scheduled changes: (ISO date effective from, input, output, cached input).
+    price_changes: Tuple[Tuple[str, float, float, Optional[float]], ...] = ()
 
     @property
     def supports_tools(self) -> bool:
@@ -643,6 +659,8 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             provider="google",
             input_price=2.0,
             output_price=10.0,
+            cached_input_price=0.10,
+            price_changes=(("2026-12-01", 4.0, 20.0, 0.20),),
             context_window=1_048_576,
             max_output=32_768,
             capabilities=[
@@ -664,6 +682,8 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             provider="google",
             input_price=0.75,
             output_price=3.75,
+            cached_input_price=0.075,
+            price_changes=(("2027-01-01", 1.50, 7.50, 0.15),),
             context_window=1_048_576,
             max_output=65_536,
             capabilities=[
@@ -683,8 +703,10 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             id="gemini-3.6-flash",
             name="Gemini 3.6 Flash",
             provider="google",
-            input_price=1.50,
-            output_price=7.50,
+            input_price=0.75,
+            output_price=3.75,
+            cached_input_price=0.075,
+            price_changes=(("2027-01-01", 1.50, 7.50, 0.15),),
             context_window=1_048_576,
             max_output=65_536,
             capabilities=[
@@ -706,6 +728,7 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             provider="google",
             input_price=0.30,
             output_price=2.50,
+            cached_input_price=0.03,
             context_window=1_048_576,
             max_output=65_536,
             capabilities=[
@@ -727,6 +750,11 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             provider="google",
             input_price=2.0,
             output_price=12.0,
+            cached_input_price=0.20,
+            long_context_threshold=200_000,
+            long_context_input_price=4.0,
+            long_context_output_price=18.0,
+            long_context_cached_input_price=0.40,
             context_window=1_048_576,
             max_output=65_536,
             capabilities=[
@@ -741,6 +769,91 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             description="Latest Gemini Pro preview for complex coding and agentic workflows",
             recommended_for=["complex reasoning", "large codebases", "research"],
             released="2026-02-19",
+        ),
+        "gemini-3.1-pro-preview-customtools": ModelInfo(
+            id=LATEST_GOOGLE_PRO_CUSTOMTOOLS_MODEL,
+            name="Gemini 3.1 Pro Preview (custom tools)",
+            provider="google",
+            input_price=2.0,
+            output_price=12.0,
+            cached_input_price=0.20,
+            long_context_threshold=200_000,
+            long_context_input_price=4.0,
+            long_context_output_price=18.0,
+            long_context_cached_input_price=0.40,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Gemini 3.1 Pro preview endpoint that prioritizes custom tools",
+            recommended_for=["agentic workflows", "custom tools", "coding"],
+        ),
+        "gemini-3.1-flash-lite": ModelInfo(
+            id=LATEST_GOOGLE_FLASH_LITE_3_1_MODEL,
+            name="Gemini 3.1 Flash-Lite",
+            provider="google",
+            # Text, image and video input; audio input is priced higher.
+            input_price=0.25,
+            output_price=1.50,
+            cached_input_price=0.025,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Stable low-cost Gemini 3.1 model",
+            recommended_for=["subagents", "high volume", "quick tasks"],
+        ),
+        "gemma-4-31b-it": ModelInfo(
+            id="gemma-4-31b-it",
+            name="Gemma 4 31B IT (Gemini API)",
+            provider="google",
+            # Gemini API: free tier only; the paid tier lists "Not available".
+            input_price=0.0,
+            output_price=0.0,
+            # max_position_embeddings in the Hugging Face config.json; the
+            # Gemini API pages do not publish an output limit for Gemma.
+            context_window=262_144,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+            ],
+            description="Open Gemma 4 model hosted on the Gemini API (free tier)",
+            recommended_for=["coding", "experimentation"],
+        ),
+        "gemma-4-26b-a4b-it": ModelInfo(
+            id="gemma-4-26b-a4b-it",
+            name="Gemma 4 26B A4B IT (Gemini API)",
+            provider="google",
+            # Gemini API: free tier only; the paid tier lists "Not available".
+            input_price=0.0,
+            output_price=0.0,
+            # max_position_embeddings in the Hugging Face config.json; the
+            # Gemini API pages do not publish an output limit for Gemma.
+            context_window=262_144,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+            ],
+            description="Open Gemma 4 model hosted on the Gemini API (free tier)",
+            recommended_for=["coding", "experimentation"],
         ),
     },
     # =========================================================================
@@ -1592,6 +1705,37 @@ def get_models_for_provider(
         return _current_hosted_models(filtered)
 
     return filtered
+
+
+def price_schedule(
+    info: ModelInfo, prompt_tokens: int = 0, on: Optional[str] = None
+) -> Tuple[float, float, Optional[float]]:
+    """Return (input, output, cached input) USD per 1M tokens for one request.
+
+    ``on`` is an ISO date (default today, UTC); the latest scheduled change on
+    or before it wins. Prompts above ``long_context_threshold`` use the
+    long-context tier. Cached price is None when Google publishes none here.
+    """
+    import datetime as _dt
+
+    day = on or _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    prices = (info.input_price, info.output_price, info.cached_input_price)
+    for effective, inp, out, cached in sorted(info.price_changes):
+        if day >= effective:
+            prices = (inp, out, cached)
+    if info.long_context_threshold is not None and prompt_tokens > info.long_context_threshold:
+        prices = (
+            info.long_context_input_price
+            if info.long_context_input_price is not None
+            else prices[0],
+            info.long_context_output_price
+            if info.long_context_output_price is not None
+            else prices[1],
+            info.long_context_cached_input_price
+            if info.long_context_cached_input_price is not None
+            else prices[2],
+        )
+    return prices
 
 
 def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:

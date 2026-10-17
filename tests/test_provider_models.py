@@ -22,6 +22,10 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview-customtools",
+        "gemini-3.1-flash-lite",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it",
     ]
 
 
@@ -253,13 +257,16 @@ def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview-customtools",
+        "gemini-3.1-flash-lite",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it",
     ]
     assert list(models) == expected
     assert list(full_catalog) == expected
     assert "gemini-2.0-flash" not in full_catalog
     assert "gemini-2.5-pro" not in full_catalog
     assert "gemini-flash-latest" not in full_catalog
-    assert "gemini-3.1-pro-preview-customtools" not in full_catalog
 
 
 def test_live_provider_models_replace_stale_builtin_models():
