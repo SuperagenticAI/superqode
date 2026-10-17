@@ -366,7 +366,7 @@ class CodeGemStream:
     async def _request(self, client, method, url, *, signal=None, retry=False, **kwargs):
         """Send once, or with bounded jittered exponential backoff when retry is set.
 
-        Retries cover HTTP 429, 499 and 5xx plus transient network errors. A
+        Retries cover HTTP 429 and 5xx plus transient network errors. A
         server-supplied RetryInfo retryDelay or Retry-After wins over backoff,
         unless it exceeds retry_max_delay, in which case the error is final.
         """
