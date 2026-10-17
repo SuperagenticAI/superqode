@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-10-17
+
+This release makes CodeGem more reliable with Gemini and adds support for Gemini 4 Argon.
+
 ### Fixed
 
 - Retry CodeGem Gemini requests on HTTP 429 and 5xx and on transient
@@ -34,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sampling settings.
 - Never send `thinkingBudget` to Gemini 4, or together with `thinkingLevel` to
   any model. A raw `thinking_config` with both keeps the level and warns.
+- Make the Windows MCP panel test poll for the detail text instead of
+  asserting after a single pause.
+- Make the Windows theme install test poll the worker instead of cancelling it
+  on timeout, so it runs on Windows again rather than being skipped.
 
 ### Changed
 
