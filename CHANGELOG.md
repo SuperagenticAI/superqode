@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-10-18
+
+This release adds Gemini streaming, Gemma route fixes, vLLM support, Gemma on the Gemini API, and pricing and catalog updates.
+
 ### Added
 
 - Stream CodeGem Gemini replies with `streamGenerateContent` (server-sent
@@ -25,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Default change: Gemma 4 thinking is now off by default on local routes
+  (Ollama, vLLM and llama.cpp). Turn it on with the reasoning setting.
+- Default change: CodeGem Gemini replies now stream by default. Set `stream`
+  to false to restore single-response requests.
 - Local Gemma tool calls carry IDs and tool results are paired by
   `tool_call_id` and ordered to match the calls. Arguments are objects on
   Ollama and JSON strings on Chat Completions, as the OpenAI spec requires.
@@ -43,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   apply the Gemini 3.1 Pro long-context tier, and follow scheduled price
   changes for Argon, Gemini 3.8 Flash and Gemini 3.6 Flash.
 - Correct the Gemini 3.6 Flash price to $0.75 input and $3.75 output per 1M tokens.
+
+### Security
+
+- Require `claude-agent-sdk>=0.2.121` to pick up the fix for
+  GHSA-h4mw-j7qp-8mwm.
 
 ## [2.22.0] - 2026-10-17
 
