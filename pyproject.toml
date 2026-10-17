@@ -111,7 +111,7 @@ copilot-sdk = [
     "github-copilot-sdk>=1.0.8,<2.0.0",
 ]
 claude-agent-sdk = [
-    "claude-agent-sdk>=0.2.9,<0.3.0",
+    "claude-agent-sdk>=0.2.121,<0.3.0",
 ]
 antigravity-sdk = [
     "google-antigravity>=0.1.8,<0.2.0",
@@ -120,7 +120,7 @@ antigravity-sdk = [
 vendor-sdks = [
     "openai-codex>=0.144.4,<1.0.0",
     "github-copilot-sdk>=1.0.8,<2.0.0",
-    "claude-agent-sdk>=0.2.9,<0.3.0",
+    "claude-agent-sdk>=0.2.121,<0.3.0",
     "google-antigravity>=0.1.8,<0.2.0",
     "protobuf>=7.35.0",
 ]
