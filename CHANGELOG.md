@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-10-18
+
+This patch release fixes `harness init --template codegem` and adds a CodeGem recommended models guide.
+
+### Added
+
+- A CodeGem recommended models guide (`docs/advanced/codegem-models.md`) that
+  helps you choose a Gemini or Gemma model and gives a starting configuration
+  for each.
+
 ### Fixed
 
 - `superqode harness init --template` now accepts every registered template,
