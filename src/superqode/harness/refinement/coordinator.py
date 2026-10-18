@@ -229,7 +229,12 @@ class RefinementCoordinator:
                 changes, patch = (
                     ([], "")
                     if editor
-                    else await asyncio.to_thread(collect_changes, self.root / "source", workspace)
+                    else await asyncio.to_thread(
+                        collect_changes,
+                        self.root / "source",
+                        workspace,
+                        Path(self.manifest["source"]),
+                    )
                 )
                 protected = [
                     item["path"] for item in changes if item["path"] in self.request.protected_paths

@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -345,3 +346,161 @@ async def test_reference_evidence_pools_and_sequential_carry_forward(job_request
         assert executor.evidence["domain2-a1"] == ["base1", "base2", "invariant1", "domain1", "c1"]
         assert executor.current["domain2-a1"]["instructions.md"]
         assert result["chosen_label"] in {"c1", "c2"}
+
+
+def _git_source(job_request):
+    import subprocess
+
+    source = job_request.source
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    (source / ".gitignore").write_text("out/\n.coverage\n")
+    subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+    return source
+
+
+async def test_ignored_files_are_never_changes_or_overwritten(job_request):
+    source = _git_source(job_request)
+    (source / "out").mkdir()
+    (source / "out/keep.txt").write_text("user data\n")
+
+    class WritesIgnored(ScriptedExecutor):
+        async def run(self, *args, **kwargs):
+            response = await super().run(*args, **kwargs)
+            if not kwargs.get("editor"):
+                workspace = kwargs["workspace"]
+                (workspace / "out").mkdir(exist_ok=True)
+                (workspace / "out/keep.txt").write_text("solver output\n")
+                (workspace / ".coverage").write_text("coverage\n")
+            return response
+
+    result = await RefinementCoordinator(job_request, executor=WritesIgnored()).run()
+    assert result["status"] == "succeeded"
+    receipt = apply_refinement(job_request.output)
+    assert receipt["files"] == ["answer.py"]
+    assert (source / "out/keep.txt").read_text() == "user data\n"
+    assert not (source / ".coverage").exists()
+
+
+async def test_apply_refuses_new_file_that_exists_in_source(job_request):
+    source = job_request.source
+
+    class WritesEnv(ScriptedExecutor):
+        async def run(self, *args, **kwargs):
+            response = await super().run(*args, **kwargs)
+            if not kwargs.get("editor"):
+                (kwargs["workspace"] / "config.cfg").write_text("solver\n")
+            return response
+
+    await RefinementCoordinator(job_request, executor=WritesEnv()).run()
+    # An excluded credential file is invisible to the manifest but must survive.
+    (source / ".env").write_text("FAKE=1\n")
+    from superqode.harness.refinement import workspace as workspace_module
+
+    result = read_json(job_request.output / "result.json")
+    changes = [
+        c["path"]
+        for c in workspace_module.collect_changes(
+            job_request.output / "source",
+            job_request.output / "stages" / result["chosen_label"] / "workspace",
+        )[0]
+    ]
+    assert "config.cfg" in changes
+    # Simulate a pre-existing destination the manifest could not see.
+    monkey_target = source / "config.cfg"
+    original = workspace_module.file_manifest
+
+    def hide(root):
+        manifest = original(root)
+        if Path(root) == source:
+            manifest.pop("config.cfg", None)
+        return manifest
+
+    monkey_target.write_text("user\n")
+    workspace_module.file_manifest = hide
+    try:
+        with pytest.raises(ValueError, match="already exists"):
+            apply_refinement(job_request.output)
+    finally:
+        workspace_module.file_manifest = original
+    assert monkey_target.read_text() == "user\n"
+    assert "return -1" in (source / "answer.py").read_text()
+
+
+async def test_apply_refuses_symlinked_destination(job_request, tmp_path):
+    source = job_request.source
+
+    class WritesNested(ScriptedExecutor):
+        async def run(self, *args, **kwargs):
+            response = await super().run(*args, **kwargs)
+            if not kwargs.get("editor"):
+                (kwargs["workspace"] / "pkg").mkdir(exist_ok=True)
+                (kwargs["workspace"] / "pkg/new.py").write_text("x = 1\n")
+            return response
+
+    await RefinementCoordinator(job_request, executor=WritesNested()).run()
+    inside = source / "real"
+    inside.mkdir()
+    (source / "pkg").symlink_to(inside)
+    from superqode.harness.refinement import workspace as workspace_module
+
+    original = workspace_module.source_files
+
+    def skip_links(root):
+        for path, name in original_walk(root):
+            yield path, name
+
+    def original_walk(root):
+        for path in sorted(Path(root).rglob("*")):
+            rel = path.relative_to(root)
+            if path.is_file() and not path.is_symlink() and "pkg" not in rel.parts:
+                yield path, rel.as_posix()
+
+    workspace_module.source_files = lambda root: (
+        skip_links(root) if Path(root) == source else original(root)
+    )
+    try:
+        with pytest.raises(ValueError, match="symlink"):
+            apply_refinement(job_request.output)
+    finally:
+        workspace_module.source_files = original
+    assert not (inside / "new.py").exists()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "id_rsa",
+        "id_ed25519.pub",
+        "id_ecdsa",
+        "cert.p12",
+        "cert.pfx",
+        ".netrc",
+        ".npmrc",
+        ".pypirc",
+        ".git-credentials",
+        "terraform.tfstate",
+        "terraform.tfstate.backup",
+        "credentials.json",
+        "service-account-prod.json",
+        "prod.env",
+        ".envrc",
+        ".docker/config.json",
+        ".kube/config",
+        ".gnupg/pubring.kbx",
+        ".aws/credentials",
+    ],
+)
+def test_credential_files_are_excluded(tmp_path, name):
+    from superqode.harness.refinement.workspace import file_manifest
+
+    (tmp_path / "keep.py").write_text("x = 1\n")
+    target = tmp_path / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("FAKE_SECRET\n")
+    assert set(file_manifest(tmp_path)) == {"keep.py"}
+
+
+def test_plan_lists_credential_exclusions(job_request):
+    exclusions = job_request.plan()["source_exclusions"]
+    for item in ("id_rsa*", ".netrc", "*.tfstate*", "credentials*.json", ".kube/", ".gnupg/"):
+        assert item in exclusions

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import fnmatch
 import hashlib
 import os
 import shutil
@@ -23,10 +24,67 @@ EXCLUDED = {
     ".superqode",
     ".aws",
     ".ssh",
+    ".gnupg",
+    ".kube",
     ".pytest_cache",
     ".ruff_cache",
     ".mypy_cache",
 }
+# Credential files are excluded by name (case-insensitive glob on the basename).
+SECRET_PATTERNS = (
+    ".env",
+    ".env.*",
+    "*.env",
+    ".envrc",
+    "*.pem",
+    "*.key",
+    "id_rsa*",
+    "id_dsa*",
+    "id_ed25519*",
+    "id_ecdsa*",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "*.keystore",
+    ".netrc",
+    "_netrc",
+    ".npmrc",
+    ".pypirc",
+    ".git-credentials",
+    "*.tfstate",
+    "*.tfstate.*",
+    "credentials*.json",
+    "service-account*.json",
+    "service_account*.json",
+)
+# Relative paths excluded wherever they appear in the tree.
+SECRET_PATHS = ((".docker", "config.json"),)
+
+
+def is_secret(relative: Path) -> bool:
+    name = relative.name.lower()
+    if any(fnmatch.fnmatchcase(name, pattern) for pattern in SECRET_PATTERNS):
+        return True
+    parts = tuple(part.lower() for part in relative.parts)
+    return any(parts[-len(tail) :] == tail for tail in SECRET_PATHS if len(parts) >= len(tail))
+
+
+def ignored_by(source: Path, names) -> set[str]:
+    """Return names the Git root ``source`` ignores; tracked files are never ignored."""
+    names = sorted(names)
+    if not names or not (source / ".git").exists():
+        return set()
+    proc = subprocess.run(
+        ["git", "-C", str(source), "check-ignore", "-z", "--stdin"],
+        input=b"".join(os.fsencode(name) + b"\0" for name in names),
+        capture_output=True,
+        timeout=30,
+    )
+    if proc.returncode not in (0, 1):
+        raise ValueError("Could not read the source's Git ignore rules")
+    return {os.fsdecode(name) for name in proc.stdout.split(b"\0") if name}
+
+
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 32 * 1024 * 1024
 
@@ -70,11 +128,7 @@ def source_files(root: Path):
         relative = path.relative_to(root)
         if any(part in EXCLUDED for part in relative.parts):
             continue
-        if (
-            path.name == ".env"
-            or path.name.startswith(".env.")
-            or path.suffix in {".pem", ".key", ".pyc"}
-        ):
+        if path.suffix == ".pyc" or is_secret(relative):
             continue
         if path.is_symlink() or any(
             (root / Path(*relative.parts[:i])).is_symlink() for i in range(1, len(relative.parts))
@@ -115,10 +169,14 @@ def snapshot(source: Path, destination: Path, expected: dict):
         raise ValueError("Source changed during snapshot; start a new refinement")
 
 
-def collect_changes(base: Path, workspace: Path):
+def collect_changes(base: Path, workspace: Path, source: Path | None = None):
+    """Compare snapshots; files the source's Git ignore rules hide are never changes."""
     before, after = file_manifest(base), file_manifest(workspace)
+    names = before.keys() | after.keys()
+    if source is not None:
+        names -= ignored_by(Path(source), names - before.keys())
     changes, diff = [], []
-    for name in sorted(before.keys() | after.keys()):
+    for name in sorted(names):
         if before.get(name) == after.get(name):
             continue
         changes.append({"path": name, "before": before.get(name), "after": after.get(name)})
@@ -159,6 +217,25 @@ def _replace_file(target, body, mode):
         Path(temporary).unlink(missing_ok=True)
 
 
+def _check_target(source: Path, change):
+    """Refuse symlinked destinations and new files that would replace existing ones."""
+    parts = Path(change["path"]).parts
+    for index in range(1, len(parts) + 1):
+        try:
+            info = os.lstat(source.joinpath(*parts[:index]))
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"Destination is a symlink: {Path(*parts[:index]).as_posix()}")
+        if index == len(parts):
+            if change["before"] is None:
+                raise ValueError(
+                    f"Candidate creates a file that already exists in the source: {change['path']}"
+                )
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError(f"Destination is not a regular file: {change['path']}")
+
+
 def _apply_refinement(root):
     manifest, result = read_json(root / "manifest.json"), read_json(root / "result.json")
     verify_manifest(manifest)
@@ -192,7 +269,7 @@ def _apply_refinement(root):
     workspace = stage / "workspace"
     if digest(file_manifest(workspace)) != record["workspace_digest"]:
         raise ValueError("Candidate changed after validation")
-    changes, _ = collect_changes(base, workspace)
+    changes, _ = collect_changes(base, workspace, source)
     if digest(changes) != result["changes_digest"]:
         raise ValueError("Candidate changes no longer match the selected result")
     # Validate all paths and parent components before the first mutation.
@@ -200,6 +277,7 @@ def _apply_refinement(root):
         relpath(change["path"])
         if not (source / change["path"]).resolve().is_relative_to(source.resolve()):
             raise ValueError("Destination escapes source")
+        _check_target(source, change)
     # Stage bytes before touching the source; restore completed writes on failure.
     before = {
         item["path"]: (base / item["path"]).read_bytes() if item["before"] else None

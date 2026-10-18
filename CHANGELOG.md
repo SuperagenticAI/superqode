@@ -27,6 +27,13 @@ workflows for CodeGem, local Gemma, and Gemini.
 - Candidate audits reject empty held-out evidence, incomplete outcomes, and
   unmatched candidates. Promotion resolves portable scorecard paths and rejects
   non-finite scores.
+- Refinement `apply` no longer overwrites or, on rollback, deletes Git-ignored
+  files: candidate changes follow the source's ignore rules, and apply refuses
+  symlinked destinations and new files that already exist in the source.
+- Refinement snapshots exclude more credential files, including SSH keys,
+  `*.p12`/`*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, `.git-credentials`,
+  `*.tfstate*`, `credentials*.json`, `service-account*.json`,
+  `.docker/config.json`, and `.kube/`, `.gnupg/`, and `.aws/` directories.
 
 ## [2.23.1] - 2026-10-18
 
