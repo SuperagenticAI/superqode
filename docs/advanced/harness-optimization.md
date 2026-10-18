@@ -12,9 +12,14 @@ skills, and custom optimizers, see [Optimization Story](optimization.md).
 | --- | --- | --- |
 | **Run** | "Do the work with this harness." | SuperQode (`superqode --harness ...`) |
 | **Measure** | "Is this harness good right now?" | SuperQode (`harness test` / `eval` / `auto-bench`) |
+| **Refine one task** | "Try instruction changes while completing this task." | `harness refine` with Harness2 and CodeGem |
 | **Optimize** | "Make this harness better over many tries." | `harness optimize` with `metaharness`, or `harness optimize-omni` with GEPA |
 
 ## Run and measure: SuperQode
+
+For task-local refinement through CodeGem, see
+[Harness2 task refinement](harness2.md). It supports local Gemma and Gemini,
+separate attempt workspaces, a CLI/TUI workflow, and explicit patch application.
 
 SuperQode is where you author, run, and measure a harness.
 

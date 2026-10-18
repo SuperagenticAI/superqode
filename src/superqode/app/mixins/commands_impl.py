@@ -4419,6 +4419,9 @@ class CommandImplMixin:
         subargs = parts[1].strip() if len(parts) > 1 else ""
         if not sub:
             sub = "status"
+        if sub == "refine":
+            self._refinement_cmd(subargs, log)
+            return
         if sub != "wizard":
             cancel = getattr(self, "_cancel_harness_wizard", None)
             if callable(cancel):
@@ -4470,6 +4473,7 @@ class CommandImplMixin:
                 ":harness switch <name> changes harness or coding agent; add --fork "
                 "to branch a HarnessSpec session; "
                 ":harness list prints the catalog; :harness show <name> inspects a harness."
+                " Use :harness refine to open native Harness² task refinement."
             )
             log.add_info(
                 "Advanced commands are available through :help harness and the CLI reference."

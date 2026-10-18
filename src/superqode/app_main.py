@@ -177,6 +177,7 @@ from superqode.app.mixins.tour import TourMixin
 
 
 from superqode.app.mixins.harness_hub import HarnessHubMixin
+from superqode.app.mixins.refinement import RefinementMixin
 from superqode.app.mixins.supervision import SupervisionMixin
 from superqode.app.mixins.composer_blocks import ComposerBlocksMixin
 
@@ -187,6 +188,7 @@ class SuperQodeApp(
     ComposerBlocksMixin,
     SupervisionMixin,
     HarnessHubMixin,
+    RefinementMixin,
     ExploreMixin,
     BuildHarnessMixin,
     TourMixin,

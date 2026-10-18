@@ -48,6 +48,14 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_cli_reference_coverage.py -q
+      - name: Harness2 refinement contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/refinement tests/test_harness_self_improve.py
+          tests/test_harness_bench.py tests/test_harness_promotion.py
+          tests/test_cli_contract.py -q
       - name: Published Agent Card is current
         run: uv run python scripts/check_published_agent_card.py
       - name: TUI keyboard and draft checks

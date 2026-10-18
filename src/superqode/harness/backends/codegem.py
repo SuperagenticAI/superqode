@@ -13,7 +13,10 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
         PiPyHarnessBackend.capabilities,
         backend="codegem",
         supports_mcp=False,
-        notes=("Exactly six tools for Gemini/Gemma. Tools run with host process permissions.",),
+        supports_no_tool=True,
+        notes=(
+            "Six coding tools, or an explicit no-tool session. Coding tools use host process permissions.",
+        ),
     )
 
     def __init__(self, *, adapter=None):
@@ -36,7 +39,8 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
         policy = request.spec.execution_policy
         from superqode.codegem.tools import TOOL_NAMES
 
-        if len(request.spec.agents) != 1 or request.spec.agents[0].tools != TOOL_NAMES:
+        expected_tools = () if request.spec.is_no_tool else TOOL_NAMES
+        if len(request.spec.agents) != 1 or request.spec.agents[0].tools != expected_tools:
             raise ValueError(
                 "CodeGem requires one agent with exactly read, write, edit, search, python, bash"
             )
@@ -46,6 +50,7 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
             )
         runtime_config = {
             **ref.metadata["runtime_config"],
+            "no_tools": request.spec.is_no_tool,
             "execution_policy": {
                 "allow_read": policy.allow_read,
                 "allow_write": policy.allow_write,
@@ -54,6 +59,13 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
                 "permission_rules": bool(policy.permission_rules),
             },
         }
+        agent_prompt = request.spec.agents[0].system_prompt
+        if agent_prompt:
+            runtime_config["append_system_prompt"] = "\n\n".join(
+                value
+                for value in (agent_prompt, runtime_config.get("append_system_prompt", ""))
+                if value
+            )
         if policy.allowed_commands or policy.permission_rules or policy.blocked_categories:
             raise ValueError(
                 "CodeGem cannot enforce command allowlists or approval rules; use Core or Workbench"

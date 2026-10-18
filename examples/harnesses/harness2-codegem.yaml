@@ -1,0 +1,26 @@
+version: 1
+name: harness2-codegem-local
+inherits: codegem
+description: Experimental task-local Harness2 refinement over native CodeGem and local Gemma.
+runtime:
+  backend: codegem
+  config:
+    tool_mode: json
+    context_window: 32768
+model_policy:
+  primary: ollama/gemma4:12b
+optimization:
+  enabled: true
+  require_human_apply: true
+  config:
+    method: harness2
+    mode: sequential
+    k: 1
+    max_parallel: 1
+    max_wall_seconds: 900
+    max_sessions: 16
+    max_turns: 16
+    max_output_tokens: 4096
+metadata:
+  example: harness2-codegem-local
+  experimental: true

@@ -38,11 +38,18 @@ conversation. Use the mouse or keyboard to:
   leaving the Hub
 - use an available harness or follow its setup route
 - start the custom harness builder
+- launch **Harness² refine** to refine one coding task through CodeGem
 
 Press `/` to focus search, arrow keys to move, `Enter` to use (or learn more
 for coming-soon rows), `I` to inspect in place, `B` to build, and `Esc` to
 return. Click a row to preview; Use is explicit. `:hub` opens on **All** so the
 catalog never hides entries before you choose a filter.
+
+**Harness² refine** opens the task-refinement panel for Gemini or local Gemma.
+Review the plan, follow the job's progress, inspect checks and the selected
+patch, then explicitly apply it. You can also open the panel directly with
+`:harness refine`. See [Harness2 task refinement](advanced/harness2.md) for
+setup, resource limits, cancellation, and saved-job resume.
 
 **Available** reflects basic availability checks on the machine running
 SuperQode. Authentication and connectivity are verified when connecting.

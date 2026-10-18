@@ -81,6 +81,13 @@ CodeGem sends no thinking level, so Google's default applies. Gemma sampling
 uses temperature 1.0, top_p 0.95 and top_k 64 unless you set any of them. The
 Gemini API lists Gemma as free tier only, so cost estimates are zero.
 
+## Refine a task with Harness2
+
+For repeated task attempts with generated instruction changes, use
+`superqode harness refine` or `:harness refine` in the TUI.
+[Harness2 task refinement](harness2.md) runs above CodeGem and returns a
+reviewable patch with explicit checks and application.
+
 ## Add local EmbeddingGemma search
 
 The ordinary `search` tool works without embeddings. To add natural-language

@@ -299,11 +299,12 @@ def audit_harness_candidate(
         edit_limit = optimization.max_candidate_edits
 
     task_split_counts: dict[str, int] = {}
+    task_file = None
     required_splits: list[str] = []
     if tasks_path:
         task_file = load_eval_tasks(tasks_path)
         task_split_counts = task_file.get("split_counts") or {}
-        if require_heldout and int(task_split_counts.get("held-out") or 0) > 0:
+        if require_heldout:
             required_splits.append("held-out")
     elif require_heldout:
         required_splits.append("held-out")
@@ -331,6 +332,8 @@ def audit_harness_candidate(
         candidate_name=candidate_spec.name,
         required_splits=tuple(required_splits),
         allow_ungated=allow_ungated,
+        expected_tasks=task_file["tasks"] if task_file else None,
+        expected_tasks_hash=task_file["tasks_hash"] if task_file else None,
     )
     diff_fingerprint = _hash_json(
         {
@@ -348,6 +351,19 @@ def audit_harness_candidate(
 
     violations: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    if require_heldout and tasks_path and not int(task_split_counts.get("held-out") or 0):
+        violations.append(
+            _violation(
+                "empty_heldout_set", "Held-out validation requires at least one held-out task."
+            )
+        )
+    if any(not gate.get("passed") for gate in eval_gates["gates"]):
+        violations.append(
+            _violation(
+                "invalid_eval_evidence",
+                "Candidate evaluation evidence is incomplete, invalid, or failing.",
+            )
+        )
     if protected_changes:
         violations.append(
             _violation(
@@ -1185,6 +1201,8 @@ def _candidate_eval_gates(
     candidate_name: str,
     required_splits: tuple[str, ...],
     allow_ungated: bool,
+    expected_tasks: list[dict[str, Any]] | None = None,
+    expected_tasks_hash: str | None = None,
 ) -> dict[str, Any]:
     gates: list[dict[str, Any]] = []
     regression_refs: list[str] = []
@@ -1193,7 +1211,7 @@ def _candidate_eval_gates(
         path = Path(item).expanduser().resolve()
         payload = _read_json_mapping(path)
         split = str(payload.get("split") or "all")
-        variant = _select_candidate_variant(payload, candidate_spec_path, candidate_name)
+        variant = _select_candidate_variant(payload, candidate_spec_path, path.parent)
         if not variant:
             gates.append(
                 {
@@ -1209,16 +1227,40 @@ def _candidate_eval_gates(
         regressions = [str(value) for value in variant.get("regressions_vs_baseline") or []]
         skipped = _to_int(variant.get("skipped"))
         total_tasks = len(variant.get("tasks") or [])
-        not_executed = not bool(payload.get("live")) or (total_tasks > 0 and skipped == total_tasks)
+        not_executed = not bool(payload.get("live")) or not total_tasks or skipped == total_tasks
         status = "passed"
         passed = True
-        if not_executed:
+        expected_ids = (
+            {task["id"] for task in expected_tasks if split == "all" or task["split"] == split}
+            if expected_tasks is not None
+            else None
+        )
+        actual_ids = [
+            task.get("id") for task in variant.get("tasks") or [] if isinstance(task, dict)
+        ]
+        if (
+            expected_ids is not None
+            and (set(actual_ids) != expected_ids or len(actual_ids) != len(expected_ids))
+        ) or (
+            expected_tasks_hash
+            and payload.get("tasks_hash")
+            and payload["tasks_hash"] != expected_tasks_hash
+        ):
+            status = "mismatched_task_identity"
+            passed = False
+        elif not_executed:
             status = "not_executed"
             passed = bool(allow_ungated)
         elif bool(variant.get("regressed")) or regressions:
             status = "failed"
             passed = False
             regression_refs.extend(f"{path}#{task_id}" for task_id in regressions)
+        elif variant.get("status") in {"failed", "error", "abstained", "ungraded"} or any(
+            not isinstance(task, dict) or task.get("status") != "passed"
+            for task in variant.get("tasks", [])
+        ):
+            status = "invalid_outcomes"
+            passed = False
         if passed and status == "passed":
             passed_splits.add(split)
         gates.append(
@@ -1252,22 +1294,18 @@ def _candidate_eval_gates(
 def _select_candidate_variant(
     payload: dict[str, Any],
     candidate_spec_path: Path,
-    candidate_name: str,
+    evidence_directory: Path,
 ) -> dict[str, Any] | None:
     variants = [item for item in payload.get("variants") or [] if isinstance(item, dict)]
     if not variants:
         return None
-    candidate_path = str(candidate_spec_path)
+    context = (payload.get("path_context") or {}).get("manifest_directory", ".")
+    manifest_root = (evidence_directory / context).resolve()
     for variant in variants:
         spec = str(variant.get("spec") or "")
-        if spec and (spec == candidate_path or Path(spec).name == candidate_spec_path.name):
+        if spec and candidate_spec_path in {Path(spec).resolve(), (manifest_root / spec).resolve()}:
             return variant
-    for variant in variants[1:]:
-        if str(variant.get("harness") or "") == candidate_name:
-            return variant
-    if len(variants) == 2:
-        return variants[1]
-    return next((item for item in variants[1:] if not item.get("regressed")), variants[-1])
+    return None
 
 
 def _candidate_novelty(

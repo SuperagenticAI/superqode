@@ -81,6 +81,9 @@ class CodingSessionOptions:
     append_system_prompt: str | None = None
     include_context_files: bool = True
     include_system_prompt_files: bool = True
+    #: None preserves normal discovery; an explicit tuple freezes experiment resources.
+    skill_directories: tuple[Path, ...] | None = None
+    include_prompt_templates: bool = True
     context_file_transform: Callable[[list[ContextFile]], list[ContextFile]] | None = None
     self_docs: SelfDocs = field(default_factory=SelfDocs)
     steering_mode: QueueMode = "one-at-a-time"
@@ -185,8 +188,15 @@ class PiPyCodingSession:
         if options.tool_transform is not None:
             tools = options.tool_transform(tools)
         context_files = load_context_files(cwd) if options.include_context_files else []
-        skills = load_skills(cwd=cwd).skills
-        templates = load_prompt_templates(cwd=cwd).templates
+        skills = load_skills(
+            directories=list(options.skill_directories)
+            if options.skill_directories is not None
+            else None,
+            cwd=cwd,
+        ).skills
+        templates = (
+            load_prompt_templates(cwd=cwd).templates if options.include_prompt_templates else []
+        )
 
         instance = cls(
             harness=None,  # type: ignore[arg-type]
@@ -276,8 +286,17 @@ class PiPyCodingSession:
             if self.options.include_system_prompt_files
             else (None, None)
         )
-        self._skills = load_skills(cwd=self.cwd).skills
-        self._templates = load_prompt_templates(cwd=self.cwd).templates
+        self._skills = load_skills(
+            directories=list(self.options.skill_directories)
+            if self.options.skill_directories is not None
+            else None,
+            cwd=self.cwd,
+        ).skills
+        self._templates = (
+            load_prompt_templates(cwd=self.cwd).templates
+            if self.options.include_prompt_templates
+            else []
+        )
 
     # -- running ---------------------------------------------------------- #
 

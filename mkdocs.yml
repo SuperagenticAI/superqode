@@ -224,6 +224,7 @@ nav:
     - π PiPy: advanced/pipy.md
     - CodeGem (Gemini and Gemma): advanced/codegem.md
     - CodeGem Recommended Models: advanced/codegem-models.md
+    - Harness2 Task Refinement: advanced/harness2.md
     - Tool Composition and Recovery: advanced/tool-composition-and-recovery.md
     - 🐍 Native RLM: advanced/rlm.md
     - RLM Profiles and Budgets: advanced/rlm-profiles.md

@@ -173,6 +173,9 @@ async def run_harness_bench(
         started_at=started_at,
         live=effective_live,
     )
+    scorecard["path_context"] = {
+        "manifest_directory": os.path.relpath(manifest.manifest_dir or ".", root)
+    }
     manifest_path = root / "manifest.json"
     scorecard_path = root / "scorecard.json"
     report_path = root / "scorecard.md"

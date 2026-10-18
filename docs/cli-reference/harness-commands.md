@@ -39,6 +39,7 @@ superqode harness COMMAND [OPTIONS]
 | `improve` | Export and optionally run a failure-guided harness improvement project |
 | `optimize` | Export and optionally run a meta-harness optimization project |
 | `optimize-omni` | Stage a guarded complete-HarnessSpec candidate with GEPA Omni |
+| `refine` | Experimental Harness2 task refinement over CodeGem; inspect, cancel, resume, apply |
 | `run` | Run a task through a spec |
 | `registry` | Local publish/list/install hub for harness specs |
 | `import-agent` | Compile concise SuperQode `agent.yaml` into a spec |
@@ -54,6 +55,13 @@ superqode harness COMMAND [OPTIONS]
 | `worker` | Run a durable inbox worker loop |
 
 ---
+
+## Refine a task with Harness2
+
+For task-local refinement with local Gemma or Gemini, including the CLI options, TUI panel,
+workspace model, limits, and saved-job lifecycle, see
+[Harness2 Task Refinement](../advanced/harness2.md). Begin with
+`superqode harness refine --help` or `:harness refine` in the TUI.
 
 ## Selecting a Harness
 

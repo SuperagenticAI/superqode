@@ -263,6 +263,11 @@ sealed held-out gate without replacing the live specification.
 See the [evaluation and optimization guide](docs/advanced/harness-optimization.md)
 and [Harness Promotion](docs/advanced/harness-promotion.md).
 
+For one coding task, experimental [Harness2 refinement](docs/advanced/harness2.md)
+tries instruction changes through CodeGem with Gemini or local Gemma. Start it
+with `superqode harness refine` or `:harness refine` in the TUI, inspect the
+selected patch and checks, then explicitly apply it.
+
 
 ### Release records
 

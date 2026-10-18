@@ -842,8 +842,18 @@ class CodeGemStream:
             default_timeout = (
                 _ARGON_TIMEOUT if profile.family == "gemini" and profile.generation == 4 else 180
             )
+            from .request_budget import active_request_budget
+
+            budget = active_request_budget()
+            transport = self.transport
+            if budget is not None:
+                if model.provider != "google" or model.id != budget.model:
+                    raise ValueError("The active Gemini budget does not authorize this model route")
+                if budget.api_key:
+                    options = dataclasses.replace(options, api_key=budget.api_key)
+                transport = budget.transport(transport)
             async with httpx.AsyncClient(
-                transport=self.transport,
+                transport=transport,
                 timeout=float(self.config.get("timeout", default_timeout)),
             ) as client:
                 if profile.family == "gemini" or model.provider in {"google", "gemini"}:

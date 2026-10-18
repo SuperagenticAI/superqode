@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import os
 import shutil
 import time
@@ -291,13 +292,24 @@ def _validate_promotion_evidence(
         if scorecard.get("status") != "passed" or not scorecard.get("live"):
             raise ValueError(f"promotion evidence must be a passing live scorecard: {path}")
         sources = scorecard.get("sources") or {}
-        spec_digests = sources.get("specs") or {}
+        context = (scorecard.get("path_context") or {}).get("manifest_directory", ".")
+        manifest_root = (path.parent / context).resolve()
+
+        def spec_identity(value):
+            spec_path = Path(str(value)).expanduser()
+            return str(
+                (spec_path if spec_path.is_absolute() else manifest_root / spec_path).resolve()
+            )
+
+        spec_digests = {
+            spec_identity(key): value for key, value in (sources.get("specs") or {}).items()
+        }
         if spec_digests.get(state["base_spec"]) != state["base_digest"]:
             raise ValueError(f"scorecard base digest does not match staged base: {path}")
         if spec_digests.get(state["candidate_spec"]) != state["candidate_digest"]:
             raise ValueError(f"scorecard candidate digest does not match staged candidate: {path}")
         by_spec = {
-            str(Path(str(item.get("spec") or "")).expanduser().resolve()): item
+            spec_identity(item["spec"]): item
             for item in scorecard.get("variants") or ()
             if item.get("spec")
         }
@@ -309,7 +321,13 @@ def _validate_promotion_evidence(
             raise ValueError(f"candidate has held-out regression runs: {path}")
         candidate_score = (candidate.get("score") or {}).get("mean")
         base_score = (base.get("score") or {}).get("mean")
-        if candidate_score is None or base_score is None or candidate_score < base_score:
+        if (
+            any(
+                type(score) not in (int, float) or not math.isfinite(score)
+                for score in (candidate_score, base_score)
+            )
+            or candidate_score < base_score
+        ):
             raise ValueError(f"candidate does not meet the baseline held-out score: {path}")
         accepted.append(
             {

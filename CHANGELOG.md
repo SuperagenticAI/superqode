@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-10-18
+
+This release adds experimental Harness2 task refinement with CLI and TUI
+workflows for CodeGem, local Gemma, and Gemini.
+
+### Added
+
+- Experimental native Harness2 task refinement over CodeGem, with sequential and
+  parallel schedules, bounded prose candidates, isolated source copies, saved
+  evidence, cancellation/resume, public checks, and explicit patch application.
+- A Harness Hub refinement panel for planning, progress, saved-result inspection,
+  resume, and application, with a guide and local Gemma configuration example.
+
+### Fixed
+
+- CodeGem now includes the configured agent system prompt and supports explicit
+  tool-free sessions for refinement editors.
+- Candidate audits reject empty held-out evidence, incomplete outcomes, and
+  unmatched candidates. Promotion resolves portable scorecard paths and rejects
+  non-finite scores.
+
 ## [2.23.1] - 2026-10-18
 
 This patch release fixes `harness init --template codegem` and adds a CodeGem recommended models guide.

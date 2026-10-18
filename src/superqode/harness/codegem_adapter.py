@@ -107,7 +107,7 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             model.context_window // 4 if model.context_window else 32768,
         )
         keep_recent = min(int(config.get("keep_recent_tokens", 8192)), reserve)
-        tools = create_tools(working_directory, config=config)
+        tools = [] if config.get("no_tools") else create_tools(working_directory, config=config)
         policy = config.get("execution_policy", {})
         guarded = []
         for tool in tools:
@@ -140,6 +140,12 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             ),
             include_context_files=False,
             include_system_prompt_files=False,
+            skill_directories=(
+                tuple(Path(p).expanduser().resolve() for p in config["skill_directories"])
+                if "skill_directories" in config
+                else None
+            ),
+            include_prompt_templates=config.get("include_prompt_templates", True),
             session_root=Path(
                 config.get("session_root")
                 or working_directory / ".superqode" / "codegem" / "sessions"

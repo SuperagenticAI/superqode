@@ -8,6 +8,20 @@ Apache License, Version 2.0. See LICENSE for the full text.
 Third-party notices
 --------------------------------------------------------------------------------
 
+superqode.harness.refinement
+----------------------------
+
+The Harness2 method adaptation is based on Google Research Harness2:
+https://github.com/google-research/harness2
+Revision: 1cfe254e8d25b15f37048c3730134686abe60335
+Copyright 2026 Google LLC
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+SuperQode adapts the invariant/domain Propose-Probe-Compose method and prompt
+design to native async CodeGem sessions, bounded JSON prose components,
+SuperQode storage, CLI, and TUI. Upstream executor CLIs, libraries, and benchmark
+adapters are not bundled.
+
 superqode.pipy
 --------------
 

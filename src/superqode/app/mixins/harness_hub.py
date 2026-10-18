@@ -196,6 +196,10 @@ class HarnessHubMixin:
             self._ensure_input_focus()
             return
         action = str(getattr(result, "action", "") or "")
+        if action == "refine":
+            item = next((entry for entry in items if entry.id == result.item_id), None)
+            self._refinement_cmd("", log, spec=getattr(getattr(item, "target", None), "spec", None))
+            return
         if action == "build":
             self._handle_command(":connect build", log)
             return

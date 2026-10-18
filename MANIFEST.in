@@ -16,6 +16,9 @@ recursive-include src/superqode/systemone/packs *.yaml
 include tests/fixtures/gauge-release-policy.json
 
 prune docs/research
+prune validation
+exclude scripts/validate_refinement.py
+exclude scripts/validate_refinement_gemini.py
 exclude scripts/calibrate_local_harnesses.py
 exclude scripts/prepare_harness_comparison.py
 exclude scripts/validate_harness_routes.py

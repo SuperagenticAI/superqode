@@ -363,6 +363,7 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
 
         with Horizontal(id="hub-actions"):
             yield Button("Build your own", id="hub-build")
+            yield Button("Harness² refine", id="hub-refine")
             yield Button("Jev routing", id="hub-jev-routing")
             yield Button("Optional A2A", id="hub-a2a")
             yield Button("Inspect", id="hub-inspect")
@@ -850,6 +851,8 @@ class HarnessHubScreen(Screen[HarnessHubResult | None]):
             self.action_inspect()
         elif button_id == "hub-build":
             self.action_build()
+        elif button_id == "hub-refine":
+            self.dismiss(HarnessHubResult("refine", self._selected_id() or "codegem"))
         elif button_id == "hub-jev-routing":
             self.action_jev_routing()
         elif button_id == "hub-a2a":
