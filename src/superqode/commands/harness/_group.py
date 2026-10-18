@@ -2,19 +2,11 @@
 
 import click
 
-HARNESS_TEMPLATE_CHOICES = (
-    "coding",
-    "no-tool",
-    "qwen-coding",
-    "glm-coding",
-    "glm52-coding",
-    "gemma4-coding",
-    "gemma4-no-tool",
-    "ds4-coding",
-    "ds4-fast-local",
-    "deepseek-harness",
-    "deepagents",
-)
+from superqode.harness.templates import BUILTIN_TEMPLATES
+
+# Derived from the template registry so new templates are accepted by the CLI.
+# Underscore aliases stay out of the choices, matching list-templates.
+HARNESS_TEMPLATE_CHOICES = tuple(name for name in BUILTIN_TEMPLATES if "_" not in name)
 
 WORKFLOW_PRESET_CHOICES = (
     "single",

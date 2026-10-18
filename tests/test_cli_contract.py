@@ -165,11 +165,14 @@ EXPECTED_COMMAND_COUNT = 321
 # --approval-mode now documents supported headless runtimes as well as the TUI.
 # Rebaselined for theme compatibility and native/Pi JSON export (319 -> 321).
 # Benchmark comparison adds --dry-run and --artifacts without changing commands.
-EXPECTED_HELP_TREE_SHA256 = "1da460c732da280e21a14b383f8c2fc86b9fc6c7ebfa93419ef8e01a26fef6a7"
+# `harness init --template` choices are now derived from the template registry,
+# so codegem and the other registered templates join the choice list. Only the
+# choice list widens; no Click command is added or removed.
+EXPECTED_HELP_TREE_SHA256 = "c28dc5aec0d4655440ef01f9e243fa3ea570104a28ab89c5f52c9a1c718e8f11"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "518e08b0251c1d69464c34e0c2973e63db72f1bb71cbfc2abca826649cfc459f"
+    "e5be52bf7ebb222f77847c892bf68d98fba7404709e7613d4e596d748506eff5"
 )
 
 

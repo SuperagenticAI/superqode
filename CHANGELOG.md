@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `superqode harness init --template` now accepts every registered template,
+  including `codegem`. The choices were a hardcoded list that had fallen behind
+  the template registry; they are now derived from it.
+
 ## [2.23.0] - 2026-10-18
 
 This release adds Gemini streaming, Gemma route fixes, vLLM support, Gemma on the Gemini API, and pricing and catalog updates.
