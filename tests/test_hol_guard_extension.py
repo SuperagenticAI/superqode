@@ -46,9 +46,7 @@ def test_guard_blocks_review_monitor_block_and_unknown() -> None:
 
 def test_guard_invocation_is_shell_free_and_parses_last_json_line(tmp_path: Path) -> None:
     def runner(argv, **kwargs):
-        assert argv[:3] == ["hol-guard", "command", "test"]
-        assert argv[3] == "printf safe"
-        assert argv[4] == "--json"
+        assert argv == ["hol-guard", "command", "test", "--json", "--", "printf safe"]
         assert kwargs["cwd"] == str(tmp_path)
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
@@ -62,6 +60,27 @@ def test_guard_invocation_is_shell_free_and_parses_last_json_line(tmp_path: Path
 
     decision = hol_guard.evaluate_command("printf safe", tmp_path, runner=runner)
     assert decision.action == ALLOW
+
+
+
+def test_guard_keeps_option_like_quoted_and_multiline_text_positional(tmp_path: Path) -> None:
+    for command in ("-n", 'printf "%s" "two words"', "printf 'one\ntwo'"):
+        captured = []
+
+        def runner(argv, **kwargs):
+            captured.append(argv)
+            assert kwargs["cwd"] == str(tmp_path)
+            assert kwargs["check"] is False
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                stdout='{"minimum_action":"allow","classification":{"explicitly_benign":true}}',
+                stderr="",
+            )
+
+        decision = hol_guard.evaluate_command(command, tmp_path, runner=runner)
+        assert decision.action == ALLOW
+        assert captured == [["hol-guard", "command", "test", "--json", "--", command]]
 
 
 def test_guard_process_failures_deny(tmp_path: Path) -> None:
