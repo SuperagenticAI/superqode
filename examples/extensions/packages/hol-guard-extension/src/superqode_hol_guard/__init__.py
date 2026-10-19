@@ -103,7 +103,7 @@ def evaluate_command(
     guard_binary = guard_binary or "hol-guard"
     try:
         completed = runner(
-            [guard_binary, "command", "test", command, "--json"],
+            [guard_binary, "command", "test", "--json", "--", command],
             cwd=str(working_directory),
             capture_output=True,
             text=True,
