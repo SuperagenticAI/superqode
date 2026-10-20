@@ -7,8 +7,22 @@ enum Brand {
   static let orange = Color(red: 1, green: 164 / 255, blue: 0)
   static let gradient = LinearGradient(
     colors: [purple, pink, orange], startPoint: .bottomLeading, endPoint: .topTrailing)
-  // Functional text uses contrast-adjusted shades; the logotype retains the
-  // exact source palette. Increased Contrast uses semantic system foregrounds.
+  // Text uses contrast-adjusted shades. The icon retains the source palette.
+  // Increased Contrast uses semantic system foregrounds.
+  static func wordmarkGradient(_ scheme: ColorScheme) -> LinearGradient {
+    LinearGradient(
+      colors: scheme == .dark
+        ? [
+          Color(red: 188 / 255, green: 160 / 255, blue: 1),
+          Color(red: 1, green: 150 / 255, blue: 200 / 255),
+          Color(red: 1, green: 209 / 255, blue: 139 / 255),
+        ]
+        : [
+          Color(red: 100 / 255, green: 21 / 255, blue: 187 / 255),
+          Color(red: 170 / 255, green: 17 / 255, blue: 101 / 255),
+          Color(red: 151 / 255, green: 87 / 255, blue: 0),
+        ], startPoint: .leading, endPoint: .trailing)
+  }
   static func textGradient(_ scheme: ColorScheme) -> LinearGradient {
     LinearGradient(
       colors: scheme == .dark
@@ -82,12 +96,13 @@ struct BrandButtonStyle: PrimitiveButtonStyle {
 }
 
 struct BrandWordmark: View {
+  @Environment(\.colorScheme) private var scheme
   @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     Text("SUPERQODE").font(.system(size: 16, weight: .bold)).tracking(0.8)
       .foregroundStyle(
         contrast == .increased
-          ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Brand.gradient))
+          ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Brand.wordmarkGradient(scheme)))
   }
 }
 

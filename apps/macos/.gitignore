@@ -5,3 +5,13 @@ artifacts/
 resources/icon.icns
 .build-venv/
 resources/icon.iconset/
+.swiftpm/
+DerivedData/
+*.app/
+*.dmg
+*.pkg
+*.xcarchive/
+*.xcresult/
+*.xcuserstate
+*.dSYM/
+*.dSYM.zip

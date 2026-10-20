@@ -5,6 +5,13 @@ __pycache__/
 
 # Swift / Xcode (macOS desktop app)
 .build/
+.swiftpm/
+*.app/
+*.dmg
+*.pkg
+*.xcarchive/
+*.xcresult/
+*.xcuserstate
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 DerivedData/
@@ -136,6 +143,17 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+.envrc
+.direnv/
+.secrets/
+.pypirc
 .venv
 env/
 venv/
@@ -235,3 +253,25 @@ examples/bench/results/
 /docs/advanced/developer-trial-readiness-review.md
 /docs/advanced/pi-theme-comparison.md
 /docs/advanced/theme-reliability-review.md
+
+# Local signing material and provisioning profiles
+*.p12
+*.pfx
+*.p8
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+*.certSigningRequest
+
+# Private macOS working notes and local release orchestration
+/apps/macos/RELEASE.md
+/apps/macos/CONNECT-ACCEPTANCE.md
+/apps/macos/FEATURE-COVERAGE.md
+/apps/macos/WEBSITE-BETA.md
+/apps/macos/app-store/README.md
+/apps/macos/app-store/screenshots/README.md
+/apps/macos/scripts/beta-release.py
+/apps/macos/scripts/app-store-preflight.py
+/tests/test_macos_beta_release.py
+/docs/plans/macos-app.md

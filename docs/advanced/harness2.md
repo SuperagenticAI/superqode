@@ -114,8 +114,16 @@ not provide an OS sandbox, and commands can affect files outside those copies.
 Use a trusted project and review commands you supply as checks.
 
 Snapshots exclude Git metadata, dependency directories, caches, `.superqode`,
-`.env*`, `*.pem`, and `*.key`. At a Git root they also respect Git ignores.
-File symlinks are rejected and directory symlinks are omitted. The snapshot
+and common credential files: `.env*`, `*.env`, `.envrc`, `*.pem`, `*.key`,
+`id_rsa*`, `id_dsa*`, `id_ed25519*`, `id_ecdsa*`, `*.p12`, `*.pfx`, `*.jks`,
+`*.keystore`, `.netrc`, `.npmrc`, `.pypirc`, `.git-credentials`, `*.tfstate*`,
+`credentials*.json`, `service-account*.json`, `.docker/config.json`, and the
+`.aws/`, `.ssh/`, `.gnupg/`, and `.kube/` directories. Name-based exclusion is
+a safeguard, not a guarantee: keep other secrets out of the source directory.
+At a Git root snapshots also respect Git ignores, and files a candidate creates under
+ignored paths are never applied. Apply refuses symlinked destinations and any
+new file that already exists in the source. Symlinks inside the source make the
+job fail at a Git root; outside a Git checkout, directory symlinks are omitted. The snapshot
 limit is 2 MiB per file and 32 MiB total; choose a smaller source directory for
 larger projects. A job output directory inside the source must be under
 `.superqode/`.

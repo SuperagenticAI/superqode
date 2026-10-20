@@ -1,0 +1,16 @@
+{
+  "name": "tokenizers",
+  "version": "0.22.2",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz",
+    "hash": "sha256:473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917",
+    "size": 372115,
+    "upload-time": "2026-01-05T10:45:15.988Z"
+  },
+  "notices": [
+    "tokenizers-0.22.2__tokenizers__LICENSE"
+  ],
+  "notice_sha256": {
+    "tokenizers-0.22.2__tokenizers__LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  }
+}

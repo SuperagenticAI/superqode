@@ -41,17 +41,7 @@ rm -rf "$DEST/Contents/Resources/runtime/backend/superqode"
 ditto "$ROOT_DIR/src/superqode" "$DEST/Contents/Resources/runtime/backend/superqode"
 find "$DEST/Contents/Resources/runtime" -type d -name __pycache__ -prune -exec rm -rf {} +
 python3 "$APP_DIR/scripts/stamp-runtime.py" "$DEST/Contents/Resources/runtime"
+python3 "$APP_DIR/scripts/collect-runtime-notices.py" "$DEST/Contents/Resources/runtime"
 IDENTITY="${SIGNING_IDENTITY:--}"
-if [ "$IDENTITY" = "-" ]; then
-    codesign --force --deep --sign - "$DEST"
-else
-    # Nested Mach-O binaries must be signed inside out before the outer bundle.
-    while IFS= read -r -d '' CANDIDATE; do
-        if file -b "$CANDIDATE" | /usr/bin/grep -q 'Mach-O'; then
-            codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CANDIDATE"
-        fi
-    done < <(find "$DEST/Contents/Resources/runtime" -type f -print0)
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$DEST"
-fi
-codesign --verify --deep --strict "$DEST"
+python3 "$APP_DIR/scripts/sign-bundle.py" "$DEST" --identity "$IDENTITY"
 echo "$DEST"

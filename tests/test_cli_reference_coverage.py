@@ -393,6 +393,11 @@ def test_superqode_environment_variables_are_in_the_environment_reference():
         "SUPERQODE_REF",
         "SUPERQODE_REVIEW",
         "SUPERQODE_SENTINEL_4",
+        # Private desktop-to-worker handoff, not user configuration settings.
+        "SUPERQODE_DESKTOP_KEY_VARS",
+        "SUPERQODE_DESKTOP_REMOTE",
+        "SUPERQODE_DESKTOP_TOOL_ARGV",
+        "SUPERQODE_DESKTOP_TOOL_SECRETS",
     }
 
     source_names = set(re.findall(r"SUPERQODE_[A-Z0-9_]+", source_text))

@@ -76,6 +76,12 @@ private final class DialogAnchorView: NSView {
   private var timer: Timer?
   private var scheduled = false
   private var closing = false
+  private weak var parentWindow: NSWindow?
+  private var presentationScreen: NSScreen?
+  private var positioning = false
+  private var firstModalPass = true
+  private var positionedSize: NSSize?
+  private var positionedDisplay: NSRect?
 
   static func centeredFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
     NSRect(
@@ -98,6 +104,7 @@ private final class DialogAnchorView: NSView {
     }
     if let panel {
       (panel.contentView as? NSHostingView<AnyView>)?.rootView = hostedContent
+      schedulePosition()
       return
     }
     guard let parent = anchor?.window, parent.isVisible else { return }
@@ -108,6 +115,9 @@ private final class DialogAnchorView: NSView {
   }
   func present(parent: NSWindow) {
     guard panel == nil, let screen = parent.screen ?? NSScreen.main else { return }
+    parentWindow = parent
+    presentationScreen = screen
+    firstModalPass = true
     let hosting = NSHostingView(rootView: hostedContent)
     hosting.layoutSubtreeIfNeeded()
     let desired = hosting.fittingSize
@@ -129,6 +139,7 @@ private final class DialogAnchorView: NSView {
     dialog.delegate = self
     dialog.contentView = hosting
     panel = dialog
+    parent.addChildWindow(dialog, ordered: .above)
     dialog.setFrame(
       Self.centeredFrame(size: dialog.frame.size, visibleFrame: screen.visibleFrame), display: false
     )
@@ -143,16 +154,52 @@ private final class DialogAnchorView: NSView {
         guard let self, let session = self.session, let panel = self.panel,
           NSApp.modalWindow === panel
         else { return }
-        if NSApp.runModalSession(session) != .continue { self.close() }
+        if NSApp.runModalSession(session) != .continue {
+          self.close()
+        } else if self.firstModalPass {
+          // The first modal-loop pass can apply AppKit's initial placement after
+          // beginModalSession returns. Reconcile it after that pass as well.
+          self.firstModalPass = false
+          self.schedulePosition(force: true)
+        }
       }
     }
     timer = pump
     RunLoop.main.add(pump, forMode: .common)
   }
   func windowDidResize(_ notification: Notification) {
-    guard let panel, let screen = panel.screen else { return }
-    panel.setFrame(
-      Self.centeredFrame(size: panel.frame.size, visibleFrame: screen.visibleFrame), display: true)
+    position()
+  }
+  func windowDidChangeScreen(_ notification: Notification) {
+    schedulePosition(force: true)
+  }
+  private func schedulePosition(force: Bool = false) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let panel = self.panel else { return }
+      panel.contentView?.layoutSubtreeIfNeeded()
+      self.position(force: force)
+    }
+  }
+  private func position(force: Bool = false) {
+    guard !positioning, let panel,
+      let screen = parentWindow?.screen ?? presentationScreen
+    else { return }
+    // Content refreshes without a size/display change must not undo a user's
+    // deliberate window drag. Initial modal placement is reconciled explicitly.
+    guard
+      force || positionedSize != panel.frame.size
+        || positionedDisplay != screen.visibleFrame
+    else { return }
+    positionedSize = panel.frame.size
+    positionedDisplay = screen.visibleFrame
+    let frame = Self.centeredFrame(size: panel.frame.size, visibleFrame: screen.visibleFrame)
+    guard
+      abs(panel.frame.midX - frame.midX) > 0.5
+        || abs(panel.frame.midY - frame.midY) > 0.5
+    else { return }
+    positioning = true
+    defer { positioning = false }
+    panel.setFrame(frame, display: true)
   }
   func windowShouldClose(_ sender: NSWindow) -> Bool {
     close()
@@ -165,7 +212,8 @@ private final class DialogAnchorView: NSView {
     defer { closing = false }
     // Close nested dialogs first so AppKit's modal-session stack unwinds in order.
     if let panel, let active = NSApp.modalWindow, active !== panel,
-      active.identifier?.rawValue.hasPrefix("superqode.dialog.") == true
+      active.identifier?.rawValue.hasPrefix("superqode.dialog.") == true,
+      Self.isDescendant(active, of: panel)
     {
       active.performClose(nil)
     }
@@ -178,7 +226,20 @@ private final class DialogAnchorView: NSView {
     let old = panel
     panel = nil
     if binding?.wrappedValue == true { binding?.wrappedValue = false }
+    if let old { old.parent?.removeChildWindow(old) }
     old?.close()
     old?.contentView = nil
+    parentWindow = nil
+    presentationScreen = nil
+    positionedSize = nil
+    positionedDisplay = nil
+  }
+  private static func isDescendant(_ window: NSWindow, of ancestor: NSWindow) -> Bool {
+    var parent = window.parent
+    while let current = parent {
+      if current === ancestor { return true }
+      parent = current.parent
+    }
+    return false
   }
 }

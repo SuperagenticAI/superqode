@@ -128,7 +128,9 @@ struct ConnectionView: View {
       .task(id: page) { await loadMenu() }
       .onExitCommand { if path.count > 1 { back() } else { dismiss() } }
       .centeredDialog(
-        isPresented: Binding(get: { terminalLogin != nil }, set: { if !$0 { terminalLogin = nil } })
+        isPresented: Binding(
+          get: { terminalLogin != nil }, set: { if !$0 { terminalLogin = nil } }),
+        title: "Sign in"
       ) {
         if let arguments = terminalLogin {
           TerminalLoginView(terminals: app.terminals, arguments: arguments) {
@@ -138,7 +140,8 @@ struct ConnectionView: View {
       }
       .centeredDialog(
         isPresented: Binding(
-          get: { authentication != nil }, set: { if !$0 { authentication = nil } })
+          get: { authentication != nil }, set: { if !$0 { authentication = nil } }),
+        title: "Authentication"
       ) {
         if let request = authentication {
           AuthenticationProgressView(request: request) { _ in
@@ -471,7 +474,9 @@ struct ProtocolConnectionView: View {
       .onChange(of: cert) { _, _ in discovery = [:] }
       .onChange(of: key) { _, _ in discovery = [:] }
       .centeredDialog(
-        isPresented: Binding(get: { authorization != nil }, set: { if !$0 { authorization = nil } })
+        isPresented: Binding(
+          get: { authorization != nil }, set: { if !$0 { authorization = nil } }),
+        title: "Authorization"
       ) {
         if let request = authorization {
           AuthenticationProgressView(request: request) { result in

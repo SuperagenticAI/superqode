@@ -2,47 +2,65 @@
   <a href="https://superqode.dev"><img src="assets/superqode-logo.png" alt="SuperQode" width="104"></a>
 </p>
 
-<h1 align="center">SuperQode</h1>
+<h1 align="center">SuperQode for macOS</h1>
 
-<h3 align="center">The harness layer for coding agents.</h3>
+<h3 align="center">Your code. Your agents. Your Mac.</h3>
 
 <p align="center">
-  Discover, build, run, evaluate and optimize coding-agent harnesses from one terminal.<br>
-  Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.
+  A native Mac workspace for coding, reviewing, evaluating and optimizing coding-agent harnesses.<br>
+  Connect the agents or models you already use. Keep your harnesses inspectable and your work under your control.
 </p>
 
 <p align="center">
-  <a href="https://superqode.dev"><img src="https://img.shields.io/badge/superqode.dev-Visit%20the%20site-7c3aed?style=for-the-badge" alt="superqode.dev"></a>
+  <a href="https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg"><img src="https://img.shields.io/badge/Download%20for%20macOS-Public%20Beta%200.1.5-7c3aed?style=for-the-badge" alt="Download SuperQode for macOS, public beta 0.1.5"></a>
   &nbsp;
-  <a href="https://docs.superqode.dev/"><img src="https://img.shields.io/badge/Read%20the-Documentation-1f2937?style=for-the-badge" alt="Documentation"></a>
+  <a href="https://superqode.dev/#macos"><img src="https://img.shields.io/badge/Explore%20the-Mac%20App-1f2937?style=for-the-badge" alt="Explore the Mac app"></a>
 </p>
 
 <p align="center">
-  <a href="https://docs.superqode.dev/harness-hub/">Harness Hub</a>
-  &nbsp;·&nbsp;
-  <a href="https://uhp.superqode.dev/v1/uhp">UHP host</a>
-  &nbsp;·&nbsp;
-  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">Demo</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
+  Apple Silicon &nbsp;·&nbsp; macOS 14 or later &nbsp;·&nbsp; Signed and notarized &nbsp;·&nbsp; No Python installation required
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed&label=pypi" alt="PyPI"></a>
-  <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square&color=3776ab" alt="Python"></a>
-  <a href="https://unifiedharnessprotocol.org/conformance#measured-implementations"><img src="https://unifiedharnessprotocol.org/badges/superqode.svg" alt="UHP core 2026-09-12"></a>
+  <a href="apps/macos/README.md">Mac app guide</a>
+  &nbsp;·&nbsp;
+  <a href="https://superqode.dev/hub">Harness Hub</a>
+  &nbsp;·&nbsp;
+  <a href="#terminal-and-cli-optional">Terminal and CLI</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/SuperagenticAI/superqode/issues">Beta feedback</a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License"></a>
   <a href="https://github.com/SuperagenticAI/superqode/stargazers"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=f59e0b" alt="Stars"></a>
-  <a href="https://github.com/SuperagenticAI/superqode/discussions"><img src="https://img.shields.io/github/discussions/SuperagenticAI/superqode?style=flat-square" alt="Discussions"></a>
 </p>
 
 <p align="center">
-  <img src="assets/superqode-hero.png" alt="The SuperQode terminal interface" width="880">
+  <img src="assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
 </p>
 
-<p align="center">
-  <img src="assets/superqode-banner.png" alt="" width="760">
-</p>
+## Start with the Mac app
+
+1. [Download the macOS beta](https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg) and open the DMG.
+2. Drag **SuperQode** to **Applications**, then launch it from Applications.
+3. Open a project and choose **Connect**. Use an existing coding agent, a provider API key or a supported local model.
+4. Describe a small change, review permissions and inspect the diff before keeping the result.
+
+The app bundles its Python engine. You do not need to install Python, use the App Store or create a SuperQode account. External agents and local model servers may require their own setup. Provider subscriptions and usage charges still apply.
+
+**Public beta 0.1.5:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg.sha256).
+
+## Code, measure and improve in one workspace
+
+- **Code and review:** stream agent responses, approve tools, edit source, inspect Git changes and use the integrated terminal.
+- **Bring your connection:** connect existing agents, subscription-backed routes, provider keys or supported local models. Availability depends on the selected runtime and account.
+- **Harness Hub:** explore shared harness definitions and choose the setup for your task.
+- **Evaluate:** compare baseline and candidate results, per-task outcomes, cost and regressions.
+- **Optimize:** run bounded optimization, review candidate diffs and adopt a validated harness revision.
+- **Keep control:** inspect recorded work, manage queued tasks and use guarded checkpoints for recovery.
+
+Projects and history remain on your Mac. Requests and selected context go to the agent or provider you choose. Agent tools execute with your Mac user's access; work in a backed-up repository and review commands and changes.
 
 ## What is SuperQode?
 
@@ -58,18 +76,7 @@ policy, tools, memory, search, sandbox, approvals, workflow, and evidence.
 Connect the coding agents you already pay for, run local or hosted models, or
 build your own harness. All of them run through the same inspectable contract.
 
-## Demo
-
-One session: connect an agent, browse the Harness Hub, and call the A2A agent
-from the same terminal.
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">
-    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
-  </a>
-</p>
-
-## Quick Start
+## Terminal and CLI (optional)
 
 ```bash
 curl -fsSL https://superqode.dev/install.sh | sh
@@ -120,6 +127,17 @@ offline Awesome Pi collection. Enter installs and applies a palette; `:theme
 import` opens a preview dialog for your own JSON file. Use `superqode theme
 install --all` to install the whole collection. See [Themes](docs/advanced/themes.md)
 for light/system modes, custom palettes, and live reload.
+
+### Terminal demo
+
+One session: connect an agent, browse the Harness Hub, and call the A2A agent
+from the same terminal.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=BmTWNMvJP4s">
+    <img src="assets/superqode-demo.jpg" alt="Watch the SuperQode demo" width="720">
+  </a>
+</p>
 
 ## CodeGem for Gemini and Gemma
 
@@ -440,8 +458,9 @@ superqode harness graph <run-id> --json
 
 | Guide | What it covers |
 | --- | --- |
-| [Website](https://superqode.dev) | Product, Hub, A2A and UHP |
-| [Quick Start](https://docs.superqode.dev/getting-started/quickstart/) | Install, connect, and run your first task |
+| [Mac app guide](apps/macos/README.md) | Install, connect and start coding on macOS |
+| [Website](https://superqode.dev/#macos) | Mac app download, requirements and beta details |
+| [Terminal quick start](https://docs.superqode.dev/getting-started/quickstart/) | Optional TUI and CLI installation |
 | [Harness Hub](https://docs.superqode.dev/harness-hub/) | Browsing, filtering, and the published catalog |
 | [Connection Methods](docs/concepts/modes.md) | Local, ACP, BYOK, SDK, MCP, A2A, and UHP routes |
 | [A2A Agents](docs/providers/a2a.md) | Serving a harness over A2A, skills, API keys, and the Agent Card |

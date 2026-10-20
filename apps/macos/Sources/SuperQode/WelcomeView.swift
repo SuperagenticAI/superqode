@@ -4,6 +4,7 @@ import SwiftUI
 /// Opening a project is explicit; returning home never discards its drafts.
 struct WelcomeView: View {
   @EnvironmentObject var app: Workspace
+  @State private var showBetaGuide = false
   var body: some View {
     GeometryReader { geometry in
       ScrollView {
@@ -16,6 +17,9 @@ struct WelcomeView: View {
               .multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
             Text("Your code. Your agents. Your Mac.")
               .font(.system(size: 16)).foregroundStyle(.secondary)
+            Button("Public Beta · \(BetaRelease.version) · Read the beta guide") {
+              showBetaGuide = true
+            }.buttonStyle(.link).font(.callout)
           }
           Group {
             if geometry.size.width >= 980 {
@@ -53,6 +57,9 @@ struct WelcomeView: View {
           .frame(minHeight: geometry.size.height, alignment: .center)
       }.defaultScrollAnchor(.top)
     }.background { BrandBackdrop() }
+      .centeredDialog(isPresented: $showBetaGuide, title: "Public Beta") {
+        BetaGuideView()
+      }
   }
   private var startCard: some View {
     VStack(alignment: .leading, spacing: 20) {

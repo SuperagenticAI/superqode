@@ -1,0 +1,14 @@
+{
+  "name": "fastmcp-slim",
+  "version": "3.4.4",
+  "source": {
+    "url": "https://raw.githubusercontent.com/PrefectHQ/fastmcp/9138d40e8813c2a7c6c7a015f3dffe0a120730e0/LICENSE",
+    "hash": "sha256:43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+  },
+  "notices": [
+    "LICENSE"
+  ],
+  "notice_sha256": {
+    "LICENSE": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+  }
+}

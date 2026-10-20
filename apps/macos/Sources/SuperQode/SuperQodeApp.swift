@@ -34,6 +34,7 @@ import SwiftUI
 @main struct SuperQodeApp: App {
   @NSApplicationDelegateAdaptor(ApplicationDelegate.self) var delegate
   @StateObject private var workspace = Workspace()
+  @State private var showBetaGuide = false
   var body: some Scene {
     Window("SuperQode", id: "main") {
       RootView().environmentObject(workspace)
@@ -46,6 +47,9 @@ import SwiftUI
           applyAppearance()
         }
         .onChange(of: workspace.theme) { _, _ in applyAppearance() }
+        .centeredDialog(isPresented: $showBetaGuide, title: "Public Beta") {
+          BetaGuideView()
+        }
     }
     .defaultSize(width: 1440, height: 900)
     .windowStyle(.hiddenTitleBar)
@@ -59,6 +63,10 @@ import SwiftUI
         }.keyboardShortcut("n")
       }
       CommandGroup(replacing: .help) {
+        Button("Public Beta Guide…") { showBetaGuide = true }
+        Link("Downloads & Release Notes", destination: BetaRelease.downloads)
+        Link("Report an Issue…", destination: BetaRelease.feedback)
+        Divider()
         Button("Welcome to SuperQode") { workspace.showWelcome = true }
         Divider()
         Button("Getting Started & Learning") { workspace.showLearningGuide = true }

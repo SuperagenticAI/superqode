@@ -1068,6 +1068,16 @@ struct FileEdit {
       throw EngineError(message: "Nested modal blocked asynchronous engine progress")
     }
     try assertCenter(nested)
+    guard nested.parent === outer, outer.parent === main else {
+      throw EngineError(message: "Connect dialogs lost their parent window ownership")
+    }
+    child.content = AnyView(Text("Loaded connection details").frame(width: 620, height: 300))
+    child.schedule()
+    try await Task.sleep(for: .milliseconds(250))
+    try assertCenter(nested)
+    guard NSApp.modalWindow === nested, nested.parent === outer else {
+      throw EngineError(message: "Connection content refresh detached the nested dialog")
+    }
     nested.cancelOperation(nil)
     guard !childVisible, NSApp.modalWindow === outer else {
       throw EngineError(message: "Escape did not restore the parent dialog")
@@ -1077,7 +1087,7 @@ struct FileEdit {
       throw EngineError(message: "Dialog close did not restore its binding and modal session")
     }
     return
-      "passed; display centring with offset parent, negative display origins, nested dialogs, async progress and Escape/close"
+      "passed; offset parent, negative display origins, owned nested dialogs, content refresh, async progress and Escape/close"
   }
   private func captureLearningViews(directory: URL) throws {
     let preview = Workspace()
@@ -1085,6 +1095,7 @@ struct FileEdit {
     preview.starterTourRequested = true
     for phase in [
       "welcome", "welcome-light", "welcome-contrast", "first-task", "learning", "sidebar",
+      "sidebar-light",
       "sidebar-contrast",
     ] {
       let welcome = phase.hasPrefix("welcome")

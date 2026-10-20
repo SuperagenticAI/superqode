@@ -12,7 +12,10 @@ repos:
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        # Vendored notices are checked against their original upstream hashes.
+        exclude: ^apps/macos/third-party/
       - id: end-of-file-fixer
+        exclude: ^apps/macos/third-party/
       - id: check-yaml
         args: [--allow-multiple-documents]
         exclude: ^mkdocs\.yml$
@@ -23,6 +26,7 @@ repos:
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^apps/macos/third-party/
 
   # CI runs `ruff check .` and `ruff format --check .`. Keep this rev in step
   # with the ruff version in uv.lock, or the hook and CI can disagree.

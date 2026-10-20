@@ -1,0 +1,14 @@
+{
+  "name": "py-key-value-aio",
+  "version": "0.4.4",
+  "source": {
+    "url": "https://raw.githubusercontent.com/strawgate/py-key-value/ec9dfd6c18205aa1880f46842677f27d7275cbc7/LICENSE",
+    "hash": "sha256:d09dfd49388d9bff8ecf258700abebbd77d25da2903cd21f362e074f242a1601"
+  },
+  "notices": [
+    "LICENSE"
+  ],
+  "notice_sha256": {
+    "LICENSE": "d09dfd49388d9bff8ecf258700abebbd77d25da2903cd21f362e074f242a1601"
+  }
+}

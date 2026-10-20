@@ -1,6 +1,15 @@
 SwiftTerm 1.20.0
 https://github.com/migueldeicaza/SwiftTerm
 
+The bundled Python interpreter's license is in
+runtime/python/lib/python3.13/LICENSE.txt. Python dependency metadata and supplied
+license/notice texts are preserved under runtime/third-party-notices/, with a
+machine-readable inventory.json. Supplements for wheels that omit source notice
+files include either the locked source archive or pinned upstream release-commit
+URL and SHA-256 in source-origin.json.
+SuperQode's own license and notice are in runtime/LICENSE-superqode and
+runtime/NOTICE-superqode. These paths are relative to Contents/Resources.
+
 Copyright (c) 2019-2026 Miguel de Icaza (https://github.com/migueldeicaza)
 Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
