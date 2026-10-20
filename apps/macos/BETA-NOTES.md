@@ -1,4 +1,4 @@
-# SuperQode for macOS — public beta 0.1.5
+# SuperQode for macOS — public beta 0.1.6
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 

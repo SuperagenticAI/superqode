@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg"><img src="https://img.shields.io/badge/Download%20for%20macOS-Public%20Beta%200.1.5-7c3aed?style=for-the-badge" alt="Download SuperQode for macOS, public beta 0.1.5"></a>
+  <a href="https://superqode.dev/downloads/macos/0.1.6/SuperQode-0.1.6-arm64.dmg"><img src="https://img.shields.io/badge/Download%20for%20macOS-Public%20Beta%200.1.6-7c3aed?style=for-the-badge" alt="Download SuperQode for macOS, public beta 0.1.6"></a>
   &nbsp;
   <a href="https://superqode.dev/#macos"><img src="https://img.shields.io/badge/Explore%20the-Mac%20App-1f2937?style=for-the-badge" alt="Explore the Mac app"></a>
 </p>
@@ -42,14 +42,14 @@
 
 ## Start with the Mac app
 
-1. [Download the macOS beta](https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg) and open the DMG.
+1. [Download the macOS beta](https://superqode.dev/downloads/macos/0.1.6/SuperQode-0.1.6-arm64.dmg) and open the DMG.
 2. Drag **SuperQode** to **Applications**, then launch it from Applications.
 3. Open a project and choose **Connect**. Use an existing coding agent, a provider API key or a supported local model.
 4. Describe a small change, review permissions and inspect the diff before keeping the result.
 
 The app bundles its Python engine. You do not need to install Python, use the App Store or create a SuperQode account. External agents and local model servers may require their own setup. Provider subscriptions and usage charges still apply.
 
-**Public beta 0.1.5:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/0.1.5/SuperQode-0.1.5-arm64.dmg.sha256).
+**Public beta 0.1.6:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/0.1.6/SuperQode-0.1.6-arm64.dmg.sha256).
 
 ## Code, measure and improve in one workspace
 
