@@ -2,13 +2,13 @@
   <a href="https://superqode.dev"><img src="assets/superqode-logo.png" alt="SuperQode" width="104"></a>
 </p>
 
-<h1 align="center">SuperQode for macOS</h1>
+<h1 align="center">SuperQode</h1>
 
-<h3 align="center">Your code. Your agents. Your Mac.</h3>
+<h3 align="center">The harness layer for coding agents.</h3>
 
 <p align="center">
-  A native Mac workspace for coding, reviewing, evaluating and optimizing coding-agent harnesses.<br>
-  Connect the agents or models you already use. Keep your harnesses inspectable and your work under your control.
+  Discover, build, run, evaluate and optimize coding-agent harnesses.<br>
+  Interoperable over ACP, A2A, MCP and UHP: drive any coding agent, and be called as one.
 </p>
 
 <p align="center">
