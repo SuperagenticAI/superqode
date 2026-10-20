@@ -1,12 +1,82 @@
 import AppKit
 import SwiftUI
 
+/// Keep Connect's navigation on AppKit's standard target/action event path.
+/// The SwiftUI label remains visual; the native button owns the whole hit area.
+func nativeButton<Label: View>(
+  _ identifier: String, action: @escaping () -> Void, padded: Bool = true, title: String? = nil,
+  @ViewBuilder label: () -> Label
+) -> some View {
+  label()
+    .padding(.horizontal, padded ? 10 : 0)
+    .padding(.vertical, padded ? 7 : 0)
+    .background(padded ? Color.qPanel : .clear, in: RoundedRectangle(cornerRadius: 6))
+    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(padded ? 0.2 : 0), lineWidth: 1).allowsHitTesting(false))
+    .overlay {
+      NativeConnectionAction(identifier: identifier, title: title ?? [
+        "connect.back": "Back", "connect.root": "All connections", "connect.close": "Close",
+        "connect.subscriptions": "Existing subscription", "connect.acp": "ACP agent",
+        "connect.models": "Local model or API key", "connect.use": "Use this connection",
+      ][identifier] ?? identifier, action: action)
+    }
+}
+
+private struct NativeConnectionAction: NSViewRepresentable {
+  let identifier: String
+  let title: String
+  let action: () -> Void
+  @Environment(\.isEnabled) private var enabled
+  final class Coordinator: NSObject {
+    var action: () -> Void = {}
+    @objc func invoke(_ sender: NSButton) { action() }
+  }
+  func makeCoordinator() -> Coordinator { Coordinator() }
+  final class Control: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+  }
+  func makeNSView(context: Context) -> NSButton {
+    let button = Control(title: "", target: context.coordinator, action: #selector(Coordinator.invoke(_:)))
+    button.isBordered = false
+    button.setButtonType(.momentaryChange)
+    return button
+  }
+  func updateNSView(_ button: NSButton, context: Context) {
+    context.coordinator.action = action
+    if button.identifier?.rawValue != identifier {
+      button.identifier = NSUserInterfaceItemIdentifier(identifier)
+      button.setAccessibilityIdentifier(identifier)
+    }
+    if button.accessibilityLabel() != title { button.setAccessibilityLabel(title) }
+    if button.toolTip != title { button.toolTip = title }
+    if button.isEnabled != enabled { button.isEnabled = enabled }
+    if ["dialog.close", "dialog.done", "dialog.cancel", "options.close"].contains(identifier) {
+      button.keyEquivalent = "\u{1b}"
+      button.keyEquivalentModifierMask = []
+    } else if identifier == "dialog.done.default" {
+      button.keyEquivalent = "\r"
+      button.keyEquivalentModifierMask = []
+    }
+  }
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
+    CGSize(width: proposal.width ?? 100, height: proposal.height ?? 32)
+  }
+}
+
+/// Use refreshed executable detection, including after an installation completes.
+func connectionInstallPlan(_ selection: [String: Any], routes: [[String: Any]]) -> [String: Any]? {
+  let initial = selection["route"] as? [String: Any] ?? selection
+  let current = routes.first { string($0, "id") == string(initial, "id") && !string(initial, "id").isEmpty } ?? initial
+  guard current["available"] as? Bool != true else { return nil }
+  return current["install"] as? [String: Any] ?? selection["install"] as? [String: Any]
+}
+
 /// A native rendering of the same ownership ladder and profiles used by :connect.
 struct ConnectionView: View {
   @EnvironmentObject var app: Workspace
   @DialogDismiss private var dismiss
   @State private var path = ["menu:root"]
   @State private var menu: [String: Any] = [:]
+  @State private var menuCache: [String: [String: Any]] = [:]
   @State private var details: [String: [String: Any]] = [:]
   private var selected: [String: Any] { details[page] ?? [:] }
   @State private var loading = false
@@ -24,23 +94,27 @@ struct ConnectionView: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 12) {
-        Button {
-          back()
-        } label: {
+        nativeButton("connect.back", action: back) {
           Label("Back", systemImage: "chevron.left")
         }
         .disabled(path.count == 1)
-        Button("Connect") {
+        nativeButton("connect.root", action: {
           path = ["menu:root"]
           search = ""
-        }.buttonStyle(.plain)
+        }) { Text("All connections") }
         if page != "menu:root" {
           Text("/").foregroundStyle(.secondary)
           Text(title).lineLimit(1).font(.headline)
         }
         Spacer()
-        Button("Close") { dismiss() }
-      }.padding(20).modifier(NavigationGlass()).padding(10)
+        if !app.connectionDisconnected {
+          nativeButton("connect.disconnect", action: { app.disconnectConnection(); dismiss() }, title: "Disconnect current connection") {
+            Text("Disconnect")
+          }.disabled(app.anyActive || app.busy)
+            .help("Detach the selected connection. Saved sign-ins and history stay on your Mac.")
+        }
+        nativeButton("connect.close", action: { dismiss() }) { Text("Close") }
+      }.buttonStyle(.bordered).padding(20).background(Color.qPanel)
       Divider()
       Group {
         if page.hasPrefix("source:") {
@@ -71,6 +145,13 @@ struct ConnectionView: View {
           ScrollView {
             VStack(alignment: .leading, spacing: 18) {
               PageTitle(eyebrow: "Connect", title: title, subtitle: subtitle)
+              if page == "menu:root" {
+                HStack {
+                  nativeButton("connect.subscriptions", action: { push("menu:vendors") }) { Text("Existing subscription") }
+                  nativeButton("connect.acp", action: { push("acp") }) { Text("ACP agent") }
+                  nativeButton("connect.models", action: { push("menu:harness") }) { Text("Local model / API key") }
+                }.controlSize(.large)
+              }
               if page == "menu:root", let chips = menu["detected"] as? [[String: Any]],
                 !chips.isEmpty
               {
@@ -134,6 +215,7 @@ struct ConnectionView: View {
       ) {
         if let arguments = terminalLogin {
           TerminalLoginView(terminals: app.terminals, arguments: arguments) {
+            menuCache = [:]
             app.perform { try await app.refreshDefinitions() }
           }.environmentObject(app)
         }
@@ -146,6 +228,7 @@ struct ConnectionView: View {
         if let request = authentication {
           AuthenticationProgressView(request: request) { _ in
             authentication = nil
+            menuCache = [:]
             app.perform {
               let definitions =
                 try await app.engine.call("harnesses.list", ["project": app.projectID])
@@ -190,7 +273,11 @@ struct ConnectionView: View {
   }
   private func showDetail(_ row: [String: Any]) {
     let id = "leaf:" + UUID().uuidString
-    details[id] = row
+    var enriched = row
+    if let route = row["route"] as? [String: Any] {
+      if let install = route["install"] { enriched["install"] = install }
+    }
+    details[id] = enriched
     push(id)
   }
   private func push(_ destination: String) {
@@ -208,6 +295,11 @@ struct ConnectionView: View {
   private func loadMenu() async {
     guard page.hasPrefix("menu:") else { return }
     let target = page
+    if let cached = menuCache[target] {
+      menu = cached
+      loading = false
+      return
+    }
     loading = true
     menu = [:]
     failure = ""
@@ -218,11 +310,12 @@ struct ConnectionView: View {
         as? [String: Any] ?? [:]
       guard page == target else { return }
       menu = result
+      menuCache[target] = result
     } catch { if page == target { failure = error.localizedDescription } }
     if page == target { loading = false }
   }
   private func choice(_ row: [String: Any], action: @escaping () -> Void) -> some View {
-    Button(action: action) {
+    nativeButton("connect.row." + row.projectRowID, action: action, padded: false, title: string(row, "name")) {
       HStack(spacing: 16) {
         Image(systemName: "arrow.triangle.branch").font(.title2).foregroundStyle(Brand.gradient)
           .frame(width: 30)
@@ -234,15 +327,15 @@ struct ConnectionView: View {
         Spacer()
         Image(systemName: "chevron.right").foregroundStyle(.secondary)
       }.padding(18).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
-    }.buttonStyle(.plain)
+        .contentShape(Rectangle())
+    }
   }
   private var agentRows: some View {
     VStack(alignment: .leading, spacing: 12) {
       TextField("Find an ACP agent", text: $search).textFieldStyle(.roundedBorder)
       ForEach(
-        app.harnesses.filter {
-          string($0, "desktop_kind") == "acp"
-            && (search.isEmpty || string($0, "name").localizedCaseInsensitiveContains(search))
+        app.acpConnections.filter {
+          search.isEmpty || string($0, "name").localizedCaseInsensitiveContains(search)
         }.sorted { string($0, "name") < string($1, "name") }, id: \.projectRowID
       ) { row in
         choice(row) {
@@ -267,20 +360,6 @@ struct ConnectionView: View {
   }
   private var leaf: some View {
     VStack(alignment: .leading, spacing: 16) {
-      if let plan = selected["install"] as? [String: Any] {
-        CodeBlock(text: string(plan, "command")).frame(height: 70)
-        Button("Install this agent…") {
-          if app.confirm(
-            "Install this coding agent?",
-            "Run the reviewed package-manager command on this Mac:\n" + string(plan, "command"),
-            button: "Install")
-          {
-            authentication = [
-              "action": "install", "project": app.projectID, "reference": string(plan, "reference"),
-            ]
-          }
-        }
-      }
       if let login = selected["login"] as? [String: Any] {
         Button("Sign in to " + string(login, "label")) {
           if login["interactive"] as? Bool == true {
@@ -306,10 +385,11 @@ struct ConnectionView: View {
             string(route, "issue", "Install and sign in to this agent in Terminal, then reconnect.")
           ).textSelection(.enabled)
         }
-        Button("Use this connection") {
+        nativeButton("connect.use", action: {
           app.chooseConnection(route)
           dismiss()
-        }.buttonStyle(BrandButtonStyle()).disabled(route["available"] as? Bool != true)
+        }) { Text("Use this connection") }
+          .disabled(route["available"] as? Bool != true)
       } else {
         let issue = string(selected, "issue")
         Text(
@@ -327,6 +407,24 @@ struct ConnectionView: View {
           Button("Browse subscription agents") { push("menu:vendors") }
         }
         Button("Choose an existing HarnessSpec") { push("harnesses") }
+      }
+      if let plan = connectionInstallPlan(selected, routes: app.harnesses) {
+        Divider().padding(.top, 8)
+        Label("Installation required", systemImage: "arrow.down.circle").font(.headline)
+        Text("Install this agent on your Mac, then use the connection above.")
+          .font(.callout).foregroundStyle(.secondary)
+        CodeBlock(text: string(plan, "command")).frame(height: 70)
+        Button("Install this agent…") {
+          if app.confirm(
+            "Install this coding agent?",
+            "Run the reviewed package-manager command on this Mac:\n" + string(plan, "command"),
+            button: "Install")
+          {
+            authentication = [
+              "action": "install", "project": app.projectID, "reference": string(plan, "reference"),
+            ]
+          }
+        }
       }
     }
   }

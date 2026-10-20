@@ -32,7 +32,7 @@ struct HubView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       PageTitle(
-        eyebrow: "One workspace. Many ways to build.", title: "Harness Hub",
+        eyebrow: "One Agent Space. Many ways to build.", title: "Harness Hub",
         subtitle:
           "Discover runtimes, inspect capabilities and choose how your agent works. Compare and improve the harnesses you use."
       )
@@ -100,7 +100,7 @@ struct HubView: View {
           HStack {
             Text(string(row, "name")).font(.title)
             Spacer()
-            Button("Done") { selected = nil }
+            nativeButton("dialog.done", action: { selected = nil }, title: "Done") { Text("Done") }
           }
           Text(string(row, "description")).foregroundStyle(.secondary)
           HStack {
@@ -133,7 +133,11 @@ struct HubView: View {
     }
   }
   func use(_ definition: [String: Any], _ destination: String) {
-    app.chooseHarness(string(definition, "id"))
+    if destination == "Workspace", ["acp", "connection"].contains(string(definition, "desktop_kind")) {
+      app.chooseConnection(definition)
+    } else {
+      app.chooseHarness(string(definition, "id"))
+    }
     app.section = destination
     app.savePreferences()
     selected = nil
@@ -225,8 +229,7 @@ struct Metric: View {
     VStack(alignment: .leading, spacing: 8) {
       Text(label).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
       Text(value).font(.system(size: 20, weight: .medium))
-    }.padding(18).frame(minWidth: 140, alignment: .leading).background(
-      .primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
+    }.padding(18).frame(minWidth: 140, alignment: .leading).outlinedSurface(radius: 9)
   }
 }
 struct EvaluationView: View { var body: some View { ExperimentView(optimize: false) } }
@@ -342,8 +345,7 @@ struct ExperimentView: View {
             if optimize { optimizationResult } else { EvaluationResult(result: result) }
           }
           if relevant {
-            EventStream().frame(height: 300).background(
-              .primary.opacity(0.02), in: RoundedRectangle(cornerRadius: 10))
+            EventStream().frame(height: 300).outlinedSurface(radius: 10)
           }
         } else {
           EmptyState(
@@ -488,6 +490,7 @@ struct EvaluationResult: View {
 struct FilesView: View {
   @EnvironmentObject var app: Workspace
   @State private var search = ""
+  @State private var visibleFiles: [String] = []
   @State private var creating = false
   @State private var newPath = ""
   @State private var selected = ""
@@ -498,6 +501,7 @@ struct FilesView: View {
   @State private var editing = false
   @State private var loading = false
   @State private var saving = false
+  @State private var loadGeneration = 0
   private var dirty: Bool { content != original }
   private var draftKey: String { loadedProject + "\n" + selected }
   var body: some View {
@@ -519,9 +523,10 @@ struct FilesView: View {
             }.help("New source file").disabled(app.anyActive || saving)
           }
           List(
-            app.files.filter { search.isEmpty || $0.localizedCaseInsensitiveContains(search) },
+            visibleFiles,
             id: \.self, selection: $selected
-          ) { Text($0).font(.system(size: 11, design: .monospaced)).tag($0) }.disabled(saving)
+          ) { Text($0).font(.system(size: 11, design: .monospaced)).tag($0) }
+            .scrollContentBackground(.hidden).background(Color.qPanel).disabled(saving)
         }.frame(minWidth: 220, idealWidth: 300, maxWidth: 400)
         VStack(alignment: .leading, spacing: 12) {
           HStack {
@@ -571,14 +576,9 @@ struct FilesView: View {
                 URL(fileURLWithPath: string(app.project, "path")).appendingPathComponent(selected))
             }.disabled(selected.isEmpty)
           }
-          if editing {
-            TextEditor(text: $content).font(.system(size: 12, design: .monospaced))
-              .scrollContentBackground(.hidden).padding(10).background(
-                .black.opacity(0.08), in: RoundedRectangle(cornerRadius: 8)
-              ).disabled(loading || saving)
-          } else {
-            CodeBlock(text: content)
-          }
+          SourceEditor(text: $content, path: selected, editable: editing, documentID: loadedProject + "\n" + selected)
+            .disabled(loading || saving).clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
           if app.anyActive {
             Text("Saving is paused while an agent or experiment is active in a project.").font(
               .caption
@@ -588,6 +588,7 @@ struct FilesView: View {
       }
     }.padding(30).onAppear {
       loadedProject = app.projectID
+      filterFiles()
       app.loadFiles()
     }
     .alert("New source file", isPresented: $creating) {
@@ -599,9 +600,11 @@ struct FilesView: View {
         "Enter a project path, such as Sources/Feature.swift. Parent folders are created as needed. Existing files are never overwritten."
       )
     }
+    .onChange(of: search) { _, _ in filterFiles() }
+    .onChange(of: app.files) { _, _ in filterFiles() }
     .onChange(of: selected) { _, _ in load() }
     .onChange(of: content) { _, _ in stash() }
-    .onDisappear { stash() }
+    .onDisappear { stash(); loadGeneration += 1 }
   }
   private func create() {
     let project = loadedProject
@@ -618,6 +621,9 @@ struct FilesView: View {
       await app.refreshGit()
     }
   }
+  private func filterFiles() {
+    visibleFiles = app.files.filter { search.isEmpty || $0.localizedCaseInsensitiveContains(search) }
+  }
   private func stash() {
     guard !loadedProject.isEmpty, !selected.isEmpty, !digest.isEmpty else { return }
     if dirty {
@@ -627,7 +633,9 @@ struct FilesView: View {
     }
   }
   private func load() {
-    guard !selected.isEmpty else { return }
+    loadGeneration += 1
+    guard !selected.isEmpty else { loading = false; return }
+    let generation = loadGeneration
     let path = selected
     let project = loadedProject
     loading = true
@@ -635,20 +643,22 @@ struct FilesView: View {
     original = ""
     digest = ""
     app.perform {
-      defer { if selected == path { loading = false } }
-      let result =
-        try await app.engine.call("files.read", ["project": project, "path": path])
-        as? [String: Any] ?? [:]
-      guard selected == path else { return }
-      if let draft = app.fileDrafts[project + "\n" + path] {
-        original = draft.original
-        digest = draft.digest
-        content = draft.text
-        editing = true
-      } else {
-        original = string(result, "text")
-        digest = string(result, "digest")
-        content = original
+      defer { if generation == loadGeneration { loading = false } }
+      do {
+        let result = try await app.engine.call("files.read", ["project": project, "path": path]) as? [String: Any] ?? [:]
+        guard generation == loadGeneration, selected == path, loadedProject == project else { return }
+        if let draft = app.fileDrafts[project + "\n" + path] {
+          original = draft.original
+          digest = draft.digest
+          content = draft.text
+          editing = true
+        } else {
+          original = string(result, "text")
+          digest = string(result, "digest")
+          content = original
+        }
+      } catch {
+        if generation == loadGeneration, selected == path { app.error = error.localizedDescription }
       }
     }
   }
@@ -679,39 +689,41 @@ struct SettingsView: View {
   @AppStorage("colourfulAgentResponses") private var colourfulResponses = true
   @EnvironmentObject var app: Workspace
   var body: some View {
-    Form {
-      Section("Appearance") {
-        Toggle("Animate navigation and active agent indicators", isOn: $animatedInterface)
-        Text("Animations respect macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)
-        Toggle("SuperQode gradient in agent responses", isOn: $colourfulResponses)
-        Text(
-          "Code stays plain. Increase Contrast uses standard text; Reduce Transparency uses solid surfaces."
-        ).font(.caption).foregroundStyle(.secondary)
-        Picker("Theme", selection: $app.theme) {
-          Text("Dark").tag("dark")
-          Text("Light").tag("light")
-          Text("System").tag("system")
+    ScrollView {
+      Form {
+        Section("Appearance") {
+          Toggle("Animate navigation and active agent indicators", isOn: $animatedInterface)
+          Text("Animations respect macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)
+          Toggle("SuperQode gradient in agent responses", isOn: $colourfulResponses)
+          Text(
+            "Code blocks keep readable syntax colours. Increase Contrast uses plain, high-contrast code."
+          ).font(.caption).foregroundStyle(.secondary)
+          Picker("Theme", selection: $app.theme) {
+            Text("Dark").tag("dark")
+            Text("Light").tag("light")
+            Text("System").tag("system")
+          }
         }
-      }
-      Section("Local engine") {
-        LabeledContent("Status", value: app.connected ? "Connected over private pipes" : "Offline")
-        LabeledContent("Execution", value: "This Mac")
-        Text(
-          "Provider requests go directly from the local engine to your configured provider. The app does not upload project data to a SuperQode service."
-        ).font(.caption).foregroundStyle(.secondary)
-        Text(
-          "Connect model stores optional provider keys in macOS Keychain. Desktop preferences contain provider IDs, not secrets. Existing terminal credentials remain supported."
-        ).font(.caption).foregroundStyle(.secondary)
-      }
-      Section {
-        Button("Connect…") { app.showConnection = true }.disabled(app.project.isEmpty)
-        Button("Save preferences", action: app.savePreferences)
-        Button("Open application data") {
-          NSWorkspace.shared.open(
-            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-              .appendingPathComponent("SuperQode"))
+        Section("Local engine") {
+          LabeledContent("Status", value: app.connected ? "Connected over private pipes" : "Offline")
+          LabeledContent("Execution", value: "This Mac")
+          Text(
+            "Provider requests go directly from the local engine to your configured provider. The app does not upload project data to a SuperQode service."
+          ).font(.caption).foregroundStyle(.secondary)
+          Text(
+            "Connect model stores optional provider keys in macOS Keychain. Desktop preferences contain provider IDs, not secrets. Existing terminal credentials remain supported."
+          ).font(.caption).foregroundStyle(.secondary)
         }
-      }
-    }.formStyle(.grouped).padding(12)
+        Section {
+          Button("Connect…") { app.showConnection = true }.disabled(app.project.isEmpty)
+          Button("Save preferences", action: app.savePreferences)
+          Button("Open application data") {
+            NSWorkspace.shared.open(
+              FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("SuperQode"))
+          }
+        }
+      }.formStyle(.columns).scrollContentBackground(.hidden).padding(12)
+    }.background(Color.qPanel)
   }
 }

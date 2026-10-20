@@ -6,11 +6,30 @@ struct EngineError: LocalizedError {
   var errorDescription: String? { message }
 }
 
+/// Decode pipe frames on a serial worker, never in the AppKit input loop.
+private final class EngineFrames {
+  private let queue = DispatchQueue(label: "dev.superqode.engine.read", qos: .userInitiated)
+  private var buffer = Data()
+  func receive(_ data: Data, deliver: @escaping ([String: Any]) -> Void) {
+    queue.async {
+      self.buffer.append(data)
+      while let newline = self.buffer.firstIndex(of: 10) {
+        let line = self.buffer.prefix(upTo: newline)
+        if let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
+          deliver(object)
+        }
+        self.buffer.removeSubrange(...newline)
+      }
+    }
+  }
+}
+
 /// Inherited pipes only. The application never opens a network port.
 @MainActor final class Engine {
   private var process: Process?
   private var input: FileHandle?
-  private var buffer = Data()
+  private let frames = EngineFrames()
+  private let writer = DispatchQueue(label: "dev.superqode.engine.write", qos: .userInitiated)
   private var sequence = 0
   private var pending: [Int: CheckedContinuation<Any, Error>] = [:]
   private(set) var diagnostics = ""
@@ -49,10 +68,7 @@ struct EngineError: LocalizedError {
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
-    env["PATH"] =
-      runtime.appendingPathComponent("python/bin").path + ":/opt/homebrew/bin:/usr/local/bin:"
-      + NSHomeDirectory() + "/.local/bin:" + NSHomeDirectory() + "/.opencode/bin:"
-      + (env["PATH"] ?? "/usr/bin:/bin")
+    env["PATH"] = Self.executablePath(runtime: runtime, inherited: env["PATH"] ?? "/usr/bin:/bin")
     child.environment = env
     let incoming = Pipe()
     let outgoing = Pipe()
@@ -61,13 +77,16 @@ struct EngineError: LocalizedError {
     child.standardOutput = outgoing
     child.standardError = errors
     input = incoming.fileHandleForWriting
+    let frames = self.frames
     outgoing.fileHandleForReading.readabilityHandler = { [weak self] handle in
       let data = handle.availableData
       guard !data.isEmpty else {
         handle.readabilityHandler = nil
         return
       }
-      Task { @MainActor in self?.receive(data) }
+      frames.receive(data) { object in
+        Task { @MainActor in self?.receive(object) }
+      }
     }
     errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
       let data = handle.availableData
@@ -99,45 +118,63 @@ struct EngineError: LocalizedError {
     process = child
   }
 
-  private func receive(_ data: Data) {
-    buffer.append(data)
-    while let newline = buffer.firstIndex(of: 10) {
-      let line = buffer.prefix(upTo: newline)
-      buffer.removeSubrange(...newline)
-      guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-        let id = object["id"] as? Int, let continuation = pending.removeValue(forKey: id)
-      else { continue }
+  private func receive(_ object: [String: Any]) {
+      guard let id = object["id"] as? Int, let continuation = pending.removeValue(forKey: id)
+      else { return }
       if let error = object["error"] {
         continuation.resume(throwing: EngineError(message: String(describing: error)))
       } else {
         continuation.resume(returning: object["result"] ?? NSNull())
       }
-    }
   }
 
   func call(_ method: String, _ params: [String: Any] = [:]) async throws -> Any {
-    guard process?.isRunning == true else {
+    guard process?.isRunning == true, let input else {
       throw EngineError(message: "Local engine is not running.")
     }
     sequence += 1
     let id = sequence
-    var data = try JSONSerialization.data(withJSONObject: [
-      "id": id, "method": method, "params": params,
-    ])
-    guard data.count <= 1_000_000 else {
-      throw EngineError(message: "Request exceeds the local protocol limit.")
-    }
-    data.append(10)
     return try await withCheckedThrowingContinuation { continuation in
       pending[id] = continuation
-      do { try input?.write(contentsOf: data) } catch {
-        pending.removeValue(forKey: id)?.resume(throwing: error)
+      writer.async {
+        do {
+          var data = try JSONSerialization.data(withJSONObject: [
+            "id": id, "method": method, "params": params,
+          ])
+          guard data.count <= 1_000_000 else {
+            throw EngineError(message: "Request exceeds the local protocol limit.")
+          }
+          data.append(10)
+          try input.write(contentsOf: data)
+        } catch {
+          Task { @MainActor in self.pending.removeValue(forKey: id)?.resume(throwing: error) }
+        }
       }
     }
   }
   func stop() {
     try? input?.close()
     // EOF lets the engine cancel remote tasks and record acknowledgements before exiting.
+  }
+  /// Finder launches do not inherit shell startup files. Discover common tool
+  /// managers without executing the user's shell configuration or reading keys.
+  static func executablePath(runtime: URL, inherited: String) -> String {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    var paths = [runtime.appendingPathComponent("python/bin").path]
+    paths += inherited.components(separatedBy: ":").filter { !$0.isEmpty }
+    paths += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+    paths += [".local/bin", ".opencode/bin", ".bun/bin", ".volta/bin", ".asdf/shims",
+              ".local/share/mise/shims", ".local/share/fnm/aliases/default/bin"].map {
+      home.appendingPathComponent($0).path
+    }
+    for (folder, suffix) in [(".nvm/versions/node", "bin"), (".local/share/fnm/node-versions", "installation/bin")] {
+      let directory = home.appendingPathComponent(folder)
+      let versions = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+      paths += versions.sorted { $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedDescending }
+        .map { $0.appendingPathComponent(suffix).path }
+    }
+    var seen = Set<String>()
+    return paths.filter { $0.hasPrefix("/") && seen.insert($0).inserted }.joined(separator: ":")
   }
 }
 

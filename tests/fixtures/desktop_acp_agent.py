@@ -71,7 +71,12 @@ for line in sys.stdin:
         result = {}
     elif method == "session/prompt":
         prompt = params["prompt"][0]["text"]
-        if prompt == "image":
+        if "<superqode_history>" in prompt:
+            text = (
+                "Handoff received. Current request: "
+                + prompt.split("Current user request:\n", 1)[-1]
+            )
+        elif prompt == "image":
             text = "Image parts received: " + str(
                 sum(part.get("type") == "image" for part in params["prompt"])
             )

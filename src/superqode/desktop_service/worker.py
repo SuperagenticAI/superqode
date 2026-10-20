@@ -57,6 +57,9 @@ def snapshot_spec(request: dict, output: Path):
 
 
 async def task(request, directory):
+    from .conversations import with_handoff
+
+    request = with_handoff(request)
     if request.get("interaction_mode") == "chat":
         from .chat import run_chat
 

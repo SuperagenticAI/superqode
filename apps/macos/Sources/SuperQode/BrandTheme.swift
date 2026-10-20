@@ -13,9 +13,7 @@ enum Brand {
     LinearGradient(
       colors: scheme == .dark
         ? [
-          Color(red: 188 / 255, green: 160 / 255, blue: 1),
-          Color(red: 1, green: 150 / 255, blue: 200 / 255),
-          Color(red: 1, green: 209 / 255, blue: 139 / 255),
+          Color(red: 0.68, green: 0.36, blue: 1), Brand.pink, Brand.orange,
         ]
         : [
           Color(red: 100 / 255, green: 21 / 255, blue: 187 / 255),
@@ -56,7 +54,7 @@ struct BrandSurface: ViewModifier {
         if reduceTransparency || contrast == .increased {
           RoundedRectangle(cornerRadius: radius).fill(Color.qPanel)
         } else {
-          RoundedRectangle(cornerRadius: radius).fill(.regularMaterial)
+          RoundedRectangle(cornerRadius: radius).fill(Color.qPanel)
         }
       }
       .overlay {
@@ -68,10 +66,32 @@ struct BrandSurface: ViewModifier {
           )
           .allowsHitTesting(false)
       }
-      .shadow(color: .black.opacity(reduceTransparency ? 0 : 0.12), radius: 14, y: 6)
+
+  }
+}
+struct ConversationSurface: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorSchemeContrast) private var contrast
+  func body(content: Content) -> some View {
+    content.background {
+      RoundedRectangle(cornerRadius: 14).fill(
+        LinearGradient(colors: reduceTransparency || contrast == .increased ? [Color.qPanel, Color.qPanel]
+          : scheme == .dark ? [.black, Color(red: 0.065, green: 0.038, blue: 0.022), .black]
+          : [.white, Color(red: 1, green: 0.98, blue: 0.95), .white],
+          startPoint: .topLeading, endPoint: .bottomTrailing))
+    }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+  }
+}
+struct OutlinedSurface: ViewModifier {
+  var radius: CGFloat
+  func body(content: Content) -> some View {
+    content.background(Color.qPanel, in: RoundedRectangle(cornerRadius: radius))
+      .overlay(RoundedRectangle(cornerRadius: radius).stroke(.primary.opacity(0.16), lineWidth: 1).allowsHitTesting(false))
   }
 }
 extension View {
+  func outlinedSurface(radius: CGFloat = 10) -> some View { modifier(OutlinedSurface(radius: radius)) }
   func brandSurface(radius: CGFloat = 14) -> some View { modifier(BrandSurface(radius: radius)) }
 }
 
@@ -90,8 +110,8 @@ struct BrandButtonStyle: PrimitiveButtonStyle {
             : contrast == .increased
               ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Brand.textGradient(scheme))
         )
-        .padding(.horizontal, 4).padding(.vertical, 3)
-    }.buttonStyle(.bordered).controlSize(.large).tint(.gray)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+    }.buttonStyle(.plain).outlinedSurface(radius: 7).controlSize(.large)
   }
 }
 
@@ -117,31 +137,30 @@ struct BrandText: ViewModifier {
 }
 
 struct BrandBackdrop: View {
-  var body: some View { Color(nsColor: .windowBackgroundColor).ignoresSafeArea() }
+  var body: some View { Color.qPanel.ignoresSafeArea() }
 }
 
 /// Colour belongs to prose; fenced source code retains a plain, selectable treatment.
 struct AgentResponseView: View {
   let text: String
-  @AppStorage("colourfulAgentResponses") private var colourful = true
+  var embedded = false
+  @AppStorage("colourfulAgentResponses") private var colourful = false
   @Environment(\.colorScheme) private var scheme
   @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      ForEach(Array(text.components(separatedBy: "```").enumerated()), id: \.offset) {
-        index, part in
-        if index.isMultiple(of: 2) {
-          Text(part).font(.body).textSelection(.enabled)
-            .foregroundStyle(
-              colourful && scheme == .dark && contrast != .increased
-                ? AnyShapeStyle(Brand.response) : AnyShapeStyle(Color.primary)
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-          CodeBlock(text: part).frame(minHeight: 60, maxHeight: 280)
-        }
+    Group {
+      if embedded { ResponseDocument(text: text) }
+      else {
+        VStack(alignment: .leading, spacing: 14) {
+          HStack(spacing: 7) {
+            BrandMark().frame(width: 18, height: 18)
+            Text("SuperQode").font(.system(size: 12, weight: .semibold)).foregroundStyle(Brand.wordmarkGradient(scheme))
+          }
+          ResponseDocument(text: text)
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
       }
-    }
+    }.foregroundStyle(colourful && scheme == .dark && contrast != .increased
+      ? AnyShapeStyle(Brand.response) : AnyShapeStyle(Color.primary))
   }
 }
 
@@ -154,25 +173,87 @@ struct NavigationGlass: ViewModifier {
       scheme == .dark ? Color.white.opacity(0.92) : Color.black.opacity(0.88))
     if reduceTransparency || contrast == .increased {
       readable.background(Color.qPanel)
-    } else if #available(macOS 26.0, *) {
-      readable.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     } else {
-      readable.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+      readable.outlinedSurface(radius: 12)
     }
   }
 }
 
-struct BrandActivityIndicator: View {
+/// The animation draws only this small canvas; it does not publish workspace state.
+struct ThinkingBar: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorSchemeContrast) private var contrast
   @AppStorage("animatedInterface") private var animated = true
   var body: some View {
-    HStack(spacing: 8) {
+    Group {
       if reduceMotion || !animated {
-        Image(systemName: "sparkle").foregroundStyle(Brand.gradient)
+        Capsule().fill(Color.qAccent.opacity(0.65))
       } else {
-        Image(systemName: "sparkles").foregroundStyle(Brand.gradient).symbolEffect(.pulse)
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+          Canvas { context, size in
+            let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2) / 2
+            let width = size.width * 0.46
+            let x = (size.width + width) * phase - width
+            let rect = CGRect(x: x, y: 0, width: width, height: size.height)
+            context.fill(Path(roundedRect: rect, cornerRadius: size.height / 2), with:
+              .linearGradient(Gradient(colors: contrast == .increased ? [.primary, .primary] : [Brand.purple, Brand.pink, Brand.orange]),
+                startPoint: CGPoint(x: x, y: 0), endPoint: CGPoint(x: x + width, y: 0)))
+          }
+        }
       }
-      Text("Agent is working").font(.caption.weight(.medium)).modifier(BrandText())
-    }.accessibilityElement(children: .ignore).accessibilityLabel("Agent is working")
+    }.frame(height: 4).background(.primary.opacity(0.07), in: Capsule()).clipShape(Capsule())
+      .accessibilityHidden(true)
+  }
+}
+
+struct BrandActivityIndicator: View {
+  var status = "running"
+  var label: String {
+    status == "needs_approval" ? "Waiting for permission" : status == "cancelling" ? "Stopping agent" : status == "queued" ? "Preparing agent" : "Agent is working"
+  }
+  var body: some View {
+    HStack(spacing: 9) {
+      if status == "needs_approval" { Image(systemName: "hand.raised").foregroundStyle(.orange) }
+      else { ThinkingBar().frame(width: 52) }
+      Text(label).font(.caption.weight(.medium)).modifier(BrandText())
+    }.accessibilityElement(children: .ignore).accessibilityLabel(label)
+  }
+}
+
+struct AgentWorkingCard: View {
+  let status: String
+  var activity = ""
+  var body: some View {
+    HStack(spacing: 12) {
+      BrandMark().frame(width: 25, height: 25)
+      VStack(alignment: .leading, spacing: 8) {
+        Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+        if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
+        Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity.isEmpty ? "Preparing the next step…" : activity)
+          .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+          .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+          .accessibilityLabel("Current agent activity")
+      }
+      Spacer(minLength: 0)
+    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 12))
+      .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.qAccent.opacity(0.12), lineWidth: 1))
+  }
+}
+
+/// Account identity is absent from the view tree until deliberately revealed.
+struct PrivateAccountDetails: View {
+  let identity: String
+  @State private var revealed = false
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Label("Signed-in account", systemImage: "person.crop.circle").font(.caption.weight(.medium))
+        Spacer()
+        Button(revealed ? "Hide account" : "Reveal account") { revealed.toggle() }.font(.caption)
+      }
+      if revealed { Text(identity).font(.caption).textSelection(.enabled) }
+      else { Text("Account details are hidden for screen sharing.").font(.caption).foregroundStyle(.secondary) }
+    }.onDisappear { revealed = false }.onChange(of: identity) { _, _ in revealed = false }
   }
 }

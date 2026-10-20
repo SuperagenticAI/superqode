@@ -3,6 +3,7 @@ import SwiftUI
 /// Inline guidance follows actual project, connection and run state. It never
 /// starts an agent, installs software or changes credentials on the user's behalf.
 struct GettingStartedView: View {
+  @ObservedObject var draftStore: DraftStore
   @EnvironmentObject var app: Workspace
   @AppStorage("nativeShowStarterGuide") private var showStarterGuide = true
   private var hasRun: Bool {
@@ -56,7 +57,7 @@ struct GettingStartedView: View {
           Button("Start with a project overview") {
             app.draft =
               "Explain how this project is structured and suggest one small improvement. Do not edit files or run commands."
-          }.disabled(!app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }.disabled(!draftStore.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .help("Adds a suggested prompt without sending it. Keep or edit it before starting.")
           HStack {
             Button("How it works") { app.showLearningGuide = true }
@@ -68,7 +69,7 @@ struct GettingStartedView: View {
           }
         } else {
           PageTitle(
-            eyebrow: "Workspace", title: "What shall we build?",
+            eyebrow: "Agent Space", title: "What shall we build?",
             subtitle:
               "Describe a change below. Review tool requests and inspect the result as your agent works."
           )
@@ -106,7 +107,7 @@ struct LearningGuideView: View {
       HStack {
         Label("Getting started & learning", systemImage: "book.closed").font(.headline)
         Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+        nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") }
       }
       Picker("Learn", selection: $app.learningTopic) {
         Text("Start coding").tag("Start coding")
@@ -129,7 +130,7 @@ struct LearningGuideView: View {
               "Describe one concrete change and press ⌘Return. Read the streamed output, approve or deny permission requests, and use Stop run if needed. Normal provider or subscription limits apply. Saving credentials does not verify an account."
             )
             HStack {
-              Button(app.project.isEmpty ? "Open project…" : "Go to workspace") {
+              Button(app.project.isEmpty ? "Open project…" : "Go to Agent Space") {
                 dismiss()
                 app.section = "Workspace"
                 app.showWelcome = app.project.isEmpty

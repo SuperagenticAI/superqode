@@ -36,7 +36,7 @@ import SwiftUI
   @StateObject private var workspace = Workspace()
   @State private var showBetaGuide = false
   var body: some Scene {
-    Window("SuperQode", id: "main") {
+    Window(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode", id: "main") {
       RootView().environmentObject(workspace)
         .preferredColorScheme(
           workspace.theme == "system" ? nil : workspace.theme == "light" ? .light : .dark
@@ -72,9 +72,9 @@ import SwiftUI
         Button("Getting Started & Learning") { workspace.showLearningGuide = true }
           .keyboardShortcut("?", modifiers: .command)
       }
-      CommandMenu("Workspace") {
+      CommandMenu("Agent Space") {
         ForEach(Array(Sections.names.enumerated()), id: \.offset) { index, name in
-          Button(name) {
+          Button(Sections.title(for: name)) {
             workspace.showWelcome = workspace.project.isEmpty
             workspace.section = name
           }.keyboardShortcut(
@@ -101,6 +101,7 @@ import SwiftUI
 }
 
 enum Sections {
+  static func title(for section: String) -> String { section == "Workspace" ? "Agent Space" : section }
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
     "Terminal", "Checkpoints",
@@ -117,7 +118,9 @@ extension Color {
         ? NSColor(srgbRed: 0.79, green: 0.47, blue: 0.98, alpha: 1)
         : NSColor(srgbRed: 0.392, green: 0.082, blue: 0.733, alpha: 1)
     })
-  static let qPanel = Color(nsColor: .controlBackgroundColor)
+  static let qPanel = Color(nsColor: NSColor(name: nil) { appearance in
+    appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .white
+  })
 }
 struct BrandMark: View {
   var body: some View {
@@ -153,7 +156,7 @@ struct CodeBlock: View {
     ScrollView([.horizontal, .vertical]) {
       Text(text.isEmpty ? "No output recorded." : text).font(.system(size: 11, design: .monospaced))
         .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .topLeading).padding(14)
-    }.background(.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 9))
+    }.outlinedSurface(radius: 9)
   }
 }
 struct EmptyState: View {
@@ -201,7 +204,7 @@ struct RootView: View {
   }
   private var workspaceShell: some View {
     HStack(spacing: 0) {
-      SidebarView().frame(width: 236).background(.regularMaterial)
+      SidebarView().frame(width: 236).background(Color.qPanel)
       Divider()
       VStack(spacing: 0) {
         HStack(spacing: 12) {
@@ -213,7 +216,7 @@ struct RootView: View {
           .help("Welcome to SuperQode").accessibilityLabel("Welcome to SuperQode")
           Button(action: app.goBack) { Image(systemName: "chevron.left") }
             .disabled(app.navigationHistory.isEmpty).help("Back to previous page")
-          Text(app.section).font(.system(size: 12, weight: .medium))
+          Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium))
           Text("/").foregroundStyle(.tertiary)
           Text(string(app.project, "name", "No project")).font(.system(size: 12)).foregroundStyle(
             .secondary)
@@ -237,7 +240,7 @@ struct RootView: View {
           .horizontal, 12
         ).padding(.vertical, 6)
         if app.project.isEmpty {
-          GettingStartedView()
+          GettingStartedView(draftStore: app.draftStore)
         } else {
           GeometryReader { geometry in
             Group {
@@ -255,7 +258,7 @@ struct RootView: View {
             }.id(app.section).transition(.opacity).frame(
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.22))
+            .background(Color.qPanel)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.primary.opacity(0.07)))
           }.padding(.horizontal, 20).padding(.bottom, 20)
@@ -264,11 +267,9 @@ struct RootView: View {
           HStack {
             Text(app.notice).font(.caption)
             Spacer()
-            Button {
-              app.notice = ""
-            } label: {
+            nativeButton("notice.close", action: { app.notice = "" }, title: "Dismiss notification") {
               Image(systemName: "xmark")
-            }.buttonStyle(.plain)
+            }
           }.padding(12).background(Color.qAccent.opacity(0.1))
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -305,17 +306,17 @@ struct SidebarView: View {
           Spacer()
           Image(systemName: "plus").font(.caption)
         }.padding(10)
-      }.buttonStyle(.plain).background(
-        .primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8)
-      ).padding(.horizontal, 14)
+      }.buttonStyle(.plain).outlinedSurface(radius: 8).padding(.horizontal, 14)
       if !app.projects.isEmpty {
-        Menu("Recent projects") {
+        Menu {
           ForEach(app.projects, id: \.projectRowID) { row in
             Button(URL(fileURLWithPath: string(row, "path")).lastPathComponent) {
               app.perform { try await app.open(string(row, "path")) }
             }
           }
-        }.font(.caption).padding(.horizontal, 24).padding(.vertical, 10)
+        } label: {
+          Label("Recent projects", systemImage: "clock").font(.caption).foregroundStyle(.primary)
+        }.menuStyle(.borderlessButton).padding(.horizontal, 24).padding(.vertical, 10)
       }
       navigationItems
       Divider().padding(18)
@@ -369,20 +370,21 @@ struct SidebarView: View {
     } label: {
       HStack(spacing: 12) {
         Image(systemName: Sections.icons[index]).frame(width: 19)
-        Text(name).font(.system(size: 13, weight: app.section == name ? .semibold : .regular))
+        Text(Sections.title(for: name)).font(.system(size: 13, weight: app.section == name ? .semibold : .regular))
         Spacer()
       }.padding(.horizontal, 12).padding(.vertical, 9)
         .foregroundStyle(app.section == name ? Color.primary : Color.primary.opacity(0.75))
         .background(
-          app.section == name ? Brand.pink.opacity(0.13) : .clear,
+          Color.qPanel,
           in: RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(app.section == name ? Color.qAccent : Color.clear, lineWidth: 1))
     }.buttonStyle(.plain).disabled(app.project.isEmpty && name != "Workspace")
       .accessibilityAddTraits(app.section == name ? .isSelected : [])
   }
   private var recentRuns: some View {
     ScrollView {
       LazyVStack(spacing: 3) {
-        ForEach(app.projectJobs, id: \.projectRowID) { job in
+        ForEach(app.recentConversations, id: \.projectRowID) { job in
           Button {
             app.selectJob(string(job, "id"))
             app.section =
@@ -392,13 +394,14 @@ struct SidebarView: View {
                 ? "Optimization" : string(job, "kind") == "evaluation" ? "Evaluations" : "Workspace"
           } label: {
             VStack(alignment: .leading, spacing: 5) {
-              Text(string(job, "title")).font(.system(size: 12)).lineLimit(2)
+              Text(string(job, "conversation_title", string(job, "title"))).font(.system(size: 12)).lineLimit(2)
               Text(string(job, "kind") + " · " + string(job, "status")).font(
                 .system(size: 11, design: .monospaced)
               ).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(
-              app.selectedJob == string(job, "id") ? Color.primary.opacity(0.06) : Color.clear,
+              Color.qPanel,
               in: RoundedRectangle(cornerRadius: 6))
+              .overlay(RoundedRectangle(cornerRadius: 6).stroke(app.selectedConversationID == string(job, "conversation_id", string(job, "id")) ? Color.qAccent : Color.clear, lineWidth: 1))
           }.buttonStyle(.plain)
         }
       }.padding(.horizontal, 14).padding(.top, 8)
@@ -450,240 +453,247 @@ struct RouteControls: View {
 }
 struct CodingView: View {
   @EnvironmentObject var app: Workspace
-  @State private var continueSession = false
-  @State private var showQueue = false
-  @State private var showContext = false
-  @FocusState private var composerFocused: Bool
-  @State private var showAdvanced = false
   @State private var showInspector = false
   var body: some View {
     HStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: 0) {
-        HStack {
-          VStack(alignment: .leading, spacing: 7) {
-            Text(
-              app.selectedJob.isEmpty
-                ? "What shall we build?" : string(app.detail, "title", "Loading run…")
-            ).font(.system(size: 24, weight: .medium)).lineLimit(2)
-            Text("Code on your Mac. Evaluate the result. Improve your harness.").font(
-              .system(size: 12)
-            )
-            .foregroundStyle(.secondary)
-          }
+      VStack(spacing: 0) {
+        HStack(spacing: 12) {
+          Text(app.selectedJob.isEmpty ? "New conversation" : string(app.detail, "title", "Conversation"))
+            .font(.system(size: 16, weight: .semibold)).lineLimit(1)
           Spacer()
+          if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
           if !app.selectedJob.isEmpty {
-            Button {
-              showInspector.toggle()
-            } label: {
-              Image(systemName: "sidebar.right")
-            }.help(showInspector ? "Hide run details" : "Show run details and changes")
-            Pill(
-              title: string(app.detail, "status", "loading"), color: app.active ? .orange : .qAccent
-            )
+            Button("New conversation", systemImage: "square.and.pencil") { app.selectJob("") }
+              .disabled(app.active || app.busy)
+            Button { showInspector.toggle() } label: { Image(systemName: "sidebar.right") }
+              .help("Show changes and run details").accessibilityLabel("Show changes and run details")
           }
-        }.padding(26)
+        }.padding(.horizontal, 24).padding(.vertical, 14)
         Divider()
         if app.selectedJob.isEmpty {
-          GettingStartedView().frame(minHeight: 0, maxHeight: .infinity)
+          GettingStartedView(draftStore: app.draftStore).frame(minHeight: 220, maxHeight: .infinity)
         } else {
-          EventStream().frame(minHeight: 80, maxHeight: .infinity)
+          EventStream().frame(minHeight: 220, maxHeight: .infinity)
         }
-        VStack(alignment: .leading, spacing: 12) {
-          HStack(spacing: 10) {
-            Image(systemName: app.isManaged ? "terminal" : "cpu").foregroundStyle(Brand.gradient)
-            VStack(alignment: .leading, spacing: 3) {
-              Text(
-                app.isManaged
-                  ? string(
-                    app.harnesses.first { string($0, "id") == app.harness } ?? [:], "name",
-                    "Coding agent")
-                  : (app.model.isEmpty ? "Choose an agent or model to start" : app.model)
-              )
-              .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-              Text(
-                app.isManaged
-                  ? "Agent-owned connection"
-                  : (app.model.isEmpty ? "Use your existing setup" : app.provider)
-              )
-              .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Context…") { showContext = true }
-            Button("Change…") { app.showConnection = true }
-          }
-          if !app.isManaged {
-            DisclosureGroup("Advanced routing", isExpanded: $showAdvanced) {
-              RouteControls().padding(.top, 8)
-            }.font(.caption)
-          }
-          RouteReadiness()
-          if !app.isManaged {
-            HStack {
-              Picker("Interaction", selection: $app.interactionMode) {
-                Text("Code").tag("code")
-                Text("Chat").tag("chat")
-              }.labelsHidden().pickerStyle(.segmented).frame(width: 160).disabled(app.active)
-              if app.interactionMode == "chat" {
-                Text("Messages and images only · no project instructions or tools").font(.caption)
-                  .foregroundStyle(.secondary)
-              }
-            }
-          }
-
-          if app.active { BrandActivityIndicator() }
-
-          if app.isACP && !app.agentSession.isEmpty { AgentControlsView() }
-          if app.isACP && !app.agentCommands.isEmpty {
-            Menu("Agent commands") {
-              ForEach(app.agentCommands, id: \.projectRowID) { command in
-                Button("/" + string(command, "name")) {
-                  app.draft = "/" + string(command, "name") + " "
-                }
-              }
-            }.disabled(app.active)
-          }
-          if !app.imageAttachments.isEmpty {
-            ScrollView(.horizontal) {
-              HStack {
-                ForEach(app.imageAttachments, id: \.projectRowID) { image in
-                  HStack {
-                    if let preview = NSImage(contentsOfFile: string(image, "path")) {
-                      Image(nsImage: preview).resizable().scaledToFit().frame(width: 44, height: 36)
-                    }
-                    Text(string(image, "name")).font(.caption).lineLimit(1)
-                    Button {
-                      app.imageAttachments.removeAll { string($0, "id") == string(image, "id") }
-                    } label: {
-                      Image(systemName: "xmark.circle")
-                    }.buttonStyle(.borderless)
-                  }.padding(6).brandSurface(radius: 8)
-                }
-              }
-            }
-          }
-          if !app.contextFiles.isEmpty {
-            ScrollView(.horizontal) {
-              HStack {
-                ForEach(app.contextFiles, id: \.self) { path in
-                  Button {
-                    app.contextFiles.removeAll { $0 == path }
-                  } label: {
-                    Label(path, systemImage: "xmark.circle").font(.caption)
-                  }.buttonStyle(.borderless).help("Remove attachment")
-                }
-              }
-            }
-          }
-          TextEditor(text: $app.draft).focused($composerFocused).font(
-            .system(size: 13, design: .monospaced)
-          )
-          .scrollContentBackground(.hidden).frame(height: 100).padding(8).background(
-            .black.opacity(0.08), in: RoundedRectangle(cornerRadius: 6)
-          ).overlay(alignment: .topLeading) {
-            if app.draft.isEmpty {
-              Text("Describe the change you want to make…").font(
-                .system(size: 13, design: .monospaced)
-              ).foregroundStyle(.tertiary).padding(14).allowsHitTesting(false)
-            }
-          }
-          HStack {
-            Menu("Tasks") {
-              Button("Open queue…") { showQueue = true }
-              Button("Add draft to queue", action: app.enqueueDraft)
-                .disabled(app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }.menuStyle(.borderlessButton).fixedSize().disabled(app.projectID.isEmpty)
-            Menu {
-              Button("Project text files…", action: app.attachFiles)
-              Button("Images…", action: app.attachImages)
-              Button("Paste image", action: app.pasteImage)
-            } label: {
-              Image(systemName: "paperclip")
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().frame(width: 28)
-            .help("Attach project text files or images").accessibilityLabel("Attach context")
-            .disabled(app.projectID.isEmpty || app.active)
-            Button {
-              composerFocused = true
-              DispatchQueue.main.async {
-                NSApp.sendAction(NSSelectorFromString("startDictation:"), to: nil, from: nil)
-              }
-            } label: {
-              Image(systemName: "mic")
-            }.help("Start macOS Dictation in the focused text editor").accessibilityLabel(
-              "Dictate prompt")
-            if !app.selectedJob.isEmpty
-              && ["task", "compaction"].contains(string(app.detail, "kind"))
-            {
-              Toggle("Continue session", isOn: $continueSession).font(.caption).disabled(
-                !app.canContinue)
-            }
-            Spacer()
-            if app.canSteer {
-              Button("Steer run", action: app.steerDraft).disabled(
-                app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            if app.active {
-              Button(
-                app.isRemote ? "Cancel remote task" : "Stop run", role: .destructive,
-                action: app.cancel
-              ).help(
-                app.isRemote
-                  ? "Request cancellation from the remote server and report its acknowledgement."
-                  : "Stop this local run")
-            }
-            Button {
-              app.send(continueSession: continueSession && !app.selectedJob.isEmpty)
-            } label: {
-              Label(
-                app.interactionMode == "chat" ? "Send message" : "Start coding",
-                systemImage: "arrow.up")
-            }.buttonStyle(BrandButtonStyle()).disabled(
-              app.busy || app.active
-                || app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || (!app.isManaged && app.model.isEmpty)
-            ).keyboardShortcut(.return, modifiers: .command)
-          }
-        }.padding(16).brandSurface().padding(20)
-      }.frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        CodingComposer(draftStore: app.draftStore)
+      }.frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
       if !app.selectedJob.isEmpty && showInspector {
         Divider()
         InspectorView().frame(width: 300)
       }
-    }.centeredDialog(isPresented: $showQueue, title: "Task queue") {
+    }
+  }
+}
+struct CodingComposer: View {
+  @ObservedObject var draftStore: DraftStore
+  @EnvironmentObject var app: Workspace
+  @State private var showQueue = false
+  @State private var showContext = false
+  @State private var showOptions = false
+  @FocusState private var composerFocused: Bool
+  private var route: [String: Any] {
+    app.harnesses.first { string($0, "id") == app.harness } ?? [:]
+  }
+  private var connectionName: String {
+    app.connectionDisconnected ? "No connection" : app.isManaged ? string(route, "name", "Coding agent")
+      : (app.model.isEmpty ? "Choose a connection" : app.model)
+  }
+  private var continuesConversation: Bool {
+    app.canContinueConversation
+  }
+  var body: some View {
+    composer
+    .centeredDialog(isPresented: $showQueue, title: "Task queue") {
       TaskQueueView().environmentObject(app)
     }
     .centeredDialog(isPresented: $showContext, title: "Project context") {
       ContextPreviewView().environmentObject(app)
     }
-    .onChange(of: app.draft) { _, _ in app.saveDraft() }.onChange(of: app.selectedJob) { _, _ in
-      continueSession = false
+    .onChange(of: draftStore.text) { _, _ in app.scheduleDraftSave() }
+    .onChange(of: app.selectedJob) { _, _ in composerFocused = true }
+  }
+  private var composer: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 10) {
+        Image(systemName: app.isManaged ? "terminal" : "cpu").foregroundStyle(Brand.gradient)
+        Text(connectionName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+        Text(app.connectionDisconnected ? "Not connected" : app.isACP ? "ACP" : app.isManaged ? "Subscription / agent" : app.provider)
+          .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        Spacer()
+        Button(app.connectionDisconnected ? "Connect…" : "Change connection…") { app.showConnection = true }
+          .disabled(app.active || app.busy)
+        if !app.connectionDisconnected {
+          nativeButton("connection.disconnect", action: app.disconnectConnection, title: "Disconnect coding agent") {
+            Label("Disconnect", systemImage: "xmark.circle").font(.caption)
+          }.disabled(app.anyActive || app.busy).help("Disconnect from this Agent Space. Saved sign-ins remain on your Mac.")
+        }
+        Button { showOptions.toggle() } label: { Image(systemName: "slider.horizontal.3") }
+          .disabled(app.connectionDisconnected)
+          .accessibilityLabel("Connection and model options").help("Connection and model options")
+          .popover(isPresented: $showOptions, arrowEdge: .top) {
+            connectionOptions
+          }
+      }
+      if app.isManaged || app.routeStatus["ready"] as? Bool == false {
+        HStack {
+          if app.checkingConnection { ProgressView().controlSize(.small) }
+          Text(string(app.routeStatus, "message", "The agent owns sign-in and model access."))
+            .font(.caption).foregroundStyle(app.routeStatus["ready"] as? Bool == false ? Color.orange : Color.secondary)
+            .lineLimit(2).textSelection(.enabled)
+          if string(app.routeStatus, "state") == "connection-failed" {
+            Button("Retry") { app.perform { await app.checkManagedConnection() } }.font(.caption)
+          }
+        }
+      }
+      if app.isACP {
+        if !app.agentModels.isEmpty {
+          Picker("Model", selection: $app.agentModel) {
+            Text("Agent default").tag("")
+            ForEach(app.agentModels, id: \.agentModelID) { row in
+              Text(string(row, "name", row.agentModelID) + (row["free"] as? Bool == true ? " · Free" : ""))
+                .tag(row.agentModelID)
+            }
+          }.disabled(app.active || app.checkingConnection)
+        } else if !app.checkingConnection {
+          Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
+        }
+      }
+      attachments
+      PromptEditor(text: $draftStore.text) { app.send(continueSession: continuesConversation) }
+        .focused($composerFocused)
+        .frame(height: app.draft.contains("\n") ? 92 : 54).padding(8)
+        .outlinedSurface(radius: 8)
+        .overlay(alignment: .topLeading) {
+          if app.draft.isEmpty {
+            Text(app.active ? "Draft your next message…" : continuesConversation ? "Ask a follow-up or describe the next change…" : "Describe the change you want to make…")
+              .font(.system(size: 14)).foregroundStyle(.secondary).padding(13).allowsHitTesting(false)
+          }
+        }
+        .accessibilityLabel("Message your coding agent")
+      HStack(spacing: 12) {
+        Menu {
+          Button("Project text files…", action: app.attachFiles)
+          Button("Images…", action: app.attachImages)
+          Button("Paste image", action: app.pasteImage)
+        } label: { Image(systemName: "paperclip") }
+          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().frame(width: 24)
+          .accessibilityLabel("Attach context").disabled(app.projectID.isEmpty || app.active)
+        Button("Context…") { showContext = true }.font(.caption)
+        Menu("Tasks") {
+          Button("Open queue…") { showQueue = true }
+          Button("Add draft to queue", action: app.enqueueDraft).disabled(app.draft.isEmpty || app.connectionDisconnected)
+        }.menuStyle(.borderlessButton).fixedSize().font(.caption).disabled(app.projectID.isEmpty)
+        if app.isACP && !app.agentCommands.isEmpty {
+          Menu("Agent commands") {
+            ForEach(app.agentCommands, id: \.projectRowID) { command in
+              Button("/" + string(command, "name")) { app.draft = "/" + string(command, "name") + " " }
+            }
+          }.font(.caption).disabled(app.active)
+        }
+        Spacer()
+        if app.canSteer {
+          Button("Steer run", action: app.steerDraft).disabled(app.draft.isEmpty)
+        }
+        if app.active {
+          Button("Stop", systemImage: "stop.fill", action: app.cancel)
+            .help("Stop the current run; wait for the agent to acknowledge cancellation")
+        } else {
+          Text(app.connectionDisconnected ? "Connect an agent to start coding" : continuesConversation ? "Continuing conversation" : "Enter to send · Shift+Enter for a new line")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        Button {
+          app.send(continueSession: continuesConversation)
+        } label: {
+          Label(app.busy ? "Starting…" : "Send", systemImage: "arrow.up")
+        }.buttonStyle(BrandButtonStyle())
+          .disabled(app.busy || app.active || app.checkingConnection || app.projectID.isEmpty
+            || app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || app.connectionDisconnected || (!app.isManaged && app.model.isEmpty))
+          .keyboardShortcut(.return, modifiers: .command)
+      }
+    }.padding(16).brandSurface().padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
+  }
+  private var connectionOptions: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack {
+        Text("Connection options").font(.headline)
+        Spacer()
+        nativeButton("options.close", action: { showOptions = false }, title: "Close connection options") { Text("Done") }
+      }
+      RouteReadiness()
+      let identity = string(app.connectionMetadata[app.harness] ?? [:], "identity")
+      if !identity.isEmpty { PrivateAccountDetails(identity: identity).id(app.harness) }
+      if app.isACP {
+        if !app.agentSession.isEmpty { AgentControlsView() }
+        Text("The selected agent owns sign-in, models and tools. Its supported settings appear after the first connection.")
+          .font(.caption).foregroundStyle(.secondary)
+      } else if !app.isManaged {
+        RouteControls()
+        Picker("Interaction", selection: $app.interactionMode) {
+          Text("Code").tag("code")
+          Text("Chat").tag("chat")
+        }.pickerStyle(.segmented).disabled(app.active)
+      } else {
+        let models = app.connectionMetadata[app.harness]?["models"] as? [[String: Any]] ?? []
+        if !models.isEmpty {
+          Picker("Agent model", selection: $app.model) {
+            Text("Agent default").tag("")
+            ForEach(models, id: \.projectRowID) { model in
+              Text(string(model, "name", string(model, "id"))).tag(string(model, "id"))
+            }
+          }.disabled(app.active)
+        }
+      }
+      if app.isManaged {
+        Button(app.checkingConnection ? "Checking…" : "Check connection") {
+          app.perform { await app.checkManagedConnection() }
+        }.disabled(app.checkingConnection || app.active)
+      }
+    }.padding(20).frame(minWidth: 540)
+  }
+  @ViewBuilder private var attachments: some View {
+    if !app.imageAttachments.isEmpty || !app.contextFiles.isEmpty {
+      ScrollView(.horizontal) {
+        HStack {
+          ForEach(app.contextFiles, id: \.self) { path in
+            nativeButton("attachment.file." + path, action: { app.contextFiles.removeAll { $0 == path } }, padded: false, title: "Remove " + path) {
+              Label(path, systemImage: "xmark.circle").font(.caption)
+            }.buttonStyle(.borderless)
+          }
+          ForEach(app.imageAttachments, id: \.projectRowID) { image in
+            nativeButton("attachment.image." + string(image, "id"), action: { app.imageAttachments.removeAll { string($0, "id") == string(image, "id") } }, padded: false, title: "Remove " + string(image, "name")) {
+              Label(string(image, "name"), systemImage: "xmark.circle").font(.caption)
+            }.buttonStyle(.borderless)
+          }
+        }
+      }.frame(maxHeight: 28)
     }
   }
 }
+
 /// Coalesce consecutive model deltas for readable paragraphs while retaining raw evidence.
 func displayEvents(_ events: [[String: Any]]) -> [[String: Any]] {
   var rows: [[String: Any]] = []
+  var parts: [String] = []
+  func flush() {
+    guard !parts.isEmpty else { return }
+    rows.append(["type": "output", "data": ["text": parts.joined()], "coalesced": true])
+    parts.removeAll(keepingCapacity: true)
+  }
   for event in events {
     let data = event["data"] as? [String: Any] ?? [:]
     let payload = data["payload"] as? [String: Any] ?? [:]
-    let delta =
-      string(event, "type") == "harness_event"
+    let delta = string(event, "type") == "harness_event"
       && ["delta", "model_delta", "message.delta"].contains(string(data, "event"))
     let answer = string(event, "type") == "answer"
     if delta || answer {
-      let text = answer ? string(data, "text") : string(payload, "text", string(payload, "content"))
-      if rows.last?["coalesced"] as? Bool == true {
-        var last = rows.removeLast()
-        let old = last["data"] as? [String: Any] ?? [:]
-        last["data"] = ["text": string(old, "text") + text]
-        rows.append(last)
-      } else {
-        rows.append(["type": "output", "data": ["text": text], "coalesced": true])
-      }
+      parts.append(answer ? string(data, "text") : string(payload, "text", string(payload, "content")))
     } else {
+      flush()
       rows.append(event)
     }
   }
+  flush()
   return rows
 }
 /// Keep approvals, tool work, errors and unknown events visible. Routine engine
@@ -691,58 +701,128 @@ func displayEvents(_ events: [[String: Any]]) -> [[String: Any]] {
 func conversationEvents(_ events: [[String: Any]], includeDetails: Bool) -> [[String: Any]] {
   let rows = displayEvents(events)
   guard !includeDetails else { return rows }
-  return rows.filter { row in
+  var visible: [[String: Any]] = []
+  var activity: [[String: Any]] = []
+  for row in rows {
     let type = string(row, "type")
-    if ["stage", "provenance", "checkpoint", "control_capabilities"].contains(type) {
-      return false
+    let data = row["data"] as? [String: Any] ?? [:]
+    let name = string(data, "event")
+    if ["approval", "error"].contains(type)
+      || (type == "output" && row["coalesced"] as? Bool == true)
+      || (type == "harness_event" && ["error", "failure", "failed"].contains(name)) {
+      visible.append(row)
+    } else {
+      activity.append(row)
     }
-    if type == "harness_event" {
-      let data = row["data"] as? [String: Any] ?? [:]
-      return !["run_start", "run_end", "model_request", "control_capabilities", "thinking"]
-        .contains(string(data, "event"))
-    }
-    return true
+  }
+  if !activity.isEmpty {
+    visible.append(["type": "activity_group", "data": ["events": activity]])
+  }
+  return visible
+}
+
+/// Completed turns do not rerender their Markdown on every live agent delta.
+struct HistoricalConversationTurn: View, Equatable {
+  let prompt: String
+  let response: String
+  let harness: String
+  let status: String
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
+        .foregroundStyle(Color.qAccent)
+      Text(prompt).font(.system(size: 15)).textSelection(.enabled)
+      if !response.isEmpty {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(harness).font(.caption).foregroundStyle(.secondary)
+          ResponseDocument(text: response)
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+          .modifier(ConversationSurface())
+      }
+      if status != "completed" {
+        Text("Previous response: " + status).font(.caption).foregroundStyle(.secondary)
+      }
+      Divider()
+    }.padding(.bottom, 12)
   }
 }
+
 struct EventStream: View {
   @EnvironmentObject var app: Workspace
   @State private var follow = true
-  @State private var showActivity = false
   var body: some View {
+    let rows = conversationEvents(app.events, includeDetails: false)
+    let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
     VStack(spacing: 0) {
       HStack {
-        Text("CONVERSATION").font(.system(size: 11, design: .monospaced)).foregroundStyle(
+        Text("CONVERSATION").font(.system(size: 12, design: .monospaced)).foregroundStyle(
           .secondary)
         Spacer()
-        Toggle("Activity details", isOn: $showActivity).toggleStyle(.checkbox).font(.caption)
         Toggle("Follow", isOn: $follow).toggleStyle(.checkbox).font(.caption)
         Button("Export…", action: app.exportEvidence).font(.caption)
       }.padding(.horizontal, 20).padding(.top, 10)
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 10) {
+            if !app.earlierHistory.isEmpty {
+              Button("Load earlier messages") {
+                app.perform { await app.loadConversationHistory(earlier: true) }
+              }.disabled(app.loadingHistory)
+            }
+            ForEach(app.conversationHistory, id: \.projectRowID) { turn in
+              HistoricalConversationTurn(prompt: string(turn, "prompt"), response: string(turn, "response"),
+                harness: string(turn, "harness"), status: string(turn, "status")).equatable()
+            }
             if let request = app.detail["request"] as? [String: Any],
               !string(request, "prompt").isEmpty
             {
               VStack(alignment: .leading, spacing: 8) {
                 Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
                   .foregroundStyle(Color.qAccent)
-                Text(string(request, "prompt")).font(.system(size: 13)).textSelection(.enabled)
+                Text(string(request, "prompt")).font(.system(size: 15)).textSelection(.enabled)
+                if let continuity = request["_continuity"] as? [String: Any] {
+                  Label(string(continuity, "mode") == "handoff" ? "Conversation handed to this agent" : "Agent session resumed",
+                    systemImage: "arrow.triangle.branch").font(.caption).foregroundStyle(.secondary)
+                  if (continuity["omitted_messages"] as? Int ?? 0) > 0 {
+                    Text("Some earlier messages exceed the agent context limit. Your full conversation remains available above.")
+                      .font(.caption).foregroundStyle(.secondary)
+                  }
+                  if continuity["historical_attachments"] as? Bool == true {
+                    Text("Reattach earlier images if this agent needs them.").font(.caption).foregroundStyle(.secondary)
+                  }
+                }
               }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(
-                Color.qAccent.opacity(0.07), in: RoundedRectangle(cornerRadius: 10)
-              ).padding(.bottom, 10)
+                Color.qPanel, in: RoundedRectangle(cornerRadius: 10)
+              ).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.qAccent.opacity(0.35), lineWidth: 1)).padding(.bottom, 10)
             }
-            ForEach(
-              Array(conversationEvents(app.events, includeDetails: showActivity).enumerated()),
-              id: \.offset
-            ) { _, event in
-              EventRow(event: event)
+            let messages = rows.filter { string($0, "type") != "activity_group" }
+            if !messages.isEmpty {
+              VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 7) {
+                  BrandMark().frame(width: 18, height: 18)
+                  Text("SuperQode").font(.system(size: 12, weight: .semibold)).modifier(BrandText())
+                }
+                ForEach(Array(messages.enumerated()), id: \.offset) { index, event in
+                  if index > 0 { Divider() }
+                  EventRow(event: event, embeddedResponse: true)
+                }
+              }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
             }
             Color.clear.frame(height: 1).id("bottom")
-          }.padding(20)
+          }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }.onChange(of: app.events.count) { _, _ in
           if follow { proxy.scrollTo("bottom", anchor: .bottom) }
         }
+      }
+      if app.active || !activity.isEmpty {
+        Divider()
+        VStack(spacing: 6) {
+          if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
+          if !activity.isEmpty {
+            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
+              .id(app.selectedJob)
+          }
+        }.padding(.horizontal, 24).padding(.vertical, 10)
       }
     }
   }
@@ -750,11 +830,14 @@ struct EventStream: View {
 struct EventRow: View {
   @EnvironmentObject var app: Workspace
   let event: [String: Any]
+  var embeddedResponse = false
   var type: String { string(event, "type") }
   var data: [String: Any] { event["data"] as? [String: Any] ?? [:] }
   var body: some View {
     Group {
-      if type == "approval" {
+      if type == "activity_group" {
+        AgentActivityView(events: data["events"] as? [[String: Any]] ?? [], active: app.active)
+      } else if type == "approval" {
         VStack(alignment: .leading, spacing: 10) {
           Label("Permission requested", systemImage: "hand.raised").font(.headline).foregroundStyle(
             .orange)
@@ -794,23 +877,30 @@ struct EventRow: View {
       } else if type == "harness_event" {
         let name = string(data, "event")
         let payload = data["payload"] as? [String: Any] ?? [:]
-        if ["delta", "model_delta", "message.delta"].contains(name) {
-          AgentResponseView(text: string(payload, "text", string(payload, "content")))
+        if ["error", "failure", "failed"].contains(name) {
+          Label(string(payload, "message", string(payload, "text", pretty(payload))), systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.red).textSelection(.enabled).padding(12)
+        } else if ["delta", "model_delta", "message.delta"].contains(name) {
+          AgentResponseView(text: string(payload, "text", string(payload, "content")), embedded: embeddedResponse)
         } else {
           DisclosureGroup(name) {
             Text(pretty(payload)).font(.system(size: 11, design: .monospaced)).textSelection(
               .enabled
             ).frame(maxWidth: .infinity, alignment: .leading)
-          }.font(.caption).padding(10).background(
-            .primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 6))
+          }.font(.caption).padding(10).outlinedSurface(radius: 6)
         }
       } else if type == "output" {
         if event["coalesced"] as? Bool == true {
-          AgentResponseView(text: string(data, "text"))
+          AgentResponseView(text: string(data, "text"), embedded: embeddedResponse)
         } else {
-          Text(string(data, "text")).font(.system(size: 12, design: .monospaced)).textSelection(
-            .enabled)
+          AgentResponseView(text: string(data, "text"), embedded: embeddedResponse)
         }
+      } else if type == "error" {
+        VStack(alignment: .leading, spacing: 8) {
+          Label("The agent could not complete this request", systemImage: "exclamationmark.triangle").font(.headline)
+          Text(string(data, "message", pretty(data))).font(.system(size: 14)).textSelection(.enabled)
+          Button("Change connection…") { app.showConnection = true }
+        }.foregroundStyle(.red).padding(16).frame(maxWidth: .infinity, alignment: .leading)
       } else {
         DisclosureGroup(type.replacingOccurrences(of: "_", with: " ").capitalized) {
           Text(pretty(data)).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
@@ -871,7 +961,7 @@ struct InspectorView: View {
         CodeBlock(text: pretty(app.detail["result"]))
         Button("Export run evidence…", action: app.exportEvidence).disabled(app.selectedJob.isEmpty)
       }
-    }.padding(18).frame(maxHeight: .infinity, alignment: .top).background(.primary.opacity(0.018))
+    }.padding(18).frame(maxHeight: .infinity, alignment: .top).background(Color.qPanel)
   }
 }
 struct DiffView: View {
@@ -887,7 +977,7 @@ struct DiffView: View {
         }
       }.font(.system(size: 12, design: .monospaced)).padding(12).frame(
         maxWidth: .infinity, alignment: .leading)
-    }.background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }.outlinedSurface(radius: 8)
   }
   private func ink(for line: String) -> Color {
     guard contrast != .increased else { return .primary }

@@ -7,6 +7,27 @@ struct FileEdit {
   let text: String
 }
 
+@MainActor final class DraftStore: ObservableObject {
+  @Published var text = ""
+}
+
+@MainActor private final class DialogAuditState: ObservableObject {
+  @Published var shown = false
+  @Published var nested = false
+  @Published var title = "Dialog check"
+  @Published var content = AnyView(EmptyView())
+}
+private struct DialogAuditHost: View {
+  @ObservedObject var state: DialogAuditState
+  var body: some View {
+    Color.clear.centeredDialog(isPresented: $state.shown, title: state.title) {
+      state.content.centeredDialog(isPresented: $state.nested, title: "Nested dialog check") {
+        Text("Nested dialog").frame(width: 320, height: 120)
+      }
+    }
+  }
+}
+
 @MainActor final class Workspace: ObservableObject {
   let engine = Engine()
   let terminals = ProjectTerminals()
@@ -23,15 +44,49 @@ struct FileEdit {
   @Published var agentModel = ""
   @Published var agentMode = ""
   @Published var agentConfig: [String: String] = [:]
+  @Published var connectionMetadata: [String: [String: Any]] = [:]
+  @Published var checkingConnection = false
+  private var connectionGeneration = 0
   var agentSession: [String: Any] {
-    let event = events.last {
+    let currentEvents = string(detail["request"] as? [String: Any] ?? [:], "harness") == harness ? events : []
+    let event = currentEvents.last {
       string($0, "type") == "harness_event"
         && string($0["data"] as? [String: Any] ?? [:], "event") == "acp_session"
     }
-    return (event?["data"] as? [String: Any])?["payload"] as? [String: Any] ?? [:]
+    return (event?["data"] as? [String: Any])?["payload"] as? [String: Any]
+      ?? connectionMetadata[harness]?["session"] as? [String: Any] ?? [:]
+  }
+  var acpConnections: [[String: Any]] {
+    var seen = Set<String>()
+    return harnesses.filter { string($0, "desktop_kind") == "acp" }
+      .sorted { string($0, "id").hasPrefix("acp:") && !string($1, "id").hasPrefix("acp:") }
+      .filter { route in
+        let semantics: [String: Any] = [
+          "command": string(route, "command", string(route, "id")),
+          "vendor": string(route, "subscription_vendor"), "env": route["extra_env"] ?? [:],
+        ]
+        let key = (try? JSONSerialization.data(withJSONObject: semantics, options: .sortedKeys))
+          .map { String(decoding: $0, as: UTF8.self) } ?? string(route, "id")
+        return seen.insert(key).inserted
+      }
+  }
+  var agentModels: [[String: Any]] {
+    let state = agentSession["models"] as? [String: Any] ?? [:]
+    let live = state["availableModels"] as? [[String: Any]] ?? []
+    let cached = (connectionMetadata[harness]?["session"] as? [String: Any])?["models"] as? [String: Any] ?? [:]
+    let catalog = cached["availableModels"] as? [[String: Any]] ?? []
+    let byID = catalog.reduce(into: [String: [String: Any]]()) { $0[$1.agentModelID] = $1 }
+    return (live.isEmpty ? catalog : live).map { row in
+      guard let metadata = byID[row.agentModelID] else { return row }
+      return metadata.merging(row) { _, current in current }
+    }.sorted {
+      if ($0["free"] as? Bool == true) != ($1["free"] as? Bool == true) { return $0["free"] as? Bool == true }
+      return string($0, "name", $0.agentModelID) < string($1, "name", $1.agentModelID)
+    }
   }
   var agentCommands: [[String: Any]] {
-    let event = events.last {
+    let currentEvents = string(detail["request"] as? [String: Any] ?? [:], "harness") == harness ? events : []
+    let event = currentEvents.last {
       string($0, "type") == "harness_event"
         && string($0["data"] as? [String: Any] ?? [:], "event") == "commands"
     }
@@ -76,12 +131,21 @@ struct FileEdit {
   @Published var events: [[String: Any]] = []
   @Published var git: [String: Any] = [:]
   @Published var files: [String] = []
-  @Published var fileDrafts: [String: FileEdit] = [:]
+  var fileDrafts: [String: FileEdit] = [:]
   @Published var capabilities: [String: Any] = [:]
   @Published var provider = "openai"
   @Published var model = ""
   @Published var harness = "superqode"
-  @Published var draft = ""
+  let draftStore = DraftStore()
+  private var draftSaveTask: Task<Void, Never>?
+  var draft: String {
+    get { draftStore.text }
+    set {
+      guard draftStore.text != newValue else { return }
+      draftStore.text = newValue
+      scheduleDraftSave()
+    }
+  }
   @Published var interactionMode = "code"
   @Published var contextWindow = ""
   @Published var summarizeContext = false
@@ -93,8 +157,14 @@ struct FileEdit {
   @Published var busy = false
   @Published var candidate: [String: Any] = [:]
   private var poller: Task<Void, Never>?
-  private var loadingDetail = false
+  private var detailGeneration = 0
+  private var detailRequests = Set<String>()
+  private var pendingPreferences: [(String, String)]?
+  private var writingPreferences = false
   private var projectGeneration = 0
+  private var gitGeneration = 0
+  private var filesGeneration = 0
+  private var projectRefresh: Task<Void, Never>?
   var isACP: Bool {
     harnesses.first(where: { string($0, "id") == harness })?["desktop_kind"] as? String == "acp"
   }
@@ -102,19 +172,61 @@ struct FileEdit {
     let kind = string(harnesses.first(where: { string($0, "id") == harness }) ?? [:], "kind")
     return kind == "uhp" || kind == "a2a"
   }
+  var canContinueConversation: Bool {
+    if string(detail, "kind") == "compaction" { return canContinue }
+    let task = string(detail, "kind") == "task"
+    let finished = ["completed", "failed", "cancelled", "interrupted"].contains(string(detail, "status"))
+    return task && finished
+  }
   var canContinue: Bool {
     let result = detail["result"] as? [String: Any] ?? [:]
     return string(detail, "status") == "completed"
       && (result["native_continuity"] as? Bool == true || result["acp_continuity"] as? Bool == true
-        || result["remote_continuity"] as? Bool == true
-        || result["vendor_continuity"] as? Bool == true)
+        || result["remote_continuity"] as? Bool == true || result["vendor_continuity"] as? Bool == true)
+  }
+  @Published var conversationHistory: [[String: Any]] = []
+  @Published var earlierHistory = ""
+  @Published var loadingHistory = false
+  private var restoreSelectedConnection = false
+  func loadConversationHistory(earlier: Bool = false) async {
+    let id = selectedJob
+    let generation = detailGeneration
+    guard !id.isEmpty, !loadingHistory else { return }
+    loadingHistory = true
+    defer { if generation == detailGeneration { loadingHistory = false } }
+    do {
+      var params: [String: Any] = ["id": id]
+      if earlier { params["before"] = earlierHistory }
+      let result = try await engine.call("conversations.get", params) as? [String: Any] ?? [:]
+      guard id == selectedJob, generation == detailGeneration else { return }
+      let turns = result["turns"] as? [[String: Any]] ?? []
+      conversationHistory = earlier ? turns + conversationHistory : turns
+      earlierHistory = string(result, "earlier")
+    } catch {
+      if id == selectedJob, generation == detailGeneration { self.error = error.localizedDescription }
+    }
   }
   var isManaged: Bool {
     isACP
       || harnesses.first(where: { string($0, "id") == harness })?["desktop_kind"] as? String
         == "connection"
   }
+  var connectionDisconnected: Bool { harness == "disconnected" }
+  /// Detach the selected route without logging out of vendor-owned accounts or deleting history.
+  func disconnectConnection() {
+    guard !anyActive, !busy else { return }
+    chooseHarness("disconnected")
+    provider = ""
+    model = ""
+    agentModel = ""
+    agentMode = ""
+    agentConfig = [:]
+    connectionMetadata = [:]
+    routeStatus = [:]
+    savePreferences()
+  }
   func chooseConnection(_ route: [String: Any]) {
+    guard !active, !busy else { notice = "Finish or stop the current response before switching agents."; return }
     let id = string(route, "id")
     if let index = harnesses.firstIndex(where: { string($0, "id") == id }) {
       harnesses[index] = route
@@ -124,11 +236,65 @@ struct FileEdit {
     chooseHarness(id)
     interactionMode = "code"
     section = "Workspace"
-    selectJob("")
-    perform { await self.checkRoute() }
+    perform { await self.checkManagedConnection() }
+  }
+  func checkManagedConnection() async {
+    guard isManaged, !projectID.isEmpty else { return }
+    if isRemote || harness.hasPrefix("vendor-key:") {
+      await checkRoute()
+      return
+    }
+    let reference = harness
+    let checkedProject = projectID
+    connectionGeneration += 1
+    let generation = connectionGeneration
+    checkingConnection = true
+    routeStatus = ["state": "checking", "message": "Checking agent connection…"]
+    var operation = ""
+    defer { if generation == connectionGeneration { checkingConnection = false } }
+    do {
+      let response = try await engine.call("connect.auth.start", [
+        "action": "probe", "project": projectID, "reference": reference,
+      ]) as? [String: Any] ?? [:]
+      operation = string(response, "id")
+      guard !operation.isEmpty else { throw EngineError(message: "Connection check could not start.") }
+      for _ in 0..<200 {
+        guard generation == connectionGeneration, reference == harness else {
+          _ = try? await engine.call("connect.auth.cancel", ["id": operation])
+          return
+        }
+        let result = try await engine.call("connect.auth.poll", ["id": operation]) as? [String: Any] ?? [:]
+        guard generation == connectionGeneration, reference == harness, checkedProject == projectID else {
+          _ = try? await engine.call("connect.auth.cancel", ["id": operation])
+          return
+        }
+        if string(result, "state") == "completed" {
+          let metadata = result["result"] as? [String: Any] ?? [:]
+          connectionMetadata[reference] = metadata
+          routeStatus = ["state": metadata["connected"] as? Bool == true ? "connected" : "configured",
+                         "message": string(metadata, "message")]
+          return
+        }
+        if string(result, "state") != "running" {
+          throw EngineError(message: (result["messages"] as? [String] ?? []).last ?? "Connection check failed.")
+        }
+        try await Task.sleep(for: .milliseconds(250))
+      }
+      _ = try? await engine.call("connect.auth.cancel", ["id": operation])
+      throw EngineError(message: "Connection check timed out. Check the agent's sign-in and try again.")
+    } catch {
+      if generation == connectionGeneration && reference == harness {
+        routeStatus = ["state": "connection-failed", "ready": false, "message": error.localizedDescription]
+      }
+    }
   }
   var projectID: String { string(project, "id") }
   var projectJobs: [[String: Any]] { jobs.filter { string($0, "project") == projectID } }
+  var recentConversations: [[String: Any]] { groupedRecentRuns(projectJobs) }
+  var selectedConversationID: String {
+    let selected = jobs.first { string($0, "id") == selectedJob } ?? [:]
+    return string(selected, "conversation_id", selectedJob)
+  }
   var active: Bool {
     ["running", "needs_approval", "queued", "cancelling"].contains(string(detail, "status"))
   }
@@ -179,11 +345,17 @@ struct FileEdit {
       await checkRoute()
       await refreshJobs()
       poller = Task { [weak self] in
+        var nextJobs = ContinuousClock.now
         while !Task.isCancelled {
-          try? await Task.sleep(for: .seconds(1))
           guard let self, self.connected else { return }
-          await self.refreshJobs()
-          await self.refreshDetail()
+          do { try await Task.sleep(for: self.active ? .milliseconds(100) : .seconds(1)) }
+          catch { return }
+          guard !Task.isCancelled else { return }
+          if ContinuousClock.now >= nextJobs {
+            await self.refreshJobs()
+            nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
+          }
+          if self.active { await self.refreshDetail() }
         }
       }
       if args.contains("--smoke-test") { await smokeTest() }
@@ -198,7 +370,12 @@ struct FileEdit {
     if panel.runModal() == .OK, let url = panel.url { perform { try await self.open(url.path) } }
   }
   func open(_ path: String) async throws {
+    saveDraft()
     projectGeneration += 1
+    detailGeneration += 1
+    connectionGeneration += 1
+    checkingConnection = false
+    connectionMetadata = [:]
     let generation = projectGeneration
     openingProject = true
     defer { if generation == projectGeneration { openingProject = false } }
@@ -206,6 +383,9 @@ struct FileEdit {
     guard generation == projectGeneration else { return }
     project = opened
     selectedJob = ""
+    conversationHistory = []
+    earlierHistory = ""
+    loadingHistory = false
     contextFiles = []
     imageAttachments = []
     taskQueue = [:]
@@ -241,22 +421,33 @@ struct FileEdit {
       _ = try? await engine.call("connect.systemone.key", ["key": key])
     }
     hub = index["items"] as? [[String: Any]] ?? []
-    if !harnesses.contains(where: { string($0, "id") == harness }), let first = definitions.first {
+    if !connectionDisconnected, !harnesses.contains(where: { string($0, "id") == harness }), let first = definitions.first {
       harness = string(first, "id")
     }
     let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
     draft =
       (UserDefaults.standard.dictionary(forKey: "nativeDrafts") as? [String: String])?[projectID]
       ?? (settings["drafts"] as? [String: String])?[projectID] ?? ""
-    await refreshGit()
-    await refreshModels()
     section = "Workspace"
     showWelcome = false
+    perform {
+      await self.refreshGit()
+      await self.refreshModels()
+    }
+    if isManaged { perform { await self.checkManagedConnection() } }
   }
   func chooseHarness(_ id: String) {
     let previousACP = isManaged
     let changed = harness != id
     if changed {
+      let key = "nativeRouteChoices:" + projectID
+      var choices = UserDefaults.standard.dictionary(forKey: key) ?? [:]
+      choices[harness] = ["provider": provider, "model": model,
+        "agentModel": agentModel, "agentMode": agentMode, "agentConfig": agentConfig]
+      UserDefaults.standard.set(choices, forKey: key)
+      connectionGeneration += 1
+      checkingConnection = false
+      routeStatus = [:]
       agentModel = ""
       agentMode = ""
       agentConfig = [:]
@@ -269,43 +460,71 @@ struct FileEdit {
       provider = "openai"
       model = ""
     }
+    if changed, let choices = UserDefaults.standard.dictionary(forKey: "nativeRouteChoices:" + projectID),
+      let choice = choices[id] as? [String: Any] {
+      provider = string(choice, "provider", provider)
+      model = string(choice, "model", model)
+      agentModel = string(choice, "agentModel")
+      agentMode = string(choice, "agentMode")
+      agentConfig = choice["agentConfig"] as? [String: String] ?? [:]
+    }
     savePreferences()
   }
   func chooseModelRoute(_ provider: String, _ model: String) {
-    if isManaged {
-      harness =
-        harnesses.first(where: { string($0, "desktop_kind") != "acp" })?.projectRowID ?? "core"
+    if isManaged || connectionDisconnected {
+      chooseHarness(
+        harnesses.first(where: { string($0, "id") == "core" })?.projectRowID
+          ?? harnesses.first(where: { string($0, "desktop_kind").isEmpty })?.projectRowID ?? "core")
     }
     self.provider = provider
     self.model = model
     savePreferences()
   }
   func savePreferences() {
+    pendingPreferences = [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)]
+    guard !writingPreferences else { return }
+    writingPreferences = true
     perform {
-      for (key, value) in [
-        ("provider", self.provider), ("model", self.model), ("harness", self.harness),
-        ("theme", self.theme),
-      ] {
-        _ = try await self.engine.call("settings.set", ["key": key, "value": value])
+      defer { self.writingPreferences = false }
+      while let snapshot = self.pendingPreferences {
+        self.pendingPreferences = nil
+        for (key, value) in snapshot {
+          _ = try await self.engine.call("settings.set", ["key": key, "value": value])
+        }
       }
     }
   }
-  func saveDraft() {
+  func scheduleDraftSave() {
+    draftSaveTask?.cancel()
     let id = projectID
     let text = draft
     guard !id.isEmpty else { return }
-    var drafts =
-      UserDefaults.standard.dictionary(forKey: "nativeDrafts") as? [String: String] ?? [:]
+    draftSaveTask = Task {
+      do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+      self.writeDraft(text, for: id)
+    }
+  }
+  func saveDraft() {
+    draftSaveTask?.cancel()
+    writeDraft(draft, for: projectID)
+  }
+  private func writeDraft(_ text: String, for id: String) {
+    guard !id.isEmpty else { return }
+    var drafts = UserDefaults.standard.dictionary(forKey: "nativeDrafts") as? [String: String] ?? [:]
+    guard drafts[id] != text else { return }
     drafts[id] = text
     UserDefaults.standard.set(drafts, forKey: "nativeDrafts")
   }
 
   func refreshJobs() async {
     do {
-      jobs = try await engine.call("jobs.list") as? [[String: Any]] ?? []
+      let nextJobs = try await engine.call("jobs.list") as? [[String: Any]] ?? []
+      if !NSArray(array: jobs).isEqual(to: nextJobs) { jobs = nextJobs }
       if !projectID.isEmpty {
-        taskQueue =
-          try await engine.call("queue.list", ["project": projectID]) as? [String: Any] ?? [:]
+        let queuedProject = projectID
+        let nextQueue = try await engine.call("queue.list", ["project": queuedProject]) as? [String: Any] ?? [:]
+        guard queuedProject == projectID else { return }
+        if !NSDictionary(dictionary: taskQueue).isEqual(to: nextQueue) { taskQueue = nextQueue }
         if let queued = (taskQueue["items"] as? [[String: Any]] ?? []).first(where: {
           string($0, "state") == "running"
         }) {
@@ -338,7 +557,12 @@ struct FileEdit {
       self.error = error.localizedDescription
     }
   }
-  func selectJob(_ id: String) {
+  func selectJob(_ id: String, restoreConnection: Bool = true) {
+    detailGeneration += 1
+    restoreSelectedConnection = restoreConnection
+    conversationHistory = []
+    earlierHistory = ""
+    loadingHistory = false
     selectedJob = id
     detail = [:]
     events = []
@@ -346,28 +570,69 @@ struct FileEdit {
     perform { await self.refreshDetail() }
   }
   func refreshDetail() async {
-    guard !selectedJob.isEmpty, !loadingDetail else { return }
-    loadingDetail = true
-    defer { loadingDetail = false }
+    guard !selectedJob.isEmpty else { return }
     let id = selectedJob
+    let generation = detailGeneration
+    let requestKey = "\(generation):\(id)"
+    guard detailRequests.insert(requestKey).inserted else { return }
+    defer { detailRequests.remove(requestKey) }
     do {
       let cursor = events.last?["sequence"] as? Int ?? 0
       let result =
         try await engine.call("jobs.get", ["id": id, "after": cursor]) as? [String: Any] ?? [:]
-      guard id == selectedJob else { return }
-      detail = result
-      events += result["events"] as? [[String: Any]] ?? []
+      guard id == selectedJob, generation == detailGeneration else { return }
+      let firstLoad = detail.isEmpty
+      if firstLoad && restoreSelectedConnection,
+        string(result, "kind") == "task", let request = result["request"] as? [String: Any] {
+        restoreSelectedConnection = false
+        chooseHarness(string(request, "harness", harness))
+        provider = string(request, "provider", provider)
+        model = string(request, "model", model)
+        interactionMode = string(request, "interaction_mode", "code")
+        let options = request["acp_options"] as? [String: Any] ?? [:]
+        agentModel = string(options, "model")
+        agentMode = string(options, "mode")
+        agentConfig = options["config"] as? [String: String] ?? [:]
+        savePreferences()
+      }
+      let previousStatus = string(detail, "status")
+      var metadata = result
+      metadata.removeValue(forKey: "events")
+      if !NSDictionary(dictionary: detail).isEqual(to: metadata) { detail = metadata }
+      let incoming = result["events"] as? [[String: Any]] ?? []
+      if !incoming.isEmpty { events += incoming }
+      if firstLoad && string(metadata, "kind") == "task" {
+        await loadConversationHistory()
+        guard id == selectedJob, generation == detailGeneration else { return }
+      }
       if events.count > 1200 { events.removeFirst(events.count - 1200) }
-    } catch { self.error = error.localizedDescription }
+      let status = string(metadata, "status")
+      if status != previousStatus, ["completed", "failed", "cancelled"].contains(status) {
+        scheduleProjectRefresh()
+      }
+    } catch {
+      if id == selectedJob, generation == detailGeneration { self.error = error.localizedDescription }
+    }
+  }
+  private func scheduleProjectRefresh() {
+    projectRefresh?.cancel()
+    projectRefresh = Task {
+      do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+      await self.refreshGit()
+      guard !Task.isCancelled else { return }
+      self.loadFiles()
+    }
   }
   func refreshGit() async {
+    gitGeneration += 1
+    let generation = gitGeneration
     let id = projectID
     guard !id.isEmpty else { return }
     do {
       let status = try await engine.call("git.status", ["project": id]) as? [String: Any] ?? [:]
-      guard id == projectID else { return }
+      guard id == projectID, generation == gitGeneration, !Task.isCancelled else { return }
       git = status
-    } catch { git = ["error": error.localizedDescription] }
+    } catch { if id == projectID, generation == gitGeneration, !Task.isCancelled { git = ["error": error.localizedDescription] } }
   }
   func refreshModels() async {
     do {
@@ -377,10 +642,12 @@ struct FileEdit {
     } catch { self.error = error.localizedDescription }
   }
   func refreshDefinitions() async throws {
+    let id = projectID
+    guard !id.isEmpty else { return }
     let definitions =
-      try await engine.call("harnesses.list", ["project": projectID]) as? [[String: Any]] ?? []
-    let routes =
-      try await engine.call("routes.list", ["project": projectID]) as? [[String: Any]] ?? []
+      try await engine.call("harnesses.list", ["project": id]) as? [[String: Any]] ?? []
+    let routes = try await engine.call("routes.list", ["project": id]) as? [[String: Any]] ?? []
+    guard id == projectID else { return }
     harnesses = definitions + routes
   }
   func refreshProviders() async {
@@ -389,6 +656,7 @@ struct FileEdit {
     }
   }
   func checkRoute() async {
+    guard !connectionDisconnected else { routeStatus = [:]; return }
     if isManaged {
       let selected = harnesses.first(where: { string($0, "id") == harness }) ?? [:]
       routeStatus = [
@@ -495,7 +763,7 @@ struct FileEdit {
     }
   }
   func start(_ method: String, extra: [String: Any] = [:]) {
-    guard !busy else { return }
+    guard !busy, !connectionDisconnected else { return }
     busy = true
     perform {
       defer { self.busy = false }
@@ -511,11 +779,16 @@ struct FileEdit {
     }
   }
   func send(continueSession: Bool) {
+    guard !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
+      (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    let submittedDraft = draft
+    let submittedFiles = contextFiles
+    let submittedImages = imageAttachments.map { string($0, "id") }
     var extra: [String: Any] = [
-      "prompt": draft, "context_files": contextFiles, "interaction_mode": interactionMode,
+      "prompt": submittedDraft, "context_files": submittedFiles, "interaction_mode": interactionMode,
       "context_window": contextWindow.isEmpty ? 0 : Int(contextWindow) ?? -1,
       "enable_summarization": summarizeContext,
-      "image_ids": imageAttachments.map { string($0, "id") },
+      "image_ids": submittedImages,
     ]
     if isACP {
       extra["acp_options"] = [
@@ -527,7 +800,30 @@ struct FileEdit {
         string(detail, "kind") == "compaction"
         ? string(detail["result"] as? [String: Any] ?? [:], "source_job") : selectedJob
     }
-    start("tasks.start", extra: extra)
+    let submittedProject = projectID
+    var params: [String: Any] = [
+      "project": submittedProject, "harness": harness, "provider": provider,
+      "model": model, "command_id": UUID().uuidString,
+    ]
+    params.merge(extra) { _, value in value }
+    busy = true
+    perform {
+      defer { self.busy = false }
+      let result = try await self.engine.call("tasks.start", params) as? [String: Any] ?? [:]
+      let id = string(result, "id")
+      guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
+      guard self.projectID == submittedProject else { return }
+      // Clear only the accepted submission, preserving edits typed while starting.
+      if self.draft == submittedDraft { self.draft = ""; self.saveDraft() }
+      if self.contextFiles == submittedFiles { self.contextFiles = [] }
+      if self.imageAttachments.map({ string($0, "id") }) == submittedImages {
+        self.imageAttachments = []
+      }
+      self.selectJob(id, restoreConnection: false)
+      await self.refreshDetail()
+      await self.refreshJobs()
+      self.savePreferences()
+    }
   }
   func queueAction(_ method: String, extra: [String: Any] = [:]) {
     perform {
@@ -538,6 +834,7 @@ struct FileEdit {
     }
   }
   func enqueueDraft() {
+    guard !connectionDisconnected else { notice = "Connect an agent before adding a task."; return }
     guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     queueAction(
       "queue.add",
@@ -719,13 +1016,20 @@ struct FileEdit {
     }
   }
   func loadFiles() {
+    filesGeneration += 1
+    let generation = filesGeneration
+    let id = projectID
+    guard !id.isEmpty else { return }
     perform {
-      self.files =
-        try await self.engine.call("files.list", ["project": self.projectID]) as? [String] ?? []
+      let files = try await self.engine.call("files.list", ["project": id]) as? [String] ?? []
+      guard id == self.projectID, generation == self.filesGeneration else { return }
+      self.files = files
     }
   }
   func shutdown() {
+    saveDraft()
     poller?.cancel()
+    projectRefresh?.cancel()
     terminals.stopAll()
     engine.stop()
   }
@@ -798,7 +1102,10 @@ struct FileEdit {
       guard terminals.output(projectID).contains("native-project-pty") else {
         throw EngineError(message: "Native terminal PTY failed")
       }
-      report["project_terminal"] = "passed; actual local PTY output"
+      guard let terminalBackground = terminals.view(projectID)?.nativeBackgroundColor.usingColorSpace(.sRGB),
+        terminalBackground.redComponent == 0, terminalBackground.greenComponent == 0,
+        terminalBackground.blueComponent == 0 else { throw EngineError(message: "Terminal background is not pure black") }
+      report["project_terminal"] = "passed; actual local PTY output on pure-black background"
 
       let queued =
         try await engine.call(
@@ -819,6 +1126,9 @@ struct FileEdit {
         throw EngineError(message: "Bundled SuperQode brand asset is missing")
       }
       report["branding"] = "passed; native asset catalog brand mark loaded"
+      report["performance"] = try await verifyResponsiveness()
+      report["coding_inputs"] = try verifyCodingInputs()
+      report["source_editor"] = try await verifySourceEditor()
       report["centered_dialogs"] = try await verifyCenteredDialogs()
       if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--snapshot-dir"),
         ProcessInfo.processInfo.arguments.count > index + 1
@@ -849,17 +1159,99 @@ struct FileEdit {
           ["type": "harness_event", "data": ["event": "tool_call"]],
           ["type": "harness_event", "data": ["event": "model_request"]],
           ["type": "future_event"],
+          ["type": "output", "data": ["text": "command stdout"]],
         ], includeDetails: false)
-      guard
-        visible.map({ string($0, "type") }) == [
-          "approval", "error", "harness_event", "future_event",
-        ]
-      else {
-        throw EngineError(message: "Conversation hid an approval, tool, error or unknown event")
+      guard visible.map({ string($0, "type") }) == ["approval", "error", "activity_group"],
+        let activity = (visible.last?["data"] as? [String: Any])?["events"] as? [[String: Any]],
+        activity.count == 5
+      else { throw EngineError(message: "Conversation activity grouping lost events or hid an approval/error") }
+      let coloured = NSAttributedString(highlightedSource("def greet():\n    return 'hello' # note", language: "python", dark: true, highContrast: false))
+      var syntaxColours = Set<String>()
+      coloured.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: coloured.length)) { value, _, _ in
+        if let color = value as? NSColor { syntaxColours.insert(color.description) }
       }
-      report["conversation"] =
-        "passed; permissions, errors, tool work and unknown events remain visible"
+      let ordered = conversationEvents([
+        ["type": "harness_event", "data": ["event": "tool_call"]],
+        ["type": "answer", "data": ["text": "# Final response"]],
+        ["type": "output", "data": ["text": "tool stdout"]],
+      ], includeDetails: false)
+      guard syntaxColours.count >= 4,
+        ordered.map({ string($0, "type") }) == ["output", "activity_group"]
+      else { throw EngineError(message: "Code colouring or activity footer order failed") }
+      report["response_presentation"] = "passed; code has distinct token colours; activity stays after responses with raw tool logs preserved"
+      let recents = groupedRecentRuns([
+        ["id": "root", "kind": "task", "conversation_id": "root", "updated": 1.0],
+        ["id": "follow-up", "kind": "task", "conversation_id": "root", "conversation_title": "Original request", "updated": 3.0],
+        ["id": "other", "kind": "task", "conversation_id": "other", "updated": 2.0],
+      ])
+      func toolEvent(_ name: String, _ payload: [String: Any]) -> [String: Any] {
+        ["type": "harness_event", "data": ["event": name, "payload": payload]]
+      }
+      var live = [toolEvent("tool_call", ["toolCallId": "a", "title": "Shell", "rawInput": ["command": "pytest -q"], "status": "in_progress"])]
+      guard currentAgentActivity(live) == "pytest -q" else { throw EngineError(message: "Live command was not shown") }
+      live.append(toolEvent("tool_update", ["toolCallId": "a", "status": "in_progress"]))
+      live.append(toolEvent("tool_call", ["tool_call_id": "b", "arguments": ["command": "git diff"]]))
+      guard currentAgentActivity(live) == "git diff" else { throw EngineError(message: "Latest command did not replace the previous line") }
+      live.append(toolEvent("tool_result", ["tool_call_id": "b"]))
+      guard currentAgentActivity(live) == "pytest -q" else { throw EngineError(message: "Pending command was lost after another tool finished") }
+      live.append(toolEvent("tool_update", ["toolCallId": "a", "status": "completed"]))
+      guard currentAgentActivity(live).isEmpty, recents.count == 2,
+        string(recents[0], "id") == "follow-up", string(recents[0], "conversation_title") == "Original request"
+      else { throw EngineError(message: "Completed commands remained live or follow-ups duplicated recent rows") }
+      report["conversation_recents_live_activity"] = "passed; one latest turn per parent conversation; single current command handles sparse ACP updates and completed tools"
+      let installFixture: [String: Any] = ["route": ["id": "acp:install-check", "available": false],
+        "install": ["command": "example install", "reference": "fixture"]]
+      guard connectionInstallPlan(installFixture, routes: []) != nil,
+        connectionInstallPlan(installFixture, routes: [["id": "acp:install-check", "available": true]]) == nil,
+        connectionInstallPlan(["route": ["id": "acp:installed", "available": true], "install": ["command": "unused"]], routes: []) == nil
+      else { throw EngineError(message: "Installed agents still show installation instructions") }
+      report["installation_visibility"] = "passed; missing agent has setup instructions; installed and freshly installed agents hide them"
+      let blocks = responseBlocks("# Heading\n\nA **bold** paragraph.\n\n- First\n\n```python\nprint('hello')\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
+      guard blocks == [.heading(1, "Heading"), .paragraph("A **bold** paragraph."), .item("•", "First"), .code("python", "print('hello')"), .table([["A", "B"], ["1", "2"]])],
+        responseBlocks("```swift\nlet x = 1") == [.code("swift", "let x = 1")],
+        String(responseInline("**Bold** and `code`").characters) == "Bold and code"
+      else { throw EngineError(message: "Response Markdown rendering failed") }
+      let selectedHarness = harness
+      let selectedProvider = provider
+      let selectedModel = model
+      disconnectConnection()
+      guard connectionDisconnected, model.isEmpty, agentModel.isEmpty else {
+        throw EngineError(message: "Disconnect retained an active model selection")
+      }
+      chooseHarness(selectedHarness)
+      provider = selectedProvider
+      model = selectedModel
+      savePreferences()
+      report["conversation"] = "passed; rendered Markdown blocks and unfinished code fences; grouped activity preserves all events; approvals/errors visible; disconnect/reconnect clears selection"
 
+      if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--snapshot-dir"),
+        ProcessInfo.processInfo.arguments.count > index + 1 {
+        let sample = "# Ready to build\n\nThe response now uses **readable formatting**, `inline code`, and [useful links](https://superqode.dev).\n\n## What changed\n\n- One clear conversation\n- Selectable, highlighted source code\n- Tool activity stays in one expandable section\n\n```python\ndef greet(name: str) -> str:\n    # Keep the greeting simple\n    return f\"Hello, {name}!\"\n\nassert greet('Ada') == 'Hello, Ada!'\n```\n\n> Review changes before committing them.\n\n| Check | Result |\n| --- | --- |\n| Formatting | Ready |\n| Code selection | Available |"
+        for dark in [false, true] {
+          let host = NSHostingView(rootView: VStack(alignment: .leading, spacing: 14) {
+            AgentResponseView(text: sample)
+            AgentWorkingCard(status: "running", activity: "python -m unittest -v")
+          }.padding(24)
+            .background(Color.qPanel).environment(\.colorScheme, dark ? .dark : .light))
+          host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+          host.frame = NSRect(x: 0, y: 0, width: 780, height: 1050)
+          let previewWindow = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+          previewWindow.appearance = host.appearance
+          previewWindow.contentView = host
+          previewWindow.orderFront(nil)
+          defer { previewWindow.orderOut(nil); previewWindow.contentView = nil }
+          host.layoutSubtreeIfNeeded()
+          try await Task.sleep(for: .milliseconds(250))
+          host.displayIfNeeded()
+          guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+            throw EngineError(message: "Response renderer could not produce a native preview")
+          }
+          host.cacheDisplay(in: host.bounds, to: bitmap)
+          try bitmap.representation(using: .png, properties: [:])?.write(to:
+            URL(fileURLWithPath: ProcessInfo.processInfo.arguments[index + 1])
+              .appendingPathComponent(dark ? "response-dark.png" : "response-light.png"))
+        }
+      }
       let originalSection = section
       section = "Models"
       section = "Harness Hub"
@@ -939,13 +1331,20 @@ struct FileEdit {
         guard failure.message != "File boundary was not enforced" else { throw failure }
         report["file_boundary"] = "passed"
       }
-      let taskParams: [String: Any] = [
-        "project": projectID, "harness": "no-tool", "provider": "openai", "model": "gpt-4o-mini",
-        "prompt": "Reply using the local native test fixture.", "command_id": UUID().uuidString,
-      ]
-      let started = try await engine.call("tasks.start", taskParams) as? [String: Any] ?? [:]
-      let taskID = string(started, "id")
-      selectJob(taskID)
+      chooseHarness("no-tool")
+      provider = "openai"
+      model = "gpt-4o-mini"
+      draft = "Reply using the local native test fixture."
+      let previousJob = selectedJob
+      send(continueSession: false)
+      for _ in 0..<150 {
+        if !busy && selectedJob != previousJob { break }
+        try await Task.sleep(for: .milliseconds(100))
+      }
+      guard draft.isEmpty, selectedJob != previousJob else {
+        throw EngineError(message: "Sending did not clear the submitted composer and select its conversation")
+      }
+      let taskID = selectedJob
       for _ in 0..<150 {
         await refreshDetail()
         if !active && !detail.isEmpty { break }
@@ -954,12 +1353,15 @@ struct FileEdit {
       guard string(detail, "status") == "completed", pretty(events).contains("Native task fixture")
       else { throw EngineError(message: "Native model stream failed: " + pretty(detail["result"])) }
       let session = string(detail["result"] as? [String: Any] ?? [:], "session_id")
-      var followParams = taskParams
-      followParams["command_id"] = UUID().uuidString
-      followParams["parent_id"] = taskID
-      followParams["prompt"] = "Continue the same native session."
-      let followed = try await engine.call("tasks.start", followParams) as? [String: Any] ?? [:]
-      selectJob(string(followed, "id"))
+      draft = "Continue the same native session."
+      send(continueSession: true)
+      for _ in 0..<150 {
+        if !busy && selectedJob != taskID { break }
+        try await Task.sleep(for: .milliseconds(100))
+      }
+      guard draft.isEmpty, selectedJob != taskID else {
+        throw EngineError(message: "Follow-up message did not leave the composer")
+      }
       for _ in 0..<150 {
         await refreshDetail()
         if !active && !detail.isEmpty { break }
@@ -969,7 +1371,58 @@ struct FileEdit {
         session == string(detail["result"] as? [String: Any] ?? [:], "session_id")
       else { throw EngineError(message: "Native task continuation failed") }
       report["task_stream"] = "passed against loopback fixture"
-      report["continuation"] = "passed; native session preserved"
+      for _ in 0..<100 where loadingHistory {
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      guard conversationHistory.count == 1,
+        string(conversationHistory.first ?? [:], "id") == taskID,
+        string(conversationHistory.first ?? [:], "response").contains("Native task fixture") else {
+        throw EngineError(message: "Earlier conversation turns were not loaded into the native UI")
+      }
+      report["continuation"] = "passed; native session preserved and earlier turns displayed"
+      report["composer"] = "passed; submitted messages clear and follow-ups use the same session"
+      for index in 0..<12 {
+        selectJob(index.isMultiple(of: 2) ? evaluationID : taskID)
+        await Task.yield()
+      }
+      selectJob(taskID)
+      for _ in 0..<150 {
+        await refreshDetail()
+        if string(detail, "id") == taskID { break }
+        try await Task.sleep(for: .milliseconds(20))
+      }
+      guard string(detail, "id") == taskID, string(detail, "status") == "completed" else {
+        throw EngineError(message: "Rapid conversation switching lost the selected run")
+      }
+      let sequences = events.compactMap { $0["sequence"] as? Int }
+      guard Set(sequences).count == sequences.count else {
+        throw EngineError(message: "Stale conversation responses duplicated events")
+      }
+      for index in 0..<12 {
+        model = "temporary-model-\(index)"
+        savePreferences()
+        await Task.yield()
+      }
+      model = "gpt-4o-mini"
+      savePreferences()
+      for _ in 0..<200 {
+        if !writingPreferences { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      let persisted = try await engine.call("settings.get") as? [String: Any] ?? [:]
+      guard string(persisted, "model") == model, string(persisted, "harness") == harness,
+        string(persisted, "provider") == provider else {
+        throw EngineError(message: "Rapid route changes saved inconsistent preferences")
+      }
+      for _ in 0..<150 {
+        if files.contains("Sources/New.swift") { break }
+        try await Task.sleep(for: .milliseconds(20))
+      }
+      guard files.contains("Sources/New.swift") else {
+        throw EngineError(message: "Completed task did not refresh the project file list")
+      }
+      report["rapid_switching"] = "passed; selected conversation, unique events and latest saved connection survive rapid changes"
+      report["changes_refresh"] = "passed; task completion refreshes Git status and project files"
       await refreshJobs()
       let args = ProcessInfo.processInfo.arguments
       for tab in [
@@ -986,6 +1439,28 @@ struct FileEdit {
               tab.lowercased().replacingOccurrences(of: " ", with: "-") + ".png"))
         }
       }
+      if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
+        section = "Workspace"
+        selectJob(taskID)
+        await refreshDetail()
+        let originalTheme = theme
+        for appearance in ["light", "dark"] {
+          theme = appearance
+          try await Task.sleep(for: .milliseconds(350))
+          let target = URL(fileURLWithPath: args[index + 1]).appendingPathComponent("workspace-" + appearance + ".png")
+          try captureWindow(to: target)
+          guard let bitmap = NSBitmapImageRep(data: try Data(contentsOf: target)),
+            let pixel = bitmap.colorAt(x: 12, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.sRGB) else {
+            throw EngineError(message: "Theme background could not be inspected")
+          }
+          let channels = [pixel.redComponent, pixel.greenComponent, pixel.blueComponent]
+          guard channels.allSatisfy({ appearance == "dark" ? $0 < 0.01 : $0 > 0.99 }) else {
+            throw EngineError(message: "Workspace background is not pure black/white in " + appearance)
+          }
+        }
+        theme = originalTheme
+        report["pure_theme_surfaces"] = "passed; native workspace background pixels are pure white in light mode and pure black in dark mode"
+      }
       report["passed"] = true
     } catch {
       report["passed"] = false
@@ -999,95 +1474,365 @@ struct FileEdit {
     shutdown()
     NSApp.terminate(nil)
   }
+  private func verifyResponsiveness() async throws -> [String: Any] {
+    let preview = Workspace()
+    var workspaceChanges = 0
+    let subscription = preview.objectWillChange.sink { workspaceChanges += 1 }
+    for index in 0..<1000 { preview.draftStore.text = "Draft \(index)" }
+    subscription.cancel()
+    guard workspaceChanges == 0 else {
+      throw EngineError(message: "Typing still invalidates the entire workspace")
+    }
+    let chunk = String(repeating: "x", count: 512)
+    let deltas: [[String: Any]] = (0..<1200).map { _ in
+      ["type": "harness_event", "data": ["event": "delta", "payload": ["text": chunk]]]
+    }
+    let start = ProcessInfo.processInfo.systemUptime
+    let rows = displayEvents(deltas)
+    let renderMS = (ProcessInfo.processInfo.systemUptime - start) * 1000
+    guard rows.count == 1, string(rows[0]["data"] as? [String: Any] ?? [:], "text").count == 614400 else {
+      throw EngineError(message: "Large streaming projection lost response text")
+    }
+    var worstTick = 0.0
+    let heartbeat = Task {
+      while !Task.isCancelled {
+        let started = ProcessInfo.processInfo.systemUptime
+        do { try await Task.sleep(for: .milliseconds(10)) } catch { return }
+        worstTick = max(worstTick, ProcessInfo.processInfo.systemUptime - started)
+      }
+    }
+    defer { heartbeat.cancel() }
+    let payload = String(repeating: "p", count: 512000)
+    let saved = try await engine.call("settings.get") as? [String: Any] ?? [:]
+    let previousDrafts = saved["drafts"] ?? [:]
+    _ = try await engine.call("settings.set", ["key": "drafts", "value": ["performance-fixture": payload]])
+    do {
+      try await withThrowingTaskGroup(of: Void.self) { group in
+        for _ in 0..<8 {
+          group.addTask { _ = try await self.engine.call("settings.get", ["padding": payload]) }
+        }
+        try await group.waitForAll()
+      }
+    } catch {
+      _ = try? await engine.call("settings.set", ["key": "drafts", "value": previousDrafts])
+      throw error
+    }
+    _ = try await engine.call("settings.set", ["key": "drafts", "value": previousDrafts])
+    heartbeat.cancel()
+    await heartbeat.value
+    guard worstTick < 0.25 else {
+      throw EngineError(message: "Engine I/O blocked the UI heartbeat for more than 250 ms")
+    }
+    return ["draft_edits": 1000, "workspace_invalidations": workspaceChanges,
+            "stream_characters": 614400, "stream_projection_ms": renderMS,
+            "engine_roundtrips": 8, "payload_bytes_each_way": 512000,
+            "worst_ui_heartbeat_ms": worstTick * 1000]
+  }
+  private func verifySourceEditor() async throws -> String {
+    var buffer = "def greet(name):\n    return 'Hello, ' + name\n"
+    let initial = buffer
+    let binding = Binding<String>(get: { buffer }, set: { buffer = $0 })
+    let host = NSHostingView(rootView: SourceEditor(text: binding, path: "greet.py", editable: true))
+    host.frame = NSRect(x: 0, y: 0, width: 700, height: 320)
+    let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil); window.contentView = nil }
+    host.layoutSubtreeIfNeeded()
+    func findEditor(_ view: NSView) -> SourceEditor.Editor? {
+      if let editor = view as? SourceEditor.Editor { return editor }
+      return view.subviews.lazy.compactMap { findEditor($0) }.first
+    }
+    try await Task.sleep(for: .milliseconds(250))
+    guard let editor = findEditor(host), editor.string == initial,
+      let storage = editor.textStorage else { throw EngineError(message: "Native source editor failed to load") }
+    var colours = Set<String>()
+    storage.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
+      if let color = value as? NSColor { colours.insert(color.description) }
+    }
+    guard colours.count >= 4, editor.backgroundColor.usingColorSpace(.sRGB)?.redComponent == 0 else {
+      throw EngineError(message: "File source was not coloured on a black background")
+    }
+    window.makeFirstResponder(editor)
+    editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+    editor.insertText("# edited\n", replacementRange: editor.selectedRange())
+    let selection = editor.selectedRange()
+    try await Task.sleep(for: .milliseconds(250))
+    guard buffer == initial + "# edited\n", editor.string == buffer,
+      editor.selectedRange() == selection, editor.undoManager?.canUndo == true else {
+      throw EngineError(message: "Source colouring changed the buffer, caret or undo history")
+    }
+    editor.undoManager?.undo()
+    guard buffer == initial, editor.string == initial else {
+      throw EngineError(message: "Native source editing could not be undone")
+    }
+    if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--snapshot-dir"), ProcessInfo.processInfo.arguments.count > index + 1 {
+      editor.setSelectedRange(NSRange(location: 4, length: 0))
+      editor.needsDisplay = true
+      host.displayIfNeeded()
+      if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try bitmap.representation(using: .png, properties: [:])?.write(to:
+          URL(fileURLWithPath: ProcessInfo.processInfo.arguments[index + 1]).appendingPathComponent("source-editor.png"))
+      }
+    }
+    editor.insertText("# second edit", replacementRange: editor.selectedRange())
+    editor.replaceBuffer("let otherFile = true\n")
+    guard editor.undoManager?.canUndo != true else {
+      throw EngineError(message: "Switching source buffers retained another file's undo history")
+    }
+    return "passed; Python syntax colours, pure-black file surface, native edits and undo; caret survives colouring; switching files clears old undo history"
+  }
+  private func verifyCodingInputs() throws -> String {
+    let preview = Workspace()
+    preview.harnesses = [
+      ["id": "acp:opencode", "desktop_kind": "acp", "command": "opencode acp"],
+      ["id": "connection:alias", "desktop_kind": "acp", "command": "opencode acp", "extra_env": [:]],
+      ["id": "connection:subscription", "desktop_kind": "acp", "command": "opencode acp", "subscription_vendor": "vendor"],
+    ]
+    guard preview.acpConnections.count == 2,
+      string(preview.acpConnections.first ?? [:], "id") == "acp:opencode" else {
+      throw EngineError(message: "ACP alias deduplication lost canonical or distinct-auth routes")
+    }
+    preview.harness = "acp:opencode"
+    preview.connectionMetadata[preview.harness] = ["session": ["models": ["availableModels": [
+      ["modelId": "paid", "name": "A paid model", "free": false],
+      ["modelId": "free", "name": "Z free model", "free": true],
+    ]]]]
+    preview.detail = ["request": ["harness": "acp:another-agent"]]
+    preview.events = [["type": "harness_event", "data": ["event": "acp_session", "payload": ["models": ["availableModels": [["modelId": "wrong-agent"]]]]]]]
+    guard preview.agentModels.first?.agentModelID == "free" else {
+      throw EngineError(message: "Agent model picker lost free models or their ordering")
+    }
+    preview.selectedJob = "local-conversation"
+    preview.detail = ["kind": "task", "status": "completed", "request": ["harness": "acp:opencode"]]
+    preview.draft = "Keep this unsent draft"
+    preview.agentModel = "free"
+    preview.agentMode = "code"
+    preview.chooseConnection(["id": "acp:second", "desktop_kind": "acp"])
+    guard preview.selectedJob == "local-conversation", preview.canContinueConversation,
+      preview.draft == "Keep this unsent draft" else {
+      throw EngineError(message: "Switching connections discarded the conversation or draft")
+    }
+    preview.chooseHarness("acp:opencode")
+    guard preview.agentModel == "free", preview.agentMode == "code" else {
+      throw EngineError(message: "Returning to an agent lost its model and mode choices")
+    }
+    let editor = PromptEditor.Editor(frame: NSRect(x: 0, y: 0, width: 400, height: 80))
+    editor.isRichText = false
+    editor.string = "Test message"
+    editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+    var submissions = 0
+    editor.submit = { submissions += 1 }
+    func key(_ modifiers: NSEvent.ModifierFlags) throws -> NSEvent {
+      guard let event = NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
+        windowNumber: 0, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+        isARepeat: false, keyCode: 36) else { throw EngineError(message: "Could not build keyboard fixture") }
+      return event
+    }
+    editor.keyDown(with: try key([]))
+    guard submissions == 1, editor.string == "Test message" else {
+      throw EngineError(message: "Enter did not submit without inserting a newline")
+    }
+    editor.keyDown(with: try key(.shift))
+    guard submissions == 1, editor.string.contains("\n") else {
+      throw EngineError(message: "Shift+Enter did not insert a newline")
+    }
+    return "passed; Enter and Shift+Enter; ACP aliases and free models; switching agents preserves conversation, draft, model and mode choices"
+  }
   private func verifyCenteredDialogs() async throws -> String {
-    for visible in [
-      NSRect(x: 0, y: 25, width: 1440, height: 850),
-      NSRect(x: -1920, y: 0, width: 1920, height: 1080),
-      NSRect(x: 1440, y: -400, width: 1280, height: 900),
-    ] {
-      let frame = CenteredDialogController.centeredFrame(
-        size: NSSize(width: 700, height: 500), visibleFrame: visible)
-      guard abs(frame.midX - visible.midX) < 0.01, abs(frame.midY - visible.midY) < 0.01,
-        visible.contains(frame)
-      else { throw EngineError(message: "Dialog display geometry is incorrect") }
+    guard let main = NSApp.windows.first(where: { $0.title == (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode") }) else {
+      throw EngineError(message: "Connection test has no main window")
     }
-    guard let main = NSApp.windows.first(where: { $0.title == "SuperQode" }),
-      let screen = main.screen
-    else { throw EngineError(message: "Dialog test has no parent display") }
-    let original = main.frame
-    let child = CenteredDialogController()
+    let previousHarness = harness
+    let previousProvider = provider
+    let previousModel = model
     defer {
-      child.close()
       showConnection = false
-      showLearningGuide = false
-      for _ in 0..<4 {
-        guard let active = NSApp.modalWindow,
-          active.identifier?.rawValue.hasPrefix("superqode.dialog.") == true
-        else { break }
-        active.performClose(nil)
-      }
-      main.setFrame(original, display: true)
+      chooseHarness(previousHarness)
+      provider = previousProvider
+      model = previousModel
+      harnesses.removeAll { string($0, "id") == "acp:desktop-ui-check" }
     }
-    var offset = original
-    offset.origin.x = screen.visibleFrame.minX + 8
-    offset.size.width = min(original.width, 1120)
-    main.setFrame(offset, display: true)
+    func control(_ identifier: String, in node: NSView) -> NSButton? {
+      if let button = node as? NSButton, button.identifier?.rawValue == identifier { return button }
+      for child in node.subviews {
+        if let found = control(identifier, in: child) { return found }
+      }
+      return nil
+    }
+    func waitForSheet() async throws -> NSWindow {
+      for _ in 0..<150 {
+        if let sheet = main.attachedSheet, sheet.isVisible {
+          // Native sheet presentation is asynchronous; wait for its opening
+          // transition before delivering test clicks into a reopened sheet.
+          try await Task.sleep(for: .milliseconds(450))
+          return sheet
+        }
+        try await Task.sleep(for: .milliseconds(20))
+      }
+      throw EngineError(message: "Connect did not open a system sheet")
+    }
+    func press(_ identifier: String) async throws {
+      for _ in 0..<150 {
+        var active = main.attachedSheet
+        while let nested = active?.attachedSheet { active = nested }
+        let sheet = active ?? main
+        if let surface = sheet.contentView,
+          let button = control(identifier, in: surface) {
+          guard button.isEnabled, button.bounds.width > 0, button.bounds.height > 0,
+            let hit = surface.hitTest(button.convert(
+              NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: surface.superview)),
+            hit === button || hit.isDescendant(of: button)
+              || (hit as? NSButton)?.identifier == button.identifier
+          else { throw EngineError(message: "Connect control cannot receive clicks: " + identifier) }
+          // Deliver a click through this test window's normal event dispatch,
+          // rather than invoking the button action directly. No global mouse
+          // input, accessibility permission or other app is involved.
+          let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+          let timestamp = ProcessInfo.processInfo.systemUptime
+          guard let down = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: timestamp,
+            windowNumber: sheet.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1),
+            let up = NSEvent.mouseEvent(
+              with: .leftMouseUp, location: point, modifierFlags: [], timestamp: timestamp + 0.01,
+              windowNumber: sheet.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0)
+          else { throw EngineError(message: "Could not construct the native click test") }
+          NSApp.postEvent(up, atStart: true)
+          sheet.sendEvent(down)
+          try await Task.sleep(for: .milliseconds(250))
+          return
+        }
+        try await Task.sleep(for: .milliseconds(20))
+      }
+      func identifiers(_ node: NSView) -> [String] {
+        (node.identifier.map { [$0.rawValue] } ?? []) + node.subviews.flatMap { identifiers($0) }
+      }
+      let visible = main.attachedSheet?.contentView.map { identifiers($0) } ?? []
+      throw EngineError(message: "Missing Connect control: \(identifier); present=\(visible)")
+    }
+    var dismissalPhase = "Connect Close"
+    func assertClosed() async throws {
+      for _ in 0..<150 {
+        if !showConnection && main.attachedSheet == nil { return }
+        try await Task.sleep(for: .milliseconds(20))
+      }
+      throw EngineError(message: "Dialog did not dismiss: " + dismissalPhase)
+    }
     showConnection = true
+    _ = try await waitForSheet()
+    try await press("connect.subscriptions")
+    try await press("connect.row.codex")
+    try await press("connect.back")
+    try await press("connect.back")
+    try await press("connect.acp")
+    try await press("connect.back")
+    try await press("connect.close")
+    try await assertClosed()
+
+    // Exercise the ACP selection and Use action independently of installed or
+    // signed-in agents. Backend ACP initialization has separate fixture tests.
+    // This route cannot run a model or any coding tool.
+    harnesses.append([
+      "id": "acp:desktop-ui-check", "name": "AAA Local UI check",
+      "desktop_kind": "acp", "available": true, "description": "UI-only connection check",
+    ])
+    showConnection = true
+    _ = try await waitForSheet()
+    try await press("connect.acp")
+    try await press("connect.row.acp:desktop-ui-check")
+    try await press("connect.use")
+    dismissalPhase = "ACP Use"
+    try await assertClosed()
+    guard harness == "acp:desktop-ui-check", section == "Workspace" else {
+      throw EngineError(message: "ACP selection did not return to the coding workspace")
+    }
+    showConnection = true
+    _ = try await waitForSheet()
+    try await press("connect.disconnect")
+    dismissalPhase = "Connect Disconnect"
+    try await assertClosed()
+    guard connectionDisconnected else { throw EngineError(message: "Native Disconnect button did not detach the route") }
+    chooseModelRoute("openai", "gpt-4o-mini")
+    guard !connectionDisconnected else { throw EngineError(message: "Model connection did not recover after Disconnect") }
+    chooseHarness(previousHarness)
+    provider = previousProvider
+    model = previousModel
+    showConnection = true
+    let sheet = try await waitForSheet()
+    sheet.cancelOperation(nil)
+    dismissalPhase = "Connect Escape"
+    try await assertClosed()
+    // Exercise the shared X against actual product dialog contents, not only Connect.
+    let audit = DialogAuditState()
+    let host = NSHostingView(rootView: DialogAuditHost(state: audit))
+    host.frame = NSRect(x: 0, y: 0, width: 1, height: 1)
+    main.contentView?.addSubview(host)
+    defer { host.removeFromSuperview() }
+    let dialogs: [(String, AnyView)] = [
+      ("Beta guide", AnyView(BetaGuideView())),
+      ("Getting started", AnyView(LearningGuideView().environmentObject(self))),
+      ("Task queue", AnyView(TaskQueueView().environmentObject(self))),
+      ("Context", AnyView(ContextPreviewView().environmentObject(self))),
+      ("WorkOrders", AnyView(WorkOrderBoardView().environmentObject(self))),
+      ("Terminal sign-in", AnyView(TerminalLoginView(terminals: terminals, arguments: [], complete: {}).environmentObject(self))),
+      ("Authentication", AnyView(AuthenticationProgressView(request: ["action": "invalid-ui-fixture"], complete: { _ in }).environmentObject(self))),
+    ]
+    for (title, content) in dialogs {
+      dismissalPhase = title
+      audit.title = title
+      audit.content = content
+      audit.shown = true
+      _ = try await waitForSheet()
+      let done = title == "Beta guide" ? "dialog.done.default" : title == "Authentication" ? "dialog.cancel" : "dialog.done"
+      try await press(done)
+      try await assertClosed()
+      guard !audit.shown else { throw EngineError(message: title + " Done/Cancel failed") }
+      audit.shown = true
+      _ = try await waitForSheet()
+      try await press("dialog.close")
+      try await assertClosed()
+      guard !audit.shown else { throw EngineError(message: title + " X failed to reset presentation state") }
+    }
+    audit.content = AnyView(Text("Parent dialog").frame(width: 400, height: 200))
+    audit.shown = true
+    let parent = try await waitForSheet()
+    audit.nested = true
     for _ in 0..<150 {
-      if NSApp.modalWindow?.identifier?.rawValue.hasPrefix("superqode.dialog.") == true { break }
+      if parent.attachedSheet != nil { break }
       try await Task.sleep(for: .milliseconds(20))
     }
-    guard let outer = NSApp.modalWindow,
-      outer.identifier?.rawValue.hasPrefix("superqode.dialog.") == true
-    else {
-      throw EngineError(message: "Connect did not open a native modal dialog")
+    try await Task.sleep(for: .milliseconds(450))
+    guard parent.attachedSheet != nil else { throw EngineError(message: "Nested sheet did not open") }
+    try await press("dialog.close")
+    guard !audit.nested, audit.shown else {
+      throw EngineError(message: "Nested X closed the wrong dialog")
     }
-    try await Task.sleep(for: .milliseconds(250))
-    func assertCenter(_ window: NSWindow) throws {
-      guard abs(window.frame.midX - screen.visibleFrame.midX) <= 1,
-        abs(window.frame.midY - screen.visibleFrame.midY) <= 1
-      else {
-        throw EngineError(message: "Dialog is offset from the parent display centre")
-      }
-    }
-    try assertCenter(outer)
-    var childVisible = true
-    var engineReplied = false
-    child.binding = Binding(get: { childVisible }, set: { childVisible = $0 })
-    child.content = AnyView(
-      Text("Checking asynchronous dialog progress").frame(width: 420, height: 220)
-        .task {
-          if (try? await self.engine.call("hello")) != nil { engineReplied = true }
-        })
-    child.present(parent: outer)
     for _ in 0..<150 {
-      if engineReplied { break }
+      if parent.attachedSheet == nil { break }
       try await Task.sleep(for: .milliseconds(20))
     }
-    guard let nested = child.panel, NSApp.modalWindow === nested, engineReplied else {
-      throw EngineError(message: "Nested modal blocked asynchronous engine progress")
-    }
-    try assertCenter(nested)
-    guard nested.parent === outer, outer.parent === main else {
-      throw EngineError(message: "Connect dialogs lost their parent window ownership")
-    }
-    child.content = AnyView(Text("Loaded connection details").frame(width: 620, height: 300))
-    child.schedule()
+    try await press("dialog.close")
+    dismissalPhase = "Nested parent"
+    try await assertClosed()
+    let savedNotice = notice
+    let savedFiles = contextFiles
+    let savedImages = imageAttachments
+    defer { notice = savedNotice; contextFiles = savedFiles; imageAttachments = savedImages }
+    notice = "Dismissal check"
+    contextFiles = ["fixture-a.txt", "fixture-b.txt"]
+    imageAttachments = [["id": "ui-image", "name": "fixture.png"]]
     try await Task.sleep(for: .milliseconds(250))
-    try assertCenter(nested)
-    guard NSApp.modalWindow === nested, nested.parent === outer else {
-      throw EngineError(message: "Connection content refresh detached the nested dialog")
+    try await press("notice.close")
+    try await press("attachment.file.fixture-a.txt")
+    try await press("attachment.image.ui-image")
+    guard notice.isEmpty, contextFiles == ["fixture-b.txt"], imageAttachments.isEmpty else {
+      throw EngineError(message: "Attachment or notification X removed the wrong item")
     }
-    nested.cancelOperation(nil)
-    guard !childVisible, NSApp.modalWindow === outer else {
-      throw EngineError(message: "Escape did not restore the parent dialog")
-    }
-    outer.performClose(nil)
-    guard !showConnection, NSApp.modalWindow == nil else {
-      throw EngineError(message: "Dialog close did not restore its binding and modal session")
-    }
-    return
-      "passed; offset parent, negative display origins, owned nested dialogs, content refresh, async progress and Escape/close"
+    return "passed; Connect Back/Close, ACP Use, Escape, Done/Cancel and X in seven product sheets, nested X ownership, notification X, attachment X and reopen"
+
+
   }
   private func captureLearningViews(directory: URL) throws {
     let preview = Workspace()
@@ -1108,12 +1853,12 @@ struct FileEdit {
           ? AnyView(WelcomeView().environmentObject(preview))
           : sidebar
             ? AnyView(SidebarView().environmentObject(preview))
-            : AnyView(GettingStartedView().environmentObject(preview))
+            : AnyView(GettingStartedView(draftStore: preview.draftStore).environmentObject(preview))
       let view = NSHostingView(
         rootView:
           content
           .environment(\.colorScheme, phase.contains("light") ? .light : .dark)
-          .background(Color(nsColor: .windowBackgroundColor)))
+          .background(Color.qPanel))
       view.appearance = NSAppearance(
         named: phase.contains("contrast")
           ? .accessibilityHighContrastDarkAqua : phase.contains("light") ? .aqua : .darkAqua)
@@ -1162,7 +1907,7 @@ struct FileEdit {
         "connect-" + page.replacingOccurrences(of: ":", with: "-") + ".png"))
   }
   func captureWindow(to url: URL) throws {
-    guard let view = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView
+    guard let view = NSApp.windows.first(where: { $0.title == (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode") })?.contentView
     else { throw EngineError(message: "Native window is unavailable") }
     view.layoutSubtreeIfNeeded()
     view.displayIfNeeded()

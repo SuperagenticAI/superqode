@@ -11,7 +11,7 @@ struct WelcomeView: View {
         VStack(spacing: 32) {
           VStack(spacing: 14) {
             BrandMark().frame(width: 82, height: 82).padding(20)
-              .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 28))
+              .outlinedSurface(radius: 28)
               .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(.primary.opacity(0.06)))
             Text("Welcome to SuperQode").font(.system(size: 36, weight: .semibold))
               .multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
@@ -41,7 +41,7 @@ struct WelcomeView: View {
               Label("Getting started", systemImage: "book.closed")
             }
             if !app.project.isEmpty {
-              Button("Return to " + string(app.project, "name", "workspace")) {
+              Button("Return to " + string(app.project, "name", "Agent Space")) {
                 app.showWelcome = false
               }
             }
@@ -82,7 +82,7 @@ struct WelcomeView: View {
         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }.padding(28).frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
       .background(
-        Color(nsColor: .controlBackgroundColor).opacity(0.55),
+        Color.qPanel,
         in: RoundedRectangle(cornerRadius: 20)
       )
       .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.08)))
@@ -122,7 +122,7 @@ struct WelcomeView: View {
         }
       }
     }.padding(28).frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
-      .background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 20))
+      .outlinedSurface(radius: 20)
       .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.06)))
   }
 }

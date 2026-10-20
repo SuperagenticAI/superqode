@@ -134,7 +134,10 @@ async def install_agent(root: Path, reference: str, status):
 
     plan = install_plan(root, reference)
     process = await asyncio.create_subprocess_exec(
-        *plan["argv"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        *plan["argv"],
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        start_new_session=True,
     )
     try:
         while line := await process.stdout.readline():

@@ -10,6 +10,8 @@ struct AuthenticationProgressView: View {
   @State private var identity = ""
   @State private var state = "running"
   @State private var messages = "Starting sign-in…"
+  @State private var dismissRequested = false
+  @State private var cancellationSent = false
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       PageTitle(
@@ -20,9 +22,11 @@ struct AuthenticationProgressView: View {
       if state == "running" { ProgressView() }
       CodeBlock(text: messages).frame(height: 260)
       HStack {
-        Button(state == "running" ? "Cancel sign-in" : "Close") {
+        nativeButton("dialog.cancel", action: {
           cancel()
           dismiss()
+        }, title: state == "running" ? "Cancel sign-in" : "Close") {
+          Text(state == "running" ? "Cancel sign-in" : "Close")
         }
         Spacer()
         if state == "failed" { Text("Sign-in did not complete").foregroundStyle(.orange) }
@@ -33,10 +37,12 @@ struct AuthenticationProgressView: View {
           let response =
             try await app.engine.call("connect.auth.start", request) as? [String: Any] ?? [:]
           identity = string(response, "id")
-          while !Task.isCancelled {
+          if dismissRequested || Task.isCancelled { cancel(); return }
+          while !Task.isCancelled && !dismissRequested {
             let result =
               try await app.engine.call("connect.auth.poll", ["id": identity]) as? [String: Any]
               ?? [:]
+            if dismissRequested || Task.isCancelled { cancel(); return }
             state = string(result, "state")
             messages = (result["messages"] as? [String] ?? []).joined(separator: "\n")
             if state == "completed" {
@@ -55,7 +61,9 @@ struct AuthenticationProgressView: View {
       .onDisappear { cancel() }
   }
   private func cancel() {
-    guard !identity.isEmpty, state == "running" else { return }
+    dismissRequested = true
+    guard !identity.isEmpty, state == "running", !cancellationSent else { return }
+    cancellationSent = true
     app.perform { _ = try await app.engine.call("connect.auth.cancel", ["id": identity]) }
   }
 }
@@ -72,7 +80,7 @@ struct TerminalLoginView: View {
       HStack {
         Text("Sign in with your existing account").font(.title2.weight(.semibold))
         Spacer()
-        Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+        nativeButton("dialog.done", action: { dismiss() }, title: "Close") { Text("Close") }
       }
       Text(arguments.joined(separator: " ")).font(.caption.monospaced()).textSelection(.enabled)
       Text(

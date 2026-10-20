@@ -9,7 +9,7 @@ struct TaskQueueView: View {
       HStack {
         Text("Project task queue").font(.title2.weight(.semibold))
         Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+        nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") }
       }
       Text(
         "Tasks keep their selected connection and run independently in order. Attached files are read when each task starts. A failed or stopped run pauses the queue; restarting the app never resumes it automatically."

@@ -15,7 +15,7 @@ struct WorkOrderBoardView: View {
         Text("WorkOrders").font(.title.weight(.semibold)).modifier(BrandText())
         Spacer()
         Text("Live on your Mac").font(.caption).foregroundStyle(.secondary)
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+        nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") }
       }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
       HSplitView {

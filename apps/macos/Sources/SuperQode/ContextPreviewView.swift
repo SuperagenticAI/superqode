@@ -11,7 +11,7 @@ struct ContextPreviewView: View {
       HStack {
         Text("Next message context").font(.title2.weight(.semibold))
         Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+        nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") }
       }
       Text(
         "Review the prompt and explicit project attachments. Your selected agent or harness adds its own instructions, history and tools during execution. Files are read again when you send."

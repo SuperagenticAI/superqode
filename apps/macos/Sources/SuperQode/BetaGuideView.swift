@@ -50,7 +50,7 @@ struct BetaGuideView: View {
         Link("Downloads & release notes", destination: BetaRelease.downloads)
         Link("Report an issue", destination: BetaRelease.feedback)
         Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+        nativeButton("dialog.done.default", action: { dismiss() }, title: "Done") { Text("Done") }
       }
     }.padding(28).frame(width: 640)
   }

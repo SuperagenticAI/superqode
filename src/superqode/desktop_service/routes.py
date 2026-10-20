@@ -46,6 +46,14 @@ def acp_routes(root: Path):
             parts.insert(1, "--offline")
         launch = {"reference": item.id, "command": shlex.join(parts), "subscription_vendor": vendor}
         digest = hashlib.sha256(json.dumps(launch, sort_keys=True).encode()).hexdigest()
+        from superqode.agents.install_commands import managed_agent_install
+
+        recipe = managed_agent_install(agent)
+        install = (
+            {"reference": item.id, "command": recipe.command}
+            if recipe and recipe.runnable and recipe.managed
+            else None
+        )
         result.append(
             {
                 **launch,
@@ -61,6 +69,7 @@ def acp_routes(root: Path):
                 "path": None,
                 "desktop_kind": "acp",
                 "auth": "subscription requested" if vendor else "agent-managed; unverified",
+                "install": install,
             }
         )
     return result

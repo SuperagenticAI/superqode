@@ -24,6 +24,21 @@ def scoped_path(root: Path, supplied: str) -> Path:
     return target
 
 
+async def select_session_model(client, model: str) -> bool:
+    """Use the model-selection protocol advertised by this exact ACP session."""
+    option = next(
+        (
+            item
+            for item in client.get_session_config_options()
+            if item.get("id") == "model" or item.get("category") == "model"
+        ),
+        None,
+    )
+    if option:
+        return await client.set_config_option(str(option["id"]), model)
+    return await client.set_model(model)
+
+
 class DesktopACPClient(ACPClient):
     async def _handle_agent_request(self, method, params):
         if method in {"fs/read_text_file", "fs/write_text_file"}:
@@ -207,7 +222,7 @@ async def run_acp(request, directory, emit, secrets):
                 or "ACP startup or exact session resume failed. Start a new task if the agent cannot resume."
             )
         controls = request.get("acp_options") or {}
-        if controls.get("model") and not await client.set_model(str(controls["model"])):
+        if controls.get("model") and not await select_session_model(client, str(controls["model"])):
             raise ValueError("The agent rejected the requested model")
         if controls.get("mode") and not await client.set_mode(str(controls["mode"])):
             raise ValueError("The agent rejected the requested mode")

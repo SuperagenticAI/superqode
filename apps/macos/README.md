@@ -2,7 +2,7 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
-[**Download public beta 0.1.6**](https://superqode.dev/downloads/macos/0.1.6/SuperQode-0.1.6-arm64.dmg)
+[**Download public beta 0.1.7**](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
@@ -11,7 +11,7 @@ Your code. Your agents. Your Mac. A native workspace for coding, reviewing chang
 1. Open the DMG, drag SuperQode to Applications and launch it from Applications.
 2. Choose **Open project** and select a repository you can safely work in.
 3. Choose **Connect** and select an agent or model you already use.
-4. Describe a small task, select **Start coding** (Command-Return), review permissions and inspect the changes.
+4. Describe a small task, press **Enter** to send (**Shift-Enter** adds a line), review permissions and inspect the changes.
 
 No SuperQode account, App Store installation or separate Python installation is required. External coding agents and local model servers may need their own setup. Their authentication, privacy terms, subscriptions and usage charges apply.
 
@@ -26,18 +26,20 @@ The welcome page and **Help → Getting Started & Learning** guide you through c
 
 Connection options depend on the runtime. Supported ACP agents expose model, mode, configuration and slash-command controls when advertised. Resume and remote cancellation also depend on the selected runtime. Existing terminal credentials remain supported, and optional app-managed provider keys can be saved in macOS Keychain.
 
+You can change agents within the same conversation. SuperQode keeps the local transcript and sends bounded conversation context to the selected agent. Returning to an agent resumes its compatible session when available. Agent permissions and authentication remain separate; historical images may need reattaching, and long handoffs may omit messages from agent context while retaining them in your local history.
+
 Selecting a connection does not automatically install an agent, download weights or start a paid model call. Model tests, evaluation and optimization can incur provider charges; review their prompts and budgets before starting.
 
 ## Your daily workspace
 
-- **Workspace:** stream responses, inspect tool activity, approve or deny actions, continue supported sessions and use direct Chat mode.
+- **Agent Space:** stream responses, inspect tool activity, approve or deny actions, continue supported sessions and use direct Chat mode.
 - **Files:** browse and edit source, create files, inspect diffs, stage or unstage changes and create local commits after confirmation.
 - **Context:** attach project text or images, preview selected context and manage supported context-window and compaction controls.
 - **Tasks:** prepare independent tasks, reorder the queue and explicitly start work. Failed tasks pause the queue; interrupted work is not automatically replayed.
 - **Checkpoints:** inspect recorded changes and use guarded restoration, undo and redo.
 - **Terminal:** run interactive project commands in the integrated native terminal.
 
-Navigation starts with Workspace, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
+Navigation starts with Agent Space, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
 
 ## Harness Hub, evaluation and optimization
 
@@ -63,7 +65,7 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
 
-Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.6/SuperQode-0.1.6-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
+Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
 

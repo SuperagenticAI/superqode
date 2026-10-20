@@ -378,7 +378,9 @@ struct AgentControlsView: View {
             }
           }
         }
-        ForEach(app.agentSession["config_options"] as? [[String: Any]] ?? [], id: \.projectRowID) {
+        ForEach((app.agentSession["config_options"] as? [[String: Any]] ?? []).filter {
+          string($0, "id") != "model" && string($0, "category") != "model"
+        }, id: \.projectRowID) {
           option in
           if string(option, "type") == "select" {
             Picker(

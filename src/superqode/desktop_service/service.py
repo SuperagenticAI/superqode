@@ -73,6 +73,7 @@ class DesktopService:
             "UPDATE jobs SET status='interrupted' WHERE status IN ('running','needs_approval','queued','cancelling')"
         )
         self.db.commit()
+        self._conversation_roots: dict[str, dict] = {}
         self.processes: dict[str, subprocess.Popen] = {}
         self.pending: dict[str, str] = {}
         self.credentials: dict[str, str] = {}
@@ -88,6 +89,51 @@ class DesktopService:
     def _all(self, query, args=()):
         with self.lock:
             return [dict(r) for r in self.db.execute(query, args).fetchall()]
+
+    def job_summaries(self):
+        """Keep individual run records, with a stable conversation identity for recent rows."""
+        columns = "id,project,kind,title,status,created,updated"
+        rows = self._all(f"SELECT {columns} FROM jobs ORDER BY updated DESC LIMIT 100")
+        nodes = {row["id"]: row for row in rows}
+        # Parent links and original titles are immutable. Resolve new runs once,
+        # rather than decoding every stored prompt on each GUI status poll.
+        if len(self._conversation_roots) > 10_000:
+            self._conversation_roots.clear()
+        roots = self._conversation_roots
+        for row in rows:
+            current = row
+            chain = []
+            seen = set()
+            while current["id"] not in roots:
+                identity = current["id"]
+                if identity in seen:
+                    current = row
+                    break
+                seen.add(identity)
+                chain.append(identity)
+                records = self._all("SELECT request FROM jobs WHERE id=?", (identity,))
+                request = json.loads(records[0]["request"] or "{}") if records else {}
+                parent_id = request.get("parent_id") if current["kind"] == "task" else None
+                if not parent_id:
+                    break
+                if parent_id not in nodes:
+                    found = self._all(f"SELECT {columns} FROM jobs WHERE id=?", (parent_id,))
+                    if found:
+                        nodes[parent_id] = found[0]
+                parent = nodes.get(parent_id)
+                if not parent or parent["project"] != row["project"] or parent["kind"] != "task":
+                    break
+                current = parent
+            root = roots.get(current["id"], {key: current[key] for key in ("id", "title")})
+            for identity in chain:
+                roots[identity] = root
+        result = []
+        for row in rows:
+            root = roots.get(row["id"], row)
+            summary = {key: value for key, value in row.items() if key != "request"}
+            summary.update(conversation_id=root["id"], conversation_title=root["title"])
+            result.append(summary)
+        return result
 
     def _write(self, query, args=()):
         with self.lock:
@@ -279,6 +325,9 @@ class DesktopService:
             params.pop("_desktop_connection", None)
             params.pop("image_snapshots", None)
             params.pop("_chat_history", None)
+            params.pop("_handoff_context", None)
+            params.pop("_continuity", None)
+            params.pop("expected_digest", None)
             if kind == "compaction":
                 source = self.dispatch("jobs.get", {"id": params["source_job"]})
                 if (
@@ -367,45 +416,9 @@ class DesktopService:
 
                     resolve_harness(reference, root=root)
             if kind == "task" and params.get("parent_id"):
-                previous = self.dispatch("jobs.get", {"id": params["parent_id"]})
-                if (
-                    previous["project"] != project_id
-                    or previous["kind"] != "task"
-                    or previous["status"] != "completed"
-                ):
-                    raise ValueError("Only a completed task in this project can be continued")
-                if previous["request"].get("interaction_mode", "code") != params.get(
-                    "interaction_mode", "code"
-                ):
-                    raise ValueError("The interaction mode changed; start a new task")
-                if previous["result"].get("interaction_mode") == "chat":
-                    params["_chat_history"] = previous["result"]["chat_history"]
-                if any(
-                    previous["request"].get(field) != params.get(field)
-                    for field in ("harness", "provider", "model")
-                ):
-                    raise ValueError("The task route changed; start a new task")
-                prior_result = previous.get("result") or {}
-                if prior_result.get("remote_continuity") or prior_result.get("vendor_continuity"):
-                    route = params.get("_desktop_connection") or {}
-                    if prior_result.get("harness_digest") != route.get("digest"):
-                        raise ValueError("The remote connection changed; start a new task")
-                    if prior_result.get("remote_continuity"):
-                        params["_remote_previous"] = prior_result["remote_state"]
-                    params["session_id"] = prior_result["session_id"]
-                native_session = prior_result.get("session_id")
-                if prior_result.get("remote_continuity") or prior_result.get("vendor_continuity"):
-                    pass
-                elif (
-                    (previous.get("result") or {}).get("native_continuity")
-                    or (previous.get("result") or {}).get("acp_continuity")
-                ) and native_session:
-                    params["session_id"] = native_session
-                    params["expected_digest"] = previous["result"].get("harness_digest")
-                else:
-                    raise ValueError(
-                        "This backend cannot resume through the desktop yet; start a new task"
-                    )
+                from .conversations import prepare_continuation
+
+                prepare_continuation(self, params, project_id, root)
             if kind == "task":
                 if params.get("interaction_mode") == "chat" and (
                     params.get("_desktop_route") or params.get("_desktop_connection")
@@ -715,9 +728,11 @@ class DesktopService:
                 "continuity": "Recorded history; provider resume varies",
             }
         if method == "jobs.list":
-            return self._all(
-                "SELECT id,project,kind,title,status,created,updated FROM jobs ORDER BY updated DESC LIMIT 100"
-            )
+            return self.job_summaries()
+        if method == "conversations.get":
+            from .conversations import history
+
+            return history(self, params["id"], params.get("before"))
         if method == "jobs.get":
             rows = self._all("SELECT * FROM jobs WHERE id=?", (params["id"],))
             if not rows:
@@ -937,6 +952,22 @@ class DesktopService:
             )
         if method == "connect.auth.start":
             action = str(params.get("action") or "oauth")
+            if action == "probe":
+                from .connection_probe import probe_route
+                from .connect_workflow import profile_route
+
+                root = self.project(params["project"])
+                reference = str(params.get("reference") or "")
+                route = (
+                    resolve_acp_route(root, reference)
+                    if reference.startswith("acp:")
+                    else profile_route(root, reference.removeprefix("connection:"))
+                )
+
+                async def probe(status):
+                    return await probe_route(root, route, status)
+
+                return self.authentication.start(probe)
             if action == "install":
                 from .configuration import install_agent
 

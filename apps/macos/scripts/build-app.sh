@@ -11,8 +11,8 @@ fi
 SWIFT="$(xcrun --find swift)"
 CONFIGURATION="${CONFIGURATION:-release}"
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
-"$SWIFT" build --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION"
-BINARY_DIR="$("$SWIFT" build --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION" --show-bin-path)"
+"$SWIFT" build --build-system native --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION"
+BINARY_DIR="$("$SWIFT" build --build-system native --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION" --show-bin-path)"
 DEST="$APP_DIR/release/SuperQode.app"
 if [ ! -x "$APP_DIR/runtime/python/bin/python3" ]; then
     echo 'Missing engine payload. See apps/macos/README.md for runtime setup.' >&2
@@ -40,6 +40,11 @@ ditto "$APP_DIR/runtime" "$DEST/Contents/Resources/runtime"
 rm -rf "$DEST/Contents/Resources/runtime/backend/superqode"
 ditto "$ROOT_DIR/src/superqode" "$DEST/Contents/Resources/runtime/backend/superqode"
 find "$DEST/Contents/Resources/runtime" -type d -name __pycache__ -prune -exec rm -rf {} +
+# Apply the hash-locked security fixes to every packaged runtime, including when
+# the local base payload predates these versions.
+RUNTIME_PYTHON="$DEST/Contents/Resources/runtime/python/bin/python3"
+RUNTIME_SITE="$("$RUNTIME_PYTHON" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+uv pip install --python "$RUNTIME_PYTHON" --target "$RUNTIME_SITE" --require-hashes --no-deps -r "$APP_DIR/runtime-requirements.txt"
 python3 "$APP_DIR/scripts/stamp-runtime.py" "$DEST/Contents/Resources/runtime"
 python3 "$APP_DIR/scripts/collect-runtime-notices.py" "$DEST/Contents/Resources/runtime"
 IDENTITY="${SIGNING_IDENTITY:--}"

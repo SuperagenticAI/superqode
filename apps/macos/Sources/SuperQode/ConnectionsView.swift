@@ -42,6 +42,10 @@ struct ConnectionSourcesView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
+        Picker("Model source", selection: $mode) {
+          Text("Local model").tag("Local model")
+          Text("Provider API key").tag("Provider API key")
+        }.pickerStyle(.segmented)
         PageTitle(
           eyebrow: "Connect a model",
           title: mode == "Local model" ? "Choose a local model" : "Use your API key",
@@ -120,14 +124,12 @@ struct ConnectionSourcesView: View {
                 Button("Use model") {
                   app.chooseModelRoute("ollama", modelName(string(row, "model_id")))
                   app.section = "Workspace"
-                  app.selectJob("")
                   app.perform { await app.checkRoute() }
                   app.notice =
                     "Local model selected. Run a task or test the connection from Models."
                   dismiss()
                 }.buttonStyle(BrandButtonStyle())
-              }.padding(14).background(
-                .primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+              }.padding(14).outlinedSurface(radius: 9)
             }
           }
         }.frame(height: 280).defaultScrollAnchor(.top)
@@ -209,7 +211,6 @@ struct ConnectionSourcesView: View {
         try await app.configureConnection(
           provider: selectedProvider, model: selectedModel, key: supplied, remember: remember)
         app.section = "Workspace"
-        app.selectJob("")
         app.notice =
           "Provider selected. Credentials are configured; use Test model to verify execution."
         dismiss()

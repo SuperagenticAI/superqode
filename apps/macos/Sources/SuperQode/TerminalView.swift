@@ -13,7 +13,9 @@ import SwiftUI
     guard !running.contains(project) else { return }
     let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 500))
     terminal.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-    terminal.nativeBackgroundColor = NSColor(red: 0.055, green: 0.045, blue: 0.075, alpha: 1)
+    terminal.nativeBackgroundColor = .black
+    terminal.wantsLayer = true
+    terminal.layer?.backgroundColor = NSColor.black.cgColor
     terminal.nativeForegroundColor = NSColor(red: 0.92, green: 0.89, blue: 0.96, alpha: 1)
     let delegate = TerminalDelegate { [weak self] in self?.running.remove(project) }
     delegates[project] = delegate
@@ -98,7 +100,7 @@ struct ProjectTerminalView: View {
     VStack(alignment: .leading, spacing: 18) {
       PageTitle(
         eyebrow: "Stay in the flow", title: "Project terminal",
-        subtitle: "An interactive shell on your Mac, alongside the native coding workspace.")
+        subtitle: "An interactive shell on your Mac, alongside your Agent Space.")
       HStack {
         Text(string(app.project, "path")).font(.caption.monospaced()).textSelection(.enabled)
         Spacer()
@@ -119,7 +121,7 @@ struct ProjectTerminalView: View {
           RoundedRectangle(cornerRadius: 12))
       } else {
         EmptyState(
-          icon: "terminal", title: "Your shell, in your workspace",
+          icon: "terminal", title: "Your shell, in your Agent Space",
           detail:
             "Start a shell to run project commands, development servers or interactive tools. Shells keep running when you switch pages."
         )

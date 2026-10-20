@@ -746,3 +746,303 @@ def test_acp_always_requires_explicit_scope(desktop_acp_route):
     assert result["status"] == "completed", result
     assert "Always permission granted" in json.dumps(result["events"])
     assert "unsafe-always" in json.dumps(result["events"])
+
+
+def _history_row(service, project, identity, parent=None, *, kind="task", updated=1):
+    request = {"parent_id": parent, "private_request_field": "not-summary-data"}
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        (
+            identity,
+            project,
+            kind,
+            f"Title {identity}",
+            "completed",
+            json.dumps(request),
+            "{}",
+            updated,
+            updated,
+        ),
+    )
+
+
+def test_recent_metadata_keeps_original_conversation_title(desktop):
+    service, project, _ = desktop
+    for identity, parent, updated in [
+        ("root", None, 1),
+        ("second", "root", 2),
+        ("third", "second", 3),
+    ]:
+        _history_row(service, project["id"], identity, parent, updated=updated)
+    rows = service.dispatch("jobs.list", {})
+    assert [row["id"] for row in rows] == ["third", "second", "root"]
+    assert {row["conversation_id"] for row in rows} == {"root"}
+    assert {row["conversation_title"] for row in rows} == {"Title root"}
+    assert "private_request_field" not in json.dumps(rows)
+    assert "request" not in rows[0]
+
+
+def test_recent_metadata_resolves_parent_outside_recent_window(desktop):
+    service, project, _ = desktop
+    _history_row(service, project["id"], "old-root", updated=0)
+    for index in range(101):
+        _history_row(service, project["id"], f"other-{index}", updated=index + 1)
+    _history_row(service, project["id"], "follow-up", "old-root", updated=200)
+    rows = service.dispatch("jobs.list", {})
+    assert len(rows) == 100
+    assert rows[0]["id"] == "follow-up"
+    assert rows[0]["conversation_id"] == "old-root"
+    assert rows[0]["conversation_title"] == "Title old-root"
+
+
+def test_recent_metadata_does_not_merge_foreign_or_missing_parents(desktop):
+    service, project, _ = desktop
+    _history_row(service, "other-project", "foreign")
+    _history_row(service, project["id"], "local", "foreign", updated=2)
+    _history_row(service, project["id"], "orphan", "deleted", updated=3)
+    rows = {row["id"]: row for row in service.dispatch("jobs.list", {})}
+    assert rows["local"]["conversation_id"] == "local"
+    assert rows["orphan"]["conversation_id"] == "orphan"
+
+
+def test_recent_metadata_handles_cyclic_legacy_history(desktop):
+    service, project, _ = desktop
+    _history_row(service, project["id"], "cycle-a", "cycle-b", updated=1)
+    _history_row(service, project["id"], "cycle-b", "cycle-a", updated=2)
+    assert len(service.dispatch("jobs.list", {})) == 2
+
+
+def test_recent_metadata_reuses_lineage_without_rereading_prompts(desktop, monkeypatch):
+    service, project, _ = desktop
+    _history_row(service, project["id"], "root", updated=1)
+    _history_row(service, project["id"], "child", "root", updated=2)
+    original = service._all
+    reads = []
+
+    def record(query, args=()):
+        if "SELECT request" in query:
+            reads.append(query)
+        return original(query, args)
+
+    monkeypatch.setattr(service, "_all", record)
+    first = service.dispatch("jobs.list", {})
+    assert reads
+    reads.clear()
+    assert service.dispatch("jobs.list", {}) == first
+    assert not reads
+
+
+def test_cross_agent_handoff_and_return_resume(desktop_acp_route, monkeypatch):
+    """Two scripted ACP connections retain one app conversation and separate bindings."""
+    from superqode.desktop_service.conversations import answer
+
+    (service, project, _), route = desktop_acp_route
+    monkeypatch.setattr(
+        "superqode.desktop_service.service.resolve_acp_route",
+        lambda root, reference: {**route, "id": reference, "digest": reference + "-digest"},
+    )
+    request = {
+        "project": project["id"],
+        "harness": "acp:first",
+        "provider": "agent",
+        "model": "",
+        "prompt": "Original coding goal",
+    }
+    first = drive_acp(service, service.dispatch("tasks.start", request)["id"])
+    assert first["status"] == "completed", first
+    second = drive_acp(
+        service,
+        service.dispatch(
+            "tasks.start",
+            {
+                **request,
+                "harness": "acp:second",
+                "parent_id": first["id"],
+                "prompt": "Continue in second agent",
+                "session_id": "forged",
+                "expected_digest": "forged",
+                "_handoff_context": "forged",
+            },
+        )["id"],
+    )
+    assert second["status"] == "completed", second
+    assert "session_id" not in second["request"]
+    assert "Original coding goal" in second["request"]["_handoff_context"]
+    assert "Handoff received" in answer(service, second["id"])
+    assert second["request"]["prompt"] == "Continue in second agent"
+    third = drive_acp(
+        service,
+        service.dispatch(
+            "tasks.start",
+            {
+                **request,
+                "parent_id": second["id"],
+                "prompt": "Return to first agent",
+            },
+        )["id"],
+    )
+    assert third["status"] == "completed", third
+    assert third["request"]["session_id"] == first["result"]["session_id"]
+    assert third["request"]["_continuity"]["resumed_from"] == first["id"]
+    assert "Continue in second agent" in third["request"]["_handoff_context"]
+    assert "Resumed ACP session" in answer(service, third["id"])
+    transcript = service.dispatch("conversations.get", {"id": third["id"]})
+    assert transcript["conversation_id"] == first["id"]
+    assert [item["id"] for item in transcript["turns"]] == [first["id"], second["id"]]
+    assert len({row["conversation_id"] for row in service.dispatch("jobs.list", {})}) == 1
+    # Reopen the durable state without invoking any vendor account.
+    from superqode.desktop_service.service import DesktopService
+
+    reopened = DesktopService(service.root)
+    try:
+        assert reopened.dispatch("conversations.get", {"id": third["id"]}) == transcript
+    finally:
+        reopened.close()
+
+
+def test_handoff_bounds_privacy_route_revision_and_failed_session(desktop):
+    from superqode.desktop_service.conversations import prepare_continuation, with_handoff
+
+    service, project, root = desktop
+
+    def node(identity, parent, status="completed", digest="old"):
+        request = {
+            "harness": "acp:one",
+            "provider": "agent",
+            "model": "",
+            "prompt": identity,
+            "parent_id": parent,
+        }
+        result = {
+            "session_id": identity + "-thread",
+            "acp_continuity": True,
+            "harness_digest": digest,
+        }
+        service._write(
+            "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+            (
+                identity,
+                project["id"],
+                "task",
+                identity,
+                status,
+                json.dumps(request),
+                json.dumps(result),
+                1,
+                1,
+            ),
+        )
+
+    node("first", None)
+    node("failed", "first", "failed")
+    service.append(
+        "first",
+        {
+            "type": "harness_event",
+            "data": {"event": "thinking", "payload": {"text": "PRIVATE_REASONING"}},
+        },
+    )
+    service.append("first", {"type": "approval", "data": {"request_id": "PRIVATE_APPROVAL"}})
+    for i in range(520):
+        service.append(
+            "first",
+            {
+                "type": "harness_event",
+                "data": {"event": "delta", "payload": {"text": str(i) + " "}},
+            },
+        )
+    # A too-large visible answer is omitted whole, never sliced inside code.
+    for _ in range(4):
+        service.append(
+            "failed",
+            {
+                "type": "harness_event",
+                "data": {"event": "delta", "payload": {"text": "x" * 25_000}},
+            },
+        )
+    params = {
+        "harness": "acp:one",
+        "provider": "agent",
+        "model": "",
+        "parent_id": "failed",
+        "prompt": "CURRENT_REQUEST",
+        "_desktop_route": {"digest": "old"},
+    }
+    prepare_continuation(service, params, project["id"], root)
+    assert "session_id" not in params  # Failed session may have unknown side effects.
+    assert len(params["_handoff_context"].encode()) < 50_000
+    assert "519 " in params["_handoff_context"]  # Reads beyond the first 500 events.
+    assert "PRIVATE_" not in params["_handoff_context"]
+    assert json.loads(params["_handoff_context"])["metadata"]["omitted_messages"] == 1
+    assert params["prompt"] == "CURRENT_REQUEST"
+    assert with_handoff(params)["prompt"].endswith("CURRENT_REQUEST")
+    revision = {**params, "parent_id": "first", "_desktop_route": {"digest": "new"}}
+    prepare_continuation(service, revision, project["id"], root)
+    assert "session_id" not in revision
+    with pytest.raises(ValueError, match="project"):
+        prepare_continuation(service, dict(params), "another-project", root)
+    node("busy", "first", "running")
+    with pytest.raises(ValueError, match="finished"):
+        prepare_continuation(service, {**params, "parent_id": "busy"}, project["id"], root)
+
+
+def test_conversation_history_pages_keep_complete_messages(desktop):
+    service, project, _ = desktop
+    for index in range(25):
+        _history_row(service, project["id"], str(index), str(index - 1) if index else None)
+    page = service.dispatch("conversations.get", {"id": "24"})
+    assert len(page["turns"]) == 20
+    assert page["earlier"] == "4"
+    first = service.dispatch("conversations.get", {"id": "24", "before": page["earlier"]})
+    assert [row["id"] for row in first["turns"]] == ["0", "1", "2", "3"]
+    assert first["earlier"] == ""
+
+
+@pytest.mark.parametrize(
+    "continuity", ["acp_continuity", "vendor_continuity", "remote_continuity", "native_continuity"]
+)
+def test_native_binding_is_route_owned_and_digest_checked(desktop, continuity):
+    from superqode.desktop_service.conversations import prepare_continuation
+
+    service, project, root = desktop
+    request = {"harness": "connection:fixture", "provider": "agent", "model": "", "prompt": "first"}
+    result = {
+        "session_id": "owned-session",
+        continuity: True,
+        "harness_digest": "fixture",
+        "remote_state": {"context_id": "owned-context"},
+    }
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        (
+            "owned",
+            project["id"],
+            "task",
+            "first",
+            "completed",
+            json.dumps(request),
+            json.dumps(result),
+            1,
+            1,
+        ),
+    )
+    params = {
+        **request,
+        "prompt": "next",
+        "parent_id": "owned",
+        "_desktop_connection": {"digest": "fixture"},
+    }
+    prepare_continuation(service, params, project["id"], root)
+    assert params["session_id"] == "owned-session"
+    assert "_handoff_context" not in params
+    assert ("_remote_previous" in params) == (continuity == "remote_continuity")
+    changed = {
+        **request,
+        "harness": "connection:other",
+        "parent_id": "owned",
+        "_desktop_connection": {"digest": "fixture"},
+    }
+    prepare_continuation(service, changed, project["id"], root)
+    assert "session_id" not in changed
+    assert "_remote_previous" not in changed
+    assert changed["_continuity"]["mode"] == "handoff"
