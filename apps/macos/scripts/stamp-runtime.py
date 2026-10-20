@@ -30,6 +30,9 @@ manifest.update(
         "engine_source_tree_sha256": digest_tree(payload / "backend/superqode", ".py"),
         "native_source_tree_sha256": digest_tree(app / "Sources", ".swift"),
         "lock_sha256": hashlib.sha256((root / "uv.lock").read_bytes()).hexdigest(),
+        "runtime_requirements_sha256": hashlib.sha256(
+            (app / "runtime-requirements.txt").read_bytes()
+        ).hexdigest(),
         "presentation": "SwiftUI/AppKit",
     }
 )

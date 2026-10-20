@@ -101,6 +101,25 @@ def main():
         '#!/bin/sh\nSQ_BIN="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nPYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SQ_BIN/../../backend" LITELLM_LOCAL_MODEL_COST_MAP=True exec "$SQ_BIN/python3" -m superqode.main "$@"\n'
     )
     cli.chmod(0o755)
+    # Patch the standalone interpreter's pip and the app's fsspec without
+    # changing optional engine extras that are not bundled in this app.
+    subprocess.run(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(executable),
+            "--target",
+            str(site),
+            "--no-deps",
+            "--require-hashes",
+            "--requirement",
+            str(APP / "runtime-requirements.txt"),
+        ],
+        check=True,
+    )
+    subprocess.run([str(executable), "-m", "pip", "check"], check=True)
     inventory = subprocess.check_output(
         [
             str(executable),
