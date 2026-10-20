@@ -664,7 +664,8 @@ class A2AClient:
         ):
             raise A2AClientError("Compressed A2A streams are unsupported under bounded peer policy")
         pending = bytearray()
-        async for chunk in response.aiter_bytes(65536):
+        # Preserve transport chunks: a minimum chunk size buffers small live SSE deltas.
+        async for chunk in response.aiter_bytes():
             pending.extend(chunk)
             while b"\n" in pending:
                 raw, _, rest = pending.partition(b"\n")

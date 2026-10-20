@@ -32,6 +32,7 @@ class RLMHarnessBackend:
 
     def __init__(self, *, adapter: RLMHarnessProtocolAdapter | None = None) -> None:
         self.adapter = adapter or RLMHarnessProtocolAdapter()
+        self._active_ref = None
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         events: list[HarnessEvent] = []
@@ -105,10 +106,22 @@ class RLMHarnessBackend:
         async for event in self._events(request):
             yield event
 
+    async def steer(self, text: str) -> bool:
+        if self._active_ref is None:
+            return False
+        await self.adapter.steer(self._active_ref, HarnessMessage("user", text))
+        return True
+
     async def _events(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         ref = await self.adapter.resume(_session_ref(request))
-        async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
-            yield event
+        self._active_ref = ref
+        if observer := getattr(self, "_runtime_observer", None):
+            observer(self)
+        try:
+            async for event in self.adapter.send(ref, HarnessMessage("user", request.prompt)):
+                yield event
+        finally:
+            self._active_ref = None
 
 
 def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:

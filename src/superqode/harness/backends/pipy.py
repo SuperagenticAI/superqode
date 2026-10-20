@@ -103,9 +103,17 @@ class PiPyHarnessBackend:
                 return
         await self.adapter.cancel(ref)
 
+    async def steer(self, text: str) -> bool:
+        if self._active_ref is None:
+            return False
+        await self.adapter.steer(self._active_ref, HarnessMessage("user", text))
+        return True
+
     async def _events(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         ref = await self.adapter.resume(_session_ref(request))
         self._active_ref = ref
+        if observer := getattr(self, "_runtime_observer", None):
+            observer(self)
         try:
             message = HarnessMessage(
                 "user",

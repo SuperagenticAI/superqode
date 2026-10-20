@@ -41,6 +41,8 @@ class RuntimeHarnessBackend:
                 event_sink=runtime_events,
                 mcp_runtime=mcp_runtime,
             )
+            if observer := getattr(self, "_runtime_observer", None):
+                observer(runtime_obj)
             runtime_events.insert(
                 0,
                 HarnessEvent(
@@ -52,7 +54,9 @@ class RuntimeHarnessBackend:
                 ),
             )
             _append_mcp_events(runtime_events, mcp_runtime)
-            response = await runtime_obj.run(request.prompt)
+            response = await runtime_obj.run(
+                request.prompt, **({"images": request.images} if request.images else {})
+            )
             runtime_events.append(
                 HarnessEvent(
                     type="model_result",
@@ -95,6 +99,8 @@ class RuntimeHarnessBackend:
                 self.runtime_name,
                 mcp_runtime=mcp_runtime,
             )
+            if observer := getattr(self, "_runtime_observer", None):
+                observer(runtime_obj)
             for event in _mcp_events(mcp_runtime):
                 yield HarnessEvent(
                     type=event.type,
@@ -104,7 +110,9 @@ class RuntimeHarnessBackend:
                     run_id=event.run_id,
                 )
             if hasattr(runtime_obj, "run_harness_events"):
-                async for event in runtime_obj.run_harness_events(request.prompt):
+                async for event in runtime_obj.run_harness_events(
+                    request.prompt, **({"images": request.images} if request.images else {})
+                ):
                     yield HarnessEvent(
                         type=event.type,
                         data=event.data,
@@ -113,7 +121,9 @@ class RuntimeHarnessBackend:
                         run_id=event.run_id,
                     )
             else:
-                async for chunk in runtime_obj.run_streaming(request.prompt):
+                async for chunk in runtime_obj.run_streaming(
+                    request.prompt, **({"images": request.images} if request.images else {})
+                ):
                     if chunk:
                         yield HarnessEvent(
                             type="delta",
@@ -366,6 +376,10 @@ def _create_runtime_for_request(
         tools_enabled=request.spec.flavor != HarnessFlavor.NO_TOOL,
         max_iterations=_max_iterations_for_request(request, model_policy),
         max_tokens=_optional_positive_int(request.metadata.get("agent_max_tokens")),
+        context_window=_optional_positive_int(request.metadata.get("agent_context_window"))
+        or request.spec.model_policy.context_window
+        or 0,
+        enable_summarization=request.metadata.get("enable_summarization") is True,
         temperature=model_policy.temperature,
         reasoning_effort=model_policy.reasoning,
         enable_session_storage=True,

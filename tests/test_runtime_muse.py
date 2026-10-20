@@ -178,3 +178,27 @@ async def test_external_task_cancellation_closes_host(runtime):
         assert not runtime._pending
     finally:
         await runtime.aclose()
+
+
+async def test_explicit_vendor_key_route_preserves_key(tmp_path, monkeypatch):
+    host = tmp_path / "muse-key-host"
+    host.write_text(
+        f"#!{sys.executable}\n"
+        + HOST.replace(
+            'assert "META_API_KEY" not in os.environ',
+            'assert os.environ["META_API_KEY"] == "explicit-vendor-fixture"',
+        )
+    )
+    host.chmod(0o700)
+    monkeypatch.setattr("superqode.runtime.muse.shutil.which", lambda _: str(host))
+    monkeypatch.setenv("META_API_KEY", "explicit-vendor-fixture")
+    runtime = MuseRuntime(
+        config=AgentConfig(provider="meta", model="", working_directory=tmp_path),
+        billing_requested="byok",
+    )
+    try:
+        response = await runtime.run("hello")
+        assert response.content == "hello"
+        assert runtime.stripped_api_keys == []
+    finally:
+        await runtime.aclose()

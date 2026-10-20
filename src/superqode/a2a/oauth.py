@@ -460,32 +460,32 @@ async def _browser_flow(
             "Identity providers allowlist that exact URI; SuperQode will not "
             "pick another port. Free the port and retry."
         ) from exc
-    redirect_uri = callback.get_redirect_uri()
-    if redirect_uri != REDIRECT_URI:
-        await callback.stop()
-        raise A2AOAuthError(f"OAuth callback bound {redirect_uri}, expected {REDIRECT_URI}.")
-
-    provider, metadata = await _provider(
-        origin, need, client_id, client_secret=client_secret, metadata=metadata
-    )
-    auth_url = await provider.start_auth_flow(origin, metadata=metadata)
-    _status(on_status, f"Open this URL to authorize:\n{auth_url}")
     try:
-        webbrowser.open(auth_url)
-    except Exception:  # noqa: BLE001 - the printed URL is the fallback
-        _status(on_status, "Could not open a browser; paste the URL above.")
-    parsed = urllib.parse.urlparse(auth_url)
-    state = urllib.parse.parse_qs(parsed.query).get("state", [None])[0]
-    if not state:
+        redirect_uri = callback.get_redirect_uri()
+        if redirect_uri != REDIRECT_URI:
+            raise A2AOAuthError(f"OAuth callback bound {redirect_uri}, expected {REDIRECT_URI}.")
+
+        provider, metadata = await _provider(
+            origin, need, client_id, client_secret=client_secret, metadata=metadata
+        )
+        auth_url = await provider.start_auth_flow(origin, metadata=metadata)
+        _status(on_status, f"Open this URL to authorize:\n{auth_url}")
+        try:
+            webbrowser.open(auth_url)
+        except Exception:  # noqa: BLE001 - the printed URL is the fallback
+            _status(on_status, "Could not open a browser; paste the URL above.")
+        parsed = urllib.parse.urlparse(auth_url)
+        state = urllib.parse.parse_qs(parsed.query).get("state", [None])[0]
+        if not state:
+            raise A2AOAuthError("OAuth authorization URL was missing state")
+        result = await callback.wait_for_callback(state, timeout=300)
+        if result.error:
+            raise A2AOAuthError(result.error_description or result.error or "OAuth callback failed")
+        if not result.code:
+            raise A2AOAuthError("OAuth callback returned no code")
+        return await provider.handle_callback(result.code, state, metadata=metadata)
+    finally:
         await callback.stop()
-        raise A2AOAuthError("OAuth authorization URL was missing state")
-    result = await callback.wait_for_callback(state, timeout=300)
-    await callback.stop()
-    if result.error:
-        raise A2AOAuthError(result.error_description or result.error or "OAuth callback failed")
-    if not result.code:
-        raise A2AOAuthError("OAuth callback returned no code")
-    return await provider.handle_callback(result.code, state, metadata=metadata)
 
 
 async def _device_code_flow(

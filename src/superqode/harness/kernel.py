@@ -120,7 +120,12 @@ class HarnessSession:
         self._pending_run_id: str | None = None
         self._pending_approvals: list[dict[str, Any]] = []
         self._active_backend: Any | None = None
+        self._runtime_observer = None
         self._cancel_requested = False
+
+    def observe_runtime(self, callback) -> None:
+        """Observe the active runtime without persisting application callbacks."""
+        self._runtime_observer = callback
 
     async def cancel(self) -> None:
         """Stop the run that this session is streaming or executing.
@@ -264,6 +269,8 @@ class HarnessSession:
             runtime=runtime_name,
         )
         backend = create_harness_backend(runtime or self.kernel.spec.runtime.backend)
+        if self._runtime_observer is not None:
+            backend._runtime_observer = self._runtime_observer
         self._active_backend = backend
         cancelled = False
         try:
@@ -391,6 +398,8 @@ class HarnessSession:
             runtime=runtime_name,
         )
         backend = create_harness_backend(request.runtime or self.kernel.spec.runtime.backend)
+        if self._runtime_observer is not None:
+            backend._runtime_observer = self._runtime_observer
         self._active_backend = backend
         backend_request = HarnessBackendRequest(
             spec=self.kernel.spec,

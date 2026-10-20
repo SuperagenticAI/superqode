@@ -1,0 +1,57 @@
+{
+  "icons" : [
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_16x16.png",
+      "height" : 16,
+      "width" : 16
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_16x16@2x.png",
+      "height" : 32,
+      "width" : 32
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_32x32.png",
+      "height" : 32,
+      "width" : 32
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_32x32@2x.png",
+      "height" : 64,
+      "width" : 64
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_128x128.png",
+      "height" : 128,
+      "width" : 128
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_128x128@2x.png",
+      "height" : 256,
+      "width" : 256
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_256x256.png",
+      "height" : 256,
+      "width" : 256
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_256x256@2x.png",
+      "height" : 512,
+      "width" : 512
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_512x512.png",
+      "height" : 512,
+      "width" : 512
+    },
+    {
+      "file" : "resources\/Assets.xcassets\/AppIcon.appiconset\/icon_512x512@2x.png",
+      "height" : 1024,
+      "width" : 1024
+    }
+  ],
+  "rendering" : "Original SVG mark on a glossy dimensional macOS tile; transparent Dock silhouette; opaque submission preview; native vector rendering at every size",
+  "source" : "assets\/superqode-logo.svg",
+  "source_sha256" : "afd4017fb2c51fa62cb3f402ce8eee6aea8abe768454b20392f314ca8db0bb03"
+}

@@ -1,0 +1,7 @@
+.build/
+release/
+runtime/
+artifacts/
+resources/icon.icns
+.build-venv/
+resources/icon.iconset/

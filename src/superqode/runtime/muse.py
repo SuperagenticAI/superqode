@@ -45,9 +45,11 @@ class MuseRuntime:
         *,
         config: AgentConfig,
         approval_callback: Callable[[str, dict[str, Any]], bool] | None = None,
+        billing_requested: str = "subscription",
         **_unused: Any,
     ) -> None:
         self.config = config
+        self.billing_requested = billing_requested
         self._binary = shutil.which("muse")
         if not self._binary:
             raise RuntimeNotInstalledError(
@@ -148,7 +150,12 @@ class MuseRuntime:
         if self._process is not None and self._process.returncode is None:
             return
         self._loop = asyncio.get_running_loop()
-        env, self.stripped_api_keys = subscription_child_env("muse")
+        if self.billing_requested == "byok":
+            from superqode.herdr import child_env
+
+            env, self.stripped_api_keys = child_env(), []
+        else:
+            env, self.stripped_api_keys = subscription_child_env("muse")
         # The wrapper otherwise launches its own hourly update worker.
         env["MUSE_UPDATE_INTERVAL_SECONDS"] = "disabled"
         self._stderr = ""

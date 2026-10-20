@@ -33,11 +33,11 @@ class BuiltinRuntime:
         """Escape hatch for code that needs the underlying AgentLoop (e.g. pure_mode)."""
         return self._loop
 
-    async def run(self, prompt: str) -> AgentResponse:
-        return await self._loop.run(prompt)
+    async def run(self, prompt: str, *, images=None) -> AgentResponse:
+        return await self._loop.run(prompt, images=images)
 
-    def run_streaming(self, prompt: str) -> AsyncIterator[str]:
-        return self._loop.run_streaming(prompt)
+    def run_streaming(self, prompt: str, *, images=None) -> AsyncIterator[str]:
+        return self._loop.run_streaming(prompt, images=images)
 
     def get_pending_approvals(self) -> list[dict]:
         pending = self._loop._pending_approval
@@ -86,7 +86,7 @@ class BuiltinRuntime:
             stopped_reason="complete",
         )
 
-    async def run_harness_events(self, prompt: str) -> AsyncIterator[HarnessEvent]:
+    async def run_harness_events(self, prompt: str, *, images=None) -> AsyncIterator[HarnessEvent]:
         """Run with normalized harness events from the native AgentLoop callbacks."""
         pending: list[HarnessEvent] = []
         previous_tool_call = self._loop.on_tool_call
@@ -130,7 +130,7 @@ class BuiltinRuntime:
         self._loop.on_thinking = on_thinking
         yield HarnessEvent(type="model_request", data={"runtime": self.name})
         try:
-            async for chunk in self._loop.run_streaming(prompt):
+            async for chunk in self._loop.run_streaming(prompt, images=images):
                 while pending:
                     yield pending.pop(0)
                 if chunk:

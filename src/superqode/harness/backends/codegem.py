@@ -100,6 +100,8 @@ class CodeGemHarnessBackend(PiPyHarnessBackend):
 
         ref = await self.adapter.resume(ref)
         self._active_ref = ref
+        if observer := getattr(self, "_runtime_observer", None):
+            observer(self)
         try:
             message = HarnessMessage(
                 "user",
