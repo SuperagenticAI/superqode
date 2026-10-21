@@ -1,7 +1,7 @@
 # macOS App Store preparation guide
 
 This contributor handoff covers a future Mac App Store release. Keep it at the
-repository root, separate from the public product documentation in `docs/`.
+`proc/`, separate from the public product documentation in `docs/`.
 Account configuration, signing records, machine paths and release evidence belong
 in private storage outside the repository.
 
@@ -18,8 +18,8 @@ App Store sandboxed distribution. App Store compatibility has not been proven.
 
 ## Start here when continuing this work
 
-1. Read [the Mac app guide](apps/macos/README.md) and
-   [beta limitations](apps/macos/BETA-NOTES.md). Inspect the current checkout;
+1. Read [the Mac app guide](../apps/macos/README.md) and
+   [beta limitations](../apps/macos/BETA-NOTES.md). Inspect the current checkout;
    do not assume an earlier version or validation result still applies.
 2. Review Apple's current requirements linked below. Establish whether the
    core coding experience can operate within App Sandbox and review rules.

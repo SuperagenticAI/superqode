@@ -75,7 +75,7 @@ Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.de
 ## Build from source
 
 For future Mac App Store work, see the separate
-[App Store preparation guide](../../MACOS-APP-STORE.md). The current public beta
+[App Store preparation guide](../../proc/MACOS-APP-STORE.md). The current public beta
 uses website distribution.
 
 Requires Xcode with the macOS SDK, Apple Silicon and macOS 14 or later. The minimum OS is the build target; clean-machine compatibility still needs release validation.
