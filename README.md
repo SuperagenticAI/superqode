@@ -37,7 +37,10 @@
 </p>
 
 <p align="center">
-  <img src="assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="assets/superqode-macos-welcome-light.png">
+    <img src="assets/superqode-macos-welcome.png" alt="SuperQode 0.1.7 native Mac app welcome screen" width="960">
+  </picture>
 </p>
 
 ## Start with the Mac app
@@ -55,6 +58,7 @@ The app bundles its Python engine. You do not need to install Python, use the Ap
 
 - **Code and review:** stream agent responses, approve tools, edit source, inspect Git changes and use the integrated terminal.
 - **Bring your connection:** connect existing agents, subscription-backed routes, provider keys or supported local models. Availability depends on the selected runtime and account.
+- **Continue across agents:** keep your local conversation when changing agents, with bounded context handoffs and compatible session resume where supported.
 - **Harness Hub:** explore shared harness definitions and choose the setup for your task.
 - **Evaluate:** compare baseline and candidate results, per-task outcomes, cost and regressions.
 - **Optimize:** run bounded optimization, review candidate diffs and adopt a validated harness revision.

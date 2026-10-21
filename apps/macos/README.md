@@ -6,6 +6,11 @@ Your code. Your agents. Your Mac. A native workspace for coding, reviewing chang
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="../../assets/superqode-macos-welcome-light.png">
+  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode 0.1.7 native Mac app welcome screen" width="960">
+</picture>
+
 ## Start coding
 
 1. Open the DMG, drag SuperQode to Applications and launch it from Applications.
