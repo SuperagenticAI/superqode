@@ -304,8 +304,6 @@ nav:
         - 🏗️ Workspace System: advanced/workspace-system.md
         - 📝 LSP Integration: advanced/lsp-integration.md
         - 🐍 Monty Python REPL: advanced/monty-python-repl.md
-      - 🤝 Release Validation:
-        - ✅ 0.2.30 Validation Contract: advanced/release-0.2.30.md
       - 🛡️ Safety & Memory:
         - 🛡️ Policies & Safety: advanced/policies.md
         - 🔐 Contextual Policy & Credentials: advanced/contextual-policy.md

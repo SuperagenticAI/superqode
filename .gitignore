@@ -263,6 +263,10 @@ examples/bench/results/
 *.mobileprovision
 *.provisionprofile
 *.certSigningRequest
+*.key
+*.csr
+/.npmrc
+/.netrc
 
 # Private macOS working notes and local release orchestration
 /apps/macos/RELEASE.md
@@ -275,3 +279,6 @@ examples/bench/results/
 /apps/macos/scripts/app-store-preflight.py
 /tests/test_macos_beta_release.py
 /docs/plans/macos-app.md
+
+# Archived release planning is kept outside the public documentation.
+/docs/advanced/release-0.2.30.md

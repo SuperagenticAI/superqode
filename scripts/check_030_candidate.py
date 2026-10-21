@@ -58,7 +58,6 @@ def candidate_errors(expected_version: str | None = None) -> list[str]:
         "docs/advanced/contextual-policy.md",
         "docs/advanced/harnessbench.md",
         "docs/advanced/harness-promotion.md",
-        "docs/advanced/release-0.2.30.md",
         "docs/cli-reference/work-commands.md",
         "docs/cli-reference/policy-commands.md",
     )
