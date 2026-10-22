@@ -67,8 +67,11 @@ class Fixture(BaseHTTPRequestHandler):
 server = ThreadingHTTPServer(("127.0.0.1", 0), Fixture)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 APP = Path(__file__).resolve().parents[1]
-BINARY = APP / "release/SuperQode.app/Contents/MacOS/SuperQode"
-ARTIFACTS = APP / "artifacts"
+BINARY = (
+    Path(os.environ.get("SUPERQODE_SMOKE_APP", str(APP / "release/SuperQode.app")))
+    / "Contents/MacOS/SuperQode"
+)
+ARTIFACTS = Path(os.environ.get("SUPERQODE_SMOKE_ARTIFACTS", str(APP / "artifacts")))
 ARTIFACTS.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     root = Path(temporary)

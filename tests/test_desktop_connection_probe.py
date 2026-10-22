@@ -16,7 +16,8 @@ def test_acp_probe_advertises_models_without_a_coding_task(desktop_acp_route):
         "connect.auth.start",
         {"action": "probe", "project": project["id"], "reference": route["id"]},
     )
-    for _ in range(100):
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
         result = service.dispatch("connect.auth.poll", operation)
         if result["state"] != "running":
             break

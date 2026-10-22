@@ -87,6 +87,13 @@ def collect(runtime):
         "review_required": [r["name"] for r in inventory if not r["notices"]],
     }
     (target / "inventory.json").write_text(json.dumps(report, indent=2) + "\n")
+    # This runs after runtime security patches and before signing. Keep the
+    # machine-readable package list aligned with the actual staged payload.
+    packages = sorted(
+        [{"name": row["name"], "version": row["version"]} for row in inventory],
+        key=lambda row: row["name"].lower(),
+    )
+    (runtime / "python-dependencies.json").write_text(json.dumps(packages, indent=2) + "\n")
     print(
         f"Preserved notices for {len(inventory)} Python distributions; {len(report['review_required'])} need notice review"
     )

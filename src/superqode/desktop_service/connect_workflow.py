@@ -152,7 +152,7 @@ def connection_menu(root: Path, menu: str):
                     "command": login_command(login),
                     "interactive": login.interactive_tty,
                 }
-            except KeyError:
+            except (KeyError, FileNotFoundError):
                 pass
         from .configuration import install_plan
 

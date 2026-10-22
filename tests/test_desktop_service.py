@@ -386,26 +386,33 @@ def test_local_readiness_rejects_embedding_models_and_missing_weights(desktop, m
     )
 
 
-def test_app_key_echo_is_redacted_from_worker_events_and_diagnostics(desktop):
+def test_checks_do_not_receive_app_or_inherited_credentials(desktop, monkeypatch):
+    import shlex
+    import sys
+
     service, project, _ = desktop
     secret = "private-desktop-fixture-credential"
     service.dispatch("providers.credentials.set", {"provider": "openai", "key": secret})
-    started = service.dispatch(
-        "checks.start",
-        {
-            "project": project["id"],
-            "command": 'printf "%s\\n" "$OPENAI_API_KEY"; printf "%s\\n" "$OPENAI_API_KEY" >&2',
-        },
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "inherited-fixture-credential")
+    monkeypatch.setenv("PROJECT_TEST_VALUE", "retained")
+    command = shlex.join(
+        [
+            sys.executable,
+            "-c",
+            "import os,json;print(json.dumps({k:os.environ.get(k) for k in ['OPENAI_API_KEY','ANTHROPIC_API_KEY','PROJECT_TEST_VALUE']}))",
+        ]
     )
+    started = service.dispatch("checks.start", {"project": project["id"], "command": command})
     result = wait_job(service, started["id"])
     assert result["status"] == "completed"
-    assert "[REDACTED]" in json.dumps(result["events"])
-    assert secret not in json.dumps(result)
-    log = (service.root / (started["id"] + ".log")).read_text()
-    assert secret not in log
     artifact = json.loads((service.root / "runs" / started["id"] / "result.json").read_text())
-    assert secret not in json.dumps(artifact)
-    assert "[REDACTED]" in artifact["output"]
+    assert json.loads(artifact["output"]) == {
+        "OPENAI_API_KEY": None,
+        "ANTHROPIC_API_KEY": None,
+        "PROJECT_TEST_VALUE": "retained",
+    }
+    assert secret not in json.dumps(result)
+    assert secret not in (service.root / (started["id"] + ".log")).read_text()
 
 
 def test_worker_stderr_is_redacted_before_diagnostic_file_write(tmp_path):

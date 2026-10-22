@@ -230,6 +230,8 @@ def optimize(request, directory):
 
 
 def check(request, directory):
+    from .environment import job_environment
+
     command = str(request.get("command") or "").strip()
     if not command or len(command) > 4000:
         raise ValueError("Enter a check command")
@@ -241,6 +243,7 @@ def check(request, directory):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env=job_environment(os.environ, {}, check=True),
     )
     chunks = []
     size = 0

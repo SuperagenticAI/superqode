@@ -1,6 +1,7 @@
 """Record the exact packaged sources, independently of the checkout's dirty state."""
 
 import hashlib
+import ast
 import json
 from pathlib import Path
 import subprocess
@@ -34,6 +35,15 @@ manifest.update(
             (app / "runtime-requirements.txt").read_bytes()
         ).hexdigest(),
         "presentation": "SwiftUI/AppKit",
+        "engine": next(
+            ast.literal_eval(node.value)
+            for node in ast.parse((payload / "backend/superqode/__init__.py").read_text()).body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__version__"
+                for target in node.targets
+            )
+        ),
     }
 )
 manifest.pop("source_tree_sha256", None)

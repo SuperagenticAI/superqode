@@ -492,10 +492,15 @@ class DesktopService:
                         reverse=True,
                     )
                 )
+                from .environment import job_environment, selected_providers
+                from superqode.providers.registry import PROVIDERS
+
+                providers = selected_providers(kind, params)
                 credential_env = (
                     {}
-                    if (params.get("_desktop_route") or params.get("_desktop_connection"))
-                    else self.credential_environment()
+                    if kind == "check"
+                    or (params.get("_desktop_route") or params.get("_desktop_connection"))
+                    else self.credential_environment(None if kind == "tool" else providers)
                 )
                 if str(params.get("harness", "")).startswith("attach:"):
                     from .connect_workflow import attachment_environment
@@ -515,20 +520,55 @@ class DesktopService:
                     )
                     credential_env = {name: key for name in route["env_vars"]}
                     secrets = tuple(sorted(set(secrets) | {key}, key=len, reverse=True))
-                if "systemone" in self.vendor_keys and not (
-                    params.get("_desktop_route") or params.get("_desktop_connection")
+                if (
+                    "systemone" in str(params.get("harness") or "")
+                    and "systemone" in self.vendor_keys
+                    and not (params.get("_desktop_route") or params.get("_desktop_connection"))
                 ):
                     credential_env["TYPESAFE_API_KEY"] = self.vendor_keys["systemone"]
                     secrets = tuple(set(secrets) | {self.vendor_keys["systemone"]})
                 if tool_plan:
                     secrets = tuple(set(secrets) | set(tool_plan["secrets"]))
+                if kind == "check":
+                    credential_env = {}
+                    remote_config = {}
+                allowed = {
+                    name
+                    for provider in providers
+                    if provider in PROVIDERS
+                    for name in (PROVIDERS[provider].env_vars or [])
+                }
+                # External agents retain their own authentication contract. Plain
+                # project checks never receive that environment or app keys.
+                inherited = (
+                    os.environ
+                    if kind == "tool"
+                    or params.get("_desktop_route")
+                    or params.get("_desktop_connection")
+                    else job_environment(
+                        os.environ, credential_env, check=kind == "check", allowed=allowed
+                    )
+                )
+                from superqode.tools.env_policy import is_secret_name
+
+                key_vars = set(credential_env) | {
+                    name for name in inherited if is_secret_name(name) and name != "SSH_AUTH_SOCK"
+                }
+                secrets = tuple(
+                    sorted(
+                        set(secrets)
+                        | {inherited[name] for name in key_vars if inherited.get(name)},
+                        key=len,
+                        reverse=True,
+                    )
+                )
                 process = subprocess.Popen(
                     [sys.executable, "-u", "-m", "superqode.desktop_service.worker"],
                     cwd=root,
                     env={
-                        **os.environ,
+                        **inherited,
                         **credential_env,
-                        "SUPERQODE_DESKTOP_KEY_VARS": json.dumps(list(credential_env)),
+                        "SUPERQODE_DESKTOP_KEY_VARS": json.dumps(sorted(key_vars)),
                         "SUPERQODE_DESKTOP_REMOTE": json.dumps(remote_config),
                         "SUPERQODE_DESKTOP_TOOL_ARGV": json.dumps(
                             tool_plan["argv"] if tool_plan else []
@@ -560,11 +600,17 @@ class DesktopService:
                 raise
             return {"id": job_id}
 
-    def credential_environment(self):
+    def credential_environment(self, providers=None):
         from .connections import environment
 
         with self.lock:
-            return environment(self.credentials)
+            return environment(
+                {
+                    key: value
+                    for key, value in self.credentials.items()
+                    if providers is None or key in providers
+                }
+            )
 
     def dispatch(self, method: str, params: dict):
         if method in {

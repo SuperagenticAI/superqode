@@ -70,6 +70,15 @@ def test_model_subscription_guidance_is_not_an_agent_connection(desktop):
         profile_route(root, plans[0]["id"])
 
 
+def test_subscription_menu_works_without_installed_vendor_binaries(desktop, monkeypatch):
+    monkeypatch.setattr("superqode.providers.subscription_login.binary_path", lambda spec: None)
+    _, _, root = desktop
+    vendors = connection_menu(root, "vendors")["rows"]
+    codex = next(row for row in vendors if row["id"] == "codex")
+    assert codex["route"]["subscription_vendor"] == "codex"
+    assert "login" not in codex
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -6,6 +6,9 @@ let package = Package(
   platforms: [.macOS(.v14)],
   products: [.executable(name: "SuperQode", targets: ["SuperQode"])],
   dependencies: [.package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.20.0")],
-  targets: [.executableTarget(name: "SuperQode", dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")])],
+  targets: [
+    .executableTarget(name: "SuperQode", dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")]),
+    .testTarget(name: "SuperQodeTests", dependencies: ["SuperQode"]),
+  ],
   swiftLanguageModes: [.v5]
 )

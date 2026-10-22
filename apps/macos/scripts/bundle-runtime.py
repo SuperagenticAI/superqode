@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ast
 import hashlib
 from pathlib import Path
 import shutil
@@ -61,7 +62,15 @@ def main():
         json.dumps(
             {
                 "python": manifest["version"],
-                "engine": "2.24.0",
+                "engine": next(
+                    ast.literal_eval(node.value)
+                    for node in ast.parse((backend / "superqode/__init__.py").read_text()).body
+                    if isinstance(node, ast.Assign)
+                    and any(
+                        isinstance(target, ast.Name) and target.id == "__version__"
+                        for target in node.targets
+                    )
+                ),
                 "source": subprocess.check_output(
                     ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
                 ).strip(),

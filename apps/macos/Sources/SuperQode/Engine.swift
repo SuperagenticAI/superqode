@@ -7,18 +7,45 @@ struct EngineError: LocalizedError {
 }
 
 /// Decode pipe frames on a serial worker, never in the AppKit input loop.
-private final class EngineFrames {
+final class EngineFrames {
   private let queue = DispatchQueue(label: "dev.superqode.engine.read", qos: .userInitiated)
   private var buffer = Data()
-  func receive(_ data: Data, deliver: @escaping ([String: Any]) -> Void) {
+  private var failed = false
+  static let maximumFrameBytes = 16 * 1024 * 1024
+
+  func receive(
+    _ data: Data, deliver: @escaping ([String: Any]) -> Void,
+    failure: @escaping (EngineError) -> Void
+  ) {
     queue.async {
+      guard !self.failed else { return }
       self.buffer.append(data)
       while let newline = self.buffer.firstIndex(of: 10) {
         let line = self.buffer.prefix(upTo: newline)
-        if let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
-          deliver(object)
+        guard line.count <= Self.maximumFrameBytes,
+          let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+          object["id"] is Int,
+          object.keys.contains("result") != object.keys.contains("error")
+        else {
+          self.failed = true
+          self.buffer.removeAll()
+          failure(
+            EngineError(
+              message: "Local engine returned an invalid response. Relaunch SuperQode to reconnect."
+            ))
+          return
         }
         self.buffer.removeSubrange(...newline)
+        deliver(object)
+      }
+      if self.buffer.count > Self.maximumFrameBytes {
+        self.failed = true
+        self.buffer.removeAll()
+        failure(
+          EngineError(
+            message:
+              "Local engine response exceeded the protocol limit. Relaunch SuperQode to reconnect.")
+        )
       }
     }
   }
@@ -28,14 +55,42 @@ private final class EngineFrames {
 @MainActor final class Engine {
   private var process: Process?
   private var input: FileHandle?
-  private let frames = EngineFrames()
+  private var frames = EngineFrames()
   private let writer = DispatchQueue(label: "dev.superqode.engine.write", qos: .userInitiated)
   private var sequence = 0
   private var pending: [Int: CheckedContinuation<Any, Error>] = [:]
+  private var deadlines: [Int: Task<Void, Never>] = [:]
+  private var acceptingRequests = false
+  private let requestTimeout: Duration
+  var pendingRequestCount: Int { pending.count }
   private(set) var diagnostics = ""
+
+  init(requestTimeout: Duration = .seconds(30), input: FileHandle? = nil) {
+    self.requestTimeout = requestTimeout
+    self.input = input
+    self.acceptingRequests = input != nil
+  }
+
+  private func finish(_ id: Int, error: Error) {
+    deadlines.removeValue(forKey: id)?.cancel()
+    pending.removeValue(forKey: id)?.resume(throwing: error)
+  }
+
+  private func failAll(_ error: Error) {
+    let wasAccepting = acceptingRequests
+    acceptingRequests = false
+    let waiting = Array(pending.values)
+    pending.removeAll()
+    for task in deadlines.values { task.cancel() }
+    deadlines.removeAll()
+    for continuation in waiting { continuation.resume(throwing: error) }
+    try? input?.close()
+    if wasAccepting { onExit?() }
+  }
   var onExit: (() -> Void)?
 
   func start() throws {
+    frames = EngineFrames()
     let resources = Bundle.main.resourceURL ?? URL(fileURLWithPath: ".")
     let bundled = resources.appendingPathComponent("runtime")
     let root =
@@ -82,11 +137,21 @@ private final class EngineFrames {
       let data = handle.availableData
       guard !data.isEmpty else {
         handle.readabilityHandler = nil
+        Task { @MainActor in
+          self?.failAll(
+            EngineError(
+              message: "Local engine closed its response stream. Relaunch SuperQode to reconnect."))
+        }
         return
       }
-      frames.receive(data) { object in
-        Task { @MainActor in self?.receive(object) }
-      }
+      frames.receive(
+        data,
+        deliver: { object in
+          Task { @MainActor in self?.receive(object) }
+        },
+        failure: { error in
+          Task { @MainActor in self?.failAll(error) }
+        })
     }
     errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
       let data = handle.availableData
@@ -103,56 +168,70 @@ private final class EngineFrames {
     child.terminationHandler = { [weak self] _ in
       Task { @MainActor in
         guard let self else { return }
-        let waiting = self.pending.values
-        self.pending.removeAll()
-        for continuation in waiting {
-          continuation.resume(
-            throwing: EngineError(
-              message: "Local engine stopped. Relaunch SuperQode to reconnect. "
-                + self.diagnostics.suffix(1000)))
-        }
-        self.onExit?()
+        self.failAll(
+          EngineError(
+            message: "Local engine stopped. Relaunch SuperQode to reconnect. "
+              + self.diagnostics.suffix(1000)))
       }
     }
     try child.run()
     process = child
+    acceptingRequests = true
   }
 
-  private func receive(_ object: [String: Any]) {
-      guard let id = object["id"] as? Int, let continuation = pending.removeValue(forKey: id)
-      else { return }
-      if let error = object["error"] {
-        continuation.resume(throwing: EngineError(message: String(describing: error)))
-      } else {
-        continuation.resume(returning: object["result"] ?? NSNull())
-      }
+  func receive(_ object: [String: Any]) {
+    guard let id = object["id"] as? Int, let continuation = pending.removeValue(forKey: id)
+    else { return }
+    deadlines.removeValue(forKey: id)?.cancel()
+    if let error = object["error"] {
+      continuation.resume(throwing: EngineError(message: String(describing: error)))
+    } else {
+      continuation.resume(returning: object["result"] ?? NSNull())
+    }
   }
 
   func call(_ method: String, _ params: [String: Any] = [:]) async throws -> Any {
-    guard process?.isRunning == true, let input else {
+    guard acceptingRequests, let input else {
       throw EngineError(message: "Local engine is not running.")
     }
     sequence += 1
     let id = sequence
-    return try await withCheckedThrowingContinuation { continuation in
-      pending[id] = continuation
-      writer.async {
-        do {
-          var data = try JSONSerialization.data(withJSONObject: [
-            "id": id, "method": method, "params": params,
-          ])
-          guard data.count <= 1_000_000 else {
-            throw EngineError(message: "Request exceeds the local protocol limit.")
+    try Task.checkCancellation()
+    return try await withTaskCancellationHandler(
+      operation: {
+        try await withCheckedThrowingContinuation { continuation in
+          pending[id] = continuation
+          deadlines[id] = Task { [weak self, requestTimeout] in
+            do { try await Task.sleep(for: requestTimeout) } catch { return }
+            self?.finish(
+              id,
+              error: EngineError(
+                message: "Local engine request timed out (" + method
+                  + "). A started operation may still be running; inspect its status before retrying."
+              ))
           }
-          data.append(10)
-          try input.write(contentsOf: data)
-        } catch {
-          Task { @MainActor in self.pending.removeValue(forKey: id)?.resume(throwing: error) }
+          writer.async {
+            do {
+              var data = try JSONSerialization.data(withJSONObject: [
+                "id": id, "method": method, "params": params,
+              ])
+              guard data.count <= 1_000_000 else {
+                throw EngineError(message: "Request exceeds the local protocol limit.")
+              }
+              data.append(10)
+              try input.write(contentsOf: data)
+            } catch {
+              Task { @MainActor in self.finish(id, error: error) }
+            }
+          }
         }
-      }
-    }
+      },
+      onCancel: {
+        Task { @MainActor in self.finish(id, error: CancellationError()) }
+      })
   }
   func stop() {
+    failAll(EngineError(message: "Local engine connection closed."))
     try? input?.close()
     // EOF lets the engine cancel remote tasks and record acknowledgements before exiting.
   }
@@ -163,15 +242,23 @@ private final class EngineFrames {
     var paths = [runtime.appendingPathComponent("python/bin").path]
     paths += inherited.components(separatedBy: ":").filter { !$0.isEmpty }
     paths += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
-    paths += [".local/bin", ".opencode/bin", ".bun/bin", ".volta/bin", ".asdf/shims",
-              ".local/share/mise/shims", ".local/share/fnm/aliases/default/bin"].map {
+    paths += [
+      ".local/bin", ".opencode/bin", ".bun/bin", ".volta/bin", ".asdf/shims",
+      ".local/share/mise/shims", ".local/share/fnm/aliases/default/bin",
+    ].map {
       home.appendingPathComponent($0).path
     }
-    for (folder, suffix) in [(".nvm/versions/node", "bin"), (".local/share/fnm/node-versions", "installation/bin")] {
+    for (folder, suffix) in [
+      (".nvm/versions/node", "bin"), (".local/share/fnm/node-versions", "installation/bin"),
+    ] {
       let directory = home.appendingPathComponent(folder)
-      let versions = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-      paths += versions.sorted { $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedDescending }
-        .map { $0.appendingPathComponent(suffix).path }
+      let versions =
+        (try? FileManager.default.contentsOfDirectory(
+          at: directory, includingPropertiesForKeys: nil)) ?? []
+      paths += versions.sorted {
+        $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedDescending
+      }
+      .map { $0.appendingPathComponent(suffix).path }
     }
     var seen = Set<String>()
     return paths.filter { $0.hasPrefix("/") && seen.insert($0).inserted }.joined(separator: ":")

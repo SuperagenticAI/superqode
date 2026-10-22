@@ -13,7 +13,7 @@ CONFIGURATION="${CONFIGURATION:-release}"
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 "$SWIFT" build --build-system native --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION"
 BINARY_DIR="$("$SWIFT" build --build-system native --sdk "$SDK_PATH" --package-path "$APP_DIR" --scratch-path "$APP_DIR/.build" --disable-sandbox -c "$CONFIGURATION" --show-bin-path)"
-DEST="$APP_DIR/release/SuperQode.app"
+DEST="${SUPERQODE_APP_DESTINATION:-$APP_DIR/release/SuperQode.app}"
 if [ ! -x "$APP_DIR/runtime/python/bin/python3" ]; then
     echo 'Missing engine payload. See apps/macos/README.md for runtime setup.' >&2
     exit 1
