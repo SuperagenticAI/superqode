@@ -2,13 +2,13 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
-[**Download public beta 0.1.7**](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg)
+[**Download public beta 0.1.8**](https://superqode.dev/downloads/macos/0.1.8/SuperQode-0.1.8-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="../../assets/superqode-macos-welcome-light.png">
-  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode 0.1.7 native Mac app welcome screen" width="960">
+  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
 </picture>
 
 ## Start coding
@@ -70,7 +70,7 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
 
-Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
+Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.8/SuperQode-0.1.8-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
 
