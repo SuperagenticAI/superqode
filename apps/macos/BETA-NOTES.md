@@ -1,4 +1,4 @@
-# SuperQode for macOS — public beta 0.1.7
+# SuperQode for macOS — public beta 0.1.8
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -18,10 +18,12 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 
 ## What changed in this beta
 
-- Clearer connection navigation, working dialog controls and simpler subscription and ACP selection.
-- Faster composer and streaming updates, rendered Markdown, syntax-coloured code and grouped agent activity.
-- Pure black and white appearance, readable branding and syntax-coloured source editing.
-- Conversations stay together when switching agents, with compatible native session resume and portable context handoffs.
+- Live agent activity shows the current reported action, elapsed time and tool progress. Quiet periods are identified without inventing activity.
+- Completed responses open at the beginning, with more space to read and an option to expand the conversation.
+- Review working, staged and branch changes with unified or side-by-side diffs, search, staging and commit controls.
+- Completion summaries separate the agent's result from recorded file changes and independently run project checks.
+- Connection health explains the selected execution route, detected runtime and connection status without displaying account email addresses.
+- Improved engine request handling, cancellation, credential scoping and protection against overlapping project writes.
 
 ## Known limitations
 

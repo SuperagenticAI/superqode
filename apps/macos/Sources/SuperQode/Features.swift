@@ -520,7 +520,7 @@ struct FilesView: View {
               creating = true
             } label: {
               Image(systemName: "doc.badge.plus")
-            }.help("New source file").disabled(app.anyActive || saving)
+            }.help("New source file").disabled(app.projectActive || saving)
           }
           List(
             visibleFiles,
@@ -545,6 +545,7 @@ struct FilesView: View {
                 load()
               }
             }.disabled(selected.isEmpty || loading || saving)
+            Button("Review changes") { app.showReview = true }
             Button("Stage file") {
               guard
                 app.confirm(
@@ -559,7 +560,7 @@ struct FilesView: View {
                 _ = try await app.engine.call("git.stage_file", ["project": project, "path": path])
                 await app.refreshGit()
               }
-            }.disabled(selected.isEmpty || dirty || loading || saving || app.anyActive)
+            }.disabled(selected.isEmpty || dirty || loading || saving || app.projectActive)
             Button("Unstage") {
               let project = loadedProject
               let path = selected
@@ -568,9 +569,9 @@ struct FilesView: View {
                   "git.unstage_file", ["project": project, "path": path])
                 await app.refreshGit()
               }
-            }.disabled(selected.isEmpty || loading || saving || app.anyActive)
+            }.disabled(selected.isEmpty || loading || saving || app.projectActive)
             Button("Save", action: save).keyboardShortcut("s").disabled(
-              !dirty || digest.isEmpty || loading || saving || app.anyActive)
+              !dirty || digest.isEmpty || loading || saving || app.projectActive)
             Button("Open in editor") {
               NSWorkspace.shared.open(
                 URL(fileURLWithPath: string(app.project, "path")).appendingPathComponent(selected))
@@ -579,7 +580,7 @@ struct FilesView: View {
           SourceEditor(text: $content, path: selected, editable: editing, documentID: loadedProject + "\n" + selected)
             .disabled(loading || saving).clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
-          if app.anyActive {
+          if app.projectActive {
             Text("Saving is paused while an agent or experiment is active in a project.").font(
               .caption
             ).foregroundStyle(.secondary)
@@ -588,6 +589,7 @@ struct FilesView: View {
       }
     }.padding(30).onAppear {
       loadedProject = app.projectID
+      if !app.requestedFile.isEmpty { selected = app.requestedFile; app.requestedFile = "" }
       filterFiles()
       app.loadFiles()
     }
@@ -603,6 +605,9 @@ struct FilesView: View {
     .onChange(of: search) { _, _ in filterFiles() }
     .onChange(of: app.files) { _, _ in filterFiles() }
     .onChange(of: selected) { _, _ in load() }
+    .onChange(of: app.requestedFile) { _, path in
+      if !path.isEmpty { selected = path; app.requestedFile = "" }
+    }
     .onChange(of: content) { _, _ in stash() }
     .onDisappear { stash(); loadGeneration += 1 }
   }

@@ -126,6 +126,20 @@ private struct DialogAuditHost: View {
   @Published var hardware: [String: Any] = [:]
   @Published var packs: [[String: Any]] = []
   @Published var jobs: [[String: Any]] = []
+  @Published var showReview = false
+  @Published var showConnectionHealth = false
+  @Published var requestedFile = ""
+  var connectionSetupRequested = false
+  var projectActive: Bool {
+    let root = string(project, "path")
+    return jobs.contains { job in
+      guard ["running", "needs_approval", "queued", "cancelling"].contains(string(job, "status")) else { return false }
+      if string(job, "project") == projectID { return true }
+      let other = string(projects.first { string($0, "id") == string(job, "project") } ?? [:], "path")
+      return !root.isEmpty && !other.isEmpty && (root.hasPrefix(other + "/") || other.hasPrefix(root + "/"))
+    }
+  }
+  func openConnectionAfterHealth() { connectionSetupRequested = true }
   @Published var selectedJob = ""
   @Published var detail: [String: Any] = [:]
   @Published var events: [[String: Any]] = []
@@ -763,7 +777,7 @@ private struct DialogAuditHost: View {
     }
   }
   func start(_ method: String, extra: [String: Any] = [:]) {
-    guard !busy, !connectionDisconnected else { return }
+    guard !busy, (!connectionDisconnected || method == "checks.start") else { return }
     busy = true
     perform {
       defer { self.busy = false }
@@ -1230,7 +1244,10 @@ private struct DialogAuditHost: View {
         for dark in [false, true] {
           let host = NSHostingView(rootView: VStack(alignment: .leading, spacing: 14) {
             AgentResponseView(text: sample)
-            AgentWorkingCard(status: "running", activity: "python -m unittest -v")
+            AgentWorkingCard(status: "running", progress: agentProgress([
+              toolEvent("plan", ["entries": [["content": "Inspect the project", "status": "completed"], ["content": "Run the test suite", "status": "in_progress"]]]),
+              toolEvent("tool_call", ["toolCallId": "preview", "title": "Shell", "rawInput": ["command": "python -m unittest -v"]]),
+            ]), startedAt: Date().addingTimeInterval(-42))
           }.padding(24)
             .background(Color.qPanel).environment(\.colorScheme, dark ? .dark : .light))
           host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -1423,6 +1440,18 @@ private struct DialogAuditHost: View {
       }
       report["rapid_switching"] = "passed; selected conversation, unique events and latest saved connection survive rapid changes"
       report["changes_refresh"] = "passed; task completion refreshes Git status and project files"
+      let review = try await engine.call("git.review", ["project": projectID]) as? [String: Any] ?? [:]
+      guard (review["files"] as? [[String: Any]] ?? []).contains(where: { string($0, "path") == "Sources/New.swift" }) else {
+        throw EngineError(message: "Change review omitted an untracked source file")
+      }
+      let fileReview = try await engine.call("git.review", ["project": projectID, "path": "Sources/New.swift"]) as? [String: Any] ?? [:]
+      guard string(fileReview, "diff").contains("+let ready = true") else { throw EngineError(message: "Change review did not show new source content") }
+      let completion = try await engine.call("jobs.summary", ["id": taskID]) as? [String: Any] ?? [:]
+      guard string(completion, "id") == taskID, completion["changes_recorded"] as? Bool == true else {
+        throw EngineError(message: "Task completion did not load recorded checkpoint evidence")
+      }
+      report["change_review_completion"] = "passed; untracked source diff and sealed task checkpoint evidence"
+
       await refreshJobs()
       let args = ProcessInfo.processInfo.arguments
       for tab in [
@@ -1459,6 +1488,8 @@ private struct DialogAuditHost: View {
           }
         }
         theme = originalTheme
+        try await captureDeveloperViews(directory: URL(fileURLWithPath: args[index + 1]))
+        report["developer_views"] = "passed; native change review, connection health and task completion render in light and dark"
         report["pure_theme_surfaces"] = "passed; native workspace background pixels are pure white in light mode and pure black in dark mode"
       }
       report["passed"] = true
@@ -1905,6 +1936,29 @@ private struct DialogAuditHost: View {
     try png.write(
       to: directory.appendingPathComponent(
         "connect-" + page.replacingOccurrences(of: ":", with: "-") + ".png"))
+  }
+  private func captureDeveloperViews(directory: URL) async throws {
+    for dark in [false, true] {
+      let views: [(String, AnyView, CGFloat, CGFloat)] = [
+        ("change-review", AnyView(ChangeReviewView().environmentObject(self)), 1020, 650),
+        ("connection-health", AnyView(ConnectionHealthView().environmentObject(self)), 670, 520),
+        ("task-completion", AnyView(TaskCompletionView().environmentObject(self).padding(20)), 800, 260),
+      ]
+      for (name, view, width, height) in views {
+        let host = NSHostingView(rootView: view.frame(width: width, height: height, alignment: .topLeading)
+          .background(Color.qPanel).environment(\.colorScheme, dark ? .dark : .light))
+        host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.appearance = host.appearance; panel.contentView = host; panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.contentView = nil }
+        try await Task.sleep(for: .milliseconds(500))
+        host.layoutSubtreeIfNeeded(); host.displayIfNeeded()
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { throw EngineError(message: "Developer view did not render") }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else { throw EngineError(message: "Developer view capture failed") }
+        try png.write(to: directory.appendingPathComponent(name + (dark ? "-dark.png" : "-light.png")))
+      }
+    }
   }
   func captureWindow(to url: URL) throws {
     guard let view = NSApp.windows.first(where: { $0.title == (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode") })?.contentView

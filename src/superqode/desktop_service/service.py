@@ -90,6 +90,19 @@ class DesktopService:
         with self.lock:
             return [dict(r) for r in self.db.execute(query, args).fetchall()]
 
+    def project_has_writer(self, project_id):
+        root = self.project(project_id)
+        rows = self._all(
+            "SELECT jobs.id,jobs.status,projects.path FROM jobs JOIN projects ON jobs.project=projects.id"
+        )
+        for row in rows:
+            if row["status"] not in ACTIVE and row["id"] not in self.processes:
+                continue
+            other = Path(row["path"]).resolve()
+            if root.is_relative_to(other) or other.is_relative_to(root):
+                return True
+        return False
+
     def job_summaries(self):
         """Keep individual run records, with a stable conversation identity for recent rows."""
         columns = "id,project,kind,title,status,created,updated"
@@ -161,6 +174,8 @@ class DesktopService:
         return {"id": project_id, "path": str(root), "name": root.name}
 
     def append(self, job_id: str, event: dict):
+        received_at = time.time()
+        event = {**event, "received_at": received_at}
         raw = json.dumps(event, default=str, ensure_ascii=False)
         if len(raw) > 64_000:
             if event.get("type") == "approval":
@@ -183,6 +198,7 @@ class DesktopService:
                 }
             else:
                 event = {"type": "output", "data": {"text": raw[:63_000], "truncated": True}}
+            event["received_at"] = received_at
             raw = json.dumps(event, ensure_ascii=False)
         self._write("INSERT INTO events(job,payload) VALUES(?,?)", (job_id, raw))
 
@@ -289,6 +305,8 @@ class DesktopService:
             for old in self._all("SELECT id,request FROM jobs WHERE project=?", (project_id,)):
                 if json.loads(old["request"]).get("command_id") == key:
                     return {"id": old["id"]}
+            if self.project_has_writer(project_id):
+                raise ValueError("Finish or stop the active project run before starting another")
             # A stopped process may still be reaping; keep its project writer lease.
             if any(
                 row["id"] in self.processes
@@ -622,12 +640,7 @@ class DesktopService:
             "git.commit",
         } or method.startswith("checkpoints."):
             with self.lock:
-                if any(
-                    row["id"] in self.processes
-                    for row in self._all(
-                        "SELECT id FROM jobs WHERE project=?", (params.get("project"),)
-                    )
-                ):
+                if self.project_has_writer(params.get("project")):
                     raise ValueError(
                         "Finish or stop the active project run before changing project files"
                     )
@@ -1157,6 +1170,18 @@ class DesktopService:
             from superqode.harness.eval import list_eval_packs
 
             return list_eval_packs()
+        if method == "project.actions":
+            from .review import project_actions
+
+            return project_actions(self.project(params["project"]))
+        if method == "git.review":
+            from .review import review
+
+            return review(self.project(params["project"]), params)
+        if method == "jobs.summary":
+            from .review import task_summary
+
+            return task_summary(self, str(params["id"]))
         if method == "git.status":
             root = self.project(params["project"])
             try:
@@ -1178,10 +1203,13 @@ class DesktopService:
             ):
                 raise ValueError("Finish or stop the active run before changing Git state")
             if method in {"git.stage_file", "git.unstage_file"}:
+                from .review import private_runtime_path
+
                 target = (root / str(params.get("path") or "")).resolve()
                 if (
                     not target.is_relative_to(root)
                     or target.name.startswith(".env")
+                    or private_runtime_path(target.relative_to(root))
                     or any(
                         part in {".git", ".ssh", ".aws"} for part in target.relative_to(root).parts
                     )
@@ -1197,12 +1225,33 @@ class DesktopService:
                         git(root, "restore", "--staged", "--", relative)
                 else:
                     if not target.is_file():
-                        raise ValueError("Choose a project file")
+                        # Tracked deletions are legitimate review/staging actions.
+                        if target.exists() or not git(root, "ls-files", "--", relative).strip():
+                            raise ValueError("Choose a project file or tracked deletion")
                     git(root, "add", "--", relative)
                 return {"ok": True}
             if method == "git.stage":
                 git(root, "add", "--update")
                 return {"ok": True}
+            from .review import safe_path
+
+            staged_paths = git(
+                root,
+                "diff",
+                "--cached",
+                "--no-ext-diff",
+                "--no-renames",
+                "--diff-filter=ACMRT",
+                "--name-only",
+                "-z",
+            )
+            for path in filter(None, staged_paths.split("\0")):
+                try:
+                    safe_path(root, path)
+                except ValueError as exc:
+                    raise ValueError(
+                        "Private or external files are staged. Unstage them in Terminal before committing here."
+                    ) from exc
             message = str(params.get("message") or "").strip()
             if not message or len(message) > 2000:
                 raise ValueError("Enter a commit message of up to 2,000 characters")

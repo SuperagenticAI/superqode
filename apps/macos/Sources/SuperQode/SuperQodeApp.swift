@@ -195,6 +195,14 @@ struct RootView: View {
     } message: {
       Text(app.error ?? "")
     }
+    .centeredDialog(isPresented: $app.showReview, title: "Review") {
+      ChangeReviewView().environmentObject(app)
+    }
+    .centeredDialog(isPresented: $app.showConnectionHealth, title: "Connection health", onDismiss: {
+      if app.connectionSetupRequested { app.connectionSetupRequested = false; app.showConnection = true }
+    }) {
+      ConnectionHealthView().environmentObject(app)
+    }
     .centeredDialog(isPresented: $app.showConnection, title: "Connect") {
       ConnectionView().environmentObject(app)
     }
@@ -454,6 +462,7 @@ struct RouteControls: View {
 struct CodingView: View {
   @EnvironmentObject var app: Workspace
   @State private var showInspector = false
+  @State private var expandConversation = false
   var body: some View {
     HStack(spacing: 0) {
       VStack(spacing: 0) {
@@ -462,9 +471,15 @@ struct CodingView: View {
             .font(.system(size: 16, weight: .semibold)).lineLimit(1)
           Spacer()
           if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
+          Button("Review changes") { app.showReview = true }.disabled(app.projectID.isEmpty)
           if !app.selectedJob.isEmpty {
             Button("New conversation", systemImage: "square.and.pencil") { app.selectJob("") }
               .disabled(app.active || app.busy)
+            Button { expandConversation.toggle() } label: {
+              Image(systemName: expandConversation ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            }.help(expandConversation ? "Show message composer" : "Expand conversation")
+              .accessibilityLabel(expandConversation ? "Show message composer" : "Expand conversation")
+              .disabled(app.active)
             Button { showInspector.toggle() } label: { Image(systemName: "sidebar.right") }
               .help("Show changes and run details").accessibilityLabel("Show changes and run details")
           }
@@ -475,13 +490,14 @@ struct CodingView: View {
         } else {
           EventStream().frame(minHeight: 220, maxHeight: .infinity)
         }
-        CodingComposer(draftStore: app.draftStore)
+        if !expandConversation { CodingComposer(draftStore: app.draftStore) }
       }.frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
-      if !app.selectedJob.isEmpty && showInspector {
+      if !app.selectedJob.isEmpty && showInspector && !expandConversation {
         Divider()
         InspectorView().frame(width: 300)
       }
-    }
+    }.onChange(of: app.selectedJob) { _, _ in expandConversation = false }
+      .onChange(of: app.active) { _, active in if active { expandConversation = false } }
   }
 }
 struct CodingComposer: View {
@@ -512,14 +528,19 @@ struct CodingComposer: View {
     .onChange(of: draftStore.text) { _, _ in app.scheduleDraftSave() }
     .onChange(of: app.selectedJob) { _, _ in composerFocused = true }
   }
+  private var compact: Bool {
+    !app.selectedJob.isEmpty && !app.active && app.draft.isEmpty
+  }
   private var composer: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: compact ? 6 : 10) {
       HStack(spacing: 10) {
         Image(systemName: app.isManaged ? "terminal" : "cpu").foregroundStyle(Brand.gradient)
         Text(connectionName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
         Text(app.connectionDisconnected ? "Not connected" : app.isACP ? "ACP" : app.isManaged ? "Subscription / agent" : app.provider)
           .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         Spacer()
+        Button { app.showConnectionHealth = true } label: { Image(systemName: "stethoscope") }
+          .help("Connection health and recovery").accessibilityLabel("Connection health and recovery")
         Button(app.connectionDisconnected ? "Connect…" : "Change connection…") { app.showConnection = true }
           .disabled(app.active || app.busy)
         if !app.connectionDisconnected {
@@ -561,7 +582,7 @@ struct CodingComposer: View {
       attachments
       PromptEditor(text: $draftStore.text) { app.send(continueSession: continuesConversation) }
         .focused($composerFocused)
-        .frame(height: app.draft.contains("\n") ? 92 : 54).padding(8)
+        .frame(height: app.draft.contains("\n") ? 92 : compact ? 36 : 54).padding(compact ? 6 : 8)
         .outlinedSurface(radius: 8)
         .overlay(alignment: .topLeading) {
           if app.draft.isEmpty {
@@ -611,7 +632,7 @@ struct CodingComposer: View {
             || app.connectionDisconnected || (!app.isManaged && app.model.isEmpty))
           .keyboardShortcut(.return, modifiers: .command)
       }
-    }.padding(16).brandSurface().padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
+    }.padding(compact ? 10 : 16).brandSurface().padding(.horizontal, 20).padding(.bottom, compact ? 8 : 16).padding(.top, 8)
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -752,6 +773,8 @@ struct EventStream: View {
   @State private var follow = true
   var body: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
+    let messages = rows.filter { string($0, "type") != "activity_group" }
+    let finalIndex = finalResponseIndex(messages)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
     VStack(spacing: 0) {
       HStack {
@@ -795,7 +818,6 @@ struct EventStream: View {
                 Color.qPanel, in: RoundedRectangle(cornerRadius: 10)
               ).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.qAccent.opacity(0.35), lineWidth: 1)).padding(.bottom, 10)
             }
-            let messages = rows.filter { string($0, "type") != "activity_group" }
             if !messages.isEmpty {
               VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 7) {
@@ -805,19 +827,37 @@ struct EventStream: View {
                 ForEach(Array(messages.enumerated()), id: \.offset) { index, event in
                   if index > 0 { Divider() }
                   EventRow(event: event, embeddedResponse: true)
+                    .id("response-\(app.selectedJob)-\(index)")
                 }
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
+            }
+            if !app.active, string(app.detail, "kind") == "check",
+              let request = app.detail["request"] as? [String: Any], !string(request, "source_job").isEmpty {
+              Button("Back to coding task", systemImage: "arrow.uturn.backward") { app.selectJob(string(request, "source_job")) }
+            }
+            if !app.active && string(app.detail, "kind") == "task" && !string(app.detail, "status").isEmpty {
+              TaskCompletionView()
+            }
+            if !app.active && !activity.isEmpty {
+              AgentActivityView(events: activity, active: false).id(app.selectedJob)
             }
             Color.clear.frame(height: 1).id("bottom")
           }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }.onChange(of: app.events.count) { _, _ in
-          if follow { proxy.scrollTo("bottom", anchor: .bottom) }
+          if follow && app.active { proxy.scrollTo("bottom", anchor: .bottom) }
+        }.task(id: app.active ? "" : "\(app.selectedJob):\(string(app.detail, "status")):\(messages.count)") {
+          guard !app.active, let finalIndex else { return }
+          // Wait for the final response and the smaller footer to enter the layout.
+          await Task.yield()
+          guard !Task.isCancelled else { return }
+          proxy.scrollTo("response-\(app.selectedJob)-\(finalIndex)", anchor: .top)
         }
       }
-      if app.active || !activity.isEmpty {
+      if app.active {
         Divider()
         VStack(spacing: 6) {
-          if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
+          if app.active { AgentWorkingCard(status: string(app.detail, "status"), progress: agentProgress(app.events),
+            startedAt: (app.detail["created"] as? Double).map { Date(timeIntervalSince1970: $0) }) }
           if !activity.isEmpty {
             AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
               .id(app.selectedJob)
@@ -936,6 +976,7 @@ struct InspectorView: View {
         Text(string(app.git, "error", string(app.git, "stat", "No tracked changes."))).font(
           .system(size: 11, design: .monospaced)
         ).foregroundStyle(.secondary).textSelection(.enabled)
+        Button("Open full change review") { app.showReview = true }
         DiffView(text: string(app.git, "diff"))
         Text(string(app.git, "status")).font(.system(size: 11, design: .monospaced)).textSelection(
           .enabled

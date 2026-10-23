@@ -216,6 +216,7 @@ async def run_acp(request, directory, emit, secrets):
                 "command": route["command"],
             },
         )
+        emit("stage", {"message": "Starting the ACP agent and opening its session"})
         if not await client.start():
             raise RuntimeError(
                 client.last_startup_error
@@ -243,6 +244,7 @@ async def run_acp(request, directory, emit, secrets):
         )
         from .images import load_snapshots
 
+        emit("stage", {"message": "Sending your prompt to the connected ACP agent"})
         reason = await client.send_prompt(request["prompt"], images=load_snapshots(request))
         if reason in {None, "error", "cancelled"}:
             raise RuntimeError("ACP did not complete the task: " + str(reason))

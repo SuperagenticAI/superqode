@@ -79,6 +79,7 @@ async def run_connection(request, directory, emit, secrets):
             resume = runtime.resume_thread(request["session_id"])
             if inspect.isawaitable(resume):
                 await resume
+        emit("stage", {"message": "Starting the connected agent and sending your prompt"})
         if hasattr(runtime, "run_harness_events"):
             async for event in runtime.run_harness_events(request["prompt"]):
                 emit("harness_event", {"event": event.type, "payload": dict(event.data)})

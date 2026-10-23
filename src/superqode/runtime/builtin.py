@@ -6,6 +6,8 @@ for all backends.
 
 from __future__ import annotations
 
+import asyncio
+
 from typing import AsyncIterator
 
 from ..agent.loop import AgentLoop, AgentResponse
@@ -88,7 +90,7 @@ class BuiltinRuntime:
 
     async def run_harness_events(self, prompt: str, *, images=None) -> AsyncIterator[HarnessEvent]:
         """Run with normalized harness events from the native AgentLoop callbacks."""
-        pending: list[HarnessEvent] = []
+        pending: asyncio.Queue[HarnessEvent | None] = asyncio.Queue()
         previous_tool_call = self._loop.on_tool_call
         previous_tool_result = self._loop.on_tool_result
         previous_thinking = self._loop.on_thinking
@@ -96,7 +98,7 @@ class BuiltinRuntime:
         def on_tool_call(name: str, args: dict) -> None:
             if previous_tool_call is not None:
                 previous_tool_call(name, args)
-            pending.append(
+            pending.put_nowait(
                 HarnessEvent(
                     type="tool_call",
                     data={"tool_name": name, "arguments": args},
@@ -106,7 +108,7 @@ class BuiltinRuntime:
         def on_tool_result(name: str, result: ToolResult) -> None:
             if previous_tool_result is not None:
                 previous_tool_result(name, result)
-            pending.append(
+            pending.put_nowait(
                 HarnessEvent(
                     type="tool_result",
                     data={
@@ -123,21 +125,33 @@ class BuiltinRuntime:
             if previous_thinking is not None:
                 await previous_thinking(text)
             if text:
-                pending.append(HarnessEvent(type="thinking", data={"text": text}))
+                pending.put_nowait(HarnessEvent(type="thinking", data={"text": text}))
 
         self._loop.on_tool_call = on_tool_call
         self._loop.on_tool_result = on_tool_result
         self._loop.on_thinking = on_thinking
-        yield HarnessEvent(type="model_request", data={"runtime": self.name})
+
+        async def produce():
+            try:
+                async for chunk in self._loop.run_streaming(prompt, images=images):
+                    if chunk:
+                        await pending.put(HarnessEvent(type="model_delta", data={"text": chunk}))
+            finally:
+                await pending.put(None)
+
+        producer = None
         try:
-            async for chunk in self._loop.run_streaming(prompt, images=images):
-                while pending:
-                    yield pending.pop(0)
-                if chunk:
-                    yield HarnessEvent(type="model_delta", data={"text": chunk})
-            while pending:
-                yield pending.pop(0)
+            yield HarnessEvent(type="model_request", data={"runtime": self.name})
+            producer = asyncio.create_task(produce())
+            while (event := await pending.get()) is not None:
+                yield event
+            # Preserve runtime failures after delivering the activity preceding them.
+            await producer
         finally:
+            if producer is not None:
+                if not producer.done():
+                    producer.cancel()
+                await asyncio.gather(producer, return_exceptions=True)
             self._loop.on_tool_call = previous_tool_call
             self._loop.on_tool_result = previous_tool_result
             self._loop.on_thinking = previous_thinking

@@ -222,22 +222,65 @@ struct BrandActivityIndicator: View {
 
 struct AgentWorkingCard: View {
   let status: String
-  var activity = ""
+  var progress = AgentProgress()
+  var startedAt: Date?
   var body: some View {
-    HStack(spacing: 12) {
-      BrandMark().frame(width: 25, height: 25)
-      VStack(alignment: .leading, spacing: 8) {
-        Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
-        if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
-        Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity.isEmpty ? "Preparing the next step…" : activity)
-          .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-          .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-          .accessibilityLabel("Current agent activity")
-      }
-      Spacer(minLength: 0)
-    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 12))
-      .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.qAccent.opacity(0.12), lineWidth: 1))
+    // Only this small card ticks; the transcript and workspace do not rerender each second.
+    TimelineView(.periodic(from: .now, by: 1)) { timeline in
+      let quiet = (progress.lastUpdate ?? startedAt).map { max(0, Int(timeline.date.timeIntervalSince($0))) }
+      let waiting = (quiet ?? 0) >= 15
+      let approval = status == "needs_approval"
+      let stopping = status == "cancelling"
+      let title = approval ? "Waiting for your approval" : stopping ? "Stopping the agent" : progress.title
+      HStack(alignment: .top, spacing: 12) {
+        Image(systemName: approval ? "hand.raised" : stopping ? "stop.circle" : progress.symbol)
+          .font(.system(size: 20)).foregroundStyle(Color.qAccent).frame(width: 28, height: 28)
+        VStack(alignment: .leading, spacing: 9) {
+          HStack {
+            Text(title).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+            Spacer(minLength: 8)
+            if let startedAt {
+              Text(Self.duration(max(0, Int(timeline.date.timeIntervalSince(startedAt)))))
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                .accessibilityLabel("Elapsed time")
+                .accessibilityValue(Self.duration(max(0, Int(timeline.date.timeIntervalSince(startedAt)))))
+            }
+          }
+          if !approval && !stopping { ThinkingBar().frame(maxWidth: .infinity) }
+          Text(approval ? "Review the permission request to continue." : stopping ? "Waiting for the agent to acknowledge cancellation." : progress.detail)
+            .font(.system(size: 12, design: progress.currentTool.isEmpty ? .default : .monospaced))
+            .foregroundStyle(.primary).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+          if !approval && !stopping {
+            if progress.planTotal > 0 {
+              HStack(spacing: 8) {
+                Text("Plan: \(progress.planCompleted)/\(progress.planTotal) complete").font(.caption.weight(.medium))
+                if !progress.planStep.isEmpty { Text(progress.planStep).font(.caption).lineLimit(1) }
+              }.foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+              if progress.completedTools > 0 {
+                Text("\(progress.completedTools) tool\(progress.completedTools == 1 ? "" : "s") finished").font(.caption)
+              }
+              if progress.failedTools > 0 {
+                Text("\(progress.failedTools) failed").font(.caption).foregroundStyle(.orange)
+              }
+              if waiting, let quiet {
+                Text("No new activity for \(Self.duration(quiet))").font(.caption).foregroundStyle(.secondary)
+              }
+            }.foregroundStyle(.secondary)
+            if waiting {
+              Text("Waiting for an agent update. Some tools and models stay quiet while working; you can stop the task below.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+          }
+        }
+      }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.qAccent.opacity(0.25), lineWidth: 1))
+    }.fixedSize(horizontal: false, vertical: true)
+  }
+  static func duration(_ seconds: Int) -> String {
+    seconds < 60 ? "\(seconds)s" : "\(seconds / 60)m \(seconds % 60)s"
   }
 }
 

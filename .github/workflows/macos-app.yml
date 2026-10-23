@@ -7,6 +7,7 @@ on:
       - "apps/macos/**"
       - "src/**"
       - "tests/test_desktop*"
+      - "tests/test_runtime_builtin*"
       - "tests/test_macos_runtime_inventory.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -39,7 +40,7 @@ jobs:
       - name: Desktop and packaging regressions without accounts
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_desktop_*.py tests/test_macos_runtime_inventory.py -q
+        run: uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_desktop_*.py tests/test_runtime_builtin*.py tests/test_macos_runtime_inventory.py -q
 
   native:
     runs-on: macos-latest
@@ -50,7 +51,7 @@ jobs:
         with:
           version: "0.13.0"
           python-version: "3.13"
-      - name: Swift transport regressions and native build
+      - name: Swift transport and activity regressions
         run: swift test --build-system native --package-path apps/macos -c release
       - name: Prepare isolated bundled engine
         env:
