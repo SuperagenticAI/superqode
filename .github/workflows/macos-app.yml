@@ -81,8 +81,21 @@ jobs:
         env:
           SIGNING_IDENTITY: "-"
         run: |
-          apps/macos/scripts/build-app.sh
-          codesign --verify --deep --strict apps/macos/release/SuperQode.app
+          set -o pipefail
+          bash -x apps/macos/scripts/build-app.sh 2>&1 | tee "$RUNNER_TEMP/superqode-app-build.log"
+          codesign --verify --deep --strict apps/macos/release/SuperQode.app 2>&1 | tee -a "$RUNNER_TEMP/superqode-app-build.log"
+      - name: Report app packaging failures in check annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "superqode-app-build.log"
+          if path.exists():
+              message = "\n".join(path.read_text(errors="replace").splitlines()[-35:])[-6000:]
+              message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Native app packaging failed::" + message)
+          PY
       - name: Native app smoke with loopback model fixtures
         run: python3 apps/macos/scripts/smoke-test.py
       - uses: actions/upload-artifact@v4
