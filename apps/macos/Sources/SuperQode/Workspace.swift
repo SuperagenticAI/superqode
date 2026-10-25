@@ -39,6 +39,11 @@ private struct DialogAuditHost: View {
   @Published var showWelcome = true
   @Published var starterTourRequested = false
   @Published var showLearningGuide = false
+  @Published var showCommandPalette = false
+  private weak var commandPaletteWindow: NSWindow?
+  private weak var commandPaletteHostWindow: NSWindow?
+  private weak var commandPaletteResponder: NSResponder?
+  private var pendingPaletteAction: WorkspaceCommandAction?
   @Published var learningTopic = "Start coding"
   @Published var showConnection = false
   @Published var agentModel = ""
@@ -118,6 +123,38 @@ private struct DialogAuditHost: View {
     section = previous
     restoringNavigation = false
   }
+  func registerCommandPaletteWindow(_ window: NSWindow?) {
+    commandPaletteHostWindow = window
+  }
+  func presentCommandPalette() {
+    guard !showCommandPalette else { return }
+    guard let window = commandPaletteHostWindow else { return }
+    guard window.sheetParent == nil, window.attachedSheet == nil else {
+      notice = "Close the current dialog before opening the command palette."
+      return
+    }
+    window.makeKeyAndOrderFront(nil)
+    commandPaletteWindow = window
+    commandPaletteResponder = window.firstResponder
+    pendingPaletteAction = nil
+    showCommandPalette = true
+  }
+  func choosePaletteCommand(_ action: WorkspaceCommandAction) {
+    guard workspaceCommand(action)?.isEnabled == true else { return }
+    pendingPaletteAction = action
+    showCommandPalette = false
+  }
+  func finishCommandPalette() {
+    let action = pendingPaletteAction
+    pendingPaletteAction = nil
+    let window = commandPaletteWindow
+    let responder = commandPaletteResponder
+    commandPaletteWindow = nil
+    commandPaletteResponder = nil
+    // Present choosers and connection sheets only after the palette has closed.
+    if let action { runWorkspaceCommand(action) }
+    else if let window, let responder, window.isVisible { window.makeFirstResponder(responder) }
+  }
   @Published var projects: [[String: Any]] = []
   @Published var project: [String: Any] = [:]
   @Published var harnesses: [[String: Any]] = []
@@ -129,6 +166,11 @@ private struct DialogAuditHost: View {
   @Published var selectedJob = ""
   @Published var detail: [String: Any] = [:]
   @Published var events: [[String: Any]] = []
+  @Published private(set) var hasMoreRunEvents = false
+  @Published private(set) var omittedRunEvents = 0
+  @Published private(set) var eventStreamOpen = false
+  @Published private(set) var activityLoadError = ""
+  private var eventCursor = 0
   @Published var git: [String: Any] = [:]
   @Published var files: [String] = []
   var fileDrafts: [String: FileEdit] = [:]
@@ -355,7 +397,9 @@ private struct DialogAuditHost: View {
             await self.refreshJobs()
             nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
           }
-          if self.active { await self.refreshDetail() }
+          if self.activityLoadError.isEmpty && (self.active || self.hasMoreRunEvents || self.eventStreamOpen) {
+            await self.refreshDetail()
+          }
         }
       }
       if args.contains("--smoke-test") { await smokeTest() }
@@ -392,6 +436,11 @@ private struct DialogAuditHost: View {
     lastQueueJob = ""
     detail = [:]
     events = []
+    eventCursor = 0
+    hasMoreRunEvents = false
+    omittedRunEvents = 0
+    eventStreamOpen = false
+    activityLoadError = ""
     candidate = [:]
     git = [:]
     files = []
@@ -566,6 +615,11 @@ private struct DialogAuditHost: View {
     selectedJob = id
     detail = [:]
     events = []
+    eventCursor = 0
+    hasMoreRunEvents = !id.isEmpty
+    omittedRunEvents = 0
+    eventStreamOpen = false
+    activityLoadError = ""
     candidate = [:]
     perform { await self.refreshDetail() }
   }
@@ -576,42 +630,58 @@ private struct DialogAuditHost: View {
     let requestKey = "\(generation):\(id)"
     guard detailRequests.insert(requestKey).inserted else { return }
     defer { detailRequests.remove(requestKey) }
+    activityLoadError = ""
     do {
-      let cursor = events.last?["sequence"] as? Int ?? 0
-      let result =
-        try await engine.call("jobs.get", ["id": id, "after": cursor]) as? [String: Any] ?? [:]
-      guard id == selectedJob, generation == detailGeneration else { return }
-      let firstLoad = detail.isEmpty
-      if firstLoad && restoreSelectedConnection,
-        string(result, "kind") == "task", let request = result["request"] as? [String: Any] {
-        restoreSelectedConnection = false
-        chooseHarness(string(request, "harness", harness))
-        provider = string(request, "provider", provider)
-        model = string(request, "model", model)
-        interactionMode = string(request, "interaction_mode", "code")
-        let options = request["acp_options"] as? [String: Any] ?? [:]
-        agentModel = string(options, "model")
-        agentMode = string(options, "mode")
-        agentConfig = options["config"] as? [String: String] ?? [:]
-        savePreferences()
-      }
-      let previousStatus = string(detail, "status")
-      var metadata = result
-      metadata.removeValue(forKey: "events")
-      if !NSDictionary(dictionary: detail).isEqual(to: metadata) { detail = metadata }
-      let incoming = result["events"] as? [[String: Any]] ?? []
-      if !incoming.isEmpty { events += incoming }
-      if firstLoad && string(metadata, "kind") == "task" {
-        await loadConversationHistory()
+      // Bound work per refresh so selection, cancellation and typing stay responsive.
+      // The poller continues draining even after the run becomes terminal.
+      for _ in 0..<4 {
+        try Task.checkCancellation()
+        let cursor = eventCursor
+        let result =
+          try await engine.call("jobs.get", ["id": id, "after": cursor]) as? [String: Any] ?? [:]
         guard id == selectedJob, generation == detailGeneration else { return }
-      }
-      if events.count > 1200 { events.removeFirst(events.count - 1200) }
-      let status = string(metadata, "status")
-      if status != previousStatus, ["completed", "failed", "cancelled"].contains(status) {
-        scheduleProjectRefresh()
+        let page = try JobEventPage(result, after: cursor)
+        let firstLoad = detail.isEmpty
+        if firstLoad && restoreSelectedConnection,
+          string(result, "kind") == "task", let request = result["request"] as? [String: Any] {
+          restoreSelectedConnection = false
+          chooseHarness(string(request, "harness", harness))
+          provider = string(request, "provider", provider)
+          model = string(request, "model", model)
+          interactionMode = string(request, "interaction_mode", "code")
+          let options = request["acp_options"] as? [String: Any] ?? [:]
+          agentModel = string(options, "model")
+          agentMode = string(options, "mode")
+          agentConfig = options["config"] as? [String: String] ?? [:]
+          savePreferences()
+        }
+        let previousStatus = string(detail, "status")
+        var metadata = result
+        metadata.removeValue(forKey: "events")
+        if !NSDictionary(dictionary: detail).isEqual(to: metadata) { detail = metadata }
+        eventCursor = page.nextSequence
+        hasMoreRunEvents = page.hasMore
+        eventStreamOpen = page.streamOpen
+        if !page.events.isEmpty { events += page.events }
+        if firstLoad && string(metadata, "kind") == "task" {
+          await loadConversationHistory()
+          guard id == selectedJob, generation == detailGeneration else { return }
+        }
+        if events.count > 1200 {
+          omittedRunEvents += events.count - 1200
+          events.removeFirst(events.count - 1200)
+        }
+        let status = string(metadata, "status")
+        if status != previousStatus, ["completed", "failed", "cancelled"].contains(status) {
+          scheduleProjectRefresh()
+        }
+        if !hasMoreRunEvents { break }
       }
     } catch {
-      if id == selectedJob, generation == detailGeneration { self.error = error.localizedDescription }
+      if id == selectedJob, generation == detailGeneration {
+        // Keep the unread cursor and continuation state so Retry resumes here.
+        activityLoadError = error.localizedDescription
+      }
     }
   }
   private func scheduleProjectRefresh() {
@@ -998,10 +1068,10 @@ private struct DialogAuditHost: View {
         record =
           try await self.engine.call("jobs.get", ["id": id, "after": after]) as? [String: Any]
           ?? [:]
-        let page = record["events"] as? [[String: Any]] ?? []
-        all += page
-        guard page.count == 500, let seq = page.last?["sequence"] as? Int else { break }
-        after = seq
+        let page = try JobEventPage(record, after: after)
+        all += page.events
+        after = page.nextSequence
+        if !page.hasMore { break }
       }
       record["events"] = all
       let panel = NSSavePanel()

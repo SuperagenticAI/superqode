@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A native evaluation and held-out optimizer comparison inspector with candidate
+  selection, task search, regression/improvement/incomplete-evidence filters,
+  grading reasons, and reported cost/time differences. Saved and imported result
+  reviews flag smoke-only checks, inconsistent grading and incomplete coverage.
+
+- A native Mac command palette on Command-K for searching actions, recent runs
+  and recent projects. Native menu actions share the palette's command definitions,
+  shortcuts and availability checks. Unavailable actions explain their prerequisites.
+
+### Fixed
+
+- The native Mac app drains paginated activity for completed runs and for runs
+  finishing with unread events, including cancellation while output is draining.
+  Failed activity loads can resume from the last cursor with Retry. Follow scrolling
+  keeps working after the rolling activity buffer fills, and the conversation
+  indicates when export contains older events.
+
 ## [2.24.0] - 2026-10-18
 
 This release adds experimental Harness2 task refinement with CLI and TUI

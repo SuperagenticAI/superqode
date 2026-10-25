@@ -368,6 +368,7 @@ struct ExperimentView: View {
           title: result["accepted"] as? Bool == true ? "GATE PASSED" : "REVIEW REQUIRED",
           color: result["accepted"] as? Bool == true ? .green : .orange)
       }
+      EvaluationComparisonView(comparison: result["comparison"] as? [String: Any] ?? [:])
       if relevant && imported == nil {
         HStack {
           Button("Inspect candidate diff", action: app.inspectCandidate)
@@ -441,14 +442,15 @@ struct EvaluationResult: View {
           : result["regressed"] as? Bool == true ? "Regression detected" : "Evaluation recorded",
         systemImage: !live
           ? "info.circle"
-          : result["regressed"] as? Bool == true ? "exclamationmark.triangle" : "checkmark.seal"
+          : result["regressed"] as? Bool == true ? "exclamationmark.triangle" : "chart.bar"
       ).font(.headline).foregroundStyle(
-        !live ? Color.secondary : result["regressed"] as? Bool == true ? .orange : .green)
+        !live ? Color.secondary : result["regressed"] as? Bool == true ? .orange : .secondary)
       HStack {
         Metric(label: "SUITE CASES", value: String(describing: result["task_count"] ?? "—"))
         Metric(label: "CONFIGURATIONS", value: "\(variants.count)")
         Metric(label: "DURATION", value: "\(result["duration_seconds"] ?? "—")s")
       }
+      EvaluationComparisonView(comparison: result["comparison"] as? [String: Any] ?? [:])
       ForEach(Array(variants.enumerated()), id: \.offset) { index, variant in
         GroupBox {
           VStack(alignment: .leading, spacing: 12) {
@@ -462,8 +464,10 @@ struct EvaluationResult: View {
             Text(
               String(describing: variant["passed"] ?? 0) + " passed · "
                 + String(describing: variant["failed"] ?? 0) + " failed · "
-                + String(describing: variant["skipped"] ?? 0) + " skipped · $"
-                + String(describing: variant["cost_usd"] ?? 0)
+                + String(describing: variant["skipped"] ?? 0) + " skipped · "
+                + ((variant["cost_usd"] as? Double).flatMap {
+                  $0.isFinite && $0 >= 0 ? String(format: "$%.4f", $0) : nil
+                } ?? "Cost unknown")
             ).font(.caption.monospaced()).foregroundStyle(.secondary)
             ForEach(Array((variant["tasks"] as? [[String: Any]] ?? []).enumerated()), id: \.offset)
             { _, task in

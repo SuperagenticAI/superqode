@@ -55,40 +55,29 @@ import SwiftUI
     .windowStyle(.hiddenTitleBar)
     .commands {
       CommandGroup(replacing: .newItem) {
-        Button("Open Project…") { workspace.chooseProject() }.keyboardShortcut("o")
-        Button("New Task") {
-          workspace.showWelcome = workspace.project.isEmpty
-          workspace.section = "Workspace"
-          workspace.selectJob("")
-        }.keyboardShortcut("n")
+        WorkspaceCommandMenuItem(app: workspace, action: .openProject)
+        WorkspaceCommandMenuItem(app: workspace, action: .newTask)
       }
       CommandGroup(replacing: .help) {
         Button("Public Beta Guide…") { showBetaGuide = true }
         Link("Downloads & Release Notes", destination: BetaRelease.downloads)
         Link("Report an Issue…", destination: BetaRelease.feedback)
         Divider()
-        Button("Welcome to SuperQode") { workspace.showWelcome = true }
+        WorkspaceCommandMenuItem(app: workspace, action: .welcome)
         Divider()
-        Button("Getting Started & Learning") { workspace.showLearningGuide = true }
-          .keyboardShortcut("?", modifiers: .command)
+        WorkspaceCommandMenuItem(app: workspace, action: .learning)
       }
       CommandMenu("Agent Space") {
-        ForEach(Array(Sections.names.enumerated()), id: \.offset) { index, name in
-          Button(Sections.title(for: name)) {
-            workspace.showWelcome = workspace.project.isEmpty
-            workspace.section = name
-          }.keyboardShortcut(
-            KeyEquivalent(Character(String(index + 1))))
+        Button("Command Palette…", action: workspace.presentCommandPalette)
+          .keyboardShortcut("k").disabled(workspace.showCommandPalette)
+        Divider()
+        ForEach(Sections.names, id: \.self) { name in
+          WorkspaceCommandMenuItem(app: workspace, action: .section(name))
         }
         Divider()
-        Button("Back", action: workspace.goBack).keyboardShortcut("[", modifiers: .command)
-          .disabled(
-            workspace.navigationHistory.isEmpty
-              && !(workspace.showWelcome && !workspace.project.isEmpty))
-        Button("Refresh Changes") { workspace.perform { await workspace.refreshGit() } }
-          .keyboardShortcut("r")
-        Button("Export Run Evidence…") { workspace.exportEvidence() }.disabled(
-          workspace.selectedJob.isEmpty)
+        WorkspaceCommandMenuItem(app: workspace, action: .back)
+        WorkspaceCommandMenuItem(app: workspace, action: .refreshChanges)
+        WorkspaceCommandMenuItem(app: workspace, action: .exportEvidence)
       }
     }
     Settings { SettingsView().environmentObject(workspace).frame(width: 560, height: 460) }
@@ -187,6 +176,7 @@ struct RootView: View {
       reduceMotion || !animatedInterface ? nil : .easeInOut(duration: 0.18), value: app.showWelcome
     )
     .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: 1120, minHeight: 740)
+    .background { CommandPaletteWindowReader(app: app).frame(width: 0, height: 0) }
     .alert(
       "SuperQode",
       isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })
@@ -200,6 +190,9 @@ struct RootView: View {
     }
     .centeredDialog(isPresented: $app.showLearningGuide, title: "Getting started") {
       LearningGuideView().environmentObject(app)
+    }
+    .sheet(isPresented: $app.showCommandPalette, onDismiss: app.finishCommandPalette) {
+      CommandPaletteView().environmentObject(app)
     }
   }
   private var workspaceShell: some View {
@@ -221,6 +214,9 @@ struct RootView: View {
           Text(string(app.project, "name", "No project")).font(.system(size: 12)).foregroundStyle(
             .secondary)
           Spacer()
+          Button(action: app.presentCommandPalette) {
+            Image(systemName: "command")
+          }.help("Command Palette (⌘K)").accessibilityLabel("Open command palette")
           Button {
             app.showLearningGuide = true
           } label: {
@@ -761,6 +757,19 @@ struct EventStream: View {
         Toggle("Follow", isOn: $follow).toggleStyle(.checkbox).font(.caption)
         Button("Export…", action: app.exportEvidence).font(.caption)
       }.padding(.horizontal, 20).padding(.top, 10)
+      if !app.activityLoadError.isEmpty {
+        HStack {
+          Label("Couldn’t load run activity.", systemImage: "exclamationmark.triangle")
+          Button("Retry") { app.perform { await app.refreshDetail() } }
+        }.font(.caption).help(app.activityLoadError).padding(.top, 8)
+      } else if app.hasMoreRunEvents || (app.eventStreamOpen && !app.active) {
+        Label("Loading run activity…", systemImage: "arrow.down.circle")
+          .font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+      }
+      if app.omittedRunEvents > 0 {
+        Text("Showing recent run activity. Export to include all events.")
+          .font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+      }
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 10) {
@@ -810,7 +819,7 @@ struct EventStream: View {
             }
             Color.clear.frame(height: 1).id("bottom")
           }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        }.onChange(of: app.events.count) { _, _ in
+        }.onChange(of: app.events.last?["sequence"] as? Int) { _, _ in
           if follow { proxy.scrollTo("bottom", anchor: .bottom) }
         }
       }

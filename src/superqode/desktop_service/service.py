@@ -786,13 +786,23 @@ class DesktopService:
             row = rows[0]
             row["request"] = json.loads(row["request"])
             row["result"] = json.loads(row["result"]) if row["result"] else None
-            row["events"] = [
-                {"sequence": r["seq"], **json.loads(r["payload"])}
-                for r in self._all(
-                    "SELECT seq,payload FROM events WHERE job=? AND seq>? ORDER BY seq LIMIT 500",
-                    (params["id"], int(params.get("after", 0))),
+            if row["kind"] in {"evaluation", "optimization"} and row["result"] is not None:
+                from .evaluation_review import with_evaluation_comparison
+
+                row["result"] = with_evaluation_comparison(row["result"])
+            after = int(params.get("after", 0))
+            # Snapshot the page and writer ownership together. Cancellation can
+            # become terminal before the stdout watcher drains its final events.
+            with self.lock:
+                event_rows = self._all(
+                    "SELECT seq,payload FROM events WHERE job=? AND seq>? ORDER BY seq LIMIT 501",
+                    (params["id"], after),
                 )
-            ]
+                row["event_stream_open"] = params["id"] in self.processes
+            row["has_more_events"] = len(event_rows) > 500
+            page_rows = event_rows[:500]
+            row["events"] = [{"sequence": r["seq"], **json.loads(r["payload"])} for r in page_rows]
+            row["next_sequence"] = page_rows[-1]["seq"] if page_rows else after
             return row
         if method == "jobs.cancel":
             with self.lock:
@@ -1361,7 +1371,9 @@ class DesktopService:
                 raise ValueError("Artifact must belong to this project or desktop run store")
             if target.suffix != ".json" or target.stat().st_size > MAX_TEXT:
                 raise ValueError("Choose a JSON result smaller than 1 MB")
-            return json.loads(target.read_text())
+            from .evaluation_review import review_artifact
+
+            return review_artifact(json.loads(target.read_text()))
         raise ValueError("Unsupported desktop command")
 
     @staticmethod

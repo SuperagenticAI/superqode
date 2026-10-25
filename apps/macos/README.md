@@ -46,11 +46,25 @@ Selecting a connection does not automatically install an agent, download weights
 
 Navigation starts with Agent Space, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
 
+In the development source, **Command-K** opens the command palette. Search actions,
+the twelve most recent runs in the current project, or eight recent projects.
+Use Up/Down and Return to choose, or Escape to close and return to the previous
+control. Unavailable actions show what they need. Menu actions and palette actions
+share their shortcuts and availability rules. This feature still requires native
+build and interaction validation before inclusion in a public release.
+
 ## Harness Hub, evaluation and optimization
 
 **Harness Hub** lets you explore shared harness definitions and choose a setup for coding, evaluation or optimization. Your project can keep its own inspectable HarnessSpec.
 
 **Evaluations** compares baselines and candidates, including per-task outcomes, costs and regressions. Review setup before authorizing live execution.
+
+The development source adds a task comparison inspector for evaluation and
+optimizer held-out results. Choose a candidate, search task IDs, filter
+regressions/improvements/incomplete evidence, and inspect reasons and reported
+cost/time changes. Unknown usage remains unknown; smoke-only checks do not count
+as task-quality improvements. This is a review aid, with native validation still
+pending. See the [feature checklist](FEATURE-PARITY.md) for remaining native gaps.
 
 **Optimization** supports bounded Omni experiments, candidate diffs and reviewed adoption of a validated harness revision.
 
@@ -73,6 +87,9 @@ Some integrations and advanced workflows are experimental, and full terminal fea
 Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
+
+See the [native developer experience review and build plan](DEVELOPER-EXPERIENCE.md)
+for source comparisons, implemented history improvements and the proposed next steps.
 
 For future Mac App Store work, see the separate
 [App Store preparation guide](../../proc/MACOS-APP-STORE.md). The current public beta
