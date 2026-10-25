@@ -2,6 +2,9 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
+Source version: **0.1.8 (build 9)**, with bundled engine **2.25.0**.
+The public download remains 0.1.7 until a signed and notarized 0.1.8 is published.
+
 [**Download public beta 0.1.7**](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**

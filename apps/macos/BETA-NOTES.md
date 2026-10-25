@@ -16,6 +16,13 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
+## Upcoming 0.1.8
+
+Source version 0.1.8 (build 9) adds a Command-K palette, paginated run activity
+with retry, and evaluation and held-out optimization comparisons. It bundles
+Python engine 2.25.0. The public download remains 0.1.7 until the new app passes
+release validation and its signed, notarized installer is published.
+
 ## What changed in this beta
 
 - Clearer connection navigation, working dialog controls and simpler subscription and ACP selection.
