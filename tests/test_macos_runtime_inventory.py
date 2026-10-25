@@ -27,6 +27,14 @@ def test_framework_build_inputs_are_pruned_and_nested_code_is_signed_first(tmp_p
     spec.loader.exec_module(module)
     app = tmp_path / "SuperQode.app"
     framework = app / "Contents/Resources/runtime/python/Frameworks/Tcl.framework"
+    runtime_python = app / "Contents/Resources/runtime/python"
+    python_resources = runtime_python / "Resources"
+    python_resources.mkdir(parents=True)
+    (python_resources / "Info.plist").write_bytes(
+        plistlib.dumps({"CFBundleExecutable": "Python", "CFBundlePackageType": "FMWK"})
+    )
+    python_library = runtime_python / "Python"
+    python_library.write_bytes(b"\xcf\xfa\xed\xfeMach-O Python framework fixture")
     version = framework / "Versions/8.6"
     resources = version / "Resources"
     resources.mkdir(parents=True)
@@ -69,7 +77,7 @@ def test_framework_build_inputs_are_pruned_and_nested_code_is_signed_first(tmp_p
     monkeypatch.setattr(module.subprocess, "run", codesign)
     module.sign(app, "-")
     signed_paths = [command[-1] for command in calls if "--sign" in command]
-    assert signed_paths == [str(library), str(framework), str(app)]
+    assert signed_paths == [str(library), str(framework), str(runtime_python), str(app)]
     assert any(command[-1] == str(executable) and "--verify" in command for command in calls)
     assert executable.exists()
     assert notice.read_text() == "Tcl license fixture"

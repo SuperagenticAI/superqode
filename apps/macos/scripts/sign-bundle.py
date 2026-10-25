@@ -79,9 +79,15 @@ def sign(app, identity):
         and p.suffix in {".app", ".framework", ".xpc", ".appex", ".bundle"}
         and any(p in n.parents for n in native)
     ]
+    # python-build-standalone also ships a framework-style Python prefix whose
+    # directory is named "python", not "Python.framework". Signing its Python
+    # library seals that prefix. Seal it after its embedded Tcl/Tk frameworks.
+    runtime_python = app / "Contents/Resources/runtime/python"
+    if (runtime_python / "Resources/Info.plist").is_file():
+        bundles.append(runtime_python)
     framework_mains = set()
     for bundle in bundles:
-        if bundle.suffix == ".framework":
+        if bundle.suffix == ".framework" or bundle == runtime_python:
             framework_mains.update(framework_executables(bundle))
     # Give loose Python executables/libraries stable identifiers rather than their
     # basename alone. Bundle containers are subsequently sealed inside out.
@@ -99,7 +105,7 @@ def sign(app, identity):
         subprocess.run(["codesign", *options, str(path)], check=True)
     subprocess.run(["codesign", *options, str(app)], check=True)
     for path in [*native, app]:
-        subprocess.run(["codesign", "--verify", "--strict", str(path)], check=True)
+        subprocess.run(["codesign", "--verify", "--strict", "--verbose=4", str(path)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     print(f"Verified {len(native)} native files and the outer bundle")
 

@@ -94,7 +94,8 @@ jobs:
           if path.exists():
               lines = path.read_text(errors="replace").splitlines()
               failures = [line for line in lines if any(word in line.lower() for word in
-                  ("error", "in subcomponent:", "not signed", "invalid", "denied", "no such"))]
+                  ("error", "in subcomponent:", "not signed", "invalid", "denied", "no such",
+                   "file modified:", "file missing:", "file added:", "unsealed"))]
               for line in (failures or lines[-5:])[-10:]:
                   message = line[-2000:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print("::error title=Native app packaging failed::" + message)
