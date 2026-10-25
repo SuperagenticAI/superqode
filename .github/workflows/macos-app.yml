@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     paths:
       - "apps/macos/**"
+      - ".github/matchers/swift.json"
       - "src/**"
       - "tests/test_desktop*"
       - "tests/test_macos_runtime_inventory.py"
@@ -51,7 +52,9 @@ jobs:
           version: "0.13.0"
           python-version: "3.13"
       - name: Swift transport regressions and native build
-        run: swift test --build-system native --package-path apps/macos -c release
+        run: |
+          echo "::add-matcher::.github/matchers/swift.json"
+          swift test --build-system native --package-path apps/macos -c release
       - name: Prepare isolated bundled engine
         env:
           UV_PROJECT_ENVIRONMENT: apps/macos/.build-venv
