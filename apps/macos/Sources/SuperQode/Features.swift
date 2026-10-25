@@ -461,14 +461,7 @@ struct EvaluationResult: View {
               Text(live ? String(format: "%.0f%%", (variant["score"] as? Double ?? 0) * 100) : "—")
                 .font(.title2.monospaced())
             }
-            Text(
-              String(describing: variant["passed"] ?? 0) + " passed · "
-                + String(describing: variant["failed"] ?? 0) + " failed · "
-                + String(describing: variant["skipped"] ?? 0) + " skipped · "
-                + ((variant["cost_usd"] as? Double).flatMap {
-                  $0.isFinite && $0 >= 0 ? String(format: "$%.4f", $0) : nil
-                } ?? "Cost unknown")
-            ).font(.caption.monospaced()).foregroundStyle(.secondary)
+            Text(variantSummary(variant)).font(.caption.monospaced()).foregroundStyle(.secondary)
             ForEach(Array((variant["tasks"] as? [[String: Any]] ?? []).enumerated()), id: \.offset)
             { _, task in
               DisclosureGroup {
@@ -489,6 +482,16 @@ struct EvaluationResult: View {
         .system(size: 11, design: .monospaced)
       ).foregroundStyle(.secondary).textSelection(.enabled)
     }
+  }
+
+  private func variantSummary(_ variant: [String: Any]) -> String {
+    let passed = String(describing: variant["passed"] ?? 0)
+    let failed = String(describing: variant["failed"] ?? 0)
+    let skipped = String(describing: variant["skipped"] ?? 0)
+    let cost = (variant["cost_usd"] as? Double).flatMap {
+      $0.isFinite && $0 >= 0 ? String(format: "$%.4f", $0) : nil
+    } ?? "Cost unknown"
+    return "\(passed) passed · \(failed) failed · \(skipped) skipped · \(cost)"
   }
 }
 struct FilesView: View {

@@ -51,7 +51,7 @@ struct EvaluationComparisonView: View {
             Text(issue).font(.caption).foregroundStyle(.orange)
           }
           if (candidate["ungraded_pairs"] as? Int ?? 0) > 0 {
-            Text("\(candidate["ungraded_pairs"] ?? 0) task pairs include ungraded outcomes.")
+            Text("\(candidate["ungraded_pairs"] as? Int ?? 0) task pairs include ungraded outcomes.")
               .font(.caption).foregroundStyle(.orange)
           }
           Grid(alignment: .leading) {
