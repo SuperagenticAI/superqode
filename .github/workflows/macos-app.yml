@@ -54,7 +54,22 @@ jobs:
       - name: Swift transport regressions and native build
         run: |
           echo "::add-matcher::.github/matchers/swift.json"
-          swift test --build-system native --package-path apps/macos -c release
+          set -o pipefail
+          swift test --build-system native --package-path apps/macos -c release 2>&1 | tee "$RUNNER_TEMP/superqode-swift-tests.log"
+      - name: Report native test failures in check annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "superqode-swift-tests.log"
+          if path.exists():
+              lines = path.read_text(errors="replace").splitlines()
+              failures = [line for line in lines if any(word in line.lower() for word in ("error:", "failed", "fatal"))]
+              message = "\n".join((failures or lines[-15:])[:25])[-6000:]
+              message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Native Swift build or tests failed::" + message)
+          PY
       - name: Prepare isolated bundled engine
         env:
           UV_PROJECT_ENVIRONMENT: apps/macos/.build-venv
