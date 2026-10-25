@@ -20,7 +20,7 @@ def test_inventory_is_refreshed_from_patched_runtime(tmp_path):
     ]
 
 
-def test_framework_archives_are_pruned_and_nested_code_is_signed_first(tmp_path, monkeypatch):
+def test_framework_build_inputs_are_pruned_and_nested_code_is_signed_first(tmp_path, monkeypatch):
     script = Path(__file__).parents[1] / "apps/macos/scripts/sign-bundle.py"
     spec = importlib.util.spec_from_file_location("bundle_signing", script)
     module = importlib.util.module_from_spec(spec)
@@ -38,6 +38,11 @@ def test_framework_archives_are_pruned_and_nested_code_is_signed_first(tmp_path,
     archive.write_bytes(b"!<arch>\nstatic development archive")
     archive_link = framework / "libtclstub8.6.a"
     archive_link.symlink_to("Versions/Current/libtclstub8.6.a")
+    config = version / "tclConfig.sh"
+    config.write_text("# Tcl extension linker flags\n")
+    config.chmod(0o755)
+    config_link = framework / "tclConfig.sh"
+    config_link.symlink_to("Versions/Current/tclConfig.sh")
     executable = version / "Tcl"
     executable.write_bytes(b"\xcf\xfa\xed\xfeMach-O framework fixture")
     library = version / "libnested.dylib"
@@ -57,6 +62,8 @@ def test_framework_archives_are_pruned_and_nested_code_is_signed_first(tmp_path,
         if "--sign" in command:
             assert not archive.exists()
             assert not archive_link.is_symlink()
+            assert not config.exists()
+            assert not config_link.is_symlink()
         calls.append(command)
 
     monkeypatch.setattr(module.subprocess, "run", codesign)

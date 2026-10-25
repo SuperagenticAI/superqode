@@ -33,18 +33,19 @@ def native_files(app):
     return sorted(result, key=lambda p: (-len(p.parts), str(p)))
 
 
-def prune_framework_archives(app):
-    # Standalone Python includes Tcl/Tk stub archives for linking extensions.
-    # They are build inputs, not loadable runtime code, and codesign rejects
-    # these unsigned archives when sealing the framework. Keep the runtime
+def prune_framework_build_inputs(app):
+    # Standalone Python includes Tcl/Tk stub archives and linker configuration
+    # scripts for building extensions. They are build inputs, not runtime code,
+    # and codesign rejects them outside a framework's Resources. Keep runtime
     # executables, shared libraries and resources, including their notices.
     frameworks = app / "Contents/Resources/runtime/python/Frameworks"
     for framework in frameworks.glob("*.framework"):
         if framework.is_symlink():
             continue
-        for archive in framework.rglob("*.a"):
-            if archive.is_symlink() or archive.is_file():
-                archive.unlink()
+        for pattern in ("*.a", "*Config.sh"):
+            for path in framework.rglob(pattern):
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
 
 
 def framework_executables(framework):
@@ -68,7 +69,7 @@ def sign(app, identity):
         if not identity.startswith("Developer ID Application:"):
             raise ValueError("Use a Developer ID Application identity, or '-' for a local preview")
         options += ["--options", "runtime", "--timestamp"]
-    prune_framework_archives(app)
+    prune_framework_build_inputs(app)
     native = native_files(app)
     bundles = [
         p
