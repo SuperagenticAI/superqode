@@ -33,6 +33,33 @@ def native_files(app):
     return sorted(result, key=lambda p: (-len(p.parts), str(p)))
 
 
+def prune_framework_archives(app):
+    # Standalone Python includes Tcl/Tk stub archives for linking extensions.
+    # They are build inputs, not loadable runtime code, and codesign rejects
+    # these unsigned archives when sealing the framework. Keep the runtime
+    # executables, shared libraries and resources, including their notices.
+    frameworks = app / "Contents/Resources/runtime/python/Frameworks"
+    for framework in frameworks.glob("*.framework"):
+        if framework.is_symlink():
+            continue
+        for archive in framework.rglob("*.a"):
+            if archive.is_symlink() or archive.is_file():
+                archive.unlink()
+
+
+def framework_executables(framework):
+    result = set()
+    manifests = [framework / "Resources/Info.plist"]
+    manifests.extend(framework.glob("Versions/*/Resources/Info.plist"))
+    for manifest in manifests:
+        if manifest.is_file():
+            info = plistlib.loads(manifest.read_bytes())
+            executable = info.get("CFBundleExecutable")
+            if executable:
+                result.add((manifest.parent.parent / executable).resolve())
+    return result
+
+
 def sign(app, identity):
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     identifier = info["CFBundleIdentifier"]
@@ -41,15 +68,8 @@ def sign(app, identity):
         if not identity.startswith("Developer ID Application:"):
             raise ValueError("Use a Developer ID Application identity, or '-' for a local preview")
         options += ["--options", "runtime", "--timestamp"]
+    prune_framework_archives(app)
     native = native_files(app)
-    # Give loose Python executables/libraries stable identifiers rather than their
-    # basename alone. Bundle containers are subsequently sealed inside out.
-    for path in native:
-        suffix = hashlib.sha256(str(path.relative_to(app)).encode()).hexdigest()[:24]
-        subprocess.run(
-            ["codesign", *options, "--identifier", f"{identifier}.code.{suffix}", str(path)],
-            check=True,
-        )
     bundles = [
         p
         for p in app.rglob("*")
@@ -58,6 +78,22 @@ def sign(app, identity):
         and p.suffix in {".app", ".framework", ".xpc", ".appex", ".bundle"}
         and any(p in n.parents for n in native)
     ]
+    framework_mains = set()
+    for bundle in bundles:
+        if bundle.suffix == ".framework":
+            framework_mains.update(framework_executables(bundle))
+    # Give loose Python executables/libraries stable identifiers rather than their
+    # basename alone. Bundle containers are subsequently sealed inside out.
+    for path in native:
+        # Signing a framework's executable seals its enclosing framework too.
+        # Defer it until all nested code has been signed.
+        if path.resolve() in framework_mains:
+            continue
+        suffix = hashlib.sha256(str(path.relative_to(app)).encode()).hexdigest()[:24]
+        subprocess.run(
+            ["codesign", *options, "--identifier", f"{identifier}.code.{suffix}", str(path)],
+            check=True,
+        )
     for path in sorted(bundles, key=lambda p: (-len(p.parts), str(p))):
         subprocess.run(["codesign", *options, str(path)], check=True)
     subprocess.run(["codesign", *options, str(app)], check=True)
