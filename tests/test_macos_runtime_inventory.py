@@ -59,8 +59,13 @@ def test_framework_build_inputs_are_pruned_and_nested_code_is_signed_first(tmp_p
     notice.write_text("Tcl license fixture")
     unrelated = app / "Contents/Resources/project.a"
     unrelated.write_bytes(b"unrelated resource")
+    app_executable = app / "Contents/MacOS/SuperQode"
+    app_executable.parent.mkdir(parents=True)
+    app_executable.write_bytes(b"\xcf\xfa\xed\xfeMach-O app fixture")
     (app / "Contents/Info.plist").write_bytes(
-        plistlib.dumps({"CFBundleIdentifier": "dev.superqode.fixture"})
+        plistlib.dumps(
+            {"CFBundleIdentifier": "dev.superqode.fixture", "CFBundleExecutable": "SuperQode"}
+        )
     )
     calls = []
 
@@ -78,7 +83,11 @@ def test_framework_build_inputs_are_pruned_and_nested_code_is_signed_first(tmp_p
     module.sign(app, "-")
     signed_paths = [command[-1] for command in calls if "--sign" in command]
     assert signed_paths == [str(library), str(framework), str(runtime_python), str(app)]
-    assert any(command[-1] == str(executable) and "--verify" in command for command in calls)
+    verified_paths = [command[-1] for command in calls if "--verify" in command]
+    assert str(executable) not in verified_paths
+    assert str(app_executable) not in verified_paths
+    assert {str(library), str(framework), str(runtime_python), str(app)} <= set(verified_paths)
+    assert any(command[-1] == str(app) and "--deep" in command for command in calls)
     assert executable.exists()
     assert notice.read_text() == "Tcl license fixture"
     assert unrelated.read_bytes() == b"unrelated resource"

@@ -48,16 +48,26 @@ def prune_framework_build_inputs(app):
                     path.unlink()
 
 
-def framework_executables(framework):
+def bundle_executables(bundle):
     result = set()
-    manifests = [framework / "Resources/Info.plist"]
-    manifests.extend(framework.glob("Versions/*/Resources/Info.plist"))
+    manifests = [
+        bundle / "Contents/Info.plist",
+        bundle / "Resources/Info.plist",
+        bundle / "Info.plist",
+    ]
+    manifests.extend(bundle.glob("Versions/*/Resources/Info.plist"))
     for manifest in manifests:
         if manifest.is_file():
             info = plistlib.loads(manifest.read_bytes())
             executable = info.get("CFBundleExecutable")
             if executable:
-                result.add((manifest.parent.parent / executable).resolve())
+                if manifest.parent.name == "Contents":
+                    directory = bundle / "Contents/MacOS"
+                elif manifest.parent.name == "Resources":
+                    directory = manifest.parent.parent
+                else:
+                    directory = bundle
+                result.add((directory / executable).resolve())
     return result
 
 
@@ -85,16 +95,15 @@ def sign(app, identity):
     runtime_python = app / "Contents/Resources/runtime/python"
     if (runtime_python / "Resources/Info.plist").is_file():
         bundles.append(runtime_python)
-    framework_mains = set()
-    for bundle in bundles:
-        if bundle.suffix == ".framework" or bundle == runtime_python:
-            framework_mains.update(framework_executables(bundle))
+    bundle_mains = set()
+    for bundle in [*bundles, app]:
+        bundle_mains.update(bundle_executables(bundle))
     # Give loose Python executables/libraries stable identifiers rather than their
     # basename alone. Bundle containers are subsequently sealed inside out.
     for path in native:
-        # Signing a framework's executable seals its enclosing framework too.
-        # Defer it until all nested code has been signed.
-        if path.resolve() in framework_mains:
+        # Bundle executables must be signed and verified through their enclosing
+        # code unit, after its nested code, rather than as loose libraries.
+        if path.resolve() in bundle_mains:
             continue
         suffix = hashlib.sha256(str(path.relative_to(app)).encode()).hexdigest()[:24]
         subprocess.run(
@@ -104,7 +113,8 @@ def sign(app, identity):
     for path in sorted(bundles, key=lambda p: (-len(p.parts), str(p))):
         subprocess.run(["codesign", *options, str(path)], check=True)
     subprocess.run(["codesign", *options, str(app)], check=True)
-    for path in [*native, app]:
+    loose_code = [path for path in native if path.resolve() not in bundle_mains]
+    for path in [*loose_code, *bundles, app]:
         subprocess.run(["codesign", "--verify", "--strict", "--verbose=4", str(path)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     print(f"Verified {len(native)} native files and the outer bundle")
