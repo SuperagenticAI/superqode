@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Native Mac packaging omits Tcl/Tk extension-development archives and linker
+  configuration scripts, and seals embedded frameworks before their Python
+  runtime container. Runtime libraries, resources and license notices are retained.
+
 - The native Mac app drains paginated activity for completed runs and for runs
   finishing with unread events, including cancellation while output is draining.
   Failed activity loads can resume from the last cursor with Retry. Follow scrolling

@@ -43,8 +43,9 @@ menu items use the same command catalog and execution handler. Availability is
 rechecked at execution time. Opening the palette does not start an agent, install
 a provider, or modify Git state. Recent runs are scoped to the current project.
 Eleven XCTest cases cover matching/ranking, selection boundaries, unique IDs and
-shortcuts, project scoping, availability and deferred menu execution. These tests have not run here; a
-Swift grammar parse is only a syntax check, not compilation or UI validation.
+shortcuts, project scoping, availability and deferred menu execution. Native
+compilation and XCTest have since passed in macOS CI; Linux grammar parsing
+alone does not establish compilation or UI behavior.
 
 ### Run activity
 
@@ -132,6 +133,23 @@ profile before and after; avoid assuming a wholesale state-framework migration
 will improve performance without measurements.
 
 ## Validation before shipping
+
+The clean CI full Python suite and harness example checks passed at `e0af461`,
+as did its lint, build, connection and compatibility checks. Native Swift
+compilation and XCTest passed on macOS. A local full run reported 7,172 passed,
+97 skipped and two failures: a provider-ordering test dependent on ambient keys,
+and a version already imported before release metadata changed during that run.
+The provider test now isolates credentials; both checks pass in a fresh process.
+The desktop, packaging and version group passed 206 checks before the additional
+signing regression test. The engine 2.25.0 wheel and source archive build with
+consistent release metadata.
+
+Native packaging subsequently exposed development-only Tcl/Tk files and a
+framework-style Python prefix that needs sealing after its embedded frameworks.
+The packaging fix has regression coverage for retaining runtime libraries and
+notices while omitting static archives/linker configuration and signing inside
+out. Strict signature verification and the native app smoke test remain release
+gates. The following entries record the earlier local validation history.
 
 For the subsequent evaluation comparison inspector, 113 focused Python checks
 pass, including 85 comparison cases, long-run paging and package inventory. A
