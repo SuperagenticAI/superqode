@@ -3669,8 +3669,15 @@ async def test_curated_hosts_survive_the_collapse():
         assert curated_hosts <= shown, f"hidden curated hosts: {sorted(curated_hosts - shown)}"
 
 
-async def test_pinned_hosts_lead_the_model_hosts_section():
+async def test_pinned_hosts_lead_the_model_hosts_section(monkeypatch):
     """Baseten sorts 2nd alphabetically, so the order needs an explicit pin."""
+    from superqode.providers.registry import PROVIDERS
+
+    # Configured providers have their own Ready section ahead of Model Hosts.
+    # Exercise the category ordering independently of the developer's keys.
+    for provider in PROVIDERS.values():
+        for variable in provider.env_vars:
+            monkeypatch.delenv(variable, raising=False)
     app = SuperQodeApp()
     async with app.run_test(size=(110, 60)) as pilot:
         log = app.query_one("#log", ConversationLog)
