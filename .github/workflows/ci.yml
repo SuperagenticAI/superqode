@@ -135,7 +135,25 @@ jobs:
       - name: Pytest
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run pytest -p pytest_asyncio.plugin
+        run: uv run pytest -p pytest_asyncio.plugin --junitxml=test-results.xml
+      - name: Report test failures in check annotations
+        if: failure()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          results = Path("test-results.xml")
+          if results.exists():
+              failures = 0
+              for case in ET.parse(results).iter("testcase"):
+                  for failure in [*case.findall("failure"), *case.findall("error")]:
+                      message = f"{case.get('classname')}.{case.get('name')}: {failure.text or failure.get('message', '')}"
+                      message = message[:6000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error::{message}")
+                      failures += 1
+                      if failures >= 25:
+                          raise SystemExit(0)
+          PY
       - name: Harness example doctor
         run: |
           for spec in examples/harnesses/*.yaml; do

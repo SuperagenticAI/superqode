@@ -32,6 +32,10 @@ def _isolate_mounted_app_startup(monkeypatch):
     monkeypatch.setattr(SuperQodeApp, "_prewarm_litellm", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_models_dev_refresh", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_acp_registry_refresh", lambda self: None)
+    # This delayed welcome decoration writes feedback and temporarily anchors
+    # the viewport. Widget tests replace the welcome directly, so its timer must
+    # not race their transcript assertions. Dedicated catalogue tests exercise it.
+    monkeypatch.setattr(SuperQodeApp, "_report_catalog_freshness", lambda self: None)
 
 
 async def _settle(pilot, frames: int = 6) -> None:
@@ -3669,8 +3673,15 @@ async def test_curated_hosts_survive_the_collapse():
         assert curated_hosts <= shown, f"hidden curated hosts: {sorted(curated_hosts - shown)}"
 
 
-async def test_pinned_hosts_lead_the_model_hosts_section():
+async def test_pinned_hosts_lead_the_model_hosts_section(monkeypatch):
     """Baseten sorts 2nd alphabetically, so the order needs an explicit pin."""
+    from superqode.providers.registry import PROVIDERS
+
+    # Configured providers have their own Ready section ahead of Model Hosts.
+    # Exercise the category ordering independently of the developer's keys.
+    for provider in PROVIDERS.values():
+        for variable in provider.env_vars:
+            monkeypatch.delenv(variable, raising=False)
     app = SuperQodeApp()
     async with app.run_test(size=(110, 60)) as pilot:
         log = app.query_one("#log", ConversationLog)
