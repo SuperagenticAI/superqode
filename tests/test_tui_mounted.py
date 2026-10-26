@@ -32,6 +32,10 @@ def _isolate_mounted_app_startup(monkeypatch):
     monkeypatch.setattr(SuperQodeApp, "_prewarm_litellm", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_models_dev_refresh", lambda self: None)
     monkeypatch.setattr(SuperQodeApp, "_start_acp_registry_refresh", lambda self: None)
+    # This delayed welcome decoration writes feedback and temporarily anchors
+    # the viewport. Widget tests replace the welcome directly, so its timer must
+    # not race their transcript assertions. Dedicated catalogue tests exercise it.
+    monkeypatch.setattr(SuperQodeApp, "_report_catalog_freshness", lambda self: None)
 
 
 async def _settle(pilot, frames: int = 6) -> None:

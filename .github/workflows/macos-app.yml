@@ -74,7 +74,15 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: apps/macos/.build-venv
         run: |
-          uv sync --locked --no-dev --no-editable --python 3.13
+          python3 - <<'PY'
+          import subprocess
+          selected = subprocess.check_output(["uv", "python", "find", "3.13"], text=True).strip()
+          subprocess.run([selected, "-c", "import json,sys;print('::notice title=Default Python selection::'+json.dumps({'version':sys.version,'base':sys.base_prefix}))"], check=True)
+          PY
+          # The engine payload must come from the portable managed interpreter,
+          # rather than a runner's framework Python with host-specific resources.
+          uv sync --managed-python --locked --no-dev --no-editable --python 3.13
+          apps/macos/.build-venv/bin/python -c "import json,sys;print('::notice title=Bundled Python selection::'+json.dumps({'version':sys.version,'base':sys.base_prefix}))"
           python3 apps/macos/scripts/bundle-runtime.py
           python3 apps/macos/scripts/make-icon.py
       - name: Assemble and verify an ad-hoc signed app
@@ -89,6 +97,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import json
+          import plistlib
           from pathlib import Path
           path = Path(os.environ["RUNNER_TEMP"]) / "superqode-app-build.log"
           if path.exists():
@@ -99,6 +109,17 @@ jobs:
               for line in (failures or lines[-5:])[-10:]:
                   message = line[-2000:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print("::error title=Native app packaging failed::" + message)
+              app = Path("apps/macos/release/SuperQode.app")
+              manifest = app / "Contents/Info.plist"
+              info = plistlib.loads(manifest.read_bytes()) if manifest.is_file() else {}
+              executable = app / "Contents/MacOS" / info.get("CFBundleExecutable", "missing")
+              context = json.dumps({"app_exists": app.is_dir(), "manifest_exists": manifest.is_file(), "executable_exists": executable.is_file(), "executable": str(executable)})
+              print("::error title=Bundle filesystem diagnostics::" + context)
+              for link in app.rglob("*"):
+                  if link.is_symlink() and not link.exists():
+                      message = f"{link.relative_to(app)} -> {os.readlink(link)}"
+                      message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print("::error title=Broken bundle symlink::" + message)
           PY
       - name: Native app smoke with loopback model fixtures
         run: python3 apps/macos/scripts/smoke-test.py
