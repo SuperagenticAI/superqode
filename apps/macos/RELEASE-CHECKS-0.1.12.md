@@ -4,6 +4,21 @@
 The user deferred the Mac handoff checks. Work recorded here runs in the cloud
 checkout; native compilation, signing and publication are not certified.
 
+## Developer onboarding follow-up
+
+Setup checks no longer require a model selection in the native evaluation form.
+The real setup worker is tested with empty provider/model fields and records
+skipped cases without a quality claim. The first-run and learning screens now
+provide a direct harness path and match the actual Enter/Shift-Enter send controls.
+
+The tuning screen can prepare an offline synthetic practice batch without a data
+file, credentials or model calls. Practice persists in private app state, supports
+annotation/resume and cannot start a live run or authorize adoption. Preparing real
+examples is an explicit next step. The onboarding-focused suite passed 34 tests, including actual credential-free
+setup execution and offline practice persistence/adoption rejection. The native
+changes still require compilation and interaction validation; Python tests
+validate the backend contracts.
+
 ## Additional implementation
 
 The Optimization page now opens a dedicated native tuning screen. It prepares

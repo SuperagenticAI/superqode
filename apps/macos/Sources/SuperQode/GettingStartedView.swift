@@ -30,6 +30,10 @@ struct GettingStartedView: View {
           Button("Open project…", action: app.chooseProject).buttonStyle(BrandButtonStyle())
             .disabled(!app.connected).keyboardShortcut("o")
           if !app.connected { ProgressView("Starting the local engine…").font(.caption) }
+          Button("Learn harness evaluation & optimization") {
+            app.learningTopic = "Harnesses"
+            app.showLearningGuide = true
+          }
           Text("No SuperQode account required. Requests go to the agent or provider you choose.")
             .font(.caption).foregroundStyle(.secondary)
         } else if (showStarterGuide && !hasRun) || app.starterTourRequested {
@@ -59,6 +63,10 @@ struct GettingStartedView: View {
               "Explain how this project is structured and suggest one small improvement. Do not edit files or run commands."
           }.disabled(!draftStore.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .help("Adds a suggested prompt without sending it. Keep or edit it before starting.")
+          Button("Start with a harness setup check · no model calls") {
+            app.section = "Evaluations"
+            app.showWelcome = false
+          }
           HStack {
             Button("How it works") { app.showLearningGuide = true }
             Spacer()
@@ -112,6 +120,7 @@ struct LearningGuideView: View {
       Picker("Learn", selection: $app.learningTopic) {
         Text("Start coding").tag("Start coding")
         Text("Review your work").tag("Review your work")
+        Text("Harnesses").tag("Harnesses")
         Text("Go further").tag("Go further")
       }.pickerStyle(.segmented)
       ScrollView {
@@ -127,7 +136,7 @@ struct LearningGuideView: View {
             )
             lesson(
               "3 · Ask, approve, review",
-              "Describe one concrete change and press ⌘Return. Read the streamed output, approve or deny permission requests, and use Stop run if needed. Normal provider or subscription limits apply. Saving credentials does not verify an account."
+              "Describe one concrete change and press Enter to send (Shift-Enter adds a line). Read the streamed output, approve or deny permission requests, and use Stop run if needed. Normal provider or subscription limits apply. Saving credentials does not verify an account."
             )
             HStack {
               Button(app.project.isEmpty ? "Open project…" : "Go to Agent Space") {
@@ -159,6 +168,28 @@ struct LearningGuideView: View {
               "Terminal is your interactive project shell. Start it explicitly and keep working there while using the native app. Starting the app does not automatically execute shell commands."
             )
             navigate("Open Files", section: "Files")
+          } else if app.learningTopic == "Harnesses" {
+            lesson(
+              "1 · Inspect a suite without credentials",
+              "Open a project, go to Evaluations and choose a built-in harness and bundled suite. Leave Live evaluation off and choose Check setup. This validates configuration, makes no model calls and skips task execution. It does not measure quality."
+            )
+            lesson(
+              "2 · Learn to judge routing examples",
+              "In Optimization, open More harness workflows → Tune routing decisions from examples. Choose Try practice examples to label synthetic cases without a file or model calls. Practice data cannot authorize adoption."
+            )
+            lesson(
+              "3 · Measure, improve, review",
+              "Connect a supported provider/local model, add your real graded tasks, then explicitly enable live evaluation. Compare baseline and candidates on the same held-out tasks. Set budgets before optimization, inspect regressions and candidate diffs, and adopt only verified evidence."
+            )
+            if app.project.isEmpty {
+              Button("Open project…") {
+                dismiss()
+                app.chooseProject()
+              }.buttonStyle(BrandButtonStyle()).disabled(!app.connected)
+            } else {
+              navigate("Open Evaluations", section: "Evaluations")
+              navigate("Open Optimization", section: "Optimization")
+            }
           } else {
             lesson(
               "Find the right harness",

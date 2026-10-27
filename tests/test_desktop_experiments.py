@@ -96,3 +96,25 @@ def test_preflight_exposes_candidates_declared_inside_suite(desktop):
     result = service.dispatch("evals.inspect", {"project": project["id"], "tasks": str(path)})
     assert result["candidate_count"] == 1
     assert any("additional candidate" in warning for warning in result["warnings"])
+
+
+def test_first_setup_check_does_not_require_a_model_or_credentials(desktop):
+    service, project, _ = desktop
+    job = service.dispatch(
+        "evaluations.start",
+        {
+            "project": project["id"],
+            "harness": "core",
+            "provider": "",
+            "model": "",
+            "tasks": "decision-routing",
+            "live": False,
+        },
+    )
+    result = wait_job(service, job["id"])
+    assert result["status"] == "completed", result
+    report = result["result"]
+    assert report["live"] is False
+    assert report["variants"][0]["passed"] == 0
+    assert report["variants"][0]["skipped"] == report["task_count"]
+    assert report["comparison"]["available"] is False

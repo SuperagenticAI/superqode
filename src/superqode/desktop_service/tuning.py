@@ -35,6 +35,7 @@ def review(output: Path) -> dict:
     report = json.loads(report_path.read_text()) if report_path.exists() else None
     return {
         "id": output.name,
+        "synthetic_practice": manifest.get("synthetic_practice") is True,
         "status": manifest["status"],
         "round": manifest["round"],
         "workflow": manifest["workflow"],
@@ -71,11 +72,23 @@ def handle(service, method, params):
             raise ValueError("Use 1–1000 evaluations and a positive cost limit up to $100")
         if not 2 <= options.batch_size <= 20:
             raise ValueError("Review batch size must be between 2 and 20")
-        source = Path(str(params.get("data") or "")).expanduser()
-        source = source if source.is_absolute() else root / source
-        rows = tune.read_examples(source)
+        practice = params.get("practice") is True
+        if practice:
+            # A partially labeled synthetic batch allows offline annotation;
+            # uncertainty acquisition remains reserved for explicit live runs.
+            options.pack = "factory_route"
+            rows = tune.demo_examples()
+            for row in rows[1:]:
+                row["label"] = None
+        else:
+            source = Path(str(params.get("data") or "")).expanduser()
+            source = source if source.is_absolute() else root / source
+            rows = tune.read_examples(source)
         output = directory(service.root, project, uuid.uuid4().hex)
-        tune.prepare_run(options, rows, output)
+        manifest = tune.prepare_run(options, rows, output)
+        if practice:
+            manifest["synthetic_practice"] = True
+            tune.write_json(output / "run.json", manifest)
         return review(output)
     output = directory(service.root, project, str(params.get("id") or ""))
     current = review(output)
@@ -95,10 +108,16 @@ def handle(service, method, params):
         tune.save_label(output, identity, str(params.get("label") or ""), rationale)
         return review(output)
     if method == "tuning.decide":
+        if current["synthetic_practice"]:
+            raise ValueError("Practice examples cannot authorize candidate adoption")
         # The native flow never enables the experimental acceptance override.
         tune.decide_candidate(output, str(params.get("decision") or ""))
         return review(output)
     if method == "tuning.start":
+        if current["synthetic_practice"]:
+            raise ValueError(
+                "Practice is offline only. Prepare real examples before starting live tuning"
+            )
         if params.get("live") is not True:
             raise ValueError("Explicit live consent is required for model calls")
         stage = params.get("stage")

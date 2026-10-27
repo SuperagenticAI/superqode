@@ -25,6 +25,23 @@ No SuperQode account, App Store installation or separate Python installation is 
 
 The welcome page and **Help → Getting Started & Learning** guide you through coding, review and more advanced capabilities. The Home button returns to Welcome without closing your project or discarding drafts.
 
+## Your first harness check · no API key needed
+
+1. Open a project and choose **Evaluations** under **Improve & more**.
+2. Choose a built-in harness and a bundled suite such as **decision-routing**.
+3. Leave **Live evaluation** off and choose **Check setup**. This validates the
+   configuration without model calls. The tasks are skipped; it is not a quality score.
+4. Open **Optimization → More harness workflows → Tune routing decisions from
+   examples** and choose **Try practice examples · no calls**. Label the synthetic
+   examples and reopen the saved round to learn the workflow. Practice cannot run
+   live optimization or authorize adoption.
+5. For real measurements, prepare your own graded tasks/examples, configure the
+   required local model or provider keys, and explicitly authorize live execution.
+   Review budgets, missing evidence and regressions before saving a candidate.
+
+**Help → Getting Started & Learning → Harnesses** offers the same path inside the
+app. Preparing an experiment or opening a screen does not start a live run.
+
 ## Choose your connection
 
 - **Existing harness or subscription:** connect supported agents using their own accounts and model choices.

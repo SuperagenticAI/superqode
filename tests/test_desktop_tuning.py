@@ -167,3 +167,59 @@ def test_native_child_reports_missing_live_credentials_and_preserves_round(deskt
     after = service.dispatch("tuning.get", {"project": project["id"], "id": current["id"]})
     assert after["needs_acquisition"]
     assert after["revision"] == current["revision"]
+
+
+def test_practice_examples_need_no_file_credentials_or_model_calls(desktop, monkeypatch):
+    service, project, root = desktop
+    before = set(root.iterdir())
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Practice preparation must not call a model or read a dataset")
+
+    monkeypatch.setattr(tune, "read_examples", unexpected)
+    monkeypatch.setattr(tune, "acquire_review_batch", unexpected)
+    monkeypatch.setattr(tune, "run_tune", unexpected)
+    result = service.dispatch("tuning.prepare", {"project": project["id"], "practice": True})
+    assert result["synthetic_practice"]
+    assert result["workflow"] == "batch"
+    assert result["review"]
+    assert not result["needs_acquisition"]
+    assert set(root.iterdir()) == before
+    assert service.dispatch("experiments.list", {"project": project["id"]}) == []
+    row = result["review"][0]
+    updated = service.dispatch(
+        "tuning.label",
+        {
+            "project": project["id"],
+            "id": result["id"],
+            "revision": result["revision"],
+            "example": row["id"],
+            "label": result["labels"][0],
+        },
+    )
+    assert len(updated["review"]) == len(result["review"]) - 1
+    assert service.dispatch("tuning.get", {"project": project["id"], "id": result["id"]})[
+        "synthetic_practice"
+    ]
+    with pytest.raises(ValueError, match="Practice"):
+        service.dispatch(
+            "tuning.decide",
+            {
+                "project": project["id"],
+                "id": result["id"],
+                "revision": updated["revision"],
+                "decision": "accept",
+            },
+        )
+
+    with pytest.raises(ValueError, match="offline only"):
+        service.dispatch(
+            "tuning.start",
+            {
+                "project": project["id"],
+                "id": result["id"],
+                "revision": updated["revision"],
+                "stage": "optimize",
+                "live": True,
+            },
+        )

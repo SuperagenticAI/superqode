@@ -294,6 +294,13 @@ struct ExperimentView: View {
         GroupBox {
           VStack(alignment: .leading, spacing: 18) {
             RouteControls(allowACP: false)
+            if app.isACP {
+              Text("Choose a built-in or project harness above for evaluation. ACP subscription routes are not supported by this evaluator.")
+                .font(.caption).foregroundStyle(.secondary)
+            } else if live && app.model.isEmpty {
+              Text("Select a provider and model for live execution. Setup checks do not require a model or API key.")
+                .font(.caption).foregroundStyle(.secondary)
+            }
             Divider()
             HStack {
               Picker("Evaluation suite", selection: $suite) {
@@ -362,7 +369,7 @@ struct ExperimentView: View {
               Button(optimize ? "Optimize harness" : live ? "Run evaluation" : "Check setup") {
                 start()
               }.buttonStyle(BrandButtonStyle()).disabled(
-                suite.isEmpty || app.model.isEmpty || app.busy || app.anyActive || app.isACP
+                suite.isEmpty || (live && app.model.isEmpty) || app.busy || app.anyActive || app.isACP
                   || inspecting || !diagnosticError.isEmpty || diagnostics.isEmpty
                   || (diagnostics["task_count"] as? Int ?? 0) == 0
                   || (optimize && diagnostics["optimization_ready"] as? Bool != true)

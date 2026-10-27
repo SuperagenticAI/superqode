@@ -31,6 +31,8 @@ Source version 0.1.12 (build 13) adds a stronger harness engineering workflow:
 - Require complete, consistent, non-smoke held-out task evidence before an Omni
   candidate passes its gate or can be saved as a project harness. Older reports
   lacking this evidence require a new validation run.
+- Credential-free harness setup checks, offline synthetic tuning practice and a
+  dedicated harness learning path in the getting-started guide.
 - A dedicated native tuning screen for saved rounds, uncertainty-based example
   selection, label/rationale review and verified candidate decisions.
 - More complete agent subprocess shutdown and rejection of workers that exit

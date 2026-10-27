@@ -50,6 +50,10 @@ struct TuningView: View {
               Text("Reflection budget ($)")
               TextField("USD", value: $cost, format: .number).frame(width: 90)
               Spacer()
+              Button("Try practice examples · no calls") {
+                request("tuning.prepare", ["practice": true, "reflection_model": reflection,
+                  "max_evals": evaluations, "max_cost": cost, "batch_size": batch])
+              }.disabled(blocked || app.projectID.isEmpty)
               Button("Prepare examples") {
                 request("tuning.prepare", ["data": source, "pack": pack,
                   "reflection_model": reflection, "max_evals": evaluations,
@@ -100,6 +104,12 @@ struct TuningView: View {
     VStack(alignment: .leading, spacing: 14) {
       let counts = current["counts"] as? [String: Any] ?? [:]
       let options = current["options"] as? [String: Any] ?? [:]
+      if current["synthetic_practice"] as? Bool == true {
+        Label("Synthetic practice · not benchmark evidence", systemImage: "graduationcap")
+          .font(.headline).foregroundStyle(.secondary)
+        Text("One example is pre-labeled. Practice judging the rest without model calls. Practice mode cannot run live optimization or authorize adoption. Prepare real examples when you are ready for a measured experiment.")
+          .font(.caption).foregroundStyle(.secondary)
+      }
       HStack {
         Text("Round \(String(describing: current["round"] ?? 1))").font(.title2)
         Pill(title: string(current, "status"))
@@ -131,16 +141,19 @@ struct TuningView: View {
             DisclosureGroup("Selection evidence") { CodeBlock(text: pretty(example)).frame(height: 180) }
           }.padding(10)
         }
+      } else if string(current, "status") == "review", current["synthetic_practice"] as? Bool == true {
+        Text("Practice complete. Prepare a file of your real examples above to start a measured experiment.")
+          .font(.callout).foregroundStyle(.secondary)
       } else if string(current, "status") == "review" {
         Button("Run bounded optimization…") { start("optimize") }.disabled(blocked)
       }
       if let report = current["report"] as? [String: Any] {
-        Pill(title: report["eligible"] as? Bool == true ? "VERIFIED CANDIDATE" : "MORE EVIDENCE REQUIRED",
-          color: report["eligible"] as? Bool == true ? .green : .orange)
+        Pill(title: current["synthetic_practice"] as? Bool == true ? "PRACTICE ONLY" : report["eligible"] as? Bool == true ? "VERIFIED CANDIDATE" : "MORE EVIDENCE REQUIRED",
+          color: current["synthetic_practice"] as? Bool == true ? .secondary : report["eligible"] as? Bool == true ? .green : .orange)
         if string(current, "status") == "decision" {
           HStack {
             Button("Accept for next round") { decide("accept") }
-              .disabled(blocked || report["eligible"] as? Bool != true)
+              .disabled(blocked || report["eligible"] as? Bool != true || current["synthetic_practice"] as? Bool == true)
             Button("Reject candidate") { decide("reject") }.disabled(blocked)
           }
           Text("Accepting advances this experiment's staged pack. It does not activate or overwrite your project harness.")
