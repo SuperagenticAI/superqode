@@ -245,6 +245,18 @@ struct ExperimentView: View {
   @State private var reflection = ""
   @State private var optimizer = ""
   @State private var imported: [String: Any]?
+  @State private var split = "all"
+  @State private var diagnostics: [String: Any] = [:]
+  @State private var diagnosticError = ""
+  @State private var inspecting = false
+  @State private var history: [[String: Any]] = []
+  @State private var historyError = ""
+  @State private var workflow: String?
+  @State private var configurationMode: String?
+  private var candidates: [String] {
+    variant.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+  }
+  private var inspectionKey: String { app.projectID + "\n" + suite + "\n" + split + "\n" + variant }
   var result: [String: Any] { imported ?? (app.detail["result"] as? [String: Any] ?? [:]) }
   var relevant: Bool { string(app.detail, "kind") == (optimize ? "optimization" : "evaluation") }
   var body: some View {
@@ -258,6 +270,24 @@ struct ExperimentView: View {
               ? "Explore candidate configurations, inspect the trade-offs and keep the evidence. Adopt improvements only after their gates pass."
               : "Compare configurations on the same tasks. Inspect wins, failures and regressions before choosing a harness."
           )
+          Menu("More harness workflows") {
+            Button("Build a harness…") { configurationMode = "wizard" }
+            Button("Configure RLM routing…") { configurationMode = "rlm-routing" }
+            Button("Configure RLM budgets…") { configurationMode = "rlm" }
+            Divider()
+            Button("Tune routing decisions from examples…") { workflow = "harness tune" }
+            Button("Reproducible benchmarks…") { workflow = "harness bench" }
+            Button("Mine failures…") { workflow = "harness mine-failures" }
+            Button("Additional optimization engines…") { workflow = "harness optimize" }
+            Button("Improve from failures…") { workflow = "harness improve" }
+            Button("Validate harness…") { workflow = "harness doctor" }
+            Button("Candidate ledger…") { workflow = "harness optimize-ledger" }
+            Button("Promotion status…") { workflow = "harness promote status" }
+            Button("Stage a revision…") { workflow = "harness promote stage" }
+            Button("Canary validation…") { workflow = "harness promote canary" }
+            Button("Activate a revision…") { workflow = "harness promote activate" }
+            Button("Roll back a revision…") { workflow = "harness promote rollback" }
+          }
           Button("Open result…", action: importResult)
         }
         GroupBox {
@@ -302,10 +332,16 @@ struct ExperimentView: View {
                 "Candidates are staged for review. Provider cost reporting can lag; the cost limit is an engine budget, not a billing guarantee."
               ).font(.caption).foregroundStyle(.secondary)
             } else {
-              HStack {
-                TextField("Optional candidate HarnessSpec path", text: $variant).textFieldStyle(
-                  .roundedBorder)
-                Button("Choose…") { chooseFile { variant = $0 } }
+              Picker("Task split", selection: $split) {
+                Text("All tasks").tag("all")
+                Text("Held-in · development").tag("held-in")
+                Text("Held-out · validation").tag("held-out")
+              }.frame(maxWidth: 550)
+              Text("Candidate HarnessSpec paths · one per line, up to eight").font(.caption)
+              TextEditor(text: $variant).font(.caption.monospaced()).frame(height: 65)
+                .outlinedSurface(radius: 6)
+              Button("Add candidate…") {
+                chooseFile { variant += (variant.isEmpty ? "" : "\n") + $0 }
               }
               Toggle("Live evaluation · run harnesses and allow model charges", isOn: $live)
               Text(
@@ -314,6 +350,7 @@ struct ExperimentView: View {
                   : "Setup check validates the configuration and skips execution. It does not measure coding quality."
               ).font(.caption).foregroundStyle(.secondary)
             }
+            suiteDiagnostics
             HStack {
               Pill(
                 title: live ? "LIVE EXECUTION" : "SETUP CHECK", color: live ? .orange : .secondary)
@@ -325,6 +362,9 @@ struct ExperimentView: View {
                 start()
               }.buttonStyle(BrandButtonStyle()).disabled(
                 suite.isEmpty || app.model.isEmpty || app.busy || app.anyActive || app.isACP
+                  || inspecting || !diagnosticError.isEmpty || diagnostics.isEmpty
+                  || (diagnostics["task_count"] as? Int ?? 0) == 0
+                  || (optimize && diagnostics["optimization_ready"] as? Bool != true)
                   || (optimize
                     && (!live || reflection.isEmpty || optimizer.isEmpty
                       || app.capabilities["omni"] as? Bool != true))
@@ -332,6 +372,7 @@ struct ExperimentView: View {
             }
           }.padding(14)
         }
+        experimentHistory
         if imported != nil || relevant {
           HStack {
             Text("Run evidence").font(.title3.weight(.medium))
@@ -358,6 +399,108 @@ struct ExperimentView: View {
         }
       }.padding(30)
     }.onAppear { if suite.isEmpty { suite = app.packs.first.map { string($0, "path") } ?? "" } }
+      .task(id: inspectionKey) { await inspectSuite() }
+      .task(id: app.projectID + app.selectedJob + String(app.active)) { await loadHistory() }
+      .sheet(isPresented: Binding(get: { configurationMode != nil }, set: { if !$0 { configurationMode = nil } })) {
+        VStack {
+          HStack { Spacer(); Button("Done") { configurationMode = nil } }.padding()
+          HarnessConfigurationView(mode: configurationMode ?? "wizard") { reference in
+            app.chooseHarness(reference)
+            app.savePreferences()
+            configurationMode = nil
+          }.environmentObject(app)
+        }.frame(minWidth: 760, minHeight: 650)
+      }
+      .sheet(isPresented: Binding(get: { workflow != nil }, set: { if !$0 { workflow = nil } })) {
+        VStack {
+          HStack { Spacer(); Button("Done") { workflow = nil } }.padding()
+          ToolsView(workflow: workflow).environmentObject(app)
+        }.frame(minWidth: 1000, minHeight: 700)
+      }
+  }
+  private var suiteDiagnostics: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      if inspecting { ProgressView("Checking suite…") }
+      if !diagnosticError.isEmpty {
+        Text(diagnosticError).font(.callout).foregroundStyle(.orange)
+      }
+      if !diagnostics.isEmpty {
+        let counts = diagnostics["split_counts"] as? [String: Any] ?? [:]
+        Text("Suite: \(diagnostics["task_count"] ?? 0) selected · \(counts["held-in"] ?? 0) held-in · \(counts["held-out"] ?? 0) held-out")
+          .font(.caption.monospaced())
+        if !optimize {
+          Text("Configurations: baseline + \(diagnostics["candidate_count"] ?? 0) candidates").font(.caption)
+        }
+        Text(string(diagnostics, "tasks_hash")).font(.caption2.monospaced()).textSelection(.enabled)
+        ForEach(diagnostics["warnings"] as? [String] ?? [], id: \.self) { warning in
+          Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+        }
+      }
+    }
+  }
+  private var experimentHistory: some View {
+    GroupBox("Experiment history · latest 100 for this project") {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Text("Reopen evidence without starting another run.").font(.caption).foregroundStyle(.secondary)
+          Spacer()
+          Button("Refresh") { Task { await loadHistory() } }
+        }
+        if !historyError.isEmpty { Text(historyError).foregroundStyle(.orange) }
+        if history.isEmpty { Text("No experiments recorded yet.").font(.caption) }
+        ForEach(history.filter { string($0, "kind") == (optimize ? "optimization" : "evaluation") }, id: \.projectRowID) { row in
+          Button {
+            imported = nil
+            app.candidate = [:]
+            app.selectJob(string(row, "id"))
+          } label: {
+            HStack {
+              Text(string(row, "title")).lineLimit(1)
+              Text(String(string(row, "id").prefix(12))).font(.caption.monospaced())
+              Spacer()
+              Text(string(row, "status")).font(.caption)
+            }
+          }.buttonStyle(.plain)
+        }
+      }.padding(10)
+    }
+  }
+  func inspectSuite() async {
+    let key = inspectionKey
+    diagnostics = [:]
+    diagnosticError = ""
+    inspecting = false
+    guard !suite.isEmpty, !app.projectID.isEmpty else { return }
+    inspecting = true
+    defer { if key == inspectionKey { inspecting = false } }
+    do {
+      let value = try await app.engine.call("evals.inspect", [
+        "project": app.projectID, "tasks": suite, "split": optimize ? "all" : split,
+        "variants": optimize ? [] : candidates,
+      ]) as? [String: Any] ?? [:]
+      guard !Task.isCancelled, key == inspectionKey else { return }
+      diagnostics = value
+    } catch {
+      guard !Task.isCancelled, key == inspectionKey else { return }
+      diagnosticError = error.localizedDescription
+    }
+  }
+  func loadHistory() async {
+    let project = app.projectID
+    history = []
+    historyError = ""
+    guard !project.isEmpty else { return }
+    do {
+      let rows = try await app.engine.call("experiments.list", ["project": project]) as? [[String: Any]] ?? []
+      guard !Task.isCancelled, project == app.projectID else { return }
+      history = rows
+    } catch {
+      guard !Task.isCancelled, project == app.projectID else { return }
+      historyError = error.localizedDescription
+    }
+  }
+  private var adoptionPassed: Bool {
+    (result["adoption_gate"] as? [String: Any])?["accepted"] as? Bool == true
   }
   var optimizationResult: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -365,8 +508,11 @@ struct ExperimentView: View {
         Metric(label: "BASELINE SCORE", value: String(describing: result["baseline_score"] ?? "—"))
         Metric(label: "CANDIDATE SCORE", value: String(describing: result["best_score"] ?? "—"))
         Pill(
-          title: result["accepted"] as? Bool == true ? "GATE PASSED" : "REVIEW REQUIRED",
-          color: result["accepted"] as? Bool == true ? .green : .orange)
+          title: imported != nil ? "IMPORTED EVIDENCE" : adoptionPassed ? "GATE PASSED" : "REVIEW REQUIRED",
+          color: imported != nil ? .secondary : adoptionPassed ? .green : .orange)
+      }
+      ForEach((result["adoption_gate"] as? [String: Any])?["issues"] as? [String] ?? [], id: \.self) { issue in
+        Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
       }
       EvaluationComparisonView(comparison: result["comparison"] as? [String: Any] ?? [:])
       if relevant && imported == nil {
@@ -424,8 +570,9 @@ struct ExperimentView: View {
         "method": "omni", "max_evals": maxEvals, "max_cost": maxCost,
         "reflection_model": reflection, "optimizer_model": optimizer,
       ]) { _, new in new }
-    } else if !variant.isEmpty {
-      params["variant"] = variant
+    } else {
+      params["variants"] = candidates
+      params["split"] = split
     }
     app.start(optimize ? "optimizations.start" : "evaluations.start", extra: params)
   }

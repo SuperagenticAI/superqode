@@ -816,6 +816,16 @@ class DesktopService:
                 from .evaluation_review import with_evaluation_comparison
 
                 row["result"] = with_evaluation_comparison(row["result"])
+                if row["kind"] == "optimization":
+                    from superqode.harness.acceptance import heldout_acceptance
+
+                    gate = heldout_acceptance(row["result"].get("heldout_eval") or {})
+                    gate["accepted"] = (
+                        gate["accepted"]
+                        and row["status"] == "completed"
+                        and row["result"].get("accepted") is True
+                    )
+                    row["result"]["adoption_gate"] = gate
             after = int(params.get("after", 0))
             # Snapshot the page and writer ownership together. Cancellation can
             # become terminal before the stdout watcher drains its final events.
@@ -1189,6 +1199,19 @@ class DesktopService:
                 "digest": h.digest,
                 "name": h.display_name,
             }
+        if method == "evals.inspect":
+            from .experiments import inspect_suite
+
+            return inspect_suite(self.project(params["project"]), params)
+        if method == "experiments.list":
+            project = params["project"]
+            self.project(project)
+            return self._all(
+                "SELECT id,kind,title,status,created,updated FROM jobs "
+                "WHERE project=? AND kind IN ('evaluation','optimization') "
+                "ORDER BY updated DESC,id DESC LIMIT 100",
+                (project,),
+            )
         if method == "evals.packs":
             from superqode.harness.eval import list_eval_packs
 
@@ -1244,6 +1267,8 @@ class DesktopService:
                 raise ValueError("Enter a commit message of up to 2,000 characters")
             return {"output": git(root, "commit", "-m", message)}
         if method == "optimizations.inspect":
+            from superqode.harness.acceptance import heldout_acceptance
+
             job = self.dispatch("jobs.get", {"id": params["id"]})
             result = job.get("result") or {}
             baseline = Path(result.get("baseline_spec_path") or "").resolve()
@@ -1265,7 +1290,9 @@ class DesktopService:
                     )
                 ),
                 "digest": digest,
-                "accepted": result.get("accepted") is True,
+                "accepted": job["status"] == "completed"
+                and result.get("accepted") is True
+                and heldout_acceptance(result.get("heldout_eval") or {})["accepted"],
                 "unchanged": digest == result.get("staged_sha256"),
             }
         if method == "harnesses.save_candidate":

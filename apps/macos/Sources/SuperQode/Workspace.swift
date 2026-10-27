@@ -1488,6 +1488,15 @@ private struct DialogAuditHost: View {
         !(evaluation["variants"] as? [[String: Any]] ?? []).isEmpty
       else { throw EngineError(message: "Native setup evaluation failed") }
       report["evaluation"] = "passed; model execution skipped"
+      let diagnostics = try await engine.call("evals.inspect", [
+        "project": projectID, "tasks": string(packs[0], "path"), "split": "all",
+      ]) as? [String: Any] ?? [:]
+      let experiments = try await engine.call("experiments.list", ["project": projectID]) as? [[String: Any]] ?? []
+      guard (diagnostics["task_count"] as? Int ?? 0) > 0,
+        !string(diagnostics, "tasks_hash").isEmpty,
+        experiments.contains(where: { string($0, "id") == evaluationID })
+      else { throw EngineError(message: "Native experiment diagnostics or history failed") }
+      report["experiment_workflow"] = "passed; diagnostics and durable project history"
       do {
         _ = try await engine.call("files.read", ["project": projectID, "path": "../outside.txt"])
         throw EngineError(message: "File boundary was not enforced")

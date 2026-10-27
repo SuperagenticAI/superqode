@@ -1,4 +1,4 @@
-# SuperQode for macOS — public beta 0.1.11
+# SuperQode for macOS — upcoming public beta 0.1.12
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -15,6 +15,27 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Upcoming 0.1.12
+
+Source version 0.1.12 (build 13) adds a stronger harness engineering workflow:
+
+- Inspect suite hashes, held-in/held-out counts and smoke-only grading warnings
+  before starting a run. Setup checks remain separate from quality measurements.
+- Select development or validation splits and compare a baseline with up to eight
+  explicitly selected candidate HarnessSpecs.
+- Reopen evaluation and optimization evidence from project-specific experiment
+  history without launching another run.
+- Open harness creation, routing budgets, tuning, benchmarks, failure mining,
+  candidate ledgers and revision lifecycle forms directly from experiment pages.
+- Require complete, consistent, non-smoke held-out task evidence before an Omni
+  candidate passes its gate or can be saved as a project harness. Older reports
+  lacking this evidence require a new validation run.
+
+Advanced actions use the shared engine's typed forms. Interactive active-learning
+annotation remains a terminal workflow; this version does not claim full TUI
+parity. Native tests, interaction checks and bounded live experiments on macOS
+are required before publishing 0.1.12. Public downloads remain at 0.1.11.
 
 ## Version 0.1.11
 

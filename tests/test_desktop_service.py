@@ -140,7 +140,19 @@ def test_changed_candidate_cannot_pass_a_stale_adoption_gate(desktop):
     baseline.write_text(text)
     staged.write_text(text)
     digest = hashlib.sha256(text.encode()).hexdigest()
+    task = {
+        "id": "gate",
+        "split": "held-out",
+        "status": "passed",
+        "evaluation": {"evaluator": "contains", "status": "passed"},
+    }
     result = {
+        "heldout_eval": {
+            "live": True,
+            "split": "held-out",
+            "task_count": 1,
+            "variants": [{"tasks": [task]}, {"tasks": [task]}],
+        },
         "accepted": True,
         "baseline_spec_path": str(baseline),
         "staged_spec_path": str(staged),
@@ -164,6 +176,14 @@ def test_changed_candidate_cannot_pass_a_stale_adoption_gate(desktop):
     with pytest.raises(ValueError, match="changed"):
         service.dispatch("harnesses.save_candidate", {"id": "candidate123456", "digest": digest})
     staged.write_text(text)
+    valid_report = json.dumps(result)
+    result["heldout_eval"]["variants"][1]["tasks"][0]["evaluation"]["evaluator"] = "non_empty"
+    service._write("UPDATE jobs SET result=? WHERE id=?", (json.dumps(result), "candidate123456"))
+    preview = service.dispatch("optimizations.inspect", {"id": "candidate123456"})
+    assert not preview["accepted"]
+    with pytest.raises(ValueError, match="gate"):
+        service.dispatch("harnesses.save_candidate", {"id": "candidate123456", "digest": digest})
+    service._write("UPDATE jobs SET result=? WHERE id=?", (valid_report, "candidate123456"))
     saved = service.dispatch(
         "harnesses.save_candidate", {"id": "candidate123456", "digest": digest}
     )

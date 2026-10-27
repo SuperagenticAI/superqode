@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native harness suite diagnostics, evaluation split selection, multiple candidate
+  comparison, project experiment history and direct advanced workflow access.
+
+### Fixed
+
+- Reject Omni candidate adoption when held-out evidence is incomplete, ungraded,
+  smoke-only, contradictory or regressed, even if aggregate scores claim success.
+
 ## [2.25.0] - 2026-10-27
 
 ### Added

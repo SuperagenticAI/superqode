@@ -155,8 +155,9 @@ async def evaluate(request, directory):
     snapshot_spec(request, directory / "harness.yaml")
     tasks = eval_pack_path(request["tasks"])
     specs = [directory / "harness.yaml"]
-    if request.get("variant"):
-        specs.append(Path(request["variant"]).expanduser().resolve(strict=True))
+    from .experiments import candidate_paths
+
+    specs.extend(candidate_paths(request, Path(request["cwd"])))
     emit(
         "stage",
         {

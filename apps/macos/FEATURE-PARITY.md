@@ -1,6 +1,7 @@
 # Coding and harness-optimization feature checklist
 
-25 October 2026, `4dcac5c` plus the local working draft. This is a source-based
+27 October 2026; see the [harness engineering audit](HARNESS-ENGINEERING-AUDIT.md)
+and [0.1.12 validation handoff](HARNESS-RELEASE-HANDOFF.md) for current changes. This is a source-based
 checklist, not a claim of complete parity or verified superiority. Native source
 and tests still require compilation and interaction validation on macOS. Product
 capabilities available through CLI/TUI do not automatically have a native workflow.
@@ -33,14 +34,14 @@ and validation. See [session recovery](SESSION-RECOVERY.md) for the current chan
 | Capability | Current local status | Next acceptance condition |
 | --- | --- | --- |
 | Harness Hub and repository-owned definitions | Native discovery exists; advanced authoring/diagnostics use other surfaces | Make creation, validation, capability inspection and revision selection a cohesive native workflow. |
-| Evaluation setup/live execution | Native source exists | Keep skipped setup checks distinct from measured quality; disclose charges and execution route. |
+| Evaluation setup/live execution | Native forms, suite diagnostics, split selection and up to eight explicit candidates | Keep skipped setup checks distinct from measured quality; disclose charges and execution route. |
 | Baseline/candidate task comparison | Implemented native draft | Inspect wins, regressions, unknowns, reasons and cost/time changes for each candidate. |
 | Optimizer held-out review | Implemented native draft | Use held-out task evidence; smoke checks, contradictory records and missing coverage cannot establish improvement. |
 | Recorded/imported evidence | Native import/export exists, comparison projection added | Review the same projection for saved runs and raw/wrapped older reports without modifying source artifacts. |
 | Staged Omni optimization and candidate diff | Native source exists | Test budget controls, interruption, stale candidate detection and independent held-out checks. |
 | Broader optimizers, benchmarks, skills and memory | Available through typed forms/CLI/TUI to varying degrees | Build dedicated workflows based on frequency and support guarantees rather than copying every command into a form. |
-| Experiment history and quality/cost frontier | Planned dedicated native view | Compare fixed source/configuration hashes, repeats, uncertainty and all failed-attempt costs. |
-| Quality thresholds and adoption decisions | Existing backend gates; known semantics need separate fixes | Separate execution completion from quality; explicitly block missing/ungraded evidence under declared thresholds. |
+| Experiment history and quality/cost frontier | Project-specific recent history implemented; frontier view remains a gap | Compare fixed source/configuration hashes, repeats, uncertainty and all failed-attempt costs. |
+| Quality thresholds and adoption decisions | Omni task-evidence gate tightened; configurable threshold dashboard remains a gap | Separate execution completion from quality; explicitly block missing/ungraded evidence under declared thresholds. |
 | Versioned adoption, canary and rollback | Broader lifecycle exists outside a unified native flow | Record why a revision was adopted and restore its predecessor with matching evidence. |
 | Resource/cost dashboard | Partial metrics; dedicated dashboard planned | Account for unknown usage and overshoot; distinguish reported spend thresholds from provider billing caps. |
 

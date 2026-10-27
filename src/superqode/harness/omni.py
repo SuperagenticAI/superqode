@@ -204,19 +204,11 @@ def optimize_harness_with_omni(
             eval_split="held-out",
         )
     )
-    baseline_variant, candidate_variant = heldout_eval["variants"][:2]
-    accepted = bool(
-        candidate_audit.get("accepted")
-        and not candidate_variant.get("regressed")
-        and float(candidate_variant.get("score") or 0.0)
-        >= float(baseline_variant.get("score") or 0.0)
-    )
-    heldout_gate = {
-        "accepted": accepted,
-        "baseline_score": float(baseline_variant.get("score") or 0.0),
-        "candidate_score": float(candidate_variant.get("score") or 0.0),
-        "regressions": candidate_variant.get("regressions_vs_baseline") or [],
-    }
+    from .acceptance import heldout_acceptance
+
+    heldout_gate = heldout_acceptance(heldout_eval)
+    accepted = bool(candidate_audit.get("accepted") and heldout_gate["accepted"])
+    heldout_gate["accepted"] = accepted
     candidate_audit = {
         **candidate_audit,
         "optimizer_policy_accepted": bool(candidate_audit.get("accepted")),

@@ -4,6 +4,11 @@ import SwiftUI
 /// Native forms backed by the installed engine's typed command definitions.
 struct ToolsView: View {
   @EnvironmentObject var app: Workspace
+  let workflow: String?
+  init(workflow: String? = nil) {
+    self.workflow = workflow
+    _category = State(initialValue: workflow?.components(separatedBy: " ").first ?? "work")
+  }
   @State private var catalog: [[String: Any]] = []
   @State private var query = ""
   @State private var category = "work"
@@ -93,6 +98,10 @@ struct ToolsView: View {
                 Text(string(action, "name")).font(.title2.weight(.semibold))
                 Text(string(action, "description")).font(.callout).foregroundStyle(.secondary)
                   .textSelection(.enabled)
+                if selected == "harness tune" {
+                  Text("Use labeled examples and explicitly enable live execution to start tuning. Interactive annotation of unlabeled examples is available in the terminal workflow.")
+                    .font(.callout).foregroundStyle(.secondary)
+                }
                 ForEach(action["fields"] as? [[String: Any]] ?? [], id: \.projectRowID) { field in
                   fieldView(field)
                 }
@@ -128,7 +137,12 @@ struct ToolsView: View {
       flags = [:]
       failure = ""
     }.task {
-      do { catalog = try await app.engine.call("tools.catalog") as? [[String: Any]] ?? [] } catch {
+      do {
+        catalog = try await app.engine.call("tools.catalog") as? [[String: Any]] ?? []
+        if let workflow, let row = catalog.first(where: { string($0, "id") == workflow }) {
+          choose(row)
+        }
+      } catch {
         failure = error.localizedDescription
       }
     }
@@ -193,11 +207,18 @@ struct ToolsView: View {
       let name = string(field, "name")
       if name == "provider" && !app.isManaged { inputs[id] = app.provider }
       if name == "model" && !app.isManaged && !app.model.isEmpty { inputs[id] = app.model }
-      if ["spec", "harness"].contains(name) && !app.isManaged
-        && (field["default"] == nil || field["default"] is NSNull)
-      {
-        inputs[id] = app.harness
+      if !app.isManaged && (field["default"] == nil || field["default"] is NSNull) {
+        if name == "harness" { inputs[id] = app.harness }
+        if ["spec", "spec_path", "spec_option"].contains(name),
+          let definition = app.harnesses.first(where: { string($0, "id") == app.harness }),
+          !string(definition, "path").isEmpty
+        {
+          inputs[id] = string(definition, "path")
+        }
       }
+      // The subprocess has no interactive annotation prompt. Labeled datasets
+      // and explicit live consent are still required by the shared tune service.
+      if selected == "harness tune", name == "json_output" { flags[id] = true }
     }
   }
   private func run() {

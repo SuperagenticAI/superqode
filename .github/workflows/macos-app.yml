@@ -40,7 +40,7 @@ jobs:
       - name: Desktop and packaging regressions without accounts
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_desktop_*.py tests/test_macos_runtime_inventory.py -q
+        run: uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_desktop_*.py tests/test_macos_runtime_inventory.py tests/test_harness_acceptance.py tests/test_harness_omni.py -q
 
   native:
     runs-on: macos-latest

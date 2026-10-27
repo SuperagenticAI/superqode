@@ -155,22 +155,39 @@ def test_harness_omni_stages_candidate_and_runs_final_heldout_gate(tmp_path, mon
     async def fake_eval(**kwargs):
         assert kwargs["eval_split"] == "held-out"
         return {
+            "live": True,
+            "split": "held-out",
+            "task_count": 1,
             "variants": [
                 {
                     "harness": "demo",
                     "spec": str(kwargs["spec_paths"][0]),
                     "score": 1.0,
                     "regressed": False,
-                    "tasks": [{"id": "gate", "status": "passed"}],
+                    "tasks": [
+                        {
+                            "id": "gate",
+                            "split": "held-out",
+                            "status": "passed",
+                            "evaluation": {"evaluator": "contains", "status": "passed"},
+                        }
+                    ],
                 },
                 {
                     "harness": "demo",
                     "spec": str(kwargs["spec_paths"][1]),
                     "score": 1.0,
                     "regressed": False,
-                    "tasks": [{"id": "gate", "status": "passed"}],
+                    "tasks": [
+                        {
+                            "id": "gate",
+                            "split": "held-out",
+                            "status": "passed",
+                            "evaluation": {"evaluator": "contains", "status": "passed"},
+                        }
+                    ],
                 },
-            ]
+            ],
         }
 
     monkeypatch.setattr("superqode.harness.omni._run_modern_optimizer", fake_optimizer)
