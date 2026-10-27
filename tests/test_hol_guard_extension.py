@@ -44,6 +44,17 @@ def test_guard_blocks_review_monitor_block_and_unknown() -> None:
     assert hol_guard.decision_from_guard_payload(None).action == DENY
 
 
+def test_guard_explicit_deny_overrides_benign_classification() -> None:
+    """An explicit stop signal cannot be overridden by an allow-shaped classifier."""
+    for stopped in ({"continue": False}, {"decision": "deny"}):
+        payload = {
+            "minimum_action": "allow",
+            "classification": {"explicitly_benign": True},
+            **stopped,
+        }
+        assert hol_guard.decision_from_guard_payload(payload).action == DENY
+
+
 def test_guard_invocation_is_shell_free_and_parses_last_json_line(tmp_path: Path) -> None:
     def runner(argv, **kwargs):
         assert argv == ["hol-guard", "command", "test", "--json", "--", "printf safe"]
