@@ -84,6 +84,13 @@ costs, uncertainty and failure disclosure.
 
 ## Validation and release boundary
 
+Full desktop backend and Omni regression suite: 269 passed, with one unraisable
+asyncio subprocess-transport cleanup warning (`Event loop is closed`). It was
+reported during the Codex rejected-subscription probe test. That test passed in
+isolation with the warning promoted to an error; the suite cleanup warning still
+needs investigation on the Mac before publication. The final malformed-evidence
+hardening tests also passed separately (15 acceptance tests).
+
 Local focused suite: 123 passed. Broader harness, promotion, tuning and desktop
 suite: 127 passed, 1 skipped because GEPA was absent in the standard dev install.
 The real GEPA test was then run separately with the exact revision used by the

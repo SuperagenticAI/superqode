@@ -34,6 +34,10 @@ def test_graded_matched_heldout_tasks_can_pass():
         lambda r: r.update(task_count=0),
         lambda r: r["variants"][1].update(tasks=[]),
         lambda r: r["variants"][1]["tasks"][0].update(status="error"),
+        lambda r: r["variants"][1]["tasks"][0].update(status=[]),
+        lambda r: r["variants"][1]["tasks"][0].update(
+            evaluation={"status": "passed", "evaluator": []}
+        ),
         lambda r: r["variants"][1]["tasks"][0].update(id="other"),
         lambda r: r["variants"][1]["tasks"][0].update(
             evaluation={"status": "passed", "evaluator": "non_empty"}

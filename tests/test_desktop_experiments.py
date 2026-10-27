@@ -86,3 +86,13 @@ def test_history_is_project_scoped_and_separate_from_latest_coding_runs(desktop)
 def test_candidate_limit_is_enforced_before_reading_files(tmp_path):
     with pytest.raises(ValueError, match="eight"):
         candidate_paths({"variants": ["missing"] * 9}, tmp_path)
+
+
+def test_preflight_exposes_candidates_declared_inside_suite(desktop):
+    service, project, root = desktop
+    path = suite(root)
+    (root / "extra.yaml").write_text("name: extra\n")
+    path.write_text(path.read_text() + "variants:\n  - spec: extra.yaml\n")
+    result = service.dispatch("evals.inspect", {"project": project["id"], "tasks": str(path)})
+    assert result["candidate_count"] == 1
+    assert any("additional candidate" in warning for warning in result["warnings"])

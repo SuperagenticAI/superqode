@@ -46,10 +46,10 @@ def heldout_acceptance(report: dict) -> dict:
             evidence = evaluation.get("evidence", {}) if isinstance(evaluation, dict) else {}
             if (
                 row.get("split") != "held-out"
-                or row.get("status") not in {"passed", "failed"}
+                or row.get("status") not in ("passed", "failed")
                 or not isinstance(evaluation, dict)
                 or evaluation.get("status") != row.get("status")
-                or evaluation.get("evaluator") not in {"contains", "decision", "jev_rubric"}
+                or evaluation.get("evaluator") not in ("contains", "decision", "jev_rubric")
                 or not isinstance(evidence, dict)
                 or evidence.get("smoke_only", False) is not False
             ):
