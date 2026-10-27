@@ -3,15 +3,15 @@
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
 Source version: **0.1.11 (build 12)**, with bundled engine **2.25.0**.
-The public download remains 0.1.10 until a signed and notarized 0.1.11 is published.
+Public beta 0.1.11 includes native session recovery and scoped review.
 
-[**Download public beta 0.1.10**](https://superqode.dev/downloads/macos/0.1.10/SuperQode-0.1.10-arm64.dmg)
+[**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="../../assets/superqode-macos-welcome-light.png">
-  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode 0.1.9 native Mac app welcome screen" width="960">
+  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
 </picture>
 
 ## Start coding
@@ -50,20 +50,18 @@ Selecting a connection does not automatically install an agent, download weights
 
 Navigation starts with Agent Space, Review, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
 
-In the development source, **Command-K** opens the command palette. Search actions,
+**Command-K** opens the command palette. Search actions,
 the twelve most recent runs in the current project, or eight recent projects.
 Use Up/Down and Return to choose, or Escape to close and return to the previous
 control. Unavailable actions show what they need. Menu actions and palette actions
-share their shortcuts and availability rules. This feature still requires native
-build and interaction validation before inclusion in a public release.
+share their shortcuts and availability rules.
 
-The current development source adds [session continuity and draft recovery](SESSION-RECOVERY.md):
+The app includes [session continuity and draft recovery](SESSION-RECOVERY.md):
 conversation-specific drafts, Back/Forward navigation, file-edit recovery and
-reading anchors. Native validation is required before shipping these changes.
+reading anchors.
 
-The development source also adds the [native review workspace](REVIEW-WORKSPACE.md),
-with file/hunk navigation and guarded staging of a reviewed file. Native validation
-is required before shipping these changes.
+The app also includes the [native review workspace](REVIEW-WORKSPACE.md),
+with file/hunk navigation and guarded staging of a reviewed file.
 
 ## Harness Hub, evaluation and optimization
 
@@ -71,12 +69,11 @@ is required before shipping these changes.
 
 **Evaluations** compares baselines and candidates, including per-task outcomes, costs and regressions. Review setup before authorizing live execution.
 
-The development source adds a task comparison inspector for evaluation and
+The app includes a task comparison inspector for evaluation and
 optimizer held-out results. Choose a candidate, search task IDs, filter
 regressions/improvements/incomplete evidence, and inspect reasons and reported
 cost/time changes. Unknown usage remains unknown; smoke-only checks do not count
-as task-quality improvements. This is a review aid, with native validation still
-pending. See the [feature checklist](FEATURE-PARITY.md) for remaining native gaps.
+as task-quality improvements. See the [feature checklist](FEATURE-PARITY.md) for remaining native gaps.
 
 **Optimization** supports bounded Omni experiments, candidate diffs and reviewed adoption of a validated harness revision.
 
@@ -96,7 +93,7 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
 
-Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.10/SuperQode-0.1.10-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
+Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
 

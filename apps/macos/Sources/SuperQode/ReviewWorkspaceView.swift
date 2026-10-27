@@ -210,7 +210,7 @@ struct ReviewWorkspaceView: View {
           LazyVStack(alignment: .leading, spacing: 2) {
             ForEach(document.hunks) { hunk in
               Text(hunk.header).font(.caption.monospaced()).foregroundStyle(Color.qAccent)
-                .padding(.vertical, 8).id(hunk.id)
+                .padding(.vertical, 8).id("review-hunk-\(hunk.id)")
               ForEach(hunk.lines) { line in
                 reviewLine(line, hunk: hunk)
               }
@@ -222,9 +222,9 @@ struct ReviewWorkspaceView: View {
               .font(.callout).foregroundStyle(.secondary).padding()
             }
           }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-        }.onAppear { proxy.scrollTo(app.reviewSelection.hunkID, anchor: .top) }
+        }.onAppear { proxy.scrollTo("review-hunk-\(app.reviewSelection.hunkID)", anchor: .top) }
           .onChange(of: app.reviewSelection.hunkID) { _, value in
-            proxy.scrollTo(value, anchor: .top)
+            proxy.scrollTo("review-hunk-\(value)", anchor: .top)
           }
       }.outlinedSurface(radius: 8).frame(minHeight: 150, maxHeight: .infinity)
     }

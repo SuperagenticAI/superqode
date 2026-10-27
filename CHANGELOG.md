@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.25.0] - 2026-10-25
+## [2.25.0] - 2026-10-27
 
 ### Added
+
+- Native per-conversation drafts, navigation history, transcript reading positions
+  and local recovery for unsaved file edits, with explicit conflict handling.
+- A scoped native Review workspace for turn checkpoints, uncommitted changes and
+  branch comparisons, with revision-bound line feedback, saved notes and guarded
+  whole-file staging that preserves unrelated index entries and local edits.
+- Automated FTPS publication of signed, notarized Mac installers, versioned
+  archives and permanent latest downloads, with remote and public hash checks.
+  Credentials are loaded outside the repository or from environment variables.
 
 - A native evaluation and held-out optimizer comparison inspector with candidate
   selection, task search, regression/improvement/incomplete-evidence filters,
@@ -21,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shortcuts and availability checks. Unavailable actions explain their prerequisites.
 
 ### Fixed
+
+- Native follow-up and compaction runs retain stable conversation identity,
+  including historical runs outside the recent activity list.
+- Native Review hunk scroll anchors are distinct from line identifiers, keeping
+  changed lines visible when navigating a diff.
 
 - Native Mac packaging omits Tcl/Tk extension-development archives and linker
   configuration scripts, and seals embedded frameworks before their Python

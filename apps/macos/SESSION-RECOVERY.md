@@ -1,7 +1,6 @@
 # Session continuity and draft recovery
 
-This feature is implemented in the development source. Native compilation and
-interaction validation on macOS are required before shipping this change.
+Session continuity and draft recovery ship in macOS public beta 0.1.11.
 
 ## Moving between tasks
 
@@ -85,11 +84,11 @@ round trips, file permissions, failed/oversized writes, preserved unreadable dat
 symlink rejection, explicit reset and background/final-write ordering.
 
 The engine suite verifies stable conversation identity for historical runs outside
-the recent list, project boundaries and missing parents. Current local validation
-passed 68 Python checks and 29 portable Swift checks. The Swift checks include
-unmodified recovery-store and engine sources plus extracted production session
-methods with native adapters excluded. All 37 native source/test files passed
-compiler parsing; this does not establish full app compilation.
+the recent list, project boundaries and missing parents. Release validation on
+macOS includes the full native build, 60 Swift tests, 261 desktop and release
+checks, and a native smoke test with local model fixtures across all ten workspace
+screens. These automated checks supplement manual accessibility and interaction
+testing.
 
 Before shipping, run the native package tests and exercise switching, recovery,
 Compare, Save As, keyboard navigation and VoiceOver on a Mac. Linux checks do not

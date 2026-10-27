@@ -1,7 +1,8 @@
 # Native review workspace
 
-The development source adds Review to the sidebar and command palette. The full
-native build and interaction checks on macOS remain required before shipping.
+macOS public beta 0.1.11 includes Review in the sidebar and command palette.
+Release validation includes the native build, Swift and desktop-engine tests,
+and native screen smoke checks with local fixtures.
 
 ## Choose what to review
 

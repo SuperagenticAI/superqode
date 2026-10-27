@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg"><img src="https://img.shields.io/badge/Download%20for%20macOS-Public%20Beta%200.1.7-7c3aed?style=for-the-badge" alt="Download SuperQode for macOS, public beta 0.1.7"></a>
+  <a href="https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg"><img src="https://img.shields.io/badge/Download%20for%20macOS-Latest%20Public%20Beta-7c3aed?style=for-the-badge" alt="Download SuperQode for macOS, latest public beta"></a>
   &nbsp;
   <a href="https://superqode.dev/#macos"><img src="https://img.shields.io/badge/Explore%20the-Mac%20App-1f2937?style=for-the-badge" alt="Explore the Mac app"></a>
 </p>
@@ -39,20 +39,20 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="assets/superqode-macos-welcome-light.png">
-    <img src="assets/superqode-macos-welcome.png" alt="SuperQode 0.1.7 native Mac app welcome screen" width="960">
+    <img src="assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
   </picture>
 </p>
 
 ## Start with the Mac app
 
-1. [Download the macOS beta](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg) and open the DMG.
+1. [Download the macOS beta](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg) and open the DMG.
 2. Drag **SuperQode** to **Applications**, then launch it from Applications.
 3. Open a project and choose **Connect**. Use an existing coding agent, a provider API key or a supported local model.
 4. Describe a small change, review permissions and inspect the diff before keeping the result.
 
 The app bundles its Python engine. You do not need to install Python, use the App Store or create a SuperQode account. External agents and local model servers may require their own setup. Provider subscriptions and usage charges still apply.
 
-**Public beta 0.1.7:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg.sha256).
+**Public beta 0.1.11:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256).
 
 ## Code, measure and improve in one workspace
 
