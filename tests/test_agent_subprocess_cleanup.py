@@ -1,9 +1,37 @@
 import asyncio
 import sys
+import subprocess
 
 import pytest
 
 from superqode.acp.client import ACPClient
+
+
+def test_sdk_close_reaps_child_and_closes_all_pipes():
+    from superqode.runtime.codex_sdk import _guarded_sdk_client
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import sys; print('ready', flush=True); sys.stdin.read()"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout.readline().strip() == "ready"
+
+    class OlderClient:
+        def __init__(self):
+            self._proc = process
+
+        def close(self):
+            self._proc = None
+            process.kill()
+
+    client = _guarded_sdk_client(OlderClient)()
+    client.close()
+    client.close()
+    assert process.returncode is not None
+    assert all(stream.closed for stream in (process.stdin, process.stdout, process.stderr))
 
 
 @pytest.mark.asyncio

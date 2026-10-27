@@ -4,6 +4,7 @@ import SwiftUI
 /// The native annotation surface uses the same sealed-round service as the TUI.
 struct TuningView: View {
   @EnvironmentObject var app: Workspace
+  private let initialExperimentID: String
   @State private var sessions: [[String: Any]] = []
   @State private var current: [String: Any] = [:]
   @State private var selected = ""
@@ -20,6 +21,8 @@ struct TuningView: View {
   private var rows: [[String: Any]] { current["review"] as? [[String: Any]] ?? [] }
   private var example: [String: Any] { rows.first ?? [:] }
   private var blocked: Bool { busy || app.busy || app.anyActive }
+
+  init(experimentID: String = "") { initialExperimentID = experimentID }
 
   var body: some View {
     ScrollView {
@@ -85,7 +88,7 @@ struct TuningView: View {
       }.padding(24)
     }
     .task(id: app.projectID) {
-      selected = ""
+      selected = initialExperimentID
       current = [:]
       await refresh()
     }

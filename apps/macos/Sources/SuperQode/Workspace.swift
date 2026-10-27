@@ -1497,6 +1497,58 @@ private struct DialogAuditHost: View {
         experiments.contains(where: { string($0, "id") == evaluationID })
       else { throw EngineError(message: "Native experiment diagnostics or history failed") }
       report["experiment_workflow"] = "passed; diagnostics and durable project history"
+      let practice = try await engine.call("tuning.prepare", [
+        "project": projectID, "practice": true,
+      ]) as? [String: Any] ?? [:]
+      let practiceID = string(practice, "id")
+      let practiceRows = practice["review"] as? [[String: Any]] ?? []
+      let practiceLabels = practice["labels"] as? [String] ?? []
+      guard practice["synthetic_practice"] as? Bool == true,
+        !practiceID.isEmpty, let firstExample = practiceRows.first,
+        let firstLabel = practiceLabels.first else {
+        throw EngineError(message: "Offline tuning practice did not prepare a review batch")
+      }
+      let judged = try await engine.call("tuning.label", [
+        "project": projectID, "id": practiceID, "revision": string(practice, "revision"),
+        "example": string(firstExample, "id"), "label": firstLabel,
+        "rationale": "Local native release fixture",
+      ]) as? [String: Any] ?? [:]
+      guard (judged["review"] as? [[String: Any]] ?? []).count == practiceRows.count - 1 else {
+        throw EngineError(message: "Offline tuning judgment was not saved")
+      }
+      do {
+        _ = try await engine.call("tuning.start", [
+          "project": projectID, "id": practiceID, "revision": string(judged, "revision"),
+          "stage": "optimize", "live": true,
+        ])
+        throw EngineError(message: "Practice unexpectedly authorized a live optimizer")
+      } catch let failure as EngineError {
+        guard failure.message.contains("Practice is offline only") else { throw failure }
+      }
+      report["tuning_practice"] = "passed; credential-free prepare, saved judgment, live execution rejected"
+      if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--snapshot-dir"),
+        ProcessInfo.processInfo.arguments.count > index + 1 {
+        let host = NSHostingView(rootView: TuningView(experimentID: practiceID)
+          .environmentObject(self).environment(\.colorScheme, .dark).background(Color.black))
+        host.frame = NSRect(x: 0, y: 0, width: 1000, height: 1000)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.orderOut(nil); window.contentView = nil }
+        try await Task.sleep(for: .seconds(1))
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+          throw EngineError(message: "Native tuning screen could not render")
+        }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+          throw EngineError(message: "Native tuning screen could not encode")
+        }
+        try png.write(to: URL(fileURLWithPath: ProcessInfo.processInfo.arguments[index + 1])
+          .appendingPathComponent("tuning-practice.png"))
+      }
       do {
         _ = try await engine.call("files.read", ["project": projectID, "path": "../outside.txt"])
         throw EngineError(message: "File boundary was not enforced")

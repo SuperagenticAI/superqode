@@ -14,7 +14,7 @@ exact source under test; do not package a different revision silently.
 The branch adds native suite diagnostics, split selection, multiple candidates,
 project experiment history, direct advanced harness workflows and a stricter
 Omni held-out acceptance/save gate. It preserves the 0.1.11 session recovery and
-review features. Python package version remains 2.25.0; the packaged source-tree
+review features. Python release candidate version is 2.26.0; the packaged source-tree
 hash must reflect this branch's modified engine sources. Do not substitute the
 published PyPI wheel for the checked-out backend.
 

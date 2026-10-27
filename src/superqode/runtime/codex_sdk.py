@@ -57,6 +57,22 @@ class _SDKRequestError(dict):
 
 def _guarded_sdk_client(base):
     class GuardedClient(base):
+        def close(self):
+            # Older SDK clients clear _proc without closing output pipes, and
+            # their force-kill fallback does not reap the child.
+            process = getattr(self, "_proc", None)
+            try:
+                return super().close()
+            finally:
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=2)
+                    for name in ("stdin", "stdout", "stderr"):
+                        stream = getattr(process, name, None)
+                        if stream is not None:
+                            stream.close()
+
         def _write_message(self, payload):
             if isinstance(payload.get("result"), _SDKRequestError):
                 payload = {"id": payload["id"], "error": dict(payload["result"])}

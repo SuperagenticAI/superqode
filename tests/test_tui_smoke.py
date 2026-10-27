@@ -4899,6 +4899,7 @@ def test_acp_terminal_timeout_reports_timeout(monkeypatch):
         log,
     )
     assert handled is True
+    terminal_id = result["terminalId"]
 
     result, handled = app._handle_terminal_method(
         "terminal/wait_for_exit",
@@ -4913,6 +4914,12 @@ def test_acp_terminal_timeout_reports_timeout(monkeypatch):
     tool_rows = [item for item in log.items if isinstance(item, dict)]
     assert tool_rows[-1]["status"] == "error"
     assert "Run timed out after 0.01s" in tool_rows[-1]["output"]
+    process = terminals[terminal_id]["process"]
+    assert process.returncode is not None
+    assert all(
+        stream is None or stream.closed
+        for stream in (process.stdin, process.stdout, process.stderr)
+    )
 
 
 def test_agent_question_empty_input_uses_default():

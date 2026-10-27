@@ -3223,6 +3223,12 @@ class SlashCommandMixin:
                     os.close(master_fd)
                 except OSError:
                     pass
+            process = terminal.get("process")
+            if process is not None and process.poll() is not None:
+                for name in ("stdin", "stdout", "stderr"):
+                    stream = getattr(process, name, None)
+                    if stream is not None:
+                        stream.close()
 
         if method == "terminal/create":
             command = params.get("command", "")
@@ -3345,7 +3351,7 @@ class SlashCommandMixin:
                         drain_terminal_output(terminal, timeout=0.1)
                     drain_terminal_output(terminal, timeout=0.0)
                     terminal["exit_code"] = term_process.returncode
-
+                    close_terminal_pty(terminal)
                     emit_terminal_final_once(terminal)
 
                     return {"exitCode": terminal["exit_code"], "signal": None}, True
@@ -3358,6 +3364,7 @@ class SlashCommandMixin:
                     except Exception:
                         pass
                     drain_terminal_output(terminal, timeout=0.0)
+                    close_terminal_pty(terminal)
                     terminal["exit_code"] = -1
                     terminal["output"] += "\n[terminal timed out]"
                     emit_terminal_final_once(terminal)

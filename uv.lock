@@ -2018,15 +2018,15 @@ wheels = [
 
 [[package]]
 name = "authlib"
-version = "1.7.2"
+version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "joserfc" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/98/7d93f30d029643c0275dbc0bd6d5a6f670661ee6c9a94d93af7ab4887600/authlib-1.7.2.tar.gz", hash = "sha256:2cea25fefcd4e7173bdf1372c0afc265c8034b23a8cd5dcb6a9164b826c64231", size = 176511, upload-time = "2026-05-06T08:10:23.116Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/dc/087c08741a98d234c9b98beef8a28d3c309f814d14b6156422c5815bf6d6/authlib-1.9.1.tar.gz", hash = "sha256:5c7d9848f47cac340f060f76ae0bc09b59f5c8e89cc1bb032d4370a0c55b5974", size = 182700, upload-time = "2026-10-14T14:17:52.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fb/95/adcb68e20c34162e9135f370d6e31737719c2b6f94bc953fe7ed1f10fe21/authlib-1.7.2-py2.py3-none-any.whl", hash = "sha256:3e1faedc9d87e7d56a164eca3ccb6ace0d61b94abe83e92242f8dc8bba9b4a9f", size = 259548, upload-time = "2026-05-06T08:10:21.436Z" },
+    { url = "https://files.pythonhosted.org/packages/39/44/a46089266de32a0d809023b6bf31b80a1f26a46954446a7ce695a565cbea/authlib-1.9.1-py2.py3-none-any.whl", hash = "sha256:8b9be8b1e5174dcbf5520e984f1a22dc2edae5b6e40a61d4cedbf86b97e9e69b", size = 266042, upload-time = "2026-10-14T14:17:50.695Z" },
 ]
 
 [[package]]
@@ -2246,11 +2246,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.1.4"
+version = "2026.10.19"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/2d/a891ca51311197f6ad14a7ef42e2399f36cf2f9bd44752b3dc4eab60fdc5/certifi-2026.1.4.tar.gz", hash = "sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120", size = 154268, upload-time = "2026-01-04T02:42:41.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/bd/1436c50cc46699de0230fbaacc1d1de7bfec413176099949e9d5112e88f2/certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae", size = 137598, upload-time = "2026-10-20T02:24:16.604Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl", hash = "sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c", size = 152900, upload-time = "2026-01-04T02:42:40.15Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", size = 136464, upload-time = "2026-10-20T02:24:15.072Z" },
 ]
 
 [[package]]
@@ -2804,7 +2804,7 @@ wheels = [
 
 [[package]]
 name = "datasets"
-version = "4.8.5"
+version = "5.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dill" },
@@ -2822,9 +2822,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/34/14cd8e76f907f7d4dca2334cfeec9f81d30fd15c25a015f99aaea694eaed/datasets-4.8.5.tar.gz", hash = "sha256:0f0c1c3d56ffff2c93b2f4c63c95bac94f3d7e8621aea2a2a576275233bba772", size = 605649, upload-time = "2026-04-27T15:43:57.384Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/5b/836516269d4f618efe621661cfb6f9acc57e6f95265db3efaee48a5ffe04/datasets-5.0.1.tar.gz", hash = "sha256:ce22bb851efd7494f08aad33b940803784434f6e77763d00679a0dc45fcf686a", size = 641498, upload-time = "2026-07-28T11:09:12.016Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/99/00f3196036501b53032c4b1ab8337a0b978dee832ed276dae3815df4e8b5/datasets-4.8.5-py3-none-any.whl", hash = "sha256:5079900781719c0e063a8efdd2cd95a31ad0c63209178669cd23cf1b926149ff", size = 528973, upload-time = "2026-04-27T15:43:53.702Z" },
+    { url = "https://files.pythonhosted.org/packages/44/0b/98fc6eb83333508ca5f44c52b3e287ea8137a0ad582714e2cbc67a02154b/datasets-5.0.1-py3-none-any.whl", hash = "sha256:9fbf73688f8c18f7529b4fe592abd04015f81d1e58001e4bac73ffb2b39d7cc4", size = 559079, upload-time = "2026-07-28T11:09:10.266Z" },
 ]
 
 [[package]]
@@ -3023,11 +3023,11 @@ wheels = [
 
 [[package]]
 name = "dnspython"
-version = "2.8.0"
+version = "2.9.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8c/8b/57666417c0f90f08bcafa776861060426765fdb422eb10212086fb811d26/dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f", size = 368251, upload-time = "2025-09-07T18:58:00.022Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/4a/50822184bd67cc6493f0fb6a880749158fcd31ab3fa07409acfd91f9fc85/dnspython-2.9.0.tar.gz", hash = "sha256:b44dc6b18f07a8b1c56676a19fbfdb5209415b046a9cece286baafa87ff3f7f1", size = 423560, upload-time = "2026-10-09T00:07:24.352Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/5a/18ad964b0086c6e62e2e7500f7edc89e3faa45033c71c1893d34eed2b2de/dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af", size = 331094, upload-time = "2025-09-07T18:57:58.071Z" },
+    { url = "https://files.pythonhosted.org/packages/10/02/cdcc9b7c051786a103c3b09e1003a82fa0c66bcb91ffbdabcfbf7b4163b9/dnspython-2.9.0-py3-none-any.whl", hash = "sha256:9a4aedb833c3c1b49214d04d44d3032ab7a9135f7c1d29a549b4ff78fd82fda9", size = 354822, upload-time = "2026-10-09T00:07:22.622Z" },
 ]
 
 [[package]]
@@ -3497,11 +3497,11 @@ wheels = [
 
 [[package]]
 name = "fsspec"
-version = "2026.2.0"
+version = "2026.6.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/51/7c/f60c259dcbf4f0c47cc4ddb8f7720d2dcdc8888c8e5ad84c73ea4531cc5b/fsspec-2026.2.0.tar.gz", hash = "sha256:6544e34b16869f5aacd5b90bdf1a71acb37792ea3ddf6125ee69a22a53fb8bff", size = 313441, upload-time = "2026-02-05T21:50:53.743Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/10/a1/ae4e3e5003468d6391d2c77b6fa1cd73bd5d13511d81c642d7b28ac90ed4/fsspec-2026.6.0.tar.gz", hash = "sha256:f5bac145310fe30e16e1471bd6840b2d990d609e872251d7e674241822abf01a", size = 313646, upload-time = "2026-06-16T01:57:28.105Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/ab/fb21f4c939bb440104cc2b396d3be1d9b7a9fd3c6c2a53d98c45b3d7c954/fsspec-2026.2.0-py3-none-any.whl", hash = "sha256:98de475b5cb3bd66bedd5c4679e87b4fdfe1a3bf4d707b151b3c07e58c9a2437", size = 202505, upload-time = "2026-02-05T21:50:51.819Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/22/4222d7ddf3da30f363edaa98e329c2bce6c65497c9cb2810931c8b2c0fbc/fsspec-2026.6.0-py3-none-any.whl", hash = "sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1", size = 203949, upload-time = "2026-06-16T01:57:26.358Z" },
 ]
 
 [package.optional-dependencies]
@@ -30223,14 +30223,18 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "2.25.0"
+version = "2.26.0"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "anyio" },
+    { name = "authlib" },
+    { name = "certifi" },
     { name = "click" },
     { name = "coloraide" },
+    { name = "dnspython" },
     { name = "fastmcp" },
+    { name = "fsspec" },
     { name = "httpx" },
     { name = "httpx-sse" },
     { name = "jsonschema" },
@@ -30415,8 +30419,10 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0" },
     { name = "arize-phoenix", marker = "extra == 'observability'", specifier = ">=17.7.0" },
     { name = "arize-phoenix-otel", marker = "extra == 'observability'", specifier = ">=0.16.1" },
+    { name = "authlib", specifier = ">=1.9.1" },
     { name = "bandit", marker = "extra == 'linters'", specifier = ">=1.8.0" },
     { name = "bandit", marker = "extra == 'testing'", specifier = ">=1.8.0" },
+    { name = "certifi", specifier = ">=2026.10.19" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-agent-sdk'", specifier = ">=0.2.121,<0.3.0" },
     { name = "claude-agent-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=0.2.121,<0.3.0" },
     { name = "click", specifier = ">=8.0.0" },
@@ -30428,6 +30434,7 @@ requires-dist = [
     { name = "daytona", marker = "extra == 'sandbox-daytona'", specifier = ">=0.1.0" },
     { name = "deepagents", marker = "extra == 'deepagents'", specifier = ">=0.7.0,<0.8.0" },
     { name = "deepseek-harness-sdk", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'deepseek-harness') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'deepseek-harness') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'deepseek-harness')", specifier = ">=0.1.0rc6,<0.2.0" },
+    { name = "dnspython", specifier = ">=2.9.0" },
     { name = "e2b", marker = "extra == 'sandbox-cloud'", specifier = ">=2.0.0" },
     { name = "e2b", marker = "extra == 'sandbox-e2b'", specifier = ">=2.0.0" },
     { name = "exa-py", marker = "extra == 'extras'", specifier = ">=1.0.0" },
@@ -30435,14 +30442,15 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'uhp'", specifier = ">=0.115.0" },
     { name = "fastmcp", specifier = "==3.4.4" },
     { name = "flake8", marker = "extra == 'linters'", specifier = ">=7.1.0" },
+    { name = "fsspec", specifier = ">=2026.6.0" },
     { name = "gepa", marker = "extra == 'optimization'", specifier = ">=0.1.1" },
     { name = "github-copilot-sdk", marker = "extra == 'copilot-sdk'", specifier = ">=1.0.8,<2.0.0" },
     { name = "github-copilot-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=1.0.8,<2.0.0" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
     { name = "google-antigravity", marker = "extra == 'antigravity-sdk'", specifier = ">=0.1.8,<0.2.0" },
     { name = "google-antigravity", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.8,<0.2.0" },
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.28.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx-sse", specifier = ">=0.4.3" },
     { name = "huggingface-hub", extras = ["hf-xet"], marker = "extra == 'hf'", specifier = ">=1.0.0" },
     { name = "jsonschema", specifier = ">=4.20.0" },
@@ -30465,8 +30473,8 @@ requires-dist = [
     { name = "modal", marker = "extra == 'sandbox-cloud'", specifier = ">=1.0.0" },
     { name = "modal", marker = "extra == 'sandbox-modal'", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
-    { name = "openai-agents", marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
     { name = "openai-agents", extras = ["litellm"], marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
+    { name = "openai-agents", marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
     { name = "openai-codex", marker = "extra == 'codex-sdk'", specifier = ">=0.144.4,<1.0.0" },
     { name = "openai-codex", marker = "extra == 'vendor-sdks'", specifier = ">=0.144.4,<1.0.0" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'observability'", specifier = ">=1.39.1" },
@@ -30506,9 +30514,9 @@ requires-dist = [
     { name = "textual", specifier = ">=8.2.8" },
     { name = "textual-serve", marker = "extra == 'web'", specifier = ">=1.1.3" },
     { name = "torchvision", marker = "extra == 'semantic-local'", specifier = ">=0.29.1" },
-    { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
     { name = "uvicorn", marker = "extra == 'uhp'", specifier = ">=0.32.0" },
+    { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
     { name = "websockets", specifier = ">=15,<16" },
 ]

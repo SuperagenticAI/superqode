@@ -1,5 +1,10 @@
 # 0.1.12 development checks
 
+For the subsequent local Mac validation, Python 2.26.0 candidate, security audit
+and current stable-publication decision, see
+[the release readiness review](RELEASE-READINESS-0.1.12.md). The notes below
+record the earlier cloud development checks and are not the final release verdict.
+
 27 October 2026. Branch: `feat/macos-harness-engineering`. Target: 0.1.12/build 13.
 The user deferred the Mac handoff checks. Work recorded here runs in the cloud
 checkout; native compilation, signing and publication are not certified.

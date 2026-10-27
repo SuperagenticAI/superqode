@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.25.0"
+version = "2.26.0"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,6 +33,10 @@ dependencies = [
     "textual>=8.2.8",
     "coloraide>=8.13",
     "fastmcp==3.4.4",
+    "authlib>=1.9.1",
+    "certifi>=2026.10.19",
+    "dnspython>=2.9.0",
+    "fsspec>=2026.6.0",
     "mcp>=1.27.1,<2",
     "anyio>=4.0.0",
     "httpx>=0.28.1",

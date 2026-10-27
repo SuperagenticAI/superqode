@@ -75,6 +75,9 @@ class DesktopService:
         self.db.commit()
         self._conversation_roots: dict[str, dict] = {}
         self.processes: dict[str, subprocess.Popen] = {}
+        self._threads: set[threading.Thread] = set()
+        self._closing = False
+        self._closed = False
         self.pending: dict[str, str] = {}
         self.credentials: dict[str, str] = {}
         self.remote_connections: dict[str, dict] = {}
@@ -89,6 +92,24 @@ class DesktopService:
     def _all(self, query, args=()):
         with self.lock:
             return [dict(r) for r in self.db.execute(query, args).fetchall()]
+
+    def _background(self, target, *args):
+        def execute():
+            try:
+                target(*args)
+            finally:
+                with self.lock:
+                    self._threads.discard(threading.current_thread())
+
+        thread = threading.Thread(target=execute, daemon=True)
+        with self.lock:
+            self._threads.add(thread)
+            try:
+                thread.start()
+            except BaseException:
+                self._threads.discard(thread)
+                raise
+        return thread
 
     def job_summaries(self, identity=None):
         """Keep individual run records, with a stable conversation identity for recent rows."""
@@ -293,7 +314,6 @@ class DesktopService:
             self.task_queues.finished(job_id)
 
     def start(self, project_id: str, kind: str, params: dict):
-        root = self.project(project_id)
         if kind not in {
             "task",
             "evaluation",
@@ -305,6 +325,9 @@ class DesktopService:
         }:
             raise ValueError("Unknown job type")
         with self.lock:
+            if self._closing:
+                raise ValueError("The desktop engine is shutting down")
+            root = self.project(project_id)
             job_id = uuid.uuid4().hex
             key = str(params.get("command_id") or job_id)
             for old in self._all("SELECT id,request FROM jobs WHERE project=?", (project_id,)):
@@ -609,16 +632,11 @@ class DesktopService:
                     text=True,
                     start_new_session=True,
                 )
-                logger = threading.Thread(
-                    target=record_stderr, args=(process.stderr, log_path, secrets), daemon=True
-                )
-                logger.start()
+                logger = self._background(record_stderr, process.stderr, log_path, secrets)
                 self.processes[job_id] = process
                 process.stdin.write(json.dumps(params) + "\n")
                 process.stdin.flush()
-                threading.Thread(
-                    target=self._watch, args=(job_id, process, secrets, logger), daemon=True
-                ).start()
+                self._background(self._watch, job_id, process, secrets, logger)
             except Exception:
                 self._status(job_id, "failed")
                 raise
@@ -883,7 +901,7 @@ class DesktopService:
                             )
                             os.killpg(process.pid, signal.SIGKILL)
 
-                    threading.Thread(target=remote_timeout, daemon=True).start()
+                    self._background(remote_timeout)
                     return {"ok": True, "state": "cancelling"}
                 self._status(params["id"], "cancelled")
                 try:
@@ -900,7 +918,7 @@ class DesktopService:
                         except ProcessLookupError:
                             pass
 
-                threading.Thread(target=reap, daemon=True).start()
+                self._background(reap)
                 return {"ok": True}
         if method == "jobs.steer":
             with self.lock:
@@ -1504,6 +1522,9 @@ class DesktopService:
 
     def close(self):
         with self.lock:
+            if self._closed:
+                return
+            self._closing = True
             self.task_queues.enabled.clear()
         for identity in list(self.authentication.actions):
             self.authentication.cancel(identity)
@@ -1515,9 +1536,21 @@ class DesktopService:
         deadline = time.monotonic() + 18
         while time.monotonic() < deadline and (
             self.processes
+            or self._threads
             or any(r["state"] == "running" for r in self.authentication.actions.values())
         ):
             time.sleep(0.05)
+        with self.lock:
+            if (
+                self.processes
+                or self._threads
+                or any(r["state"] == "running" for r in self.authentication.actions.values())
+            ):
+                raise RuntimeError(
+                    "Desktop workers are still shutting down; retry closing the engine"
+                )
+            self.db.close()
+            self._closed = True
 
 
 def main():

@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-10-27
+
 ### Added
 
+- Credential-free first evaluation setup checks and offline synthetic tuning
+  practice, with explicit separation from measured quality and live adoption.
 - Native harness suite diagnostics, evaluation split selection, multiple candidate
   comparison, project experiment history and direct advanced workflow access.
 
@@ -18,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Close the desktop database after background writers and cancellation helpers
+  have drained; reject new work during shutdown and make repeated close safe.
+- Refresh Authlib, certificate trust, DNS and filesystem dependency security floors
+  for both Python installs and the bundled Mac runtime.
 - Reap ACP and Codex subprocesses and close input streams before loop shutdown;
   reject worker exits without valid terminal results.
 - Patch Authlib to 1.9.1 in the hash-verified bundled Mac runtime overlays.
