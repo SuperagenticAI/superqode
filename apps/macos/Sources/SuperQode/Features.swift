@@ -500,17 +500,22 @@ struct FilesView: View {
   @State private var visibleFiles: [String] = []
   @State private var creating = false
   @State private var newPath = ""
-  @State private var selected = ""
+  private var selected: String { app.selectedFile }
   @State private var content = ""
   @State private var original = ""
   @State private var digest = ""
   @State private var loadedProject = ""
+  @State private var loadedPath = ""
+  @State private var diskContent = ""
+  @State private var fileIssue = ""
+  @State private var conflicted = false
+  @State private var comparing = false
   @State private var editing = false
   @State private var loading = false
   @State private var saving = false
   @State private var loadGeneration = 0
   private var dirty: Bool { content != original }
-  private var draftKey: String { loadedProject + "\n" + selected }
+  private var draftKey: String { loadedProject + "\n" + loadedPath }
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       PageTitle(
@@ -518,6 +523,17 @@ struct FilesView: View {
         subtitle:
           "Read and edit project source files here. Save with a revision check, then review the diff."
       )
+      if !app.recoveredFilePaths.isEmpty {
+        Menu("Recovered drafts (\(app.recoveredFilePaths.count))") {
+          ForEach(app.recoveredFilePaths, id: \.self) { path in
+            Button(path) { app.selectedFile = path }
+          }
+        }.disabled(saving).help("Open an unsaved file draft, including files no longer on disk")
+      }
+      if !fileIssue.isEmpty {
+        Label(fileIssue, systemImage: "exclamationmark.triangle")
+          .font(.callout).foregroundStyle(.orange).textSelection(.enabled)
+      }
       HSplitView {
         VStack {
           HStack {
@@ -531,59 +547,14 @@ struct FilesView: View {
           }
           List(
             visibleFiles,
-            id: \.self, selection: $selected
+            id: \.self, selection: $app.selectedFile
           ) { Text($0).font(.system(size: 11, design: .monospaced)).tag($0) }
             .scrollContentBackground(.hidden).background(Color.qPanel).disabled(saving)
         }.frame(minWidth: 220, idealWidth: 300, maxWidth: 400)
         VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text(selected.isEmpty ? "Select a file" : selected).font(.caption.monospaced())
-              .lineLimit(1)
-            if dirty { Pill(title: "UNSAVED", color: .orange) }
-            Spacer()
-            Toggle("Edit", isOn: $editing).toggleStyle(.checkbox).disabled(selected.isEmpty)
-            Button("Reload") {
-              if !dirty
-                || app.confirm(
-                  "Discard unsaved edits?",
-                  "Reload this file from disk and discard its in-memory draft.", button: "Reload")
-              {
-                app.fileDrafts.removeValue(forKey: draftKey)
-                load()
-              }
-            }.disabled(selected.isEmpty || loading || saving)
-            Button("Stage file") {
-              guard
-                app.confirm(
-                  "Stage this file?",
-                  selected
-                    + " will be added to the index, including a new file if it is untracked.",
-                  button: "Stage file")
-              else { return }
-              let project = loadedProject
-              let path = selected
-              app.perform {
-                _ = try await app.engine.call("git.stage_file", ["project": project, "path": path])
-                await app.refreshGit()
-              }
-            }.disabled(selected.isEmpty || dirty || loading || saving || app.anyActive)
-            Button("Unstage") {
-              let project = loadedProject
-              let path = selected
-              app.perform {
-                _ = try await app.engine.call(
-                  "git.unstage_file", ["project": project, "path": path])
-                await app.refreshGit()
-              }
-            }.disabled(selected.isEmpty || loading || saving || app.anyActive)
-            Button("Save", action: save).keyboardShortcut("s").disabled(
-              !dirty || digest.isEmpty || loading || saving || app.anyActive)
-            Button("Open in editor") {
-              NSWorkspace.shared.open(
-                URL(fileURLWithPath: string(app.project, "path")).appendingPathComponent(selected))
-            }.disabled(selected.isEmpty)
-          }
-          SourceEditor(text: $content, path: selected, editable: editing, documentID: loadedProject + "\n" + selected)
+          fileToolbar
+          SourceEditor(text: Binding(get: { content }, set: { content = $0; stash() }),
+            path: loadedPath, editable: editing, documentID: loadedProject + "\n" + loadedPath)
             .disabled(loading || saving).clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
           if app.anyActive {
@@ -597,6 +568,7 @@ struct FilesView: View {
       loadedProject = app.projectID
       filterFiles()
       app.loadFiles()
+      load()
     }
     .alert("New source file", isPresented: $creating) {
       TextField("Path relative to project", text: $newPath)
@@ -609,9 +581,81 @@ struct FilesView: View {
     }
     .onChange(of: search) { _, _ in filterFiles() }
     .onChange(of: app.files) { _, _ in filterFiles() }
-    .onChange(of: selected) { _, _ in load() }
-    .onChange(of: content) { _, _ in stash() }
-    .onDisappear { stash(); loadGeneration += 1 }
+    .onChange(of: app.recoveredFilePaths) { _, _ in filterFiles() }
+    .onChange(of: app.selectedFile) { _, _ in stash(); load() }
+    .onDisappear { stash(); app.flushRecovery(); loadGeneration += 1 }
+    .centeredDialog(isPresented: $comparing, title: "Compare recovered edits") {
+      VStack(alignment: .leading, spacing: 12) {
+        Text(loadedPath).font(.headline.monospaced())
+        Text("Saving still checks the original disk revision. Copy or Save As keeps your draft without replacing changed source.")
+          .font(.callout).foregroundStyle(.secondary)
+        HStack(alignment: .top) {
+          comparisonColumn("Original revision", text: original)
+          comparisonColumn("Current disk", text: diskContent)
+          comparisonColumn("Your draft", text: content)
+        }.frame(height: 420)
+        Button("Close") { comparing = false }
+      }.padding(20).frame(width: 900)
+    }
+  }
+  private var fileToolbar: some View {
+    HStack {
+      Text(selected.isEmpty ? "Select a file" : selected).font(.caption.monospaced()).lineLimit(1)
+      if dirty { Pill(title: "UNSAVED", color: .orange) }
+      Spacer()
+      Toggle("Edit", isOn: $editing).toggleStyle(.checkbox).disabled(selected.isEmpty)
+      Menu("File actions") { fileActionItems }
+        .disabled(selected.isEmpty || loading || saving)
+      Button("Save", action: save).keyboardShortcut("s")
+        .disabled(!dirty || digest.isEmpty || conflicted || loading || saving || app.anyActive)
+    }
+  }
+  @ViewBuilder private var fileActionItems: some View {
+    Button("Reload") {
+      if !dirty
+        || app.confirm(
+          "Discard unsaved edits?",
+          "Discard this recovered draft and read the current file from disk. Copy or save the draft first if you need it.", button: "Discard draft")
+      {
+        app.fileDrafts.removeValue(forKey: draftKey)
+        app.flushRecovery()
+        load()
+      }
+    }.disabled(selected.isEmpty || loading || saving)
+    Button("Compare") { compare() }.disabled(selected.isEmpty || loading || saving)
+    Button("Copy draft") {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(content, forType: .string)
+    }.disabled(selected.isEmpty || loading)
+    Button("Save As…", action: saveAs).disabled(selected.isEmpty || loading || saving || app.anyActive)
+    Button("Stage file") {
+      guard
+        app.confirm(
+          "Stage this file?",
+          selected
+            + " will be added to the index, including a new file if it is untracked.",
+          button: "Stage file")
+      else { return }
+      let project = loadedProject
+      let path = selected
+      app.perform {
+        _ = try await app.engine.call("git.stage_file", ["project": project, "path": path])
+        await app.refreshGit()
+      }
+    }.disabled(selected.isEmpty || dirty || loading || saving || app.anyActive)
+    Button("Unstage") {
+      let project = loadedProject
+      let path = selected
+      app.perform {
+        _ = try await app.engine.call(
+          "git.unstage_file", ["project": project, "path": path])
+        await app.refreshGit()
+      }
+    }.disabled(selected.isEmpty || loading || saving || app.anyActive)
+    Button("Open in editor") {
+      NSWorkspace.shared.open(
+        URL(fileURLWithPath: string(app.project, "path")).appendingPathComponent(selected))
+    }.disabled(selected.isEmpty)
   }
   private func create() {
     let project = loadedProject
@@ -623,16 +667,18 @@ struct FilesView: View {
       guard project == loadedProject else { return }
       app.loadFiles()
       editing = true
-      selected = string(result, "path")
+      app.selectedFile = string(result, "path")
       app.notice = "Created " + selected
       await app.refreshGit()
     }
   }
   private func filterFiles() {
-    visibleFiles = app.files.filter { search.isEmpty || $0.localizedCaseInsensitiveContains(search) }
+    visibleFiles = Set(app.files + app.recoveredFilePaths).sorted().filter {
+      search.isEmpty || $0.localizedCaseInsensitiveContains(search)
+    }
   }
   private func stash() {
-    guard !loadedProject.isEmpty, !selected.isEmpty, !digest.isEmpty else { return }
+    guard !loading, !loadedProject.isEmpty, !loadedPath.isEmpty, !digest.isEmpty else { return }
     if dirty {
       app.fileDrafts[draftKey] = FileEdit(original: original, digest: digest, text: content)
     } else {
@@ -641,31 +687,53 @@ struct FilesView: View {
   }
   private func load() {
     loadGeneration += 1
-    guard !selected.isEmpty else { loading = false; return }
+    guard !selected.isEmpty else {
+      loading = false
+      loadedPath = ""
+      content = ""
+      original = ""
+      digest = ""
+      fileIssue = ""
+      return
+    }
     let generation = loadGeneration
     let path = selected
     let project = loadedProject
     loading = true
+    loadedPath = path
+    fileIssue = ""
+    conflicted = false
+    diskContent = ""
     content = ""
     original = ""
     digest = ""
+    let recovered = app.fileDrafts[project + "\n" + path]
+    if let recovered {
+      original = recovered.original
+      digest = recovered.digest
+      content = recovered.text
+      editing = true
+    }
     app.perform {
       defer { if generation == loadGeneration { loading = false } }
       do {
         let result = try await app.engine.call("files.read", ["project": project, "path": path]) as? [String: Any] ?? [:]
         guard generation == loadGeneration, selected == path, loadedProject == project else { return }
-        if let draft = app.fileDrafts[project + "\n" + path] {
-          original = draft.original
-          digest = draft.digest
-          content = draft.text
-          editing = true
+        diskContent = string(result, "text")
+        if let recovered {
+          conflicted = recovered.digest != string(result, "digest")
+          if conflicted { fileIssue = "The file changed on disk. Your draft is preserved. Compare, Copy or Save As before discarding it." }
         } else {
           original = string(result, "text")
           digest = string(result, "digest")
           content = original
         }
       } catch {
-        if generation == loadGeneration, selected == path { app.error = error.localizedDescription }
+        guard generation == loadGeneration, selected == path, loadedProject == project else { return }
+        conflicted = true
+        diskContent = "File unavailable: " + error.localizedDescription
+        fileIssue = recovered == nil ? diskContent
+          : "The file is unavailable. Your recovered draft is preserved; use Copy or Save As. " + error.localizedDescription
       }
     }
   }
@@ -677,18 +745,72 @@ struct FilesView: View {
     saving = true
     app.perform {
       defer { saving = false }
-      let result =
-        try await app.engine.call(
+      do {
+        let result = try await app.engine.call(
           "files.write", ["project": project, "path": path, "text": text, "digest": revision])
         as? [String: Any] ?? [:]
-      app.fileDrafts.removeValue(forKey: project + "\n" + path)
-      if selected == path {
-        original = text
-        digest = string(result, "digest")
+        app.fileDrafts.removeValue(forKey: project + "\n" + path)
+        app.flushRecovery()
+        if selected == path {
+          original = text
+          digest = string(result, "digest")
+          diskContent = text
+          fileIssue = ""
+        }
+        app.notice = "Saved " + path
+        await app.refreshGit()
+      } catch {
+        if selected == path, loadedProject == project {
+          fileIssue = "Your draft is preserved. " + error.localizedDescription
+          stash()
+          app.flushRecovery()
+          await readDiskForComparison(project: project, path: path)
+        }
       }
-      app.notice = "Saved " + path
-      await app.refreshGit()
     }
+  }
+  @ViewBuilder private func comparisonColumn(_ title: String, text: String) -> some View {
+    VStack(alignment: .leading) {
+      Text(title).font(.caption.bold())
+      SourceEditor(text: .constant(text), path: loadedPath, editable: false,
+        documentID: title + "\n" + loadedPath)
+    }.frame(maxWidth: .infinity)
+  }
+  private func compare() {
+    let project = loadedProject
+    let path = loadedPath
+    app.perform {
+      await readDiskForComparison(project: project, path: path)
+      guard project == loadedProject, path == loadedPath else { return }
+      comparing = true
+    }
+  }
+  private func readDiskForComparison(project: String, path: String) async {
+    do {
+      let result = try await app.engine.call("files.read", ["project": project, "path": path]) as? [String: Any] ?? [:]
+      guard project == loadedProject, path == loadedPath else { return }
+      diskContent = string(result, "text")
+      conflicted = digest != string(result, "digest")
+    } catch {
+      guard project == loadedProject, path == loadedPath else { return }
+      conflicted = true
+      diskContent = "File unavailable: " + error.localizedDescription
+    }
+  }
+  private func saveAs() {
+    let panel = NSSavePanel()
+    panel.title = "Save a copy of your draft"
+    panel.nameFieldStringValue = URL(fileURLWithPath: loadedPath).lastPathComponent + ".recovered"
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    let source = URL(fileURLWithPath: string(app.project, "path")).appendingPathComponent(loadedPath)
+    guard url.resolvingSymlinksInPath().standardizedFileURL != source.resolvingSymlinksInPath().standardizedFileURL else {
+      app.error = "Choose another file. Use Save with a revision check to update the original."
+      return
+    }
+    do {
+      try Data(content.utf8).write(to: url, options: .atomic)
+      app.notice = "Saved a copy to " + url.path + ". The recovered draft is still available."
+    } catch { app.error = error.localizedDescription }
   }
 }
 struct SettingsView: View {

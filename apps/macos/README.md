@@ -2,10 +2,10 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
-Source version: **0.1.10 (build 11)**, with bundled engine **2.25.0**.
-The public download remains 0.1.9 until a signed and notarized 0.1.10 is published.
+Source version: **0.1.11 (build 12)**, with bundled engine **2.25.0**.
+The public download remains 0.1.10 until a signed and notarized 0.1.11 is published.
 
-[**Download public beta 0.1.9**](https://superqode.dev/downloads/macos/0.1.9/SuperQode-0.1.9-arm64.dmg)
+[**Download public beta 0.1.10**](https://superqode.dev/downloads/macos/0.1.10/SuperQode-0.1.10-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
@@ -41,13 +41,14 @@ Selecting a connection does not automatically install an agent, download weights
 ## Your daily workspace
 
 - **Agent Space:** stream responses, inspect tool activity, approve or deny actions, continue supported sessions and use direct Chat mode.
+- **Review:** inspect turn checkpoints, uncommitted layers and committed branch diffs; select lines and add revision-bound feedback to a follow-up draft.
 - **Files:** browse and edit source, create files, inspect diffs, stage or unstage changes and create local commits after confirmation.
 - **Context:** attach project text or images, preview selected context and manage supported context-window and compaction controls.
 - **Tasks:** prepare independent tasks, reorder the queue and explicitly start work. Failed tasks pause the queue; interrupted work is not automatically replayed.
 - **Checkpoints:** inspect recorded changes and use guarded restoration, undo and redo.
 - **Terminal:** run interactive project commands in the integrated native terminal.
 
-Navigation starts with Agent Space, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
+Navigation starts with Agent Space, Review, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
 
 In the development source, **Command-K** opens the command palette. Search actions,
 the twelve most recent runs in the current project, or eight recent projects.
@@ -55,6 +56,14 @@ Use Up/Down and Return to choose, or Escape to close and return to the previous
 control. Unavailable actions show what they need. Menu actions and palette actions
 share their shortcuts and availability rules. This feature still requires native
 build and interaction validation before inclusion in a public release.
+
+The current development source adds [session continuity and draft recovery](SESSION-RECOVERY.md):
+conversation-specific drafts, Back/Forward navigation, file-edit recovery and
+reading anchors. Native validation is required before shipping these changes.
+
+The development source also adds the [native review workspace](REVIEW-WORKSPACE.md),
+with file/hunk navigation and guarded staging of a reviewed file. Native validation
+is required before shipping these changes.
 
 ## Harness Hub, evaluation and optimization
 
@@ -87,12 +96,12 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
 
-Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.9/SuperQode-0.1.9-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
+Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.10/SuperQode-0.1.10-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
 
 See the [native developer experience review and build plan](DEVELOPER-EXPERIENCE.md)
-for source comparisons, implemented history improvements and the proposed next steps.
+for implemented workspace improvements and the proposed next steps.
 
 For future Mac App Store work, see the separate
 [App Store preparation guide](../../proc/MACOS-APP-STORE.md). The current public beta

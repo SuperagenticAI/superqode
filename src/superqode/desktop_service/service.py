@@ -90,10 +90,14 @@ class DesktopService:
         with self.lock:
             return [dict(r) for r in self.db.execute(query, args).fetchall()]
 
-    def job_summaries(self):
+    def job_summaries(self, identity=None):
         """Keep individual run records, with a stable conversation identity for recent rows."""
         columns = "id,project,kind,title,status,created,updated"
-        rows = self._all(f"SELECT {columns} FROM jobs ORDER BY updated DESC LIMIT 100")
+        rows = (
+            self._all(f"SELECT {columns} FROM jobs WHERE id=?", (identity,))
+            if identity is not None
+            else self._all(f"SELECT {columns} FROM jobs ORDER BY updated DESC LIMIT 100")
+        )
         nodes = {row["id"]: row for row in rows}
         # Parent links and original titles are immutable. Resolve new runs once,
         # rather than decoding every stored prompt on each GUI status poll.
@@ -113,7 +117,13 @@ class DesktopService:
                 chain.append(identity)
                 records = self._all("SELECT request FROM jobs WHERE id=?", (identity,))
                 request = json.loads(records[0]["request"] or "{}") if records else {}
-                parent_id = request.get("parent_id") if current["kind"] == "task" else None
+                parent_id = (
+                    request.get("parent_id")
+                    if current["kind"] == "task"
+                    else request.get("source_job")
+                    if current["kind"] == "compaction"
+                    else None
+                )
                 if not parent_id:
                     break
                 if parent_id not in nodes:
@@ -613,6 +623,19 @@ class DesktopService:
             )
 
     def dispatch(self, method: str, params: dict):
+        if method in {"review.list", "review.diff", "review.feedback", "review.stage"}:
+            from .review import action
+
+            with self.lock:
+                if method == "review.stage":
+                    jobs = self._all(
+                        "SELECT id,status FROM jobs WHERE project=?", (params["project"],)
+                    )
+                    if any(row["status"] in ACTIVE or row["id"] in self.processes for row in jobs):
+                        raise ValueError(
+                            "Finish or stop project work before staging reviewed changes"
+                        )
+                return action(self, self.project(params["project"]), method, params)
         if method in {
             "files.create",
             "files.write",
@@ -784,6 +807,9 @@ class DesktopService:
             if not rows:
                 raise ValueError("Run not found")
             row = rows[0]
+            summary = self.job_summaries(params["id"])[0]
+            row["conversation_id"] = summary["conversation_id"]
+            row["conversation_title"] = summary["conversation_title"]
             row["request"] = json.loads(row["request"])
             row["result"] = json.loads(row["result"]) if row["result"] else None
             if row["kind"] in {"evaluation", "optimization"} and row["result"] is not None:

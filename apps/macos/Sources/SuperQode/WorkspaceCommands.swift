@@ -4,7 +4,7 @@ import AppKit
   var workspaceCommands: [WorkspaceCommand] {
     let engineReason = connected ? nil : "Wait for the local engine to connect."
     let projectReason = project.isEmpty ? "Open a project first." : engineReason
-    let idleReason = openingProject ? "Wait for the project to finish opening."
+    let idleReason = openingProject || restoringNavigation ? "Wait for navigation to finish."
       : busy ? "Wait for the current operation to finish." : nil
     var commands: [WorkspaceCommand] = [
       .init(action: .openProject, title: "Open Project…", detail: "Choose a local repository",
@@ -16,10 +16,14 @@ import AppKit
       .init(action: .connect, title: "Connect…", detail: "Choose an agent or model connection",
         symbol: "link", keywords: "provider harness model agent",
         disabledReason: projectReason ?? idleReason),
-      .init(action: .back, title: "Back", detail: "Return to the previous page",
+      .init(action: .back, title: "Back", detail: "Restore the previous session and page",
         symbol: "chevron.left", key: "[",
-        disabledReason: openingProject ? idleReason : navigationHistory.isEmpty && !(showWelcome && !project.isEmpty)
+        disabledReason: openingProject || restoringNavigation || busy ? idleReason : navigationHistory.isEmpty && !(showWelcome && !project.isEmpty)
           ? "No previous page to return to." : nil),
+      .init(action: .forward, title: "Forward", detail: "Restore the next session and page",
+        symbol: "chevron.right", key: "]",
+        disabledReason: openingProject || restoringNavigation || busy ? idleReason
+          : forwardHistory.isEmpty ? "No next page to return to." : nil),
       .init(action: .refreshChanges, title: "Refresh Changes", detail: "Refresh project Git status",
         symbol: "arrow.clockwise", keywords: "git diff review", key: "r",
         disabledReason: projectReason ?? idleReason),
@@ -35,7 +39,7 @@ import AppKit
       WorkspaceCommand(action: .section(name), title: Sections.title(for: name),
         detail: "Navigate to " + Sections.title(for: name), symbol: Sections.icons[index],
         keywords: name == "Workspace" ? "chat conversation coding" : name.lowercased(),
-        key: String(index + 1), disabledReason: projectReason ?? idleReason)
+        key: index < 9 ? String(index + 1) : nil, disabledReason: projectReason ?? idleReason)
     }
     commands += recentConversations.prefix(12).map { run in
       WorkspaceCommand(action: .run(string(run, "id")),
@@ -68,11 +72,11 @@ import AppKit
     switch action {
     case .openProject: chooseProject()
     case .newTask:
+      selectJob("", targetSection: "Workspace")
       showWelcome = false
-      section = "Workspace"
-      selectJob("")
     case .connect: showConnection = true
     case .back: goBack()
+    case .forward: goForward()
     case .refreshChanges: perform { await self.refreshGit() }
     case .exportEvidence: exportEvidence()
     case .welcome: showWelcome = true
@@ -83,13 +87,14 @@ import AppKit
     case .run(let id):
       guard let run = projectJobs.first(where: { string($0, "id") == id }) else { return }
       showWelcome = false
-      selectJob(id)
+      let destinationSection: String
       switch string(run, "kind") {
-      case "tool": section = "Tools"
-      case "optimization": section = "Optimization"
-      case "evaluation": section = "Evaluations"
-      default: section = "Workspace"
+      case "tool": destinationSection = "Tools"
+      case "optimization": destinationSection = "Optimization"
+      case "evaluation": destinationSection = "Evaluations"
+      default: destinationSection = "Workspace"
       }
+      selectJob(id, targetSection: destinationSection)
     case .project(let path): perform { try await self.open(path) }
     }
   }

@@ -12,6 +12,12 @@ requests = []
 authorizations = []
 
 
+def fail_smoke(message):
+    annotation = str(message)[-4000:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print("::error title=Native app smoke failed::" + annotation, flush=True)
+    raise SystemExit(message)
+
+
 class Fixture(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -106,9 +112,9 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
             timeout=180,
         )
     except subprocess.TimeoutExpired as error:
-        raise SystemExit(f"Native smoke timed out: {error.stderr}")
+        fail_smoke(f"Native smoke timed out: {error.stderr}")
     if not report.exists():
-        raise SystemExit(
+        fail_smoke(
             f"Native application returned {result.returncode} without a report: {result.stderr[-3000:]}"
         )
     evidence = json.loads(report.read_text())
@@ -137,4 +143,4 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     (ARTIFACTS / "smoke-report.json").write_text(json.dumps(evidence, indent=2))
     print(json.dumps(evidence, indent=2))
     if not evidence.get("passed"):
-        raise SystemExit(1)
+        fail_smoke(evidence.get("error", "Native smoke reported failure without an explanation"))

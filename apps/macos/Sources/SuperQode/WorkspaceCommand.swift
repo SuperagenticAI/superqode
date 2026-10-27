@@ -1,7 +1,7 @@
 import Foundation
 
 enum WorkspaceCommandAction: Equatable {
-  case openProject, newTask, connect, back, refreshChanges, exportEvidence, welcome, learning
+  case openProject, newTask, connect, back, forward, refreshChanges, exportEvidence, welcome, learning
   case section(String), run(String), project(String)
 
   var id: String {
@@ -10,6 +10,7 @@ enum WorkspaceCommandAction: Equatable {
     case .newTask: return "new-task"
     case .connect: return "connect"
     case .back: return "back"
+    case .forward: return "forward"
     case .refreshChanges: return "refresh-changes"
     case .exportEvidence: return "export-evidence"
     case .welcome: return "welcome"

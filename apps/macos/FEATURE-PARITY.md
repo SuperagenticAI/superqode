@@ -5,9 +5,8 @@ checklist, not a claim of complete parity or verified superiority. Native source
 and tests still require compilation and interaction validation on macOS. Product
 capabilities available through CLI/TUI do not automatically have a native workflow.
 
-The [developer-experience review](DEVELOPER-EXPERIENCE.md) links the specific T3 Code
-and Omnigent implementations sampled for comparison. Codex's public app-server
-source does not establish availability of its desktop UI source.
+The [developer-experience plan](DEVELOPER-EXPERIENCE.md) records local implementation
+and validation. See [session recovery](SESSION-RECOVERY.md) for the current change.
 
 ## Daily coding
 
@@ -19,12 +18,12 @@ source does not establish availability of its desktop UI source.
 | Command palette and shared menu actions | Implemented native draft | Validate Command-K, IME input, focus restoration, Settings-window invocation and disabled-action explanations. |
 | Editing and integrated terminal | Native source exists | Preserve editor text during concurrent disk changes; validate terminal lifecycle and clipboard on real macOS. |
 | Git diff, staging and local commits | Native source exists | Add explicit turn/uncommitted/branch review scopes, deletion staging and consistent sensitive-path handling. |
-| Scoped diffs and line-range feedback | Planned | Identify exactly which source/revision a comment refers to and preserve unrelated changes. |
+| Scoped diffs and line-range feedback | Implemented locally; native validation pending | Identify exactly which source/revision a comment refers to and preserve unrelated changes. |
 | Session resume and cross-agent handoff | Native source exists with route limitations | Explain native resume versus transcript handoff and omitted context. |
-| Session destinations and drafts | Partial; composer drafts are project-scoped | A → B → Back restores the session, draft, selection and inspector. |
-| Recoverable source-editor drafts | Planned; current drafts are in memory | Restart after a crash and recover text/base revision; offer Compare, Copy and Save As on conflict. |
+| Session destinations and drafts | Implemented locally; conversation drafts and full destinations | A → B → Back restores the session, draft, selection and inspector. |
+| Recoverable source-editor drafts | Implemented locally; persistent drafts and conflict comparison | Restart after a crash and recover text/base revision; offer Compare, Copy and Save As on conflict. |
 | Fork/tree, pin/archive and session search | Broader operations through forms/CLI; dedicated native UX incomplete | Navigate lineage and search beyond recent rows without destabilizing selected-session ordering. |
-| Reading-position-aware transcript | Partial; manual Follow exists | Upward scrolling pauses follow; Jump to latest resumes; history loading preserves anchors. |
+| Reading-position-aware transcript | Implemented locally; Follow, message anchors and Jump to latest | Upward scrolling pauses follow; Jump to latest resumes; history loading preserves anchors. |
 | Background notifications and Dock badge | Planned | Deduplicated approval/completion notifications reopen the exact session. |
 | Independent windows and remote/mobile continuity | Native gap; other remote interfaces exist | First establish durable writer ownership, then restore independent destinations and reconnect without event loss. |
 | Signed updater and migration recovery | Manual app updates today | Verify update signatures and supported data migrations/rollback on clean Macs. |
@@ -50,8 +49,7 @@ source does not establish availability of its desktop UI source.
 1. Fix durable worker ownership, valid terminal-result enforcement and worktree
    preservation. These protect both coding and matched experiment inputs.
 2. Complete session destinations/draft recovery, scoped review and reading-aware
-   streaming. These are the most frequent daily-use gaps visible in the sampled
-   competitor source.
+   streaming. These address frequent daily navigation and review workflows.
 3. Validate the implemented command palette and comparison inspector on macOS.
    Add repeated, held-out experiment history and explicit quality thresholds.
 4. Add routed notifications, revision adoption/rollback and resource dashboards.
