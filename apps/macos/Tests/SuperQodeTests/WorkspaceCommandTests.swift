@@ -50,7 +50,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testCatalogHasUniqueIDsAndSingleCharacterShortcuts() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true
     app.project = ["id": "project", "path": "/tmp/project"]
     app.projects = [["id": "other", "path": "/tmp/other"]]
@@ -65,7 +65,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testUnavailableActionsDoNotNavigateAndAreRevalidated() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     XCTAssertFalse(app.workspaceCommand(.section("Terminal"))?.isEnabled ?? true)
     app.runWorkspaceCommand(.section("Terminal"))
     XCTAssertEqual(app.section, "Workspace")
@@ -81,7 +81,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testRecentRunsAreScopedToCurrentProject() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true
     app.project = ["id": "a"]
     app.jobs = [
@@ -94,7 +94,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testBusyOperationsDisableProjectChangesAndExportNeedsSelection() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true
     app.project = ["id": "project"]
     app.busy = true
@@ -107,7 +107,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testProjectLoadingBlocksOverlappingNavigation() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true
     app.project = ["id": "project"]
     app.projects = [["id": "other", "path": "/tmp/other"]]
@@ -121,7 +121,7 @@ final class WorkspaceCommandTests: XCTestCase {
   }
 
   @MainActor func testMenuActionDefersUntilPaletteDismissalAndRunsOnce() {
-    let app = Workspace()
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true
     app.project = ["id": "project"]
     app.showCommandPalette = true

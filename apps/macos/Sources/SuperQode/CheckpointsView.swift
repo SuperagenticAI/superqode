@@ -7,6 +7,7 @@ struct CheckpointsView: View {
   @State private var failure = ""
   @State private var canUndo = false
   @State private var canRedo = false
+  @State private var loadGeneration = 0
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
       PageTitle(
@@ -32,16 +33,9 @@ struct CheckpointsView: View {
                   .secondary)
                 ForEach(item["changes"] as? [[String: Any]] ?? [], id: \.checkpointPath) { change in
                   Button(string(change, "change_type") + " · " + string(change, "path")) {
-                    app.perform {
-                      let result =
-                        try await app.engine.call(
-                          "checkpoints.diff",
-                          [
-                            "project": app.projectID, "id": string(item, "id"),
-                            "path": string(change, "path"),
-                          ]) as? [String: Any] ?? [:]
-                      diff = string(result, "diff")
-                    }
+                    app.checkpointID = string(item, "id")
+                    app.checkpointPath = string(change, "path")
+                    loadSelectedDiff()
                   }.buttonStyle(.borderless).font(.caption.monospaced())
                 }
                 if (item["changes"] as? [Any] ?? []).isEmpty {
@@ -69,19 +63,47 @@ struct CheckpointsView: View {
           text: diff.isEmpty ? "Choose a changed file to inspect its checkpoint diff." : diff
         ).padding(.leading, 14)
       }
-    }.padding(26).onAppear { load() }
+    }.padding(26).onAppear { load() }.onDisappear { loadGeneration += 1 }
+      .onChange(of: app.checkpointPath) { _, _ in loadSelectedDiff() }
   }
   private func load() {
+    loadGeneration += 1
+    let generation = loadGeneration
+    let project = app.projectID
     app.perform {
       do {
         let result =
-          try await app.engine.call("checkpoints.list", ["project": app.projectID])
+          try await app.engine.call("checkpoints.list", ["project": project])
           as? [String: Any] ?? [:]
+        guard project == app.projectID, generation == loadGeneration else { return }
         items = result["items"] as? [[String: Any]] ?? []
         canUndo = result["can_undo"] as? Bool ?? false
         canRedo = result["can_redo"] as? Bool ?? false
         failure = ""
-      } catch { failure = error.localizedDescription }
+        loadSelectedDiff()
+      } catch {
+        if project == app.projectID, generation == loadGeneration { failure = error.localizedDescription }
+      }
+    }
+  }
+  private func loadSelectedDiff() {
+    let project = app.projectID
+    let id = app.checkpointID
+    let path = app.checkpointPath
+    let generation = loadGeneration
+    guard !id.isEmpty, !path.isEmpty else { diff = ""; return }
+    diff = ""
+    app.perform {
+      do {
+        let result = try await app.engine.call("checkpoints.diff", ["project": project, "id": id, "path": path])
+          as? [String: Any] ?? [:]
+        guard project == app.projectID, generation == loadGeneration,
+          id == app.checkpointID, path == app.checkpointPath else { return }
+        diff = string(result, "diff")
+      } catch {
+        if project == app.projectID, generation == loadGeneration,
+          id == app.checkpointID, path == app.checkpointPath { failure = error.localizedDescription }
+      }
     }
   }
   private func restore(_ method: String, id: String = "") {

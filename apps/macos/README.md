@@ -41,13 +41,14 @@ Selecting a connection does not automatically install an agent, download weights
 ## Your daily workspace
 
 - **Agent Space:** stream responses, inspect tool activity, approve or deny actions, continue supported sessions and use direct Chat mode.
+- **Review:** inspect turn checkpoints, uncommitted layers and committed branch diffs; select lines and add revision-bound feedback to a follow-up draft.
 - **Files:** browse and edit source, create files, inspect diffs, stage or unstage changes and create local commits after confirmation.
 - **Context:** attach project text or images, preview selected context and manage supported context-window and compaction controls.
 - **Tasks:** prepare independent tasks, reorder the queue and explicitly start work. Failed tasks pause the queue; interrupted work is not automatically replayed.
 - **Checkpoints:** inspect recorded changes and use guarded restoration, undo and redo.
 - **Terminal:** run interactive project commands in the integrated native terminal.
 
-Navigation starts with Agent Space, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
+Navigation starts with Agent Space, Review, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
 
 In the development source, **Command-K** opens the command palette. Search actions,
 the twelve most recent runs in the current project, or eight recent projects.
@@ -55,6 +56,14 @@ Use Up/Down and Return to choose, or Escape to close and return to the previous
 control. Unavailable actions show what they need. Menu actions and palette actions
 share their shortcuts and availability rules. This feature still requires native
 build and interaction validation before inclusion in a public release.
+
+The current development source adds [session continuity and draft recovery](SESSION-RECOVERY.md):
+conversation-specific drafts, Back/Forward navigation, file-edit recovery and
+reading anchors. Native validation is required before shipping these changes.
+
+The development source also adds the [native review workspace](REVIEW-WORKSPACE.md),
+with file/hunk navigation and guarded staging of a reviewed file. Native validation
+is required before shipping these changes.
 
 ## Harness Hub, evaluation and optimization
 
@@ -92,7 +101,7 @@ Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.de
 ## Build from source
 
 See the [native developer experience review and build plan](DEVELOPER-EXPERIENCE.md)
-for source comparisons, implemented history improvements and the proposed next steps.
+for implemented workspace improvements and the proposed next steps.
 
 For future Mac App Store work, see the separate
 [App Store preparation guide](../../proc/MACOS-APP-STORE.md). The current public beta

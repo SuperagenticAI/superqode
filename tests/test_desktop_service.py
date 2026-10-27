@@ -313,6 +313,7 @@ def test_actual_harness_stream_and_native_followup(desktop, monkeypatch, interac
             assert compacted["status"] == "completed", compacted
             assert compacted["result"]["success"] is True
             assert compacted["result"]["source_job"] == second["id"]
+            assert compacted["conversation_id"] == result["conversation_id"]
 
         for artifact in service.root.rglob("*"):
             if artifact.is_file():

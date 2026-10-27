@@ -1,14 +1,12 @@
 import AppKit
 import SwiftUI
 
-struct FileEdit {
-  let original: String
-  let digest: String
-  let text: String
-}
-
 @MainActor final class DraftStore: ObservableObject {
   @Published var text = ""
+}
+
+@MainActor final class ReviewCommentStore: ObservableObject {
+  @Published var drafts: [String: ReviewCommentDraft] = [:]
 }
 
 @MainActor private final class DialogAuditState: ObservableObject {
@@ -29,14 +27,41 @@ private struct DialogAuditHost: View {
 }
 
 @MainActor final class Workspace: ObservableObject {
-  let engine = Engine()
+  let recoveryStore: WorkspaceRecoveryStore
+  let preferences: UserDefaults
+  var recoverySnapshot: WorkspaceRecoverySnapshot
+  @Published var restoringNavigation = false
+  var restoringComposer = false
+  var composerConversationID = ""
+  private var draftSaveTask: Task<Void, Never>?
+  var recoverySaveTask: Task<Void, Never>?
+  var recoverySaveGeneration = 0
+  @Published var recoveryIssue = ""
+  @Published var loadingConversationDraft = false
+  @Published var selectedFile = "" { didSet { persistDestination() } }
+  @Published var inspectorVisible = false { didSet { persistDestination() } }
+  @Published var checkpointID = "" { didSet { persistDestination() } }
+  @Published var checkpointPath = "" { didSet { persistDestination() } }
+  @Published var reviewSelection = ReviewSelection() { didSet { persistDestination() } }
+
+  init(recoveryStore: WorkspaceRecoveryStore? = nil, preferences: UserDefaults = .standard, engine: Engine? = nil) {
+    let store = recoveryStore ?? (ProcessInfo.processInfo.arguments.contains("--smoke-test")
+      ? WorkspaceRecoveryStore(directory: nil) : .applicationStore())
+    self.recoveryStore = store
+    self.preferences = preferences
+    self.engine = engine ?? Engine()
+    self.recoverySnapshot = store.load()
+    self.fileDrafts = recoverySnapshot.editors
+    self.recoveryIssue = store.loadIssue
+  }
+  let engine: Engine
   let terminals = ProjectTerminals()
   let credentialStore = CredentialStore()
   @Published var providers: [[String: Any]] = []
   @Published var savedCredentialProviders: [String] = []
   @Published var routeStatus: [String: Any] = [:]
   @Published var openingProject = false
-  @Published var showWelcome = true
+  @Published var showWelcome = true { didSet { persistDestination() } }
   @Published var starterTourRequested = false
   @Published var showLearningGuide = false
   @Published var showCommandPalette = false
@@ -106,11 +131,16 @@ private struct DialogAuditHost: View {
   @Published var connected = false
   @Published var error: String?
   @Published var notice = ""
-  @Published var navigationHistory: [String] = []
-  private var restoringNavigation = false
+  @Published var navigationHistory: [WorkspaceDestination] = []
+  @Published var forwardHistory: [WorkspaceDestination] = []
   @Published var section = "Workspace" {
     didSet {
-      if oldValue != section && !restoringNavigation { navigationHistory.append(oldValue) }
+      if oldValue != section && !restoringNavigation {
+        var previous = currentDestination
+        previous.section = oldValue
+        recordNavigation(previous)
+      }
+      persistDestination()
     }
   }
   func goBack() {
@@ -118,10 +148,7 @@ private struct DialogAuditHost: View {
       showWelcome = false
       return
     }
-    guard let previous = navigationHistory.popLast() else { return }
-    restoringNavigation = true
-    section = previous
-    restoringNavigation = false
+    travelHistory(forward: false)
   }
   func registerCommandPaletteWindow(_ window: NSWindow?) {
     commandPaletteHostWindow = window
@@ -173,13 +200,19 @@ private struct DialogAuditHost: View {
   private var eventCursor = 0
   @Published var git: [String: Any] = [:]
   @Published var files: [String] = []
-  var fileDrafts: [String: FileEdit] = [:]
+  var fileDrafts: [String: FileEdit] = [:] {
+    didSet {
+      // Source text stays local to the editor; publish only changes to the draft list.
+      if Set(oldValue.keys) != Set(fileDrafts.keys) { objectWillChange.send() }
+      scheduleRecoverySave()
+    }
+  }
   @Published var capabilities: [String: Any] = [:]
   @Published var provider = "openai"
   @Published var model = ""
   @Published var harness = "superqode"
   let draftStore = DraftStore()
-  private var draftSaveTask: Task<Void, Never>?
+  let reviewCommentStore = ReviewCommentStore()
   var draft: String {
     get { draftStore.text }
     set {
@@ -188,11 +221,11 @@ private struct DialogAuditHost: View {
       scheduleDraftSave()
     }
   }
-  @Published var interactionMode = "code"
-  @Published var contextWindow = ""
-  @Published var summarizeContext = false
-  @Published var contextFiles: [String] = []
-  @Published var imageAttachments: [[String: Any]] = []
+  @Published var interactionMode = "code" { didSet { scheduleDraftSave() } }
+  @Published var contextWindow = "" { didSet { scheduleDraftSave() } }
+  @Published var summarizeContext = false { didSet { scheduleDraftSave() } }
+  @Published var contextFiles: [String] = [] { didSet { scheduleDraftSave() } }
+  @Published var imageAttachments: [[String: Any]] = [] { didSet { scheduleDraftSave() } }
   @Published var taskQueue: [String: Any] = [:]
   private var lastQueueJob = ""
   @Published var theme = "dark"
@@ -241,6 +274,11 @@ private struct DialogAuditHost: View {
       if earlier { params["before"] = earlierHistory }
       let result = try await engine.call("conversations.get", params) as? [String: Any] ?? [:]
       guard id == selectedJob, generation == detailGeneration else { return }
+      if loadingConversationDraft, let identity = result["conversation_id"] as? String, !identity.isEmpty {
+        loadingConversationDraft = false
+        restoreComposer(conversationID: identity)
+        restoreSessionDestination()
+      }
       let turns = result["turns"] as? [[String: Any]] ?? []
       conversationHistory = earlier ? turns + conversationHistory : turns
       earlierHistory = string(result, "earlier")
@@ -334,6 +372,7 @@ private struct DialogAuditHost: View {
   var projectJobs: [[String: Any]] { jobs.filter { string($0, "project") == projectID } }
   var recentConversations: [[String: Any]] { groupedRecentRuns(projectJobs) }
   var selectedConversationID: String {
+    if !composerConversationID.isEmpty { return composerConversationID }
     let selected = jobs.first { string($0, "id") == selectedJob } ?? [:]
     return string(selected, "conversation_id", selectedJob)
   }
@@ -382,6 +421,9 @@ private struct DialogAuditHost: View {
       let args = ProcessInfo.processInfo.arguments
       if let index = args.firstIndex(of: "--project"), args.count > index + 1 {
         try await open(args[index + 1])
+      } else if let destination = recoverySnapshot.lastDestination {
+        do { try await restoreDestination(destination) }
+        catch { notice = "Couldn’t reopen the saved session. Choose its project to recover drafts. " + error.localizedDescription }
       }
       if project.isEmpty { await refreshModels() }
       await checkRoute()
@@ -406,6 +448,7 @@ private struct DialogAuditHost: View {
     } catch { self.error = error.localizedDescription }
   }
   func chooseProject() {
+    guard !openingProject, !restoringNavigation else { return }
     let panel = NSOpenPanel()
     panel.canChooseDirectories = true
     panel.canChooseFiles = false
@@ -413,20 +456,63 @@ private struct DialogAuditHost: View {
     panel.prompt = "Open project"
     if panel.runModal() == .OK, let url = panel.url { perform { try await self.open(url.path) } }
   }
-  func open(_ path: String) async throws {
+  func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil) async throws {
+    guard !openingProject else { throw EngineError(message: "Wait for the current project to finish opening.") }
     saveDraft()
+    let previous = currentDestination
+    let savedDestinations = recoverySnapshot.projectDestinations
     projectGeneration += 1
     detailGeneration += 1
     connectionGeneration += 1
     checkingConnection = false
-    connectionMetadata = [:]
     let generation = projectGeneration
     openingProject = true
-    defer { if generation == projectGeneration { openingProject = false } }
+    defer {
+      if generation == projectGeneration {
+        openingProject = false
+        loadingHistory = false
+        persistDestination()
+      }
+    }
+    // Load everything before replacing the visible project. A failed request
+    // must leave the previous destination and both projects' drafts intact.
     let opened = try await engine.call("projects.open", ["path": path]) as? [String: Any] ?? [:]
+    let openedID = string(opened, "id")
+    guard !openedID.isEmpty else { throw EngineError(message: "The engine did not return a project identity.") }
+    if let expectedProjectID, openedID != expectedProjectID {
+      throw EngineError(message: "The project identity changed. Open it manually to inspect saved drafts.")
+    }
+    let nextProjects = try await engine.call("projects.list") as? [[String: Any]] ?? []
+    let params: [String: Any] = ["project": openedID]
+    let definitions = try await engine.call("harnesses.list", params) as? [[String: Any]] ?? []
+    let index = try await engine.call("hub.list", params) as? [String: Any] ?? [:]
+    let routes = try await engine.call("routes.list", params) as? [[String: Any]] ?? []
+    var nextHarnesses = definitions + routes
+    for entry in UserDefaults.standard.stringArray(forKey: "nativeVendorKeys") ?? [] {
+      if let key = try? credentialStore.read("vendor:" + entry),
+        let route = try? await engine.call("connect.vendor.key", ["project": openedID, "entry": entry, "key": key]) as? [String: Any] {
+        nextHarnesses.append(route)
+      }
+    }
+    if UserDefaults.standard.bool(forKey: "nativeSystemOneKey"),
+      let key = try? credentialStore.read("systemone") {
+      _ = try? await engine.call("connect.systemone.key", ["key": key])
+    }
+    let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
     guard generation == projectGeneration else { return }
+    if recordHistory { recordNavigation(previous) }
+    let wasRestoring = restoringNavigation
+    restoringNavigation = true
+    defer { restoringNavigation = wasRestoring }
     project = opened
     selectedJob = ""
+    composerConversationID = ""
+    loadingConversationDraft = false
+    selectedFile = ""
+    inspectorVisible = false
+    checkpointID = ""
+    checkpointPath = ""
+    reviewSelection = ReviewSelection()
     conversationHistory = []
     earlierHistory = ""
     loadingHistory = false
@@ -444,46 +530,23 @@ private struct DialogAuditHost: View {
     candidate = [:]
     git = [:]
     files = []
-    hub = []
-    harnesses = []
-    projects = try await engine.call("projects.list") as? [[String: Any]] ?? []
-    let params: [String: Any] = ["project": projectID]
-    let definitions = try await engine.call("harnesses.list", params) as? [[String: Any]] ?? []
-    let index = try await engine.call("hub.list", params) as? [String: Any] ?? [:]
-    guard generation == projectGeneration else { return }
-    let routes = try await engine.call("routes.list", params) as? [[String: Any]] ?? []
-    guard generation == projectGeneration else { return }
-    harnesses = definitions + routes
-    for entry in UserDefaults.standard.stringArray(forKey: "nativeVendorKeys") ?? [] {
-      if let key = try? credentialStore.read("vendor:" + entry) {
-        if let route = try? await engine.call(
-          "connect.vendor.key", ["project": projectID, "entry": entry, "key": key])
-          as? [String: Any]
-        {
-          harnesses.append(route)
-        }
-      }
-    }
-    if UserDefaults.standard.bool(forKey: "nativeSystemOneKey"),
-      let key = try? credentialStore.read("systemone")
-    {
-      _ = try? await engine.call("connect.systemone.key", ["key": key])
-    }
+    connectionMetadata = [:]
+    projects = nextProjects
+    harnesses = nextHarnesses
     hub = index["items"] as? [[String: Any]] ?? []
     if !connectionDisconnected, !harnesses.contains(where: { string($0, "id") == harness }), let first = definitions.first {
       harness = string(first, "id")
     }
-    let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
-    draft =
-      (UserDefaults.standard.dictionary(forKey: "nativeDrafts") as? [String: String])?[projectID]
-      ?? (settings["drafts"] as? [String: String])?[projectID] ?? ""
+    migrateLegacyDraft(settings: settings)
+    restoreComposer(conversationID: "")
     section = "Workspace"
     showWelcome = false
+    if recordHistory, let saved = savedDestinations[projectID] { applyDestination(saved) }
     perform {
       await self.refreshGit()
       await self.refreshModels()
     }
-    if isManaged { perform { await self.checkManagedConnection() } }
+    if isManaged && recordHistory { perform { await self.checkManagedConnection() } }
   }
   func chooseHarness(_ id: String) {
     let previousACP = isManaged
@@ -544,25 +607,20 @@ private struct DialogAuditHost: View {
     }
   }
   func scheduleDraftSave() {
+    guard !restoringComposer, !loadingConversationDraft, !openingProject, !restoringNavigation else { return }
     draftSaveTask?.cancel()
-    let id = projectID
-    let text = draft
-    guard !id.isEmpty else { return }
     draftSaveTask = Task {
       do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-      self.writeDraft(text, for: id)
+      self.saveDraft(flush: false)
     }
   }
-  func saveDraft() {
+  func saveDraft(flush: Bool = true) {
     draftSaveTask?.cancel()
-    writeDraft(draft, for: projectID)
-  }
-  private func writeDraft(_ text: String, for id: String) {
-    guard !id.isEmpty else { return }
-    var drafts = UserDefaults.standard.dictionary(forKey: "nativeDrafts") as? [String: String] ?? [:]
-    guard drafts[id] != text else { return }
-    drafts[id] = text
-    UserDefaults.standard.set(drafts, forKey: "nativeDrafts")
+    guard !projectID.isEmpty, !loadingConversationDraft, !restoringComposer,
+      !openingProject, !restoringNavigation else { return }
+    recoverySnapshot.composers[composerKey] = composerRecovery
+    persistDestination()
+    if flush { flushRecovery() }
   }
 
   func refreshJobs() async {
@@ -606,13 +664,27 @@ private struct DialogAuditHost: View {
       self.error = error.localizedDescription
     }
   }
-  func selectJob(_ id: String, restoreConnection: Bool = true) {
+  func selectJob(_ id: String, restoreConnection: Bool = true,
+    conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil) {
+    saveDraft()
+    if recordHistory, id != selectedJob || targetSection.map({ $0 != section }) == true {
+      recordNavigation(currentDestination)
+    }
+    let wasRestoring = restoringNavigation
+    restoringNavigation = true
+    defer { restoringNavigation = wasRestoring; persistDestination() }
     detailGeneration += 1
     restoreSelectedConnection = restoreConnection
     conversationHistory = []
     earlierHistory = ""
     loadingHistory = false
     selectedJob = id
+    let summary = projectJobs.first { string($0, "id") == id }
+    let identity = conversationID ?? summary.map { string($0, "conversation_id", id) }
+    loadingConversationDraft = !id.isEmpty && identity == nil
+    restoreComposer(conversationID: identity ?? id)
+    if let targetSection { section = targetSection }
+    restoreSessionDestination()
     detail = [:]
     events = []
     eventCursor = 0
@@ -621,7 +693,7 @@ private struct DialogAuditHost: View {
     eventStreamOpen = false
     activityLoadError = ""
     candidate = [:]
-    perform { await self.refreshDetail() }
+    if !id.isEmpty && connected { perform { await self.refreshDetail() } }
   }
   func refreshDetail() async {
     guard !selectedJob.isEmpty else { return }
@@ -640,15 +712,23 @@ private struct DialogAuditHost: View {
         let result =
           try await engine.call("jobs.get", ["id": id, "after": cursor]) as? [String: Any] ?? [:]
         guard id == selectedJob, generation == detailGeneration else { return }
+        guard string(result, "project") == projectID else {
+          throw EngineError(message: "This run belongs to a different project. Choose a run in the current project.")
+        }
         let page = try JobEventPage(result, after: cursor)
         let firstLoad = detail.isEmpty
+        if firstLoad, loadingConversationDraft, let identity = result["conversation_id"] as? String, !identity.isEmpty {
+          loadingConversationDraft = false
+          restoreComposer(conversationID: identity)
+          restoreSessionDestination()
+        }
         if firstLoad && restoreSelectedConnection,
           string(result, "kind") == "task", let request = result["request"] as? [String: Any] {
           restoreSelectedConnection = false
           chooseHarness(string(request, "harness", harness))
           provider = string(request, "provider", provider)
           model = string(request, "model", model)
-          interactionMode = string(request, "interaction_mode", "code")
+          interactionMode = recoverySnapshot.composers[composerKey]?.mode ?? string(request, "interaction_mode", "code")
           let options = request["acp_options"] as? [String: Any] ?? [:]
           agentModel = string(options, "model")
           agentMode = string(options, "mode")
@@ -849,9 +929,12 @@ private struct DialogAuditHost: View {
     }
   }
   func send(continueSession: Bool) {
-    guard !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
+    guard !loadingConversationDraft, !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
       (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     let submittedDraft = draft
+    let submittedKey = composerKey
+    let submittedConversation = composerConversationID
+    let submittedRecord = composerRecovery
     let submittedFiles = contextFiles
     let submittedImages = imageAttachments.map { string($0, "id") }
     var extra: [String: Any] = [
@@ -882,14 +965,24 @@ private struct DialogAuditHost: View {
       let result = try await self.engine.call("tasks.start", params) as? [String: Any] ?? [:]
       let id = string(result, "id")
       guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
-      guard self.projectID == submittedProject else { return }
+      self.clearAcceptedSubmission(key: submittedKey, submitted: submittedRecord)
+      guard self.projectID == submittedProject, self.composerKey == submittedKey else {
+        await self.refreshJobs()
+        return
+      }
       // Clear only the accepted submission, preserving edits typed while starting.
       if self.draft == submittedDraft { self.draft = ""; self.saveDraft() }
       if self.contextFiles == submittedFiles { self.contextFiles = [] }
       if self.imageAttachments.map({ string($0, "id") }) == submittedImages {
         self.imageAttachments = []
       }
-      self.selectJob(id, restoreConnection: false)
+      // Keep a newer new-task draft visible if the user typed while acceptance was pending.
+      if !continueSession && !self.draft.isEmpty && self.draft != submittedDraft {
+        self.notice = "Task started. Your newer draft is still in New conversation."
+        await self.refreshJobs()
+        return
+      }
+      self.selectJob(id, restoreConnection: false, conversationID: continueSession ? submittedConversation : id)
       await self.refreshDetail()
       await self.refreshJobs()
       self.savePreferences()
@@ -1098,6 +1191,7 @@ private struct DialogAuditHost: View {
   }
   func shutdown() {
     saveDraft()
+    flushRecovery()
     poller?.cancel()
     projectRefresh?.cancel()
     terminals.stopAll()

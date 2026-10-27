@@ -1,11 +1,24 @@
 # Native developer experience: source review and build plan
 
 Reviewed 25 October 2026 against SuperQode checkout `4dcac5c`, with the run-history
-changes in this working draft. This is source analysis, not a hands-on competitor
-usability study. SwiftUI and AppKit provide useful integration points; writing in
+changes in this working draft. This records implementation details and validation requirements. SwiftUI and AppKit provide useful integration points; writing in
 Swift alone does not establish better responsiveness or usability.
 
-## Implemented in this draft
+## Session continuity and recovery
+
+The next development change adds conversation-specific drafts, full destination
+navigation, persistent file recovery and message-level reading anchors. See
+[session continuity and draft recovery](SESSION-RECOVERY.md) for behavior, storage
+and validation requirements. Native validation for this new change is pending.
+
+## Native review workspace
+
+The current development source adds explicit turn, uncommitted and branch scopes,
+old/new line coordinates, file and hunk navigation, saved feedback notes and
+revision-checked staging. See [native review workspace](REVIEW-WORKSPACE.md) for
+behavior, scope boundaries and native validation requirements.
+
+## Previously implemented
 
 ### Evaluation and held-out comparison
 
@@ -72,29 +85,9 @@ coverage includes old-engine fallback and malformed/non-advancing cursors. Pytho
 checks can run on Linux; Swift tests and interactive behavior require the existing
 macOS CI job or a Mac with Xcode. Do not infer native validation from Python tests.
 
-## Source comparisons
-
-The following references point to actual implementation, not product feature
-lists. These are patterns to evaluate, not evidence that a competitor is better
-in every workflow. Reuse ideas with a native implementation; do not copy source
-without reviewing its license.
-
-| Workflow | Competitor source | SuperQode opportunity |
-| --- | --- | --- |
-| Session navigation | [T3 sidebar sections](https://github.com/pingdotgg/t3code/blob/5b35402623d7d1d88eaa472807272a6c2e78012a/apps/web/src/components/Sidebar.logic.ts#L117); [Omnigent stable active-session sorting](https://github.com/omnigent-ai/omnigent/blob/0862ae65df7617217efac2b43a4de51701a23268/web/src/shell/sidebarNav.ts#L291) | Back currently stores section names, and composer drafts are keyed by project. Introduce a destination containing project, conversation, section and inspector selection; store drafts by conversation. Keep the selected session stationary while events arrive. |
-| Review scope | [T3 DiffPanel](https://github.com/pingdotgg/t3code/blob/5b35402623d7d1d88eaa472807272a6c2e78012a/apps/web/src/components/DiffPanel.tsx#L254); [Omnigent diff viewer](https://github.com/omnigent-ai/omnigent/blob/0862ae65df7617217efac2b43a4de51701a23268/web/src/shell/MonacoDiffViewer.tsx#L49) | Bring project Git review and checkpoint review together with explicit This turn / Uncommitted / Branch scopes. Add changed-file and hunk navigation, followed by line-range feedback attached to a prompt. Never imply ordinary workspace diffs prove agent ownership. |
-| Command access | [T3 palette state](https://github.com/pingdotgg/t3code/blob/5b35402623d7d1d88eaa472807272a6c2e78012a/apps/web/src/components/CommandPalette.logic.ts#L71); [Omnigent command/session search](https://github.com/omnigent-ai/omnigent/blob/0862ae65df7617217efac2b43a4de51701a23268/web/src/shell/CommandPalette.tsx#L182) | Use one typed command registry for native menus and a keyboard-searchable palette. Include recent sessions, project switching, New Task, Changes and Terminal. Availability and shortcuts should come from the same definitions. |
-| Streaming and reading | [T3 follow behavior](https://github.com/pingdotgg/t3code/blob/5b35402623d7d1d88eaa472807272a6c2e78012a/apps/web/src/components/chat/useTimelineFollow.ts#L119); [Omnigent anchor restoration](https://github.com/omnigent-ai/omnigent/blob/0862ae65df7617217efac2b43a4de51701a23268/web/src/components/chat/Transcript.tsx#L510) | Pause following when the reader scrolls upward, show Jump to latest, and restore an anchor per conversation. Isolate frequently changing transcript state from project navigation and composer state. |
-| Background attention | [T3 Dock badge](https://github.com/pingdotgg/t3code/blob/5b35402623d7d1d88eaa472807272a6c2e78012a/apps/desktop/src/ipc/methods/notificationBadge.ts#L20); [Omnigent notification routing](https://github.com/omnigent-ai/omnigent/blob/0862ae65df7617217efac2b43a4de51701a23268/web/electron/src/main.js#L4508) | Add a session-attention coordinator, optional system notifications and a Dock badge. Notification activation should restore the correct session, not just bring the app forward. Avoid private prompt/code text in notification previews by default. |
-
-The public [Codex app-server implementation](https://github.com/openai/codex/blob/970111f6cb62cc02fe36a82ea7d71b37a2889c97/codex-rs/app-server/src/lib.rs#L36)
-is backend/protocol infrastructure. It does not establish public availability of
-the Codex App desktop UI source, so this review does not claim a source-level
-comparison of that UI.
-
 ## Recommended build order
 
-1. **Session destinations and recovery.** A → B → Back restores the exact session,
+1. **Session destinations and recovery: validate the local implementation.** A → B → Back restores the exact session,
    unsent draft and review selection. Recover source-editor drafts after a crash
    with the base revision, and provide Compare / Copy / Save As for conflicts.
    This is foundational for notification routing and multiple windows.

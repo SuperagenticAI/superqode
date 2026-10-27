@@ -21,9 +21,14 @@ import SwiftUI
       guard
         workspace.confirm(
           "Quit SuperQode?",
-          "Quitting stops active runs and discards unsaved file-edit drafts (\(workspace.fileDrafts.count)). Recorded run history remains on this Mac.",
+          "Quitting stops active runs and terminals. File-edit drafts (\(workspace.fileDrafts.count)) are kept in local recovery storage when recovery is available. Recorded run history remains on this Mac.",
           button: "Quit")
       else { return .terminateCancel }
+    }
+    workspace?.saveDraft()
+    if let workspace, !workspace.flushRecovery() {
+      guard workspace.confirm("Quit without saved recovery?", workspace.recoveryIssue,
+        button: "Quit anyway") else { return .terminateCancel }
     }
     workspace?.shutdown()
     return .terminateNow
@@ -76,6 +81,7 @@ import SwiftUI
         }
         Divider()
         WorkspaceCommandMenuItem(app: workspace, action: .back)
+        WorkspaceCommandMenuItem(app: workspace, action: .forward)
         WorkspaceCommandMenuItem(app: workspace, action: .refreshChanges)
         WorkspaceCommandMenuItem(app: workspace, action: .exportEvidence)
       }
@@ -93,11 +99,11 @@ enum Sections {
   static func title(for section: String) -> String { section == "Workspace" ? "Agent Space" : section }
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
-    "Terminal", "Checkpoints",
+    "Terminal", "Checkpoints", "Review",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
-    "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath",
+    "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass",
   ]
 }
 extension Color {
@@ -198,6 +204,7 @@ struct RootView: View {
   private var workspaceShell: some View {
     HStack(spacing: 0) {
       SidebarView().frame(width: 236).background(Color.qPanel)
+        .disabled(app.openingProject || app.restoringNavigation)
       Divider()
       VStack(spacing: 0) {
         HStack(spacing: 12) {
@@ -208,7 +215,11 @@ struct RootView: View {
           }
           .help("Welcome to SuperQode").accessibilityLabel("Welcome to SuperQode")
           Button(action: app.goBack) { Image(systemName: "chevron.left") }
-            .disabled(app.navigationHistory.isEmpty).help("Back to previous page")
+            .disabled(app.navigationHistory.isEmpty || app.openingProject || app.restoringNavigation)
+            .help("Back (⌘[)").accessibilityLabel("Back")
+          Button(action: app.goForward) { Image(systemName: "chevron.right") }
+            .disabled(app.forwardHistory.isEmpty || app.openingProject || app.restoringNavigation)
+            .help("Forward (⌘])").accessibilityLabel("Forward")
           Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium))
           Text("/").foregroundStyle(.tertiary)
           Text(string(app.project, "name", "No project")).font(.system(size: 12)).foregroundStyle(
@@ -247,17 +258,29 @@ struct RootView: View {
               case "Optimization": OptimizationView()
               case "Tools": ToolsView()
               case "Terminal": ProjectTerminalView(terminals: app.terminals)
-              case "Checkpoints": CheckpointsView()
+              case "Checkpoints": CheckpointsView().id(app.projectID)
+              case "Review": ReviewWorkspaceView(commentStore: app.reviewCommentStore).id(app.projectID + "\n" + app.selectedJob)
               case "Files": FilesView().id(app.projectID)
               default: CodingView()
               }
-            }.id(app.section).transition(.opacity).frame(
+            }.id(app.section).transition(.opacity).disabled(app.openingProject || app.restoringNavigation).frame(
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
             .background(Color.qPanel)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.primary.opacity(0.07)))
           }.padding(.horizontal, 20).padding(.bottom, 20)
+        }
+        if !app.recoveryIssue.isEmpty {
+          HStack {
+            Label(app.recoveryIssue, systemImage: "exclamationmark.triangle").font(.caption)
+              .textSelection(.enabled)
+            Spacer()
+            Button("Retry recovery save") { app.saveDraft(); app.flushRecovery() }
+            if !app.recoveryStore.loadIssue.isEmpty {
+              Button("Reset recovery…", action: app.resetRecovery)
+            }
+          }.padding(12).background(Color.orange.opacity(0.12))
         }
         if !app.notice.isEmpty {
           HStack {
@@ -323,11 +346,10 @@ struct SidebarView: View {
         .foregroundStyle(.secondary)
         Spacer()
         Button {
-          app.selectJob("")
-          app.section = "Workspace"
+          app.selectJob("", targetSection: "Workspace")
         } label: {
           Image(systemName: "plus")
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).disabled(app.openingProject || app.restoringNavigation || app.busy)
       }.padding(.horizontal, 24)
       recentRuns
       Spacer(minLength: 8)
@@ -342,13 +364,13 @@ struct SidebarView: View {
   }
   private var navigationItems: some View {
     VStack(spacing: 4) {
-      ForEach(["Workspace", "Files", "Terminal"], id: \.self) { name in
+      ForEach(["Workspace", "Review", "Files", "Terminal"], id: \.self) { name in
         navigationButton(name)
       }
       DisclosureGroup("Improve & more", isExpanded: $expandedNavigation) {
         VStack(spacing: 3) {
           ForEach(
-            Sections.names.filter { !["Workspace", "Files", "Terminal"].contains($0) }, id: \.self
+            Sections.names.filter { !["Workspace", "Review", "Files", "Terminal"].contains($0) }, id: \.self
           ) { name in
             navigationButton(name)
           }
@@ -356,7 +378,7 @@ struct SidebarView: View {
       }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 8)
     }.padding(.horizontal, 14).padding(.top, 14)
       .onChange(of: app.section) { _, name in
-        if !["Workspace", "Files", "Terminal"].contains(name) { expandedNavigation = true }
+        if !["Workspace", "Review", "Files", "Terminal"].contains(name) { expandedNavigation = true }
       }
   }
   private func navigationButton(_ name: String) -> some View {
@@ -374,7 +396,7 @@ struct SidebarView: View {
           Color.qPanel,
           in: RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(app.section == name ? Color.qAccent : Color.clear, lineWidth: 1))
-    }.buttonStyle(.plain).disabled(app.project.isEmpty && name != "Workspace")
+    }.buttonStyle(.plain).disabled((app.project.isEmpty && name != "Workspace") || app.openingProject || app.restoringNavigation)
       .accessibilityAddTraits(app.section == name ? .isSelected : [])
   }
   private var recentRuns: some View {
@@ -382,12 +404,12 @@ struct SidebarView: View {
       LazyVStack(spacing: 3) {
         ForEach(app.recentConversations, id: \.projectRowID) { job in
           Button {
-            app.selectJob(string(job, "id"))
-            app.section =
+            let destinationSection =
               string(job, "kind") == "tool"
               ? "Tools"
               : string(job, "kind") == "optimization"
                 ? "Optimization" : string(job, "kind") == "evaluation" ? "Evaluations" : "Workspace"
+            app.selectJob(string(job, "id"), targetSection: destinationSection)
           } label: {
             VStack(alignment: .leading, spacing: 5) {
               Text(string(job, "conversation_title", string(job, "title"))).font(.system(size: 12)).lineLimit(2)
@@ -449,7 +471,6 @@ struct RouteControls: View {
 }
 struct CodingView: View {
   @EnvironmentObject var app: Workspace
-  @State private var showInspector = false
   var body: some View {
     HStack(spacing: 0) {
       VStack(spacing: 0) {
@@ -461,7 +482,7 @@ struct CodingView: View {
           if !app.selectedJob.isEmpty {
             Button("New conversation", systemImage: "square.and.pencil") { app.selectJob("") }
               .disabled(app.active || app.busy)
-            Button { showInspector.toggle() } label: { Image(systemName: "sidebar.right") }
+            Button { app.inspectorVisible.toggle() } label: { Image(systemName: "sidebar.right") }
               .help("Show changes and run details").accessibilityLabel("Show changes and run details")
           }
         }.padding(.horizontal, 24).padding(.vertical, 14)
@@ -469,11 +490,11 @@ struct CodingView: View {
         if app.selectedJob.isEmpty {
           GettingStartedView(draftStore: app.draftStore).frame(minHeight: 220, maxHeight: .infinity)
         } else {
-          EventStream().frame(minHeight: 220, maxHeight: .infinity)
+          EventStream().id(app.projectID + "\n" + app.selectedJob).frame(minHeight: 220, maxHeight: .infinity)
         }
         CodingComposer(draftStore: app.draftStore)
       }.frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
-      if !app.selectedJob.isEmpty && showInspector {
+      if !app.selectedJob.isEmpty && app.inspectorVisible {
         Divider()
         InspectorView().frame(width: 300)
       }
@@ -499,6 +520,7 @@ struct CodingComposer: View {
   }
   var body: some View {
     composer
+    .disabled(app.loadingConversationDraft)
     .centeredDialog(isPresented: $showQueue, title: "Task queue") {
       TaskQueueView().environmentObject(app)
     }
@@ -746,6 +768,22 @@ struct HistoricalConversationTurn: View, Equatable {
 struct EventStream: View {
   @EnvironmentObject var app: Workspace
   @State private var follow = true
+  @State private var visibleAnchor: String?
+  @State private var pendingAnchor: String?
+  @State private var savedJob = ""
+  @State private var savedProject = ""
+  @State private var initialized = false
+  @State private var restoringPosition = false
+  @State private var restorePages = 0
+  @State private var positionNotice = ""
+  private var availableAnchors: [String] {
+    var anchors = ["bottom"] + app.conversationHistory.map { "turn:" + string($0, "id") }
+    if !(app.detail["request"] as? [String: Any] ?? [:]).isEmpty { anchors.append("prompt:" + app.selectedJob) }
+    if conversationEvents(app.events, includeDetails: false).contains(where: { string($0, "type") != "activity_group" }) {
+      anchors.append("response:" + app.selectedJob)
+    }
+    return anchors
+  }
   var body: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
@@ -755,6 +793,14 @@ struct EventStream: View {
           .secondary)
         Spacer()
         Toggle("Follow", isOn: $follow).toggleStyle(.checkbox).font(.caption)
+        if !follow {
+          Button("Jump to latest") {
+            pendingAnchor = nil
+            positionNotice = ""
+            follow = true
+            visibleAnchor = "bottom"
+          }.font(.caption)
+        }
         Button("Export…", action: app.exportEvidence).font(.caption)
       }.padding(.horizontal, 20).padding(.top, 10)
       if !app.activityLoadError.isEmpty {
@@ -770,6 +816,9 @@ struct EventStream: View {
         Text("Showing recent run activity. Export to include all events.")
           .font(.caption).foregroundStyle(.secondary).padding(.top, 8)
       }
+      if !positionNotice.isEmpty {
+        Text(positionNotice).font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+      }
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 10) {
@@ -781,6 +830,7 @@ struct EventStream: View {
             ForEach(app.conversationHistory, id: \.projectRowID) { turn in
               HistoricalConversationTurn(prompt: string(turn, "prompt"), response: string(turn, "response"),
                 harness: string(turn, "harness"), status: string(turn, "status")).equatable()
+                .id("turn:" + string(turn, "id"))
             }
             if let request = app.detail["request"] as? [String: Any],
               !string(request, "prompt").isEmpty
@@ -803,6 +853,7 @@ struct EventStream: View {
               }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(
                 Color.qPanel, in: RoundedRectangle(cornerRadius: 10)
               ).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.qAccent.opacity(0.35), lineWidth: 1)).padding(.bottom, 10)
+                .id("prompt:" + app.selectedJob)
             }
             let messages = rows.filter { string($0, "type") != "activity_group" }
             if !messages.isEmpty {
@@ -816,11 +867,37 @@ struct EventStream: View {
                   EventRow(event: event, embeddedResponse: true)
                 }
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
+                .id("response:" + app.selectedJob)
             }
             Color.clear.frame(height: 1).id("bottom")
-          }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+          }.scrollTargetLayout().padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }.scrollPosition(id: $visibleAnchor, anchor: .top)
+        .background(TranscriptScrollObserver { readingEarlier in
+          pendingAnchor = nil
+          positionNotice = ""
+          if readingEarlier && follow { follow = false }
+        })
+        .onAppear {
+          savedJob = app.selectedJob
+          savedProject = app.projectID
+          let saved = app.transcriptPosition(for: savedJob)
+          follow = saved.follow
+          pendingAnchor = saved.anchor
+          initialized = true
+          restorePosition(proxy)
+        }
+        .onChange(of: availableAnchors) { _, _ in restorePosition(proxy) }
+        .onChange(of: app.hasMoreRunEvents) { _, _ in restorePosition(proxy) }
+        .onChange(of: app.loadingHistory) { _, _ in restorePosition(proxy) }
+        .onChange(of: follow) { _, value in
+          guard initialized else { return }
+          if value { pendingAnchor = nil; positionNotice = ""; proxy.scrollTo("bottom", anchor: .bottom) }
+          savePosition()
+        }
+        .onChange(of: visibleAnchor) { _, _ in
+          if initialized && !restoringPosition && pendingAnchor == nil { savePosition() }
         }.onChange(of: app.events.last?["sequence"] as? Int) { _, _ in
-          if follow { proxy.scrollTo("bottom", anchor: .bottom) }
+          if follow && initialized { proxy.scrollTo("bottom", anchor: .bottom) }
         }
       }
       if app.active || !activity.isEmpty {
@@ -832,6 +909,36 @@ struct EventStream: View {
               .id(app.selectedJob)
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)
+      }
+    }.onDisappear { savePosition(); app.flushRecovery() }
+  }
+  private func savePosition() {
+    guard initialized else { return }
+    app.setTranscriptPosition(TranscriptPosition(follow: follow, anchor: pendingAnchor ?? visibleAnchor),
+      for: savedJob, project: savedProject)
+  }
+  private func restorePosition(_ proxy: ScrollViewProxy) {
+    guard initialized, savedJob == app.selectedJob, savedProject == app.projectID else { return }
+    if follow { proxy.scrollTo("bottom", anchor: .bottom); return }
+    guard let anchor = pendingAnchor else { return }
+    if availableAnchors.contains(anchor) {
+      restoringPosition = true
+      visibleAnchor = anchor
+      proxy.scrollTo(anchor, anchor: .top)
+      pendingAnchor = nil
+      positionNotice = ""
+      // Let the scroll binding settle before recording its new visible target.
+      Task { @MainActor in
+        await Task.yield()
+        restoringPosition = false
+        savePosition()
+      }
+    } else if !app.loadingHistory && !app.hasMoreRunEvents {
+      if !app.earlierHistory.isEmpty && restorePages < 4 {
+        restorePages += 1
+        app.perform { await app.loadConversationHistory(earlier: true) }
+      } else {
+        positionNotice = "Your saved reading position isn’t loaded. Load earlier messages or Jump to latest."
       }
     }
   }
@@ -932,6 +1039,9 @@ struct InspectorView: View {
         Text("Evidence").tag("Evidence")
       }.pickerStyle(.segmented)
       if tab == "Changes" {
+        Button("Open review workspace") { app.section = "Review" }
+        Text("Current project preview. Open Review to choose a turn, staged/unstaged layers or a branch comparison.")
+          .font(.caption).foregroundStyle(.secondary)
         HStack {
           Image(systemName: "arrow.triangle.branch")
           Text(string(app.git, "branch", "No branch")).font(.caption.monospaced())
