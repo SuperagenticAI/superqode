@@ -1,4 +1,4 @@
-# SuperQode for macOS — public beta 0.1.7
+# SuperQode for macOS — upcoming public beta 0.1.11
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -16,12 +16,24 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
-## Upcoming 0.1.8
+## Upcoming 0.1.11
 
-Source version 0.1.8 (build 9) adds a Command-K palette, paginated run activity
-with retry, and evaluation and held-out optimization comparisons. It bundles
-Python engine 2.25.0. The public download remains 0.1.7 until the new app passes
-release validation and its signed, notarized installer is published.
+Source version 0.1.11 (build 12) bundles Python engine 2.25.0 and includes the
+latest native session recovery and scoped review changes:
+
+- Per-conversation composer drafts, project navigation history, transcript reading
+  positions and local recovery of unsaved file edits, with conflict handling.
+- A Review workspace for This turn, Uncommitted and Branch comparisons, with
+  line feedback, saved feedback drafts and guarded whole-file staging.
+- Stable conversation identity across follow-up and compaction runs.
+- Smoke validation covering every native workspace screen, with failures exposed
+  in CI check annotations.
+
+It also retains the Command-K palette, paginated run activity with retry, and
+evaluation and held-out optimization comparisons. The public download remains
+0.1.10 until 0.1.11 passes native macOS release validation and its signed,
+notarized installer is published. See [session recovery](SESSION-RECOVERY.md)
+and the [review workspace](REVIEW-WORKSPACE.md) for behavior and limitations.
 
 ## What changed in this beta
 
