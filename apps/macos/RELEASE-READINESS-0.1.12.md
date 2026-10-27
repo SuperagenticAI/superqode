@@ -1,9 +1,15 @@
 # Harness release readiness — 27 October 2026
 
-**Decision: hold stable publication.** The feature and packaging checks pass,
+**Initial review decision: hold stable publication.** The feature and packaging checks pass,
 but the dependency audit and shutdown evidence do not support an unrestricted
 stable-release recommendation yet. No tag, PyPI publication, notarized installer
-or website upload is part of this review.
+or website upload was part of that initial review.
+
+**Subsequent user decision:** the user explicitly accepted the remaining issues
+and requested the website upload anyway. macOS 0.1.12/build 13 has since been
+signed, notarized and uploaded as a Public Beta. See the
+[publication record](RELEASE-PUBLISHED-0.1.12.md). The outstanding findings below
+remain open; publication does not establish that they have been resolved.
 
 Candidate: macOS **0.1.12 / build 13**, Python engine **2.26.0** on
 `feat/macos-harness-engineering`, based on feature commit `987d2c8f`.
@@ -120,8 +126,8 @@ before calling this gate complete.
   downloads via the existing external-credentials FTPS tooling, then verify
   public hashes. Publish the Python tag only when its publication gates pass.
 
-The development candidate is deliberately separate from the previously released
-app. Nothing in these checks updates the live website or spends a PyPI version.
+The initial development candidate was kept separate from the previously released
+app. The later website upload is recorded separately; no PyPI version was spent.
 
 ## Local evidence
 
