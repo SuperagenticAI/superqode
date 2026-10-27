@@ -1589,10 +1589,7 @@ private struct DialogAuditHost: View {
       report["changes_refresh"] = "passed; task completion refreshes Git status and project files"
       await refreshJobs()
       let args = ProcessInfo.processInfo.arguments
-      for tab in [
-        "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
-        "Terminal", "Checkpoints",
-      ] {
+      for tab in Sections.names {
         section = tab
         selectJob(tab == "Evaluations" ? evaluationID : taskID)
         await refreshDetail()
@@ -1603,6 +1600,7 @@ private struct DialogAuditHost: View {
               tab.lowercased().replacingOccurrences(of: " ", with: "-") + ".png"))
         }
       }
+      report["native_workspace_screens"] = Sections.names
       if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
         section = "Workspace"
         selectJob(taskID)
