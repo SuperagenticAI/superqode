@@ -2,16 +2,16 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
-Source version: **0.1.8 (build 9)**, with bundled engine **2.25.0**.
-The public download remains 0.1.7 until a signed and notarized 0.1.8 is published.
+Source version: **0.1.10 (build 11)**, with bundled engine **2.25.0**.
+The public download remains 0.1.9 until a signed and notarized 0.1.10 is published.
 
-[**Download public beta 0.1.7**](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg)
+[**Download public beta 0.1.9**](https://superqode.dev/downloads/macos/0.1.9/SuperQode-0.1.9-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="../../assets/superqode-macos-welcome-light.png">
-  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode 0.1.7 native Mac app welcome screen" width="960">
+  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode 0.1.9 native Mac app welcome screen" width="960">
 </picture>
 
 ## Start coding
@@ -87,7 +87,7 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
 
-Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.7/SuperQode-0.1.7-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
+Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/0.1.9/SuperQode-0.1.9-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 
 ## Build from source
 
@@ -115,3 +115,55 @@ apps/macos/scripts/package-distribution.sh
 SwiftPM pins SwiftTerm for the AppKit project terminal; its license is bundled with the app. The runtime builder pins the compatible Omni optimizer revision and records dependencies and source provenance. Model weights, user configuration and credentials are excluded from the bundle. Python is an execution dependency; all desktop presentation, navigation, lifecycle, dialogs and integration are Swift.
 
 For development, `swift build --package-path apps/macos` builds the executable. The packaging script selects full Xcode when available and places compiler caches inside `.build`. `CONFIGURATION=debug apps/macos/scripts/build-app.sh` packages a debug build. Open `Package.swift` in Xcode to work on the native sources.
+
+### Upload a notarized website release
+
+Store GoDaddy settings in `~/.env.macos-release`, outside the repository:
+
+```dotenv
+FTP_HOST=your-certificate-compatible-server-hostname
+FTP_USER=your-ftp-user
+FTP_PASSWORD=your-ftp-password
+FTP_REMOTE_DIR=/downloads/macos
+```
+
+Use the FTP account's directory root: `/downloads/macos` applies when the account
+opens inside `superqode.dev`. Values are read literally, without shell expansion;
+matching outer single or double quotes are optional. Restrict file access and
+check the connection without changing server files:
+
+```sh
+chmod 600 ~/.env.macos-release
+python3 apps/macos/scripts/upload-release.py
+```
+
+The uploader uses explicit FTPS on port 21 (optional `FTP_PORT` override), with
+certificate validation and encrypted data transfers. Use the server hostname
+covered by GoDaddy's certificate rather than its IP address. It requires the
+existing `latest/SuperQode-arm64.dmg` and checksum to confirm the destination.
+
+After signing, notarizing and stapling the DMG, publish it with:
+
+```sh
+python3 apps/macos/scripts/upload-release.py --upload
+```
+
+No version argument is needed: the script reads the current version from
+`apps/macos/resources/Info.plist` and selects its matching DMG in `release/`.
+It rejects packaged app metadata that differs from the source, rather than
+guessing from file timestamps. An explicit DMG path after `--upload` remains
+supported when needed.
+
+Exported `FTP_HOST`, `FTP_USER`, `FTP_PASSWORD`, `FTP_REMOTE_DIR` and optional
+`FTP_PORT` environment variables override file values. If all required variables
+are set, no file is needed. `--config /path/to/private-file` or
+`SUPERQODE_MACOS_RELEASE_CONFIG` selects a different configuration file. Nothing
+loads a credentials file from the repository automatically.
+
+This command checks signing, the stapled ticket and Gatekeeper acceptance. It
+uploads the versioned archive, then replaces `latest/SuperQode-arm64.dmg` and its
+checksum. Each pair is transferred to temporary names and its remote bytes are
+verified before renaming. The two renames are separate FTP operations; run only
+one uploader at a time. Existing versioned files must match exactly. Both public
+DMGs and checksums are downloaded over HTTPS for final verification. The script
+does not build, notarize, tag Python releases or edit the website.
