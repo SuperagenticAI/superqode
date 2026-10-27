@@ -252,6 +252,7 @@ struct ExperimentView: View {
   @State private var history: [[String: Any]] = []
   @State private var historyError = ""
   @State private var workflow: String?
+  @State private var showTuning = false
   @State private var configurationMode: String?
   private var candidates: [String] {
     variant.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -275,7 +276,7 @@ struct ExperimentView: View {
             Button("Configure RLM routing…") { configurationMode = "rlm-routing" }
             Button("Configure RLM budgets…") { configurationMode = "rlm" }
             Divider()
-            Button("Tune routing decisions from examples…") { workflow = "harness tune" }
+            Button("Tune routing decisions from examples…") { showTuning = true }
             Button("Reproducible benchmarks…") { workflow = "harness bench" }
             Button("Mine failures…") { workflow = "harness mine-failures" }
             Button("Additional optimization engines…") { workflow = "harness optimize" }
@@ -401,6 +402,12 @@ struct ExperimentView: View {
     }.onAppear { if suite.isEmpty { suite = app.packs.first.map { string($0, "path") } ?? "" } }
       .task(id: inspectionKey) { await inspectSuite() }
       .task(id: app.projectID + app.selectedJob + String(app.active)) { await loadHistory() }
+      .sheet(isPresented: $showTuning) {
+        VStack {
+          HStack { Spacer(); Button("Done") { showTuning = false } }.padding()
+          TuningView().environmentObject(app)
+        }.frame(minWidth: 850, minHeight: 700)
+      }
       .sheet(isPresented: Binding(get: { configurationMode != nil }, set: { if !$0 { configurationMode = nil } })) {
         VStack {
           HStack { Spacer(); Button("Done") { configurationMode = nil } }.padding()
@@ -426,10 +433,10 @@ struct ExperimentView: View {
       }
       if !diagnostics.isEmpty {
         let counts = diagnostics["split_counts"] as? [String: Any] ?? [:]
-        Text("Suite: \(diagnostics["task_count"] ?? 0) selected · \(counts["held-in"] ?? 0) held-in · \(counts["held-out"] ?? 0) held-out")
+        Text("Suite: \(String(describing: diagnostics["task_count"] ?? 0)) selected · \(String(describing: counts["held-in"] ?? 0)) held-in · \(String(describing: counts["held-out"] ?? 0)) held-out")
           .font(.caption.monospaced())
         if !optimize {
-          Text("Configurations: baseline + \(diagnostics["candidate_count"] ?? 0) candidates").font(.caption)
+          Text("Configurations: baseline + \(String(describing: diagnostics["candidate_count"] ?? 0)) candidates").font(.caption)
         }
         Text(string(diagnostics, "tasks_hash")).font(.caption2.monospaced()).textSelection(.enabled)
         ForEach(diagnostics["warnings"] as? [String] ?? [], id: \.self) { warning in

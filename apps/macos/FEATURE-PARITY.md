@@ -39,6 +39,7 @@ and validation. See [session recovery](SESSION-RECOVERY.md) for the current chan
 | Optimizer held-out review | Implemented native draft | Use held-out task evidence; smoke checks, contradictory records and missing coverage cannot establish improvement. |
 | Recorded/imported evidence | Native import/export exists, comparison projection added | Review the same projection for saved runs and raw/wrapped older reports without modifying source artifacts. |
 | Staged Omni optimization and candidate diff | Native source exists | Test budget controls, interruption, stale candidate detection and independent held-out checks. |
+| Guided routing tuning | Native saved rounds, uncertainty/audit selection, labeling, bounded optimization and verified decisions implemented | Compile and exercise the full screen on macOS; confirm sealed data and cancellation with real routes. |
 | Broader optimizers, benchmarks, skills and memory | Available through typed forms/CLI/TUI to varying degrees | Build dedicated workflows based on frequency and support guarantees rather than copying every command into a form. |
 | Experiment history and quality/cost frontier | Project-specific recent history implemented; frontier view remains a gap | Compare fixed source/configuration hashes, repeats, uncertainty and all failed-attempt costs. |
 | Quality thresholds and adoption decisions | Omni task-evidence gate tightened; configurable threshold dashboard remains a gap | Separate execution completion from quality; explicitly block missing/ungraded evidence under declared thresholds. |

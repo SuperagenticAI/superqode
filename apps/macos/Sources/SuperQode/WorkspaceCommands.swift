@@ -90,7 +90,7 @@ import AppKit
       let destinationSection: String
       switch string(run, "kind") {
       case "tool": destinationSection = "Tools"
-      case "optimization": destinationSection = "Optimization"
+      case "optimization", "tuning": destinationSection = "Optimization"
       case "evaluation": destinationSection = "Evaluations"
       default: destinationSection = "Workspace"
       }

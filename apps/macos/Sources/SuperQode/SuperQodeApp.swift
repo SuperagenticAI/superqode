@@ -407,7 +407,7 @@ struct SidebarView: View {
             let destinationSection =
               string(job, "kind") == "tool"
               ? "Tools"
-              : string(job, "kind") == "optimization"
+              : ["optimization", "tuning"].contains(string(job, "kind"))
                 ? "Optimization" : string(job, "kind") == "evaluation" ? "Evaluations" : "Workspace"
             app.selectJob(string(job, "id"), targetSection: destinationSection)
           } label: {

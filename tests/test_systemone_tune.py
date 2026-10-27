@@ -485,6 +485,9 @@ def test_installer_targets_running_python_without_shell(monkeypatch):
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(subprocess, "run", install)
+    # This test exercises the failed-import branch regardless of whether the
+    # developer environment already includes GEPA.
+    monkeypatch.setattr(tune, "refresh_tuning_support_import", lambda: False)
     assert "Restart" in tune.install_support()
     assert sys.executable in calls[0]
     assert tune.GEPA_REQUIREMENT in calls[0]

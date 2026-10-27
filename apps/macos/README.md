@@ -3,7 +3,7 @@
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
 Source version: **0.1.12 (build 13)**, with bundled engine **2.25.0**.
-Development source for 0.1.12 adds suite diagnostics, split selection, multiple evaluation candidates, experiment history and stricter held-out adoption gates. The public download remains 0.1.11 pending native validation and publication.
+Development source for 0.1.12 adds suite diagnostics, split selection, multiple evaluation candidates, experiment history, guided decision tuning and stricter held-out adoption gates. The public download remains 0.1.11 pending native validation and publication.
 
 [**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
 

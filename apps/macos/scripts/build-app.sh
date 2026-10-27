@@ -45,6 +45,7 @@ find "$DEST/Contents/Resources/runtime" -type d -name __pycache__ -prune -exec r
 RUNTIME_PYTHON="$DEST/Contents/Resources/runtime/python/bin/python3"
 RUNTIME_SITE="$("$RUNTIME_PYTHON" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
 uv pip install --python "$RUNTIME_PYTHON" --target "$RUNTIME_SITE" --require-hashes --no-deps -r "$APP_DIR/runtime-requirements.txt"
+"$RUNTIME_PYTHON" "$APP_DIR/scripts/check-runtime-dependencies.py"
 python3 "$APP_DIR/scripts/stamp-runtime.py" "$DEST/Contents/Resources/runtime"
 python3 "$APP_DIR/scripts/collect-runtime-notices.py" "$DEST/Contents/Resources/runtime"
 IDENTITY="${SIGNING_IDENTITY:--}"

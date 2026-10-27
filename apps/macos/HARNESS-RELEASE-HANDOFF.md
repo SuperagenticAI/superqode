@@ -1,5 +1,9 @@
 # macOS 0.1.12 validation handoff
 
+The user deferred these Mac checks while development continued in the cloud.
+See [current development checks](RELEASE-CHECKS-0.1.12.md). This file remains a
+reference, not a requirement to pause the cloud implementation.
+
 Target: 0.1.12, build 13. Branch: `feat/macos-harness-engineering`.
 Do not reset or replace the other agent's local work. Use its existing checkout
 and preserve local changes before fetching. Record `git rev-parse HEAD` for the
@@ -15,7 +19,7 @@ hash must reflect this branch's modified engine sources. Do not substitute the
 published PyPI wheel for the checked-out backend.
 
 The [audit](HARNESS-ENGINEERING-AUDIT.md) distinguishes implemented controls from
-remaining native workflow gaps. Interactive tuning annotation remains terminal-only;
+remaining native workflow gaps. Native tuning annotation has now been implemented and needs native validation;
 frontier analysis and a unified lifecycle dashboard are not included. Release
 notes must not promise full TUI parity.
 
@@ -70,8 +74,9 @@ runtime must also pass its own API availability checks).
    experiments outside the shared recent-job list. Check project isolation and
    imported reports. Imported flags must not enable adoption.
 7. Open every More harness workflows entry. Check actual command selection, path
-   pickers and budgets. Test labeled-data tuning with explicit live consent; confirm
-   unlabeled data explains the terminal annotation requirement. Do not run promotion,
+   pickers and budgets. Test the dedicated tuning screen with explicit live consent: prepare an unlabeled
+   pool, acquire uncertain/audit examples, label a batch, run optimization, reopen
+   the round and accept/reject a verified candidate. Do not run promotion,
    rollback or any live form merely by opening it.
 8. Build a harness and configure RLM routing/budgets from the experiment page. Check
    peer allowlists, invalid limits, unsupported routes and no model calls on save.

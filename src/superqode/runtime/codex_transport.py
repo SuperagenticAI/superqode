@@ -198,6 +198,13 @@ class CodexTransport:
                     except ProcessLookupError:
                         pass
                     await proc.wait()
+            # Even an already-exited server can still own pending pipe callbacks.
+            await proc.wait()
+            if proc.stdin:
+                try:
+                    await proc.stdin.wait_closed()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
         await asyncio.gather(*tasks, return_exceptions=True)
         self._server_tasks.clear()
         self.process = None

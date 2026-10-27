@@ -253,6 +253,9 @@ class DesktopService:
                 error = (
                     error or "Remote cancellation ended without acknowledgement; check the server."
                 )
+            if not isinstance(result, dict):
+                error = error or "Worker exited without a valid terminal result"
+                result = None
             status = "failed" if code or error else "completed"
             if isinstance(result, dict) and result.get("status") == "cancelled":
                 status = "cancelled"
@@ -291,7 +294,15 @@ class DesktopService:
 
     def start(self, project_id: str, kind: str, params: dict):
         root = self.project(project_id)
-        if kind not in {"task", "evaluation", "optimization", "check", "tool", "compaction"}:
+        if kind not in {
+            "task",
+            "evaluation",
+            "optimization",
+            "check",
+            "tool",
+            "compaction",
+            "tuning",
+        }:
             raise ValueError("Unknown job type")
         with self.lock:
             job_id = uuid.uuid4().hex
@@ -476,6 +487,7 @@ class DesktopService:
 
             else:
                 title = {
+                    "tuning": "Routing decision tuning",
                     "evaluation": "Harness evaluation",
                     "optimization": "Harness optimization",
                     "check": "Project check",
@@ -548,6 +560,8 @@ class DesktopService:
                     if provider in PROVIDERS
                     for name in (PROVIDERS[provider].env_vars or [])
                 }
+                if kind == "tuning":
+                    allowed.add("TYPESAFE_API_KEY")
                 # External agents retain their own authentication contract. Plain
                 # project checks never receive that environment or app keys.
                 inherited = (
@@ -1199,6 +1213,25 @@ class DesktopService:
                 "digest": h.digest,
                 "name": h.display_name,
             }
+        if method in {
+            "tuning.list",
+            "tuning.prepare",
+            "tuning.get",
+            "tuning.label",
+            "tuning.decide",
+            "tuning.start",
+        }:
+            from .tuning import handle
+
+            with self.lock:
+                if method not in {"tuning.list", "tuning.get"} and any(
+                    row["status"] in ACTIVE or row["id"] in self.processes
+                    for row in self._all(
+                        "SELECT id,status FROM jobs WHERE project=?", (params["project"],)
+                    )
+                ):
+                    raise ValueError("Finish or stop project work before changing tuning state")
+                return handle(self, method, params)
         if method == "evals.inspect":
             from .experiments import inspect_suite
 

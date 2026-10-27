@@ -913,7 +913,7 @@ private struct DialogAuditHost: View {
     }
   }
   func start(_ method: String, extra: [String: Any] = [:]) {
-    guard !busy, !connectionDisconnected else { return }
+    guard !busy, method == "tuning.start" || !connectionDisconnected else { return }
     busy = true
     perform {
       defer { self.busy = false }

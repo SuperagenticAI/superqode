@@ -377,6 +377,10 @@ class ACPClient:
                 pass
 
         if self._process:
+            # A shell-launched agent may outlive its shell until stdin reaches
+            # EOF. Close input before waiting so its stdout pipe can also close.
+            if getattr(self._process, "stdin", None):
+                self._process.stdin.close()
             if self._process.returncode is None:
                 try:
                     self._process.terminate()
@@ -389,7 +393,14 @@ class ACPClient:
                     self._process.kill()
                 except ProcessLookupError:
                     pass
+                await self._process.wait()
+            if getattr(self._process, "stdin", None):
+                try:
+                    await self._process.stdin.wait_closed()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
             self._process = None
+        self._read_task = None
 
     async def _initialize_traffic_log(self) -> None:
         """Create the ACP traffic log file when logging is enabled.

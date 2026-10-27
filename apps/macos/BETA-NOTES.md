@@ -31,11 +31,15 @@ Source version 0.1.12 (build 13) adds a stronger harness engineering workflow:
 - Require complete, consistent, non-smoke held-out task evidence before an Omni
   candidate passes its gate or can be saved as a project harness. Older reports
   lacking this evidence require a new validation run.
+- A dedicated native tuning screen for saved rounds, uncertainty-based example
+  selection, label/rationale review and verified candidate decisions.
+- More complete agent subprocess shutdown and rejection of workers that exit
+  without a valid terminal result.
+- A hash-verified Authlib 1.9.1 security overlay for the bundled runtime.
 
-Advanced actions use the shared engine's typed forms. Interactive active-learning
-annotation remains a terminal workflow; this version does not claim full TUI
-parity. Native tests, interaction checks and bounded live experiments on macOS
-are required before publishing 0.1.12. Public downloads remain at 0.1.11.
+Other advanced actions use the shared engine's typed forms; this version does not
+claim full TUI parity. Native tests, interaction checks and bounded live experiments
+on macOS are required before publishing 0.1.12. Public downloads remain at 0.1.11.
 
 ## Version 0.1.11
 

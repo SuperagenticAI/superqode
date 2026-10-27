@@ -12,8 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native harness suite diagnostics, evaluation split selection, multiple candidate
   comparison, project experiment history and direct advanced workflow access.
 
+- A native decision tuning screen using shared sealed-round services, with
+  project-owned saved experiments, uncertainty/audit selection, labels/rationales
+  and verified candidate decisions.
+
 ### Fixed
 
+- Reap ACP and Codex subprocesses and close input streams before loop shutdown;
+  reject worker exits without valid terminal results.
+- Patch Authlib to 1.9.1 in the hash-verified bundled Mac runtime overlays.
 - Reject Omni candidate adoption when held-out evidence is incomplete, ungraded,
   smoke-only, contradictory or regressed, even if aggregate scores claim success.
 

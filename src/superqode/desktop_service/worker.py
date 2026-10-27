@@ -309,6 +309,10 @@ def main():
             asyncio.run(compact(request, emit))
         elif request["kind"] == "evaluation":
             asyncio.run(evaluate(request, directory))
+        elif request["kind"] == "tuning":
+            from .tuning import run
+
+            run(request, emit)
         elif request["kind"] == "optimization":
             optimize(request, directory)
         elif request["kind"] == "check":

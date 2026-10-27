@@ -32,7 +32,7 @@ superiority over another agent.
 | Whole-harness optimization (`commands/harness/optimization.py`, `harness/omni.py`) | Bounded staged Omni, reflection and optimizer model inputs | Retained. Additional optimizer forms now reachable directly. Automatic route credentials and external runtimes still require their normal setup. |
 | Held-out acceptance and candidate saving | Aggregate scores and regression flags could accept incomplete/smoke outcomes | Recompute acceptance from matched, complete, consistently graded held-out tasks. Smoke checks, missing tasks, contradictory grades and regressions reject adoption. Both engine and desktop save enforce it. |
 | Candidate inspection and import/export | Candidate diff, immutable new-harness save, report import/export | Retained. Imported evidence is explicitly read-only; it cannot authorize a save. Older records without grading evidence require revalidation. |
-| Example-driven routing tuning (`commands/harness/tune.py`, `systemone/tune.py`, `widgets/systemone_tune.py`) | Generic Tools form, no native annotation wizard | Direct tuning form with machine-readable output and explicit labeled-data guidance. TUI active-learning annotation, uncertainty review and guided labeling are still terminal-only. |
+| Example-driven routing tuning (`commands/harness/tune.py`, `systemone/tune.py`, `widgets/systemone_tune.py`) | Generic Tools form, no native annotation wizard | Dedicated native tuning screen added: saved rounds, uncertainty/audit selection, labeling/rationales, bounded execution and verified accept/reject decisions use the shared TUI service. Native compilation and interaction validation remain deferred. |
 | Failure mining and meta-harness improvement (`commands/harness/optimization.py`, `harness/self_improve.py`) | Typed Tools forms | Direct links from experiment pages; external backend support varies. No dedicated failure triage dashboard. |
 | Reproducible benchmarks (`commands/harness/bench.py`, `harness/bench.py`) | Typed forms | Direct benchmark entry. Manifest, dataset and external runner prerequisites remain explicit. |
 | Promotion/canary/activation/rollback (`commands/harness/promotion.py`, `harness/promotion.py`) | Typed forms | Direct lifecycle entries. They retain existing backend gates; no automatic activation or unified native lifecycle dashboard. Omni evidence hardening is not a rewrite of all promotion policy semantics. |
@@ -81,6 +81,17 @@ specs, explicit task graders, held-out comparisons, bounded candidate search and
 revision review across supported runtimes. A comparative product claim needs
 matched tasks, runtime versions, source/configuration hashes, repeats, all attempt
 costs, uncertainty and failure disclosure.
+
+## Continued cloud implementation
+
+See [0.1.12 development checks](RELEASE-CHECKS-0.1.12.md) for native tuning,
+subprocess cleanup, terminal-result validation and the dependency audit. This
+supersedes the earlier terminal-only annotation finding. The user deferred Mac
+handoff checks while implementation continued here. The follow-up broader suite
+passed 544 tests with cleanup warnings promoted to errors; one installed-agent
+integration was skipped. The earlier cleanup warning did not recur in this run.
+The current dependency check validated 149 packages and 266 requirements, but the
+vulnerability audit still reports three advisories requiring disposition.
 
 ## Validation and release boundary
 
