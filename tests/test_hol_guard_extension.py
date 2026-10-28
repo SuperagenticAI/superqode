@@ -81,6 +81,7 @@ def test_guard_explicit_deny_overrides_benign_classification() -> None:
         {"hookSpecificOutput": {"permissionDecision": "ask"}},
         {"hookSpecificOutput": {"permissionDecision": "allow", "hookEventName": "PostToolUse"}},
         {"hookSpecificOutput": "malformed"},
+        {"hookSpecificOutput": None},
     ):
         payload = {
             "minimum_action": "allow",
