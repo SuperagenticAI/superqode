@@ -162,6 +162,18 @@ def test_guard_process_failures_deny(tmp_path: Path) -> None:
 
     assert hol_guard.evaluate_command("echo x", tmp_path, runner=missing).action == DENY
 
+    def invalid_argv(argv, **kwargs):
+        raise ValueError("embedded null byte")
+
+    assert hol_guard.evaluate_command("echo x", tmp_path, runner=invalid_argv).action == DENY
+
+    def invalid_decode(argv, **kwargs):
+        raise UnicodeDecodeError("utf-8", b"\\xff", 0, 1, "invalid start byte")
+
+    assert hol_guard.evaluate_command("echo x", tmp_path, runner=invalid_decode).action == DENY
+    # Real subprocess argument validation, not a mocked runner.
+    assert hol_guard.evaluate_command("echo \x00unsafe", tmp_path).action == DENY
+
 
 def test_before_tool_abstains_outside_bash_and_denies_bad_bash_input(tmp_path: Path) -> None:
     class Context:
