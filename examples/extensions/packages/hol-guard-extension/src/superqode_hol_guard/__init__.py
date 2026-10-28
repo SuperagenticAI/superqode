@@ -71,7 +71,7 @@ def decision_from_guard_payload(payload: dict[str, Any] | None) -> HookDecision:
     if not isinstance(payload, dict):
         return HookDecision(action=DENY, message="HOL Guard returned an invalid response.")
     decision = payload.get("decision")
-    if payload.get("continue") is False or (
+    if ("continue" in payload and payload["continue"] is not True) or (
         decision is not None
         and (not isinstance(decision, str) or decision.strip().lower() != "allow")
     ):
