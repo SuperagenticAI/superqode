@@ -30,28 +30,16 @@ def _non_empty_text(value: Any) -> str | None:
 
 
 def _last_json_object(stdout: str) -> dict[str, Any] | None:
-    """Reject ambiguous machine verdicts rather than trusting the final JSON line."""
+    """Require exactly one JSON-object verdict, without mixed diagnostic output."""
     text = stdout.strip()
     if not text:
         return None
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
-        # A diagnostic prefix is tolerated, but there must be exactly one
-        # structured verdict. An echoed command or multiple result lines must
-        # not be able to replace a deny with a later allow-shaped object.
-        verdicts = []
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                value = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(value, dict):
-                verdicts.append(value)
-        return verdicts[0] if len(verdicts) == 1 else None
+        # The CLI promises JSON on stdout. Any diagnostic prefix, suffix,
+        # second object or echoed command makes the result non-authoritative.
+        return None
     return value if isinstance(value, dict) else None
 
 
