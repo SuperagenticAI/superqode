@@ -36,6 +36,27 @@ def test_guard_allows_only_explicitly_benign_commands() -> None:
     assert unproven_allow.action == DENY
 
 
+def test_inspection_only_status_allows_only_explicitly_benign_commands() -> None:
+    """Command inspection can be safe without evaluating a runtime policy."""
+    allow = {
+        "policy_action": "not_run",
+        "minimum_action": "allow",
+        "classification": {"explicitly_benign": True},
+    }
+    assert hol_guard.decision_from_guard_payload(allow).action == ALLOW
+
+    for unsafe in (
+        {"minimum_action": "review"},
+        {"classification": {"explicitly_benign": False}},
+        {"continue": False},
+        {"decision": "deny"},
+        {"hookSpecificOutput": {"permissionDecision": "deny"}},
+        {"policy_action": "warn"},
+        {"policy_action": "not_run "},
+    ):
+        assert hol_guard.decision_from_guard_payload({**allow, **unsafe}).action == DENY
+
+
 def test_guard_blocks_review_monitor_block_and_unknown() -> None:
     for action in ("review", "monitor", "block"):
         decision = hol_guard.decision_from_guard_payload({"minimum_action": action})
