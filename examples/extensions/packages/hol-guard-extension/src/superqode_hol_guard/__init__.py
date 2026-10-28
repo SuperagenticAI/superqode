@@ -30,26 +30,29 @@ def _non_empty_text(value: Any) -> str | None:
 
 
 def _last_json_object(stdout: str) -> dict[str, Any] | None:
+    """Reject ambiguous machine verdicts rather than trusting the final JSON line."""
     text = stdout.strip()
     if not text:
         return None
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
-        value = None
-    if isinstance(value, dict):
-        return value
-    for line in reversed(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            return value
-    return None
+        # A diagnostic prefix is tolerated, but there must be exactly one
+        # structured verdict. An echoed command or multiple result lines must
+        # not be able to replace a deny with a later allow-shaped object.
+        verdicts = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                verdicts.append(value)
+        return verdicts[0] if len(verdicts) == 1 else None
+    return value if isinstance(value, dict) else None
 
 
 def _reason(payload: dict[str, Any] | None) -> str:
