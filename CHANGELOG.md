@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.0] - 2026-10-28
+
+### Changed
+
+- Prepare Python 2.30.0 with the harness engineering changes documented below
+  for 2.26.0. This version bump changes no application behavior.
+
 ## [2.26.0] - 2026-10-27
 
 ### Added

@@ -20,8 +20,8 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 
 Source version 0.2.0 (build 14) presents the harness engineering update introduced
 in 0.1.12 under the new macOS release version. This version preparation changes
-metadata and documentation only; application behavior and bundled engine 2.26.0
-are unchanged. The update includes:
+metadata and documentation only; the bundled engine version is now 2.30.0.
+Application behavior is unchanged. The update includes:
 
 - Inspect suite hashes, held-in/held-out counts and smoke-only grading warnings
   before starting a run. Setup checks remain separate from quality measurements.

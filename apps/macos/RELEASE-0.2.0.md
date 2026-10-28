@@ -1,10 +1,11 @@
 # macOS 0.2.0 release preparation
 
-Target: **0.2.0 / build 14**, Public Beta, bundled engine **2.26.0**.
+Target: **0.2.0 / build 14**, Public Beta, bundled engine **2.30.0**.
 
 This is a version and documentation update to the published 0.1.12 harness
-engineering build. It changes no application logic, dependency declarations or
-engine version. Preserve the [0.1.12 publication record](RELEASE-PUBLISHED-0.1.12.md)
+engineering build. It changes no application logic or dependency declarations.
+The bundled engine version is now 2.30.0. Preserve the
+[0.1.12 publication record](RELEASE-PUBLISHED-0.1.12.md)
 and its [readiness findings](RELEASE-READINESS-0.1.12.md); renumbering does not
 resolve those findings or revalidate a new installer.
 
