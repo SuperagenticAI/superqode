@@ -175,8 +175,9 @@ def hol_guard_before_tool(ctx, name: str = "", arguments=None):
             message="HOL Guard could not inspect the bash tool arguments.",
             reason="HOL Guard gate input failure",
         )
-    command = _non_empty_text(arguments.get("command"))
-    if not command:
+    # Inspect exactly what the bash tool will run, including whitespace and newlines.
+    command = arguments.get("command")
+    if not isinstance(command, str) or not command.strip():
         return HookDecision(
             action=DENY,
             message="HOL Guard could not inspect an empty bash command.",
