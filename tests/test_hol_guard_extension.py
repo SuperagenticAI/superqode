@@ -168,7 +168,7 @@ def test_guard_process_failures_deny(tmp_path: Path) -> None:
     assert hol_guard.evaluate_command("echo x", tmp_path, runner=invalid_argv).action == DENY
 
     def invalid_decode(argv, **kwargs):
-        raise UnicodeDecodeError("utf-8", b"\\xff", 0, 1, "invalid start byte")
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
 
     assert hol_guard.evaluate_command("echo x", tmp_path, runner=invalid_decode).action == DENY
     # Real subprocess argument validation, not a mocked runner.
