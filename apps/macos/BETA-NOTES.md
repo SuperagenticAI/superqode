@@ -1,4 +1,4 @@
-# SuperQode for macOS — upcoming public beta 0.1.12
+# SuperQode for macOS — upcoming public beta 0.2.0
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -16,9 +16,12 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
-## Upcoming 0.1.12
+## Upcoming 0.2.0
 
-Source version 0.1.12 (build 13) adds a stronger harness engineering workflow:
+Source version 0.2.0 (build 14) presents the harness engineering update introduced
+in 0.1.12 under the new macOS release version. This version preparation changes
+metadata and documentation only; application behavior and bundled engine 2.26.0
+are unchanged. The update includes:
 
 - Inspect suite hashes, held-in/held-out counts and smoke-only grading warnings
   before starting a run. Setup checks remain separate from quality measurements.
@@ -41,7 +44,7 @@ Source version 0.1.12 (build 13) adds a stronger harness engineering workflow:
 
 Other advanced actions use the shared engine's typed forms; this version does not
 claim full TUI parity. Native tests, interaction checks and bounded live experiments
-on macOS are required before publishing 0.1.12. Public downloads remain at 0.1.11.
+on macOS are required before publishing 0.2.0. Public downloads remain at 0.1.12.
 
 ## Version 0.1.11
 
