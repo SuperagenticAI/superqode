@@ -78,10 +78,16 @@ def decision_from_guard_payload(payload: dict[str, Any] | None) -> HookDecision:
     if (
         ("continue" in payload and payload["continue"] is not True)
         or (
-            decision is not None
+            "decision" in payload
             and (not isinstance(decision, str) or decision.strip().lower() != "allow")
         )
-        or ("policy_action" in payload and payload["policy_action"] not in {"allow", "not_run"})
+        or (
+            "policy_action" in payload
+            and (
+                not isinstance(payload["policy_action"], str)
+                or payload["policy_action"] not in {"allow", "not_run"}
+            )
+        )
         or (
             "hookSpecificOutput" in payload
             and (
