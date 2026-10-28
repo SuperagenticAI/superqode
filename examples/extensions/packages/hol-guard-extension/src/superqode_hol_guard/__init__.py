@@ -142,6 +142,14 @@ def evaluate_command(
             message=f"HOL Guard could not start: {exc}",
             reason="HOL Guard gate launch failure",
         )
+    except ValueError as exc:
+        # subprocess may reject an argv with NUL or fail to decode CLI output.
+        # Report a deny rather than raising out of the reusable evaluator.
+        return HookDecision(
+            action=DENY,
+            message=f"HOL Guard returned invalid process data: {exc}",
+            reason="HOL Guard gate process failure",
+        )
 
     if completed.returncode != 0:
         return HookDecision(
