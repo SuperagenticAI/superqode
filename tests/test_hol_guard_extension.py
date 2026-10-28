@@ -63,7 +63,7 @@ def test_guard_explicit_deny_overrides_benign_classification() -> None:
         assert hol_guard.decision_from_guard_payload(payload).action == DENY
 
 
-def test_guard_invocation_is_shell_free_and_parses_last_json_line(tmp_path: Path) -> None:
+def test_guard_invocation_is_shell_free_and_parses_single_json_line(tmp_path: Path) -> None:
     def runner(argv, **kwargs):
         assert argv == ["hol-guard", "command", "test", "--json", "--", "printf safe"]
         assert kwargs["cwd"] == str(tmp_path)
@@ -80,6 +80,18 @@ def test_guard_invocation_is_shell_free_and_parses_last_json_line(tmp_path: Path
     decision = hol_guard.evaluate_command("printf safe", tmp_path, runner=runner)
     assert decision.action == ALLOW
 
+
+
+def test_guard_rejects_conflicting_machine_verdicts(tmp_path: Path) -> None:
+    """A diagnostic or echoed JSON line must not override a deny verdict."""
+    allowed = '{"minimum_action":"allow","classification":{"explicitly_benign":true}}'
+    denied = '{"minimum_action":"review","classification":{"explicitly_benign":false}}'
+    for stdout in (f"{denied}\n{allowed}", f"{allowed}\n{denied}", f"{allowed}\n{allowed}"):
+        def runner(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+        decision = hol_guard.evaluate_command("echo guarded", tmp_path, runner=runner)
+        assert decision.action == DENY
 
 
 def test_guard_keeps_option_like_quoted_and_multiline_text_positional(tmp_path: Path) -> None:
