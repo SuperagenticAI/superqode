@@ -172,6 +172,23 @@ def test_before_tool_abstains_outside_bash_and_denies_bad_bash_input(tmp_path: P
     assert hol_guard.hol_guard_before_tool(Context(), "bash", {}).action == DENY
 
 
+def test_before_tool_inspects_exact_bash_input(monkeypatch, tmp_path: Path) -> None:
+    class Context:
+        working_directory = tmp_path
+
+    # The shell receives these bytes verbatim. Guard must inspect the same bytes.
+    command = "  cat <<\'EOF\'\nexample\nEOF\n"
+    received = []
+
+    def fake_evaluate(value, cwd):
+        received.append((value, cwd))
+        return hol_guard.HookDecision(action=ALLOW)
+
+    monkeypatch.setattr(hol_guard, "evaluate_command", fake_evaluate)
+    decision = hol_guard.hol_guard_before_tool(Context(), "bash", {"command": command})
+    assert decision.action == ALLOW
+    assert received == [(command, tmp_path)]
+
 def test_before_tool_converts_unexpected_adapter_failure_to_deny(
     monkeypatch, tmp_path: Path
 ) -> None:
