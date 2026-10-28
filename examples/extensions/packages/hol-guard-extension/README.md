@@ -18,7 +18,7 @@ Install HOL Guard separately from its [official repository](https://github.com/h
 
 Before SuperQode executes a `bash` tool call, the extension passes the **original command string** as a positional argument to `hol-guard command test --json -- <command>`. The invocation inspects the command; it never executes it. The extension allows execution only when the returned JSON has both `minimum_action: "allow"` and `classification.explicitly_benign: true`, without a contradictory stop signal.
 
-Unknown/review/block classifications, multiple verdicts, malformed JSON, a missing binary, subprocess errors and timeouts are denied. Other SuperQode tools are unaffected; this does not guard arbitrary tool calls, MCP operations or other harnesses.
+Unknown/review/block classifications, multiple verdicts, diagnostic text mixed with a verdict, malformed JSON, a missing binary, subprocess errors and timeouts are denied. The CLI's stdout must contain exactly one JSON object; any non-JSON prefix or suffix is treated as non-authoritative. Other SuperQode tools are unaffected; this does not guard arbitrary tool calls, MCP operations or other harnesses.
 
 **This is not HOL Guard's authoritative runtime policy decision.** The `command test` surface reports `policy_evaluation: "not_run"`. The extension does not perform Guard's native approval flow, apply its runtime policy, record native execution receipts, or provide complete command-interception coverage. Classification-only allow is insufficient to establish authorization for a real production system. For native Guard policy enforcement, use a supported harness listed in [HOL Guard's harness matrix](https://github.com/hashgraph-online/hol-guard/blob/main/docs/guard/harness-support.md).
 
