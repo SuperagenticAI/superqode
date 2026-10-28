@@ -48,6 +48,8 @@ def test_guard_explicit_deny_overrides_benign_classification() -> None:
     """An explicit stop signal cannot be overridden by an allow-shaped classifier."""
     for stopped in (
         {"continue": False},
+        {"continue": "false"},
+        {"continue": 0},
         {"decision": "deny"},
         {"decision": "review"},
         {"decision": "block"},
