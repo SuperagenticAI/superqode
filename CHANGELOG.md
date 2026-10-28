@@ -9,10 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.30.0] - 2026-10-28
 
-### Changed
+### Added
 
-- Prepare Python 2.30.0 with the harness engineering changes documented below
-  for 2.26.0. This version bump changes no application behavior.
+- Harness engineering workflows for suite diagnostics, held-in/held-out evaluation,
+  multiple candidate comparisons and project experiment history.
+- Guided native decision tuning with saved experiments, labels and rationales,
+  uncertainty selection, random audit samples and sealed-test evidence.
+- Credential-free setup checks and offline synthetic tuning practice so developers
+  can explore the workflow before configuring a model or paying for execution.
+
+### Fixed
+
+- Reject candidate adoption based on incomplete, ungraded, smoke-only,
+  contradictory or regressed held-out evidence. Accepted experiment candidates
+  do not automatically overwrite or activate a project harness.
+- Drain desktop background writers before database shutdown, reject new work
+  while closing, and improve ACP, Codex and terminal subprocess cleanup.
+- Update compatible Authlib, certificate trust, DNS and filesystem dependencies.
+
+This is the Python publication of the harness changes prepared under 2.26.0,
+alongside the macOS 0.2.0/build 14 Public Beta. Known dependency and lifecycle
+findings remain documented in `apps/macos/RELEASE-READINESS-0.1.12.md`.
 
 ## [2.26.0] - 2026-10-27
 
