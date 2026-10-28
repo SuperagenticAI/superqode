@@ -1,6 +1,8 @@
-# macOS 0.2.0 release preparation
+# macOS 0.2.0 release
 
-Target: **0.2.0 / build 14**, Public Beta, bundled engine **2.30.0**.
+Published: **0.2.0 / build 14**, Public Beta, bundled engine **2.30.0**.
+Python **2.30.0** is also published on PyPI. See the
+[verified publication record](RELEASE-PUBLISHED-0.2.0.md).
 
 This is a version and documentation update to the published 0.1.12 harness
 engineering build. It changes no application logic or dependency declarations.
@@ -9,13 +11,11 @@ The bundled engine version is now 2.30.0. Preserve the
 and its [readiness findings](RELEASE-READINESS-0.1.12.md); renumbering does not
 resolve those findings or revalidate a new installer.
 
-The existing app/DMG must be rebuilt with the new Info.plist, signed, notarized,
-stapled and uploaded under the new version. Renaming the old DMG does not change
-its embedded app version and would leave its signed metadata at 0.1.12. Do not
-announce the new download as available until the new artifact and its published
-checksum are verified. This preparation does not create a tag or publish a release.
+The app and DMG were rebuilt with the new metadata, Developer ID signed,
+notarized, stapled and uploaded under the new version. Both the versioned and
+permanent latest downloads and their checksums were verified over HTTPS.
 
-## Announcement draft
+## Announcement copy
 
 **SuperQode for macOS 0.2 — the harness engineering update**
 
@@ -30,4 +30,6 @@ charges apply to live execution. The release remains subject to the documented
 limitations; this announcement does not claim full TUI parity or guaranteed
 improvements for every model or project.
 
-Publish this draft only after the 0.2.0 download is actually available.
+[Download for macOS](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
+or install the Python CLI with `pip install --upgrade superqode`.
+Explore the workflows at [superqode.dev](https://superqode.dev/#macos).
