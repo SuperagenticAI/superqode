@@ -70,7 +70,11 @@ def decision_from_guard_payload(payload: dict[str, Any] | None) -> HookDecision:
     """Map Guard's command-test payload to SuperQode's gating decision."""
     if not isinstance(payload, dict):
         return HookDecision(action=DENY, message="HOL Guard returned an invalid response.")
-    if payload.get("continue") is False or payload.get("decision") == "deny":
+    decision = payload.get("decision")
+    if payload.get("continue") is False or (
+        decision is not None
+        and (not isinstance(decision, str) or decision.strip().lower() != "allow")
+    ):
         return HookDecision(
             action=DENY,
             message="HOL Guard explicitly refused tool continuation.",
