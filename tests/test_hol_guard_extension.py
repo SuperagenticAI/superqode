@@ -105,7 +105,7 @@ def test_guard_invocation_is_shell_free_and_parses_single_json_line(tmp_path: Pa
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout='diagnostic\n{"minimum_action":"allow","classification":{"explicitly_benign":true}}\n',
+            stdout='{"minimum_action":"allow","classification":{"explicitly_benign":true}}\n',
             stderr="",
         )
 
@@ -118,7 +118,7 @@ def test_guard_rejects_conflicting_machine_verdicts(tmp_path: Path) -> None:
     """A diagnostic or echoed JSON line must not override a deny verdict."""
     allowed = '{"minimum_action":"allow","classification":{"explicitly_benign":true}}'
     denied = '{"minimum_action":"review","classification":{"explicitly_benign":false}}'
-    for stdout in (f"{denied}\n{allowed}", f"{allowed}\n{denied}", f"{allowed}\n{allowed}"):
+    for stdout in (f"{denied}\n{allowed}", f"{allowed}\n{denied}", f"{allowed}\n{allowed}", f"diagnostic\n{allowed}", f"{allowed}\ndiagnostic"):
         def runner(argv, **kwargs):
             return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
