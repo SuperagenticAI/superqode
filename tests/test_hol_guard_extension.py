@@ -46,7 +46,13 @@ def test_guard_blocks_review_monitor_block_and_unknown() -> None:
 
 def test_guard_explicit_deny_overrides_benign_classification() -> None:
     """An explicit stop signal cannot be overridden by an allow-shaped classifier."""
-    for stopped in ({"continue": False}, {"decision": "deny"}):
+    for stopped in (
+        {"continue": False},
+        {"decision": "deny"},
+        {"decision": "review"},
+        {"decision": "block"},
+        {"decision": ""},
+    ):
         payload = {
             "minimum_action": "allow",
             "classification": {"explicitly_benign": True},
