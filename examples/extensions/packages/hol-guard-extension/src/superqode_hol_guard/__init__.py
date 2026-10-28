@@ -87,7 +87,7 @@ def decision_from_guard_payload(payload: dict[str, Any] | None) -> HookDecision:
             and (
                 not isinstance(hook_output, dict)
                 or hook_output.get("permissionDecision") != "allow"
-                or hook_output.get("hookEventName", "PreToolUse") != "PreToolUse"
+                or hook_output.get("hookEventName") != "PreToolUse"
             )
         )
     ):
