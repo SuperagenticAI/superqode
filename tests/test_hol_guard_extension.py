@@ -27,6 +27,17 @@ hol_guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hol_guard)
 
 
+@pytest.fixture(autouse=True)
+def _use_fixed_guard_path_for_stub_runner_tests(monkeypatch):
+    """Stubbed CLI tests use a predictable resolved executable path."""
+    monkeypatch.delenv("HOL_GUARD_BIN", raising=False)
+    real_which = hol_guard.shutil.which
+    monkeypatch.setattr(
+        hol_guard.shutil, "which",
+        lambda name: "/usr/bin/hol-guard" if name == "hol-guard" else real_which(name),
+    )
+
+
 def test_guard_allows_only_explicitly_benign_commands() -> None:
     allowed = hol_guard.decision_from_guard_payload(
         {"minimum_action": "allow", "classification": {"explicitly_benign": True}}
@@ -100,7 +111,7 @@ def test_guard_explicit_deny_overrides_benign_classification() -> None:
 
 def test_guard_invocation_is_shell_free_and_parses_single_json_line(tmp_path: Path) -> None:
     def runner(argv, **kwargs):
-        assert argv == ["hol-guard", "command", "test", "--json", "--", "printf safe"]
+        assert argv == ["/usr/bin/hol-guard", "command", "test", "--json", "--", "printf safe"]
         assert kwargs["cwd"] == str(tmp_path)
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
@@ -146,7 +157,7 @@ def test_guard_keeps_option_like_quoted_and_multiline_text_positional(tmp_path: 
 
         decision = hol_guard.evaluate_command(command, tmp_path, runner=runner)
         assert decision.action == ALLOW
-        assert captured == [["hol-guard", "command", "test", "--json", "--", command]]
+        assert captured == [["/usr/bin/hol-guard", "command", "test", "--json", "--", command]]
 
 
 def test_guard_process_failures_deny(tmp_path: Path) -> None:
@@ -309,3 +320,39 @@ def test_real_guard_subprocess_blocks_launch_and_review(tmp_path: Path) -> None:
     fake_guard.chmod(0o644)
     unavailable = hol_guard.evaluate_command("git status", tmp_path, binary=str(fake_guard))
     assert unavailable.action == DENY
+
+
+def test_binary_lookup_is_bound_before_changing_working_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A relative PATH entry must not point to a new binary in the tool cwd."""
+    previous_dir_binary = "./bin/hol-guard"
+    expected_binary = os.path.realpath(previous_dir_binary)
+    seen = {}
+
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: previous_dir_binary)
+
+    def runner(argv, **kwargs):
+        seen["argv"] = argv
+        seen["cwd"] = kwargs["cwd"]
+        return subprocess.CompletedProcess(
+            argv, 0,
+            stdout='{"minimum_action":"allow","classification":{"explicitly_benign":true}}',
+            stderr="",
+        )
+
+    decision = hol_guard.evaluate_command("pwd", tmp_path, runner=runner)
+    assert decision.action == ALLOW
+    assert seen["argv"][0] == expected_binary
+    assert seen["cwd"] == str(tmp_path)
+
+
+def test_missing_binary_lookup_blocks_without_launch(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: None)
+
+    def never_run(argv, **kwargs):
+        pytest.fail("Unresolved Guard executable must never run")
+
+    decision = hol_guard.evaluate_command("pwd", tmp_path, runner=never_run)
+    assert decision.action == DENY
+    assert decision.reason == "HOL Guard gate launch failure"
