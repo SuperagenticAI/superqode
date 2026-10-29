@@ -34,7 +34,7 @@ def _use_fixed_guard_path_for_stub_runner_tests(monkeypatch):
     real_which = hol_guard.shutil.which
     monkeypatch.setattr(
         hol_guard.shutil, "which",
-        lambda name: "/usr/bin/hol-guard" if name == "hol-guard" else real_which(name),
+        lambda name: "/__hol_guard_test__/bin/hol-guard" if name == "hol-guard" else real_which(name),
     )
 
 
@@ -111,7 +111,7 @@ def test_guard_explicit_deny_overrides_benign_classification() -> None:
 
 def test_guard_invocation_is_shell_free_and_parses_single_json_line(tmp_path: Path) -> None:
     def runner(argv, **kwargs):
-        assert argv == ["/usr/bin/hol-guard", "command", "test", "--json", "--", "printf safe"]
+        assert argv == ["/__hol_guard_test__/bin/hol-guard", "command", "test", "--json", "--", "printf safe"]
         assert kwargs["cwd"] == str(tmp_path)
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
@@ -157,7 +157,7 @@ def test_guard_keeps_option_like_quoted_and_multiline_text_positional(tmp_path: 
 
         decision = hol_guard.evaluate_command(command, tmp_path, runner=runner)
         assert decision.action == ALLOW
-        assert captured == [["/usr/bin/hol-guard", "command", "test", "--json", "--", command]]
+        assert captured == [["/__hol_guard_test__/bin/hol-guard", "command", "test", "--json", "--", command]]
 
 
 def test_guard_process_failures_deny(tmp_path: Path) -> None:
