@@ -213,3 +213,17 @@ def test_before_tool_converts_unexpected_adapter_failure_to_deny(
     monkeypatch.setattr(hol_guard, "evaluate_command", boom)
     decision = hol_guard.hol_guard_before_tool(Context(), "bash", {"command": "echo x"})
     assert decision.action == DENY
+
+
+def test_guard_rejects_duplicate_machine_verdicts(tmp_path: Path) -> None:
+    """A repeated member must not replace an earlier stop with a benign allow."""
+    for stdout in (
+        '{"minimum_action":"review","minimum_action":"allow","classification":{"explicitly_benign":true}}',
+        '{"minimum_action":"allow","classification":{"explicitly_benign":false,"explicitly_benign":true}}',
+        '{"continue":false,"continue":true,"minimum_action":"allow","classification":{"explicitly_benign":true}}',
+    ):
+        def runner(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+        result = hol_guard.evaluate_command("git status", tmp_path, runner=runner)
+        assert result.action == DENY
