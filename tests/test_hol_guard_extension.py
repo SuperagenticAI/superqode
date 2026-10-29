@@ -202,6 +202,54 @@ def test_before_tool_inspects_exact_bash_input(monkeypatch, tmp_path: Path) -> N
     assert decision.action == ALLOW
     assert received == [(command, tmp_path)]
 
+def test_before_tool_inspects_in_bash_effective_working_dir(monkeypatch, tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    nested = project / "nested"
+    nested.mkdir(parents=True)
+
+    class Context:
+        working_directory = project
+
+    received = []
+
+    def fake_evaluate(command, cwd):
+        received.append((command, cwd))
+        return hol_guard.HookDecision(action=ALLOW)
+
+    monkeypatch.setattr(hol_guard, "evaluate_command", fake_evaluate)
+    explicit = hol_guard.hol_guard_before_tool(
+        Context(), "bash", {"command": "cat settings.json", "working_dir": "nested"}
+    )
+    implicit = hol_guard.hol_guard_before_tool(
+        Context(), "bash", {"command": "pwd"}
+    )
+
+    assert explicit.action == ALLOW
+    assert implicit.action == ALLOW
+    assert received == [
+        ("cat settings.json", nested.resolve()),
+        ("pwd", project.resolve()),
+    ]
+
+
+def test_before_tool_denies_out_of_scope_bash_working_dir(monkeypatch, tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+
+    class Context:
+        working_directory = project
+
+    def must_not_inspect(*_args, **_kwargs):
+        pytest.fail("Guard must not inspect a command in a different directory")
+
+    monkeypatch.setattr(hol_guard, "evaluate_command", must_not_inspect)
+    for invalid in ("../outside", str(tmp_path / "outside"), 42):
+        result = hol_guard.hol_guard_before_tool(
+            Context(), "bash", {"command": "cat settings.json", "working_dir": invalid}
+        )
+        assert result.action == DENY
+
+
 def test_before_tool_converts_unexpected_adapter_failure_to_deny(
     monkeypatch, tmp_path: Path
 ) -> None:
