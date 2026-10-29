@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from superqode import Extension
 from superqode.agent.hooks import ALLOW, DENY, HookDecision
+from superqode.tools.validation import validate_working_dir_parameter
 
 
 DEFAULT_TIMEOUT_SECONDS = 6.0
@@ -190,7 +191,12 @@ def hol_guard_before_tool(ctx, name: str = "", arguments=None):
             reason="HOL Guard gate input failure",
         )
     try:
-        return evaluate_command(command, Path(ctx.working_directory))
+        # Match the exact directory validated by the native BashTool before it
+        # executes. A tool-level working_dir overrides the session directory.
+        cwd = validate_working_dir_parameter(
+            arguments.get("working_dir"), Path(ctx.working_directory)
+        )
+        return evaluate_command(command, cwd)
     except Exception:
         # SuperQode treats hook exceptions as abstentions. Convert any unexpected
         # adapter failure into an explicit deny so this security gate stays closed.
