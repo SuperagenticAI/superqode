@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any, Callable
 
@@ -132,6 +133,16 @@ def evaluate_command(
     """Run a shell command through the local HOL Guard CLI without invoking a shell."""
     guard_binary = _non_empty_text(binary) or _non_empty_text(os.environ.get("HOL_GUARD_BIN"))
     guard_binary = guard_binary or "hol-guard"
+    # Resolve PATH and relative binaries in the caller's directory *before*
+    # switching cwd. Otherwise a project-local executable can shadow Guard.
+    resolved_binary = shutil.which(guard_binary)
+    if not resolved_binary:
+        return HookDecision(
+            action=DENY,
+            message="HOL Guard executable could not be resolved.",
+            reason="HOL Guard gate launch failure",
+        )
+    guard_binary = os.path.realpath(resolved_binary)
     try:
         completed = runner(
             [guard_binary, "command", "test", "--json", "--", command],
