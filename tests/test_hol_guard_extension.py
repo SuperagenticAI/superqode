@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 
@@ -227,3 +228,34 @@ def test_guard_rejects_duplicate_machine_verdicts(tmp_path: Path) -> None:
 
         result = hol_guard.evaluate_command("git status", tmp_path, runner=runner)
         assert result.action == DENY
+
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX executable script fixture")
+def test_real_guard_subprocess_blocks_launch_and_review(tmp_path: Path) -> None:
+    """Run a fake CLI process to verify the actual subprocess boundary."""
+    fake_guard = tmp_path / "hol-guard"
+    fake_guard.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        "if sys.argv[1:] == ['command', 'test', '--json', '--', 'git status']:\n"
+        "    print(json.dumps({'minimum_action': 'allow', "
+        "'classification': {'explicitly_benign': True}}))\n"
+        "else:\n"
+        "    print(json.dumps({'minimum_action': 'review', "
+        "'classification': {'explicitly_benign': False}}))\n"
+    )
+    fake_guard.chmod(0o755)
+
+    # The test command travels as argv to the fake CLI; no shell runs it.
+    safe = hol_guard.evaluate_command("git status", tmp_path, binary=str(fake_guard))
+    risky = hol_guard.evaluate_command(
+        "rm -rf /tmp/hol-guard-fixture-never-run", tmp_path, binary=str(fake_guard)
+    )
+    assert safe.action == ALLOW
+    assert risky.action == DENY
+
+    # The real operating system refuses launch, and the gate must deny.
+    fake_guard.chmod(0o644)
+    unavailable = hol_guard.evaluate_command("git status", tmp_path, binary=str(fake_guard))
+    assert unavailable.action == DENY
