@@ -29,14 +29,24 @@ def _non_empty_text(value: Any) -> str | None:
     return value or None
 
 
+def _reject_duplicate_guard_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject conflicting machine verdicts, including nested classification fields."""
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("duplicate key in Guard JSON verdict")
+        obj[key] = value
+    return obj
+
+
 def _last_json_object(stdout: str) -> dict[str, Any] | None:
     """Require exactly one JSON-object verdict, without mixed diagnostic output."""
     text = stdout.strip()
     if not text:
         return None
     try:
-        value = json.loads(text)
-    except json.JSONDecodeError:
+        value = json.loads(text, object_pairs_hook=_reject_duplicate_guard_keys)
+    except (ValueError, RecursionError):
         # The CLI promises JSON on stdout. Any diagnostic prefix, suffix,
         # second object or echoed command makes the result non-authoritative.
         return None
