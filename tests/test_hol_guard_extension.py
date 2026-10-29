@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import subprocess
 
+import pytest
+
 from superqode.agent.hooks import ALLOW, DENY
 
 
