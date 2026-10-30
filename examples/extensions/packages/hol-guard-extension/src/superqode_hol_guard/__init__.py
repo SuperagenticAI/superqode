@@ -142,7 +142,35 @@ def evaluate_command(
             message="HOL Guard executable could not be resolved.",
             reason="HOL Guard gate launch failure",
         )
-    guard_binary = os.path.realpath(resolved_binary)
+    selected_binary = os.path.abspath(resolved_binary)
+    guard_binary = os.path.realpath(selected_binary)
+    try:
+        # Use the outermost Git root. A nested .git marker can be supplied by
+        # an untrusted project, and a project-owned symlink can point outside.
+        root = os.path.realpath(working_directory)
+        current = root
+        while True:
+            if os.path.lexists(os.path.join(current, ".git")):
+                root = current
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+        if any(
+            os.path.commonpath((root, candidate)) == root
+            for candidate in (selected_binary, guard_binary)
+        ):
+            return HookDecision(
+                action=DENY,
+                message="HOL Guard executable is controlled by the project worktree.",
+                reason="HOL Guard gate untrusted executable",
+            )
+    except (OSError, ValueError):
+        return HookDecision(
+            action=DENY,
+            message="HOL Guard executable location could not be verified.",
+            reason="HOL Guard gate launch failure",
+        )
     try:
         completed = runner(
             [guard_binary, "command", "test", "--json", "--", command],
