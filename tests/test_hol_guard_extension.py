@@ -198,6 +198,19 @@ def test_before_tool_abstains_outside_bash_and_denies_bad_bash_input(tmp_path: P
     assert hol_guard.hol_guard_before_tool(Context(), "bash", {}).action == DENY
 
 
+@pytest.mark.parametrize("tool_name", [None, "", "   ", 42, [], {}])
+def test_before_tool_denies_missing_or_malformed_tool_identity(tool_name, tmp_path: Path) -> None:
+    class Context:
+        working_directory = tmp_path
+
+    result = hol_guard.hol_guard_before_tool(
+        Context(), tool_name, {"command": "git status"}
+    )
+    assert result is not None
+    assert result.action == DENY
+    assert result.reason == "HOL Guard gate input failure"
+
+
 def test_before_tool_inspects_exact_bash_input(monkeypatch, tmp_path: Path) -> None:
     class Context:
         working_directory = tmp_path
