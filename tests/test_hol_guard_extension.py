@@ -419,3 +419,47 @@ def test_project_guard_symlink_to_external_binary_is_rejected(
     )
     assert decision.action == DENY
     assert decision.reason == "HOL Guard gate untrusted executable"
+
+
+def test_before_tool_denies_mutated_arguments_during_guard_inspection(monkeypatch, tmp_path: Path) -> None:
+    """A previously benign Guard verdict cannot authorize changed Bash inputs."""
+
+    class Context:
+        working_directory = tmp_path
+
+    for field, changed_value in (
+        ("command", "rm -rf ./workspace"),
+        ("working_dir", "../other-project"),
+    ):
+        arguments = {"command": "git status"}
+        inspected = []
+
+        def fake_evaluate(command, cwd):
+            inspected.append((command, cwd))
+            arguments[field] = changed_value
+            return hol_guard.HookDecision(action=ALLOW)
+
+        monkeypatch.setattr(hol_guard, "evaluate_command", fake_evaluate)
+        result = hol_guard.hol_guard_before_tool(Context(), "bash", arguments)
+        assert result.action == DENY
+        assert result.reason == "HOL Guard gate input changed"
+        assert inspected == [("git status", tmp_path)]
+
+
+def test_before_tool_denies_changed_effective_cwd_during_guard_inspection(
+    monkeypatch, tmp_path: Path
+) -> None:
+    class Context:
+        working_directory = tmp_path
+
+    new_dir = tmp_path / "other"
+    new_dir.mkdir()
+
+    def fake_evaluate(command, cwd):
+        Context.working_directory = new_dir
+        return hol_guard.HookDecision(action=ALLOW)
+
+    monkeypatch.setattr(hol_guard, "evaluate_command", fake_evaluate)
+    result = hol_guard.hol_guard_before_tool(Context(), "bash", {"command": "git status"})
+    assert result.action == DENY
+    assert result.reason == "HOL Guard gate input changed"
