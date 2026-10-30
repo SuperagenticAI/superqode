@@ -340,12 +340,72 @@ def test_real_guard_subprocess_blocks_launch_and_review(tmp_path: Path) -> None:
 def test_binary_lookup_is_bound_before_changing_working_directory(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """A relative PATH entry must not point to a new binary in the tool cwd."""
-    previous_dir_binary = "./bin/hol-guard"
-    expected_binary = os.path.realpath(previous_dir_binary)
-    seen = {}
+    """A relative PATH executable from the hook-launch checkout cannot forge allow."""
+    launcher = tmp_path / "launcher"
+    launcher.mkdir()
+    (launcher / ".git").mkdir()
+    target = tmp_path / "other-checkout"
+    target.mkdir()
+    (target / ".git").mkdir()
+    monkeypatch.chdir(launcher)
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: "./bin/hol-guard")
+    result = hol_guard.evaluate_command(
+        "pwd", target,
+        runner=lambda *args, **kwargs: pytest.fail("launcher shim must not execute"),
+    )
+    assert result.action == DENY
+    assert result.reason == "HOL Guard gate untrusted executable"
 
-    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: previous_dir_binary)
+
+@pytest.mark.parametrize("symlinked", [False, True])
+def test_launcher_checkout_guard_is_not_trusted_with_other_tool_cwd(
+    monkeypatch, tmp_path: Path, symlinked: bool
+) -> None:
+    """Reject absolute launcher-owned binaries and outbound symlink aliases."""
+    launcher = tmp_path / "launcher"
+    launcher.mkdir()
+    (launcher / ".git").mkdir()
+    selected = launcher / ".bin" / "hol-guard"
+    selected.parent.mkdir()
+    if symlinked:
+        trusted = tmp_path / "trusted" / "hol-guard"
+        trusted.parent.mkdir()
+        trusted.write_text("test binary", encoding="utf-8")
+        try:
+            selected.symlink_to(trusted)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation is unavailable")
+    else:
+        selected.write_text("test binary", encoding="utf-8")
+    target = tmp_path / "other-checkout"
+    target.mkdir()
+    (target / ".git").mkdir()
+    monkeypatch.chdir(launcher)
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: str(selected))
+    result = hol_guard.evaluate_command(
+        "git status", target,
+        runner=lambda *args, **kwargs: pytest.fail("launcher checkout binary must not execute"),
+    )
+    assert result.action == DENY
+    assert result.reason == "HOL Guard gate untrusted executable"
+
+
+def test_external_guard_remains_usable_across_checkouts(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Allow a trusted external Guard binary while inspecting the actual Bash cwd."""
+    launcher = tmp_path / "launcher"
+    launcher.mkdir()
+    (launcher / ".git").mkdir()
+    target = tmp_path / "other-checkout"
+    target.mkdir()
+    (target / ".git").mkdir()
+    binary = tmp_path / "trusted" / "hol-guard"
+    binary.parent.mkdir()
+    binary.write_text("test binary", encoding="utf-8")
+    monkeypatch.chdir(launcher)
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda name: str(binary))
+    seen = {}
 
     def runner(argv, **kwargs):
         seen["argv"] = argv
@@ -356,10 +416,10 @@ def test_binary_lookup_is_bound_before_changing_working_directory(
             stderr="",
         )
 
-    decision = hol_guard.evaluate_command("pwd", tmp_path, runner=runner)
+    decision = hol_guard.evaluate_command("pwd", target, runner=runner)
     assert decision.action == ALLOW
-    assert seen["argv"][0] == expected_binary
-    assert seen["cwd"] == str(tmp_path)
+    assert seen["argv"][0] == str(binary)
+    assert seen["cwd"] == str(target)
 
 
 def test_missing_binary_lookup_blocks_without_launch(monkeypatch, tmp_path: Path) -> None:
