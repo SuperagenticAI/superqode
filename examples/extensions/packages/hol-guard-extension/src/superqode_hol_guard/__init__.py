@@ -185,6 +185,14 @@ def evaluate_command(
 @extension.before_tool
 def hol_guard_before_tool(ctx, name: str = "", arguments=None):
     """Gate SuperQode's native bash tool immediately before execution."""
+    # Missing or malformed tool names cannot prove an unrelated safe tool.
+    # Do not silently abstain if the host loses a protected bash identity.
+    if not isinstance(name, str) or not name.strip():
+        return HookDecision(
+            action=DENY,
+            message="HOL Guard could not identify the tool being called.",
+            reason="HOL Guard gate input failure",
+        )
     if name != "bash":
         return None
     if not isinstance(arguments, dict):
