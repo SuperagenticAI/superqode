@@ -307,7 +307,9 @@ def test_guard_rejects_duplicate_machine_verdicts(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX executable script fixture")
 def test_real_guard_subprocess_blocks_launch_and_review(tmp_path: Path) -> None:
-    """Run a fake CLI process to verify the actual subprocess boundary."""
+    """Run a fake CLI located outside the protected workspace."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
     fake_guard = tmp_path / "hol-guard"
     fake_guard.write_text(
         "#!/usr/bin/env python3\n"
@@ -322,16 +324,16 @@ def test_real_guard_subprocess_blocks_launch_and_review(tmp_path: Path) -> None:
     fake_guard.chmod(0o755)
 
     # The test command travels as argv to the fake CLI; no shell runs it.
-    safe = hol_guard.evaluate_command("git status", tmp_path, binary=str(fake_guard))
+    safe = hol_guard.evaluate_command("git status", workspace, binary=str(fake_guard))
     risky = hol_guard.evaluate_command(
-        "rm -rf /tmp/hol-guard-fixture-never-run", tmp_path, binary=str(fake_guard)
+        "rm -rf /tmp/hol-guard-fixture-never-run", workspace, binary=str(fake_guard)
     )
     assert safe.action == ALLOW
     assert risky.action == DENY
 
     # The real operating system refuses launch, and the gate must deny.
     fake_guard.chmod(0o644)
-    unavailable = hol_guard.evaluate_command("git status", tmp_path, binary=str(fake_guard))
+    unavailable = hol_guard.evaluate_command("git status", workspace, binary=str(fake_guard))
     assert unavailable.action == DENY
 
 
@@ -369,3 +371,51 @@ def test_missing_binary_lookup_blocks_without_launch(monkeypatch, tmp_path: Path
     decision = hol_guard.evaluate_command("pwd", tmp_path, runner=never_run)
     assert decision.action == DENY
     assert decision.reason == "HOL Guard gate launch failure"
+
+@pytest.mark.parametrize("nested_marker", [False, True])
+def test_project_controlled_guard_binary_cannot_authorize_tools(
+    monkeypatch, tmp_path: Path, nested_marker: bool
+) -> None:
+    """A nested worktree must reject a project-controlled Guard binary."""
+    project = tmp_path / "repo"
+    cwd = project / "nested"
+    project_bin = project / "bin"
+    cwd.mkdir(parents=True)
+    project_bin.mkdir()
+    (project / ".git").mkdir()
+    if nested_marker:
+        (cwd / ".git").mkdir()
+    binary = project_bin / "hol-guard"
+    binary.write_text("#!/bin/sh\\nexit 0\\n")
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda _: str(binary))
+    result = hol_guard.evaluate_command(
+        "git status", cwd,
+        runner=lambda *args, **kwargs: pytest.fail("untrusted Guard binary must never execute"),
+    )
+    assert result.action == DENY
+    assert result.reason == "HOL Guard gate untrusted executable"
+
+
+def test_project_guard_symlink_to_external_binary_is_rejected(
+    monkeypatch, tmp_path: Path
+) -> None:
+    project = tmp_path / "repo"
+    project.mkdir()
+    (project / ".git").mkdir()
+    trusted = tmp_path / "outside" / "hol-guard"
+    trusted.parent.mkdir()
+    trusted.write_text("#!/bin/sh\\nexit 0\\n")
+    local_bin = project / "bin"
+    local_bin.mkdir()
+    link = local_bin / "hol-guard"
+    try:
+        link.symlink_to(trusted)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+    monkeypatch.setattr(hol_guard.shutil, "which", lambda _: str(link))
+    decision = hol_guard.evaluate_command(
+        "git status", project,
+        runner=lambda *args, **kwargs: pytest.fail("project-controlled symlink must not launch"),
+    )
+    assert decision.action == DENY
+    assert decision.reason == "HOL Guard gate untrusted executable"
