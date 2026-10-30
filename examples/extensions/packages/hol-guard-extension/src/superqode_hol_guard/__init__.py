@@ -145,19 +145,28 @@ def evaluate_command(
     selected_binary = os.path.abspath(resolved_binary)
     guard_binary = os.path.realpath(selected_binary)
     try:
-        # Use the outermost Git root. A nested .git marker can be supplied by
-        # an untrusted project, and a project-owned symlink can point outside.
-        root = os.path.realpath(working_directory)
-        current = root
-        while True:
-            if os.path.lexists(os.path.join(current, ".git")):
-                root = current
-            parent = os.path.dirname(current)
-            if parent == current:
-                break
-            current = parent
+        def outer_worktree_root(directory: str | Path) -> str:
+            root = os.path.realpath(directory)
+            current = root
+            while True:
+                # Nested .git markers cannot conceal the enclosing checkout.
+                if os.path.lexists(os.path.join(current, ".git")):
+                    root = current
+                parent = os.path.dirname(current)
+                if parent == current:
+                    return root
+                current = parent
+
+        # PATH was resolved from the launch process, not from Bash's future
+        # directory. Reject executables supplied by either Git checkout, even
+        # when a launch-checkout symlink points to a binary outside the repo.
+        worktrees = {
+            outer_worktree_root(os.getcwd()),
+            outer_worktree_root(working_directory),
+        }
         if any(
             os.path.commonpath((root, candidate)) == root
+            for root in worktrees
             for candidate in (selected_binary, guard_binary)
         ):
             return HookDecision(
