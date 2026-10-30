@@ -230,7 +230,9 @@ def hol_guard_before_tool(ctx, name: str = "", arguments=None):
             reason="HOL Guard gate input failure",
         )
     # Inspect exactly what the bash tool will run, including whitespace and newlines.
-    command = arguments.get("command")
+    guarded_arguments = dict(arguments)
+    original_working_directory = Path(ctx.working_directory)
+    command = guarded_arguments.get("command")
     if not isinstance(command, str) or not command.strip():
         return HookDecision(
             action=DENY,
@@ -241,9 +243,18 @@ def hol_guard_before_tool(ctx, name: str = "", arguments=None):
         # Match the exact directory validated by the native BashTool before it
         # executes. A tool-level working_dir overrides the session directory.
         cwd = validate_working_dir_parameter(
-            arguments.get("working_dir"), Path(ctx.working_directory)
+            guarded_arguments.get("working_dir"), original_working_directory
         )
-        return evaluate_command(command, cwd)
+        verdict = evaluate_command(command, cwd)
+        # A concurrent callback must not swap the Bash input after Guard
+        # inspected its original command or effective execution directory.
+        if (arguments != guarded_arguments or Path(ctx.working_directory) != original_working_directory:
+            return HookDecision(
+                action=DENY,
+                message="HOL Guard tool inputs changed during inspection.",
+                reason="HOL Guard gate input changed",
+            )
+        return verdict
     except Exception:
         # SuperQode treats hook exceptions as abstentions. Convert any unexpected
         # adapter failure into an explicit deny so this security gate stays closed.
