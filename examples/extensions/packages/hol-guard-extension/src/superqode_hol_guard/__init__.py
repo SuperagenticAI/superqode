@@ -248,7 +248,7 @@ def hol_guard_before_tool(ctx, name: str = "", arguments=None):
         verdict = evaluate_command(command, cwd)
         # A concurrent callback must not swap the Bash input after Guard
         # inspected its original command or effective execution directory.
-        if (arguments != guarded_arguments or Path(ctx.working_directory) != original_working_directory:
+        if (arguments != guarded_arguments or Path(ctx.working_directory) != original_working_directory):
             return HookDecision(
                 action=DENY,
                 message="HOL Guard tool inputs changed during inspection.",
