@@ -981,6 +981,9 @@ struct SettingsView: View {
   var body: some View {
     ScrollView {
       Form {
+        Section("SuperQode Pro") {
+          ProPreviewView()
+        }
         Section("Appearance") {
           Toggle("Animate navigation and active agent indicators", isOn: $animatedInterface)
           Text("Animations respect macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)

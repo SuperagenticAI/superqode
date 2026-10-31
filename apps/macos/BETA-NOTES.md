@@ -1,4 +1,4 @@
-# SuperQode for macOS — upcoming public beta 0.2.0
+# SuperQode for macOS public beta 0.2.1
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -16,7 +16,15 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
-## Upcoming 0.2.0
+## Version 0.2.1
+
+Version 0.2.1 (build 15) adds a SuperQode Pro preview in Settings. It describes
+the planned release-confidence workflow, includes an explicitly fictional
+hold-for-review example and links to the design-partner programme. Commercial
+verification, record inspection, licensing and team approval controls are not
+available in this build. The bundled Python engine remains 2.30.0.
+
+## Version 0.2.0
 
 Source version 0.2.0 (build 14) presents the harness engineering update introduced
 in 0.1.12 under the new macOS release version. This version preparation changes
@@ -43,8 +51,8 @@ Application behavior is unchanged. The update includes:
 - A hash-verified Authlib 1.9.1 security overlay for the bundled runtime.
 
 Other advanced actions use the shared engine's typed forms; this version does not
-claim full TUI parity. Native tests, interaction checks and bounded live experiments
-on macOS are required before publishing 0.2.0. Public downloads remain at 0.1.12.
+claim full TUI parity. Setup checks and synthetic practice are not general
+quality benchmarks or release approval.
 
 ## Version 0.1.11
 
