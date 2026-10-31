@@ -496,7 +496,7 @@ def monty_command(action: str):
                 "[dim]The python_repl tool is available in standard/full tool profiles.[/dim]"
             )
         else:
-            console.print("[red]❌ pydantic-monty is not installed[/red]")
+            console.print("[red]❌ Compatible pydantic-monty 1.x is not installed[/red]")
             console.print("Install with:")
             console.print("  [cyan]uv tool install 'superqode\\[monty]'[/cyan]")
             console.print("  [cyan]# or, from a source checkout: uv sync --extra monty[/cyan]")
@@ -516,13 +516,13 @@ def monty_command(action: str):
         console.print()
         console.print("[bold]Behavior:[/bold]")
         console.print("  • Tool name: [cyan]python_repl[/cyan]")
-        console.print("  • State persists per SuperQode session")
-        console.print("  • Filesystem is blocked unless the tool mounts /workspace explicitly")
-        console.print("  • Default resource limits cap duration, memory, and recursion depth")
+        console.print("  • python_repl starts fresh on each call; checkpointed programs use a separate runner")
+        console.print("  • No direct filesystem, environment or network access; optional host calls retain SuperQode policy")
+        console.print("  • Default REPL limits are 2 seconds and 32 MiB; no third-party Python packages")
         return
 
     if not is_monty_available():
-        console.print("[red]❌ pydantic-monty is not installed[/red]")
+        console.print("[red]❌ Compatible pydantic-monty 1.x is not installed[/red]")
         console.print("Run: [cyan]uv sync --extra monty[/cyan]")
         return
 

@@ -205,6 +205,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "jev",
     # Open catalog rows, then Closed. Both are appended by _flat_profiles so
     # `--connect` and completion accept every row the pickers draw.
+    "strands",
     "tau",
     "deepseek-harness",
     "deepagents",
@@ -596,7 +597,7 @@ def test_optional_harnesses_is_still_the_v1_other_source():
     from superqode.harness import optional_harnesses
 
     ids = [entry.id for entry in optional_harnesses(".")]
-    assert ids == ["rlm-code", "tau", "uhp", "deepseek-harness", "deepagents"]
+    assert ids == ["rlm-code", "tau", "uhp", "deepseek-harness", "deepagents", "strands"]
 
 
 def test_open_rows_surface_optional_harness_setup_hints(monkeypatch):

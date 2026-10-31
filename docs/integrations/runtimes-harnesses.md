@@ -11,6 +11,7 @@ supports it.
 
 | Runtime | Optional dependency | Select or run | Verify | Detailed guide |
 | --- | --- | --- | --- | --- |
+| AWS Strands harness | Separate runtime via `python scripts/setup-strands-runtime.py --install` | `runtime.backend: strands` | `python scripts/setup-strands-runtime.py` | [AWS Strands Harness](../advanced/strands-harness.md) |
 | Google Agent Development Kit | `uv tool install "superqode[adk]"` | `runtime.backend: adk` | `superqode runtime doctor adk` | [Python Runtimes](../advanced/python-runtimes.md) |
 | OpenAI Agents SDK | `uv tool install "superqode[openai-agents]"` | `runtime.backend: openai-agents` | `superqode runtime doctor openai-agents` | [Python Runtimes](../advanced/python-runtimes.md) |
 | PydanticAI | `uv tool install "superqode[pydanticai]"` | `runtime.backend: pydanticai` | `superqode runtime doctor pydanticai` | [Python Runtimes](../advanced/python-runtimes.md) |

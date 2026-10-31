@@ -1045,7 +1045,21 @@ def benchmark_coding_template() -> HarnessSpec:
     )
 
 
+def strands_template() -> HarnessSpec:
+    """Isolated AWS Strands harness with governed read-only defaults."""
+    return HarnessSpec(
+        name="strands",
+        description="AWS Strands harness in an isolated runtime with SuperQode-governed core tools.",
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="strands", config={"max_turns": 20, "timeout_seconds": 300}),
+        execution_policy=ExecutionPolicySpec(allow_read=True, allow_write=False, allow_shell=False),
+        agents=(AgentSpec(id="coder", tools=("read", "write", "edit", "bash")),),
+        metadata={"template": "strands", "builtin_harness": True},
+    )
+
+
 BUILTIN_TEMPLATES = {
+    "strands": strands_template,
     "core": core_template,
     "systemone": systemone_template,
     "workbench": workbench_template,

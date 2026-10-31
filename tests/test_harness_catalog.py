@@ -64,6 +64,7 @@ def test_optional_catalogue_contains_tau_without_main_or_acp_harnesses(tmp_path)
         "uhp",
         "deepseek-harness",
         "deepagents",
+        "strands",
     ]
     assert optional["rlm-code"].source == "optional:rlm-code"
     assert optional["tau"].source == "optional:tau"

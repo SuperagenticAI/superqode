@@ -11,6 +11,7 @@ from .base import (
     HarnessBackendInspection,
     HarnessBackendIssue,
 )
+from .strands import StrandsHarnessBackend, strands_installation_status
 from .deepagents import DeepAgentsHarnessBackend
 from .dsh import (
     DSH_BACKEND_ALIASES,
@@ -39,6 +40,7 @@ from .systemone import SystemOneHarnessBackend
 
 _RUNTIME_BACKENDS = {"builtin", "systemone"}
 _OPTIONAL_BACKENDS = {
+    "strands",
     "codegem",
     "adk",
     "anthropic-managed",
@@ -79,6 +81,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return CopilotSDKHarnessBackend()
     if resolved == "claude-agent-sdk":
         return ClaudeAgentSDKHarnessBackend()
+    if resolved == "strands":
+        return StrandsHarnessBackend()
     if resolved == "deepagents":
         return DeepAgentsHarnessBackend()
     if resolved in {DSH_BACKEND_NAME, *DSH_BACKEND_ALIASES}:
@@ -212,6 +216,9 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
             availability="available" if available else "missing",
             install_hint=None if available else issue,
         )
+    if capabilities.backend == "strands":
+        available, issue = strands_installation_status()
+        return replace(capabilities, availability="available" if available else "missing", install_hint=None if available else issue)
     if capabilities.backend == "tau":
         from ..tau_adapter import tau_installation_status
 

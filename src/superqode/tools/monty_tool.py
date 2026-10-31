@@ -1,9 +1,9 @@
 """Monty-backed Python sandbox tool.
 
 Monty (``pydantic-monty``) is an optional, from-scratch Python interpreter that
-runs LLM-generated Python in-process with resource limits and *no* host access
+runs LLM-generated Python in worker processes with resource limits and *no* direct host access
 (filesystem, env, and network are all denied unless explicitly provided). It
-starts in microseconds, so it is the lightest sandbox tier - use it for quick
+is intended for small snippets - use it for quick
 generated-Python compute, not for shell commands (use ``bash`` for those) or
 full project runs (use a remote sandbox for those).
 
@@ -34,9 +34,13 @@ DEFAULT_MAX_MEMORY = 32 * 1024 * 1024
 
 
 def _load_monty() -> Any | None:
-    """Import pydantic_monty if available."""
+    """Import the compatible Monty 1.x API, or report it unavailable."""
     try:
-        return importlib.import_module("pydantic_monty")
+        module = importlib.import_module("pydantic_monty")
+        # The 0.x feed API and checkpoints are incompatible with our 1.x client.
+        if str(getattr(module, "__version__", "")).split(".")[0] != "1":
+            return None
+        return module
     except ImportError:
         return None
 
@@ -168,7 +172,7 @@ class MontyPythonReplTool(Tool):
                 success=False,
                 output="",
                 error=(
-                    "Monty is not installed. Install optional support with "
+                    "Monty 1.x is missing or incompatible. Install optional support with "
                     "`uv tool install 'superqode[monty]'` or `uv sync --extra monty`."
                 ),
                 metadata={"missing_dependency": "pydantic-monty"},

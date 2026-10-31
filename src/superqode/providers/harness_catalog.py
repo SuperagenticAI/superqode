@@ -370,6 +370,24 @@ def _vendor_key_auth(
 
 HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
     HarnessCatalogEntry(
+        id="strands",
+        label="Strands",
+        description="AWS harness in an isolated Python runtime; governed core tools, BYOK or local models.",
+        openness="open",
+        license="Apache-2.0",
+        repository="https://github.com/strands-agents/harness-sdk",
+        auth=_key_auth(
+            "strands", "switch-and-model",
+            byok_providers=("anthropic", "openai", "google"),
+            local_providers=("ollama",),
+        ),
+        harness_id="strands",
+        hub_id="strands",
+        vendor_owned=False,
+        wired=True,
+        list_visible=True,
+    ),
+    HarnessCatalogEntry(
         id="tau",
         label="Tau (Hugging Face)",
         description="Open-source harness. Connect with your API key or a local model.",

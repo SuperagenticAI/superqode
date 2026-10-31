@@ -8,6 +8,7 @@ from .base import (
     HarnessBackendRequest,
     HarnessBackendResult,
 )
+from .strands import StrandsHarnessBackend
 from .deepagents import DeepAgentsHarnessBackend
 from .dsh import (
     DSHHarnessBackend,
@@ -44,6 +45,7 @@ from .tau import TauHarnessBackend
 
 __all__ = [
     "HarnessBackend",
+    "StrandsHarnessBackend",
     "HarnessBackendCapabilities",
     "HarnessBackendInspection",
     "HarnessBackendIssue",

@@ -21,6 +21,7 @@ from .templates import (
     BUILTIN_TEMPLATES,
     core_template,
     deepagents_template,
+    strands_template,
     deepseek_harness_template,
     no_tool_template,
     pipy_template,
@@ -162,6 +163,8 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     uhp = uhp_template()
     dsh = deepseek_harness_template()
     deepagents = deepagents_template()
+    from .backends.strands import strands_installation_status
+    strands_available, strands_issue = strands_installation_status()
     from .backends.deepagents import deepagents_installation_status
     from .backends.dsh import dsh_installation_status
     from .backends.rlm_code import rlm_code_installation_status
@@ -253,6 +256,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     reserved.add("uhp")
     reserved.add("deepseek-harness")
     reserved.add("deepagents")
+    reserved.add("strands")
     presets: list[HarnessDefinition] = []
     seen_factories: set[object] = set()
     for template_id, factory in BUILTIN_TEMPLATES.items():
@@ -336,11 +340,17 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         available=deepagents_available,
         issue=deepagents_issue,
     )
+    strands_entry = HarnessDefinition(
+        id="strands", display_name="Strands", description=strands_template().description,
+        runtime="strands", source="optional:strands", spec=strands_template(),
+        loop_policy=core_loop_policy(), aliases=("aws-strands",),
+        available=strands_available, issue=strands_issue,
+    )
     # Keep optional first-party harness integrations on the first picker page.
     # They remain visible with a setup hint when their dependency is missing.
     return (
         workflows
-        + (rlm_code_entry, tau_entry, uhp_entry, dsh_entry, deepagents_entry)
+        + (rlm_code_entry, tau_entry, uhp_entry, dsh_entry, deepagents_entry, strands_entry)
         + tuple(presets)
     )
 

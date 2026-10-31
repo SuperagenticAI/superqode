@@ -1,5 +1,8 @@
 # AWS Strands harness integration research
 
+Implementation follow-up: see [the initial adapter and test guide](strands-harness.md).
+The findings below describe the source investigation before that implementation.
+
 Research date: 31 October 2026. Status: source review and isolated feasibility
 probes completed; production integration is not implemented by this research.
 
@@ -358,7 +361,7 @@ readiness. No remote push, version bump or publication was performed for this re
 [routing]: https://github.com/strands-agents/harness-sdk/blob/1af083deb09c956041ddbb47d1f12da59b896bc4/strands-py/src/strands/models/routing/router.py
 [acp-server]: https://github.com/strands-agents/harness-sdk/blob/1af083deb09c956041ddbb47d1f12da59b896bc4/strands-cli/src/tui/acp/server.ts
 [evals]: https://github.com/strands-agents/evals/tree/32e72bb0639fc69d6763a671b461b12bc08c83af/src/strands_evals
-[sq-backend]: ../../src/superqode/harness/backends/base.py
-[sq-credentials]: ../../src/superqode/desktop_service/connections.py
-[sq-eval]: ../../src/superqode/harness/eval.py
-[sq-acceptance]: ../../src/superqode/harness/acceptance.py
+[sq-backend]: https://github.com/SuperagenticAI/superqode/blob/727deeb42f28f3972e091147163113da5e295298/src/superqode/harness/backends/base.py
+[sq-credentials]: https://github.com/SuperagenticAI/superqode/blob/727deeb42f28f3972e091147163113da5e295298/src/superqode/desktop_service/connections.py
+[sq-eval]: https://github.com/SuperagenticAI/superqode/blob/727deeb42f28f3972e091147163113da5e295298/src/superqode/harness/eval.py
+[sq-acceptance]: https://github.com/SuperagenticAI/superqode/blob/727deeb42f28f3972e091147163113da5e295298/src/superqode/harness/acceptance.py
