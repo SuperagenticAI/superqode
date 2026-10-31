@@ -220,6 +220,72 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertFalse(app.openingProject)
   }
 
+  @MainActor private func completeProjectOpen(_ app: Workspace, engine: Engine,
+    projectID: String, path: String) async throws {
+    let opening = Task { try await app.open(path) }
+    await reply(engine, id: 1, result: ["id": projectID, "path": path])
+    await reply(engine, id: 2, result: [["id": projectID, "path": path]])
+    await reply(engine, id: 3, result: [])
+    await reply(engine, id: 4, result: ["items": []])
+    await reply(engine, id: 5, result: [])
+    await reply(engine, id: 6, result: [:])
+    try await opening.value
+  }
+
+  @MainActor func testOpeningCurrentProjectFromWelcomeEntersWorkspaceAndKeepsDraft() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.section = "Files"
+    app.selectedFile = "pending.swift"
+    app.draft = "Unsent work"
+    app.showWelcome = true
+    XCTAssertTrue(try XCTUnwrap(app.recoverySnapshot.projectDestinations["project"]).showWelcome)
+    try await completeProjectOpen(app, engine: engine, projectID: "project", path: "/tmp/project")
+    XCTAssertFalse(app.showWelcome)
+    XCTAssertFalse(app.openingProject)
+    XCTAssertEqual(app.section, "Files")
+    XCTAssertEqual(app.selectedFile, "pending.swift")
+    XCTAssertEqual(app.draft, "Unsent work")
+    XCTAssertFalse(try XCTUnwrap(app.recoverySnapshot.lastDestination).showWelcome)
+  }
+
+  @MainActor func testOpeningRecentProjectIgnoresItsSavedWelcomeDestination() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.draft = "Keep previous project"
+    app.showWelcome = true
+    app.recoverySnapshot.projectDestinations["next"] = WorkspaceDestination(
+      projectID: "next", projectPath: "/tmp/next", section: "Review", showWelcome: true)
+    let key = WorkspaceRecoverySnapshot.key(project: "next", conversation: "")
+    app.recoverySnapshot.composers[key] = ComposerRecovery(text: "Restore recent project")
+    try await completeProjectOpen(app, engine: engine, projectID: "next", path: "/tmp/next")
+    XCTAssertEqual(app.projectID, "next")
+    XCTAssertFalse(app.showWelcome)
+    XCTAssertEqual(app.section, "Review")
+    XCTAssertEqual(app.draft, "Restore recent project")
+    let previousKey = WorkspaceRecoverySnapshot.key(project: "project", conversation: "")
+    XCTAssertEqual(app.recoverySnapshot.composers[previousKey]?.text, "Keep previous project")
+  }
+
+  @MainActor func testOpeningFirstProjectFromWelcomeEntersWorkspace() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.project = [:]
+    app.recoverySnapshot = WorkspaceRecoverySnapshot()
+    app.showWelcome = true
+    try await completeProjectOpen(app, engine: engine, projectID: "first", path: "/tmp/first")
+    XCTAssertEqual(app.projectID, "first")
+    XCTAssertFalse(app.showWelcome)
+    XCTAssertFalse(app.openingProject)
+    XCTAssertEqual(app.section, "Workspace")
+  }
+
   @MainActor func testChangedProjectIdentityDoesNotReplaceVisibleProject() async {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)

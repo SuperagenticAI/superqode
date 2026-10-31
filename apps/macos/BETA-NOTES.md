@@ -25,6 +25,9 @@ verification, record inspection, licensing and team approval controls are not
 available in this build. The welcome tagline is now "The harness layer for
 coding agents". The bundled Python engine remains 2.30.0.
 
+Opening a project from Welcome now enters its workspace even if that project's
+saved destination was Welcome. Saved tabs and drafts are preserved.
+
 ## Version 0.2.0
 
 Source version 0.2.0 (build 14) presents the harness engineering update introduced

@@ -540,8 +540,11 @@ private struct DialogAuditHost: View {
     migrateLegacyDraft(settings: settings)
     restoreComposer(conversationID: "")
     section = "Workspace"
-    showWelcome = false
     if recordHistory, let saved = savedDestinations[projectID] { applyDestination(saved) }
+    // Explicit project opens must enter the workspace, even when its saved
+    // destination was Welcome. History/restart restoration can apply Welcome
+    // separately after open returns.
+    showWelcome = false
     perform {
       await self.refreshGit()
       await self.refreshModels()
@@ -1312,11 +1315,11 @@ private struct DialogAuditHost: View {
       }
       let existingDraft = draft
       showWelcome = true
-      showWelcome = false
-      guard draft == existingDraft else {
-        throw EngineError(message: "Welcome navigation lost a draft")
+      try await open(string(project, "path"))
+      guard !showWelcome, draft == existingDraft else {
+        throw EngineError(message: "Reopening a project from Welcome did not enter its workspace with its draft")
       }
-      report["welcome_navigation"] = "passed; project entry and draft-preserving return"
+      report["welcome_navigation"] = "passed; actual project reopen from Welcome enters the workspace and preserves its draft"
       let visible = conversationEvents(
         [
           ["type": "stage"], ["type": "approval"], ["type": "error"],
