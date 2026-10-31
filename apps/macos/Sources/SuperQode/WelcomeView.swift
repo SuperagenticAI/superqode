@@ -15,7 +15,7 @@ struct WelcomeView: View {
               .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(.primary.opacity(0.06)))
             Text("Welcome to SuperQode").font(.system(size: 36, weight: .semibold))
               .multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
-            Text("Your code. Your agents. Your Mac.")
+            Text("The harness layer for coding agents")
               .font(.system(size: 16)).foregroundStyle(.secondary)
             Button("Public Beta · \(BetaRelease.version) · Read the beta guide") {
               showBetaGuide = true

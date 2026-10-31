@@ -22,7 +22,8 @@ Version 0.2.1 (build 15) adds a SuperQode Pro preview in Settings. It describes
 the planned release-confidence workflow, includes an explicitly fictional
 hold-for-review example and links to the design-partner programme. Commercial
 verification, record inspection, licensing and team approval controls are not
-available in this build. The bundled Python engine remains 2.30.0.
+available in this build. The welcome tagline is now "The harness layer for
+coding agents". The bundled Python engine remains 2.30.0.
 
 ## Version 0.2.0
 
