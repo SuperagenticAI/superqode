@@ -98,3 +98,23 @@ The runner uses a disposable project and state directory, local provider
 fixtures and test-scoped native credential storage.
 
 Validation DMG SHA-256: `d4fd2d8a533bd5cd0e042e3c8cb030d322d64d7196239d43534c89da96690b29`.
+
+## Interface follow-up
+
+Validation of this follow-up passed 380 selected regressions, including 13
+actual SDK integration tests, a real ACP stdio client, TUI pilot selection and
+Open-source/Python Hub filter checks. Ruff, documentation style, release metadata
+and the documentation build passed. A fresh wheel exposed the new ACP option
+and passed its packaged runtime doctor outside the checkout.
+
+The interface follow-up adds direct `serve acp --harness strands` selection and
+`SUPERQODE_ACP_HARNESS`, fixes named CLI execution for `strands` and `aws-strands`,
+and enables TUI tool activity and token accounting. A real stdio ACP client,
+CLI runner and TUI execution controller exercise the isolated SDK against local
+fixtures. TUI selection and the shared native Connect menu have focused tests.
+The desktop job execution and native application were validated as described
+above.
+
+The signed validation installer above predates this interface follow-up. Rebuild
+the combined GUI source before distribution. Apple submission remains on hold
+at the user's request while the other GUI features are being implemented.

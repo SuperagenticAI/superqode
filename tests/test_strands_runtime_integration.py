@@ -376,3 +376,120 @@ def test_desktop_job_runs_actual_strands_worker(local_runtime, monkeypatch):
         assert len(paths) == 3  # Restored tool history avoids re-executing the read.
     finally:
         service.close()
+
+
+@pytest.mark.parametrize("reference", ["strands", "aws-strands"])
+def test_cli_runs_named_strands_harness(local_runtime, monkeypatch, reference):
+    from click.testing import CliRunner
+    from superqode.commands.harness import harness
+
+    root, _, paths = local_runtime
+    monkeypatch.setenv("HOME", str(root / "private-home"))
+    result = CliRunner().invoke(
+        harness,
+        [
+            "run",
+            reference,
+            "--provider",
+            "ollama",
+            "--model",
+            "fixture",
+            "--working-dir",
+            str(root),
+            "--store",
+            "memory",
+            "--json",
+            "-p",
+            "Read README.md",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["harness"] == "strands"
+    assert data["content"].strip() == "strands-backend-ok"
+    assert paths == ["/api/chat", "/api/chat"]
+
+
+@pytest.mark.asyncio
+async def test_acp_stdio_runs_strands_and_restores_followup(local_runtime):
+    import shlex
+    import sys
+    from superqode.acp.client import ACPClient
+
+    root, _, paths = local_runtime
+    messages, tools = [], []
+
+    async def message(text):
+        messages.append(text)
+
+    async def tool(call):
+        tools.append(call)
+
+    source = Path(__file__).resolve().parents[1] / "src"
+    command = shlex.join(
+        [
+            sys.executable,
+            "-c",
+            "from superqode.main import cli_main; cli_main()",
+            "serve",
+            "acp",
+            "--harness",
+            "strands",
+            "--provider",
+            "ollama",
+            "--model",
+            "fixture",
+        ]
+    )
+    client = ACPClient(
+        project_root=root,
+        command=command,
+        on_message=message,
+        on_tool_call=tool,
+        extra_env={
+            "PYTHONPATH": str(source),
+            "HOME": str(root / "private-home"),
+            "SUPERQODE_ACP_SPEC": "",
+            "SUPERQODE_ACP_HARNESS": "",
+        },
+        startup_timeout=15,
+        request_timeout=15,
+        prompt_timeout=20,
+    )
+    try:
+        assert await client.start(), client.last_startup_error
+        assert await client.send_prompt("Read README.md") == "end_turn"
+        session_id = client._session_id
+        assert "strands-backend-ok" in "".join(messages)
+        assert tools
+        assert paths == ["/api/chat", "/api/chat"]
+        assert await client.send_prompt("Continue this session") == "end_turn"
+        assert client._session_id == session_id
+        assert len(paths) == 3
+    finally:
+        await client.stop()
+
+
+@pytest.mark.asyncio
+async def test_tui_execution_streams_tools_once_and_records_usage(local_runtime, monkeypatch):
+    from superqode.pure_mode import PureMode
+
+    root, _, paths = local_runtime
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("HOME", str(root / "private-home"))
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
+    pure = PureMode()
+    calls, results = [], []
+    pure.on_tool_call = lambda name, arguments: calls.append((name, arguments))
+    pure.on_tool_result = lambda name, result: results.append((name, result))
+    pure.select_harness("strands")
+    assert pure.connect("ollama", "fixture", working_directory=root)
+    chunks = [chunk async for chunk in pure.run_streaming("Read README.md")]
+    assert "strands-backend-ok" in "".join(chunks)
+    assert len(calls) == len(results) == 1
+    assert calls[0][0] == results[0][0] == "read"
+    assert results[0][1].success
+    assert pure.get_status()["stats"]["total_tokens"] == 28
+    assert pure.get_status()["stats"]["cost_usd"] is None
+    assert pure.session.total_tool_calls == 1
+    assert paths == ["/api/chat", "/api/chat"]

@@ -6,7 +6,8 @@ This is the inverse of [ACP Agents](../providers/acp.md), where SuperQode is the
 
 ```bash
 superqode serve acp                       # stdio, auto-discovered harness
-superqode serve acp --spec harness.yaml   # pin one HarnessSpec for all sessions
+superqode serve acp --spec harness.yaml   # pin one HarnessSpec
+superqode serve acp --harness strands --provider ollama --model YOUR_INSTALLED_MODEL for all sessions
 ```
 
 ---
@@ -33,13 +34,17 @@ SuperQode is also submitted to the [ACP agent registry](https://github.com/agent
 
 Each ACP session resolves a HarnessSpec, in order:
 
-1. `--spec <path>` or `SUPERQODE_ACP_SPEC` (see template selection below)
-2. `superqode.local.yaml` in the session's working directory
-3. `harness.yaml` in the session's working directory
-4. The first spec under a conventional harness directory (`.superqode/harness/`, `harness/`, ...)
-5. The built-in `coding` template as a fallback
+1. `--harness <name>` or `SUPERQODE_ACP_HARNESS` pins a catalog harness, including Strands
+2. `--spec <path>` or `SUPERQODE_ACP_SPEC` (see template selection below)
+3. `superqode.local.yaml` in the session's working directory
+4. `harness.yaml` in the session's working directory
+5. The first spec under a conventional harness directory (`.superqode/harness/`, `harness/`, ...)
+6. The built-in `coding` template as a fallback
 
-The editor runs the harness file versioned with the open project.
+The editor runs the selected catalog harness or harness file versioned with the
+open project. Pass only one of `--harness`, `--spec` and `--dir`.
+For the isolated Strands setup and its permission limits, see
+[AWS Strands harness](strands-harness.md#use-from-acp-tui-cli-and-macos).
 
 ### Template selection without a spec file
 

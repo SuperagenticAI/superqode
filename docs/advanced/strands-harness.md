@@ -86,6 +86,45 @@ are not written to the spec. AWS uses its existing profile/SSO credential chain.
 LiteLLM proxy connections use `LITELLM_API_KEY` and `LITELLM_BASE_URL`.
 There is no Strands subscription/OAuth login. API and Bedrock charges apply.
 
+## Use from ACP, TUI, CLI and macOS
+
+All four interfaces run the same Strands HarnessSpec through SuperQode's
+HarnessKernel and governed tools. Install the separate runtime first. The TUI
+shows streamed responses, one card per governed tool call, and reported token
+usage; unavailable monetary cost remains unknown.
+
+| Interface | Select Strands |
+| --- | --- |
+| CLI | `superqode harness run strands --provider ollama --model YOUR_INSTALLED_MODEL -p "Read README.md"` |
+| TUI | `:harness switch strands`, or choose Strands in the Harness Hub; then choose your provider and model |
+| macOS GUI | Connect, Harnesses, Open, Strands; choose your provider and model |
+| ACP agent server | `superqode serve acp --harness strands --provider ollama --model YOUR_INSTALLED_MODEL` |
+
+ACP clients can launch SuperQode with this configuration, substituting an
+installed model identifier:
+
+```json
+{
+  "agent_servers": {
+    "SuperQode Strands": {
+      "command": "superqode",
+      "args": ["serve", "acp", "--harness", "strands", "--provider", "ollama", "--model", "YOUR_INSTALLED_MODEL"]
+    }
+  }
+}
+```
+
+`SUPERQODE_ACP_HARNESS=strands` is the environment equivalent of `--harness`.
+The existing `SUPERQODE_ACP_SPEC=template:strands` route also remains available.
+Choose only one of `--harness`, `--spec` and `--dir`. The ACP route is SuperQode's
+server backed by Strands; it preserves the same tool restrictions as the other
+interfaces. Strands interactive approval/resume remains unsupported: `ask`
+blocks execution. The raw upstream Strands CLI ACP server is not registered.
+
+The TUI and GUI keep Strands visible with setup guidance when its separate
+runtime is missing. This source branch must be included in a rebuilt app;
+the previously published macOS application does not gain Strands automatically.
+
 ## Configure bounded runs
 
 Example runtime section:

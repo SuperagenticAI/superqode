@@ -323,6 +323,7 @@ class StrandsHarnessBackend:
                         type="tool_result",
                         data={
                             "tool_name": name,
+                            "tool_call_id": packet["id"],
                             "success": result.success,
                             "output": result.output,
                             "error": result.error,

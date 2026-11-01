@@ -244,16 +244,30 @@ def serve_harness(
 
 
 @serve.command("acp")
+@click.option(
+    "--harness",
+    "harness_ref",
+    default="",
+    envvar="SUPERQODE_ACP_HARNESS",
+    help="Pin a catalog harness, for example strands, without creating a spec file",
+)
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option(
     "--dir", "harness_dir", type=click.Path(file_okay=False, path_type=Path), default=None
 )
 @click.option("--provider", default="", envvar="SUPERQODE_ACP_PROVIDER")
 @click.option("--model", default="", envvar="SUPERQODE_ACP_MODEL")
-def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: str, model: str):
+def serve_acp(
+    spec_path: Optional[Path],
+    harness_dir: Optional[Path],
+    provider: str,
+    model: str,
+    harness_ref: str,
+):
     """Run SuperQode as an ACP agent on stdio (Zed, JetBrains, Neovim, ...).
 
-    The agent loop is a HarnessSpec: --spec pins one file, otherwise each
+    The agent loop is a HarnessSpec: --harness pins a catalog entry, --spec
+    pins one file, otherwise each
     session resolves superqode.local.yaml / harness.yaml in its working
     directory, then the conventional harness dirs, then the coding template.
     """
@@ -261,8 +275,15 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
 
     from superqode.acp.server import run_acp_server
 
-    if spec_path and harness_dir:
-        raise click.ClickException("Pass either --spec or --dir, not both.")
+    if sum(bool(value) for value in (spec_path, harness_dir, harness_ref)) > 1:
+        raise click.ClickException("Pass only one of --harness, --spec or --dir.")
+    if harness_ref:
+        from superqode.harness.catalog import resolve_harness
+
+        try:
+            resolve_harness(harness_ref)
+        except (ValueError, FileNotFoundError) as exc:
+            raise click.ClickException(str(exc)) from exc
     # stdout carries JSON-RPC, so any human-facing output must go to stderr.
     click.echo("SuperQode ACP agent listening on stdio", err=True)
     try:
@@ -270,6 +291,7 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
             run_acp_server(
                 spec_path=spec_path,
                 harness_dir=harness_dir,
+                harness=harness_ref,
                 provider=provider,
                 model=model,
             )

@@ -48,7 +48,7 @@ jobs:
         run: |
           export SUPERQODE_TEST_STRANDS_PYTHON="$RUNNER_TEMP/strands/bin/python"
           uv run --locked --no-sync superqode harness strands setup --python "$SUPERQODE_TEST_STRANDS_PYTHON"
-          uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_strands_backend.py tests/test_strands_setup.py tests/test_strands_runtime_integration.py -q
+          uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_strands_backend.py tests/test_strands_setup.py tests/test_strands_surfaces.py tests/test_strands_runtime_integration.py tests/test_acp_server.py tests/test_harness_connect_catalog.py tests/test_harness_hub_catalog.py -q
 
   native:
     runs-on: macos-latest

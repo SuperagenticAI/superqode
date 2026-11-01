@@ -4,7 +4,7 @@ Run SuperQode as an ACP agent (the agent side of the Agent Client Protocol).
 Complements the client in ``acp/client.py``: any ACP client — Zed, JetBrains
 IDEs, Neovim, Devin Desktop — can drive SuperQode as its coding agent over
 stdio JSON-RPC. The agent loop is a HarnessSpec, resolved per session: an
-explicit ``--spec``, the session directory's ``superqode.local.yaml`` or
+explicit ``--harness`` or ``--spec``, the session directory's ``superqode.local.yaml`` or
 ``harness.yaml``, a spec discovered under the conventional harness dirs, or
 the built-in coding template.
 
@@ -12,6 +12,7 @@ Run it::
 
     superqode serve acp                       # stdio, auto-discovered spec
     superqode serve acp --spec harness.yaml   # pin one HarnessSpec
+    superqode serve acp --harness strands --provider ollama --model MODEL
 
 Provider/model resolution order: explicit flags → ``SUPERQODE_ACP_PROVIDER``
 / ``SUPERQODE_ACP_MODEL`` env → the spec's ``model_policy.primary``.
@@ -296,10 +297,12 @@ class SuperQodeAcpAgent:
         self,
         *,
         spec_path: Path | None = None,
+        harness: str = "",
         harness_dir: Path | None = None,
         provider: str = "",
         model: str = "",
     ) -> None:
+        self._harness = harness
         self._spec_path = spec_path
         self._harness_dir = harness_dir
         self._provider = provider
@@ -605,6 +608,10 @@ class SuperQodeAcpAgent:
         from superqode.harness import load_harness_spec
         from superqode.harness.templates import coding_template, get_harness_template
 
+        if self._harness:
+            from superqode.harness.catalog import resolve_harness
+
+            return resolve_harness(self._harness, root=cwd).spec
         explicit = str(self._spec_path or os.environ.get("SUPERQODE_ACP_SPEC", "")).strip()
         if explicit:
             # `template:<name>` selects a built-in template — no spec file needed,
@@ -626,6 +633,7 @@ class SuperQodeAcpAgent:
 async def run_acp_server(
     *,
     spec_path: Path | None = None,
+    harness: str = "",
     harness_dir: Path | None = None,
     provider: str = "",
     model: str = "",
@@ -633,6 +641,7 @@ async def run_acp_server(
     """Serve SuperQode as an ACP agent on stdio until the client disconnects."""
     agent = SuperQodeAcpAgent(
         spec_path=spec_path,
+        harness=harness,
         harness_dir=harness_dir,
         provider=provider,
         model=model,

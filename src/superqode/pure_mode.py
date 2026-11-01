@@ -900,6 +900,21 @@ class PureMode:
             if self.on_systemone:
                 self.on_systemone(event.data)
             return ""
+        if (
+            event.type == "model_result"
+            and self._harness_spec is not None
+            and self._harness_spec.runtime.backend == "strands"
+        ):
+            self._last_stats = {
+                "prompt_tokens": event.data.get("input_tokens"),
+                "completion_tokens": event.data.get("output_tokens"),
+                "total_tokens": event.data.get("total_tokens"),
+                "thinking_tokens": None,
+                "cost_usd": None,
+            }
+            self.session.total_tool_calls += event.data.get("tool_calls_made", 0)
+            self.session.total_iterations += event.data.get("iterations", 0)
+            return ""
         if event.type == "model_delta":
             return str(event.data.get("text") or "")
         if event.type == "thinking":

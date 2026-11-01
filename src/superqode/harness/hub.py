@@ -106,6 +106,7 @@ def readiness_label(readiness: str, *, local: bool = False) -> str:
 
 
 _DOCS_BY_ID = {
+    "strands": f"{DOCS_BASE}advanced/strands-harness/",
     "gemini-cli": "https://geminicli.com/docs/get-started/authentication/",
     "codex": f"{DOCS_BASE}providers/codex/",
     "codex-sdk": f"{DOCS_BASE}providers/codex/",
@@ -208,6 +209,7 @@ _PROJECT_OPENNESS = HubOpenness("open", "Apache-2.0", PROJECT_REPOSITORY)
 #
 _LANGCHAIN_DEEPAGENTS = HubOpenness("open", "MIT", "https://github.com/langchain-ai/deepagents")
 _OPENNESS_BY_ID: dict[str, HubOpenness] = {
+    "strands": HubOpenness("open", "Apache-2.0", "https://github.com/strands-agents/harness-sdk"),
     "gemini-cli": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
     "deepagents": _LANGCHAIN_DEEPAGENTS,
     "deepagents-code": _LANGCHAIN_DEEPAGENTS,
@@ -305,6 +307,11 @@ _PROJECT_LANGUAGE = HubLanguage(
 # fetches. Anything absent here falls through ``_resolve_language`` and, failing
 # that, stays Unknown. A language is never reported on a guess.
 _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
+    "strands": HubLanguage(
+        "Python",
+        "confirmed",
+        "The integrated Strands Python harness ships a pyproject.toml and Python SDK.",
+    ),
     "acp:agentpool": HubLanguage(
         "Python",
         "confirmed",
@@ -1535,6 +1542,21 @@ def _native_details(item: HarnessPickerItem) -> dict[str, Any]:
             ":rlm a2a",
             ":rlm routing",
             ":rlm delegations",
+        )
+    if item.id == "strands":
+        details.update(
+            install_command="superqode harness strands setup",
+            setup_steps=(
+                HubSetupStep(
+                    "Install the isolated Strands runtime", "superqode harness strands setup"
+                ),
+                HubSetupStep(
+                    "Check the runtime without model calls", "superqode harness strands doctor"
+                ),
+            ),
+        )
+        details["cli_commands"] += (
+            "superqode serve acp --harness strands --provider PROVIDER --model MODEL",
         )
     if item.id == "uhp":
         details.update(

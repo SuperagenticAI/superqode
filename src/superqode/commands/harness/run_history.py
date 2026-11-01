@@ -97,7 +97,13 @@ def harness_run(
         raise click.UsageError("A harness name/path or --spec is required")
 
     async def _run_spec():
-        spec = load_harness_spec(spec_path)
+        from superqode.harness.catalog import resolve_harness
+
+        spec = (
+            load_harness_spec(spec_path)
+            if spec_path is not None
+            else resolve_harness(reference, root=working_dir).spec
+        )
         store = create_harness_store(
             store_kind or spec.observability.run_store,
             (
@@ -327,7 +333,10 @@ def harness_run(
         return events
 
     try:
-        asyncio.run(_run_adapter() if reference else _run_spec())
+        # Strands executes as a catalog HarnessSpec through HarnessKernel;
+        # it is not an independently installed Harness Protocol adapter.
+        catalog_spec = reference and reference.strip().lower() in {"strands", "aws-strands"}
+        asyncio.run(_run_spec() if spec_path is not None or catalog_spec else _run_adapter())
     except Exception as exc:
         if json_output:
             click.echo(json.dumps({"error": str(exc), "success": False}, indent=2))
