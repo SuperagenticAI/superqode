@@ -2,7 +2,7 @@
 
 SuperQode can run the AWS Strands Python harness in a separate environment and
 use it as a harness evaluation baseline or candidate. This is an initial
-integration for source-checkout testing, not a published app update.
+integration available on the feature branch, not a published app update.
 
 The adapter uses `strands_harness.create_harness()`, its system prompt and its
 context manager. SuperQode supplies the governed `read`, `write`, `edit` and
@@ -15,15 +15,20 @@ implemented by this adapter. An `ask` permission blocks execution.
 
 ## Install the separate runtime
 
-From the SuperQode checkout:
+Use a SuperQode build containing this integration, from the feature branch or
+its eventual package release:
 
 ```bash
-python scripts/setup-strands-runtime.py --install
-python scripts/setup-strands-runtime.py
+superqode harness strands setup
+superqode harness strands doctor
 ```
 
+These commands are included in the Python package and do not require the source
+checkout. The old `python scripts/setup-strands-runtime.py --install` helper is
+retained for checkout compatibility.
+
 This explicitly creates `~/.superqode/runtimes/strands` using uv and Python 3.12,
-installs the tested provider extras, and checks the worker without calling a
+installs the Anthropic, OpenAI, Gemini, Ollama and LiteLLM provider extras, and checks the worker without calling a
 model. It does not install Strands into SuperQode's Python environment. The
 runtime pins Strands harness 0.3.3, SDK 1.63.0 and Monty 0.0.23. Transitive
 requirements are resolved normally; this is not a bundled, hash-locked macOS
@@ -32,7 +37,7 @@ runtime. Selection does not trigger automatic installation.
 For a custom isolated environment:
 
 ```bash
-python scripts/setup-strands-runtime.py --install --python /absolute/path/to/venv/bin/python
+superqode harness strands setup --python /absolute/path/to/venv/bin/python
 export SUPERQODE_STRANDS_PYTHON=/absolute/path/to/venv/bin/python
 ```
 
@@ -50,7 +55,8 @@ superqode harness run strands --provider ollama --model YOUR_INSTALLED_MODEL \
   --working-dir /path/to/project -p "Read README.md and summarize this project."
 ```
 
-The preset disables writing and shell execution. To change those settings,
+The preset disables writing and shell execution and does not advertise those
+tools to the model. To change those settings,
 generate an editable HarnessSpec:
 
 ```bash
@@ -72,7 +78,12 @@ Supported provider identifiers are `bedrock`, `anthropic`, `openai`, `google`,
 `ollama` and `litellm`. Choose an explicit model; there is no silent fallback to
 the AWS harness's default model. Anthropic/OpenAI/Google use provider API keys;
 Bedrock uses the AWS SDK credential workflow and model/region access. Existing
-configured credentials are passed to the worker, not written to the spec.
+keys are resolved through SuperQode's common credential resolver: environment
+or app-injected credentials take precedence over saved local auth. Only the
+selected provider's variables and required OS/proxy/TLS settings are forwarded
+to the worker; unrelated tokens such as `GITHUB_TOKEN` are excluded. Credentials
+are not written to the spec. AWS uses its existing profile/SSO credential chain.
+LiteLLM proxy connections use `LITELLM_API_KEY` and `LITELLM_BASE_URL`.
 There is no Strands subscription/OAuth login. API and Bedrock charges apply.
 
 ## Configure bounded runs
@@ -95,7 +106,9 @@ runtime:
 
 Unsupported configuration fields fail instead of being silently ignored.
 Token limits are SDK limits checked at turn boundaries, not a hard currency cap.
-The adapter rejects incomplete, limited or malformed terminal results. Unknown
+`timeout_seconds` bounds active awaited worker/tool execution. Event consumer or
+UI processing time is excluded, so a slow renderer cannot be cancelled by an
+internal timeout. The adapter rejects incomplete, limited or malformed terminal results. Unknown
 cost stays unknown. Token counts and resolved package versions are recorded.
 
 Sessions are separated by project, full HarnessSpec, selected model and
@@ -163,21 +176,35 @@ the core dependency range nor the lock.
 
 ## Validation and boundaries
 
-Validation recorded on 31 October 2026: 207 backend/catalog/connection/desktop
-regression tests passed; a final focused run of 37 Strands and Monty REPL tests
-passed, including three actual-worker integration tests. Separate Monty 1.0.0
-and 1.4.0 runs each passed 34 REPL/recovery tests and 13 RLM kernel tests. These
-counts overlap; they are not a combined full-suite total. The documentation build,
-style checks and existing release metadata checks passed.
+The 1 November review identified timeout ownership, saved-key forwarding,
+installation guidance, environment filtering and packaging issues in the initial
+implementation. The review follow-up passed 246 selected backend, connection,
+desktop and Monty tests, including six actual-worker tests against local fixtures
+(no paid model calls). Ruff format/check passed for the changed Python files;
+`python scripts/check_public_docs_style.py` and the documentation build passed.
+A built wheel was installed in a fresh environment and its packaged setup/doctor
+commands were exercised outside the checkout. These checks do not validate a
+native macOS build or live provider credentials.
+
+Provider errors now distinguish
+authentication, permissions, missing models/endpoints, configuration, connectivity
+and rate limits without returning raw provider response bodies.
+
+The original Monty checks ran separately against 1.0.0 and 1.4.0: each passed
+34 REPL/recovery tests and 13 RLM kernel tests. These are not Strands compatibility
+claims for Monty 1.x; the Strands runtime remains isolated on 0.0.23.
 
 The integration has deterministic subprocess tests for policy denial, scoped
 file access, command filtering, incomplete results, usage, timeout and cancellation.
 Opt-in tests exercise the actual pinned Strands SDK against a local Ollama HTTP
-fixture, including governed file reads and the shared evaluation/adoption path:
+fixture, including governed file reads, saved credentials, provider errors, session
+restoration and the shared evaluation/adoption path. From a development checkout,
+install the test dependencies with `uv sync --frozen --extra dev`, then run:
 
 ```bash
 SUPERQODE_TEST_STRANDS_PYTHON=/absolute/path/to/strands/bin/python \
-  python -m pytest -q tests/test_strands_runtime_integration.py
+  .venv/bin/python -m pytest -q tests/test_strands_backend.py \
+  tests/test_strands_setup.py tests/test_strands_runtime_integration.py
 ```
 
 These tests make no paid model calls and prove no real-model quality improvement.

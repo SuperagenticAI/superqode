@@ -25,7 +25,11 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def local_runtime(tmp_path, monkeypatch):
-    paths = []
+    class Requests(list):
+        status = None
+        headers = []
+
+    paths = Requests()
 
     class Stub(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -34,6 +38,13 @@ def local_runtime(tmp_path, monkeypatch):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             paths.append(self.path)
+            paths.headers.append(self.headers.get("Authorization"))
+            if paths.status:
+                self.send_response(paths.status)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "provider-fixture-secret"}).encode())
+                return
             used = any(m["role"] == "tool" for m in body.get("messages", []))
             self.send_response(200)
             self.send_header("Content-Type", "application/x-ndjson")
@@ -174,3 +185,38 @@ async def test_real_worker_restores_project_session(local_runtime, monkeypatch):
     # Reopening starts with the previous tool result rather than silently
     # resetting the conversation and re-executing the first read.
     assert len(paths) == 3
+
+
+@pytest.mark.parametrize("status,hint", [(401, "authentication failed"), (404, "not found")])
+@pytest.mark.asyncio
+async def test_real_worker_provider_failures_are_actionable_and_redacted(
+    local_runtime, status, hint
+):
+    root, spec, paths = local_runtime
+    paths.status = status
+    request = HarnessBackendRequest(
+        spec=spec, prompt="fixture", provider="ollama", model="fixture", working_directory=root
+    )
+    with pytest.raises(RuntimeError, match=hint) as error:
+        await StrandsHarnessBackend().run(request)
+    assert "provider-fixture-secret" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_real_worker_uses_saved_key_for_local_provider(local_runtime, tmp_path, monkeypatch):
+    from superqode import auth
+
+    root, spec, paths = local_runtime
+    storage = auth.LocalAuthStorage(tmp_path / "auth.json")
+    storage.set("ollama", auth.ApiAuth(key="saved-ollama-fixture"))
+    monkeypatch.setattr(auth, "_storage", storage)
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    request = HarnessBackendRequest(
+        spec=spec,
+        prompt="Read README.md",
+        provider="ollama",
+        model="fixture",
+        working_directory=root,
+    )
+    await StrandsHarnessBackend().run(request)
+    assert paths.headers == ["Bearer saved-ollama-fixture", "Bearer saved-ollama-fixture"]

@@ -1,6 +1,7 @@
 """Deterministic process fixture for the isolated harness transport."""
 
 import json
+import os
 import sys
 import time
 
@@ -32,6 +33,14 @@ if mode == "tool":
     reply = json.loads(sys.stdin.readline())
     assert reply["id"] == "1"
     content = "written" if reply["success"] else reply["error"]
+elif mode == "environment":
+    content = json.dumps(
+        {
+            "selected_key": os.environ.get("OPENAI_API_KEY") == "saved-openai-fixture",
+            "other_key": "ANTHROPIC_API_KEY" in os.environ,
+            "github_token": "GITHUB_TOKEN" in os.environ,
+        }
+    )
 else:
     content = "fixture response"
 send({"type": "delta", "text": content})

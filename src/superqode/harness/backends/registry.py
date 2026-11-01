@@ -218,7 +218,11 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         )
     if capabilities.backend == "strands":
         available, issue = strands_installation_status()
-        return replace(capabilities, availability="available" if available else "missing", install_hint=None if available else issue)
+        return replace(
+            capabilities,
+            availability="available" if available else "missing",
+            install_hint=None if available else issue,
+        )
     if capabilities.backend == "tau":
         from ..tau_adapter import tau_installation_status
 

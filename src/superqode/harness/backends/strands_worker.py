@@ -37,6 +37,7 @@ def check():
         raise ValueError(f"Unsupported Strands runtime versions: {versions}; expected {EXPECTED}")
     from strands_harness import create_harness
     from strands import Agent
+
     if not callable(create_harness) or not hasattr(Agent, "stream_async"):
         raise ValueError("Unsupported Strands runtime API")
     return versions
@@ -158,6 +159,84 @@ async def run(request):
     )
 
 
+def error_diagnostic(exc):
+    """Classify errors without returning provider response bodies or credentials."""
+    kind = type(exc).__name__
+    status = (
+        getattr(exc, "status_code", None)
+        or getattr(exc, "status", None)
+        or getattr(exc, "code", None)
+    )
+    response = getattr(exc, "response", None)
+    code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
+    if kind in {"PackageNotFoundError", "ImportError", "ModuleNotFoundError"}:
+        return (
+            "runtime_setup",
+            "Strands dependencies are missing. Run `superqode harness strands setup`.",
+        )
+    if isinstance(exc, ValueError) and str(exc).startswith("Unsupported Strands runtime"):
+        return (
+            "runtime_setup",
+            "Strands runtime versions/API do not match this adapter. Run `superqode harness strands setup`.",
+        )
+    if (
+        status == 401
+        or kind
+        in {
+            "AuthenticationError",
+            "NoCredentialsError",
+            "PartialCredentialsError",
+            "CredentialRetrievalError",
+            "SSOTokenLoadError",
+            "UnauthorizedSSOTokenError",
+        }
+        or code in {"UnrecognizedClientException", "ExpiredTokenException", "InvalidClientTokenId"}
+    ):
+        return (
+            "authentication",
+            "Strands authentication failed. Check the selected provider's saved API key or renew the AWS profile session.",
+        )
+    if (
+        status == 403
+        or kind == "PermissionDeniedError"
+        or code in {"AccessDeniedException", "UnauthorizedOperation"}
+    ):
+        return (
+            "permission",
+            "Strands provider access was denied. Check model access, AWS permissions and region.",
+        )
+    if status == 404 or kind == "NotFoundError" or code == "ResourceNotFoundException":
+        return (
+            "model_not_found",
+            "Strands model or endpoint was not found. Check the model identifier, provider endpoint and AWS region.",
+        )
+    if status == 429 or kind == "RateLimitError" or code == "ThrottlingException":
+        return "rate_limit", "Strands provider rate limit reached. Check quota or retry later."
+    if isinstance(exc, TimeoutError) or kind in {
+        "APITimeoutError",
+        "ReadTimeout",
+        "ConnectTimeout",
+    }:
+        return (
+            "timeout",
+            "Strands provider request timed out. Check connectivity or retry with a longer timeout.",
+        )
+    if kind in {"APIConnectionError", "ConnectError", "ConnectionError"}:
+        return (
+            "connection",
+            "Strands could not connect to the provider. Check the endpoint, local model server, proxy and TLS configuration.",
+        )
+    if status == 400 or isinstance(exc, ValueError) or code == "ValidationException":
+        return (
+            "configuration",
+            "Strands rejected the model configuration. Check the model identifier, reasoning effort and provider settings.",
+        )
+    return (
+        "execution",
+        f"Strands execution failed ({kind}). Check the runtime and selected provider configuration.",
+    )
+
+
 def main():
     # Provider/SDK printers must never corrupt the private protocol stream.
     with contextlib.redirect_stdout(sys.stderr):
@@ -167,13 +246,8 @@ def main():
             if "--check" not in sys.argv:
                 asyncio.run(run(receive()))
         except Exception as exc:
-            if isinstance(exc, ValueError) and str(exc).startswith(
-                "Unsupported Strands runtime versions"
-            ):
-                message = str(exc)
-            else:
-                message = f"Strands worker failed ({type(exc).__name__}). Check the runtime setup, provider credentials and model."
-            send({"type": "error", "message": message})
+            category, message = error_diagnostic(exc)
+            send({"type": "error", "category": category, "message": message})
             return 1
     return 0
 

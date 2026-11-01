@@ -3,6 +3,7 @@
 from dataclasses import replace
 from pathlib import Path
 import asyncio
+import os
 import sys
 
 import pytest
@@ -251,3 +252,65 @@ async def test_cancel_during_host_shell_reaps_command(request_factory, monkeypat
     with pytest.raises(asyncio.CancelledError):
         await task
     assert processes and all(p.returncode is not None for p in processes)
+
+
+@pytest.mark.asyncio
+async def test_slow_event_consumer_is_not_cancelled_by_worker_timeout(request_factory):
+    backend = strands.StrandsHarnessBackend()
+    events = []
+    async for event in backend.stream(request_factory(timeout_seconds=0.2)):
+        events.append(event.type)
+        if event.type == "model_request":
+            await asyncio.sleep(0.35)
+    assert events[-2:] == ["model_result", "end"]
+    assert not asyncio.current_task().cancelling()
+
+
+@pytest.mark.asyncio
+async def test_missing_runtime_has_packaged_setup_hint(request_factory, monkeypatch):
+    monkeypatch.setattr(strands, "_worker_command", lambda: ["/missing/strands/python"])
+    with pytest.raises(RuntimeError, match="superqode harness strands setup"):
+        await strands.StrandsHarnessBackend().run(request_factory())
+
+
+def test_readonly_advertises_only_executable_tools(request_factory):
+    request = request_factory()
+    assert [t.name for t in strands._tools(request).list()] == ["read"]
+    request = replace(
+        request,
+        spec=replace(
+            request.spec,
+            execution_policy=replace(
+                request.spec.execution_policy, allow_write=True, allow_shell=True
+            ),
+        ),
+    )
+    assert {t.name for t in strands._tools(request).list()} == {"read", "write", "edit", "bash"}
+    assert [
+        t.name for t in strands._tools(replace(request, sandbox_backend="read-only")).list()
+    ] == ["read"]
+
+
+@pytest.mark.asyncio
+async def test_saved_api_key_reaches_child_without_other_credentials(
+    request_factory, tmp_path, monkeypatch
+):
+    from superqode import auth
+
+    storage = auth.LocalAuthStorage(tmp_path / "auth.json")
+    storage.set("openai", auth.ApiAuth(key="saved-openai-fixture"))
+    monkeypatch.setattr(auth, "_storage", storage)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "unrelated-anthropic-fixture")
+    monkeypatch.setenv("GITHUB_TOKEN", "unrelated-github-fixture")
+    request = replace(request_factory("environment"), provider="openai")
+    result = await strands.StrandsHarnessBackend().run(request)
+    import json
+
+    assert json.loads(result.response.content) == {
+        "selected_key": True,
+        "other_key": False,
+        "github_token": False,
+    }
+    assert "saved-openai-fixture" not in str(result.metadata)
+    assert "OPENAI_API_KEY" not in os.environ

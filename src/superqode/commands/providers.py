@@ -516,9 +516,15 @@ def monty_command(action: str):
         console.print()
         console.print("[bold]Behavior:[/bold]")
         console.print("  • Tool name: [cyan]python_repl[/cyan]")
-        console.print("  • python_repl starts fresh on each call; checkpointed programs use a separate runner")
-        console.print("  • No direct filesystem, environment or network access; optional host calls retain SuperQode policy")
-        console.print("  • Default REPL limits are 2 seconds and 32 MiB; no third-party Python packages")
+        console.print(
+            "  • python_repl starts fresh on each call; checkpointed programs use a separate runner"
+        )
+        console.print(
+            "  • No direct filesystem, environment or network access; optional host calls retain SuperQode policy"
+        )
+        console.print(
+            "  • Default REPL limits are 2 seconds and 32 MiB; no third-party Python packages"
+        )
         return
 
     if not is_monty_available():

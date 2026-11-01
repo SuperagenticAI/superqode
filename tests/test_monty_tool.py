@@ -135,6 +135,9 @@ async def test_python_repl_accepts_max_duration_secs_parameter(tool_context):
 def test_incompatible_monty_is_not_exposed(monkeypatch):
     from types import SimpleNamespace
     from superqode.tools import monty_tool
-    monkeypatch.setattr(monty_tool.importlib, "import_module", lambda _: SimpleNamespace(__version__="0.0.23"))
+
+    monkeypatch.setattr(
+        monty_tool.importlib, "import_module", lambda _: SimpleNamespace(__version__="0.0.23")
+    )
     assert not monty_tool.is_monty_available()
     assert monty_tool._load_monty() is None

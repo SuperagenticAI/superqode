@@ -23,6 +23,7 @@ from ..permissions import evaluate_permission_rules
 from ..sandbox import apply_backend_permissions, require_shell, SandboxPolicy
 from ..spec import HarnessFlavor
 from .base import HarnessBackendCapabilities, HarnessBackendRequest, HarnessBackendResult
+from .strands_environment import worker_environment, redact_error
 
 MAX_PACKET = 1_000_000
 SUPPORTED_TOOLS = {"read", "write", "edit", "bash"}
@@ -36,9 +37,7 @@ CONFIG_KEYS = {
     "timeout_seconds",
     "session",
 }
-INSTALL_HINT = (
-    "Run python scripts/setup-strands-runtime.py --install from the SuperQode source checkout."
-)
+INSTALL_HINT = "Run `superqode harness strands setup`, then `superqode harness strands doctor`."
 
 
 def strands_python() -> Path:
@@ -163,7 +162,15 @@ def _tools(request: HarnessBackendRequest) -> ToolRegistry:
         raise ValueError("Strands agent tools cannot widen the HarnessSpec tool declaration")
     if set(selected) - SUPPORTED_TOOLS:
         raise ValueError("Strands supports only the governed read, write, edit and bash tools")
-    return ToolRegistry.core().filtered(list(selected))
+    policy = spec.execution_policy
+    enabled = set(selected)
+    if not policy.allow_read:
+        enabled.discard("read")
+    if not policy.allow_write or request.sandbox_backend == "read-only":
+        enabled.difference_update({"write", "edit"})
+    if not policy.allow_shell or request.sandbox_backend in {"read-only", "no-shell"}:
+        enabled.discard("bash")
+    return ToolRegistry.core().filtered([name for name in selected if name in enabled])
 
 
 class StrandsHarnessBackend:
@@ -250,22 +257,15 @@ class StrandsHarnessBackend:
             if request.session_id and settings.get("session", True)
             else False,
         }
-        # Provider SDKs retain normal credentials/proxy configuration. Python and
-        # Monty paths must resolve inside the selected environment.
-        environment = dict(os.environ)
-        for key in ("PYTHONPATH", "PYTHONHOME", "MONTY_BIN"):
-            environment.pop(key, None)
-        environment["OTEL_TRACES_EXPORTER"] = "none"
-        environment["PATH"] = (
-            str(strands_python().parent) + os.pathsep + environment.get("PATH", "")
-        )
+        environment = worker_environment(request.provider, strands_python())
+        budget = _ActiveBudget(settings["timeout_seconds"])
         self._tasks[request.session_id] = asyncio.current_task()
         process = None
         if observer := getattr(self, "_runtime_observer", None):
             observer(self)
         try:
-            async with asyncio.timeout(settings["timeout_seconds"]):
-                process = await asyncio.create_subprocess_exec(
+            process = await budget.wait(
+                asyncio.create_subprocess_exec(
                     *_worker_command(),
                     cwd=request.working_directory,
                     env=environment,
@@ -274,49 +274,51 @@ class StrandsHarnessBackend:
                     stderr=asyncio.subprocess.DEVNULL,
                     limit=MAX_PACKET + 1,
                 )
-                await _send(process, payload)
-                terminal = None
-                ready = False
-                while line := await process.stdout.readline():
-                    if len(line) > MAX_PACKET:
-                        raise ValueError("Strands worker packet exceeds size limit")
-                    packet = json.loads(line)
-                    if not isinstance(packet, dict) or terminal is not None:
-                        raise ValueError("Invalid Strands worker protocol")
-                    kind = packet.get("type")
-                    if kind == "ready" and not ready:
-                        ready = True
-                        yield HarnessEvent(
-                            type="model_request",
-                            data={
-                                "backend": self.name,
-                                "model": model,
-                                "versions": packet["versions"],
-                            },
-                        )
-                    elif kind == "tool_request" and ready:
-                        name, args = packet.get("name"), packet.get("arguments")
-                        if not isinstance(args, dict) or not isinstance(packet.get("id"), str):
-                            raise ValueError("Invalid Strands tool request")
-                        yield HarnessEvent(
-                            type="tool_call",
-                            data={
-                                "tool_name": name,
-                                "arguments": args,
-                                "tool_call_id": packet["id"],
-                            },
-                        )
-                        result = await execute_tool(request, tools, name, args)
-                        yield HarnessEvent(
-                            type="tool_result",
-                            data={
-                                "tool_name": name,
-                                "success": result.success,
-                                "output": result.output,
-                                "error": result.error,
-                            },
-                        )
-                        await _send(
+            )
+            await budget.wait(_send(process, payload))
+            terminal = None
+            ready = False
+            while line := await budget.wait(process.stdout.readline()):
+                if len(line) > MAX_PACKET:
+                    raise ValueError("Strands worker packet exceeds size limit")
+                packet = json.loads(line)
+                if not isinstance(packet, dict) or terminal is not None:
+                    raise ValueError("Invalid Strands worker protocol")
+                kind = packet.get("type")
+                if kind == "ready" and not ready:
+                    ready = True
+                    yield HarnessEvent(
+                        type="model_request",
+                        data={
+                            "backend": self.name,
+                            "model": model,
+                            "versions": packet["versions"],
+                        },
+                    )
+                elif kind == "tool_request" and ready:
+                    name, args = packet.get("name"), packet.get("arguments")
+                    if not isinstance(args, dict) or not isinstance(packet.get("id"), str):
+                        raise ValueError("Invalid Strands tool request")
+                    yield HarnessEvent(
+                        type="tool_call",
+                        data={
+                            "tool_name": name,
+                            "arguments": args,
+                            "tool_call_id": packet["id"],
+                        },
+                    )
+                    result = await budget.wait(execute_tool(request, tools, name, args))
+                    yield HarnessEvent(
+                        type="tool_result",
+                        data={
+                            "tool_name": name,
+                            "success": result.success,
+                            "output": result.output,
+                            "error": result.error,
+                        },
+                    )
+                    await budget.wait(
+                        _send(
                             process,
                             {
                                 "id": packet["id"],
@@ -325,23 +327,53 @@ class StrandsHarnessBackend:
                                 "error": result.error,
                             },
                         )
-                    elif kind == "delta" and ready and isinstance(packet.get("text"), str):
-                        yield HarnessEvent(type="model_delta", data={"text": packet["text"]})
-                    elif kind == "result" and ready:
-                        terminal = _validate_result(packet)
-                    elif kind == "error":
-                        raise RuntimeError(str(packet.get("message") or "Strands worker failed"))
-                    else:
-                        raise ValueError("Unexpected Strands worker packet")
-                code = await process.wait()
-                if code != 0 or terminal is None:
-                    raise RuntimeError("Strands worker exited without a successful terminal result")
-                yield HarnessEvent(type="model_result", data=terminal)
-                yield HarnessEvent(type="end", data={"backend": self.name})
+                    )
+                elif kind == "delta" and ready and isinstance(packet.get("text"), str):
+                    yield HarnessEvent(type="model_delta", data={"text": packet["text"]})
+                elif kind == "result" and ready:
+                    terminal = _validate_result(packet)
+                elif kind == "error":
+                    raise RuntimeError(
+                        redact_error(
+                            str(packet.get("message") or "Strands worker failed"), environment
+                        )
+                    )
+                else:
+                    raise ValueError("Unexpected Strands worker packet")
+            code = await budget.wait(process.wait())
+            if code != 0 or terminal is None:
+                raise RuntimeError("Strands worker exited without a successful terminal result")
+            yield HarnessEvent(type="model_result", data=terminal)
+            yield HarnessEvent(type="end", data={"backend": self.name})
+        except (FileNotFoundError, PermissionError) as exc:
+            if process is None:
+                raise RuntimeError(
+                    "Strands runtime is missing or cannot be started. " + INSTALL_HINT
+                ) from exc
+            raise
         finally:
             self._tasks.pop(request.session_id, None)
             if process:
                 await _close(process)
+
+
+class _ActiveBudget:
+    """Time awaited work; never leave a cancellation timer armed across yield."""
+
+    def __init__(self, seconds):
+        self.seconds = seconds
+        self.remaining = seconds
+
+    async def wait(self, operation):
+        started = asyncio.get_running_loop().time()
+        try:
+            return await asyncio.wait_for(operation, max(0, self.remaining))
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"Strands exceeded its {self.seconds:g}s active execution timeout"
+            ) from exc
+        finally:
+            self.remaining -= asyncio.get_running_loop().time() - started
 
 
 async def _send(process, packet):

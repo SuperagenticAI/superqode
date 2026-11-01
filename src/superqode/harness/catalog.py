@@ -164,6 +164,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     dsh = deepseek_harness_template()
     deepagents = deepagents_template()
     from .backends.strands import strands_installation_status
+
     strands_available, strands_issue = strands_installation_status()
     from .backends.deepagents import deepagents_installation_status
     from .backends.dsh import dsh_installation_status
@@ -341,10 +342,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         issue=deepagents_issue,
     )
     strands_entry = HarnessDefinition(
-        id="strands", display_name="Strands", description=strands_template().description,
-        runtime="strands", source="optional:strands", spec=strands_template(),
-        loop_policy=core_loop_policy(), aliases=("aws-strands",),
-        available=strands_available, issue=strands_issue,
+        id="strands",
+        display_name="Strands",
+        description=strands_template().description,
+        runtime="strands",
+        source="optional:strands",
+        spec=strands_template(),
+        loop_policy=core_loop_policy(),
+        aliases=("aws-strands",),
+        available=strands_available,
+        issue=strands_issue,
     )
     # Keep optional first-party harness integrations on the first picker page.
     # They remain visible with a setup hint when their dependency is missing.

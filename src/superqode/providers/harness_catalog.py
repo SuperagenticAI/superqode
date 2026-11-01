@@ -377,7 +377,8 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         license="Apache-2.0",
         repository="https://github.com/strands-agents/harness-sdk",
         auth=_key_auth(
-            "strands", "switch-and-model",
+            "strands",
+            "switch-and-model",
             byok_providers=("anthropic", "openai", "google"),
             local_providers=("ollama",),
         ),
