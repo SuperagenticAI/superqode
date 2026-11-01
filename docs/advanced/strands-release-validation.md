@@ -5,7 +5,8 @@ Review date: 1 November 2026. Implementation baseline: `c7cc683904602e273eefbf66
 ## Release status
 
 The backend has passed local runtime, SDK, desktop and native UI validation on
-Apple Silicon. Live AWS Bedrock and hosted API-key provider inference still
+Apple Silicon, including a Developer ID signed release application and DMG.
+Live AWS Bedrock and hosted API-key provider inference still
 require credentials. This report does not authorize merging, tagging or publishing.
 
 ## Corrections made during validation
@@ -34,7 +35,7 @@ require credentials. This report does not authorize merging, tagging or publishi
 | Real local inference | Ollama `qwen3.5:2b` read a disposable file through the governed `read` tool and returned `STRANDS_LIVE_74921`; 1603 total tokens |
 | SDK execution limit | Token-limited run rejected as unsuccessful |
 | Desktop process | Default preset runs and a follow-up restores its session and tool history |
-| Native app smoke | Strands selected in an ad-hoc signed debug app; two Responses API fixture requests, session continuation and ephemeral app credentials verified |
+| Native app smoke | Passed in both ad-hoc debug and Developer ID signed release applications; two Responses API fixture requests, session continuation and ephemeral app credentials verified |
 | Permission boundaries | Deny/ask, read-only mode, symlink escape, command filtering and cancellation regressions passed |
 | Wheel | Built and installed in a fresh temporary environment; setup and doctor passed outside the source checkout |
 | Static checks | Ruff lint/format, documentation style, release metadata and diff whitespace passed |
@@ -45,9 +46,25 @@ not a comparison against SuperQode's existing backend.
 
 ## Distribution validation
 
-A Developer ID release build and notarization validation are in progress.
-This section must be updated with their actual results before treating those
-checks as complete. The published application remains unchanged.
+The release-configuration app built successfully and was Developer ID signed
+with hardened runtime enabled. The signing script verified 33 embedded native
+files and the outer bundle. The signed app passed the complete native Strands
+smoke test. A signed validation DMG was created; app and DMG signature checks
+passed outside the filesystem sandbox after the UI test.
+
+The existing `SuperQodeNotary` Keychain profile authenticated with Apple's
+notarization service. Submission was not executed: automatic approval review
+rejected uploading the application code to Apple without explicit user consent.
+Notarization, stapling and Gatekeeper distribution acceptance remain incomplete.
+No installer was published, and no branch was merged or release tagged.
+
+Local validation artifacts:
+
+- App: `/tmp/superqode-strands-signed/SuperQode.app`
+- DMG: `/tmp/superqode-strands-signed/SuperQode-strands-validation-arm64.dmg`
+- Native evidence: `/tmp/superqode-strands-signed-ui/smoke-report.json`
+- Selected tests: `/tmp/superqode-strands-final-tests.log`
+- Signature verification: `/tmp/superqode-strands-signature-verification.log`
 
 ## Remaining provider validation
 
@@ -79,3 +96,5 @@ SUPERQODE_SMOKE_ARTIFACTS=/tmp/strands-native-artifacts \
 
 The runner uses a disposable project and state directory, local provider
 fixtures and test-scoped native credential storage.
+
+Validation DMG SHA-256: `d4fd2d8a533bd5cd0e042e3c8cb030d322d64d7196239d43534c89da96690b29`.
