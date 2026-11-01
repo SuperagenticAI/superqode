@@ -71,8 +71,8 @@ execution grants commands the host user's privileges.
 
 In the TUI, select **Strands** from the harness picker or use
 `:harness switch strands`, then select your model. The shared catalog exposes
-Strands to the macOS backend and Connect workflow. Native UI and signed-app
-execution still require validation on a Mac.
+Strands to the macOS backend and Connect workflow. See the [release validation report](strands-release-validation.md) for the
+locally verified native UI and packaging scope.
 
 Supported provider identifiers are `bedrock`, `anthropic`, `openai`, `google`,
 `ollama` and `litellm`. Choose an explicit model; there is no silent fallback to
@@ -101,14 +101,18 @@ runtime:
     total_tokens: 100000
     output_tokens: 32000
     timeout_seconds: 300
+    wall_timeout_seconds: 3600
     session: true
 ```
 
 Unsupported configuration fields fail instead of being silently ignored.
 Token limits are SDK limits checked at turn boundaries, not a hard currency cap.
 `timeout_seconds` bounds active awaited worker/tool execution. Event consumer or
-UI processing time is excluded, so a slow renderer cannot be cancelled by an
-internal timeout. The adapter rejects incomplete, limited or malformed terminal results. Unknown
+UI processing time is excluded from that budget. A separate `wall_timeout_seconds`
+deadline (3600 seconds by default, configurable up to 3600) includes consumer
+processing time and reaps the worker even if the UI stops consuming events. It
+does not cancel the UI task. Active host tools are cancelled at either deadline.
+The adapter rejects incomplete, limited or malformed terminal results. Unknown
 cost stays unknown. Token counts and resolved package versions are recorded.
 
 Sessions are separated by project, full HarnessSpec, selected model and
@@ -208,7 +212,14 @@ SUPERQODE_TEST_STRANDS_PYTHON=/absolute/path/to/strands/bin/python \
 ```
 
 These tests make no paid model calls and prove no real-model quality improvement.
-Real AWS/API-key inference, macOS native execution and signed packaging remain
-untested here. The raw Strands CLI ACP route is not registered as a supported
+The tests also cover the OpenAI Responses API, shared endpoint configuration and
+the desktop job process with the default preset. The native macOS CI workflow
+runs these SDK tests and a packaged-app Strands smoke test without paid accounts.
+Automatic caching uses upstream provider detection; explicitly enabling caching
+on an unsupported provider still fails.
+
+Real AWS/API-key inference and Developer ID signed/notarized distribution require
+separate release validation. See the [release validation report](strands-release-validation.md)
+for evidence from the local Mac review. The raw Strands CLI ACP route is not registered as a supported
 coding connection by this implementation, because its stock server lacks the
 required client approval bridge. See the [source investigation](strands-harness-research.md).

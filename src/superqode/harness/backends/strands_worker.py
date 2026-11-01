@@ -108,7 +108,9 @@ async def run(request):
         background_tasks=False,
         session=request["session"],
         context_manager=settings.get("context_manager", "auto"),
-        caching=settings.get("caching", "auto"),
+        # Omitting caching lets upstream auto-detect provider support. Passing
+        # "auto" explicitly raises for Ollama and some Bedrock models.
+        **({"caching": settings["caching"]} if settings.get("caching", "auto") != "auto" else {}),
         callback_handler=None,
     )
     result = None

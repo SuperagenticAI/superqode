@@ -24,7 +24,9 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
-def local_runtime(tmp_path, monkeypatch):
+def local_runtime(tmp_path, monkeypatch, request):
+    provider = getattr(request, "param", "ollama")
+
     class Requests(list):
         status = None
         headers = []
@@ -47,6 +49,62 @@ def local_runtime(tmp_path, monkeypatch):
                 return
             used = any(m["role"] == "tool" for m in body.get("messages", []))
             self.send_response(200)
+            if provider == "openai":
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                used = any(m.get("type") == "function_call_output" for m in body.get("input", []))
+                packets = (
+                    [
+                        {
+                            "type": "response.output_text.delta",
+                            "item_id": "message",
+                            "output_index": 0,
+                            "content_index": 0,
+                            "delta": "strands-backend-ok",
+                        }
+                    ]
+                    if used
+                    else [
+                        {
+                            "type": "response.output_item.added",
+                            "output_index": 0,
+                            "item": {
+                                "type": "function_call",
+                                "id": "read-item",
+                                "call_id": "read-fixture",
+                                "name": "read",
+                                "arguments": "",
+                                "status": "in_progress",
+                            },
+                        },
+                        {
+                            "type": "response.function_call_arguments.done",
+                            "output_index": 0,
+                            "item_id": "read-item",
+                            "arguments": '{"path":"README.md"}',
+                        },
+                    ]
+                )
+                packets.append(
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "id": "fixture",
+                            "object": "response",
+                            "status": "completed",
+                            "output": [],
+                            "usage": {"input_tokens": 10, "output_tokens": 4, "total_tokens": 14},
+                        },
+                    }
+                )
+                for index, packet in enumerate(packets):
+                    packet["sequence_number"] = index
+                    self.wfile.write(
+                        (
+                            "event: " + packet["type"] + "\ndata: " + json.dumps(packet) + "\n\n"
+                        ).encode()
+                    )
+                return
             self.send_header("Content-Type", "application/x-ndjson")
             self.end_headers()
             message = {"role": "assistant", "content": "strands-backend-ok" if used else ""}
@@ -73,6 +131,10 @@ def local_runtime(tmp_path, monkeypatch):
     thread.start()
     monkeypatch.setenv("SUPERQODE_STRANDS_PYTHON", os.environ["SUPERQODE_TEST_STRANDS_PYTHON"])
     monkeypatch.setenv("OLLAMA_HOST", f"http://127.0.0.1:{server.server_port}")
+    if provider == "openai":
+        monkeypatch.setenv("OPENAI_API_BASE", f"http://127.0.0.1:{server.server_port}/v1")
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "local-openai-fixture")
     monkeypatch.setenv("MONTY_BIN", "/does/not/exist")
     (tmp_path / "README.md").write_text("fixture-read-ok")
     spec = strands_template()
@@ -161,6 +223,24 @@ async def test_real_worker_reaches_shared_eval_and_acceptance_contract(local_run
 
 
 @pytest.mark.asyncio
+async def test_real_sdk_token_limit_cannot_be_reported_as_success(local_runtime):
+    root, spec, _ = local_runtime
+    spec = replace(
+        spec, runtime=replace(spec.runtime, config={**spec.runtime.config, "total_tokens": 1})
+    )
+    with pytest.raises(RuntimeError, match="did not complete: max_tokens"):
+        await StrandsHarnessBackend().run(
+            HarnessBackendRequest(
+                spec=spec,
+                prompt="Read README.md",
+                provider="ollama",
+                model="fixture",
+                working_directory=root,
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_real_worker_restores_project_session(local_runtime, monkeypatch):
     from superqode.harness.backends import strands
 
@@ -220,3 +300,79 @@ async def test_real_worker_uses_saved_key_for_local_provider(local_runtime, tmp_
     )
     await StrandsHarnessBackend().run(request)
     assert paths.headers == ["Bearer saved-ollama-fixture", "Bearer saved-ollama-fixture"]
+
+
+@pytest.mark.parametrize("local_runtime", ["openai"], indirect=True)
+@pytest.mark.asyncio
+async def test_real_openai_sdk_uses_shared_endpoint_and_governed_tools(local_runtime):
+    root, spec, paths = local_runtime
+    result = await StrandsHarnessBackend().run(
+        HarnessBackendRequest(
+            spec=spec,
+            prompt="Read README.md",
+            provider="openai",
+            model="fixture",
+            working_directory=root,
+        )
+    )
+    assert result.response.content.strip() == "strands-backend-ok"
+    assert result.response.tool_calls_made == 1
+    assert paths == ["/v1/responses", "/v1/responses"]
+    assert paths.headers == ["Bearer local-openai-fixture"] * 2
+
+
+def test_desktop_job_runs_actual_strands_worker(local_runtime, monkeypatch):
+    import subprocess
+    import time
+    from superqode.desktop_service.service import DesktopService
+
+    root, _, paths = local_runtime
+    monkeypatch.setenv("HOME", str(root / "isolated-home"))
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    service = DesktopService(root / "desktop-state")
+    try:
+        project = service.open_project(str(root))
+        job = service.dispatch(
+            "tasks.start",
+            {
+                "project": project["id"],
+                "harness": "strands",
+                "provider": "ollama",
+                "model": "fixture",
+                "prompt": "Read README.md",
+                "command_id": "strands-native-worker",
+            },
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            detail = service.dispatch("jobs.get", {"id": job["id"]})
+            if detail["status"] not in {"running", "needs_approval"}:
+                break
+            time.sleep(0.05)
+        assert detail["status"] == "completed", detail
+        assert paths == ["/api/chat", "/api/chat"]
+        first_session = detail["result"]["session_id"]
+        assert detail["result"]["native_continuity"] is True
+        followup = service.dispatch(
+            "tasks.start",
+            {
+                "project": project["id"],
+                "harness": "strands",
+                "provider": "ollama",
+                "model": "fixture",
+                "prompt": "Continue the same session",
+                "parent_id": job["id"],
+                "command_id": "strands-native-followup",
+            },
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            detail = service.dispatch("jobs.get", {"id": followup["id"]})
+            if detail["status"] not in {"running", "needs_approval"}:
+                break
+            time.sleep(0.05)
+        assert detail["status"] == "completed", detail
+        assert detail["result"]["session_id"] == first_session
+        assert len(paths) == 3  # Restored tool history avoids re-executing the read.
+    finally:
+        service.close()

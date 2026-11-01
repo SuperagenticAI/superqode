@@ -35,6 +35,7 @@ CONFIG_KEYS = {
     "total_tokens",
     "output_tokens",
     "timeout_seconds",
+    "wall_timeout_seconds",
     "session",
 }
 INSTALL_HINT = "Run `superqode harness strands setup`, then `superqode harness strands doctor`."
@@ -90,6 +91,14 @@ def _settings(request: HarnessBackendRequest) -> dict:
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 3600:
         raise ValueError("Strands timeout_seconds must be between 0 and 3600")
     raw["timeout_seconds"] = timeout
+    wall_timeout = raw.get("wall_timeout_seconds", 3600)
+    if (
+        type(wall_timeout) not in (int, float)
+        or not math.isfinite(wall_timeout)
+        or not 0 < wall_timeout <= 3600
+    ):
+        raise ValueError("Strands wall_timeout_seconds must be between 0 and 3600")
+    raw["wall_timeout_seconds"] = wall_timeout
     if raw.get("effort", "auto") not in {
         "auto",
         "off",
@@ -258,9 +267,10 @@ class StrandsHarnessBackend:
             else False,
         }
         environment = worker_environment(request.provider, strands_python())
-        budget = _ActiveBudget(settings["timeout_seconds"])
+        budget = _ActiveBudget(settings["timeout_seconds"], settings["wall_timeout_seconds"])
         self._tasks[request.session_id] = asyncio.current_task()
         process = None
+        watchdog = None
         if observer := getattr(self, "_runtime_observer", None):
             observer(self)
         try:
@@ -275,6 +285,7 @@ class StrandsHarnessBackend:
                     limit=MAX_PACKET + 1,
                 )
             )
+            watchdog = asyncio.create_task(_expire_worker(process, budget.deadline))
             await budget.wait(_send(process, payload))
             terminal = None
             ready = False
@@ -353,6 +364,10 @@ class StrandsHarnessBackend:
             raise
         finally:
             self._tasks.pop(request.session_id, None)
+            if watchdog:
+                watchdog.cancel()
+                with suppress(asyncio.CancelledError):
+                    await watchdog
             if process:
                 await _close(process)
 
@@ -360,20 +375,35 @@ class StrandsHarnessBackend:
 class _ActiveBudget:
     """Time awaited work; never leave a cancellation timer armed across yield."""
 
-    def __init__(self, seconds):
+    def __init__(self, seconds, wall_seconds=3600):
         self.seconds = seconds
         self.remaining = seconds
+        self.wall_seconds = wall_seconds
+        self.deadline = asyncio.get_running_loop().time() + wall_seconds
 
     async def wait(self, operation):
         started = asyncio.get_running_loop().time()
         try:
-            return await asyncio.wait_for(operation, max(0, self.remaining))
+            return await asyncio.wait_for(
+                operation, max(0, min(self.remaining, self.deadline - started))
+            )
         except TimeoutError as exc:
+            if asyncio.get_running_loop().time() >= self.deadline:
+                raise TimeoutError(
+                    f"Strands exceeded its {self.wall_seconds:g}s wall-clock timeout"
+                ) from exc
             raise TimeoutError(
                 f"Strands exceeded its {self.seconds:g}s active execution timeout"
             ) from exc
         finally:
             self.remaining -= asyncio.get_running_loop().time() - started
+
+
+async def _expire_worker(process, deadline):
+    # Reap the worker even while the async generator is suspended in a UI yield.
+    # Do not cancel the consumer task, which may be processing unrelated UI work.
+    await asyncio.sleep(max(0, deadline - asyncio.get_running_loop().time()))
+    await _close(process)
 
 
 async def _send(process, packet):
@@ -388,11 +418,13 @@ async def _close(process):
     if process.stdin:
         process.stdin.close()
     if process.returncode is None:
-        process.terminate()
+        with suppress(ProcessLookupError):
+            process.terminate()
         try:
             await asyncio.wait_for(process.wait(), 2)
         except asyncio.TimeoutError:
-            process.kill()
+            with suppress(ProcessLookupError):
+                process.kill()
     await process.wait()
     if process.stdin:
         with suppress(BrokenPipeError, ConnectionResetError):

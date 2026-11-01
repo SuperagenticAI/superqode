@@ -8,6 +8,7 @@ on:
       - ".github/matchers/swift.json"
       - "src/**"
       - "tests/test_desktop*"
+      - "tests/test_strands*"
       - "tests/test_macos_runtime_inventory.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -41,6 +42,13 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_desktop_*.py tests/test_macos_runtime_inventory.py tests/test_macos_runtime_dependencies.py tests/test_agent_subprocess_cleanup.py tests/test_harness_acceptance.py tests/test_harness_omni.py -q
+      - name: Install isolated Strands runtime and check actual SDK adapters
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: |
+          export SUPERQODE_TEST_STRANDS_PYTHON="$RUNNER_TEMP/strands/bin/python"
+          uv run --locked --no-sync superqode harness strands setup --python "$SUPERQODE_TEST_STRANDS_PYTHON"
+          uv run --locked --no-sync pytest -p pytest_asyncio.plugin tests/test_strands_backend.py tests/test_strands_setup.py tests/test_strands_runtime_integration.py -q
 
   native:
     runs-on: macos-latest
@@ -123,9 +131,19 @@ jobs:
           PY
       - name: Native app smoke with loopback model fixtures
         run: python3 apps/macos/scripts/smoke-test.py
+      - name: Native Strands smoke with loopback Responses API fixture
+        env:
+          SUPERQODE_SMOKE_HARNESS: strands
+          SUPERQODE_SMOKE_ARTIFACTS: apps/macos/artifacts-strands
+        run: |
+          export SUPERQODE_STRANDS_PYTHON="$RUNNER_TEMP/strands/bin/python"
+          PYTHONPATH=src apps/macos/.build-venv/bin/python -c 'from superqode.main import cli_main; cli_main()' harness strands setup --python "$SUPERQODE_STRANDS_PYTHON"
+          python3 apps/macos/scripts/smoke-test.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-smoke-report
-          path: apps/macos/artifacts/smoke-report.json
+          path: |
+            apps/macos/artifacts/smoke-report.json
+            apps/macos/artifacts-strands/smoke-report.json
           if-no-files-found: ignore

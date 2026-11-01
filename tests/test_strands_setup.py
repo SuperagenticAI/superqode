@@ -97,6 +97,19 @@ def test_environment_keeps_only_selected_provider_and_transport_configuration(
     assert redact_error("Rejected openai-fixture", openai) == "Rejected [REDACTED]"
 
 
+def test_shared_openai_endpoint_reaches_strands_sdk(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_BASE", "http://localhost:9999/v1")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    assert worker_environment("openai", tmp_path / "python")["OPENAI_BASE_URL"] == (
+        "http://localhost:9999/v1"
+    )
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:8888/v1")
+    assert worker_environment("openai", tmp_path / "python")["OPENAI_BASE_URL"] == (
+        "http://localhost:8888/v1"
+    )
+    assert "OPENAI_BASE_URL" not in worker_environment("ollama", tmp_path / "python")
+
+
 @pytest.fixture
 def worker_module():
     path = Path(strands_setup.__file__).with_name("backends") / "strands_worker.py"

@@ -1559,7 +1559,7 @@ private struct DialogAuditHost: View {
         guard failure.message != "File boundary was not enforced" else { throw failure }
         report["file_boundary"] = "passed"
       }
-      chooseHarness("no-tool")
+      chooseHarness(ProcessInfo.processInfo.environment["SUPERQODE_SMOKE_HARNESS"] ?? "no-tool")
       provider = "openai"
       model = "gpt-4o-mini"
       draft = "Reply using the local native test fixture."

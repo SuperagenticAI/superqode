@@ -142,7 +142,8 @@ async def task(request, directory):
             "session_id": session.session_id,
             "harness": spec.name,
             "harness_digest": digest,
-            "native_continuity": spec.runtime.backend == "builtin",
+            "native_continuity": spec.runtime.backend == "builtin"
+            or (spec.runtime.backend == "strands" and spec.runtime.config.get("session", True)),
             "artifact_dir": str(directory),
             "status": "completed",
         },

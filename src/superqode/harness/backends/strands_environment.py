@@ -63,6 +63,11 @@ def worker_environment(provider: str, interpreter: Path) -> dict[str, str]:
         if key:
             for name in KEY_VARIABLES[provider]:
                 environment[name] = key
+    # The shared OpenAI connection uses OPENAI_API_BASE; the OpenAI SDK
+    # used by Strands reads OPENAI_BASE_URL instead.
+    if provider == "openai" and "OPENAI_BASE_URL" not in environment:
+        if base_url := os.environ.get("OPENAI_API_BASE"):
+            environment["OPENAI_BASE_URL"] = base_url
     environment["PATH"] = str(interpreter.parent) + os.pathsep + environment.get("PATH", "")
     environment["OTEL_TRACES_EXPORTER"] = "none"
     return environment

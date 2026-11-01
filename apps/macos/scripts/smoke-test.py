@@ -28,6 +28,35 @@ class Fixture(BaseHTTPRequestHandler):
         authorizations.append(self.headers.get("Authorization"))
         text = "Native task fixture: the Swift app is streaming the local harness engine."
         self.send_response(200)
+        if self.path.endswith("/responses"):
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for index, packet in enumerate(
+                [
+                    {
+                        "type": "response.output_text.delta",
+                        "item_id": "message",
+                        "output_index": 0,
+                        "content_index": 0,
+                        "delta": text,
+                    },
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "id": "native-fixture",
+                            "object": "response",
+                            "status": "completed",
+                            "output": [],
+                            "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+                        },
+                    },
+                ]
+            ):
+                packet["sequence_number"] = index
+                self.wfile.write(
+                    ("event: " + packet["type"] + "\ndata: " + json.dumps(packet) + "\n\n").encode()
+                )
+            return
         if body.get("stream"):
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
@@ -91,6 +120,7 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     environment = {
         **os.environ,
         "OPENAI_API_BASE": f"http://127.0.0.1:{server.server_port}/v1",
+        "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
         "OPENAI_API_KEY": "local-native-test-only",
         "LITELLM_LOCAL_MODEL_COST_MAP": "True",
         "SUPERQODE_STATE_DIR": str(root / "state"),
@@ -122,7 +152,8 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     evidence["provider_requests"] = len(requests)
     if evidence.get("passed") and (
         len(requests) < 2
-        or "Native task fixture" not in json.dumps(requests[-1].get("messages", []))
+        or "Native task fixture"
+        not in json.dumps(requests[-1].get("messages", requests[-1].get("input", [])))
     ):
         evidence["passed"] = False
         evidence["error"] = "Follow-up did not include prior native session context"

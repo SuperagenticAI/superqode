@@ -141,6 +141,36 @@ async def test_path_escape_invalid_arguments_and_compound_shell_blocked(request_
 
 
 @pytest.mark.asyncio
+async def test_file_tools_cannot_follow_project_symlinks_outside(request_factory, tmp_path):
+    outside = tmp_path.parent / (tmp_path.name + "-outside.txt")
+    outside.write_text("private fixture")
+    (tmp_path / "escape.txt").symlink_to(outside)
+    request = request_factory()
+    request = replace(
+        request,
+        spec=replace(
+            request.spec,
+            execution_policy=replace(
+                request.spec.execution_policy,
+                allow_write=True,
+            ),
+        ),
+    )
+    try:
+        for name, arguments in [
+            ("read", {"path": "escape.txt"}),
+            ("write", {"path": "escape.txt", "content": "changed"}),
+            ("edit", {"path": "escape.txt", "old_text": "private", "new_text": "changed"}),
+        ]:
+            result = await strands.execute_tool(request, ToolRegistry.core(), name, arguments)
+            assert not result.success
+            assert "outside the project" in result.error
+        assert outside.read_text() == "private fixture"
+    finally:
+        outside.unlink()
+
+
+@pytest.mark.asyncio
 async def test_timeout_and_cancel_reap_owned_worker(request_factory, monkeypatch):
     processes = []
     original = asyncio.create_subprocess_exec
@@ -176,6 +206,9 @@ async def test_timeout_and_cancel_reap_owned_worker(request_factory, monkeypatch
         {"max_turns": 0},
         {"max_turns": True},
         {"timeout_seconds": float("nan")},
+        {"wall_timeout_seconds": float("nan")},
+        {"wall_timeout_seconds": True},
+        {"wall_timeout_seconds": 0},
         {"mcp_servers": {}},
         {"session": "yes"},
     ],
@@ -264,6 +297,46 @@ async def test_slow_event_consumer_is_not_cancelled_by_worker_timeout(request_fa
             await asyncio.sleep(0.35)
     assert events[-2:] == ["model_result", "end"]
     assert not asyncio.current_task().cancelling()
+
+
+@pytest.mark.asyncio
+async def test_wall_timeout_reaps_worker_while_consumer_is_suspended(request_factory, monkeypatch):
+    processes = []
+    original = asyncio.create_subprocess_exec
+
+    async def spawn(*args, **kwargs):
+        process = await original(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    stream = strands.StrandsHarnessBackend().stream(
+        request_factory("hang", timeout_seconds=5, wall_timeout_seconds=0.2)
+    )
+    try:
+        assert (await anext(stream)).type == "model_request"
+        await asyncio.wait_for(processes[0].wait(), 3)
+        assert processes[0].returncode is not None
+        assert not asyncio.current_task().cancelling()
+        with pytest.raises(TimeoutError, match="wall-clock"):
+            await anext(stream)
+    finally:
+        await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_wall_timeout_cancels_active_host_operation():
+    stopped = asyncio.Event()
+
+    async def operation():
+        try:
+            await asyncio.sleep(60)
+        finally:
+            stopped.set()
+
+    with pytest.raises(TimeoutError, match="wall-clock"):
+        await strands._ActiveBudget(5, 0.02).wait(operation())
+    assert stopped.is_set()
 
 
 @pytest.mark.asyncio
