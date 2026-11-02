@@ -330,6 +330,27 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.draft, "Original task")
   }
 
+  @MainActor func testDroppedImageCannotAttachToAnotherThreadWhileStaging() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    let image = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+    try Data([0]).write(to: image)
+    defer { try? FileManager.default.removeItem(at: image) }
+    app.attachDroppedFile(image.path)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while engine.pendingRequestCount == 0 && ContinuousClock.now < deadline { await Task.yield() }
+    app.selectJob("b")
+    app.draft = "Keep this thread"
+    app.imageAttachments = [["id": "other-image", "name": "other.png"]]
+    await reply(engine, id: 1, result: ["id": "late-image", "name": "late.png"])
+    while !app.notice.contains("draft changed") && ContinuousClock.now < deadline { await Task.yield() }
+    XCTAssertEqual(app.draft, "Keep this thread")
+    XCTAssertEqual(app.imageAttachments.map { string($0, "id") }, ["other-image"])
+    XCTAssertTrue(app.notice.contains("draft changed"))
+  }
+
   @MainActor func testProjectSetupFailureLeavesPreviousDestinationAndDraftIntact() async {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)

@@ -1258,10 +1258,17 @@ private struct DialogAuditHost: View {
     guard !projectID.isEmpty else { return false }
     let urls = providers.filter { $0.canLoadObject(ofClass: URL.self) }
     guard !urls.isEmpty else { return false }
+    let sourceComposerKey = composerKey
     for provider in urls {
       _ = provider.loadObject(ofClass: URL.self) { object, _ in
         guard let url = object, url.isFileURL else { return }
-        DispatchQueue.main.async { self.attachDroppedFile(url.path) }
+        DispatchQueue.main.async {
+          guard self.composerKey == sourceComposerKey else {
+            self.notice = "The draft changed while loading the drop. Attach it again in the intended thread."
+            return
+          }
+          self.attachDroppedFile(url.path)
+        }
       }
     }
     return true
@@ -1271,11 +1278,19 @@ private struct DialogAuditHost: View {
     guard FileManager.default.fileExists(atPath: path, isDirectory: &directory), !directory.boolValue else { return }
     let kind = (path as NSString).pathExtension.lowercased()
     if ["png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "heic"].contains(kind) {
+      let sourceComposerKey = composerKey
       perform {
         guard self.imageAttachments.count < 4 else {
           throw EngineError(message: "Attach up to four images.")
         }
         let item = try await self.engine.call("images.stage", ["path": path]) as? [String: Any] ?? [:]
+        guard self.composerKey == sourceComposerKey else {
+          self.notice = "The draft changed while loading the image. Attach it again in the intended thread."
+          return
+        }
+        guard self.imageAttachments.count < 4 else {
+          throw EngineError(message: "Attach up to four images.")
+        }
         self.imageAttachments.append(item)
       }
       return
