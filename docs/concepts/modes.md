@@ -39,6 +39,11 @@ the remote catalog.
 
 ## Harness Choices
 
+The `strands` profile runs AWS Strands in a separate environment with SuperQode's
+governed tools. Use `:connect strands` after the explicit setup described in the
+[Strands harness guide](../advanced/strands-harness.md); selecting the profile
+does not install packages or start a model call.
+
 The Harness Switcher is the centralized inventory for runnable harnesses:
 
 ```text

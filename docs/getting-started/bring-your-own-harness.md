@@ -103,6 +103,7 @@ superqode harness init my-coder -t qwen-coding
 | Template | Starting point |
 | --- | --- |
 | `core` | Lean native harness with read, write, edit, and shell tools |
+| `strands` | AWS Strands with governed SuperQode tools and a separately installed runtime; see the [setup guide](../advanced/strands-harness.md) |
 | `workbench` | Complete native coding workbench |
 | `codegem` | Six-tool coding harness optimized for Google's Gemma and Gemini models |
 | `systemone` | Progressive tool discovery and Jev-backed typed decisions |

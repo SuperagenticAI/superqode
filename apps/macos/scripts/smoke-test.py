@@ -138,6 +138,7 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
         "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
         "OPENAI_API_KEY": "local-native-test-only",
         "LITELLM_LOCAL_MODEL_COST_MAP": "True",
+        "PYTHONDONTWRITEBYTECODE": "1",
         "SUPERQODE_STATE_DIR": str(root / "state"),
         "SUPERQODE_SMOKE_REPORT": str(report),
     }
@@ -149,6 +150,7 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
         subprocess.check_output(
             [
                 str(runtime / "python/bin/python3"),
+                "-B",
                 "-c",
                 "import json,sys; from superqode.desktop_service.service import DesktopService; "
                 "fixture=DesktopService(sys.argv[1]); "
@@ -259,3 +261,10 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     print(json.dumps(evidence, indent=2))
     if not evidence.get("passed"):
         fail_smoke(evidence.get("error", "Native smoke reported failure without an explanation"))
+    signature = subprocess.run(
+        ["codesign", "--verify", "--deep", "--strict", str(BINARY.parent.parent.parent)],
+        capture_output=True,
+        text=True,
+    )
+    if signature.returncode:
+        fail_smoke("Smoke run changed the signed app: " + signature.stderr[-3000:])

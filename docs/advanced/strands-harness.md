@@ -1,8 +1,8 @@
 # AWS Strands harness
 
 SuperQode can run the AWS Strands Python harness in a separate environment and
-use it as a harness evaluation baseline or candidate. This is an initial
-integration available on the feature branch, not a published app update.
+use it as a harness evaluation baseline or candidate. The integration is included
+in Python 2.31.0 and macOS 0.3.0; the Strands runtime is installed separately.
 
 The adapter uses `strands_harness.create_harness()`, its system prompt and its
 context manager. SuperQode supplies the governed `read`, `write`, `edit` and
@@ -15,8 +15,8 @@ implemented by this adapter. An `ask` permission blocks execution.
 
 ## Install the separate runtime
 
-Use a SuperQode build containing this integration, from the feature branch or
-its eventual package release:
+Install or update SuperQode to Python 2.31.0 or macOS 0.3.0, then explicitly
+prepare the separate runtime:
 
 ```bash
 superqode harness strands setup
@@ -30,7 +30,8 @@ retained for checkout compatibility.
 This explicitly creates `~/.superqode/runtimes/strands` using uv and Python 3.12,
 installs the Anthropic, OpenAI, Gemini, Ollama and LiteLLM provider extras, and checks the worker without calling a
 model. It does not install Strands into SuperQode's Python environment. The
-runtime pins Strands harness 0.3.3, SDK 1.63.0 and Monty 0.0.23. Transitive
+runtime pins Strands harness 0.3.3, SDK 1.63.0, LiteLLM 1.103.1 and
+filelock 4.2.1; the harness uses Monty 0.0.23. Other transitive
 requirements are resolved normally; this is not a bundled, hash-locked macOS
 runtime. Selection does not trigger automatic installation.
 
@@ -43,8 +44,8 @@ export SUPERQODE_STRANDS_PYTHON=/absolute/path/to/venv/bin/python
 
 For the macOS app, use the default directory so the backend finds it when the
 app is opened from Finder. Custom environment variables and terminal API-key
-exports may not reach a Finder-launched app. The app must be rebuilt from this
-branch to include the adapter; the currently published app is unchanged.
+exports may not reach a Finder-launched app. Use macOS 0.3.0 or later for the native integration; older installed
+apps do not gain the adapter automatically.
 
 ## Start with a read-only task
 
@@ -70,7 +71,7 @@ execution. A local worker is not an operating-system sandbox; enabling shell
 execution grants commands the host user's privileges.
 
 In the TUI, select **Strands** from the harness picker or use
-`:harness switch strands`, then select your model. The shared catalog exposes
+`:connect strands` or `:harness switch strands`, then select your model. The shared catalog exposes
 Strands to the macOS backend and Connect workflow. Install the separate runtime
 and run `superqode harness strands doctor` before connecting.
 
@@ -122,8 +123,8 @@ interfaces. Strands interactive approval/resume remains unsupported: `ask`
 blocks execution. The raw upstream Strands CLI ACP server is not registered.
 
 The TUI and GUI keep Strands visible with setup guidance when its separate
-runtime is missing. This source branch must be included in a rebuilt app;
-the previously published macOS application does not gain Strands automatically.
+runtime is missing. Older macOS applications do not gain Strands automatically;
+install macOS 0.3.0 or later.
 
 ## Configure bounded runs
 

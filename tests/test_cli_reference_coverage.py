@@ -280,6 +280,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "agent-closed-harnesses": "concepts/modes.md",
         # Open catalog rows. Closed rows are listed with their vendor above.
         "tau": "concepts/modes.md",
+        "strands": "advanced/strands-harness.md",
         "deepseek-harness": "concepts/modes.md",
         "deepagents": "providers/deepagents.md",
         "deepagents-code-key": "providers/deepagents.md",
@@ -393,11 +394,15 @@ def test_superqode_environment_variables_are_in_the_environment_reference():
         "SUPERQODE_REF",
         "SUPERQODE_REVIEW",
         "SUPERQODE_SENTINEL_4",
+        # Generated read-check content marker, not an environment lookup.
+        "SUPERQODE_READ_CHECK_",
         # Private desktop-to-worker handoff, not user configuration settings.
         "SUPERQODE_DESKTOP_KEY_VARS",
         "SUPERQODE_DESKTOP_REMOTE",
         "SUPERQODE_DESKTOP_TOOL_ARGV",
         "SUPERQODE_DESKTOP_TOOL_SECRETS",
+        "SUPERQODE_DESKTOP_PARENT_PID",
+        "SUPERQODE_DESKTOP_LEASE_FD",
     }
 
     source_names = set(re.findall(r"SUPERQODE_[A-Z0-9_]+", source_text))

@@ -172,6 +172,8 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 | `SUPERQODE_FAST_AGENT_ACP_COMMAND` | command | built-in | Override the command used to launch the fast-agent ACP server. |
 | `SUPERQODE_ACP_SPEC` | path or `template:<name>` | discovered per session | Pin the HarnessSpec exposed by `superqode serve acp`. |
 | `SUPERQODE_ACP_PROVIDER` | provider id | HarnessSpec route | Override the provider used by the SuperQode ACP server. |
+| `SUPERQODE_ACP_HARNESS` | catalog harness id | unset | Select the ACP server's catalog harness, equivalent to `serve acp --harness`; for example `strands`. |
+| `SUPERQODE_STRANDS_PYTHON` | absolute interpreter path | `~/.superqode/runtimes/strands/bin/python` (Windows: `Scripts/python.exe`) | Override the isolated Strands interpreter. Run `superqode harness strands setup --python PATH` first. Finder-launched apps may not inherit shell exports. |
 | `SUPERQODE_ACP_MODEL` | model id | HarnessSpec route | Override the model used by the SuperQode ACP server. |
 
 ## MCP harness server
