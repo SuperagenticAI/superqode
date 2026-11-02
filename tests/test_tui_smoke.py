@@ -2105,6 +2105,22 @@ def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
     assert missing == []
 
 
+@pytest.mark.parametrize(
+    "arguments", ["", "doctor", "setup --python '/tmp/strands env/bin/python'"]
+)
+def test_strands_setup_commands_dispatch_to_cli_without_connecting(arguments):
+    app = make_app()
+    called = []
+    app._run_cli_passthrough = lambda parts, _log, _label: called.append(parts)
+    app._record_ex_command = lambda *_args: None
+
+    app._handle_command(":harness strands " + arguments, FakeLog())
+
+    import shlex
+
+    assert called == [["harness", "strands", *shlex.split(arguments)]]
+
+
 def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()

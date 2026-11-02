@@ -4646,6 +4646,7 @@ class CommandImplMixin:
             "mine-failures",
             "registry",
             "run",
+            "strands",
             "test",
             "validate",
             "worker",
