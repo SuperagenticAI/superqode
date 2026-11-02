@@ -12,12 +12,21 @@ struct AuthenticationProgressView: View {
   @State private var messages = "Starting sign-in…"
   @State private var dismissRequested = false
   @State private var cancellationSent = false
+  private var heading: String {
+    switch string(request, "action") {
+    case "registry-refresh": return "Refresh ACP registry"
+    case "install", "acp-install": return "Install coding agent"
+    case "probe": return "Check agent connection"
+    case "acp-terminal": return "Prepare agent sign-in"
+    default: return "Complete sign-in"
+    }
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       PageTitle(
-        eyebrow: "Your account", title: "Complete sign-in",
+          eyebrow: "Agent setup", title: heading,
         subtitle:
-          "Approve access in the vendor browser window. Your credentials stay with the vendor or this Mac’s local credential store."
+          "Review progress below. Sign-in stays with the selected agent. You can cancel this operation."
       )
       if state == "running" { ProgressView() }
       CodeBlock(text: messages).frame(height: 260)
@@ -25,11 +34,11 @@ struct AuthenticationProgressView: View {
         nativeButton("dialog.cancel", action: {
           cancel()
           dismiss()
-        }, title: state == "running" ? "Cancel sign-in" : "Close") {
-          Text(state == "running" ? "Cancel sign-in" : "Close")
+        }, title: state == "running" ? "Cancel operation" : "Close") {
+          Text(state == "running" ? "Cancel operation" : "Close")
         }
         Spacer()
-        if state == "failed" { Text("Sign-in did not complete").foregroundStyle(.orange) }
+        if state == "failed" { Text("Operation did not complete").foregroundStyle(.orange) }
       }
     }.padding(28).frame(width: 650, height: 480).background { BrandBackdrop() }
       .task {
@@ -73,8 +82,11 @@ struct TerminalLoginView: View {
   @ObservedObject var terminals: ProjectTerminals
   @DialogDismiss private var dismiss
   let arguments: [String]
+  var environment: [String: String] = [:]
+  var unsetEnvironment: [String] = []
   let complete: () -> Void
   @State private var identity = "sign-in-" + UUID().uuidString
+  @State private var failure = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
@@ -87,14 +99,19 @@ struct TerminalLoginView: View {
         "Complete the vendor’s interactive sign-in here. Credentials remain in the vendor’s local store. Closing this window stops this sign-in process."
       ).font(.callout).foregroundStyle(.secondary)
       if let terminal = terminals.view(identity) { ProjectTerminalHost(terminal: terminal) }
+      if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
     }.padding(24).frame(width: 820, height: 550).background { BrandBackdrop() }
       .task {
         guard !arguments.isEmpty else { return }
-        terminals.start(identity, path: string(app.project, "path"), arguments: arguments)
+        terminals.start(identity, path: string(app.project, "path"), arguments: arguments,
+          environment: environment, unset: unsetEnvironment)
         while terminals.running.contains(identity) && !Task.isCancelled {
           try? await Task.sleep(for: .milliseconds(500))
         }
-        if !Task.isCancelled { complete() }
+        if !Task.isCancelled {
+          if terminals.exitCodes[identity] == 0 { complete() }
+          else { failure = "Sign-in exited without success. Close this window and try again." }
+        }
       }.onDisappear { terminals.stop(identity) }
   }
 }

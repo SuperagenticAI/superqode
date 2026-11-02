@@ -89,6 +89,7 @@ def to_openai_function_tools(
     ctx_factory: Callable[[], ToolContext],
     permission_manager: PermissionManager,
     excluded: Optional[Iterable[str]] = None,
+    on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
 ) -> List[Any]:
     """Bridge every tool in ``registry`` to an openai-agents FunctionTool.
 
@@ -114,7 +115,9 @@ def to_openai_function_tools(
         if tool.name in excluded_set:
             continue
 
-        tools_out.append(_bridge_one(tool, ctx_factory, permission_manager, FunctionTool))
+        tools_out.append(
+            _bridge_one(tool, ctx_factory, permission_manager, FunctionTool, on_tool_result)
+        )
 
     return tools_out
 
@@ -124,6 +127,7 @@ def _bridge_one(
     ctx_factory: Callable[[], ToolContext],
     permission_manager: PermissionManager,
     FunctionToolCls: Any,
+    on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
 ) -> Any:
     """Build one FunctionTool. Pulled out so closures bind to the right tool."""
 
@@ -146,6 +150,8 @@ def _bridge_one(
             from ..tools.governed import execute_governed_tool
 
             result = await execute_governed_tool(sq_tool, args, ctx)
+            if on_tool_result:
+                on_tool_result(sq_tool.name, result)
         except Exception as exc:  # noqa: BLE001 — surface as tool error
             logger.exception("Tool %s raised", sq_tool.name)
             return f"ERROR: {type(exc).__name__}: {exc}"

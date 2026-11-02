@@ -29,6 +29,15 @@ superqode harness observability export <run-id> \
   --output .superqode/obs/<run-id>
 ```
 
+For PydanticAI model and tool tracing, install the dedicated extra and enable
+tracing in your HarnessSpec:
+
+```bash
+uv tool install "superqode[pydanticai-logfire]"
+```
+
+Configure your Logfire destination and credentials before enabling external
+trace export.
+
 See the [Harness CLI observability reference](../cli-reference/harness-commands.md#harness-observability-status)
 and [configuration reference](../configuration/yaml-reference.md).
-

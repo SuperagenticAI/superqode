@@ -95,11 +95,13 @@ def make_bridged_tool_class():
             sq_tool: Tool,
             ctx_factory: Callable[[], ToolContext],
             permission_manager: PermissionManager,
+            on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
         ):
             super().__init__(name=sq_tool.name, description=sq_tool.description)
             self._sq_tool = sq_tool
             self._ctx_factory = ctx_factory
             self._permission_manager = permission_manager
+            self._on_tool_result = on_tool_result
 
         def _get_declaration(self):  # type: ignore[override]
             # SuperQode parameters are already JSON Schema. ADK's Schema is a
@@ -124,6 +126,8 @@ def make_bridged_tool_class():
             from ..tools.governed import execute_governed_tool
 
             result = await execute_governed_tool(self._sq_tool, args, ctx)
+            if self._on_tool_result:
+                self._on_tool_result(self.name, result)
             return _format_tool_result(result)
 
     return BridgedSuperQodeTool
@@ -134,6 +138,7 @@ def to_adk_tools(
     ctx_factory: Callable[[], ToolContext],
     permission_manager: PermissionManager,
     excluded: Optional[Iterable[str]] = None,
+    on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
 ) -> List[Any]:
     """Bridge every tool in ``registry`` into an ADK BaseTool instance.
 
@@ -152,5 +157,5 @@ def to_adk_tools(
     for tool in registry.list():
         if tool.name in excluded_set:
             continue
-        bridged.append(BridgedSuperQodeTool(tool, ctx_factory, permission_manager))
+        bridged.append(BridgedSuperQodeTool(tool, ctx_factory, permission_manager, on_tool_result))
     return bridged

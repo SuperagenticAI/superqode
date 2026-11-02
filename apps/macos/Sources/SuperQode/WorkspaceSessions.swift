@@ -1,6 +1,25 @@
 import Foundation
 
 @MainActor extension Workspace {
+  func addSharedThreadContext(_ text: String, project: String, target: String, targetSummary: [String: Any]? = nil) -> Bool {
+    guard project == projectID, !text.isEmpty, !busy, !openingProject, !restoringNavigation else { return false }
+    var identity = ""
+    if !target.isEmpty {
+      guard let row = targetSummary ?? recentConversations.first(where: { string($0, "id") == target }),
+        string(row, "id") == target, string(row, "project") == project,
+        row["archived"] as? Bool != true,
+        string(row, "kind") == "task",
+        ["completed", "failed", "cancelled", "interrupted"].contains(string(row, "status")) else { return false }
+      identity = string(row, "conversation_id", target)
+    }
+    selectJob(target, conversationID: identity, targetSection: "Workspace")
+    draft += (draft.isEmpty ? "" : "\n\n") + text
+    saveDraft()
+    showWelcome = false
+    notice = "Thread context added to the destination draft. Review it before sending."
+    return true
+  }
+
   var currentDestination: WorkspaceDestination {
     WorkspaceDestination(
       projectID: projectID, projectPath: string(project, "path"),

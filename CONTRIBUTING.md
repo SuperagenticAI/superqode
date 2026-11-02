@@ -97,6 +97,13 @@ for the interpreter limitations and upstream blockers.
 - Prefer small, focused changes with tests
 - Keep public behavior changes documented
 
+## Public Documentation
+
+Public documentation should explain installation, usage, supported behavior and
+limitations. Keep research notes, internal implementation plans, feature parity
+audits, validation logs, release handoffs and account-specific deployment
+procedures outside the repository.
+
 ## Pull Requests
 
 - Explain the problem and the solution clearly.

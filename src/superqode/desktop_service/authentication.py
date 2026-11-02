@@ -9,18 +9,27 @@ class AuthenticationActions:
     def __init__(self):
         self.actions = {}
         self.lock = threading.RLock()
+        self.closing = False
 
     def start(self, operation):
         identity = uuid.uuid4().hex
         record = {"state": "running", "messages": [], "result": None, "loop": None, "task": None}
         with self.lock:
+            if self.closing:
+                raise ValueError("The desktop engine is shutting down")
+            if len(self.actions) > 100:
+                for key in list(self.actions):
+                    if self.actions[key]["state"] != "running":
+                        del self.actions[key]
+                    if len(self.actions) <= 60:
+                        break
             if sum(r["state"] == "running" for r in self.actions.values()) >= 4:
                 raise ValueError("Finish or cancel another sign-in first")
             self.actions[identity] = record
 
         def status(message):
             with self.lock:
-                record["messages"] = (record["messages"] + [str(message)])[-60:]
+                record["messages"] = (record["messages"] + [str(message)[:4000]])[-60:]
 
         async def execute():
             record["loop"] = asyncio.get_running_loop()
@@ -51,7 +60,14 @@ class AuthenticationActions:
             record = self.actions.get(identity)
             if record and record["state"] == "running":
                 if record["loop"] and record["task"]:
-                    record["loop"].call_soon_threadsafe(record["task"].cancel)
+                    if not record["loop"].is_closed():
+                        record["loop"].call_soon_threadsafe(record["task"].cancel)
                 else:
                     record["cancel_requested"] = True
         return {"ok": True}
+
+    def begin_close(self):
+        with self.lock:
+            self.closing = True
+            for identity in list(self.actions):
+                self.cancel(identity)

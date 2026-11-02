@@ -3,13 +3,21 @@ import Darwin
 import SwiftTerm
 import SwiftUI
 
+func terminalExitCode(_ status: Int32?) -> Int32 {
+  guard let status, status >= 0 else { return -1 }
+  // SwiftTerm 1.20 reports waitpid's status, including its signal bits.
+  return status & 0x7f == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
+}
+
 /// Explicitly started local shells, retained when navigating between native pages.
 @MainActor final class ProjectTerminals: ObservableObject {
   @Published private(set) var running: Set<String> = []
+  @Published private(set) var exitCodes: [String: Int32] = [:]
   private var views: [String: LocalProcessTerminalView] = [:]
   private var delegates: [String: TerminalDelegate] = [:]
   func view(_ project: String) -> LocalProcessTerminalView? { views[project] }
-  func start(_ project: String, path: String, smoke: Bool = false, arguments: [String]? = nil) {
+  func start(_ project: String, path: String, smoke: Bool = false, arguments: [String]? = nil,
+    environment overrides: [String: String] = [:], unset: [String] = []) {
     guard !running.contains(project) else { return }
     let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 500))
     terminal.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -17,7 +25,11 @@ import SwiftUI
     terminal.wantsLayer = true
     terminal.layer?.backgroundColor = NSColor.black.cgColor
     terminal.nativeForegroundColor = NSColor(red: 0.92, green: 0.89, blue: 0.96, alpha: 1)
-    let delegate = TerminalDelegate { [weak self] in self?.running.remove(project) }
+    exitCodes.removeValue(forKey: project)
+    let delegate = TerminalDelegate { [weak self] code in
+      self?.exitCodes[project] = terminalExitCode(code)
+      self?.running.remove(project)
+    }
     delegates[project] = delegate
     let io = TerminalIOProxy(terminal)
     delegate.io = io
@@ -31,6 +43,8 @@ import SwiftUI
     environment["PATH"] =
       NSHomeDirectory() + "/.local/bin:/opt/homebrew/bin:/usr/local/bin:"
       + (environment["PATH"] ?? "/usr/bin:/bin")
+    for name in unset { environment.removeValue(forKey: name) }
+    environment.merge(overrides) { _, new in new }
     terminal.startProcess(
       executable: arguments == nil ? "/bin/zsh" : "/usr/bin/env",
       args: arguments ?? (smoke ? ["-c", "printf native-project-pty"] : ["-l"]),
@@ -81,12 +95,12 @@ private final class TerminalIOProxy: TerminalViewDelegate {
 }
 private final class TerminalDelegate: LocalProcessTerminalViewDelegate {
   var io: TerminalIOProxy?
-  let ended: () -> Void
-  init(ended: @escaping () -> Void) { self.ended = ended }
+  let ended: (Int32?) -> Void
+  init(ended: @escaping (Int32?) -> Void) { self.ended = ended }
   func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
   func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
   func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
-  func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) { ended() }
+  func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) { ended(exitCode) }
 }
 struct ProjectTerminalHost: NSViewRepresentable {
   let terminal: LocalProcessTerminalView

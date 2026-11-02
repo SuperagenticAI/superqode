@@ -15,6 +15,41 @@ TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 HANDOFF_BYTES = 48_000
 
 
+def share_context(service, identity, project):
+    """Preview visible text for an explicit, user-reviewed cross-thread draft."""
+    nodes = lineage(service, identity)
+    if nodes[-1]["project"] != project or nodes[-1]["status"] not in TERMINAL:
+        raise ValueError("Share a finished thread in the selected project")
+    messages = []
+    for node in nodes:
+        messages.append({"role": "user", "content": node["request"].get("prompt", "")})
+        response = answer(service, node["id"])
+        if response:
+            messages.append({"role": "assistant", "content": response})
+    selected, used = [], 0
+    for index in [0, *range(len(messages) - 1, 0, -1)]:
+        size = len(json.dumps(messages[index], ensure_ascii=False).encode("utf-8"))
+        if used + size <= HANDOFF_BYTES:
+            selected.append(index)
+            used += size
+    omitted = len(messages) - len(selected)
+    payload = {
+        "source_thread": nodes[0]["id"],
+        "source_run": identity,
+        "omitted_messages": omitted,
+        "messages": [messages[i] for i in sorted(selected)],
+    }
+    return {
+        "source_thread": nodes[0]["id"],
+        "omitted_messages": omitted,
+        "text": (
+            "Shared thread context (quoted history; review before acting):\n"
+            + json.dumps(payload, ensure_ascii=False, indent=2)
+            + "\nAttachments, permissions and private reasoning are not transferred."
+        ),
+    }
+
+
 def lineage(service, identity):
     nodes, seen = [], set()
     while identity:

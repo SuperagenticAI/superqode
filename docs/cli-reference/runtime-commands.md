@@ -79,18 +79,27 @@ superqode -p --runtime adk "implement the feature"
 
 ### Runtime Backends
 
+These are the 15 direct agent runtimes. See the
+[complete runtime and HarnessSpec inventory](../integrations/runtimes-harnesses.md)
+for all 28 distinct IDs across both registries.
+
 | Backend | Package | Description |
 |---------|---------|-------------|
 | `builtin` | (built-in) | Default harness runtime, no extra dependencies |
 | `adk` | `google-adk` | Google Agent Development Kit |
 | `openai-agents` | `openai-agents` | OpenAI Agents SDK |
 | `pydanticai` | `pydanticai` | PydanticAI agent framework |
-| `codex-sdk` | `codex-sdk` | Codex SDK |
+| `codex-cli` | Codex CLI | Installed Codex CLI / app-server |
+| `codex-sdk` | `openai-codex` | Codex SDK |
 | `copilot-sdk` | `github-copilot-sdk` | GitHub Copilot SDK |
 | `claude-agent-sdk` | `claude-agent-sdk` | Claude Agent SDK |
 | `antigravity-sdk` | `google-antigravity` | Local Antigravity SDK harness |
 | `antigravity-cli` | `agy` | Signed-in Antigravity CLI harness |
 | `antigravity-managed` | (built-in) | Google-hosted Antigravity agent over the Gemini Interactions API |
+| `devin-cli` | Devin CLI | Cognition Devin headless runtime |
+| `muse` | Muse CLI | Meta Muse Code native session protocol |
+| `copilot-cli` | Copilot CLI | GitHub Copilot subscription CLI runtime |
+| `grok-cli` | Grok CLI | Grok subscription CLI runtime |
 
 Optional backends require their respective package to be installed.
 `antigravity-managed` uses the built-in HTTP adapter but requires

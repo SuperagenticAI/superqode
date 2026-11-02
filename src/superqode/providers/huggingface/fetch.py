@@ -72,6 +72,7 @@ def search_hub(
     kind: Optional[str] = None,
     sort: str = "downloads",
     limit: int = 25,
+    token: Optional[str] = None,
 ) -> List[HubModel]:
     """Search the Hub for downloadable models.
 
@@ -81,7 +82,7 @@ def search_hub(
     _require_hub()
     from huggingface_hub import HfApi
 
-    api = HfApi()
+    api = HfApi(**({"token": token} if token else {}))
     kwargs: dict[str, Any] = {"sort": sort, "limit": limit, "full": False}
     if query:
         kwargs["search"] = query
@@ -174,16 +175,25 @@ def download_file(
     *,
     target_dir: Optional[Path] = None,
     token: Optional[str] = None,
+    revision: Optional[str] = None,
+    progress_callback=None,
+    cache_dir: Optional[str] = None,
 ) -> Path:
     """Download a single file (e.g. a GGUF). Progress shown by huggingface_hub."""
     _require_hub()
     from huggingface_hub import hf_hub_download
+    from superqode.local.storage import cache_override
+
+    cache_dir = cache_dir or cache_override()
 
     path = hf_hub_download(
         repo_id,
         filename,
         local_dir=str(target_dir) if target_dir else None,
         token=token,
+        **({"cache_dir": cache_dir} if cache_dir else {}),
+        **({"revision": revision} if revision else {}),
+        **({"tqdm_class": _progress_class(progress_callback)} if progress_callback else {}),
     )
     return Path(path)
 
@@ -194,18 +204,54 @@ def download_repo(
     target_dir: Optional[Path] = None,
     allow_patterns: Optional[List[str]] = None,
     token: Optional[str] = None,
+    revision: Optional[str] = None,
+    progress_callback=None,
+    cache_dir: Optional[str] = None,
 ) -> Path:
     """Snapshot an entire repo to disk (resumable, hf_xet-accelerated)."""
     _require_hub()
     from huggingface_hub import snapshot_download
+    from superqode.local.storage import cache_override
+
+    cache_dir = cache_dir or cache_override()
 
     path = snapshot_download(
         repo_id,
         allow_patterns=allow_patterns,
         local_dir=str(target_dir) if target_dir else None,
         token=token,
+        **({"cache_dir": cache_dir} if cache_dir else {}),
+        **({"revision": revision} if revision else {}),
+        **({"tqdm_class": _progress_class(progress_callback)} if progress_callback else {}),
     )
     return Path(path)
+
+
+def _progress_class(callback):
+    import time
+    from tqdm.auto import tqdm
+
+    class ReportedProgress(tqdm):
+        def __init__(self, *args, **kwargs):
+            self.last_report = 0.0
+            super().__init__(*args, **kwargs)
+
+        def update(self, n=1):
+            value = super().update(n)
+            now = time.monotonic()
+            if now - self.last_report >= 0.5 or self.n == self.total:
+                callback(
+                    {
+                        "completed": self.n,
+                        "total": self.total,
+                        "unit": self.unit,
+                        "label": str(self.desc)[:200],
+                    }
+                )
+                self.last_report = now
+            return value
+
+    return ReportedProgress
 
 
 def detect_target(model: Optional[HubModel], repo_id: str, *, token: Optional[str] = None) -> str:
@@ -273,9 +319,11 @@ def scan_cache() -> List[CachedRepo]:
     """List models in the local HF cache (largest first)."""
     _require_hub()
     from huggingface_hub import scan_cache_dir
+    from superqode.local.storage import cache_override
 
     try:
-        info = scan_cache_dir()
+        cache = cache_override()
+        info = scan_cache_dir(**({"cache_dir": cache} if cache else {}))
     except Exception:
         return []
     repos = [
@@ -300,8 +348,10 @@ def delete_cached(pattern: str) -> Tuple[int, int]:
     """
     _require_hub()
     from huggingface_hub import scan_cache_dir
+    from superqode.local.storage import cache_override
 
-    info = scan_cache_dir()
+    cache = cache_override()
+    info = scan_cache_dir(**({"cache_dir": cache} if cache else {}))
     needle = pattern.lower()
     revisions = []
     freed = 0

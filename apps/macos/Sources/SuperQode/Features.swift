@@ -37,6 +37,12 @@ struct HubView: View {
           "Discover runtimes, inspect capabilities and choose how your agent works. Compare and improve the harnesses you use."
       )
       HStack {
+        Button("Harness Studio", systemImage: "hammer.fill") { app.section = "Harness Studio" }
+        Button("Build a harness…", systemImage: "hammer") { app.openConnections("builder") }
+        Button("Agent runtimes…", systemImage: "cpu") { app.openConnections("runtimes") }
+        Button("ACP agents…", systemImage: "link") { app.openConnections("acp") }
+      }.disabled(app.project.isEmpty || app.busy || app.active)
+      HStack {
         TextField("Search harnesses, runtimes, capabilities", text: $search).textFieldStyle(
           .roundedBorder
         ).frame(maxWidth: 400)
@@ -143,7 +149,7 @@ struct HubView: View {
     selected = nil
   }
 }
-struct ModelsView: View {
+struct ModelRoutesView: View {
   @EnvironmentObject var app: Workspace
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
@@ -164,7 +170,7 @@ struct ModelsView: View {
             await app.checkRoute()
           }
         }
-        Button("Connect…") { app.showConnection = true }.disabled(app.project.isEmpty).buttonStyle(
+        Button("Connect…") { app.openConnections() }.disabled(app.project.isEmpty).buttonStyle(
           BrandButtonStyle())
       }
       GroupBox("Active model route") {
@@ -177,6 +183,11 @@ struct ModelsView: View {
             ).font(.caption).foregroundStyle(.secondary)
             Spacer()
             Button("Save route", action: app.savePreferences)
+            if ["ollama", "lmstudio", "mlx", "llamacpp"].contains(app.provider) {
+              Button("Use provider configuration") { app.perform { try await app.clearLocalModelBinding() } }
+                .disabled(app.projectID.isEmpty || app.anyActive || app.busy)
+                .help("Clear the selected model’s loopback binding and use the provider’s configured endpoint, which may be remote.")
+            }
             Button("Test model", action: app.testConnection).disabled(
               app.model.isEmpty || app.busy || app.anyActive || app.isACP)
             if !app.selectedJob.isEmpty { Button("View run") { app.section = "Workspace" } }
@@ -998,7 +1009,8 @@ struct SettingsView: View {
           }
         }
         Section("Local engine") {
-          LabeledContent("Status", value: app.connected ? "Connected over private pipes" : "Offline")
+          LabeledContent("Status", value: app.connected ? (app.backgroundEngineMode ? "Connected to background engine" : "Connected over private pipes") : "Offline")
+          BackgroundEngineControls()
           LabeledContent("Execution", value: "This Mac")
           Text(
             "Provider requests go directly from the local engine to your configured provider. The app does not upload project data to a SuperQode service."
@@ -1008,7 +1020,7 @@ struct SettingsView: View {
           ).font(.caption).foregroundStyle(.secondary)
         }
         Section {
-          Button("Connect…") { app.showConnection = true }.disabled(app.project.isEmpty)
+          Button("Connect…") { app.openConnections() }.disabled(app.project.isEmpty)
           Button("Save preferences", action: app.savePreferences)
           Button("Open application data") {
             NSWorkspace.shared.open(

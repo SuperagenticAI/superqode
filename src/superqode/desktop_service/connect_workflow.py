@@ -28,6 +28,71 @@ MENU_CONNECTORS = {
 }
 
 
+def runtime_catalog():
+    """Discover both runtime surfaces without starting processes or model calls."""
+    from superqode.harness.backends.registry import (
+        backend_capabilities,
+        known_harness_backend_names,
+    )
+    from superqode.runtime.registry import list_runtimes
+
+    names = {
+        "builtin": "SuperQode Core",
+        "adk": "Google ADK",
+        "openai-agents": "OpenAI Agents SDK",
+        "pydanticai": "Pydantic AI",
+        "codex-cli": "OpenAI Codex CLI",
+        "codex-sdk": "OpenAI Codex SDK",
+        "copilot-sdk": "GitHub Copilot SDK",
+        "copilot-cli": "GitHub Copilot CLI",
+        "claude-agent-sdk": "Anthropic Claude Agent SDK",
+        "antigravity-sdk": "Google Antigravity SDK",
+        "antigravity-cli": "Google Antigravity CLI",
+        "antigravity-managed": "Google Antigravity Managed",
+        "devin-cli": "Cognition Devin CLI",
+        "grok-cli": "Grok CLI",
+        "muse": "Meta Muse Code",
+        "deepagents": "LangChain DeepAgents",
+        "strands": "AWS Strands Harness",
+        "codegem": "CodeGem",
+        "pipy": "PiPy",
+        "rlm": "SuperQode RLM",
+        "rlm-code": "RLM Code",
+        "tau": "Hugging Face Tau",
+        "deepseek-harness": "DeepSeek Harness",
+        "prime-agent": "Prime Agent",
+        "google-agent-engine": "Google Agent Engine",
+        "anthropic-managed": "Anthropic Managed Agents",
+        "systemone": "SystemOne Decisions",
+        "uhp": "Unified Harness Protocol (UHP)",
+    }
+    direct = {runtime.name: runtime for runtime in list_runtimes()}
+    harness = set(known_harness_backend_names())
+    rows = []
+    for name in sorted(harness | direct.keys()):
+        runtime = direct.get(name)
+        row = (
+            backend_capabilities(name).to_dict()
+            if name in harness
+            else {
+                "backend": name,
+                "availability": "available" if runtime.usable else "missing",
+                "install_hint": runtime.install_hint,
+                "notes": [runtime.status_detail] if runtime.status_detail else [],
+            }
+        )
+        rows.append(
+            {
+                **row,
+                "display_name": names.get(name, name),
+                "description": runtime.description if runtime else " ".join(row["notes"]),
+                "agent_runtime": runtime is not None,
+                "harness_backend": name in harness,
+            }
+        )
+    return rows
+
+
 def profile_route(root: Path, profile_id: str):
     from superqode.providers.connection_profiles import get_connection_profile
     from superqode.providers.subscription_env import resolve_vendor

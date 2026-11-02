@@ -147,6 +147,9 @@ The compiler decides what capabilities are legal for each flavor:
 ### Runtime Backends
 
 Runtime backends are interchangeable execution adapters behind the same harness contract.
+The table lists all 21 registered HarnessSpec backends. The
+[complete inventory](../integrations/runtimes-harnesses.md) also includes direct
+agent runtimes that do not have a HarnessSpec adapter.
 
 | Backend | Status | Use when |
 | --- | --- | --- |
@@ -162,6 +165,15 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `pipy` | built-in | You want parallel tools, a session tree, and pure host permissions with no approval or sandbox layer |
 | `codegem` | built-in | You want a six-tool Python coding loop for Gemini and local Gemma, with native signed Gemini history |
 | `tau` | optional | You want Hugging Face Tau's event-first Python harness and native JSONL sessions behind Harness Protocol |
+| `codex-cli` | external CLI | You want the installed Codex app-server and vendor-owned loop |
+| `copilot-sdk` | optional | You want the GitHub Copilot SDK and account-specific model access |
+| `strands` | separate runtime | You want the AWS Strands harness through its managed setup |
+| `deepseek-harness` | optional | You want the DeepSeek Harness adapter |
+| `prime-agent` | external runtime | You want Prime Agent through its harness adapter |
+| `google-agent-engine` | remote, configured | You want a configured Google managed-agent endpoint |
+| `anthropic-managed` | remote, configured | You want a configured Anthropic managed-agent endpoint |
+| `uhp` | remote, configured | You want to execute a harness exposed by a UHP server |
+| `systemone` | included adapter, configured pack/client | You want structured decision-pack evaluation rather than a coding loop |
 
 The `rlm-code` backend delegates recursive execution to RLM Code and maps its context record, steps,
 root/submodel usage, harness-exposure metrics, and native JSONL trajectory into SuperQode events and evidence.

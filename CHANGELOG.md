@@ -28,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update compatible Authlib, certificate trust, DNS and filesystem dependencies.
 
 This is the Python publication of the harness changes prepared under 2.26.0,
-alongside the macOS 0.2.0/build 14 Public Beta. Known dependency and lifecycle
-findings remain documented in `apps/macos/RELEASE-READINESS-0.1.12.md`.
+alongside the macOS 0.2.0/build 14 Public Beta. See the
+[macOS beta notes](apps/macos/BETA-NOTES.md) for supported behavior and limitations.
 
 ## [2.26.0] - 2026-10-27
 

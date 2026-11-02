@@ -1,6 +1,13 @@
 SwiftTerm 1.20.0
 https://github.com/migueldeicaza/SwiftTerm
 
+ACP agent glyphs are bundled from the official Agent Client Protocol registry:
+https://github.com/agentclientprotocol/registry (Apache-2.0).
+The upstream license is preserved as ACP-REGISTRY-LICENSE.txt and per-icon
+source URLs/hashes are in agent-icons-provenance.json. Glyphs identify third-party
+agents; their names and marks belong to their respective owners. Registry
+currentColor glyphs are rendered as native templates for light/dark appearances.
+
 The bundled Python interpreter's license is in
 runtime/python/lib/python3.13/LICENSE.txt. Python dependency metadata and supplied
 license/notice texts are preserved under runtime/third-party-notices/, with a

@@ -2,8 +2,9 @@
 
 Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
-Source version: **0.2.0 (build 14)**, with bundled engine **2.30.0**.
-Development source for 0.2.0 adds suite diagnostics, split selection, multiple evaluation candidates, experiment history, guided decision tuning and stricter held-out adoption gates. The public download remains 0.1.12 until the 0.2.0 installer is rebuilt, signed, notarized and published.
+Normal launch stays on Welcome until you open a folder or choose a recent project.
+Live agent activity shows the current command or file target across supported
+runtime event shapes.
 
 [**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
 
@@ -44,6 +45,34 @@ app. Preparing an experiment or opening a screen does not start a live run.
 
 ## Choose your connection
 
+**Harness Studio** is a primary sidebar destination for editing/importing a
+HarnessSpec, validating without model calls, saving immutable revisions and
+reviewing repeated read/edit checks. Choose a local model or provider route,
+then select a saved revision for Agent Space. Unsaved Studio drafts last for the
+current app session; saved revisions persist. Repeated checks use a restricted
+read/edit profile, excluding source hooks, MCP, delegates, fallbacks and shell
+execution. These checks do not certify the complete harness.
+
+**Harness Hub** is available directly in the sidebar. Its **Build a harness**,
+**Agent runtimes** and **ACP agents** actions also appear in Command-K.
+Agent runtimes lists all 28 registered runtime/backend IDs, with setup status
+and the supported selection path for each. See the
+[complete runtime inventory](../../docs/integrations/runtimes-harnesses.md).
+
+ACP agents now appear in a searchable icon grid with launcher/verification
+filters. Open a card for guided setup, or explore the separate clients/ecosystem
+directory. Threads show the distinct harnesses used, including multiple icons
+after switching agents.
+
+**Agent activity** brings app-owned threads across projects into one priority
+view, with opt-in native alerts. Fork a finished thread into a new Git worktree,
+review its context draft and integrate clean committed changes explicitly.
+
+**All work** now combines the app-owned activity surface with an **External history**
+tab. Connect a Codex session folder explicitly, browse/search its metadata and
+review a text handoff into a new or idle thread's draft. Source files remain
+unchanged; recorded external history does not imply live status or native resume.
+
 - **Existing harness or subscription:** connect supported agents using their own accounts and model choices.
 - **Harness with your model:** choose a harness, then connect a provider key or supported local model. Detected Ollama models can be selected directly.
 - **Protocols:** connect through ACP, A2A or UHP where the selected agent or server supports the required operations.
@@ -51,12 +80,51 @@ app. Preparing an experiment or opening a screen does not start a live run.
 
 Connection options depend on the runtime. Supported ACP agents expose model, mode, configuration and slash-command controls when advertised. Resume and remote cancellation also depend on the selected runtime. Existing terminal credentials remain supported, and optional app-managed provider keys can be saved in macOS Keychain.
 
+ACP setup now includes explicit official-registry refresh, reviewed installation,
+advertised agent/terminal sign-in and startup verification. Add, edit or remove
+project-scoped custom ACP launch commands from the same flow. Engine and writer
+leases protect restart recovery, and interrupted tasks are available for review
+without automatic replay.
+
 You can change agents within the same conversation. SuperQode keeps the local transcript and sends bounded conversation context to the selected agent. Returning to an agent resumes its compatible session when available. Agent permissions and authentication remain separate; historical images may need reattaching, and long handoffs may omit messages from agent context while retaining them in your local history.
 
 Selecting a connection does not automatically install an agent, download weights or start a paid model call. Model tests, evaluation and optimization can incur provider charges; review their prompts and budgets before starting.
 
+Use **Share to thread** on a finished conversation to preview recorded text and
+append it to a new or idle thread's draft in the same project. Review and send
+from the destination. Existing drafts are preserved; attachments and provider
+sessions are not transferred. Sharing adds text to a draft and does not start
+automatic agent-to-agent communication.
+
+## Local AI and background work
+
+**Local AI** is directly available in the sidebar and Command-K, including before
+project selection. Search the shared TUI catalog or Hugging Face, review exact
+GGUF/MLX files and download size, configure a supported server and select an
+advertised local model for a native harness. LM Studio-compatible search uses
+Hugging Face artifacts. Context/KV controls follow each runtime's capabilities.
+Downloads and setup have recorded output, progress and cancellation. Available
+formats, context sizes and cache settings depend on the selected server and model.
+
+**Storage & Hub access…** configures a shared Hub cache location and verifies a
+Hugging Face token, with optional macOS Keychain storage. **Harness compatibility…**
+shows every registered runtime and saved check evidence. A running server's
+**Check…** offers model-format probes or a bounded Core read-tool roundtrip on
+generated data; these remain distinct from full coding quality. MLX installation
+now uses its own environment rather than modifying the app's packages. TUI users
+can use `:local serve ollama --ctx 16384 --kv-cache q8_0` or `ctx=16384 kv=q8_0`
+in the inline start prompt.
+
+While idle, **Settings → Local engine → Keep agent work running when the app
+quits** opts into the private background engine. Reopening reconnects to ongoing
+work without replaying prompts. App terminals close on quit; engine/Mac loss
+still interrupts work.
+
 ## Your daily workspace
 
+- **Threads:** search complete project thread metadata, pin or rename conversations,
+  archive/restore finished work and return to older drafts. **Connection Diagnostics**
+  shows startup evidence and advertised agent capabilities.
 - **Agent Space:** stream responses, inspect tool activity, approve or deny actions, continue supported sessions and use direct Chat mode.
 - **Review:** inspect turn checkpoints, uncommitted layers and committed branch diffs; select lines and add revision-bound feedback to a follow-up draft.
 - **Files:** browse and edit source, create files, inspect diffs, stage or unstage changes and create local commits after confirmation.
@@ -73,11 +141,11 @@ Use Up/Down and Return to choose, or Escape to close and return to the previous
 control. Unavailable actions show what they need. Menu actions and palette actions
 share their shortcuts and availability rules.
 
-The app includes [session continuity and draft recovery](SESSION-RECOVERY.md):
+The app includes session continuity and draft recovery:
 conversation-specific drafts, Back/Forward navigation, file-edit recovery and
 reading anchors.
 
-The app also includes the [native review workspace](REVIEW-WORKSPACE.md),
+The app also includes a native review workspace,
 with file/hunk navigation and guarded staging of a reviewed file.
 
 ## Harness Hub, evaluation and optimization
@@ -90,7 +158,7 @@ The app includes a task comparison inspector for evaluation and
 optimizer held-out results. Choose a candidate, search task IDs, filter
 regressions/improvements/incomplete evidence, and inspect reasons and reported
 cost/time changes. Unknown usage remains unknown; smoke-only checks do not count
-as task-quality improvements. See the [feature checklist](FEATURE-PARITY.md) for remaining native gaps.
+as task-quality improvements.
 
 **Optimization** supports bounded Omni experiments, candidate diffs and reviewed adoption of a validated harness revision.
 
@@ -114,14 +182,7 @@ Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.de
 
 ## Build from source
 
-See the [native developer experience review and build plan](DEVELOPER-EXPERIENCE.md)
-for implemented workspace improvements and the proposed next steps.
-
-For future Mac App Store work, see the separate
-[App Store preparation guide](../../proc/MACOS-APP-STORE.md). The current public beta
-uses website distribution.
-
-Requires Xcode with the macOS SDK, Apple Silicon and macOS 14 or later. The minimum OS is the build target; clean-machine compatibility still needs release validation.
+Requires Xcode with the macOS SDK, Apple Silicon and macOS 14 or later.
 
 Create the isolated engine environment and payload from the repository root:
 
@@ -138,55 +199,3 @@ apps/macos/scripts/package-distribution.sh
 SwiftPM pins SwiftTerm for the AppKit project terminal; its license is bundled with the app. The runtime builder pins the compatible Omni optimizer revision and records dependencies and source provenance. Model weights, user configuration and credentials are excluded from the bundle. Python is an execution dependency; all desktop presentation, navigation, lifecycle, dialogs and integration are Swift.
 
 For development, `swift build --package-path apps/macos` builds the executable. The packaging script selects full Xcode when available and places compiler caches inside `.build`. `CONFIGURATION=debug apps/macos/scripts/build-app.sh` packages a debug build. Open `Package.swift` in Xcode to work on the native sources.
-
-### Upload a notarized website release
-
-Store GoDaddy settings in `~/.env.macos-release`, outside the repository:
-
-```dotenv
-FTP_HOST=your-certificate-compatible-server-hostname
-FTP_USER=your-ftp-user
-FTP_PASSWORD=your-ftp-password
-FTP_REMOTE_DIR=/downloads/macos
-```
-
-Use the FTP account's directory root: `/downloads/macos` applies when the account
-opens inside `superqode.dev`. Values are read literally, without shell expansion;
-matching outer single or double quotes are optional. Restrict file access and
-check the connection without changing server files:
-
-```sh
-chmod 600 ~/.env.macos-release
-python3 apps/macos/scripts/upload-release.py
-```
-
-The uploader uses explicit FTPS on port 21 (optional `FTP_PORT` override), with
-certificate validation and encrypted data transfers. Use the server hostname
-covered by GoDaddy's certificate rather than its IP address. It requires the
-existing `latest/SuperQode-arm64.dmg` and checksum to confirm the destination.
-
-After signing, notarizing and stapling the DMG, publish it with:
-
-```sh
-python3 apps/macos/scripts/upload-release.py --upload
-```
-
-No version argument is needed: the script reads the current version from
-`apps/macos/resources/Info.plist` and selects its matching DMG in `release/`.
-It rejects packaged app metadata that differs from the source, rather than
-guessing from file timestamps. An explicit DMG path after `--upload` remains
-supported when needed.
-
-Exported `FTP_HOST`, `FTP_USER`, `FTP_PASSWORD`, `FTP_REMOTE_DIR` and optional
-`FTP_PORT` environment variables override file values. If all required variables
-are set, no file is needed. `--config /path/to/private-file` or
-`SUPERQODE_MACOS_RELEASE_CONFIG` selects a different configuration file. Nothing
-loads a credentials file from the repository automatically.
-
-This command checks signing, the stapled ticket and Gatekeeper acceptance. It
-uploads the versioned archive, then replaces `latest/SuperQode-arm64.dmg` and its
-checksum. Each pair is transferred to temporary names and its remote bytes are
-verified before renaming. The two renames are separate FTP operations; run only
-one uploader at a time. Existing versioned files must match exactly. Both public
-DMGs and checksums are downloaded over HTTPS for final verification. The script
-does not build, notarize, tag Python releases or edit the website.

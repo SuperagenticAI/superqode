@@ -22,8 +22,9 @@ Engine notes:
                 context is set later at load time (``lms load --context-length``).
 - ``mlx``       ``<venv-python> -m mlx_lm.server``. MUST use the venv interpreter
                 so we never pick up a stray ``mlx_lm.server`` from another
-                environment (e.g. miniconda). Requires the ``superqode[mlx]``
-                extra installed in this environment.
+                environment (e.g. miniconda). Prefers SuperQode's isolated MLX
+                runtime; also supports the ``superqode[mlx]`` extra in the active
+                environment.
 - ``ds4``       ``./ds4-server --ctx N``; built binary lives in the ds4 checkout
                 (``~/oss/ds4`` by default). If it is missing we offer to build it.
 - ``llama.cpp`` ``llama-server -m <gguf> -c N``.
@@ -48,7 +49,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from superqode.providers.local_order import local_provider_sort_key
-from superqode.local.install import runtime_executable
+from superqode.local.install import runtime_executable, managed_mlx_installed, mlx_python
 
 from .laguna import (
     LAGUNA_DS4_REF,
@@ -114,7 +115,7 @@ SPECS: Dict[str, ServerSpec] = {
         ready_path="/health",
         needs_model=True,
         ctx_mode="none",
-        notes="Needs the superqode[mlx] extra in this environment.",
+        notes="Uses the isolated MLX runtime, or the superqode[mlx] extra in this environment.",
     ),
     "ds4": ServerSpec(
         engine="ds4",
@@ -180,7 +181,7 @@ MLX_REQUIREMENT = "mlx-lm>=0.31.0,<0.32.0"
 
 
 def mlx_install_command(python: Optional[str] = None) -> str:
-    """Exact command used by the one-click MLX installer."""
+    """Legacy explicit-interpreter installer; UI onboarding uses install_plan."""
     from superqode.providers.env_introspect import python_package_install_command
 
     return python_package_install_command(MLX_REQUIREMENT, python=python or sys.executable)
@@ -199,7 +200,10 @@ def discover_gguf_models(limit: int = 50) -> List[dict]:
     """
     hf_home = os.environ.get("HF_HOME", "").strip()
     hf_hub_cache = os.environ.get("HF_HUB_CACHE", "").strip()
+    from .storage import cache_directory
+
     roots = [
+        cache_directory(),
         *([Path(hf_hub_cache).expanduser()] if hf_hub_cache else []),
         *([Path(hf_home).expanduser() / "hub"] if hf_home else []),
         Path.home() / ".cache" / "huggingface" / "hub",
@@ -293,7 +297,11 @@ def parse_inline_start(text: str) -> tuple[str, dict, str]:
         return ("cancel", {}, "")
 
     opts: dict = {}
-    for tok in raw.split():
+    try:
+        tokens = shlex.split(raw)
+    except ValueError as exc:
+        return ("error", {}, str(exc))
+    for tok in tokens:
         lt = tok.lower()
         if lt in ("y", "yes", "start"):
             continue
@@ -310,14 +318,29 @@ def parse_inline_start(text: str) -> tuple[str, dict, str]:
                     opts["host"] = val
                 elif key in ("model", "m"):
                     opts["model"] = val
+                elif key in ("kv", "kv_cache", "kv-cache"):
+                    from .options import cache_options
+
+                    cache_options("ollama", val)
+                    opts["kv_cache"] = val
                 else:
                     return ("error", {}, f"unknown option {key!r}")
-            except ValueError:
-                return ("error", {}, f"bad number for {key!r}")
+            except ValueError as exc:
+                return (
+                    "error",
+                    {},
+                    str(exc)
+                    if key in {"kv", "kv_cache", "kv-cache"}
+                    else f"bad number for {key!r}",
+                )
         elif tok.isdigit():
             opts["port"] = int(tok)
         else:
             return ("error", {}, f"could not parse {tok!r}")
+    if "port" in opts and not 1 <= opts["port"] <= 65535:
+        return ("error", {}, "port must be between 1 and 65535")
+    if "ctx" in opts and opts["ctx"] < 1:
+        return ("error", {}, "ctx must be positive")
     return ("start", opts, "")
 
 
@@ -331,7 +354,9 @@ def _hf_model_cached(model_id: str) -> bool:
         return True
     if os.path.exists(model_id):  # an explicit local path
         return True
-    roots: List[Path] = []
+    from .storage import cache_directory
+
+    roots: List[Path] = [cache_directory()]
     hf_home = os.environ.get("HF_HOME")
     if hf_home:
         roots.append(Path(hf_home) / "hub")
@@ -374,6 +399,8 @@ class ServerHandle:
     ctx: Optional[int] = None
     # Informational messages about how port/ctx/model were applied.
     notes: List[str] = field(default_factory=list)
+    process_start: Optional[str] = None
+    owner_job: Optional[str] = None
 
     @property
     def registry_path(self) -> Path:
@@ -462,10 +489,14 @@ class ServerManager:
         port = handle.port if handle else spec.default_port
         running = self.is_running(engine, host, port)
         managed = handle is not None and handle.pid is not None and _pid_alive(handle.pid)
-        if handle is not None and not running:
+        starting = bool(
+            handle and managed and handle.started_at and 0 <= time.time() - handle.started_at < 180
+        )
+        if handle is not None and not running and not starting:
             # Stale registry entry; the server is gone.
             self._forget(engine)
             handle = None
+            managed = False
         return {
             "engine": engine,
             "running": running,
@@ -577,6 +608,8 @@ class ServerManager:
                 or Path("/Applications/LM Studio.app").exists()
             )
         if engine == "mlx":
+            if managed_mlx_installed():
+                return True
             if refresh_imports:
                 # mlx-lm may have just been installed into this interpreter.
                 importlib.invalidate_caches()
@@ -607,6 +640,7 @@ class ServerManager:
         model: Optional[str] = None,
         ctx: Optional[int] = None,
         extra_args: Optional[List[str]] = None,
+        kv_cache: str = "auto",
     ) -> tuple[List[str], Dict[str, str], Optional[Path]]:
         """Return (argv, env_overrides, cwd) for launching ``engine``.
 
@@ -614,6 +648,13 @@ class ServerManager:
         """
         spec = SPECS[engine]
         extra_args = list(extra_args or [])
+        from .options import cache_options
+
+        try:
+            cache_args, cache_env = cache_options(engine, kv_cache)
+        except ValueError as exc:
+            raise ServerError(str(exc)) from exc
+        extra_args += cache_args
         if spec.needs_model and not model:
             raise ServerError(f"{engine} needs a model: pass --model")
 
@@ -634,7 +675,11 @@ class ServerManager:
             # Ollama's current guidance recommends at least 64K for coding,
             # web-search, and agent tool workloads.
             env["OLLAMA_CONTEXT_LENGTH"] = str(ctx or 64000)
-            return ([runtime_executable("ollama"), "serve", *extra_args], env, None)
+            return (
+                [runtime_executable("ollama"), "serve", *extra_args],
+                {**env, **cache_env},
+                None,
+            )
 
         if engine == "lmstudio":
             cmd = [runtime_executable("lms"), "server", "start", "--port", str(port)]
@@ -643,9 +688,9 @@ class ServerManager:
             return (cmd + extra_args, {}, None)
 
         if engine == "mlx":
-            # Always the venv interpreter, never a stray mlx_lm.server on PATH.
+            # Prefer the managed environment; never a stray server on PATH.
             cmd = [
-                sys.executable,
+                mlx_python(),
                 "-m",
                 "mlx_lm.server",
                 "--model",
@@ -719,6 +764,8 @@ class ServerManager:
         wait: bool = True,
         timeout: float = DEFAULT_READY_TIMEOUT,
         allow_download: bool = False,
+        owner_job: Optional[str] = None,
+        kv_cache: str = "auto",
     ) -> ServerHandle:
         """Start (or adopt) the engine's server and return a handle.
 
@@ -729,9 +776,28 @@ class ServerManager:
         """
         if engine not in SPECS:
             raise ServerError(f"Unknown engine: {engine}")
+        from .options import cache_options
+
+        try:
+            cache_options(engine, kv_cache)
+        except ValueError as exc:
+            raise ServerError(str(exc)) from exc
         spec = SPECS[engine]
         host = host or spec.default_host
         port = port or spec.default_port
+        existing = self._load(engine)
+        if (
+            existing
+            and existing.pid
+            and not existing.adopted
+            and _pid_alive(existing.pid)
+            and existing.started_at
+            and time.time() - existing.started_at < 180
+            and not self.is_running(engine, host, port)
+        ):
+            raise ServerError(
+                "This server is already starting. Wait for readiness or stop its owned process before retrying."
+            )
         if engine == "ds4" and ctx is None:
             ctx = DS4_DEFAULT_CTX
 
@@ -753,6 +819,18 @@ class ServerManager:
                     f"already running on port {port}; --ctx {ctx:,} not applied "
                     "(stop it first to relaunch with a new context window)"
                 )
+            if (
+                existing
+                and existing.pid
+                and not existing.adopted
+                and existing.host == host
+                and existing.port == port
+                and _pid_alive(existing.pid)
+                and existing.process_start
+                and _pid_start(existing.pid) == existing.process_start
+            ):
+                existing.notes = [*existing.notes, *adopt_notes]
+                return existing
             handle = ServerHandle(
                 engine=engine,
                 host=host,
@@ -775,7 +853,13 @@ class ServerManager:
             )
 
         cmd, env_overrides, cwd = self.build_command(
-            engine, host=host, port=port, model=model, ctx=ctx, extra_args=extra_args
+            engine,
+            host=host,
+            port=port,
+            model=model,
+            ctx=ctx,
+            extra_args=extra_args,
+            kv_cache=kv_cache,
         )
 
         self.registry_dir.mkdir(parents=True, exist_ok=True)
@@ -822,6 +906,8 @@ class ServerManager:
             base_url=self.base_url(engine, host, port),
             cmd=cmd,
             pid=owned_pid,
+            process_start=_pid_start(owned_pid) if owned_pid else None,
+            owner_job=owner_job,
             log_path=str(log_path),
             started_at=time.time(),
             model=model,
@@ -829,6 +915,7 @@ class ServerManager:
             notes=self._ctx_notes(engine, ctx, model),
         )
 
+        self._save(handle)
         if wait:
             ready = self._wait_ready(engine, host, port, timeout, proc, owned_pid)
             if not ready:
@@ -1015,6 +1102,8 @@ class ServerManager:
             return False
         if handle.adopted:
             return False  # never kill a server we only adopted
+        if handle.process_start and _pid_start(handle.pid) != handle.process_start:
+            return False  # a reused PID is not the process this registry started
         return _terminate(handle.pid)
 
 
@@ -1033,6 +1122,16 @@ def _pid_alive(pid: int) -> bool:
         return True  # exists but owned by another user
     except OSError:
         return False
+
+
+def _pid_start(pid):
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "lstart="], capture_output=True, text=True, timeout=2
+        )
+        return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def _terminate(pid: int, grace: float = 5.0) -> bool:

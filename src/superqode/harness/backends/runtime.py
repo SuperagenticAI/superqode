@@ -65,6 +65,7 @@ class RuntimeHarnessBackend:
                         "tool_calls_made": response.tool_calls_made,
                         "iterations": response.iterations,
                         "rubric_result": getattr(response, "rubric_result", None),
+                        **({"error": response.error} if response.error else {}),
                     },
                 )
             )
@@ -402,6 +403,9 @@ def _create_runtime_for_request(
     )
     callbacks = {}
     hook_kwargs = {}
+    if event_sink is not None and runtime_name in {"adk", "openai-agents", "pydanticai"}:
+        observed = _builtin_event_callbacks(event_sink)
+        callbacks = {key: observed[key] for key in ("on_tool_call", "on_tool_result")}
     if runtime_name == "builtin":
         if event_sink is not None:
             callbacks = _builtin_event_callbacks(event_sink)

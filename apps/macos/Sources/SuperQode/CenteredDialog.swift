@@ -10,9 +10,10 @@ extension View {
   /// Manually pumping a modal session from a timer bypasses normal interaction.
   func centeredDialog<Dialog: View>(
     isPresented: Binding<Bool>, title: String = "SuperQode",
+    onDismiss: (() -> Void)? = nil,
     @ViewBuilder content: @escaping () -> Dialog
   ) -> some View {
-    sheet(isPresented: isPresented) {
+    sheet(isPresented: isPresented, onDismiss: onDismiss) {
       VStack(spacing: 0) {
         HStack {
           Text(title).font(.headline)

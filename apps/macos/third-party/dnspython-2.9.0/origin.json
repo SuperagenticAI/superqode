@@ -1,0 +1,16 @@
+{
+  "name": "dnspython",
+  "version": "2.9.0",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/ef/4a/50822184bd67cc6493f0fb6a880749158fcd31ab3fa07409acfd91f9fc85/dnspython-2.9.0.tar.gz",
+    "hash": "sha256:b44dc6b18f07a8b1c56676a19fbfdb5209415b046a9cece286baafa87ff3f7f1",
+    "member": "dnspython-2.9.0/dns/__init__.py"
+  },
+  "note": "The wheel and source archive omit a standalone license file. Preserve the upstream copyright and ISC permission notice verbatim from this source member.",
+  "notices": [
+    "NOTICE"
+  ],
+  "notice_sha256": {
+    "NOTICE": "296410354f3c68906bb0425e0594a6ede2bf1f13d1f31ec56762459c48f78259"
+  }
+}

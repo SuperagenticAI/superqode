@@ -32,6 +32,5 @@ scripts/run_tiny_omni_experiment.sh \
   --spec examples/harnesses/omni-tiny-local.yaml
 ```
 
-Review [the recorded GEPA Omni experiment](../advanced/gepa-omni-experiment.md)
+Review the [harness optimization guide](../advanced/harness-optimization.md)
 before increasing the evaluation or token budget.
-

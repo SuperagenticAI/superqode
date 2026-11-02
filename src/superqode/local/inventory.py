@@ -75,10 +75,9 @@ def list_ollama_models() -> List[LocalModel]:
 
 
 def _hf_cache_root() -> Path:
-    custom = os.environ.get("HF_HOME", "").strip()
-    if custom:
-        return Path(custom).expanduser() / "hub"
-    return Path.home() / ".cache" / "huggingface" / "hub"
+    from .storage import cache_directory
+
+    return cache_directory()
 
 
 def _cache_dir_model_id(entry: Path) -> str:

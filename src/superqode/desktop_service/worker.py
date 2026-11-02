@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import uuid
 
 from .redaction import redact, worker_secrets
@@ -22,15 +23,19 @@ _remote_config = json.loads(os.environ.get("SUPERQODE_DESKTOP_REMOTE", "{}"))
 SECRETS.extend(connection_secrets(_remote_config))
 del _remote_config
 WIRE = sys.stdout
+WIRE_LOCK = threading.Lock()
 sys.stdout = sys.stderr
 
 
 def emit(kind: str, data: dict):
-    WIRE.write(
-        json.dumps({"type": kind, "data": redact(data, SECRETS)}, default=str, ensure_ascii=False)
-        + "\n"
-    )
-    WIRE.flush()
+    with WIRE_LOCK:
+        WIRE.write(
+            json.dumps(
+                {"type": kind, "data": redact(data, SECRETS)}, default=str, ensure_ascii=False
+            )
+            + "\n"
+        )
+        WIRE.flush()
 
 
 def snapshot_spec(request: dict, output: Path):
@@ -272,6 +277,10 @@ def main():
         if len(raw) > 1_000_000:
             raise ValueError("Job request too large")
         request = json.loads(raw)
+        from .ownership import watch_parent
+
+        owner = int(os.environ.get("SUPERQODE_DESKTOP_PARENT_PID") or os.getppid())
+        watch_parent(owner)
         directory = Path(request["state_root"]) / "runs" / request["job_id"]
         directory.mkdir(parents=True, mode=0o700)
         os.chdir(request["cwd"])
@@ -322,6 +331,19 @@ def main():
             from .tools import run_tool
 
             run_tool(request, emit)
+        elif request["kind"] == "studio":
+            from superqode.harness.verification import run
+
+            run(request["studio_plan"], directory, emit)
+        elif request["kind"] == "local":
+            from superqode.local.workbench import run
+
+            run(
+                request["local_plan"],
+                Path(request["state_root"]) / "model-servers",
+                emit,
+                owner_job=request["job_id"],
+            )
         else:
             raise ValueError("Unknown job kind")
     except Exception as exc:

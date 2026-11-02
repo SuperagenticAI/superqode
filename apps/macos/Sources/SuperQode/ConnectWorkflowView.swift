@@ -83,6 +83,11 @@ struct ConnectionView: View {
   @State private var failure = ""
   @State private var search = ""
   @State private var pendingHarness = ""
+  @State private var builderPreset = "core"
+  @State private var builderBackend = ""
+  @State private var runtimes: [[String: Any]] = []
+  @State private var registry: [String: Any] = [:]
+  @State private var customEditing: [String: Any] = [:]
   @State private var authentication: [String: Any]?
   @State private var terminalError = ""
   @State private var terminalLogin: [String]?
@@ -132,9 +137,13 @@ struct ConnectionView: View {
         } else if page.hasPrefix("vendor-key:") {
           VendorKeyConnectionView(entry: String(page.dropFirst(11)))
         } else if page == "builder" {
-          HarnessBuilderView { id in
+          HarnessBuilderView(initialPreset: builderPreset, initialBackend: builderBackend) { id in
             app.chooseHarness(id)
             push("menu:models")
+          }
+        } else if page == "custom-acp" {
+          CustomACPAgentView(project: app.projectID, initial: customEditing, removed: { path = ["menu:root", "acp"] }) { route in
+            showDetail(["name": string(route, "name"), "route": route])
           }
         } else if page.hasPrefix("protocol:") {
           ProtocolConnectionView(kind: String(page.dropFirst(9))) { route in
@@ -151,6 +160,10 @@ struct ConnectionView: View {
                   nativeButton("connect.acp", action: { push("acp") }) { Text("ACP agent") }
                   nativeButton("connect.models", action: { push("menu:harness") }) { Text("Local model / API key") }
                 }.controlSize(.large)
+                HStack {
+                  Button("Build your own harness…") { push("builder") }
+                  Button("Browse all agent runtimes…") { push("runtimes") }
+                }
               }
               if page == "menu:root", let chips = menu["detected"] as? [[String: Any]],
                 !chips.isEmpty
@@ -183,10 +196,12 @@ struct ConnectionView: View {
               if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
               if page.hasPrefix("leaf:") {
                 leaf
-              } else if page == "acp" {
+              } else if ["acp", "acp-clients"].contains(page) {
                 agentRows
               } else if page == "harnesses" {
                 harnessRows
+              } else if page == "runtimes" {
+                runtimeRows
               } else {
                 ForEach(menu["rows"] as? [[String: Any]] ?? [], id: \.projectRowID) { row in
                   choice(row) { activate(row) }
@@ -208,6 +223,7 @@ struct ConnectionView: View {
     ).background { BrandBackdrop() }
       .task(id: page) { await loadMenu() }
       .onExitCommand { if path.count > 1 { back() } else { dismiss() } }
+      .onChange(of: app.projectID) { _, _ in dismiss() }
       .centeredDialog(
         isPresented: Binding(
           get: { terminalLogin != nil }, set: { if !$0 { terminalLogin = nil } }),
@@ -237,6 +253,7 @@ struct ConnectionView: View {
                 try await app.engine.call("routes.list", ["project": app.projectID])
                 as? [[String: Any]] ?? []
               app.harnesses = definitions + routes
+              registry = (try? await app.engine.call("connect.acp.registry.status")) as? [String: Any] ?? [:]
             }
           }
         }
@@ -250,8 +267,9 @@ struct ConnectionView: View {
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
     if page.hasPrefix("leaf:") { return string(selected, "name", "Connection") }
     if page == "builder" { return "Build your own harness" }
-    if page == "acp" { return "Agent Client Protocol (ACP)" }
+    if ["acp", "acp-clients"].contains(page) { return "ACP connections" }
     if page == "harnesses" { return "Choose an existing HarnessSpec" }
+    if page == "runtimes" { return "Agent runtimes" }
     if page.hasPrefix("protocol:") {
       return page.hasSuffix("uhp") ? "Unified Harness Protocol (UHP)" : "Agent2Agent (A2A)"
     }
@@ -265,10 +283,13 @@ struct ConnectionView: View {
     if page == "systemone" { return "SystemOne" }
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
     if page.hasPrefix("leaf:") { return string(selected, "description") }
-    if page == "acp" {
+    if ["acp", "acp-clients"].contains(page) {
       return "Choose a local coding agent. It keeps its own harness, model and sign-in."
     }
     if page == "harnesses" { return "Choose the harness first. Connect its model next." }
+    if page == "runtimes" {
+      return "Explore all registered agent runtimes and harness backends. Each entry shows its setup status and supported selection path."
+    }
     return string(menu, "subtitle")
   }
   private func showDetail(_ row: [String: Any]) {
@@ -293,6 +314,16 @@ struct ConnectionView: View {
     }
   }
   private func loadMenu() async {
+    if ["acp", "acp-clients"].contains(page) {
+      registry = (try? await app.engine.call("connect.acp.registry.status")) as? [String: Any] ?? [:]
+      return
+    }
+    if page == "runtimes" {
+      do {
+        runtimes = try await app.engine.call("connect.runtimes") as? [[String: Any]] ?? []
+      } catch { failure = error.localizedDescription }
+      return
+    }
     guard page.hasPrefix("menu:") else { return }
     let target = page
     if let cached = menuCache[target] {
@@ -331,18 +362,69 @@ struct ConnectionView: View {
     }
   }
   private var agentRows: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      TextField("Find an ACP agent", text: $search).textFieldStyle(.roundedBorder)
-      ForEach(
-        app.acpConnections.filter {
-          search.isEmpty || string($0, "name").localizedCaseInsensitiveContains(search)
-        }.sorted { string($0, "name") < string($1, "name") }, id: \.projectRowID
-      ) { row in
-        choice(row) {
-          showDetail([
-            "name": string(row, "name"), "description": string(row, "description"), "route": row,
-          ])
-        }
+    ACPAgentCatalogView(registry: registry, search: $search,
+      refreshRegistry: { authentication = ["action": "registry-refresh"] },
+      addCustom: { customEditing = [:]; push("custom-acp") },
+      open: { row in
+        showDetail(["name": string(row, "name"), "description": string(row, "description"), "route": row])
+      }, initialTab: page == "acp-clients" ? "clients" : "agents")
+  }
+  private var runtimeRows: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      TextField("Find a runtime or harness", text: $search).textFieldStyle(.roundedBorder)
+      Text("\(runtimes.count) runtimes and harness backends · optional dependencies and sign-in may be required")
+        .font(.caption).foregroundStyle(.secondary)
+      ForEach(runtimes.filter { row in
+        search.isEmpty || ["display_name", "backend", "description"].map { string(row, $0) }
+          .joined(separator: " ").localizedCaseInsensitiveContains(search)
+      }, id: \.runtimeRowID) { row in
+        VStack(alignment: .leading, spacing: 8) {
+          Text(string(row, "display_name", string(row, "backend"))).font(.headline)
+          Text(string(row, "backend") + " · " + string(row, "availability", "unknown"))
+            .font(.caption).foregroundStyle(.secondary)
+          Text(string(row, "description")).foregroundStyle(.secondary)
+          if !string(row, "install_hint").isEmpty {
+            Text(string(row, "install_hint")).font(.caption).textSelection(.enabled)
+          }
+          if row["harness_backend"] as? Bool == true {
+            if row["supports_coding"] as? Bool == true {
+              Text(row["agent_runtime"] as? Bool == true ? "Direct agent runtime and HarnessSpec backend" : "HarnessSpec backend")
+                .font(.caption).foregroundStyle(.secondary)
+              Button("Build with this runtime…") {
+                builderPreset = "core"
+                builderBackend = string(row, "backend")
+                push("builder")
+              }
+            } else {
+              Text("Decision backend · evaluates structured state rather than running a coding loop.")
+                .font(.caption).foregroundStyle(.secondary)
+              Button("Configure SystemOne…") { push("systemone") }
+            }
+          } else {
+            Text("Direct runtime in CLI/TUI. Native connection options vary by agent.")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          if row["agent_runtime"] as? Bool == true {
+            Text("superqode --runtime " + string(row, "backend"))
+              .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+          }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
+      }
+      Text("Harness definitions").font(.headline)
+      ForEach(app.harnesses.filter { row in
+        string(row, "desktop_kind").isEmpty && (search.isEmpty ||
+          ["name", "runtime", "description"].map { string(row, $0) }.joined(separator: " ").localizedCaseInsensitiveContains(search))
+      }, id: \.projectRowID) { row in
+        VStack(alignment: .leading, spacing: 8) {
+          Text(string(row, "name")).font(.headline)
+          Text(string(row, "runtime") + " · " + string(row, "description")).foregroundStyle(.secondary)
+          if !string(row, "issue").isEmpty { Text(string(row, "issue")).font(.caption).textSelection(.enabled) }
+          HStack {
+            Button("Use runtime") { app.chooseHarness(string(row, "id")); push("menu:models") }
+              .disabled(row["available"] as? Bool != true)
+            Button("Customize harness…") { builderPreset = string(row, "id"); builderBackend = ""; push("builder") }
+          }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
       }
     }
   }
@@ -360,6 +442,12 @@ struct ConnectionView: View {
   }
   private var leaf: some View {
     VStack(alignment: .leading, spacing: 16) {
+      if let route = selected["route"] as? [String: Any], string(route, "desktop_kind") == "acp" {
+        ACPSetupView(initialRoute: route, project: app.projectID, use: { verifiedRoute, metadata in
+          app.chooseConnection(verifiedRoute, verified: metadata)
+          dismiss()
+        }, edit: { customEditing = route; push("custom-acp") })
+      } else {
       if let login = selected["login"] as? [String: Any] {
         Button("Sign in to " + string(login, "label")) {
           if login["interactive"] as? Bool == true {
@@ -425,6 +513,7 @@ struct ConnectionView: View {
             ]
           }
         }
+      }
       }
     }
   }
@@ -636,6 +725,12 @@ struct HarnessBuilderView: View {
   @State private var yaml = ""
   @State private var message = ""
   @State private var busy = false
+  let initialBackend: String
+  init(initialPreset: String = "core", initialBackend: String = "", select: @escaping (String) -> Void) {
+    self.select = select
+    self.initialBackend = initialBackend
+    _preset = State(initialValue: initialPreset)
+  }
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 18) {
@@ -645,6 +740,10 @@ struct HarnessBuilderView: View {
             "Start with an existing harness or import a definition. Review its tools and execution policy before saving a new project harness. No run starts when you save."
         )
         TextField("New harness name", text: $name).textFieldStyle(.roundedBorder)
+        if !initialBackend.isEmpty {
+          Text("Runtime: " + initialBackend + ". Review runtime configuration and provider requirements in the definition below.")
+            .font(.callout).foregroundStyle(.secondary)
+        }
         HStack {
           Picker("Start from", selection: $preset) {
             ForEach(app.harnesses.filter { string($0, "desktop_kind").isEmpty }, id: \.projectRowID)
@@ -672,7 +771,7 @@ struct HarnessBuilderView: View {
       do {
         let result =
           try await app.engine.call(
-            "connect.harness.draft", ["project": app.projectID, "harness": preset])
+            "connect.harness.draft", ["project": app.projectID, "harness": preset, "backend": initialBackend])
           as? [String: Any] ?? [:]
         yaml = string(result, "yaml")
       } catch { message = error.localizedDescription }
@@ -712,4 +811,8 @@ struct HarnessBuilderView: View {
       } catch { message = error.localizedDescription }
     }
   }
+}
+
+extension Dictionary where Key == String, Value == Any {
+  var runtimeRowID: String { string(self, "backend") }
 }

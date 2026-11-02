@@ -18,7 +18,8 @@ from superqode.local.servers import SPECS, ServerError, ServerHandle, ServerMana
 
 
 @pytest.fixture()
-def manager(tmp_path: Path) -> ServerManager:
+def manager(tmp_path: Path, monkeypatch) -> ServerManager:
+    monkeypatch.setattr(servers, "_pid_start", lambda pid: f"fixture-process-{pid}")
     return ServerManager(registry_dir=tmp_path / "servers")
 
 
@@ -447,6 +448,44 @@ def test_status_clears_stale_registry(manager, monkeypatch):
     status = manager.status("ds4")
     assert status["running"] is False
     assert not manager._registry_path("ds4").exists()  # forgotten
+
+
+def test_starting_server_keeps_registry_and_cannot_be_launched_twice(manager, monkeypatch):
+    import time
+
+    handle = ServerHandle(
+        engine="ollama",
+        host="127.0.0.1",
+        port=11434,
+        base_url="x",
+        pid=1234,
+        started_at=time.time(),
+    )
+    manager._save(handle)
+    monkeypatch.setattr(servers, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    assert manager.status("ollama")["managed"]
+    assert manager._registry_path("ollama").exists()
+    with pytest.raises(ServerError, match="already starting"):
+        manager.start("ollama")
+
+
+def test_stop_rejects_reused_process_id(manager, monkeypatch):
+    manager._save(
+        ServerHandle(
+            engine="mlx",
+            host="127.0.0.1",
+            port=8080,
+            base_url="x",
+            pid=1234,
+            process_start="old-process",
+        )
+    )
+    monkeypatch.setattr(servers, "_pid_start", lambda pid: "different-process")
+    monkeypatch.setattr(
+        servers, "_terminate", lambda pid: pytest.fail("must not stop a reused PID")
+    )
+    assert manager.stop("mlx") is False
 
 
 # -- context-window flexibility ---------------------------------------------

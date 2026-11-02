@@ -57,6 +57,8 @@ final class EngineFrames {
   private var frames = EngineFrames()
   private let writer = DispatchQueue(label: "dev.superqode.engine.write", qos: .userInitiated)
   private var sequence = 0
+  private var generation = 0
+  private(set) var backgroundMode = false
   private var pending: [Int: CheckedContinuation<Any, Error>] = [:]
   private var deadlines: [Int: Task<Void, Never>] = [:]
   private var acceptingRequests = false
@@ -88,7 +90,9 @@ final class EngineFrames {
   }
   var onExit: (() -> Void)?
 
-  func start() throws {
+  func start(management: Bool = false, background: Bool? = nil, stateDirectory: String? = nil) throws {
+    generation += 1
+    let generation = self.generation
     frames = EngineFrames()
     let resources = Bundle.main.resourceURL ?? URL(fileURLWithPath: ".")
     let bundled = resources.appendingPathComponent("runtime")
@@ -109,12 +113,14 @@ final class EngineFrames {
         message: "Local engine is missing. Build the bundled runtime before opening SuperQode.")
     }
     let state =
-      ProcessInfo.processInfo.environment["SUPERQODE_STATE_DIR"]
+      stateDirectory ?? ProcessInfo.processInfo.environment["SUPERQODE_STATE_DIR"]
       ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("SuperQode").path
     let child = Process()
     child.executableURL = executable
-    child.arguments = ["-u", "-m", "superqode.desktop_service.service", "--state", state]
+    backgroundMode = management || (background ?? (UserDefaults.standard.bool(forKey: "nativeBackgroundEngine") && !ProcessInfo.processInfo.arguments.contains("--smoke-test")))
+    child.arguments = ["-u", "-m", backgroundMode ? "superqode.desktop_service.daemon" : "superqode.desktop_service.service", "--state", state]
+    if management { child.arguments?.append("--manage") }
     var env = ProcessInfo.processInfo.environment
     env["PYTHONPATH"] =
       FileManager.default.fileExists(atPath: runtime.appendingPathComponent("backend").path)
@@ -137,6 +143,7 @@ final class EngineFrames {
       guard !data.isEmpty else {
         handle.readabilityHandler = nil
         Task { @MainActor in
+          guard self?.generation == generation else { return }
           self?.failAll(
             EngineError(
               message: "Local engine closed its response stream. Relaunch SuperQode to reconnect."))
@@ -146,10 +153,16 @@ final class EngineFrames {
       frames.receive(
         data,
         deliver: { object in
-          Task { @MainActor in self?.receive(object) }
+          Task { @MainActor in
+            guard self?.generation == generation else { return }
+            self?.receive(object)
+          }
         },
         failure: { error in
-          Task { @MainActor in self?.failAll(error) }
+          Task { @MainActor in
+            guard self?.generation == generation else { return }
+            self?.failAll(error)
+          }
         })
     }
     errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
@@ -166,6 +179,7 @@ final class EngineFrames {
     }
     child.terminationHandler = { [weak self] _ in
       Task { @MainActor in
+        guard self?.generation == generation else { return }
         guard let self else { return }
         self.failAll(
           EngineError(
@@ -233,6 +247,15 @@ final class EngineFrames {
     failAll(EngineError(message: "Local engine connection closed."))
     try? input?.close()
     // EOF lets the engine cancel remote tasks and record acknowledgements before exiting.
+  }
+  func stopAndWait() async throws {
+    let previous = process
+    stop()
+    for _ in 0..<220 {
+      if previous?.isRunning != true { return }
+      try await Task.sleep(for: .milliseconds(100))
+    }
+    throw EngineError(message: "The previous engine is still closing. Wait and reconnect; its work has not been replayed.")
   }
   /// Finder launches do not inherit shell startup files. Discover common tool
   /// managers without executing the user's shell configuration or reading keys.

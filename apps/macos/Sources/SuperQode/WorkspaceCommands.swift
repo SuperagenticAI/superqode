@@ -4,7 +4,7 @@ import AppKit
   var workspaceCommands: [WorkspaceCommand] {
     let engineReason = connected ? nil : "Wait for the local engine to connect."
     let projectReason = project.isEmpty ? "Open a project first." : engineReason
-    let idleReason = openingProject || restoringNavigation ? "Wait for navigation to finish."
+    let idleReason = openingProject || restoringNavigation || switchingBackgroundEngine ? "Wait for navigation or engine reconnection to finish."
       : busy ? "Wait for the current operation to finish." : nil
     var commands: [WorkspaceCommand] = [
       .init(action: .openProject, title: "Open Project…", detail: "Choose a local repository",
@@ -13,9 +13,29 @@ import AppKit
       .init(action: .newTask, title: "New Task", detail: "Start composing a task",
         symbol: "square.and.pencil", keywords: "new chat conversation", key: "n",
         disabledReason: projectReason ?? idleReason),
+      .init(action: .section("Agent activity"), title: "All Work",
+        detail: "See project threads and connect external session history",
+        symbol: "square.stack.3d.up", keywords: "fleet agents activity threads all projects working blocked needs attention external codex history sessions",
+        disabledReason: engineReason ?? idleReason),
       .init(action: .connect, title: "Connect…", detail: "Choose an agent or model connection",
         symbol: "link", keywords: "provider harness model agent",
         disabledReason: projectReason ?? idleReason),
+      .init(action: .section("Models"), title: "Local AI", detail: "Search, download and serve models on this Mac",
+        symbol: "cpu", keywords: "ollama hugging face lm studio mlx gguf kv cache models local inference", disabledReason: engineReason ?? idleReason),
+      .init(action: .connectionPage("builder"), title: "Build Your Own Harness…",
+        detail: "Create or import a project HarnessSpec", symbol: "hammer", keywords: "custom harness yaml preset",
+        disabledReason: projectReason ?? idleReason),
+      .init(action: .connectionPage("runtimes"), title: "Agent Runtimes…",
+        detail: "Browse all agent runtimes and harness backends", symbol: "cpu",
+        keywords: "framework sdk backend adk pydanticai strands codex copilot claude antigravity deepagents muse grok devin tau rlm pipy codegem prime systemone uhp",
+        disabledReason: projectReason ?? idleReason),
+      .init(action: .connectionPage("acp"), title: "Connect ACP Agent…",
+        detail: "Browse agents and review installation", symbol: "link", keywords: "agent client protocol setup",
+        disabledReason: projectReason ?? idleReason),
+      .init(action: .connectionDiagnostics, title: "Connection Diagnostics…",
+        detail: "Inspect startup evidence, session capabilities and connection failures", symbol: "checkmark.shield",
+        keywords: "agent acp resume images models modes retry health",
+        disabledReason: projectReason ?? idleReason ?? (isManaged ? nil : "Choose an agent-managed connection first.")),
       .init(action: .back, title: "Back", detail: "Restore the previous session and page",
         symbol: "chevron.left", key: "[",
         disabledReason: openingProject || restoringNavigation || busy ? idleReason : navigationHistory.isEmpty && !(showWelcome && !project.isEmpty)
@@ -35,7 +55,7 @@ import AppKit
       .init(action: .learning, title: "Getting Started & Learning", detail: "Open the local learning guide",
         symbol: "book", keywords: "help documentation guide", key: "?"),
     ]
-    commands += Sections.names.enumerated().map { index, name in
+    commands += Sections.names.enumerated().filter { !["Agent activity", "Models"].contains($0.element) }.map { index, name in
       WorkspaceCommand(action: .section(name), title: Sections.title(for: name),
         detail: "Navigate to " + Sections.title(for: name), symbol: Sections.icons[index],
         keywords: name == "Workspace" ? "chat conversation coding" : name.lowercased(),
@@ -50,7 +70,7 @@ import AppKit
     commands += projects.prefix(8).map { row in
       let path = string(row, "path")
       return WorkspaceCommand(action: .project(path),
-        title: URL(fileURLWithPath: path).lastPathComponent,
+        title: string(row, "name", URL(fileURLWithPath: path).lastPathComponent),
         detail: "Recent project · " + path, symbol: "folder", keywords: "repository",
         disabledReason: engineReason ?? idleReason)
     }
@@ -74,7 +94,9 @@ import AppKit
     case .newTask:
       selectJob("", targetSection: "Workspace")
       showWelcome = false
-    case .connect: showConnection = true
+    case .connect: openConnections()
+    case .connectionPage(let page): openConnections(page)
+    case .connectionDiagnostics: showConnectionInspector = true
     case .back: goBack()
     case .forward: goForward()
     case .refreshChanges: perform { await self.refreshGit() }

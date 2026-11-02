@@ -3,6 +3,8 @@ import Foundation
 enum WorkspaceCommandAction: Equatable {
   case openProject, newTask, connect, back, forward, refreshChanges, exportEvidence, welcome, learning
   case section(String), run(String), project(String)
+  case connectionPage(String)
+  case connectionDiagnostics
 
   var id: String {
     switch self {
@@ -18,6 +20,8 @@ enum WorkspaceCommandAction: Equatable {
     case .section(let name): return "section:" + name
     case .run(let id): return "run:" + id
     case .project(let path): return "project:" + path
+    case .connectionPage(let page): return "connection-page:" + page
+    case .connectionDiagnostics: return "connection-diagnostics"
     }
   }
 }

@@ -105,8 +105,9 @@ adk = [
     "google-adk>=2.1.0,<3.0",
 ]
 openai-agents = [
-    "openai-agents>=0.17.4",
-    "openai-agents[litellm]>=0.17.4",
+    # 0.20 handles the usage-detail field added in the OpenAI 2.45 client.
+    "openai-agents>=0.20.0,<0.21",
+    "openai-agents[litellm]>=0.20.0,<0.21",
 ]
 codex-sdk = [
     "openai-codex>=0.144.4,<1.0.0",

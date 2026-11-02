@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -51,12 +52,44 @@ def runtime_python(engine: str) -> Path:
     return Path.home() / ".superqode" / "runtimes" / engine / "bin" / "python"
 
 
+_MLX_PROBES: dict[str, tuple[float, bool]] = {}
+
+
+def managed_mlx_installed(*, refresh=False) -> bool:
+    """Check the isolated interpreter, never importing its packages into the app."""
+    python = runtime_python("mlx")
+    if not python.is_file():
+        return False
+    key = str(python)
+    previous = _MLX_PROBES.get(key)
+    if not refresh and previous and time.monotonic() - previous[0] < 15:
+        return previous[1]
+    try:
+        result = subprocess.run(
+            [str(python), "-I", "-c", "import mlx.core; import mlx_lm; import mlx_lm.server"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        ready = result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ready = False
+    _MLX_PROBES[key] = (time.monotonic(), ready)
+    return ready
+
+
+def mlx_python() -> str:
+    return str(runtime_python("mlx")) if managed_mlx_installed() else sys.executable
+
+
 def runtime_installed(engine: str) -> bool:
     engine = normalize_engine(engine)
     binary = {"ollama": "ollama", "lmstudio": "lms", "llama.cpp": "llama-server"}.get(engine)
     if binary:
         resolved = runtime_executable(binary)
         return bool(shutil.which(resolved))
+    if engine == "mlx" and managed_mlx_installed(refresh=True):
+        return True
     if engine in ("sglang", "vllm"):
         python = runtime_python(engine)
         if python.is_file():
@@ -124,10 +157,25 @@ def install_plan(engine: str) -> InstallPlan:
         guidance = "Installs the official headless LM Studio daemon and lms CLI. The desktop app is optional."
     elif engine == "mlx":
         if system == "darwin" and platform.machine() == "arm64":
-            from .servers import mlx_install_command
+            from .servers import MLX_REQUIREMENT
 
-            steps = (tuple(shlex.split(mlx_install_command())),)
-            guidance = "Installs mlx-lm into SuperQode's active Python environment."
+            target = runtime_python("mlx")
+            uv = shutil.which(runtime_executable("uv"))
+            if uv:
+                steps = (
+                    (uv, "venv", "--python", "3.12", "--allow-existing", str(target.parent.parent)),
+                    (uv, "pip", "install", "--python", str(target), MLX_REQUIREMENT),
+                )
+            else:
+                steps = (
+                    (sys.executable, "-m", "venv", "--symlinks", str(target.parent.parent)),
+                    (str(target), "-I", "-m", "pip", "install", MLX_REQUIREMENT),
+                )
+            guidance = (
+                "Installs MLX in its own environment under ~/.superqode/runtimes/mlx. "
+                "Downloads Python when uv needs it, plus MLX packages; no model weights. "
+                "The app's Python packages are not modified. A failed or cancelled setup can be retried."
+            )
         else:
             guidance = "MLX requires Apple Silicon on macOS. Choose Ollama or llama.cpp on this machine, or connect to an existing MLX server."
     elif engine in ("sglang", "vllm"):

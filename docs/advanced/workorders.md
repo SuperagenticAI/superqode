@@ -444,4 +444,4 @@ The WorkOrder kernel now owns durable task admission, dependencies, atomic claim
 
 The next integrations are layered cost/risk enforcement, credential brokering, richer private scorecards, and guarded harness optimization. The lifecycle and event contracts are designed so those additions do not require another orchestration model.
 
-For the full product hierarchy and end-to-end operator path, return to [Terminal-First Software Factory](software-factory.md). For competitive scope, see [SuperQode and Omnigent](superqode-vs-omnigent.md).
+For the full product hierarchy and end-to-end operator path, return to [Terminal-First Software Factory](software-factory.md).

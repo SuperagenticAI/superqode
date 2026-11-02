@@ -454,7 +454,7 @@ you are changing, then use the CLI reference when you need exact flags.
 | Safety, sandboxing, and approvals | [Safety & Permissions](advanced/safety-permissions.md) |
 | Sessions, sharing, memory, and logging | [Session Management](advanced/session-management.md) |
 | Code Factory, WorkOrders, workers, and delivery gates | [Building a Code Factory with SuperQode](advanced/software-factory.md) |
-| Omnigent similarities, differences, and interoperability | [How SuperQode Relates to Omnigent](advanced/superqode-vs-omnigent.md) |
+| Import Omnigent agent definitions | [Omnigent Compatibility](advanced/omnigent-compat.md) |
 | Plugins, skills, and optimization | [Plugin Authoring](advanced/plugin-authoring.md) |
 | Automation, channels, MCP, ACP, and A2A | [Advanced Workflows](advanced/index.md) |
 | Environment variables and YAML config | [Configuration](configuration/index.md) |

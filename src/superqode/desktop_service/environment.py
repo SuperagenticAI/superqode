@@ -5,6 +5,20 @@ from superqode.tools.env_policy import is_secret_name
 
 def selected_providers(kind, request):
     providers = {str(request.get("provider") or "")}
+    if kind == "studio":
+        route = (request.get("studio_plan") or {}).get("route") or {}
+        return (
+            {route["provider"]}
+            if route.get("source") != "local" and route.get("provider")
+            else set()
+        )
+    if kind == "local":
+        plan = request.get("local_plan") or {}
+        return (
+            {"huggingface"}
+            if plan.get("action") == "download" and plan.get("source") == "hf"
+            else set()
+        )
     models = [request.get("reflection_model"), request.get("optimizer_model")]
     if kind == "optimization":
         models = [

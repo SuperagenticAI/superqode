@@ -196,19 +196,9 @@ Aliases `e` (`exec`) and `a` (`apply`) do not add independent behavior. The inst
 | `/debug-m-drop` | Internal | Debug/test-only command; intentionally not exposed. |
 | `/debug-m-update` | Internal | Debug/test-only command; intentionally not exposed. |
 
-## Validation and remaining work
+## Compatibility and limits
 
-Automated checks cover async UI responsiveness, rejected invalid options before connection, SDK routing isolation, exact review targets, full session IDs/pagination, subscription checks for new chats, login cancellation, idle-only mutations, native Plan settings and credential redaction.
-
-A live signed-out smoke test with an isolated `CODEX_HOME` on 0.160.0 verified skills, hooks, feature flags, permissions, MCP status, effective configuration/requirements, Plan preset discovery and doctor JSON. Metadata created no thread; guarded fresh-chat creation refused the signed-out account before `thread/start`. Doctor reported the expected unhealthy state for an empty installation home. No real login, model inference, cloud task, plugin installation or user-session mutation was performed.
-
-Installed-schema checks gate experimental controls. Daily CI checks both pinned
-0.160.0 and `@openai/codex@latest`, including real thread/reviewer/daemon protocol
-checks with isolated storage and no inference. Publish includes the approval and
-dynamic-tool regression contracts.
-
-Remaining separate lifecycle work: unattended native goals, queued turns,
-side chats, transcript export, plugin mutation and cloud/worktree handoffs.
+Experimental controls depend on the installed Codex server's advertised schema.
 SuperQode does not expose sandbox-bypassing shell/process RPCs or copy ChatGPT
 tokens. Connection overrides do not write persistent Codex configuration;
 explicitly confirmed rule amendments and MCP OAuth can cause Codex-managed

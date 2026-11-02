@@ -74,14 +74,24 @@ def _build_model(provider: str, model: str):
     """Return the SDK model spec for the given (provider, model).
 
     For OpenAI's own provider we pass the bare model id (the SDK handles it
-    via the default OpenAI client). For anything else we wrap in
-    ``LitellmModel`` so the same model name works across providers.
+    via the default OpenAI client). Local compatible servers get an explicit
+    Chat Completions client; other providers use ``LitellmModel``.
     """
     _require_sdk()
     provider = normalize_provider_id(provider)
     model = normalize_model_for_provider(provider, model)
     if (provider or "").strip().lower() in {"openai", "openai-compatible"}:
         return model
+    from .local_endpoint import local_endpoint
+
+    if endpoint := local_endpoint(provider):
+        from openai import AsyncOpenAI
+        from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
+
+        return OpenAIChatCompletionsModel(
+            model=model,
+            openai_client=AsyncOpenAI(base_url=endpoint, api_key="superqode-local"),
+        )
     try:
         from agents.extensions.models.litellm_model import LitellmModel
     except ImportError as exc:
@@ -279,6 +289,7 @@ class OpenAIAgentsRuntime:
             ctx_factory=ctx_factory,
             permission_manager=self.permission_manager,
             excluded=profile.excluded_tools,
+            on_tool_result=on_tool_result,
         )
         # Bridge MCP tool definitions (if any) as additional FunctionTools.
         bridged_tools.extend(
@@ -339,10 +350,16 @@ class OpenAIAgentsRuntime:
         if self._sandbox_client is None:
             # Build the Agent. Default tool_use_behavior is "run_llm_again",
             # matching the AgentLoop iteration model.
+            model_options = {}
+            if config.max_tokens:
+                from agents.model_settings import ModelSettings
+
+                model_options["model_settings"] = ModelSettings(max_tokens=config.max_tokens)
             self._agent = Agent(
                 name="superqode",
                 instructions=instructions,
                 tools=bridged_tools,
+                **model_options,
                 model=_build_model(config.provider, config.model),
             )
             # RunConfig: keep tracing disabled by default for privacy.

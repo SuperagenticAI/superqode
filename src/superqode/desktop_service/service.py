@@ -54,7 +54,14 @@ def record_stderr(stream, path, secrets):
 class DesktopService:
     def __init__(self, root: str | Path):
         self.root = private_root(root)
+        from .ownership import Lease
+
+        self._engine_lease = Lease(self.root / "engine.lock")
+        self._engine_lease.record(pid=os.getpid())
+        self._project_leases = {}
+        self._reapers = {}
         self.lock = threading.RLock()
+        self._external_scan_lock = threading.Lock()
         self.db = sqlite3.connect(self.root / "desktop.sqlite", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(
@@ -63,10 +70,35 @@ class DesktopService:
             CREATE TABLE IF NOT EXISTS jobs(
               id TEXT PRIMARY KEY, project TEXT, kind TEXT, title TEXT, status TEXT,
               request TEXT, result TEXT, created REAL, updated REAL);
+            CREATE INDEX IF NOT EXISTS jobs_project_kind ON jobs(project,kind,updated);
             CREATE TABLE IF NOT EXISTS events(
               seq INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, payload TEXT);
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE IF NOT EXISTS remote_routes(id TEXT PRIMARY KEY, project TEXT, route TEXT);
+            CREATE TABLE IF NOT EXISTS custom_acp_agents(id TEXT PRIMARY KEY, project TEXT, definition TEXT);
+            CREATE TABLE IF NOT EXISTS acp_install_receipts(reference TEXT, digest TEXT, updated REAL, PRIMARY KEY(reference,digest));
+            CREATE TABLE IF NOT EXISTS thread_runs(job TEXT PRIMARY KEY, project TEXT, conversation TEXT);
+            CREATE INDEX IF NOT EXISTS thread_runs_project ON thread_runs(project,conversation);
+            CREATE TABLE IF NOT EXISTS thread_metadata(
+              project TEXT, conversation TEXT, title TEXT, pinned INTEGER, archived INTEGER, updated REAL,
+              PRIMARY KEY(project,conversation));
+            CREATE TABLE IF NOT EXISTS thread_forks(
+              id TEXT PRIMARY KEY,source_project TEXT,source_run TEXT,source_thread TEXT,project TEXT,
+              path TEXT,branch TEXT,base_commit TEXT,title TEXT,context TEXT,created REAL,state TEXT,
+              plan_digest TEXT,issue TEXT);
+            CREATE INDEX IF NOT EXISTS thread_forks_project ON thread_forks(project);
+            CREATE TABLE IF NOT EXISTS desktop_notifications(
+              seq INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT UNIQUE,job TEXT,project TEXT,status TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS external_session_sources(
+              id TEXT PRIMARY KEY,path TEXT UNIQUE,device INTEGER,inode INTEGER,created REAL,
+              scanned REAL,report TEXT,provider TEXT);
+            CREATE TABLE IF NOT EXISTS external_sessions(
+              id TEXT,source TEXT,relative TEXT,metadata TEXT,stamp TEXT,updated REAL,PRIMARY KEY(id,source));
+            CREATE INDEX IF NOT EXISTS external_sessions_source ON external_sessions(source);
+            CREATE TABLE IF NOT EXISTS local_model_plans(id TEXT PRIMARY KEY,plan TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS studio_reviews(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS studio_check_plans(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS local_model_bindings(project TEXT,harness TEXT,provider TEXT,model TEXT,endpoint TEXT,PRIMARY KEY(project,harness,provider,model));
             """
         )
         self.db.execute(
@@ -74,6 +106,9 @@ class DesktopService:
         )
         self.db.commit()
         self._conversation_roots: dict[str, dict] = {}
+        from .thread_branches import reconcile
+
+        reconcile(self)
         self.processes: dict[str, subprocess.Popen] = {}
         self._threads: set[threading.Thread] = set()
         self._closing = False
@@ -88,6 +123,8 @@ class DesktopService:
         from .task_queue import TaskQueues
 
         self.task_queues = TaskQueues(self)
+        for row in self._all("SELECT id FROM jobs WHERE kind='task' AND status='interrupted'"):
+            self._notify(row["id"], "interrupted")
 
     def _all(self, query, args=()):
         with self.lock:
@@ -111,13 +148,28 @@ class DesktopService:
                 raise
         return thread
 
-    def job_summaries(self, identity=None):
+    def job_summaries(self, identity=None, *, include_metadata=True, identities=None):
         """Keep individual run records, with a stable conversation identity for recent rows."""
-        columns = "id,project,kind,title,status,created,updated"
+        columns = "id,project,kind,title,status,created,updated,json_extract(request,'$.harness') AS harness,json_extract(request,'$._fork_origin') AS fork_origin"
         rows = (
-            self._all(f"SELECT {columns} FROM jobs WHERE id=?", (identity,))
-            if identity is not None
-            else self._all(f"SELECT {columns} FROM jobs ORDER BY updated DESC LIMIT 100")
+            (
+                self._all(
+                    f"SELECT {columns} FROM jobs WHERE id IN ("
+                    + ",".join("?" for _ in identities)
+                    + ")",
+                    identities,
+                )
+                if identities
+                else []
+            )
+            if identities is not None
+            else (
+                self._all(f"SELECT {columns} FROM jobs WHERE id=?", (identity,))
+                if identity is not None
+                else self._all(
+                    f"SELECT {columns} FROM jobs WHERE id IN (SELECT id FROM jobs ORDER BY updated DESC LIMIT 100) OR status IN ('running','needs_approval','queued','cancelling') ORDER BY updated DESC"
+                )
+            )
         )
         nodes = {row["id"]: row for row in rows}
         # Parent links and original titles are immutable. Resolve new runs once,
@@ -159,10 +211,41 @@ class DesktopService:
             for identity in chain:
                 roots[identity] = root
         result = []
+        identities = list({roots.get(row["id"], row)["id"] for row in rows})
+        metadata = (
+            {
+                (r["project"], r["conversation"]): r
+                for r in self._all(
+                    "SELECT * FROM thread_metadata WHERE conversation IN ("
+                    + ",".join("?" for _ in identities)
+                    + ")",
+                    identities,
+                )
+            }
+            if identities and include_metadata
+            else {}
+        )
+        used = {}
+        if include_metadata:
+            from .threads import index_runs
+            from .identities import thread_harnesses
+
+            with self.lock:
+                for project in {row["project"] for row in rows}:
+                    index_runs(self, project)
+                used = thread_harnesses(self, identities)
         for row in rows:
             root = roots.get(row["id"], row)
             summary = {key: value for key, value in row.items() if key != "request"}
+            summary["fork_origin"] = json.loads(row["fork_origin"]) if row["fork_origin"] else None
             summary.update(conversation_id=root["id"], conversation_title=root["title"])
+            saved = metadata.get((row["project"], root["id"]), {})
+            if saved.get("title"):
+                summary["conversation_title"] = saved["title"]
+            summary.update(pinned=bool(saved.get("pinned")), archived=bool(saved.get("archived")))
+            if row["kind"] == "task" and include_metadata:
+                summary["harnesses_used"] = used.get((row["project"], root["id"]), [])
+                summary["harness"] = row["harness"] or "core"
             result.append(summary)
         return result
 
@@ -189,7 +272,19 @@ class DesktopService:
             "INSERT INTO projects VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET opened=excluded.opened",
             (project_id, str(root), time.time()),
         )
-        return {"id": project_id, "path": str(root), "name": root.name}
+        forks = self._all(
+            "SELECT title,branch,source_project FROM thread_forks WHERE path=?", (str(root),)
+        )
+        return {
+            "id": project_id,
+            "path": str(root),
+            "name": forks[0]["title"] if forks else root.name,
+            **(
+                {"branch": forks[0]["branch"], "source_project": forks[0]["source_project"]}
+                if forks
+                else {}
+            ),
+        }
 
     def append(self, job_id: str, event: dict):
         raw = json.dumps(event, default=str, ensure_ascii=False)
@@ -219,6 +314,20 @@ class DesktopService:
 
     def _status(self, job_id, status):
         self._write("UPDATE jobs SET status=?,updated=? WHERE id=?", (status, time.time(), job_id))
+        self._notify(job_id, status)
+
+    def _notify(self, job_id, status):
+        if status not in {"needs_approval", "completed", "failed", "interrupted"}:
+            return
+        rows = self._all("SELECT project,kind FROM jobs WHERE id=?", (job_id,))
+        if not rows or rows[0]["kind"] != "task":
+            return
+        request = self.pending.get(job_id, "") if status == "needs_approval" else ""
+        key = hashlib.sha256((job_id + status + str(request)).encode()).hexdigest()
+        self._write(
+            "INSERT OR IGNORE INTO desktop_notifications(event_key,job,project,status,created) VALUES(?,?,?,?,?)",
+            (key, job_id, rows[0]["project"], status, time.time()),
+        )
 
     def _seal_checkpoint(self, job_id):
         try:
@@ -264,6 +373,9 @@ class DesktopService:
                 elif event.get("type") == "error":
                     error = event.get("data", {}).get("message", "Execution failed")
             code = process.wait()
+            reaped = self._reapers.get(job_id)
+            if reaped:
+                reaped.wait()
             if logger:
                 logger.join(timeout=2)
             self._seal_checkpoint(job_id)
@@ -299,6 +411,10 @@ class DesktopService:
                         job_id,
                     ),
                 )
+                lease = self._project_leases.pop(job_id, None)
+                if lease:
+                    lease.close()
+                self._notify(job_id, status)
         except Exception as exc:
             self.append(job_id, {"type": "error", "data": {"message": redact(str(exc), secrets)}})
             self._status(job_id, "failed")
@@ -311,6 +427,12 @@ class DesktopService:
                 process.stdin.close()
             if process.stdout:
                 process.stdout.close()
+            reaped = self._reapers.pop(job_id, None)
+            if reaped:
+                reaped.wait()
+            lease = self._project_leases.pop(job_id, None)
+            if lease:
+                lease.close()
             self.task_queues.finished(job_id)
 
     def start(self, project_id: str, kind: str, params: dict):
@@ -322,12 +444,20 @@ class DesktopService:
             "tool",
             "compaction",
             "tuning",
+            "local",
+            "studio",
         }:
             raise ValueError("Unknown job type")
         with self.lock:
             if self._closing:
                 raise ValueError("The desktop engine is shutting down")
             root = self.project(project_id)
+            if kind != "local" and self._all(
+                "SELECT id FROM jobs WHERE kind='local' AND status IN ('running','queued','needs_approval','cancelling') AND json_extract(request,'$.local_plan.action') IN ('serve','stop','install')"
+            ):
+                raise ValueError(
+                    "Wait for inference-server setup to finish before starting other work"
+                )
             job_id = uuid.uuid4().hex
             key = str(params.get("command_id") or job_id)
             for old in self._all("SELECT id,request FROM jobs WHERE project=?", (project_id,)):
@@ -372,6 +502,16 @@ class DesktopService:
             params.pop("_handoff_context", None)
             params.pop("_continuity", None)
             params.pop("expected_digest", None)
+            params.pop("_thread_harness", None)
+            params.pop("_fork_origin", None)
+            fork = self._all(
+                "SELECT * FROM thread_forks WHERE project=? AND state='ready'", (project_id,)
+            )
+            if fork:
+                from .thread_branches import validate, public
+
+                validate(self, fork[0])
+                params["_fork_origin"] = public(fork[0])
             if kind == "compaction":
                 source = self.dispatch("jobs.get", {"id": params["source_job"]})
                 if (
@@ -453,16 +593,25 @@ class DesktopService:
                 elif reference.startswith("acp:") or any(
                     route["id"] == reference for route in acp_routes(root)
                 ):
-                    params["_desktop_route"] = resolve_acp_route(root, reference)
+                    params["_desktop_route"] = self.resolve_desktop_acp(project_id, root, reference)
                     params["provider"] = "agent"
                 else:
                     from superqode.harness.catalog import resolve_harness
 
-                    resolve_harness(reference, root=root)
+                    resolved = resolve_harness(reference, root=root)
+                    params["_thread_harness"] = {
+                        "name": resolved.display_name,
+                        "runtime": resolved.spec.runtime.backend,
+                    }
             if kind == "task" and params.get("parent_id"):
                 from .conversations import prepare_continuation
 
                 prepare_continuation(self, params, project_id, root)
+                if self._all(
+                    "SELECT conversation FROM thread_metadata WHERE project=? AND conversation=? AND archived=1",
+                    (project_id, params["_continuity"]["conversation_id"]),
+                ):
+                    raise ValueError("Restore this archived thread before continuing it")
             if kind == "task":
                 if params.get("interaction_mode") == "chat" and (
                     params.get("_desktop_route") or params.get("_desktop_connection")
@@ -516,12 +665,34 @@ class DesktopService:
                     "check": "Project check",
                     "compaction": "Compact model context",
                     "tool": tool_plan["title"] if tool_plan else "Advanced workflow",
+                    "local": params.get("local_plan", {}).get("title", "Local model setup"),
+                    "studio": params.get("studio_plan", {}).get("title", "Harness check"),
                 }[kind]
+            from .ownership import Lease, project_lease_path
+
+            lease = Lease(project_lease_path(self.root, root))
+            self._project_leases[job_id] = lease
             now = time.time()
-            self._write(
-                "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
-                (job_id, project_id, kind, title, "running", json.dumps(params), None, now, now),
-            )
+            try:
+                self._write(
+                    "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+                    (
+                        job_id,
+                        project_id,
+                        kind,
+                        title,
+                        "running",
+                        json.dumps(params),
+                        None,
+                        now,
+                        now,
+                    ),
+                )
+            except Exception:
+                self._project_leases.pop(job_id, None)
+                lease.close()
+                raise
+            process = None
             try:
                 log_path = self.root / f"{job_id}.log"
                 remote_config = self.remote_connections.get(str(params.get("harness")), {}).get(
@@ -574,6 +745,24 @@ class DesktopService:
                     secrets = tuple(set(secrets) | {self.vendor_keys["systemone"]})
                 if tool_plan:
                     secrets = tuple(set(secrets) | set(tool_plan["secrets"]))
+                from .local_models import binding as local_binding
+
+                binding = local_binding(
+                    self,
+                    project_id,
+                    params.get("harness", ""),
+                    params.get("provider", ""),
+                    params.get("model", ""),
+                )
+                if binding:
+                    provider = PROVIDERS.get(params["provider"])
+                    if provider and provider.base_url_env:
+                        endpoint = binding[0]["endpoint"]
+                        credential_env[provider.base_url_env] = (
+                            endpoint.removesuffix("/v1") if provider.id == "ollama" else endpoint
+                        )
+                        if provider.id == "ollama":
+                            credential_env["OLLAMA_HOST"] = endpoint.removesuffix("/v1")
                 if kind == "check":
                     credential_env = {}
                     remote_config = {}
@@ -585,6 +774,12 @@ class DesktopService:
                 }
                 if kind == "tuning":
                     allowed.add("TYPESAFE_API_KEY")
+                if (
+                    kind == "local"
+                    and params.get("local_plan", {}).get("action") == "download"
+                    and params.get("local_plan", {}).get("source") == "hf"
+                ):
+                    allowed.update({"HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"})
                 # External agents retain their own authentication contract. Plain
                 # project checks never receive that environment or app keys.
                 inherited = (
@@ -625,20 +820,42 @@ class DesktopService:
                         ),
                         "PYTHONUNBUFFERED": "1",
                         "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+                        "SUPERQODE_DESKTOP_PARENT_PID": str(os.getpid()),
+                        "SUPERQODE_DESKTOP_LEASE_FD": str(lease.fd),
                     },
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     start_new_session=True,
+                    pass_fds=(lease.fd,),
                 )
+                lease.record(pid=process.pid, job=job_id, project=project_id)
+                from .ownership import reap_children
+
+                reaped = threading.Event()
+                self._reapers[job_id] = reaped
+                self._background(reap_children, process, reaped)
                 logger = self._background(record_stderr, process.stderr, log_path, secrets)
                 self.processes[job_id] = process
                 process.stdin.write(json.dumps(params) + "\n")
                 process.stdin.flush()
                 self._background(self._watch, job_id, process, secrets, logger)
             except Exception:
+                if process is not None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait(timeout=5)
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream:
+                            stream.close()
+                    self.processes.pop(job_id, None)
                 self._status(job_id, "failed")
+                lease = self._project_leases.pop(job_id, None)
+                if lease:
+                    lease.close()
                 raise
             return {"id": job_id}
 
@@ -655,11 +872,37 @@ class DesktopService:
             )
 
     def dispatch(self, method: str, params: dict):
+        if method == "engine.status":
+            return {
+                "mode": "attached",
+                "pid": os.getpid(),
+                "continuity": "UI loss stops attached workers",
+            }
+        if method in {
+            "files.create",
+            "files.write",
+            "git.stage",
+            "git.stage_file",
+            "git.unstage_file",
+            "git.commit",
+            "checkpoints.restore",
+            "checkpoints.undo",
+            "checkpoints.redo",
+        }:
+            # Keep the ownership check and mutation atomic with respect to start().
+            with self.lock:
+                return self._dispatch(method, params)
+        return self._dispatch(method, params)
+
+    def _dispatch(self, method: str, params: dict):
         if method in {"review.list", "review.diff", "review.feedback", "review.stage"}:
             from .review import action
 
             with self.lock:
                 if method == "review.stage":
+                    from .ownership import assert_project_idle
+
+                    assert_project_idle(self, params["project"])
                     jobs = self._all(
                         "SELECT id,status FROM jobs WHERE project=?", (params["project"],)
                     )
@@ -686,6 +929,17 @@ class DesktopService:
                     raise ValueError(
                         "Finish or stop the active project run before changing project files"
                     )
+                if method in {
+                    "files.create",
+                    "files.write",
+                    "git.stage",
+                    "git.stage_file",
+                    "git.unstage_file",
+                    "git.commit",
+                } or method in {"checkpoints.restore", "checkpoints.undo", "checkpoints.redo"}:
+                    from .ownership import assert_project_idle
+
+                    assert_project_idle(self, params["project"])
 
         if method.startswith("checkpoints."):
             from .checkpoints import action
@@ -762,6 +1016,42 @@ class DesktopService:
                     return install(self.credentials, params)
                 credentials = dict(self.credentials)
             if method == "providers.check":
+                if params.get("project") and params.get("harness"):
+                    from .local_models import binding as local_binding
+
+                    binding = local_binding(
+                        self,
+                        params["project"],
+                        params["harness"],
+                        params.get("provider", ""),
+                        params.get("model", ""),
+                    )
+                    if binding:
+                        from .local_models import available
+                        from superqode.local.workbench import PROVIDERS as LOCAL_PROVIDERS
+
+                        engine = next(
+                            (
+                                key
+                                for key, value in LOCAL_PROVIDERS.items()
+                                if value == params.get("provider")
+                            ),
+                            None,
+                        )
+                        if engine:
+                            selected = available(engine)
+                            ready = (
+                                params.get("model") in selected["models"]
+                                and binding[0]["endpoint"] == selected["endpoint"]
+                            )
+                            return {
+                                "ready": ready,
+                                "state": "local-model-advertised" if ready else "model-unavailable",
+                                "endpoint": binding[0]["endpoint"],
+                                "message": "Model checked against the selected loopback endpoint. Test inference and tool use separately."
+                                if ready
+                                else "The selected local model/server changed. Refresh Local AI.",
+                            }
                 return inspect_route(credentials, params)
             return list_connections(credentials)
         if method == "hello":
@@ -776,7 +1066,32 @@ class DesktopService:
         if method == "projects.open":
             return self.open_project(params["path"])
         if method == "projects.list":
-            return self._all("SELECT * FROM projects ORDER BY opened DESC")
+            rows = self._all(
+                "SELECT * FROM projects WHERE id!='local-model-workspace' ORDER BY opened DESC"
+            )
+            forks = {
+                row["project"]: row
+                for row in self._all(
+                    "SELECT project,title,branch,source_project FROM thread_forks WHERE state='ready'"
+                )
+            }
+            return [
+                {
+                    **row,
+                    "name": forks[row["id"]]["title"]
+                    if row["id"] in forks
+                    else Path(row["path"]).name,
+                    **(
+                        {
+                            "branch": forks[row["id"]]["branch"],
+                            "source_project": forks[row["id"]]["source_project"],
+                        }
+                        if row["id"] in forks
+                        else {}
+                    ),
+                }
+                for row in rows
+            ]
         if method == "settings.get":
             return {r["key"]: json.loads(r["value"]) for r in self._all("SELECT * FROM settings")}
         if method == "settings.set":
@@ -809,6 +1124,51 @@ class DesktopService:
                 "models": [asdict(m) for m in inventory_models()],
                 "hardware": asdict(detect_hardware()),
             }
+        if method.startswith("local.models."):
+            from . import local_models
+            from . import hub_access
+            from superqode.local import workbench
+
+            if method == "local.models.storage":
+                from superqode.local import storage
+
+                return storage.status()
+            if method == "local.models.storage.set":
+                return local_models.save_storage(self, params)
+            if method == "local.models.hub.status":
+                return hub_access.status(self)
+            if method == "local.models.hub.verify":
+                return hub_access.verify(self, params.get("token"))
+            if method == "local.models.compatibility":
+                return local_models.compatibility(self, params.get("project"))
+
+            if method == "local.models.overview":
+                return local_models.overview(self)
+            if method == "local.models.servers":
+                return local_models.servers(self)
+            if method == "local.models.search":
+                return workbench.search(
+                    params.get("query", ""),
+                    params.get("source", "recommended"),
+                    params.get("format", "gguf"),
+                    token=hub_access.token(self),
+                )
+            if method == "local.models.files":
+                return workbench.manifest(params["model"], token=hub_access.token(self))
+            if method == "local.models.prepare":
+                return local_models.prepare(self, params)
+            if method == "local.models.start":
+                return local_models.start(self, params)
+            if method == "local.models.jobs":
+                return local_models.jobs(self)
+            if method == "local.models.harnesses":
+                return local_models.harnesses(self, params["project"])
+            if method == "local.models.available":
+                return local_models.available(params["engine"])
+            if method == "local.models.use":
+                return local_models.use(self, params)
+            if method == "local.models.clear_binding":
+                return local_models.clear_binding(self, params)
         if method == "capabilities":
             try:
                 optimizer = __import__(
@@ -830,10 +1190,86 @@ class DesktopService:
             }
         if method == "jobs.list":
             return self.job_summaries()
+        if method == "activity.list":
+            from .activity import list_activity
+
+            return list_activity(self, params)
+        if method.startswith("external."):
+            from . import external_sessions
+
+            if method == "external.sources.list":
+                return external_sessions.list_sources(self)
+            if method == "external.sources.add":
+                return external_sessions.add_source(self, params)
+            if method == "external.sources.remove":
+                return external_sessions.remove_source(self, params["id"])
+            if method == "external.sources.scan":
+                return external_sessions.scan_source(self, params["id"])
+            if method == "external.sessions.list":
+                return external_sessions.list_sessions(self, params)
+            if method == "external.sessions.preview":
+                return external_sessions.preview_session(self, params)
+            if method == "external.sessions.reveal":
+                return external_sessions.reveal_session(self, params)
+        if method == "notifications.poll":
+            after = params.get("after", -1)
+            if type(after) is not int or after < -1:
+                raise ValueError("Use a valid notification cursor")
+            attention = self._all(
+                "SELECT COUNT(*) AS count FROM jobs WHERE kind='task' AND status='needs_approval'"
+            )[0]["count"]
+            if after == -1:
+                latest = self._all("SELECT COALESCE(MAX(seq),0) AS seq FROM desktop_notifications")[
+                    0
+                ]["seq"]
+                return {"items": [], "cursor": latest, "attention_count": attention}
+            rows = self._all(
+                "SELECT seq,job,project,status,created FROM desktop_notifications WHERE seq>? ORDER BY seq LIMIT 50",
+                (after,),
+            )
+            return {
+                "items": rows,
+                "cursor": rows[-1]["seq"] if rows else after,
+                "attention_count": attention,
+            }
+        if method == "threads.list":
+            from .threads import list_threads
+
+            return list_threads(self, params)
+        if method.startswith("threads.fork."):
+            from . import thread_branches
+
+            if method == "threads.fork.preview":
+                return thread_branches.preview(self, params)
+            if method == "threads.fork.create":
+                return thread_branches.create(self, params)
+            if method == "threads.fork.list":
+                return thread_branches.list_forks(self, params["project"])
+            if method == "threads.fork.context":
+                row = thread_branches.lookup(self, params["id"])
+                thread_branches.validate(self, row)
+                return {"text": row["context"], **thread_branches.public(row)}
+            if method == "threads.fork.merge.plan":
+                return thread_branches.merge_plan(self, params["id"])
+            if method == "threads.fork.merge":
+                return thread_branches.merge(self, params)
+        if method == "threads.update":
+            from .threads import update_thread
+
+            return update_thread(self, params)
+        if method == "threads.get":
+            from .threads import get_thread
+
+            return get_thread(self, params)
         if method == "conversations.get":
             from .conversations import history
 
             return history(self, params["id"], params.get("before"))
+        if method == "conversations.share":
+            from .conversations import share_context
+
+            self.project(params["project"])
+            return share_context(self, params["id"], params["project"])
         if method == "jobs.get":
             rows = self._all("SELECT * FROM jobs WHERE id=?", (params["id"],))
             if not rows:
@@ -842,6 +1278,11 @@ class DesktopService:
             summary = self.job_summaries(params["id"])[0]
             row["conversation_id"] = summary["conversation_id"]
             row["conversation_title"] = summary["conversation_title"]
+            row["pinned"] = summary["pinned"]
+            row["archived"] = summary["archived"]
+            row["harnesses_used"] = summary.get("harnesses_used", [])
+            row["harness"] = summary.get("harness")
+            row["fork_origin"] = summary.get("fork_origin")
             row["request"] = json.loads(row["request"])
             row["result"] = json.loads(row["result"]) if row["result"] else None
             if row["kind"] in {"evaluation", "optimization"} and row["result"] is not None:
@@ -878,6 +1319,22 @@ class DesktopService:
                 if not process:
                     raise ValueError("Run is no longer active")
                 record = self.dispatch("jobs.get", {"id": params["id"]})
+                if (
+                    record["kind"] == "local"
+                    and record["request"].get("local_plan", {}).get("action") == "serve"
+                ):
+                    from superqode.local.servers import ServerManager
+
+                    manager = ServerManager(registry_dir=self.root / "model-servers")
+                    engine = record["request"]["local_plan"]["engine"]
+                    handle = manager._load(engine)
+                    if (
+                        handle
+                        and handle.owner_job == params["id"]
+                        and handle.process_start
+                        and not handle.adopted
+                    ):
+                        manager.stop(engine)
                 remote = record["request"].get("_desktop_connection", {}).get("kind") in {
                     "a2a",
                     "uhp",
@@ -1044,6 +1501,10 @@ class DesktopService:
                 raise ValueError("Enter a valid vendor key")
             self.vendor_keys[entry] = key.strip()
             return route
+        if method == "connect.runtimes":
+            from .connect_workflow import runtime_catalog
+
+            return runtime_catalog()
         if method == "connect.harness.draft":
             import yaml
             from superqode.harness.catalog import resolve_harness
@@ -1052,12 +1513,23 @@ class DesktopService:
             spec = resolve_harness(
                 str(params.get("harness") or "core"), root=self.project(params["project"])
             ).spec
-            return {"yaml": yaml.safe_dump(harness_spec_to_dict(spec), sort_keys=False)}
+            data = harness_spec_to_dict(spec)
+            if params.get("backend"):
+                from superqode.harness.backends.registry import create_harness_backend
+
+                backend = create_harness_backend(str(params["backend"]))
+                if not backend.capabilities.supports_coding:
+                    raise ValueError("Choose a runtime that supports coding harnesses")
+                data["runtime"] = {"backend": backend.name, "config": {}}
+            return {"yaml": yaml.safe_dump(data, sort_keys=False)}
         if method == "connect.harness.save":
             from .connect_workflow import save_harness
 
             with self.lock:
                 root = self.project(params["project"])
+                from .ownership import assert_project_idle
+
+                assert_project_idle(self, params["project"])
                 if self._all(
                     "SELECT id FROM jobs WHERE project=? AND status IN ('running','needs_approval','queued','cancelling')",
                     (params["project"],),
@@ -1074,22 +1546,101 @@ class DesktopService:
             return connection_menu(
                 self.project(params["project"]), str(params.get("menu") or "root")
             )
+        if method == "connect.acp.registry.status":
+            from .acp_catalog import registry_status
+
+            return registry_status(self)
+        if method == "connect.acp.custom.save":
+            from .acp_catalog import custom_agent
+
+            return custom_agent(self, params)
+        if method == "connect.acp.custom.remove":
+            from .acp_catalog import remove_custom_agent
+
+            return remove_custom_agent(self, params)
+        if method == "connect.acp.install.plan":
+            from .acp_catalog import install_plan
+
+            return install_plan(self, params["project"], params["reference"])
+        if method == "connect.acp.login.plan":
+            from .connect_workflow import profile_route
+            from superqode.providers.subscription_env import resolve_vendor, subscription_child_env
+            from superqode.providers.subscription_login import get_login_spec, login_command
+
+            root = self.project(params["project"])
+            route = (
+                self.resolve_desktop_acp(params["project"], root, params["reference"])
+                if params["reference"].startswith("acp:")
+                else profile_route(root, params["reference"].removeprefix("connection:"))
+            )
+            vendor = route.get("subscription_vendor") or resolve_vendor(
+                params["reference"].removeprefix("acp:")
+            )
+            if not vendor:
+                raise ValueError("Use an authentication method advertised by this agent")
+            spec = get_login_spec(vendor)
+            _, unset = subscription_child_env(vendor)
+            return {
+                "vendor": spec.id,
+                "name": spec.label,
+                "interactive": spec.interactive_tty,
+                "argv": login_command(spec),
+                "env": {},
+                "unset_env": unset,
+            }
+        if method == "execution.recovery":
+            from .ownership import recovery_status
+
+            return recovery_status(self, params["project"])
+        if method == "execution.recovery.acknowledge":
+            self.project(params["project"])
+            self._write(
+                "INSERT OR REPLACE INTO settings VALUES(?,?)",
+                ("recovery-ack:" + params["project"], json.dumps(time.time())),
+            )
+            return {"ok": True}
         if method == "connect.auth.start":
             action = str(params.get("action") or "oauth")
-            if action == "probe":
+            if action == "registry-refresh":
+                from .acp_catalog import refresh_registry
+
+                return self.authentication.start(lambda status: refresh_registry(self, status))
+            if action == "acp-install":
+                from .acp_catalog import install_agent
+
+                return self.authentication.start(
+                    lambda status: install_agent(
+                        self,
+                        params["project"],
+                        params["reference"],
+                        params["expected_digest"],
+                        status,
+                    )
+                )
+            if action in {"probe", "acp-auth", "acp-terminal"}:
                 from .connection_probe import probe_route
                 from .connect_workflow import profile_route
 
                 root = self.project(params["project"])
                 reference = str(params.get("reference") or "")
                 route = (
-                    resolve_acp_route(root, reference)
+                    self.resolve_desktop_acp(params["project"], root, reference)
                     if reference.startswith("acp:")
                     else profile_route(root, reference.removeprefix("connection:"))
                 )
+                if action != "probe" and params.get("expected_digest") != route["digest"]:
+                    raise ValueError(
+                        "The agent launch configuration changed. Check the connection again."
+                    )
 
                 async def probe(status):
-                    return await probe_route(root, route, status)
+                    return await probe_route(
+                        root,
+                        route,
+                        status,
+                        method_id=params.get("method") if action == "acp-auth" else None,
+                        terminal_method=params.get("method") if action == "acp-terminal" else None,
+                    )
 
                 return self.authentication.start(probe)
             if action == "install":
@@ -1188,6 +1739,20 @@ class DesktopService:
             from .connect_workflow import desktop_routes
 
             routes = desktop_routes(self.project(params["project"]))
+            from .acp_catalog import extra_routes
+
+            known = {row["id"]: row for row in routes}
+            for row in extra_routes(self, params["project"]):
+                if row["id"] in known:
+                    known[row["id"]].update(
+                        {
+                            key: row[key]
+                            for key in ("registry_version", "registry_source")
+                            if key in row
+                        }
+                    )
+                else:
+                    routes.append(row)
             for record in self._all(
                 "SELECT id,route FROM remote_routes WHERE project=?", (params["project"],)
             ):
@@ -1199,8 +1764,13 @@ class DesktopService:
                     )
                 routes.append(route)
             return routes
+        if method.startswith("studio."):
+            from .studio import handle
+
+            return handle(self, method, params)
         if method == "harnesses.list":
             from superqode.harness.catalog import list_harnesses
+            from .studio import selection
 
             return [
                 {
@@ -1214,7 +1784,7 @@ class DesktopService:
                     "path": str(h.path) if h.path else None,
                 }
                 for h in list_harnesses(self.project(params["project"]))
-            ]
+            ] + selection(self, params["project"])
         if method == "harnesses.inspect":
             from superqode.harness.catalog import resolve_harness
             from superqode.harness.loader import harness_spec_to_dict
@@ -1520,14 +2090,25 @@ class DesktopService:
         }
         return {**discovery, "connection": identity}
 
+    def resolve_desktop_acp(self, project, root, reference):
+        from .acp_catalog import extra_routes
+
+        for route in extra_routes(self, project):
+            if route["id"] == reference and (
+                route.get("custom") or not any(r["id"] == reference for r in acp_routes(root))
+            ):
+                if not route["available"]:
+                    raise ValueError(route["issue"])
+                return route
+        return resolve_acp_route(root, reference)
+
     def close(self):
         with self.lock:
             if self._closed:
                 return
             self._closing = True
             self.task_queues.enabled.clear()
-        for identity in list(self.authentication.actions):
-            self.authentication.cancel(identity)
+        self.authentication.begin_close()
         for job_id in list(self.processes):
             try:
                 self.dispatch("jobs.cancel", {"id": job_id})
@@ -1550,6 +2131,10 @@ class DesktopService:
                     "Desktop workers are still shutting down; retry closing the engine"
                 )
             self.db.close()
+            for lease in self._project_leases.values():
+                lease.close()
+            self._project_leases.clear()
+            self._engine_lease.close()
             self._closed = True
 
 

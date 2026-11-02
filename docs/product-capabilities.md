@@ -55,7 +55,7 @@ The primary interfaces are the CLI and TUI. Headless commands, local APIs, brows
 | Observability | Normalized logs, harness events, run graphs, optional sinks, evidence exports, and replay | [Logging System](advanced/logging-system.md) |
 | Automation | Headless execution, structured output, CI gates, persistent workers, and daemon operation | [Headless and CI](advanced/headless-ci.md) |
 | Remote access | Telegram, Slack, and Discord control, local companion API, browser TUI, ACP serving, and MCP serving | [Chat Channels](advanced/channels.md) |
-| Omnigent interoperability | Agent-spec import, portable conversion, shared multi-harness concepts, and different interface priorities | [SuperQode and Omnigent](advanced/superqode-vs-omnigent.md) |
+| Omnigent interoperability | Agent-spec import and portable conversion | [Omnigent Compatibility](advanced/omnigent-compat.md) |
 
 ## Configuration artifacts
 

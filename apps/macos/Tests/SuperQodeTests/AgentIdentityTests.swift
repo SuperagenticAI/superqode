@@ -1,0 +1,60 @@
+import XCTest
+@testable import SuperQode
+
+final class AgentIdentityTests: XCTestCase {
+  func testClientDirectoryHasUniquePublicWebsiteDestinations() {
+    XCTAssertFalse(ACPClientDirectory.projects.isEmpty)
+    XCTAssertEqual(Set(ACPClientDirectory.projects.map(\.id)).count, ACPClientDirectory.projects.count)
+    for project in ACPClientDirectory.projects {
+      let url = URL(string: project.url)
+      XCTAssertEqual(url?.scheme, "https", project.name)
+      XCTAssertNotNil(url?.host, project.name)
+      XCTAssertNil(url?.user, project.name)
+      XCTAssertNil(url?.password, project.name)
+    }
+  }
+
+  func testAgentIdentityUsesExecutionRouteAndNeverTheModel() {
+    XCTAssertEqual(HarnessIdentity(["id": "acp:codex"]).assetName, "Agent-codex-acp")
+    XCTAssertEqual(HarnessIdentity(["id": "connection:claude", "subscription_vendor": "claude"]).assetName, "Agent-claude-acp")
+    XCTAssertEqual(HarnessIdentity(["id": "my-harness", "runtime": "codex-cli"]).assetName, "Agent-codex-acp")
+    XCTAssertEqual(HarnessIdentity(["id": "core", "model": "codex"]).assetName, "BrandMark")
+    XCTAssertNil(HarnessIdentity(["id": "acp:custom-research", "name": "Codex experiment"]).assetName)
+  }
+
+  func testMixedHarnessHistoryKeepsDistinctRoutesAndNames() {
+    let row: [String: Any] = ["harnesses_used": [
+      ["id": "acp:codex", "name": "Codex", "icon_key": "codex"],
+      ["id": "acp:claude", "name": "Claude", "icon_key": "claude"],
+      ["id": "acp:codex", "name": "Codex", "icon_key": "codex"],
+      ["id": "retired", "name": "Old research harness", "icon_key": ""],
+    ]]
+    XCTAssertEqual(HarnessIdentity.used(in: row).map(\.name), ["Codex", "Claude", "Old research harness"])
+    XCTAssertEqual(HarnessIdentity.used(in: ["harness": "acp:codex"]).first?.assetName, "Agent-codex-acp")
+    XCTAssertTrue(HarnessIdentity.used(in: [:]).isEmpty)
+    let overflow: [String: Any] = ["harness": "five", "harnesses_used": ["one", "two", "three", "four", "five"].map { ["id": $0, "name": $0] }]
+    XCTAssertEqual(HarnessIdentity.visible(in: overflow, limit: 3).map(\.id), ["one", "two", "five"])
+    XCTAssertEqual(HarnessIdentity.visible(in: overflow, limit: 1).map(\.id), ["five"])
+  }
+
+  func testCatalogFiltersKeepMissingAgentsDiscoverableAndRejectStaleVerification() {
+    let routes: [[String: Any]] = [
+      ["id": "acp:missing", "name": "Missing", "available": false],
+      ["id": "acp:codex", "name": "Codex", "available": true, "digest": "new"],
+      ["id": "acp:custom", "name": "Custom", "available": true, "custom": true, "digest": "current"],
+    ]
+    let metadata: [String: [String: Any]] = [
+      "acp:codex": ["connected": true, "route_digest": "old"],
+      "acp:custom": ["connected": true, "route_digest": "current"],
+    ]
+    func ids(_ filter: ACPAgentFilter, _ search: String = "") -> [String] {
+      filteredACPAgents(routes, search: search, filter: filter, metadata: metadata, selected: "acp:codex").map { string($0, "id") }
+    }
+    XCTAssertEqual(ids(.all), ["acp:codex", "acp:custom", "acp:missing"])
+    XCTAssertEqual(ids(.installed), ["acp:codex", "acp:custom"])
+    XCTAssertEqual(ids(.verified), ["acp:custom"])
+    XCTAssertEqual(ids(.custom), ["acp:custom"])
+    XCTAssertEqual(ids(.all, "  MISSING  "), ["acp:missing"])
+    XCTAssertTrue(ids(.all, "not here").isEmpty)
+  }
+}

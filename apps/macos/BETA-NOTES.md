@@ -68,14 +68,11 @@ latest native session recovery and scoped review changes:
 - A Review workspace for This turn, Uncommitted and Branch comparisons, with
   line feedback, saved feedback drafts and guarded whole-file staging.
 - Stable conversation identity across follow-up and compaction runs.
-- Smoke validation covering every native workspace screen, with failures exposed
-  in CI check annotations.
 
 It also retains the Command-K palette, paginated run activity with retry, and
-evaluation and held-out optimization comparisons. Release checks include 60
-native Swift tests, 261 desktop and release checks, and a native smoke test
-covering all ten workspace screens with local model fixtures. See [session recovery](SESSION-RECOVERY.md)
-and the [review workspace](REVIEW-WORKSPACE.md) for behavior and limitations.
+evaluation and held-out optimization comparisons. Review feedback is saved as a
+draft for a follow-up request; staging requires an explicit action. Recovery of
+unsaved file edits offers conflict handling when files have changed on disk.
 
 ## What changed in this beta
 

@@ -2099,7 +2099,7 @@ class LocalModelsMixin:
                 self.run_worker(self._local_serve(subargs, log))
             else:
                 log.add_info(
-                    "Usage: :local serve <ollama|lmstudio|llama.cpp|mlx|ds4> [--model X] [--port N] [--ctx N] [--host H]"
+                    "Usage: :local serve <ollama|lmstudio|llama.cpp|mlx|ds4> [--model X] [--port N] [--ctx N] [--host H] [--kv-cache auto|f16|q8_0|q4_0]"
                 )
                 log.add_system(
                     "sglang/vllm: use :local install <engine>, then the printed next steps (not :local serve)"
@@ -2666,8 +2666,8 @@ class LocalModelsMixin:
 
         try:
             engine, opts = self._parse_serve_args(subargs)
-        except ValueError:
-            log.add_error("Bad value for --port/--ctx (must be a number)")
+        except ValueError as exc:
+            log.add_error(f"Could not parse server options: {exc}")
             return
         if engine not in SPECS:
             log.add_error(f"Unknown engine: {engine}")
@@ -2692,6 +2692,7 @@ class LocalModelsMixin:
                     model=opts.get("model"),
                     ctx=opts.get("ctx"),
                     extra_args=opts.get("extra_args"),
+                    kv_cache=opts.get("kv_cache", "auto"),
                 )
                 t0 = Text()
                 t0.append(f"Starting managed {engine} server\n", style=f"bold {THEME['text']}")
@@ -3268,6 +3269,13 @@ class LocalModelsMixin:
         from superqode.local.servers import parse_inline_start
 
         action, opts, error = parse_inline_start(text)
+        if action == "start":
+            from superqode.local.options import cache_options
+
+            try:
+                cache_options(engine, opts.get("kv_cache", "auto"))
+            except ValueError as exc:
+                action, error = "error", str(exc)
         if action == "cancel":
             self._awaiting_local_server_start = None
             self._reset_input_placeholder()
@@ -3282,7 +3290,7 @@ class LocalModelsMixin:
         if action == "error":
             log.add_error(
                 f"{error}. Start it yourself, press Enter for SuperQode managed defaults, "
-                "type 'port=8090 ctx=8192', or 'n' to skip."
+                "type 'port=8090 ctx=8192 kv=q8_0' for Ollama/llama.cpp, or 'n' to skip."
             )
             self._pin_local_prompt_to_input(
                 f"Start {engine} yourself, or press Enter for SuperQode managed start",
@@ -3312,6 +3320,8 @@ class LocalModelsMixin:
         reset_highlight: bool = True,
     ) -> bool:
         """Show missing local support as the same navigable setup card as SDK extras."""
+        if engine == "mlx":
+            return self._show_local_runtime_install(engine, log)
         from superqode.app.prompt_stack import PromptSpec
         from superqode.local.servers import mlx_install_command
         from superqode.providers.env_introspect import environment_info

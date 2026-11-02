@@ -160,13 +160,13 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Code Factory guide](software-factory.md)
 
--   **SuperQode and Omnigent**
+-   **Omnigent Compatibility**
 
     ---
 
-    Understand the ideas both products share, their different design priorities, SuperQode's remote-control options, and the Omnigent import path.
+    Import compatible Omnigent agent definitions and review the supported fields and execution boundaries.
 
-    [:octicons-arrow-right-24: SuperQode and Omnigent](superqode-vs-omnigent.md)
+    [:octicons-arrow-right-24: Omnigent Compatibility](omnigent-compat.md)
 
 -   **Session Management**
 

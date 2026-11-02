@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime
 import json
 import os
+import signal
 from pathlib import Path
 from typing import Any, Callable, Awaitable, Optional, Dict, List, Protocol
 from dataclasses import dataclass, field
@@ -166,6 +167,11 @@ class ACPClient:
 
     project_root: Path
     command: str  # e.g., "opencode acp"
+    launch_argv: Optional[List[str]] = field(default=None, kw_only=True)
+    own_process_group: bool = field(default=False, kw_only=True)
+    initialize_only: bool = field(default=False, kw_only=True)
+    terminal_auth_supported: bool = field(default=False, kw_only=True)
+    allow_host_tools: bool = field(default=True, kw_only=True)
     model: Optional[str] = None
     startup_timeout: float = 30.0
     prompt_timeout: float = 180.0
@@ -228,8 +234,11 @@ class ACPClient:
     _pending_requests: Dict[int, asyncio.Future] = field(default_factory=dict, repr=False)
     _inbound_tasks: set[asyncio.Task] = field(default_factory=set, repr=False)
     _session_id: str = field(default="", repr=False)
+    _auth_methods: list[dict] = field(default_factory=list, repr=False)
+    _initialization_info: dict = field(default_factory=dict, repr=False)
     _tool_calls: Dict[str, ToolCall] = field(default_factory=dict, repr=False)
     _read_task: Optional[asyncio.Task] = field(default=None, repr=False)
+    _stderr_task: Optional[asyncio.Task] = field(default=None, repr=False)
     _terminal_count: int = field(default=0, repr=False)
     _terminals: Dict[str, dict] = field(default_factory=dict, repr=False)
 
@@ -340,22 +349,35 @@ class ACPClient:
             if "opencode" in cmd and os.environ.get("SUPERQODE_ACP_PRINT_LOGS"):
                 cmd = f"{cmd} --print-logs"
 
-            self._process = await asyncio.create_subprocess_shell(
-                cmd,
+            launch = (
+                asyncio.create_subprocess_exec
+                if self.launch_argv is not None
+                else asyncio.create_subprocess_shell
+            )
+            arguments = self.launch_argv if self.launch_argv is not None else [cmd]
+            self._process = await launch(
+                *arguments,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
+                stderr=asyncio.subprocess.PIPE
+                if self.launch_argv is not None
+                else asyncio.subprocess.STDOUT,
                 cwd=str(self.project_root),
                 env=child_env(env),
                 limit=10 * 1024 * 1024,  # 10MB buffer
+                start_new_session=self.own_process_group,
             )
 
             # Start reading output
             self._read_task = asyncio.create_task(self._read_loop())
+            if self.launch_argv is not None:
+                self._stderr_task = asyncio.create_task(self._read_stderr())
 
             # Initialize the protocol
             await self._initialize()
 
+            if self.initialize_only:
+                return True
             if not await self._restore_or_create_session():
                 return False
 
@@ -381,6 +403,11 @@ class ACPClient:
             # EOF. Close input before waiting so its stdout pipe can also close.
             if getattr(self._process, "stdin", None):
                 self._process.stdin.close()
+            if self.own_process_group:
+                try:
+                    os.killpg(self._process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
             if self._process.returncode is None:
                 try:
                     self._process.terminate()
@@ -389,18 +416,40 @@ class ACPClient:
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=5.0)
             except asyncio.TimeoutError:
+                if self.own_process_group:
+                    try:
+                        os.killpg(self._process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                 try:
                     self._process.kill()
                 except ProcessLookupError:
                     pass
                 await self._process.wait()
+            if self.own_process_group:
+                try:
+                    os.killpg(self._process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             if getattr(self._process, "stdin", None):
                 try:
                     await self._process.stdin.wait_closed()
                 except (BrokenPipeError, ConnectionResetError):
                     pass
             self._process = None
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            await asyncio.gather(self._stderr_task, return_exceptions=True)
+            self._stderr_task = None
         self._read_task = None
+
+    async def _read_stderr(self):
+        while self._process and self._process.stderr:
+            line = await self._process.stderr.read(4096)
+            if not line:
+                return
+            if self.on_thinking:
+                await self.on_thinking(line.decode(errors="replace")[:4000])
 
     async def _initialize_traffic_log(self) -> None:
         """Create the ACP traffic log file when logging is enabled.
@@ -644,6 +693,22 @@ class ACPClient:
         """Return a copy of the agent capabilities reported at initialize."""
         return dict(self._agent_capabilities)
 
+    def get_auth_methods(self) -> list[dict]:
+        return json.loads(json.dumps(self._auth_methods))
+
+    async def authenticate(self, method_id: str):
+        method = next((m for m in self._auth_methods if m.get("id") == method_id), None)
+        if not method or method.get("type", "agent") != "agent":
+            raise ValueError("Choose an advertised agent authentication method")
+        await self._call_method("authenticate", methodId=method_id, timeout=300)
+
+    def get_initialization_info(self) -> dict:
+        """Only public protocol/agent identity; never account or authentication payloads."""
+        return {
+            **self._initialization_info,
+            "agent": dict(self._initialization_info.get("agent") or {}),
+        }
+
     def get_session_modes(self) -> dict[str, Any]:
         """Return the latest ACP session mode state reported by the agent."""
         return {
@@ -695,11 +760,18 @@ class ACPClient:
             timeout=self.startup_timeout,
             protocolVersion=PROTOCOL_VERSION,
             clientCapabilities={
-                "fs": {
-                    "readTextFile": True,
-                    "writeTextFile": True,
-                },
-                "terminal": True,
+                **(
+                    {
+                        "fs": {
+                            "readTextFile": True,
+                            "writeTextFile": True,
+                        },
+                        "terminal": True,
+                    }
+                    if self.allow_host_tools
+                    else {}
+                ),
+                **({"auth": {"terminal": True}} if self.terminal_auth_supported else {}),
             },
             clientInfo={
                 "name": CLIENT_NAME,
@@ -707,11 +779,32 @@ class ACPClient:
                 "version": CLIENT_VERSION,
             },
         )
+        version = response.get("protocolVersion")
+        if type(version) is not int or version != PROTOCOL_VERSION:
+            raise ValueError(
+                f"Unsupported ACP protocol version {version!r}; this client supports {PROTOCOL_VERSION}. "
+                "Update the agent or its ACP adapter and reconnect."
+            )
+        agent = response.get("agentInfo") or {}
+        self._initialization_info = {
+            "protocol_version": version,
+            "agent": {
+                key: str(agent[key])[:200]
+                for key in ("name", "title", "version")
+                if isinstance(agent, dict) and key in agent
+            },
+        }
         # Stash whatever the agent told us about itself. We only act on
         # ``loadSession`` today, but keeping the full dict means future
         # capability checks (e.g. ``promptCapabilities.embeddedContent``)
         # don't require a re-roundtrip.
         self._agent_capabilities = response.get("agentCapabilities") or {}
+        methods = response.get("authMethods") or []
+        self._auth_methods = (
+            [m for m in methods if isinstance(m, dict) and isinstance(m.get("id"), str)]
+            if isinstance(methods, list)
+            else []
+        )
         return response
 
     async def _new_session(self) -> NewSessionResponse:
@@ -971,18 +1064,20 @@ class ACPClient:
         future: asyncio.Future = asyncio.get_event_loop().create_future()
         self._pending_requests[request_id] = future
 
-        # Send request
-        await self._send_json(request)
-
-        # Wait for response
         try:
+            await self._send_json(request)
             response = await asyncio.wait_for(future, timeout=timeout or self.request_timeout)
             return response
         except asyncio.TimeoutError:
-            self._pending_requests.pop(request_id, None)
             raise TimeoutError(f"{method}: timed out waiting for the ACP agent") from None
         except Exception as exc:
-            raise RuntimeError(f"{method}: {exc}") from exc
+            failure = RuntimeError(f"{method}: {exc}")
+            failure.acp_code = getattr(exc, "acp_code", None)
+            raise failure from exc
+        finally:
+            self._pending_requests.pop(request_id, None)
+            if not future.done():
+                future.cancel()
 
     async def _send_notification(self, method: str, **params) -> None:
         """Send a JSON-RPC notification (no response expected)."""
@@ -1044,6 +1139,15 @@ class ACPClient:
             if self.on_thinking:
                 await self.on_thinking(f"[error] {e}")
         finally:
+            # EOF must release requests immediately, including long-running
+            # prompts. Replaying a prompt after a disconnect could repeat edits.
+            pending = list(self._pending_requests.values())
+            self._pending_requests.clear()
+            for future in pending:
+                if not future.done():
+                    future.set_exception(
+                        ConnectionError("ACP agent disconnected. Reconnect before retrying.")
+                    )
             if self._inbound_tasks:
                 for task in list(self._inbound_tasks):
                     task.cancel()
@@ -1062,8 +1166,14 @@ class ACPClient:
             request_id = data.get("id")
             if request_id is not None and request_id in self._pending_requests:
                 future = self._pending_requests.pop(request_id)
+                if future.done():
+                    return
                 if "error" in data:
-                    future.set_exception(Exception(_format_jsonrpc_error(data["error"])))
+                    failure = Exception(_format_jsonrpc_error(data["error"]))
+                    failure.acp_code = (
+                        data["error"].get("code") if isinstance(data["error"], dict) else None
+                    )
+                    future.set_exception(failure)
                 else:
                     future.set_result(data.get("result", {}))
             return

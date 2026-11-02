@@ -327,6 +327,7 @@ superqode local serve llama.cpp --model /path/to/model.gguf --ctx 16384
 | `-p, --port INTEGER` | Port (default: engine default) |
 | `--host TEXT` | Bind host (default `127.0.0.1`) |
 | `--ctx INTEGER` | Context window (where the engine supports it) |
+| `--kv-cache [auto\|f16\|q8_0\|q4_0]` | Typed Ollama/llama.cpp KV cache request; quantized cache requests enable Flash Attention. Existing servers keep their settings. |
 | `--no-wait` | Return immediately, do not wait for readiness |
 | `--build` | (ds4) Build the `ds4-server` binary first if missing |
 | `--allow-download` | (mlx) Permit downloading the model from Hugging Face if not cached |

@@ -29,6 +29,23 @@ private struct DialogAuditHost: View {
 @MainActor final class Workspace: ObservableObject {
   let recoveryStore: WorkspaceRecoveryStore
   let preferences: UserDefaults
+  lazy var threadNotifications: ThreadNotifications = {
+    let alerts = ThreadNotifications(preferences: preferences)
+    alerts.openThread = { [weak self] project, job in
+      guard let self else { return }
+      self.perform {
+        let record = try await self.engine.call("jobs.get", ["id": job]) as? [String: Any] ?? [:]
+        guard string(record, "project") == project,
+          let destination = self.projects.first(where: { string($0, "id") == project }) else { return }
+        if self.projectID != project { try await self.open(string(destination, "path"), expectedProjectID: project) }
+        self.selectJob(job, targetSection: "Workspace")
+        let title = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode"
+        NSApp.windows.first(where: { $0.title == title })?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+      }
+    }
+    return alerts
+  }()
   var recoverySnapshot: WorkspaceRecoverySnapshot
   @Published var restoringNavigation = false
   var restoringComposer = false
@@ -45,8 +62,9 @@ private struct DialogAuditHost: View {
   @Published var reviewSelection = ReviewSelection() { didSet { persistDestination() } }
 
   init(recoveryStore: WorkspaceRecoveryStore? = nil, preferences: UserDefaults = .standard, engine: Engine? = nil) {
+    let smokeRecovery = ProcessInfo.processInfo.environment["SUPERQODE_SMOKE_RECOVERY_DIRECTORY"].map { URL(fileURLWithPath: $0) }
     let store = recoveryStore ?? (ProcessInfo.processInfo.arguments.contains("--smoke-test")
-      ? WorkspaceRecoveryStore(directory: nil) : .applicationStore())
+      ? WorkspaceRecoveryStore(directory: smokeRecovery) : .applicationStore())
     self.recoveryStore = store
     self.preferences = preferences
     self.engine = engine ?? Engine()
@@ -55,6 +73,7 @@ private struct DialogAuditHost: View {
     self.recoveryIssue = store.loadIssue
   }
   let engine: Engine
+  let harnessStudio = HarnessStudioLibrary()
   let terminals = ProjectTerminals()
   let credentialStore = CredentialStore()
   @Published var providers: [[String: Any]] = []
@@ -71,10 +90,18 @@ private struct DialogAuditHost: View {
   private var pendingPaletteAction: WorkspaceCommandAction?
   @Published var learningTopic = "Start coding"
   @Published var showConnection = false
+  @Published var showConnectionInspector = false
+  @Published var connectionStartPage = "menu:root"
+
+  func openConnections(_ page: String = "menu:root") {
+    connectionStartPage = page
+    showConnection = true
+  }
   @Published var agentModel = ""
   @Published var agentMode = ""
   @Published var agentConfig: [String: String] = [:]
   @Published var connectionMetadata: [String: [String: Any]] = [:]
+  @Published var forkWorkspaces: [[String: Any]] = []
   @Published var checkingConnection = false
   private var connectionGeneration = 0
   var agentSession: [String: Any] {
@@ -91,10 +118,12 @@ private struct DialogAuditHost: View {
     return harnesses.filter { string($0, "desktop_kind") == "acp" }
       .sorted { string($0, "id").hasPrefix("acp:") && !string($1, "id").hasPrefix("acp:") }
       .filter { route in
-        let semantics: [String: Any] = [
+        var semantics: [String: Any] = [
           "command": string(route, "command", string(route, "id")),
           "vendor": string(route, "subscription_vendor"), "env": route["extra_env"] ?? [:],
         ]
+        if route["custom"] as? Bool == true { semantics["custom"] = string(route, "id") }
+        if string(route, "command").isEmpty { semantics["unavailable"] = string(route, "id") }
         let key = (try? JSONSerialization.data(withJSONObject: semantics, options: .sortedKeys))
           .map { String(decoding: $0, as: UTF8.self) } ?? string(route, "id")
         return seen.insert(key).inserted
@@ -190,6 +219,14 @@ private struct DialogAuditHost: View {
   @Published var hardware: [String: Any] = [:]
   @Published var packs: [[String: Any]] = []
   @Published var jobs: [[String: Any]] = []
+  @Published var executionRecovery: [String: Any] = [:]
+  private var threadLibraries: [String: ThreadLibrary] = [:]
+  func threadLibrary(for project: String) -> ThreadLibrary {
+    if let library = threadLibraries[project] { return library }
+    let library = ThreadLibrary()
+    threadLibraries[project] = library
+    return library
+  }
   @Published var selectedJob = ""
   @Published var detail: [String: Any] = [:]
   @Published var events: [[String: Any]] = []
@@ -197,6 +234,9 @@ private struct DialogAuditHost: View {
   @Published private(set) var omittedRunEvents = 0
   @Published private(set) var eventStreamOpen = false
   @Published private(set) var activityLoadError = ""
+  @Published var workSource = "app"
+  @Published var backgroundEngineMode = false
+  @Published var switchingBackgroundEngine = false
   private var eventCursor = 0
   @Published var git: [String: Any] = [:]
   @Published var files: [String] = []
@@ -305,7 +345,7 @@ private struct DialogAuditHost: View {
     routeStatus = [:]
     savePreferences()
   }
-  func chooseConnection(_ route: [String: Any]) {
+  func chooseConnection(_ route: [String: Any], verified: [String: Any]? = nil) {
     guard !active, !busy else { notice = "Finish or stop the current response before switching agents."; return }
     let id = string(route, "id")
     if let index = harnesses.firstIndex(where: { string($0, "id") == id }) {
@@ -316,7 +356,10 @@ private struct DialogAuditHost: View {
     chooseHarness(id)
     interactionMode = "code"
     section = "Workspace"
-    perform { await self.checkManagedConnection() }
+    if let verified, verifiedACPConnection(route: route, metadata: verified) {
+      connectionMetadata[id] = verified
+      routeStatus = ["state": "connected", "message": string(verified, "message")]
+    } else { perform { await self.checkManagedConnection() } }
   }
   func checkManagedConnection() async {
     guard isManaged, !projectID.isEmpty else { return }
@@ -351,7 +394,7 @@ private struct DialogAuditHost: View {
         if string(result, "state") == "completed" {
           let metadata = result["result"] as? [String: Any] ?? [:]
           connectionMetadata[reference] = metadata
-          routeStatus = ["state": metadata["connected"] as? Bool == true ? "connected" : "configured",
+          routeStatus = ["state": metadata["connected"] as? Bool == true ? "connected" : string(metadata, "state", "configured"),
                          "message": string(metadata, "message")]
           return
         }
@@ -363,10 +406,19 @@ private struct DialogAuditHost: View {
       _ = try? await engine.call("connect.auth.cancel", ["id": operation])
       throw EngineError(message: "Connection check timed out. Check the agent's sign-in and try again.")
     } catch {
-      if generation == connectionGeneration && reference == harness {
+      if generation == connectionGeneration && reference == harness && checkedProject == projectID {
+        var metadata = connectionMetadata[reference] ?? [:]
+        metadata["last_check_error"] = error.localizedDescription
+        connectionMetadata[reference] = metadata
         routeStatus = ["state": "connection-failed", "ready": false, "message": error.localizedDescription]
       }
     }
+  }
+  func cancelConnectionCheck() {
+    guard checkingConnection else { return }
+    connectionGeneration += 1
+    checkingConnection = false
+    routeStatus = ["state": "check-cancelled", "message": "Connection check cancelled. You can check again when ready."]
   }
   var projectID: String { string(project, "id") }
   var projectJobs: [[String: Any]] { jobs.filter { string($0, "project") == projectID } }
@@ -384,6 +436,9 @@ private struct DialogAuditHost: View {
       ["running", "needs_approval", "queued", "cancelling"].contains(string($0, "status"))
     }
   }
+  func hasActiveWork(project: String) -> Bool {
+    jobs.contains { string($0, "project") == project && ["running", "needs_approval", "queued", "cancelling"].contains(string($0, "status")) }
+  }
 
   func perform(_ action: @escaping @MainActor () async throws -> Void) {
     Task { do { try await action() } catch { self.error = error.localizedDescription } }
@@ -393,6 +448,7 @@ private struct DialogAuditHost: View {
     do {
       engine.onExit = { [weak self] in self?.connected = false }
       try engine.start()
+      backgroundEngineMode = engine.backgroundMode
       _ = try await engine.call("hello")
       connected = true
       capabilities = try await engine.call("capabilities") as? [String: Any] ?? [:]
@@ -419,12 +475,7 @@ private struct DialogAuditHost: View {
       projects = try await engine.call("projects.list") as? [[String: Any]] ?? []
       packs = try await engine.call("evals.packs") as? [[String: Any]] ?? []
       let args = ProcessInfo.processInfo.arguments
-      if let index = args.firstIndex(of: "--project"), args.count > index + 1 {
-        try await open(args[index + 1])
-      } else if let destination = recoverySnapshot.lastDestination {
-        do { try await restoreDestination(destination) }
-        catch { notice = "Couldn’t reopen the saved session. Choose its project to recover drafts. " + error.localizedDescription }
-      }
+      try await openStartupProject(arguments: args)
       if project.isEmpty { await refreshModels() }
       await checkRoute()
       await refreshJobs()
@@ -444,8 +495,18 @@ private struct DialogAuditHost: View {
           }
         }
       }
-      if args.contains("--smoke-test") { await smokeTest() }
+      if args.contains("--smoke-test") {
+        if args.contains("--welcome-only") { await smokeWelcomeStartup() }
+        else { await smokeTest() }
+      }
     } catch { self.error = error.localizedDescription }
+  }
+  func openStartupProject(arguments: [String]) async throws {
+    // Loading recovery and recents must not navigate away from Welcome.
+    // Explicit launch targets (including the smoke fixture) remain supported.
+    guard let index = arguments.firstIndex(of: "--project"), arguments.count > index + 1,
+      !arguments[index + 1].hasPrefix("--"), !arguments[index + 1].isEmpty else { return }
+    try await open(arguments[index + 1])
   }
   func chooseProject() {
     guard !openingProject, !restoringNavigation else { return }
@@ -487,6 +548,7 @@ private struct DialogAuditHost: View {
     let definitions = try await engine.call("harnesses.list", params) as? [[String: Any]] ?? []
     let index = try await engine.call("hub.list", params) as? [String: Any] ?? [:]
     let routes = try await engine.call("routes.list", params) as? [[String: Any]] ?? []
+    let nextForks = try await engine.call("threads.fork.list", params) as? [[String: Any]] ?? []
     var nextHarnesses = definitions + routes
     for entry in UserDefaults.standard.stringArray(forKey: "nativeVendorKeys") ?? [] {
       if let key = try? credentialStore.read("vendor:" + entry),
@@ -505,6 +567,7 @@ private struct DialogAuditHost: View {
     restoringNavigation = true
     defer { restoringNavigation = wasRestoring }
     project = opened
+    forkWorkspaces = nextForks
     selectedJob = ""
     composerConversationID = ""
     loadingConversationDraft = false
@@ -519,6 +582,7 @@ private struct DialogAuditHost: View {
     contextFiles = []
     imageAttachments = []
     taskQueue = [:]
+    executionRecovery = [:]
     lastQueueJob = ""
     detail = [:]
     events = []
@@ -595,6 +659,12 @@ private struct DialogAuditHost: View {
     self.model = model
     savePreferences()
   }
+  func clearLocalModelBinding() async throws {
+    _ = try await engine.call("local.models.clear_binding", ["project": projectID, "provider": provider, "model": model])
+    verifiedRoute = ""
+    await checkRoute()
+    notice = "Local endpoint binding cleared. Future requests use the provider configuration."
+  }
   func savePreferences() {
     pendingPreferences = [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)]
     guard !writingPreferences else { return }
@@ -630,11 +700,19 @@ private struct DialogAuditHost: View {
     do {
       let nextJobs = try await engine.call("jobs.list") as? [[String: Any]] ?? []
       if !NSArray(array: jobs).isEqual(to: nextJobs) { jobs = nextJobs }
+      let alerts = try await engine.call("notifications.poll", ["after": threadNotifications.cursor]) as? [String: Any] ?? [:]
+      threadNotifications.consume(alerts, selected: selectedJob)
       if !projectID.isEmpty {
         let queuedProject = projectID
         let nextQueue = try await engine.call("queue.list", ["project": queuedProject]) as? [String: Any] ?? [:]
         guard queuedProject == projectID else { return }
         if !NSDictionary(dictionary: taskQueue).isEqual(to: nextQueue) { taskQueue = nextQueue }
+        let recovery = try await engine.call("execution.recovery", ["project": queuedProject]) as? [String: Any] ?? [:]
+        guard queuedProject == projectID else { return }
+        if !NSDictionary(dictionary: executionRecovery).isEqual(to: recovery) { executionRecovery = recovery }
+        let forks = try await engine.call("threads.fork.list", ["project": queuedProject]) as? [[String: Any]] ?? []
+        guard queuedProject == projectID else { return }
+        if !NSArray(array: forkWorkspaces).isEqual(to: forks) { forkWorkspaces = forks }
         if let queued = (taskQueue["items"] as? [[String: Any]] ?? []).first(where: {
           string($0, "state") == "running"
         }) {
@@ -829,7 +907,7 @@ private struct DialogAuditHost: View {
     do {
       let result =
         try await engine.call(
-          "providers.check", ["provider": currentProvider, "model": currentModel]) as? [String: Any]
+          "providers.check", ["provider": currentProvider, "model": currentModel, "project": projectID, "harness": harness]) as? [String: Any]
         ?? [:]
       if route == provider + "\n" + model { routeStatus = result }
     } catch {
@@ -842,6 +920,14 @@ private struct DialogAuditHost: View {
     provider selectedProvider: String, model selectedModel: String, key: String, remember: Bool
   ) async throws {
     if !key.isEmpty {
+      try await storeProviderCredential(selectedProvider, key: key, remember: remember)
+    }
+    chooseModelRoute(
+      selectedProvider, selectedModel.trimmingCharacters(in: .whitespacesAndNewlines))
+    await refreshProviders()
+    await checkRoute()
+  }
+  func storeProviderCredential(_ selectedProvider: String, key: String, remember: Bool) async throws {
       _ = try await engine.call(
         "providers.credentials.set", ["provider": selectedProvider, "key": key])
       verifiedRoute = ""
@@ -865,12 +951,13 @@ private struct DialogAuditHost: View {
         }
         _ = try await engine.call(
           "settings.set", ["key": "credential_providers", "value": savedCredentialProviders])
+      } else if savedCredentialProviders.contains(selectedProvider) {
+        let store = credentialStore
+        try await Task.detached { try store.remove(selectedProvider) }.value
+        savedCredentialProviders.removeAll { $0 == selectedProvider }
+        _ = try await engine.call("settings.set", ["key": "credential_providers", "value": savedCredentialProviders])
       }
-    }
-    chooseModelRoute(
-      selectedProvider, selectedModel.trimmingCharacters(in: .whitespacesAndNewlines))
     await refreshProviders()
-    await checkRoute()
   }
   func forgetCredential(_ provider: String) async throws {
     let store = credentialStore
@@ -932,6 +1019,7 @@ private struct DialogAuditHost: View {
     }
   }
   func send(continueSession: Bool) {
+    guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
     guard !loadingConversationDraft, !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
       (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     let submittedDraft = draft
@@ -1293,6 +1381,10 @@ private struct DialogAuditHost: View {
         throw EngineError(message: "Bundled SuperQode brand asset is missing")
       }
       report["branding"] = "passed; native asset catalog brand mark loaded"
+      for name in Set(BundledAgentIcons.assets.values) {
+        guard NSImage(named: name) != nil else { throw EngineError(message: "Bundled agent icon missing: " + name) }
+      }
+      report["agent_icons"] = "passed; all \(Set(BundledAgentIcons.assets.values).count) bundled ACP glyphs loaded"
       report["performance"] = try await verifyResponsiveness()
       report["coding_inputs"] = try verifyCodingInputs()
       report["source_editor"] = try await verifySourceEditor()
@@ -1315,11 +1407,16 @@ private struct DialogAuditHost: View {
       }
       let existingDraft = draft
       showWelcome = true
+      try await openStartupProject(arguments: ["SuperQode"])
+      try await Task.sleep(for: .milliseconds(350))
+      guard showWelcome, draft == existingDraft else {
+        throw EngineError(message: "Loading startup recovery navigated away from Welcome")
+      }
       try await open(string(project, "path"))
       guard !showWelcome, draft == existingDraft else {
         throw EngineError(message: "Reopening a project from Welcome did not enter its workspace with its draft")
       }
-      report["welcome_navigation"] = "passed; actual project reopen from Welcome enters the workspace and preserves its draft"
+      report["welcome_navigation"] = "passed; startup navigation stays on Welcome until an explicit project open, which enters the workspace and preserves its draft"
       let visible = conversationEvents(
         [
           ["type": "stage"], ["type": "approval"], ["type": "error"],
@@ -1362,9 +1459,9 @@ private struct DialogAuditHost: View {
       live.append(toolEvent("tool_result", ["tool_call_id": "b"]))
       guard currentAgentActivity(live) == "pytest -q" else { throw EngineError(message: "Pending command was lost after another tool finished") }
       live.append(toolEvent("tool_update", ["toolCallId": "a", "status": "completed"]))
-      guard currentAgentActivity(live).isEmpty, recents.count == 2,
+      guard currentAgentActivity(live) == "Finished · pytest -q", recents.count == 2,
         string(recents[0], "id") == "follow-up", string(recents[0], "conversation_title") == "Original request"
-      else { throw EngineError(message: "Completed commands remained live or follow-ups duplicated recent rows") }
+      else { throw EngineError(message: "Completed commands were mislabeled or follow-ups duplicated recent rows") }
       report["conversation_recents_live_activity"] = "passed; one latest turn per parent conversation; single current command handles sparse ACP updates and completed tools"
       let installFixture: [String: Any] = ["route": ["id": "acp:install-check", "available": false],
         "install": ["command": "example install", "reference": "fixture"]]
@@ -1397,7 +1494,7 @@ private struct DialogAuditHost: View {
         for dark in [false, true] {
           let host = NSHostingView(rootView: VStack(alignment: .leading, spacing: 14) {
             AgentResponseView(text: sample)
-            AgentWorkingCard(status: "running", activity: "python -m unittest -v")
+            AgentWorkingCard(status: "running", activity: currentAgentActivity([toolEvent("tool_call", ["tool_name": "bash", "args": ["command": "uv run pytest -q tests/test_desktop_studio_execution.py --disable-warnings"]])]))
           }.padding(24)
             .background(Color.qPanel).environment(\.colorScheme, dark ? .dark : .light))
           host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -1444,9 +1541,11 @@ private struct DialogAuditHost: View {
         for page in [
           "menu:root", "menu:vendors", "menu:protocols", "source:key", "configure:wizard",
           "configure:rlm", "configure:rlm-routing", "systemone",
+          "runtimes", "acp", "acp-clients", "custom-acp", "acp-setup-preview", "thread-identities-preview",
         ] {
           try await captureConnectionPage(page, directory: destination)
         }
+        try await captureConnectionInspector(directory: destination)
       }
       report["harnesses"] = harnesses.count
       report["hub"] = hub.count
@@ -1651,8 +1750,32 @@ private struct DialogAuditHost: View {
       }
       report["rapid_switching"] = "passed; selected conversation, unique events and latest saved connection survive rapid changes"
       report["changes_refresh"] = "passed; task completion refreshes Git status and project files"
+      let sourceProject = projectID
+      let sourceRun = selectedJob
+      let sourceDraft = draft
+      let forkParameters: [String: Any] = ["project": sourceProject, "id": sourceRun,
+        "title": "Alternative implementation", "branch": "superqode/native-fork"]
+      let forkPlan = try await engine.call("threads.fork.preview", forkParameters) as? [String: Any] ?? [:]
+      let fork = try await engine.call("threads.fork.create", forkParameters.merging([
+        "fork_id": string(forkPlan, "fork_id"), "expected_digest": string(forkPlan, "digest")]) { _, value in value }) as? [String: Any] ?? [:]
+      try await openForkWorkspace(fork, includeContext: true)
+      guard projectID == string(fork, "project"), draft.contains("Shared thread context"),
+        selectedJob.isEmpty, string(project, "name") == "Alternative implementation" else {
+        throw EngineError(message: "Fork workspace did not retain its reviewed draft and destination")
+      }
+      let forkArguments = ProcessInfo.processInfo.arguments
+      if let index = forkArguments.firstIndex(of: "--snapshot-dir"), forkArguments.count > index + 1 {
+        try await Task.sleep(for: .milliseconds(250))
+        try captureWindow(to: URL(fileURLWithPath: forkArguments[index + 1]).appendingPathComponent("fork-workspace.png"))
+      }
+      try await openForkSource(fork)
+      guard projectID == sourceProject, selectedJob == sourceRun, draft == sourceDraft else {
+        throw EngineError(message: "Returning from a fork changed the source destination or draft")
+      }
+      report["thread_forks"] = "passed; real isolated Git worktree, bounded draft context, source navigation and no automatic task execution"
       await refreshJobs()
       let args = ProcessInfo.processInfo.arguments
+      report["harness_studio"] = try await smokeHarnessStudio()
       for tab in Sections.names {
         section = tab
         selectJob(tab == "Evaluations" ? evaluationID : taskID)
@@ -1665,6 +1788,30 @@ private struct DialogAuditHost: View {
         }
       }
       report["native_workspace_screens"] = Sections.names
+      let library = try await engine.call("threads.list", ["project": projectID]) as? [String: Any] ?? [:]
+      guard let thread = (library["items"] as? [[String: Any]])?.first else {
+        throw EngineError(message: "Recorded tasks are missing from the thread library")
+      }
+      let threadID = string(thread, "id")
+      _ = try await engine.call("threads.update", ["project": projectID, "id": threadID, "title": "Native thread organization fixture", "pinned": true])
+      let pinned = try await engine.call("threads.list", ["project": projectID, "view": "pinned"]) as? [String: Any] ?? [:]
+      guard (pinned["items"] as? [[String: Any]])?.contains(where: { string($0, "conversation_title") == "Native thread organization fixture" }) == true else {
+        throw EngineError(message: "Thread rename and pin did not persist through the native pipe")
+      }
+      _ = try await engine.call("threads.update", ["project": projectID, "id": threadID, "archived": true])
+      let archived = try await engine.call("threads.get", ["project": projectID, "id": threadID]) as? [String: Any] ?? [:]
+      guard archived["archived"] as? Bool == true else { throw EngineError(message: "Thread archive failed") }
+      _ = try await engine.call("threads.update", ["project": projectID, "id": threadID, "archived": false])
+      report["thread_library"] = "passed; full thread library, rename, pin, archive and restore over the native engine pipe"
+      let snapshotIndex = args.firstIndex(of: "--snapshot-dir")
+      let externalSnapshots = snapshotIndex.flatMap { args.count > $0 + 1 ? URL(fileURLWithPath: args[$0 + 1]) : nil }
+      report["external_sessions"] = try await smokeExternalSessions(snapshotDirectory: externalSnapshots)
+      report["local_model_workbench"] = try await smokeLocalModelWorkbench()
+      if let externalSnapshots {
+        try await captureConnectionPage("local-storage-hub", directory: externalSnapshots)
+        try await captureConnectionPage("local-harness-compatibility", directory: externalSnapshots)
+      }
+      report["background_engine"] = try await smokeBackgroundEngine()
       if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
         section = "Workspace"
         selectJob(taskID)
@@ -1963,7 +2110,9 @@ private struct DialogAuditHost: View {
     harnesses.append([
       "id": "acp:desktop-ui-check", "name": "AAA Local UI check",
       "desktop_kind": "acp", "available": true, "description": "UI-only connection check",
+      "digest": "ui-fixture", "command": "ui-only-not-an-executable",
     ])
+    connectionMetadata["acp:desktop-ui-check"] = ["connected": true, "route_digest": "ui-fixture", "message": "Verified UI fixture"]
     showConnection = true
     _ = try await waitForSheet()
     try await press("connect.acp")
@@ -2112,10 +2261,63 @@ private struct DialogAuditHost: View {
       contentRect: NSRect(x: 0, y: 0, width: 860, height: 740), styleMask: [.titled],
       backing: .buffered, defer: false)
     panel.isReleasedWhenClosed = false
-    let view = NSHostingView(
-      rootView: ConnectionView(initialPage: page).environmentObject(self).preferredColorScheme(
-        .dark))
+    let content: AnyView
+    if page == "thread-identities-preview" {
+      let examples: [[String: Any]] = [
+        ["id": "preview-codex", "title": "Investigate the authentication flow", "harness": "acp:codex", "harnesses_used": [
+          ["id": "acp:codex", "name": "Codex", "icon_key": "codex"]]],
+        ["id": "preview-mixed", "title": "Review API contracts across agents", "harness": "acp:claude", "harnesses_used": [
+          ["id": "acp:codex", "name": "Codex", "icon_key": "codex"],
+          ["id": "acp:claude", "name": "Claude", "icon_key": "claude"],
+          ["id": "acp:gemini", "name": "Gemini CLI", "icon_key": "gemini"]]],
+        ["id": "preview-custom", "title": "Compare the research harness", "harness": "custom", "harnesses_used": [
+          ["id": "custom", "name": "Research harness", "icon_key": ""],
+          ["id": "core", "name": "Core", "icon_key": "superqode"]]],
+      ]
+      content = AnyView(VStack(alignment: .leading, spacing: 24) {
+        PageTitle(eyebrow: "Thread identity preview", title: "Know which agents did the work",
+          subtitle: "Example threads · saved harness identities, multiple agents and a neutral fallback.")
+        ForEach(examples, id: \.projectRowID) { row in
+          HStack(spacing: 18) {
+            HarnessIconStack(row: row, size: 38)
+            VStack(alignment: .leading, spacing: 8) {
+              Text(string(row, "title")).font(.headline)
+              Text(HarnessIdentity.used(in: row).map(\.name).joined(separator: " · "))
+                .font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+          }.padding(22).brandSurface()
+        }
+        Text("The accent border marks the last used harness. Missing icons use a neutral agent symbol.")
+          .font(.caption).foregroundStyle(.secondary)
+        Spacer()
+      }.padding(28).frame(width: 860, height: 740).background(Color.qPanel).preferredColorScheme(.dark))
+    } else if page == "acp-setup-preview" {
+      let route: [String: Any] = ["id": "acp:setup-preview", "name": "ACP setup preview", "desktop_kind": "acp",
+        "available": true, "digest": "preview", "command": "example-agent --acp", "registry_source": "Setup preview"]
+      connectionMetadata["acp:setup-preview"] = ["connected": false,
+        "message": "Choose a sign-in method offered by this agent, then verify the connection.",
+        "auth_methods": [["id": "browser", "name": "Browser sign-in", "type": "agent"], ["id": "terminal", "name": "Terminal sign-in", "type": "terminal"]]]
+      content = AnyView(ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          Text("Set up your ACP agent").font(.title)
+          ACPSetupView(initialRoute: route, project: projectID, use: { _, _ in })
+        }.padding(28)
+      }.frame(width: 860, height: 740).background(Color.qPanel).environmentObject(self).preferredColorScheme(.dark))
+    } else if page == "local-storage-hub" {
+      content = AnyView(LocalModelSetupView().environmentObject(self).preferredColorScheme(.dark))
+    } else if page == "local-harness-compatibility" {
+      content = AnyView(LocalModelCompatibilityView(project: projectID).environmentObject(self).preferredColorScheme(.dark))
+    } else {
+      content = AnyView(ConnectionView(initialPage: page).environmentObject(self).preferredColorScheme(.dark))
+    }
+    let styled = page.hasPrefix("local-") ? AnyView(content.foregroundStyle(Color.white).environment(\.colorScheme, .dark)) : AnyView(content.foregroundStyle(Color.white))
+    let view = NSHostingView(rootView: styled)
+    view.appearance = NSAppearance(named: .darkAqua)
     panel.contentView = view
+    panel.appearance = NSAppearance(named: .darkAqua)
+    if page == "local-storage-hub" { panel.setContentSize(NSSize(width: 780, height: 620)) }
+    if page == "local-harness-compatibility" { panel.setContentSize(NSSize(width: 920, height: 680)) }
     panel.orderFront(nil)
     defer { panel.close() }
     try await Task.sleep(for: .milliseconds(450))
@@ -2123,7 +2325,9 @@ private struct DialogAuditHost: View {
     guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
       throw EngineError(message: "Connect view could not render")
     }
-    view.cacheDisplay(in: view.bounds, to: bitmap)
+    view.effectiveAppearance.performAsCurrentDrawingAppearance {
+      view.cacheDisplay(in: view.bounds, to: bitmap)
+    }
     guard let png = bitmap.representation(using: .png, properties: [:]) else {
       throw EngineError(message: "Connect view render failed")
     }
@@ -2131,6 +2335,35 @@ private struct DialogAuditHost: View {
     try png.write(
       to: directory.appendingPathComponent(
         "connect-" + page.replacingOccurrences(of: ":", with: "-") + ".png"))
+  }
+  private func captureConnectionInspector(directory: URL) async throws {
+    let preview = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    preview.project = project
+    preview.harness = "acp:preview"
+    preview.harnesses = [["id": preview.harness, "name": "ACP connection preview", "desktop_kind": "acp", "digest": "preview"]]
+    preview.routeStatus = ["state": "connected", "message": "ACP connection checked. The agent owns model access and billing."]
+    preview.connectionMetadata[preview.harness] = ["connected": true, "checked_at": Date().timeIntervalSince1970,
+      "route_digest": "preview", "initialization": ["protocol_version": 1, "agent": ["name": "preview", "version": "1.0"]],
+      "session": ["capabilities": ["loadSession": true, "promptCapabilities": ["image": true]], "models": ["availableModels": [["modelId": "example"]]]]]
+    for dark in [true, false] {
+      let host = NSHostingView(rootView: ConnectionInspectorView().environmentObject(preview)
+        .environment(\.colorScheme, dark ? .dark : .light))
+      host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+      let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 650), styleMask: [.borderless], backing: .buffered, defer: false)
+      panel.isReleasedWhenClosed = false
+      panel.contentView = host
+      panel.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+      panel.orderFront(nil)
+      defer { panel.close() }
+      try await Task.sleep(for: .milliseconds(250))
+      host.layoutSubtreeIfNeeded()
+      guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { throw EngineError(message: "Connection inspector could not render") }
+      host.effectiveAppearance.performAsCurrentDrawingAppearance {
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+      }
+      guard let png = bitmap.representation(using: .png, properties: [:]) else { throw EngineError(message: "Connection inspector render failed") }
+      try png.write(to: directory.appendingPathComponent(dark ? "connection-inspector-dark.png" : "connection-inspector-light.png"))
+    }
   }
   func captureWindow(to url: URL) throws {
     guard let view = NSApp.windows.first(where: { $0.title == (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SuperQode") })?.contentView

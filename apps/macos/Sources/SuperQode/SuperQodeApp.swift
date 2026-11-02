@@ -1,10 +1,16 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
-@MainActor final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class ApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
   weak var workspace: Workspace?
+  var bootReady = false
+  private var notificationDestination: (String, String)?
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
+    if Bundle.main.bundleIdentifier != nil && UserDefaults.standard.bool(forKey: "threadAlertsEnabled") {
+      UNUserNotificationCenter.current().delegate = self
+    }
     if let url = Bundle.main.url(forResource: "icon", withExtension: "icns"),
       let icon = NSImage(contentsOf: url)
     {
@@ -21,7 +27,7 @@ import SwiftUI
       guard
         workspace.confirm(
           "Quit SuperQode?",
-          "Quitting stops active runs and terminals. File-edit drafts (\(workspace.fileDrafts.count)) are kept in local recovery storage when recovery is available. Recorded run history remains on this Mac.",
+          (workspace.backgroundEngineMode ? "Agent runs continue in the background engine. Quitting closes app terminals. " : "Quitting stops active runs and terminals. ") + "File-edit drafts (\(workspace.fileDrafts.count)) are kept in local recovery storage when recovery is available. Recorded run history remains on this Mac.",
           button: "Quit")
       else { return .terminateCancel }
     }
@@ -34,6 +40,21 @@ import SwiftUI
     return .terminateNow
   }
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+  nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    let info = response.notification.request.content.userInfo
+    let project = info["project"] as? String ?? ""
+    let job = info["job"] as? String ?? ""
+    Task { @MainActor in
+      self.notificationDestination = (project, job)
+      if self.bootReady { self.openPendingNotification() }
+    }
+    completionHandler()
+  }
+  func openPendingNotification() {
+    guard bootReady, let destination = notificationDestination, let workspace else { return }
+    notificationDestination = nil
+    workspace.threadNotifications.openThread?(destination.0, destination.1)
+  }
 }
 
 @main struct SuperQodeApp: App {
@@ -49,6 +70,8 @@ import SwiftUI
         .task {
           delegate.workspace = workspace
           await workspace.boot()
+          delegate.bootReady = true
+          delegate.openPendingNotification()
           applyAppearance()
         }
         .onChange(of: workspace.theme) { _, _ in applyAppearance() }
@@ -96,14 +119,16 @@ import SwiftUI
 }
 
 enum Sections {
-  static func title(for section: String) -> String { section == "Workspace" ? "Agent Space" : section }
+  static func title(for section: String) -> String {
+    section == "Workspace" ? "Agent Space" : section == "Agent activity" ? "All work" : section == "Models" ? "Local AI" : section
+  }
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
-    "Terminal", "Checkpoints", "Review",
+    "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
-    "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass",
+    "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass", "bubble.left.and.bubble.right", "square.stack.3d.up", "hammer",
   ]
 }
 extension Color {
@@ -192,7 +217,10 @@ struct RootView: View {
       Text(app.error ?? "")
     }
     .centeredDialog(isPresented: $app.showConnection, title: "Connect") {
-      ConnectionView().environmentObject(app)
+      ConnectionView(initialPage: app.connectionStartPage).environmentObject(app)
+    }
+    .centeredDialog(isPresented: $app.showConnectionInspector, title: "Connection details") {
+      ConnectionInspectorView().environmentObject(app)
     }
     .centeredDialog(isPresented: $app.showLearningGuide, title: "Getting started") {
       LearningGuideView().environmentObject(app)
@@ -233,7 +261,7 @@ struct RootView: View {
           } label: {
             Image(systemName: "questionmark.circle")
           }.help("Getting started & learning (⌘?)")
-          Button("Connect…") { app.showConnection = true }.disabled(
+          Button("Connect…") { app.openConnections() }.disabled(
             !app.connected || app.project.isEmpty)
           Pill(title: "ON YOUR MAC", color: .green)
           Button {
@@ -246,13 +274,17 @@ struct RootView: View {
         }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
           .horizontal, 12
         ).padding(.vertical, 6)
-        if app.project.isEmpty {
+        ForkWorkspaceBar()
+        if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
           GettingStartedView(draftStore: app.draftStore)
         } else {
           GeometryReader { geometry in
             Group {
               switch app.section {
+              case "Threads": ThreadsView(library: app.threadLibrary(for: app.projectID)).id(app.projectID)
+              case "Agent activity": AgentFleetView()
               case "Harness Hub": HubView()
+              case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
               case "Models": ModelsView()
               case "Evaluations": EvaluationView()
               case "Optimization": OptimizationView()
@@ -271,6 +303,7 @@ struct RootView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.primary.opacity(0.07)))
           }.padding(.horizontal, 20).padding(.bottom, 20)
         }
+        ExecutionRecoveryView()
         if !app.recoveryIssue.isEmpty {
           HStack {
             Label(app.recoveryIssue, systemImage: "exclamationmark.triangle").font(.caption)
@@ -329,7 +362,7 @@ struct SidebarView: View {
       if !app.projects.isEmpty {
         Menu {
           ForEach(app.projects, id: \.projectRowID) { row in
-            Button(URL(fileURLWithPath: string(row, "path")).lastPathComponent) {
+            Button(string(row, "name", URL(fileURLWithPath: string(row, "path")).lastPathComponent)) {
               app.perform { try await app.open(string(row, "path")) }
             }
           }
@@ -340,7 +373,7 @@ struct SidebarView: View {
       navigationItems
       Divider().padding(18)
       HStack {
-        Text("RECENT RUNS").font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(
+        Text("THREADS & RUNS").font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(
           1.5
         )
         .foregroundStyle(.secondary)
@@ -364,13 +397,13 @@ struct SidebarView: View {
   }
   private var navigationItems: some View {
     VStack(spacing: 4) {
-      ForEach(["Workspace", "Review", "Files", "Terminal"], id: \.self) { name in
+      ForEach(["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Models"], id: \.self) { name in
         navigationButton(name)
       }
       DisclosureGroup("Improve & more", isExpanded: $expandedNavigation) {
         VStack(spacing: 3) {
           ForEach(
-            Sections.names.filter { !["Workspace", "Review", "Files", "Terminal"].contains($0) }, id: \.self
+            Sections.names.filter { !["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Models"].contains($0) }, id: \.self
           ) { name in
             navigationButton(name)
           }
@@ -378,7 +411,7 @@ struct SidebarView: View {
       }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 8)
     }.padding(.horizontal, 14).padding(.top, 14)
       .onChange(of: app.section) { _, name in
-        if !["Workspace", "Review", "Files", "Terminal"].contains(name) { expandedNavigation = true }
+        if !["Workspace", "Threads", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio"].contains(name) { expandedNavigation = true }
       }
   }
   private func navigationButton(_ name: String) -> some View {
@@ -396,7 +429,7 @@ struct SidebarView: View {
           Color.qPanel,
           in: RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(app.section == name ? Color.qAccent : Color.clear, lineWidth: 1))
-    }.buttonStyle(.plain).disabled((app.project.isEmpty && name != "Workspace") || app.openingProject || app.restoringNavigation)
+    }.buttonStyle(.plain).disabled((app.project.isEmpty && !["Workspace", "Agent activity", "Models"].contains(name)) || app.openingProject || app.restoringNavigation)
       .accessibilityAddTraits(app.section == name ? .isSelected : [])
   }
   private var recentRuns: some View {
@@ -412,7 +445,10 @@ struct SidebarView: View {
             app.selectJob(string(job, "id"), targetSection: destinationSection)
           } label: {
             VStack(alignment: .leading, spacing: 5) {
-              Text(string(job, "conversation_title", string(job, "title"))).font(.system(size: 12)).lineLimit(2)
+              HStack(alignment: .top, spacing: 7) {
+                if string(job, "kind") == "task" { HarnessIconStack(row: job, size: 22, limit: 2) }
+                Text(string(job, "conversation_title", string(job, "title"))).font(.system(size: 12)).lineLimit(2)
+              }
               Text(string(job, "kind") + " · " + string(job, "status")).font(
                 .system(size: 11, design: .monospaced)
               ).foregroundStyle(.secondary)
@@ -471,15 +507,28 @@ struct RouteControls: View {
 }
 struct CodingView: View {
   @EnvironmentObject var app: Workspace
+  @State private var shareSource = ""
+  @State private var shareProject = ""
+  @State private var showShare = false
+  @State private var forkSource: [String: Any]?
   var body: some View {
     HStack(spacing: 0) {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          Text(app.selectedJob.isEmpty ? "New conversation" : string(app.detail, "title", "Conversation"))
+          if !app.selectedJob.isEmpty { HarnessIconStack(row: app.detail, size: 26) }
+          Text(app.selectedJob.isEmpty ? "New conversation" : string(app.detail, "conversation_title", string(app.detail, "title", "Conversation")))
             .font(.system(size: 16, weight: .semibold)).lineLimit(1)
           Spacer()
           if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
           if !app.selectedJob.isEmpty {
+            Button("Fork…", systemImage: "arrow.triangle.branch") {
+              forkSource = ["project": app.projectID, "id": app.selectedJob]
+            }.disabled(app.active || app.busy || string(app.detail, "kind") != "task")
+            Button("Share to thread…", systemImage: "arrowshape.turn.up.right") {
+              shareSource = app.selectedJob
+              shareProject = app.projectID
+              showShare = true
+            }.disabled(app.active || app.busy || app.loadingConversationDraft)
             Button("New conversation", systemImage: "square.and.pencil") { app.selectJob("") }
               .disabled(app.active || app.busy)
             Button { app.inspectorVisible.toggle() } label: { Image(systemName: "sidebar.right") }
@@ -487,6 +536,13 @@ struct CodingView: View {
           }
         }.padding(.horizontal, 24).padding(.vertical, 14)
         Divider()
+        if app.detail["archived"] as? Bool == true {
+          HStack {
+            Label("Archived thread", systemImage: "archivebox")
+            Spacer()
+            Button("Restore thread") { app.restoreSelectedThread() }
+          }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10)
+        }
         if app.selectedJob.isEmpty {
           GettingStartedView(draftStore: app.draftStore).frame(minHeight: 220, maxHeight: .infinity)
         } else {
@@ -498,6 +554,11 @@ struct CodingView: View {
         Divider()
         InspectorView().frame(width: 300)
       }
+    }.centeredDialog(isPresented: $showShare, title: "Share thread context") {
+      ThreadShareView(project: shareProject, source: shareSource).environmentObject(app)
+    }
+    .centeredDialog(isPresented: Binding(get: { forkSource != nil }, set: { if !$0 { forkSource = nil } }), title: "Fork thread") {
+      if let source = forkSource { ThreadForkView(project: string(source, "project"), source: string(source, "id")) }
     }
   }
 }
@@ -537,9 +598,17 @@ struct CodingComposer: View {
         Text(connectionName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
         Text(app.connectionDisconnected ? "Not connected" : app.isACP ? "ACP" : app.isManaged ? "Subscription / agent" : app.provider)
           .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        if !app.isManaged && !app.connectionDisconnected {
+          Text(string(route, "name", app.harness)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
         Spacer()
-        Button(app.connectionDisconnected ? "Connect…" : "Change connection…") { app.showConnection = true }
+        Button(app.connectionDisconnected ? "Connect…" : "Change connection…") { app.openConnections() }
           .disabled(app.active || app.busy)
+          .help("Switch the agent or harness in this thread. Compatible sessions resume; other connections receive bounded conversation context.")
+        if app.isManaged {
+          Button { app.showConnectionInspector = true } label: { Image(systemName: "checkmark.shield") }
+            .help("Connection details and diagnostics").accessibilityLabel("Connection details and diagnostics")
+        }
         if !app.connectionDisconnected {
           nativeButton("connection.disconnect", action: app.disconnectConnection, title: "Disconnect coding agent") {
             Label("Disconnect", systemImage: "xmark.circle").font(.caption)
@@ -625,6 +694,7 @@ struct CodingComposer: View {
           Label(app.busy ? "Starting…" : "Send", systemImage: "arrow.up")
         }.buttonStyle(BrandButtonStyle())
           .disabled(app.busy || app.active || app.checkingConnection || app.projectID.isEmpty
+            || app.detail["archived"] as? Bool == true
             || app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || app.connectionDisconnected || (!app.isManaged && app.model.isEmpty))
           .keyboardShortcut(.return, modifiers: .command)
@@ -1015,7 +1085,7 @@ struct EventRow: View {
         VStack(alignment: .leading, spacing: 8) {
           Label("The agent could not complete this request", systemImage: "exclamationmark.triangle").font(.headline)
           Text(string(data, "message", pretty(data))).font(.system(size: 14)).textSelection(.enabled)
-          Button("Change connection…") { app.showConnection = true }
+          Button("Change connection…") { app.openConnections() }
         }.foregroundStyle(.red).padding(16).frame(maxWidth: .infinity, alignment: .leading)
       } else {
         DisclosureGroup(type.replacingOccurrences(of: "_", with: " ").capitalized) {
@@ -1059,10 +1129,10 @@ struct InspectorView: View {
         Text(string(app.git, "status")).font(.system(size: 11, design: .monospaced)).textSelection(
           .enabled
         ).lineLimit(6)
-        Button("Stage tracked changes") { app.gitAction("git.stage") }.disabled(app.anyActive)
+        Button("Stage tracked changes") { app.gitAction("git.stage") }.disabled(app.hasActiveWork(project: app.projectID))
         TextField("Commit message", text: $commit).textFieldStyle(.roundedBorder)
         Button("Commit staged changes") { app.gitAction("git.commit", message: commit) }.disabled(
-          commit.isEmpty || app.anyActive)
+          commit.isEmpty || app.hasActiveWork(project: app.projectID))
       } else if tab == "Checks" {
         Text("Run a command in this project").font(.headline)
         Text(

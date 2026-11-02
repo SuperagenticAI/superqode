@@ -1278,3 +1278,77 @@ async def test_rejected_request_identifies_method_and_validation_details(tmp_pat
         await client._call_method("session/new", cwd=str(tmp_path), mcpServers=[])
     assert "mcpServers" in str(exc.value)
     assert "Expected array" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_eof_fails_pending_prompt_immediately(tmp_path):
+    client = ACPClient(project_root=tmp_path, command="unused")
+    reader = asyncio.StreamReader()
+    reader.feed_eof()
+    client._process = MagicMock(stdout=reader)
+    future = asyncio.get_running_loop().create_future()
+    client._pending_requests[1] = future
+    await client._read_loop()
+    with pytest.raises(ConnectionError, match="disconnected"):
+        await future
+    assert not client._pending_requests
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", [None, 2, True, "1"])
+async def test_initialization_rejects_unsupported_protocol(tmp_path, monkeypatch, version):
+    client = ACPClient(project_root=tmp_path, command="unused")
+    monkeypatch.setattr(
+        client, "_call_method", AsyncMock(return_value={"protocolVersion": version})
+    )
+    with pytest.raises(ValueError, match="Unsupported ACP protocol version"):
+        await client._initialize()
+
+
+@pytest.mark.asyncio
+async def test_public_connection_identity_omits_auth_payload_and_is_copied(tmp_path, monkeypatch):
+    client = ACPClient(project_root=tmp_path, command="unused")
+    monkeypatch.setattr(
+        client,
+        "_call_method",
+        AsyncMock(
+            return_value={
+                "protocolVersion": PROTOCOL_VERSION,
+                "agentInfo": {"name": "fixture", "version": "1.2", "accessToken": "PRIVATE"},
+                "authMethods": [{"id": "private-auth-payload"}],
+            }
+        ),
+    )
+    await client._initialize()
+    info = client.get_initialization_info()
+    assert info == {
+        "protocol_version": PROTOCOL_VERSION,
+        "agent": {"name": "fixture", "version": "1.2"},
+    }
+    info["agent"]["name"] = "changed"
+    assert client.get_initialization_info()["agent"]["name"] == "fixture"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_and_failed_sends_release_request(tmp_path, monkeypatch):
+    client = ACPClient(project_root=tmp_path, command="unused")
+    sent = asyncio.Event()
+
+    async def send(request):
+        sent.set()
+
+    monkeypatch.setattr(client, "_send_json", send)
+    task = asyncio.create_task(client._call_method("session/prompt"))
+    await sent.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not client._pending_requests
+
+    async def broken_send(request):
+        raise BrokenPipeError("closed")
+
+    monkeypatch.setattr(client, "_send_json", broken_send)
+    with pytest.raises(RuntimeError, match="session/prompt: closed"):
+        await client._call_method("session/prompt")
+    assert not client._pending_requests

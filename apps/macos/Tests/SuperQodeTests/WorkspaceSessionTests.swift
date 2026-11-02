@@ -221,14 +221,18 @@ final class WorkspaceSessionTests: XCTestCase {
   }
 
   @MainActor private func completeProjectOpen(_ app: Workspace, engine: Engine,
-    projectID: String, path: String) async throws {
-    let opening = Task { try await app.open(path) }
+    projectID: String, path: String, startup: Bool = false) async throws {
+    let opening = Task {
+      if startup { try await app.openStartupProject(arguments: ["SuperQode", "--project", path]) }
+      else { try await app.open(path) }
+    }
     await reply(engine, id: 1, result: ["id": projectID, "path": path])
     await reply(engine, id: 2, result: [["id": projectID, "path": path]])
     await reply(engine, id: 3, result: [])
     await reply(engine, id: 4, result: ["items": []])
     await reply(engine, id: 5, result: [])
-    await reply(engine, id: 6, result: [:])
+    await reply(engine, id: 6, result: [])
+    await reply(engine, id: 7, result: [:])
     try await opening.value
   }
 
@@ -279,11 +283,31 @@ final class WorkspaceSessionTests: XCTestCase {
     app.project = [:]
     app.recoverySnapshot = WorkspaceRecoverySnapshot()
     app.showWelcome = true
-    try await completeProjectOpen(app, engine: engine, projectID: "first", path: "/tmp/first")
+    try await completeProjectOpen(app, engine: engine, projectID: "first", path: "/tmp/first", startup: true)
     XCTAssertEqual(app.projectID, "first")
     XCTAssertFalse(app.showWelcome)
     XCTAssertFalse(app.openingProject)
     XCTAssertEqual(app.section, "Workspace")
+  }
+
+  @MainActor func testStartupKeepsWelcomeEvenWithRecoveredEditorAndRecentProjects() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.project = [:]; app.showWelcome = true
+    let previous = WorkspaceDestination(projectID: "previous", projectPath: "/tmp/previous", section: "Files", filePath: "main.py")
+    app.recoverySnapshot.lastDestination = previous
+    app.projects = [["id": "previous", "path": "/tmp/previous"]]
+    let key = WorkspaceRecoverySnapshot.key(project: "previous", conversation: "")
+    app.recoverySnapshot.composers[key] = ComposerRecovery(text: "Keep my draft")
+    try await app.openStartupProject(arguments: ["SuperQode"])
+    try await app.openStartupProject(arguments: ["SuperQode", "-psn_0_123"])
+    XCTAssertTrue(app.showWelcome)
+    XCTAssertTrue(app.projectID.isEmpty)
+    XCTAssertEqual(engine.pendingRequestCount, 0)
+    XCTAssertEqual(app.recoverySnapshot.lastDestination, previous)
+    XCTAssertEqual(app.recoverySnapshot.composers[key]?.text, "Keep my draft")
   }
 
   @MainActor func testChangedProjectIdentityDoesNotReplaceVisibleProject() async {

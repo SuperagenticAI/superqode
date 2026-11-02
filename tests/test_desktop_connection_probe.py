@@ -25,6 +25,9 @@ def test_acp_probe_advertises_models_without_a_coding_task(desktop_acp_route):
     assert result["state"] == "completed", result
     state = result["result"]
     assert state["connected"] is True
+    assert state["checked_at"] > 0
+    assert state["route_digest"] == route["digest"]
+    assert state["initialization"]["protocol_version"] == 1
     assert len(state["session"]["models"]["availableModels"]) == 2
     assert service.dispatch("jobs.list", {}) == []
     assert not (root / "main.py").exists()  # The fixture writes this on coding turns.
@@ -39,6 +42,31 @@ def test_missing_adapter_is_actionable_without_starting_a_process(tmp_path):
                 lambda message: None,
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_probe_rejects_terminal_requests_and_closes_client(tmp_path, monkeypatch):
+    closed = []
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            self.terminals = kwargs["terminal_service"]
+
+        async def start(self):
+            await self.terminals.create({"command": "touch", "args": ["unexpected"]})
+
+        async def stop(self):
+            closed.append(True)
+
+    monkeypatch.setattr("superqode.desktop_service.acp_worker.DesktopACPClient", Client)
+    with pytest.raises(PermissionError, match="do not execute tools"):
+        await probe_route(
+            tmp_path,
+            {"available": True, "desktop_kind": "acp", "command": "fixture"},
+            lambda _: None,
+        )
+    assert closed == [True]
+    assert not (tmp_path / "unexpected").exists()
 
 
 def test_codex_probe_only_returns_account_identity_and_models(tmp_path, monkeypatch):

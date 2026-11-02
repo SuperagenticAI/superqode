@@ -68,6 +68,9 @@ def acp_routes(root: Path):
                 "digest": digest,
                 "path": None,
                 "desktop_kind": "acp",
+                "agent_id": str(agent.get("short_name") or ""),
+                "website": str(agent.get("url") or ""),
+                "registry_source": "Bundled catalog",
                 "auth": "subscription requested" if vendor else "agent-managed; unverified",
                 "install": install,
             }

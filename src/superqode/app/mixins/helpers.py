@@ -1918,6 +1918,12 @@ class HelpersMixin(
             elif tok == "--ctx" and i + 1 < len(tokens):
                 opts["ctx"] = int(tokens[i + 1])
                 i += 2
+            elif tok == "--kv-cache" and i + 1 < len(tokens):
+                from superqode.local.options import cache_options
+
+                cache_options(engine, tokens[i + 1])
+                opts["kv_cache"] = tokens[i + 1]
+                i += 2
             elif tok == "--host" and i + 1 < len(tokens):
                 opts["host"] = tokens[i + 1]
                 i += 2
@@ -1930,6 +1936,17 @@ class HelpersMixin(
             elif tok in ("--allow-download", "-y"):
                 opts["allow_download"] = True
                 i += 1
+            elif tok in {
+                "--model",
+                "-m",
+                "--port",
+                "-p",
+                "--ctx",
+                "--host",
+                "--kv-cache",
+                "--extra",
+            }:
+                raise ValueError(f"{tok} needs a value")
             else:
                 i += 1
         return engine, opts

@@ -128,13 +128,17 @@ def install_plan(root: Path, reference: str):
 
 
 async def install_agent(root: Path, reference: str, status):
+    plan = install_plan(root, reference)
+    return await run_install_command(plan["argv"], status)
+
+
+async def run_install_command(argv, status):
     import asyncio
     import os
     import signal
 
-    plan = install_plan(root, reference)
     process = await asyncio.create_subprocess_exec(
-        *plan["argv"],
+        *argv,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=True,

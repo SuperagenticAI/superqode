@@ -4,6 +4,11 @@
 
 SuperQode provides a Python API to embed the agent runtime directly in your applications. The runtime system supports multiple backends through a common AgentRuntime protocol.
 
+The complete [runtime and harness inventory](../integrations/runtimes-harnesses.md)
+also lists HarnessSpec-only adapters. The table below covers all 15 direct
+`create_runtime()` registrations; optional dependencies and vendor authentication
+remain separate requirements.
+
 ## Available Runtimes
 
 | Name | Backend | Install |
@@ -12,9 +17,17 @@ SuperQode provides a Python API to embed the agent runtime directly in your appl
 | openai-agents | OpenAI Agents SDK | uv tool install "superqode[openai-agents]" |
 | adk | Google Agent Development Kit | uv tool install "superqode[adk]" |
 | pydanticai | PydanticAI agent framework | uv tool install "superqode[pydanticai]" |
+| codex-cli | Installed Codex CLI / app-server | Codex CLI and vendor sign-in |
 | codex-sdk | OpenAI Codex Python SDK | uv tool install "superqode[codex-sdk]" |
 | copilot-sdk | GitHub Copilot Python SDK | uv tool install "superqode[copilot-sdk]" |
 | claude-agent-sdk | Anthropic Claude Agent SDK | uv tool install "superqode[claude-agent-sdk]" |
+| antigravity-sdk | Google Antigravity SDK | uv tool install "superqode[antigravity-sdk]" |
+| antigravity-cli | Google Antigravity CLI | installed `agy` CLI and Google sign-in |
+| antigravity-managed | Google-hosted Antigravity | included HTTP adapter; Google API key required |
+| devin-cli | Cognition Devin CLI | installed Devin CLI and vendor sign-in |
+| muse | Meta Muse Code | installed Muse CLI and vendor sign-in |
+| copilot-cli | GitHub Copilot CLI | installed Copilot CLI and vendor sign-in |
+| grok-cli | Grok CLI | installed Grok CLI and vendor sign-in |
 
 ## create_runtime()
 

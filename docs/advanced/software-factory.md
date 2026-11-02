@@ -277,7 +277,8 @@ Their centers of gravity differ:
 - Omnigent centers the persistent, shareable live session across terminal, web, mobile, and desktop interfaces.
 - SuperQode centers the repository-owned harness and durable WorkOrder: build it, run it through isolated workers, prove the result, deliver it safely, and improve the harness from evidence.
 
-The products overlap for multi-harness builders, but their different centers make them suitable for different workflows. SuperQode also remains an interop layer for teams that already have Omnigent YAML. See [How SuperQode Relates to Omnigent](superqode-vs-omnigent.md) for the shared ideas and design differences, and [Omnigent Compatibility](omnigent-compat.md) for the importer.
+Import compatible Omnigent agent definitions into a SuperQode HarnessSpec. See
+[Omnigent Compatibility](omnigent-compat.md) for supported fields and import instructions.
 
 ## Read next
 

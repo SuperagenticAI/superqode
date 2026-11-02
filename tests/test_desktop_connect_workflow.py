@@ -103,6 +103,7 @@ def test_subscription_runtime_keeps_vendor_model_and_strips_api_billing(monkeypa
         async def run_harness_events(self, prompt):
             captured["key_present"] = "OPENAI_API_KEY" in os.environ
             yield SimpleNamespace(type="model_delta", data={"text": "fixture reply"})
+            yield SimpleNamespace(type="turn_complete", data={"status": "completed"})
 
         async def aclose(self):
             captured["closed"] = True

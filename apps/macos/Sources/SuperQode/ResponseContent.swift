@@ -208,8 +208,8 @@ struct AgentActivityView: View {
           } label: {
             VStack(alignment: .leading, spacing: 3) {
               Text(name.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.weight(.medium))
-              let title = string(payload, "title", string(payload, "command", string(payload, "name")))
-              if !title.isEmpty { Text(title).font(.caption.monospaced()).lineLimit(2) }
+              let title = agentToolAction(payload)
+              if !title.isEmpty { Text(title).font(.caption.monospaced()).lineLimit(3).help(title).textSelection(.enabled) }
             }
           }
         }

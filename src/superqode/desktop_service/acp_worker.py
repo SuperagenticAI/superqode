@@ -41,6 +41,10 @@ async def select_session_model(client, model: str) -> bool:
 
 class DesktopACPClient(ACPClient):
     async def _handle_agent_request(self, method, params):
+        if not self.allow_host_tools and (
+            method.startswith("fs/") or method.startswith("terminal/")
+        ):
+            raise PermissionError("Connection setup cannot read, write or execute project tools")
         if method in {"fs/read_text_file", "fs/write_text_file"}:
             path = scoped_path(self.project_root, str(params.get("path") or ""))
             if path.is_file() and path.stat().st_size > 1_000_000:
@@ -187,6 +191,7 @@ async def run_acp(request, directory, emit, secrets):
     client = DesktopACPClient(
         root,
         route["command"],
+        launch_argv=route.get("command_argv") or __import__("shlex").split(route["command"]),
         model=request.get("model") or None,
         subscription_vendor=route.get("subscription_vendor"),
         extra_env=route.get("extra_env"),

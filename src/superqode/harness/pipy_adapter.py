@@ -95,7 +95,8 @@ class PiPyHarnessProtocolAdapter:
         )
         self._sessions[session_id] = coding_session
         self._refs[session_id] = ref
-        _record_session_path(session_id, coding_session.session_path)
+        if not request.metadata.get("verification_root"):
+            _record_session_path(session_id, coding_session.session_path)
         return ref
 
     async def resume(self, session: HarnessSessionRef) -> HarnessSessionRef:
@@ -118,8 +119,13 @@ class PiPyHarnessProtocolAdapter:
         )
         # A fresh backend, and so a fresh adapter, is built per request, so the
         # in-memory cache never survives to the next turn.
-        existing = str(metadata.get("session_path") or "") or _indexed_session_path(
-            session.session_id, working_directory
+        existing = (
+            ""
+            if metadata.get("verification_root")
+            else (
+                str(metadata.get("session_path") or "")
+                or _indexed_session_path(session.session_id, working_directory)
+            )
         )
         coding_session = await self._open(request, working_directory, session_path=existing or None)
         ref = HarnessSessionRef(
@@ -130,7 +136,8 @@ class PiPyHarnessProtocolAdapter:
         )
         self._sessions[session.session_id] = coding_session
         self._refs[session.session_id] = ref
-        _record_session_path(session.session_id, coding_session.session_path)
+        if not metadata.get("verification_root"):
+            _record_session_path(session.session_id, coding_session.session_path)
         return ref
 
     async def _open(
@@ -155,11 +162,24 @@ class PiPyHarnessProtocolAdapter:
             "conditional_instructions", runtime_config.get("conditional_instructions", False)
         )
         context_host = PiPyContextHost(context_config)
+        transform = guard_pipy_tools
+        if request.metadata.get("verification_root"):
+            from .verification import scoped_pipy_tools
+
+            def transform(tools):
+                return scoped_pipy_tools(guard_pipy_tools(tools), working_directory)
+
         options = CodingSessionOptions(
             cwd=working_directory,
             model=resolve_model(request.model or "", provider=request.provider or ""),
             tool_names=tuple(request.metadata.get("tools") or DEFAULT_TOOLS),
-            tool_transform=guard_pipy_tools,
+            tool_transform=transform,
+            max_turns=int(request.metadata.get("agent_max_iterations") or 0),
+            session_root=Path(request.metadata["verification_root"]) / "pipy-sessions"
+            if request.metadata.get("verification_root")
+            else None,
+            skill_directories=() if request.metadata.get("verification_root") else None,
+            include_prompt_templates=not bool(request.metadata.get("verification_root")),
             include_context_files=runtime_config.get("context_files") is not False,
             include_system_prompt_files=runtime_config.get("system_prompt_files") is not False,
             custom_prompt=runtime_config.get("system_prompt"),
@@ -168,6 +188,23 @@ class PiPyHarnessProtocolAdapter:
             if context_host.conditional
             else None,
         )
+        if request.metadata.get("verification_root"):
+            from dataclasses import replace as replace_options
+            from superqode.pipy.ai.gateway import GatewayStream
+
+            gateway_stream = GatewayStream()
+
+            def bounded_stream(model, context, stream_options):
+                return gateway_stream(
+                    model,
+                    context,
+                    replace_options(
+                        stream_options,
+                        max_tokens=int(request.metadata.get("agent_max_tokens") or 768),
+                    ),
+                )
+
+            options.stream_fn = bounded_stream
         from .pipy_mcp import PiPyMCPTools
 
         program = None

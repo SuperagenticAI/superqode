@@ -85,7 +85,19 @@ def _result_text(result: Any) -> str:
 
 
 def _pydanticai_model(provider: str, model: str, fallbacks: tuple[str, ...]):
-    model_name = _model_name(provider, model)
+    from .local_endpoint import local_endpoint
+
+    endpoint = local_endpoint(provider)
+    if endpoint:
+        from pydantic_ai.models.openai import OpenAIChatModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        model_name = OpenAIChatModel(
+            normalize_model_for_provider(provider, model),
+            provider=OpenAIProvider(base_url=endpoint, api_key="superqode-local"),
+        )
+    else:
+        model_name = _model_name(provider, model)
     if not fallbacks:
         return model_name
     from pydantic_ai.models.fallback import FallbackModel
@@ -270,6 +282,13 @@ class PydanticAIRuntime:
         model_settings: dict[str, Any] = {}
         if config.temperature is not None:
             model_settings["temperature"] = config.temperature
+        if config.max_tokens:
+            model_settings["max_tokens"] = config.max_tokens
+        self._usage_options = {}
+        if config.max_iterations > 0:
+            from pydantic_ai.usage import UsageLimits
+
+            self._usage_options["usage_limits"] = UsageLimits(request_limit=config.max_iterations)
         if config.reasoning_effort:
             model_settings["thinking"] = config.reasoning_effort
 
@@ -294,7 +313,7 @@ class PydanticAIRuntime:
     async def run(self, prompt: str) -> AgentResponse:
         self._last_prompt = prompt
         try:
-            result = await self._agent.run(prompt)
+            result = await self._agent.run(prompt, **self._usage_options)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -316,7 +335,7 @@ class PydanticAIRuntime:
                 if response.content:
                     yield response.content
                 return
-            async with self._agent.run_stream(prompt) as response:
+            async with self._agent.run_stream(prompt, **self._usage_options) as response:
                 async for chunk in response.stream_text(delta=True, debounce_by=None):
                     if self._cancelled:
                         break
@@ -343,7 +362,7 @@ class PydanticAIRuntime:
                         yield HarnessEvent(type="model_delta", data={"text": chunk})
                 return
 
-            async with self._agent.run_stream_events(prompt) as stream:
+            async with self._agent.run_stream_events(prompt, **self._usage_options) as stream:
                 async for event in stream:
                     if self._cancelled:
                         break

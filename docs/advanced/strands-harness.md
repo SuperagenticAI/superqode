@@ -71,8 +71,8 @@ execution grants commands the host user's privileges.
 
 In the TUI, select **Strands** from the harness picker or use
 `:harness switch strands`, then select your model. The shared catalog exposes
-Strands to the macOS backend and Connect workflow. See the [release validation report](strands-release-validation.md) for the
-locally verified native UI and packaging scope.
+Strands to the macOS backend and Connect workflow. Install the separate runtime
+and run `superqode harness strands doctor` before connecting.
 
 Supported provider identifiers are `bedrock`, `anthropic`, `openai`, `google`,
 `ollama` and `litellm`. Choose an explicit model; there is no silent fallback to
@@ -176,89 +176,29 @@ import Strands Evals scores or authorize automatic adoption of external reports.
 It makes bounded Strands runtime settings available to the existing experiment
 flow; it adds no dedicated Strands optimiser or native tuning workflow.
 
-## Monty versions and upgrade options
+## Compatibility and limits
 
-Monty is already used in SuperQode:
+The Strands runtime pins Monty 0.0.23 in its separate environment. SuperQode's
+optional Python REPL and RLM tools use Monty 1.x; do not install Strands into
+that environment or downgrade core Monty to accommodate it. Installing the
+Strands runtime does not add a Python REPL to the core preset.
 
-| Use | Behaviour | Source |
-| --- | --- | --- |
-| `python_repl` | Fresh, bounded Python snippet; no direct filesystem/network/environment or third-party imports | `tools/monty_tool.py` |
-| Optional tool composition | With `SUPERQODE_RLM_TOOLS=1`, explicit host calls retain SuperQode policy; parallel calls are restricted | `tools/composition.py` |
-| Recoverable programs | Sequential host-tool calls with durable checkpoints, bounded calls and replay validation | `tools/monty_program.py`, `harness/pipy_program.py`, `workorders/programs.py` |
-| Native RLM Monty kernel | Resident Python state with selected read-only host capabilities; no direct subprocess or file-writing access | `rlm/kernel_monty.py` |
-| Strands upstream caller | Upstream programmatic tool caller depends on Monty 0.0.23 | Disabled in this adapter; dependency stays in its own environment |
-
-The core preset has only four tools, so installing Monty does not add a Python
-REPL to that preset. Broader tool profiles expose `python_repl` when a compatible
-Monty 1.x package is available. Incompatible 0.x installs are now excluded from
-that tool's discovery. Check it with:
+For SuperQode's optional Monty tools, check availability with:
 
 ```bash
 superqode providers monty check
 superqode providers monty smoke
 ```
 
-SuperQode's lock currently selects Monty 1.0.0; its optional requirement allows
-1.x. The latest registry release observed on 31 October 2026 is **1.4.0**.
-Separate runs of 34 REPL/checkpoint tests and 13 native RLM kernel tests passed
-on both versions. This is
-initial compatibility evidence, not permission to restore checkpoints under a
-new worker binary: durable program identity pins the worker hash, and old
-checkpoints may require a fresh run or reconciliation after an upgrade.
+Durable program identity pins the worker hash. Checkpoints may require a fresh
+run or reconciliation after a worker upgrade.
 
-Recommended options:
-
-1. Keep core Monty 1.0.0 and the separate Strands runtime for the initial test.
-2. Trial core Monty 1.4.0 in a separate environment, including the native RLM
-   kernel, before updating the lock and revalidating macOS packaging.
-3. Revisit a shared environment if upstream Strands supports Monty 1.x. Disabling
-   its caller does not remove the current unconditional 0.0.23 dependency.
-
-Do not downgrade core Monty to accommodate Strands. This branch changes neither
-the core dependency range nor the lock.
-
-## Validation and boundaries
-
-The 1 November review identified timeout ownership, saved-key forwarding,
-installation guidance, environment filtering and packaging issues in the initial
-implementation. The review follow-up passed 246 selected backend, connection,
-desktop and Monty tests, including six actual-worker tests against local fixtures
-(no paid model calls). Ruff format/check passed for the changed Python files;
-`python scripts/check_public_docs_style.py` and the documentation build passed.
-A built wheel was installed in a fresh environment and its packaged setup/doctor
-commands were exercised outside the checkout. These checks do not validate a
-native macOS build or live provider credentials.
-
-Provider errors now distinguish
-authentication, permissions, missing models/endpoints, configuration, connectivity
-and rate limits without returning raw provider response bodies.
-
-The original Monty checks ran separately against 1.0.0 and 1.4.0: each passed
-34 REPL/recovery tests and 13 RLM kernel tests. These are not Strands compatibility
-claims for Monty 1.x; the Strands runtime remains isolated on 0.0.23.
-
-The integration has deterministic subprocess tests for policy denial, scoped
-file access, command filtering, incomplete results, usage, timeout and cancellation.
-Opt-in tests exercise the actual pinned Strands SDK against a local Ollama HTTP
-fixture, including governed file reads, saved credentials, provider errors, session
-restoration and the shared evaluation/adoption path. From a development checkout,
-install the test dependencies with `uv sync --frozen --extra dev`, then run:
-
-```bash
-SUPERQODE_TEST_STRANDS_PYTHON=/absolute/path/to/strands/bin/python \
-  .venv/bin/python -m pytest -q tests/test_strands_backend.py \
-  tests/test_strands_setup.py tests/test_strands_runtime_integration.py
-```
-
-These tests make no paid model calls and prove no real-model quality improvement.
-The tests also cover the OpenAI Responses API, shared endpoint configuration and
-the desktop job process with the default preset. The native macOS CI workflow
-runs these SDK tests and a packaged-app Strands smoke test without paid accounts.
+Provider errors distinguish authentication, permissions, missing models or
+endpoints, configuration, connectivity and rate limits. Configure the selected
+provider's credentials and model access; there is no silent provider fallback.
 Automatic caching uses upstream provider detection; explicitly enabling caching
-on an unsupported provider still fails.
+on an unsupported provider fails.
 
-Real AWS/API-key inference and Developer ID signed/notarized distribution require
-separate release validation. See the [release validation report](strands-release-validation.md)
-for evidence from the local Mac review. The raw Strands CLI ACP route is not registered as a supported
-coding connection by this implementation, because its stock server lacks the
-required client approval bridge. See the [source investigation](strands-harness-research.md).
+Use SuperQode's governed `serve acp --harness strands` endpoint for ACP. The
+stock Strands CLI ACP server lacks the required client approval bridge and is
+not registered as a supported coding connection.

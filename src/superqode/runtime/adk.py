@@ -74,6 +74,10 @@ def _build_model(provider: str, model: str):
         return model
     from google.adk.models.lite_llm import LiteLlm
 
+    from .local_endpoint import local_litellm_options
+
+    if options := local_litellm_options(provider, model):
+        return LiteLlm(**options)
     return LiteLlm(model=f"{provider}/{model}")
 
 
@@ -188,13 +192,22 @@ class ADKRuntime:
             ctx_factory=ctx_factory,
             permission_manager=self.permission_manager,
             excluded=profile.excluded_tools,
+            on_tool_result=on_tool_result,
         )
+        generation_options = {}
+        if config.max_tokens:
+            from google.genai.types import GenerateContentConfig
+
+            generation_options["generate_content_config"] = GenerateContentConfig(
+                max_output_tokens=config.max_tokens
+            )
         self._agent = LlmAgent(
             name="superqode",
             description="SuperQode coding harness (ADK backend)",
             model=_build_model(config.provider, config.model),
             instruction=instructions,
             tools=bridged,
+            **generation_options,
         )
 
         self._session_service = InMemorySessionService()
@@ -294,10 +307,16 @@ class ADKRuntime:
         from google.genai import types
 
         new_message = types.Content(role="user", parts=[types.Part(text=prompt)])
+        limits = {}
+        if self.config.max_iterations > 0:
+            from google.adk.agents.run_config import RunConfig
+
+            limits["run_config"] = RunConfig(max_llm_calls=self.config.max_iterations)
         async for event in self._runner.run_async(
             user_id=self._user_id,
             session_id=self.session_id,
             new_message=new_message,
+            **limits,
         ):
             if self._cancelled:
                 break

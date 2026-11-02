@@ -209,8 +209,6 @@ superqode --harness ...                        # run the improved harness
 ## Related
 
 - [Harness System](harness-system.md): the full HarnessSpec reference.
-- [GEPA Omni Integration Experiment](gepa-omni-experiment.md): reproducible
-  subscription-plus-local release evidence.
 - [Harness Commands](../cli-reference/harness-commands.md): `test`, `eval`, `auto-bench`, and the rest.
 - [Bring Your Own Harness](../getting-started/bring-your-own-harness.md): author and edit a harness.
 - [metaharness](https://github.com/SuperagenticAI/metaharness): the optional optimization tool.

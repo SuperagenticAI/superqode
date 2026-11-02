@@ -116,6 +116,21 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     (root / "outside.txt").write_text("outside project boundary")
     subprocess.run(["git", "init", "-q", str(project)], check=True)
     subprocess.run(["git", "-C", str(project), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(project),
+            "-c",
+            "user.name=Native Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "Initial native fixture",
+        ],
+        check=True,
+    )
     report = root / "report.json"
     environment = {
         **os.environ,
@@ -126,6 +141,62 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
         "SUPERQODE_STATE_DIR": str(root / "state"),
         "SUPERQODE_SMOKE_REPORT": str(report),
     }
+    # Exercise actual boot without --project, with an existing recent and a
+    # saved editor destination. No clicks or provider requests are allowed.
+    from superqode.desktop_service.service import DesktopService
+
+    fixture = DesktopService(root / "state")
+    previous = fixture.open_project(str(project))
+    fixture.close()
+    recovery = root / "recovery"
+    recovery.mkdir(mode=0o700)
+    destination = {
+        "projectID": previous["id"],
+        "projectPath": str(project),
+        "conversationID": "",
+        "jobID": "",
+        "section": "Files",
+        "filePath": "README.md",
+        "inspectorVisible": False,
+        "checkpointID": "",
+        "checkpointPath": "",
+        "showWelcome": False,
+    }
+    (recovery / "workspace-v1.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "lastDestination": destination,
+                "destinations": {},
+                "projectDestinations": {previous["id"]: destination},
+                "composers": {},
+                "editors": {},
+                "transcripts": {},
+                "migratedProjects": [],
+            }
+        )
+    )
+    welcome_report = root / "welcome-report.json"
+    try:
+        welcome_result = subprocess.run(
+            [str(BINARY), "--smoke-test", "--welcome-only", "--snapshot-dir", str(ARTIFACTS)],
+            env={
+                **environment,
+                "SUPERQODE_SMOKE_REPORT": str(welcome_report),
+                "SUPERQODE_SMOKE_RECOVERY_DIRECTORY": str(recovery),
+            },
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired:
+        fail_smoke("Welcome startup smoke timed out")
+    if not welcome_report.exists():
+        fail_smoke(f"Welcome startup returned no report: {welcome_result.stderr[-2000:]}")
+    welcome_evidence = json.loads(welcome_report.read_text())
+    (ARTIFACTS / "welcome-startup-report.json").write_text(json.dumps(welcome_evidence, indent=2))
+    if welcome_result.returncode or not welcome_evidence.get("passed") or requests:
+        fail_smoke(f"Welcome startup navigated or made provider requests: {welcome_evidence}")
     try:
         result = subprocess.run(
             [
@@ -148,6 +219,7 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
             f"Native application returned {result.returncode} without a report: {result.stderr[-3000:]}"
         )
     evidence = json.loads(report.read_text())
+    evidence["welcome_startup"] = welcome_evidence["welcome_startup"]
     (ARTIFACTS / "smoke-report.json").write_text(json.dumps(evidence, indent=2))
     evidence["provider_requests"] = len(requests)
     if evidence.get("passed") and (

@@ -47,6 +47,14 @@ def install_fake_pydanticai(monkeypatch, *, agent_cls=None):
     fallback = types.ModuleType("pydantic_ai.models.fallback")
     durable_exec = types.ModuleType("pydantic_ai.durable_exec")
     durable_prefect = types.ModuleType("pydantic_ai.durable_exec.prefect")
+    usage = types.ModuleType("pydantic_ai.usage")
+
+    @dataclass
+    class UsageLimits:
+        request_limit: int
+
+    usage.UsageLimits = UsageLimits
+    monkeypatch.setitem(sys.modules, "pydantic_ai.usage", usage)
 
     class AbstractToolset:
         def __class_getitem__(cls, item):
@@ -235,12 +243,16 @@ async def test_pydanticai_runtime_surfaces_and_resumes_deferred_approvals(
             provider="openai",
             model="gpt-5",
             working_directory=tmp_path,
+            max_tokens=768,
+            max_iterations=6,
         ),
     )
 
     response = await runtime.run("run shell")
 
     assert response.stopped_reason == "needs_approval"
+    assert captured["init"]["kwargs"]["model_settings"]["max_tokens"] == 768
+    assert captured["last_run"]["kwargs"]["usage_limits"].request_limit == 6
     assert runtime.get_pending_approvals() == [
         {
             "index": 0,

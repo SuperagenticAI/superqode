@@ -80,15 +80,33 @@ async def run_connection(request, directory, emit, secrets):
             if inspect.isawaitable(resume):
                 await resume
         if hasattr(runtime, "run_harness_events"):
+            terminal_result = False
             async for event in runtime.run_harness_events(request["prompt"]):
                 emit("harness_event", {"event": event.type, "payload": dict(event.data)})
-                if event.type in {"error", "run.failed"} or (
-                    event.type == "model_result"
-                    and event.data.get("stopped_reason") in {"error", "cancelled"}
+                if (
+                    event.type in {"error", "run.failed"}
+                    or (
+                        event.type == "model_result"
+                        and (
+                            event.data.get("error")
+                            or event.data.get("stopped_reason") in {"error", "cancelled"}
+                        )
+                    )
+                    or (
+                        event.type == "turn_complete"
+                        and event.data.get("status")
+                        in {"error", "failed", "cancelled", "interrupted"}
+                    )
                 ):
                     raise RuntimeError(
                         str(event.data.get("error") or "Vendor agent did not complete")
                     )
+                if event.type == "model_result" or (
+                    event.type == "turn_complete" and event.data.get("status") == "completed"
+                ):
+                    terminal_result = True
+            if not terminal_result:
+                raise RuntimeError("Vendor agent stream ended without a successful terminal result")
         else:
             response = await runtime.run(request["prompt"])
             if response.stopped_reason in {"error", "cancelled"}:

@@ -471,6 +471,12 @@ def _local_client_for(engine: str):
 @click.option("--port", "-p", default=None, type=int, help="Port (default: engine default)")
 @click.option("--host", default=None, help="Bind host (default: 127.0.0.1)")
 @click.option("--ctx", default=None, type=int, help="Context window (where the engine supports it)")
+@click.option(
+    "--kv-cache",
+    type=click.Choice(["auto", "f16", "q8_0", "q4_0"]),
+    default="auto",
+    help="KV cache type for Ollama/llama.cpp; quantized caches enable Flash Attention",
+)
 @click.option("--no-wait", is_flag=True, help="Return immediately, do not wait for readiness")
 @click.option("--build", is_flag=True, help="(ds4) Build the ds4-server binary first if missing")
 @click.option(
@@ -481,7 +487,9 @@ def _local_client_for(engine: str):
 @click.option(
     "--extra", "extra_args", multiple=True, help="Extra flag passed to the server (repeatable)"
 )
-def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, extra_args):
+def local_serve(
+    engine, model, port, host, ctx, kv_cache, no_wait, build, allow_download, extra_args
+):
     """Start a local model server as a managed background daemon.
 
     The server keeps running after SuperQode exits; manage it later with
@@ -534,6 +542,7 @@ def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, 
                 model=model,
                 ctx=ctx,
                 extra_args=list(extra_args),
+                kv_cache=kv_cache,
             )
             click.echo(f"Starting managed {engine} server:", err=True)
             click.echo(f"  command: {' '.join(shlex.quote(part) for part in cmd)}", err=True)
@@ -557,6 +566,7 @@ def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, 
             model=model,
             ctx=ctx,
             extra_args=list(extra_args),
+            kv_cache=kv_cache,
             wait=not no_wait,
             allow_download=allow_download,
         )

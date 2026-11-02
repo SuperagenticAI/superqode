@@ -92,11 +92,11 @@ def test_run_recovery_never_reexecutes_work(tmp_path):
         "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
         ("run", "project", "task", "task", "running", "{}", None, 1, 1),
     )
-    service.db.close()
+    service.close()
     restarted = DesktopService(tmp_path)
     assert restarted.dispatch("jobs.list", {})[0]["status"] == "interrupted"
     assert not restarted.processes
-    restarted.db.close()
+    restarted.close()
 
 
 def test_check_records_actual_exit_status(desktop):
@@ -921,6 +921,7 @@ def test_cross_agent_handoff_and_return_resume(desktop_acp_route, monkeypatch):
     # Reopen the durable state without invoking any vendor account.
     from superqode.desktop_service.service import DesktopService
 
+    service.close()
     reopened = DesktopService(service.root)
     try:
         assert reopened.dispatch("conversations.get", {"id": third["id"]}) == transcript

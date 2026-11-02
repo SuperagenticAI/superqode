@@ -2,6 +2,11 @@
 
 SuperQode is your portable coding agent harness. You can keep the default native loop, or opt into a different backend with one flag. Runtime adapters are peers behind the same harness contract.
 
+For the complete inventory of **28 runtime/backend IDs**, including vendor
+CLIs, managed agents, Strands, DeepAgents, RLM, Tau and decision backends, see
+[All runtimes and harness backends](integrations/runtimes-harnesses.md).
+The table below lists all 15 direct runtime choices.
+
 ## Runtime Versus Harness
 
 A harness describes what should happen. A runtime performs it.
@@ -28,15 +33,19 @@ explicit user action. See the
 | --- | --- | --- |
 | `builtin` | included | SuperQode's native loop. This is the default and the canonical path for local-model and no-tool policy. |
 | `adk` | `uv tool install "superqode[adk]"` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
-| `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
+| `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.20 line. Includes SDK sessions, tool bridging, and HITL support; this line handles current OpenAI usage details. |
 | `codex-cli` | installed Codex CLI | Native asynchronous stdio connection to the user's Codex harness. `:connect codex` guards ChatGPT subscription authentication. |
 | `codex-sdk` | `uv tool install "superqode[codex-sdk]"` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
 | `copilot-sdk` | `uv tool install "superqode[copilot-sdk]"` | Official GitHub Copilot SDK runtime. Uses the user's Copilot account or an explicit GitHub token and normalizes SDK events into SuperQode. |
 | `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
 | `antigravity-sdk` | `uv tool install "superqode[antigravity-sdk]"` | Google Antigravity SDK runtime using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. This is separate from the signed-in `agy` CLI route. |
 | `antigravity-managed` | included | Google-hosted Antigravity agent over the Gemini Interactions API using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. |
-| `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.7 runtime for graph and middleware-heavy coding harnesses. Also available as the built-in `deepagents` harness. |
+| `antigravity-cli` | installed Antigravity CLI | Google-account coding agent through `agy`; sign-in and CLI compatibility are checked separately. |
 | `pydanticai` | `uv tool install "superqode[pydanticai]"` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
+| `devin-cli` | installed Devin CLI | Cognition Devin headless runtime; vendor sign-in required. |
+| `muse` | installed Muse CLI | Meta Muse Code native session protocol; vendor sign-in required. |
+| `copilot-cli` | installed Copilot CLI | Vendor-owned non-interactive loop on the user's subscription. |
+| `grok-cli` | installed Grok CLI | Vendor-owned non-interactive loop on the user's subscription. |
 
 ### Vendor SDK Bundle
 
@@ -349,7 +358,7 @@ Example output:
 │    │ adk           │ ready  │ Google Agent Development Kit          │
 │    │ openai-agents │ ready  │ OpenAI Agents SDK                     │
 │    │ codex-sdk     │ ready  │ OpenAI Codex Python SDK / app-server  │
-│    │ deepagents    │ ready  │ DeepAgents runtime adapter            │
+│    │ pydanticai    │ ready  │ PydanticAI agent framework            │
 └────┴───────────────┴────────┴───────────────────────────────────────┘
 ```
 
@@ -633,6 +642,9 @@ model_policy:
 ```
 
 ### `deepagents`
+
+DeepAgents is a HarnessSpec backend, rather than a direct `--runtime` choice.
+Inspect it with `superqode harness list-backends` and select its harness as below.
 
 Wraps DeepAgents 0.7 through `create_deep_agent(...)`. This backend is useful when you want DeepAgents graph state, middleware, filesystem backend behavior, and subagent patterns behind a SuperQode `HarnessSpec`.
 

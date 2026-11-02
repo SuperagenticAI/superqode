@@ -113,6 +113,7 @@ still be inspected and adapted.
 
 The importer is a format and execution bridge, not an emulator for Omnigent's server, synchronized clients, collaboration permissions, or managed runner hosts.
 
-SuperQode compiles compatible agent structure into its richer `HarnessSpec`, preserves unsupported Omnigent fields in metadata, and then owns execution through its runtimes, events, WorkOrders, evaluation, contextual policy, credential-safe tools, HarnessBench, and guarded promotion. Reproducing Omnigent's web, mobile, and desktop suite is not the terminal-first product priority.
-
-See [How SuperQode Relates to Omnigent](superqode-vs-omnigent.md) for the ideas the products share, their different priorities, SuperQode's existing remote-access options, and when the import path is useful.
+SuperQode compiles compatible agent structure into a `HarnessSpec`, preserves
+unsupported Omnigent fields in metadata and executes the imported definition
+through SuperQode's configured runtime and tool policy. Review preserved fields
+and adapt unsupported behavior before running the imported harness.

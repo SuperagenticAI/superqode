@@ -160,6 +160,11 @@ def _session_ref(request: HarnessBackendRequest) -> HarnessSessionRef:
             "model": request.model,
             "working_directory": str(request.working_directory),
             "runtime_config": dict(request.spec.runtime.config),
+            **(
+                {"tools": list(request.metadata["agent_tools"])}
+                if request.metadata.get("agent_tools") is not None
+                else {}
+            ),
         },
     )
 

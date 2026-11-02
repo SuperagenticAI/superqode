@@ -231,7 +231,7 @@ struct AgentWorkingCard: View {
         if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
         Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity.isEmpty ? "Preparing the next step…" : activity)
           .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-          .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+          .lineLimit(3).textSelection(.enabled).help(activity)
           .accessibilityLabel("Current agent activity")
       }
       Spacer(minLength: 0)
