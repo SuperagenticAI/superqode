@@ -2081,10 +2081,16 @@ private struct DialogAuditHost: View {
           else { throw EngineError(message: "Could not construct the native click test") }
           NSApp.postEvent(up, atStart: true)
           sheet.sendEvent(down)
-          // Target/action is synchronous. Check ownership before yielding to
-          // unrelated engine notifications or another SwiftUI layout pass.
-          if let verify, !verify() {
-            throw EngineError(message: "Native control action did not apply: " + identifier)
+          // The queued mouse-up is delivered after this task yields. Observe
+          // this control's effect, rather than a fixed-delay combined state.
+          if let verify {
+            for _ in 0..<150 {
+              if verify() { break }
+              try await Task.sleep(for: .milliseconds(20))
+            }
+            guard verify() else {
+              throw EngineError(message: "Native control action did not apply: \(identifier); noticeEmpty=\(self.notice.isEmpty), fixtureNoticeVisible=\(self.notice == "Dismissal check"), files=\(self.contextFiles), images=\(self.imageAttachments.count)")
+            }
           }
           try await Task.sleep(for: .milliseconds(250))
           return
