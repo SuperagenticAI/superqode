@@ -2047,13 +2047,20 @@ private struct DialogAuditHost: View {
       }
       throw EngineError(message: "Connect did not open a system sheet")
     }
-    func press(_ identifier: String) async throws {
+    func press(_ identifier: String, verify: (() -> Bool)? = nil) async throws {
       for _ in 0..<150 {
         var active = main.attachedSheet
         while let nested = active?.attachedSheet { active = nested }
         let sheet = active ?? main
         if let surface = sheet.contentView,
           let button = control(identifier, in: surface) {
+          // Closing a notice or removing a chip relayouts the next control.
+          // Do not deliver a click into a frame that is still moving.
+          let frame = button.convert(button.bounds, to: nil)
+          try await Task.sleep(for: .milliseconds(100))
+          guard button.window === sheet,
+            button.identifier?.rawValue == identifier,
+            button.convert(button.bounds, to: nil) == frame else { continue }
           guard button.isEnabled, button.bounds.width > 0, button.bounds.height > 0,
             let hit = surface.hitTest(button.convert(
               NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: surface.superview)),
@@ -2074,6 +2081,11 @@ private struct DialogAuditHost: View {
           else { throw EngineError(message: "Could not construct the native click test") }
           NSApp.postEvent(up, atStart: true)
           sheet.sendEvent(down)
+          // Target/action is synchronous. Check ownership before yielding to
+          // unrelated engine notifications or another SwiftUI layout pass.
+          if let verify, !verify() {
+            throw EngineError(message: "Native control action did not apply: " + identifier)
+          }
           try await Task.sleep(for: .milliseconds(250))
           return
         }
@@ -2199,11 +2211,18 @@ private struct DialogAuditHost: View {
     contextFiles = ["fixture-a.txt", "fixture-b.txt"]
     imageAttachments = [["id": "ui-image", "name": "fixture.png"]]
     try await Task.sleep(for: .milliseconds(250))
-    try await press("notice.close")
-    try await press("attachment.file.fixture-a.txt")
-    try await press("attachment.image.ui-image")
-    guard notice.isEmpty, contextFiles == ["fixture-b.txt"], imageAttachments.isEmpty else {
-      throw EngineError(message: "Attachment or notification X removed the wrong item")
+    try await press("notice.close", verify: {
+      self.notice.isEmpty && self.contextFiles == ["fixture-a.txt", "fixture-b.txt"]
+        && self.imageAttachments.count == 1
+    })
+    try await press("attachment.file.fixture-a.txt", verify: {
+      self.contextFiles == ["fixture-b.txt"] && self.imageAttachments.count == 1
+    })
+    try await press("attachment.image.ui-image", verify: {
+      self.contextFiles == ["fixture-b.txt"] && self.imageAttachments.isEmpty
+    })
+    guard contextFiles == ["fixture-b.txt"], imageAttachments.isEmpty else {
+      throw EngineError(message: "Attachment removal was overwritten after layout")
     }
     return "passed; Connect Back/Close, ACP Use, Escape, Done/Cancel and X in seven product sheets, nested X ownership, notification X, attachment X and reopen"
 
