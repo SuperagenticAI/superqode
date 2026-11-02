@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-10-14T17:47:42.835818+00:00",
-  "count": 104,
+  "generated_at": "2026-11-01T14:54:44.043239+00:00",
+  "count": 105,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -4532,6 +4532,87 @@
       "language": "Python",
       "language_confidence": "confirmed",
       "language_evidence": "langchain-ai/deepagents carries pyproject.toml (Python 98%)."
+    },
+    {
+      "id": "strands",
+      "name": "Strands",
+      "description": "AWS Strands harness in an isolated runtime with SuperQode-governed core tools.",
+      "category": "Optional integrations",
+      "kind": "harness",
+      "runtime": "strands",
+      "source": "optional:strands",
+      "readiness": "setup-required",
+      "integration_level": "optional",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "superqode harness strands setup",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/strands-agents/harness-sdk",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/advanced/strands-harness/",
+      "install_command": "superqode harness strands setup",
+      "tui_commands": [
+        ":harness switch strands",
+        ":harness show strands",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run strands \"Describe your task\"",
+        "superqode harness show strands",
+        "superqode serve acp --harness strands --provider PROVIDER --model MODEL"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "bash"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "strands",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install the isolated Strands runtime",
+          "command": "superqode harness strands setup",
+          "description": ""
+        },
+        {
+          "title": "Check the runtime without model calls",
+          "command": "superqode harness strands doctor",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "The integrated Strands Python harness ships a pyproject.toml and Python SDK."
     },
     {
       "id": "benchmark-coding",
