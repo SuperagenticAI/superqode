@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.0
+# SuperQode for macOS public beta 0.3.1
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -15,6 +15,28 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.1
+
+Version 0.3.1 (build 17) bundles Python engine 2.31.1. Supported harnesses
+now expose Code, Plan and Chat, plus Ask, Auto-edit and Full permissions.
+Unsupported controls are hidden and rejected by the engine. Plan restricts
+writes, shell and network; Full does not reopen gates closed by the harness.
+After starting a new conversation with Full, the next new-conversation draft
+returns to Ask, including when navigation changes while Send is pending.
+
+Isolate draft creates a Git worktree from the current commit and transfers
+the unsent prompt, staged images and files available there. Uncommitted files
+stay in the source checkout, and source-only attachments remain with its draft.
+Nothing runs until you explicitly send the isolated task.
+
+The composer adds file mentions, image paste and file drops, repository
+navigation pins and a compact change summary. Super Agent is a reviewed
+preview: proposals bind the selected provider and model, saved revisions
+remain disabled until explicitly enabled, and generated harnesses use builtin
+tools with recursion off. Its optional Monty check prints a template; it does
+not call a model, launch a child agent or install a plugin. Monty is not bundled
+in this release, so that check reports unavailable rather than using host Python.
 
 ## Version 0.3.0
 

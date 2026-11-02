@@ -83,15 +83,26 @@ def compile_to_headless_profile(spec: HarnessSpec) -> HarnessProfile:
 def _permission_config_from_spec(spec: HarnessSpec) -> PermissionConfig:
     default = Permission.ALLOW
     groups: dict[ToolGroup, Permission] = {}
+    allow_patterns: list[str] = []
+    deny_patterns: list[str] = []
+    extra = spec.execution_policy.config if isinstance(spec.execution_policy.config, dict) else {}
+    default_name = str(extra.get("default_permission") or "")
+    if default_name in {"allow", "deny", "ask"}:
+        default = Permission(default_name)
+    overrides = extra.get("group_permissions")
+    if isinstance(overrides, dict):
+        for key, value in overrides.items():
+            try:
+                groups[ToolGroup(str(key))] = Permission(str(value))
+            except ValueError:
+                continue
+    # A closed gate in the spec stays closed. Session overlays cannot reopen it.
     if not spec.execution_policy.allow_write:
         groups[ToolGroup.WRITE] = Permission.DENY
     if not spec.execution_policy.allow_shell:
         groups[ToolGroup.SHELL] = Permission.DENY
     if not spec.execution_policy.allow_network:
         groups[ToolGroup.NETWORK] = Permission.DENY
-    allow_patterns: list[str] = []
-    deny_patterns: list[str] = []
-    extra = spec.execution_policy.config if isinstance(spec.execution_policy.config, dict) else {}
     allow_patterns.extend(str(item) for item in extra.get("allow_patterns", []) or [])
     deny_patterns.extend(str(item) for item in extra.get("deny_patterns", []) or [])
     for rule in spec.execution_policy.permission_rules or ():

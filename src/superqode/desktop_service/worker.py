@@ -94,6 +94,22 @@ async def task(request, directory):
         raise ValueError(
             "The harness changed since this task. Start a new task to use the new revision."
         )
+    from .session_controls import apply_controls, enforces_session_controls
+
+    if (
+        request.get("interaction_mode") == "plan" or request.get("permission_mode")
+    ) and not enforces_session_controls(spec.runtime.backend):
+        raise ValueError(
+            "This harness does not enforce SuperQode Ask or Plan. The task was not run."
+        )
+    spec = apply_controls(spec, request)
+    emit(
+        "session_controls",
+        {
+            "interaction_mode": request.get("interaction_mode") or "code",
+            "permission_mode": request.get("permission_mode") or "",
+        },
+    )
     spec = replace(
         spec,
         context=replace(

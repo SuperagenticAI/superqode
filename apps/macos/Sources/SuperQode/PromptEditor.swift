@@ -4,17 +4,31 @@ import SwiftUI
 /// Preserve native text editing and IME composition, with chat-style Return.
 struct PromptEditor: NSViewRepresentable {
   @Binding var text: String
+  var onCursorPrefix: (String) -> Void = { _ in }
+  var onImagePaste: () -> Void = {}
+  var onInterceptReturn: () -> Bool = { false }
   let submit: () -> Void
 
   final class Editor: NSTextView {
     var submit: () -> Void = {}
+    var onImagePaste: () -> Void = {}
+    var onInterceptReturn: () -> Bool = { false }
     override func keyDown(with event: NSEvent) {
       if (event.keyCode == 36 || event.keyCode == 76), !hasMarkedText(),
         event.modifierFlags.intersection([.shift, .option, .control]).isEmpty {
-        submit()
+        if !onInterceptReturn() { submit() }
       } else {
         super.keyDown(with: event)
       }
+    }
+    override func paste(_ sender: Any?) {
+      let board = NSPasteboard.general
+      let hasText = !(board.string(forType: .string) ?? "").isEmpty
+      if !hasText, NSImage(pasteboard: board) != nil {
+        onImagePaste()
+        return
+      }
+      super.paste(sender)
     }
   }
   final class Coordinator: NSObject, NSTextViewDelegate {
@@ -23,7 +37,17 @@ struct PromptEditor: NSViewRepresentable {
     func textDidChange(_ notification: Notification) {
       guard let editor = notification.object as? NSTextView else { return }
       parent.text = editor.string
+      parent.report(editor)
     }
+    func textViewDidChangeSelection(_ notification: Notification) {
+      guard let editor = notification.object as? NSTextView else { return }
+      parent.report(editor)
+    }
+  }
+  private func report(_ editor: NSTextView) {
+    let value = editor.string as NSString
+    let location = min(max(editor.selectedRange().location, 0), value.length)
+    onCursorPrefix(value.substring(to: location))
   }
   func makeCoordinator() -> Coordinator { Coordinator(self) }
   func makeNSView(context: Context) -> NSScrollView {
@@ -50,6 +74,8 @@ struct PromptEditor: NSViewRepresentable {
     context.coordinator.parent = self
     guard let editor = scroll.documentView as? Editor else { return }
     editor.submit = submit
+    editor.onImagePaste = onImagePaste
+    editor.onInterceptReturn = onInterceptReturn
     if editor.string != text { editor.string = text }
   }
 }

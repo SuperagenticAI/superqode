@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.1] - 2026-11-02
+
+### Added
+
+- Desktop Code, Plan and Chat controls, with per-task Ask, Auto-edit and Full
+  permissions on runtimes that enforce them. Unsupported controls are rejected
+  before execution. Full resets to Ask for the next new conversation.
+- Reviewed draft isolation in a Git worktree, preserving source-only context
+  files and unrelated drafts while transferring the prompt and staged images.
+- Super Agent preview proposals bound to the selected provider and model,
+  disabled saved revisions, explicit enablement and repository navigation pins.
+- Native file mentions, image paste and drops, and a compact Git change summary.
+
+Ships alongside macOS **0.3.1 / build 17**, Public Beta. Super Agent uses builtin
+tools with recursion off. Its optional Monty check prints a template; Monty is
+not bundled, and no live Monty execution is claimed for the macOS release.
+
 ## [2.31.0] - 2026-11-02
 
 ### Added

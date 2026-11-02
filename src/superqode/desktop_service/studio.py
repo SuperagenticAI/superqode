@@ -627,6 +627,8 @@ def selection(service, project):
         if not version:
             return []
         definition = resolve_harness(version["reference"], root=service.project(project))
+        from .session_controls import enforces_session_controls
+
         return [
             {
                 "id": version["reference"],
@@ -637,6 +639,7 @@ def selection(service, project):
                 "issue": definition.issue,
                 "digest": definition.digest,
                 "path": version["reference"],
+                "enforces_session_controls": enforces_session_controls(definition.runtime),
             }
         ]
     except (ValueError, KeyError, OSError):

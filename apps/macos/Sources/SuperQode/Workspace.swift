@@ -262,6 +262,19 @@ private struct DialogAuditHost: View {
     }
   }
   @Published var interactionMode = "code" { didSet { scheduleDraftSave() } }
+  @Published var permissionMode = "ask" {
+    didSet {
+      guard !restoringComposer, !projectID.isEmpty else { return }
+      guard PermissionMemory.modes.contains(permissionMode) else {
+        permissionMode = "ask"
+        return
+      }
+      PermissionMemory.store(permissionMode, composerKey: composerKey, defaults: preferences)
+    }
+  }
+  @Published var repositoryPanels: [String] = []
+  @Published var repositoryLayoutName = ""
+  @Published var mentionPrefix = ""
   @Published var contextWindow = "" { didSet { scheduleDraftSave() } }
   @Published var summarizeContext = false { didSet { scheduleDraftSave() } }
   @Published var contextFiles: [String] = [] { didSet { scheduleDraftSave() } }
@@ -330,6 +343,27 @@ private struct DialogAuditHost: View {
     isACP
       || harnesses.first(where: { string($0, "id") == harness })?["desktop_kind"] as? String
         == "connection"
+  }
+  /// Ask, Plan, and Full are enforceable only when this backend pauses for them.
+  var enforcesSessionControls: Bool {
+    guard !isManaged, !connectionDisconnected else { return false }
+    let row = harnesses.first { string($0, "id") == harness } ?? [:]
+    return row["enforces_session_controls"] as? Bool == true
+  }
+  /// The route already chosen in the app, for a reviewed Super Agent draft.
+  var reviewedModelRoute: [String: Any]? {
+    let selected = model.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !selected.isEmpty, !isManaged, !connectionDisconnected else { return nil }
+    switch provider {
+    case "ollama", "lmstudio", "mlx", "llama.cpp":
+      return ["source": "local", "engine": provider, "model": selected]
+    case "llamacpp":
+      return ["source": "local", "engine": "llama.cpp", "model": selected]
+    case "", "agent":
+      return nil
+    default:
+      return ["source": "provider", "provider": provider, "model": selected]
+    }
   }
   var connectionDisconnected: Bool { harness == "disconnected" }
   /// Detach the selected route without logging out of vendor-owned accounts or deleting history.
@@ -594,6 +628,9 @@ private struct DialogAuditHost: View {
     candidate = [:]
     git = [:]
     files = []
+    repositoryPanels = []
+    repositoryLayoutName = ""
+    mentionPrefix = ""
     connectionMetadata = [:]
     projects = nextProjects
     harnesses = nextHarnesses
@@ -612,6 +649,7 @@ private struct DialogAuditHost: View {
     perform {
       await self.refreshGit()
       await self.refreshModels()
+      await self.loadRepositoryLayout()
     }
     if isManaged && recordHistory { perform { await self.checkManagedConnection() } }
   }
@@ -632,6 +670,7 @@ private struct DialogAuditHost: View {
       agentConfig = [:]
     }
     harness = id
+    if interactionMode == "plan" && !enforcesSessionControls { interactionMode = "code" }
     if changed && isManaged {
       provider = "agent"
       model = ""
@@ -694,6 +733,37 @@ private struct DialogAuditHost: View {
     recoverySnapshot.composers[composerKey] = composerRecovery
     persistDestination()
     if flush { flushRecovery() }
+  }
+
+  /// Move an unsent prompt into the workspace just opened by Isolate draft.
+  func moveDraftToOpenedWorkspace(
+    text: String, files: [String], images: [[String: Any]], fromProject: String,
+    fromComposerKey: String
+  ) {
+    guard !projectID.isEmpty, projectID != fromProject else { return }
+    let root = URL(fileURLWithPath: string(project, "path")).resolvingSymlinksInPath()
+    let split = TaskIsolation.handoff(files: files) { relative in
+      let target = root.appendingPathComponent(relative).resolvingSymlinksInPath()
+      return target.path.hasPrefix(root.path + "/") && FileManager.default.fileExists(atPath: target.path)
+    }
+    restoringComposer = true
+    draft = text
+    contextFiles = split.files
+    imageAttachments = images
+    restoringComposer = false
+    saveDraft()
+    let sourceKey = fromComposerKey
+    if var source = recoverySnapshot.composers[sourceKey] {
+      if source.text == text { source.text = "" }
+      if source.files == files { source.files = split.dropped }
+      let carried = images.map { string($0, "id") }
+      if source.images.map({ $0["id"] ?? "" }) == carried { source.images = [] }
+      recoverySnapshot.composers[sourceKey] = source
+      flushRecovery()
+    }
+    notice = split.dropped.isEmpty
+      ? "Isolated workspace opened. The unsent draft is here."
+      : "Isolated workspace opened. The unsent draft is here. Files that are not in this worktree stayed behind."
   }
 
   func refreshJobs() async {
@@ -1022,18 +1092,24 @@ private struct DialogAuditHost: View {
     guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
     guard !loadingConversationDraft, !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
       (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    if interactionMode == "plan" && !enforcesSessionControls {
+      notice = "Plan mode applies to a SuperQode harness that can enforce it. This agent uses its own tools and permissions."
+      return
+    }
     let submittedDraft = draft
     let submittedKey = composerKey
     let submittedConversation = composerConversationID
     let submittedRecord = composerRecovery
     let submittedFiles = contextFiles
     let submittedImages = imageAttachments.map { string($0, "id") }
+    let submittedPermission = permissionMode
     var extra: [String: Any] = [
       "prompt": submittedDraft, "context_files": submittedFiles, "interaction_mode": interactionMode,
       "context_window": contextWindow.isEmpty ? 0 : Int(contextWindow) ?? -1,
       "enable_summarization": summarizeContext,
       "image_ids": submittedImages,
     ]
+    if enforcesSessionControls { extra["permission_mode"] = submittedPermission }
     if isACP {
       extra["acp_options"] = [
         "model": agentModel, "mode": agentMode, "config": agentConfig.filter { !$0.value.isEmpty },
@@ -1057,6 +1133,19 @@ private struct DialogAuditHost: View {
       let id = string(result, "id")
       guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
       self.clearAcceptedSubmission(key: submittedKey, submitted: submittedRecord)
+      // Acceptance belongs to the submitted conversation even if navigation changed.
+      let destination = continueSession ? submittedConversation : id
+      if !continueSession {
+        PermissionMemory.commitNewConversation(
+          submittedPermission, project: submittedProject, conversation: destination,
+          defaults: self.preferences)
+      } else {
+        PermissionMemory.store(
+          submittedPermission,
+          composerKey: WorkspaceRecoverySnapshot.key(
+            project: submittedProject, conversation: destination),
+          defaults: self.preferences)
+      }
       guard self.projectID == submittedProject, self.composerKey == submittedKey else {
         await self.refreshJobs()
         return
@@ -1067,8 +1156,10 @@ private struct DialogAuditHost: View {
       if self.imageAttachments.map({ string($0, "id") }) == submittedImages {
         self.imageAttachments = []
       }
+      let keptNewerDraft = !continueSession && !self.draft.isEmpty && self.draft != submittedDraft
       // Keep a newer new-task draft visible if the user typed while acceptance was pending.
-      if !continueSession && !self.draft.isEmpty && self.draft != submittedDraft {
+      if keptNewerDraft {
+        self.permissionMode = "ask"
         self.notice = "Task started. Your newer draft is still in New conversation."
         await self.refreshJobs()
         return
@@ -1090,16 +1181,20 @@ private struct DialogAuditHost: View {
   func enqueueDraft() {
     guard !connectionDisconnected else { notice = "Connect an agent before adding a task."; return }
     guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-    queueAction(
-      "queue.add",
-      extra: [
-        "prompt": draft, "harness": harness, "provider": provider, "model": model,
-        "interaction_mode": interactionMode,
-        "context_files": contextFiles, "image_ids": imageAttachments.map { string($0, "id") },
-        "context_window": contextWindow.isEmpty ? 0 : Int(contextWindow) ?? -1,
-        "enable_summarization": summarizeContext,
-        "acp_options": ["model": agentModel, "mode": agentMode, "config": agentConfig],
-      ])
+    if interactionMode == "plan" && !enforcesSessionControls {
+      notice = "Plan mode applies to a SuperQode harness that can enforce it. This agent uses its own tools and permissions."
+      return
+    }
+    var extra: [String: Any] = [
+      "prompt": draft, "harness": harness, "provider": provider, "model": model,
+      "interaction_mode": interactionMode,
+      "context_files": contextFiles, "image_ids": imageAttachments.map { string($0, "id") },
+      "context_window": contextWindow.isEmpty ? 0 : Int(contextWindow) ?? -1,
+      "enable_summarization": summarizeContext,
+      "acp_options": ["model": agentModel, "mode": agentMode, "config": agentConfig],
+    ]
+    if enforcesSessionControls { extra["permission_mode"] = permissionMode }
+    queueAction("queue.add", extra: extra)
     notice = "Adding task to the project queue"
   }
   func attachImages() {
@@ -1158,6 +1253,41 @@ private struct DialogAuditHost: View {
       let relative = String(path.dropFirst(root.count))
       if !contextFiles.contains(relative) { contextFiles.append(relative) }
     }
+  }
+  func consumeFileDrop(_ providers: [NSItemProvider]) -> Bool {
+    guard !projectID.isEmpty else { return false }
+    let urls = providers.filter { $0.canLoadObject(ofClass: URL.self) }
+    guard !urls.isEmpty else { return false }
+    for provider in urls {
+      _ = provider.loadObject(ofClass: URL.self) { object, _ in
+        guard let url = object, url.isFileURL else { return }
+        DispatchQueue.main.async { self.attachDroppedFile(url.path) }
+      }
+    }
+    return true
+  }
+  func attachDroppedFile(_ path: String) {
+    var directory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: path, isDirectory: &directory), !directory.boolValue else { return }
+    let kind = (path as NSString).pathExtension.lowercased()
+    if ["png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "heic"].contains(kind) {
+      perform {
+        guard self.imageAttachments.count < 4 else {
+          throw EngineError(message: "Attach up to four images.")
+        }
+        let item = try await self.engine.call("images.stage", ["path": path]) as? [String: Any] ?? [:]
+        self.imageAttachments.append(item)
+      }
+      return
+    }
+    let root = URL(fileURLWithPath: string(project, "path")).resolvingSymlinksInPath().path + "/"
+    let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    guard resolved.hasPrefix(root) else {
+      error = "Attach files from the current project."
+      return
+    }
+    let relative = String(resolved.dropFirst(root.count))
+    if !contextFiles.contains(relative) { contextFiles.append(relative) }
   }
   var canSteer: Bool {
     guard string(detail, "status") == "running",
@@ -1267,6 +1397,52 @@ private struct DialogAuditHost: View {
         self.notice =
           "Evidence exported. Review it before sharing; task output can contain project content."
       }
+    }
+  }
+  var mentionQuery: String? { ComposerMentions.query(in: mentionPrefix) }
+  var mentionMatches: [String] {
+    guard let query = mentionQuery?.lowercased() else { return [] }
+    var matches: [String] = []
+    for path in files where query.isEmpty || path.lowercased().contains(query) {
+      matches.append(path)
+      if matches.count == 8 { break }
+    }
+    return matches
+  }
+  func noteComposerCursor(_ prefix: String) {
+    guard prefix != mentionPrefix else { return }
+    mentionPrefix = prefix
+  }
+  func acceptTopMentionIfNeeded() -> Bool {
+    guard let path = mentionMatches.first else { return false }
+    acceptMention(path)
+    return true
+  }
+  func acceptMention(_ path: String) {
+    let next = ComposerMentions.insert(text: draft, prefix: mentionPrefix, path: path)
+    guard next != draft else { return }
+    draft = next
+    if !contextFiles.contains(path) { contextFiles.append(path) }
+    mentionPrefix = ""
+  }
+  func loadRepositoryLayout() async {
+    let id = projectID
+    guard !id.isEmpty else {
+      repositoryPanels = []
+      repositoryLayoutName = ""
+      return
+    }
+    do {
+      let layout = try await engine.call("creator.layout", ["project": id]) as? [String: Any] ?? [:]
+      guard id == projectID else { return }
+      let raw = layout["panels"] as? [String]
+        ?? (layout["panels"] as? [Any])?.compactMap { $0 as? String } ?? []
+      repositoryLayoutName = string(layout, "name")
+      repositoryPanels = RepositoryLayout.pinned(raw)
+    } catch {
+      guard id == projectID else { return }
+      repositoryPanels = []
+      repositoryLayoutName = ""
     }
   }
   func loadFiles() {

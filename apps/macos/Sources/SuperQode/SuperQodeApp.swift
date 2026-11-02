@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 @MainActor final class ApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -124,11 +125,12 @@ enum Sections {
   }
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
-    "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio",
+    "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio", "Super Agent",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
     "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass", "bubble.left.and.bubble.right", "square.stack.3d.up", "hammer",
+    "arrow.triangle.2.circlepath",
   ]
 }
 extension Color {
@@ -285,6 +287,7 @@ struct RootView: View {
               case "Agent activity": AgentFleetView()
               case "Harness Hub": HubView()
               case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
+              case "Super Agent": CreatorModeView().id(app.projectID)
               case "Models": ModelsView()
               case "Evaluations": EvaluationView()
               case "Optimization": OptimizationView()
@@ -395,23 +398,37 @@ struct SidebarView: View {
       }.foregroundStyle(.secondary).padding(20)
     }.frame(maxHeight: .infinity, alignment: .top).clipped()
   }
+  private var primarySections: [String] {
+    ["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Super Agent", "Models"]
+  }
   private var navigationItems: some View {
     VStack(spacing: 4) {
-      ForEach(["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Models"], id: \.self) { name in
+      if !app.repositoryPanels.isEmpty {
+        Text("THIS REPOSITORY")
+          .font(.system(size: 11, weight: .bold, design: .monospaced))
+          .tracking(1.5)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 12)
+          .padding(.bottom, 4)
+        ForEach(app.repositoryPanels, id: \.self) { name in
+          navigationButton(name)
+        }
+        Divider().padding(.vertical, 8)
+      }
+      ForEach(primarySections, id: \.self) { name in
         navigationButton(name)
       }
       DisclosureGroup("Improve & more", isExpanded: $expandedNavigation) {
         VStack(spacing: 3) {
-          ForEach(
-            Sections.names.filter { !["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Models"].contains($0) }, id: \.self
-          ) { name in
+          ForEach(Sections.names.filter { !primarySections.contains($0) }, id: \.self) { name in
             navigationButton(name)
           }
         }.padding(.top, 6)
       }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 8)
     }.padding(.horizontal, 14).padding(.top, 14)
       .onChange(of: app.section) { _, name in
-        if !["Workspace", "Threads", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio"].contains(name) { expandedNavigation = true }
+        if !primarySections.contains(name) { expandedNavigation = true }
       }
   }
   private func navigationButton(_ name: String) -> some View {
@@ -536,6 +553,7 @@ struct CodingView: View {
           }
         }.padding(.horizontal, 24).padding(.vertical, 14)
         Divider()
+        ChangeStrip()
         if app.detail["archived"] as? Bool == true {
           HStack {
             Label("Archived thread", systemImage: "archivebox")
@@ -560,6 +578,29 @@ struct CodingView: View {
     .centeredDialog(isPresented: Binding(get: { forkSource != nil }, set: { if !$0 { forkSource = nil } }), title: "Fork thread") {
       if let source = forkSource { ThreadForkView(project: string(source, "project"), source: string(source, "id")) }
     }
+    .onChange(of: app.selectedJob) { _, _ in
+      guard !app.projectID.isEmpty else { return }
+      app.perform { await app.refreshGit() }
+    }
+  }
+}
+struct ChangeStrip: View {
+  @EnvironmentObject var app: Workspace
+  var body: some View {
+    if let line = ChangeSummary.line(
+      stat: string(app.git, "stat"), status: string(app.git, "status"),
+      diff: string(app.git, "diff"), error: string(app.git, "error")) {
+      HStack(spacing: 12) {
+        Image(systemName: "arrow.triangle.branch")
+        Text(string(app.git, "branch", "Git")).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+        Text(line).font(.system(size: 11, design: .monospaced)).lineLimit(1)
+        Spacer()
+        Button("Review") { app.section = "Review" }.font(.caption)
+        Button(app.inspectorVisible ? "Hide diff" : "Show diff") { app.inspectorVisible.toggle() }
+          .font(.caption)
+      }.padding(.horizontal, 24).padding(.vertical, 8)
+      Divider()
+    }
   }
 }
 struct CodingComposer: View {
@@ -568,7 +609,13 @@ struct CodingComposer: View {
   @State private var showQueue = false
   @State private var showContext = false
   @State private var showOptions = false
+  @State private var isolatePlan: [String: Any]?
+  @State private var requestedFiles = false
   @FocusState private var composerFocused: Bool
+  private var composerHeight: CGFloat {
+    let lines = max(1, app.draft.components(separatedBy: "\n").count)
+    return min(180, max(54, CGFloat(lines) * 22 + 16))
+  }
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == app.harness } ?? [:]
   }
@@ -588,8 +635,21 @@ struct CodingComposer: View {
     .centeredDialog(isPresented: $showContext, title: "Project context") {
       ContextPreviewView().environmentObject(app)
     }
+    .centeredDialog(
+      isPresented: Binding(get: { isolatePlan != nil }, set: { if !$0 { isolatePlan = nil } }),
+      title: "Isolate draft in a worktree"
+    ) {
+      isolateConfirmation
+    }
     .onChange(of: draftStore.text) { _, _ in app.scheduleDraftSave() }
     .onChange(of: app.selectedJob) { _, _ in composerFocused = true }
+    .onChange(of: app.projectID) { _, _ in requestedFiles = false }
+    .onChange(of: app.mentionPrefix) { _, _ in
+      if !requestedFiles, app.mentionQuery != nil, app.files.isEmpty {
+        requestedFiles = true
+        app.loadFiles()
+      }
+    }
   }
   private var composer: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -646,10 +706,16 @@ struct CodingComposer: View {
         }
       }
       attachments
-      PromptEditor(text: $draftStore.text) { app.send(continueSession: continuesConversation) }
+      PromptEditor(
+        text: $draftStore.text,
+        onCursorPrefix: app.noteComposerCursor,
+        onImagePaste: app.pasteImage,
+        onInterceptReturn: app.acceptTopMentionIfNeeded
+      ) { app.send(continueSession: continuesConversation) }
         .focused($composerFocused)
-        .frame(height: app.draft.contains("\n") ? 92 : 54).padding(8)
+        .frame(height: composerHeight).padding(8)
         .outlinedSurface(radius: 8)
+        .onDrop(of: [.fileURL], isTargeted: nil) { app.consumeFileDrop($0) }
         .overlay(alignment: .topLeading) {
           if app.draft.isEmpty {
             Text(app.active ? "Draft your next message…" : continuesConversation ? "Ask a follow-up or describe the next change…" : "Describe the change you want to make…")
@@ -657,18 +723,55 @@ struct CodingComposer: View {
           }
         }
         .accessibilityLabel("Message your coding agent")
+      mentionChoices
+      if app.enforcesSessionControls && app.interactionMode == "plan" {
+        Text("Plan mode inspects the repository. It does not edit files, run shell commands, or use the network.")
+          .font(.caption).foregroundStyle(.secondary)
+      }
+      if app.enforcesSessionControls && app.interactionMode != "plan" && app.interactionMode != "chat" && app.permissionMode == "full" {
+        Text("Full runs writes and shell without a prompt. Network still asks. This app is not an OS sandbox.")
+          .font(.caption).foregroundStyle(.orange)
+      }
+      if !app.isManaged && !app.enforcesSessionControls && app.interactionMode != "chat" {
+        Text("This harness runs its own tools and permissions. SuperQode Ask and Plan do not apply.")
+          .font(.caption).foregroundStyle(.secondary)
+      }
       HStack(spacing: 12) {
+        if !app.isManaged {
+          Picker("Mode", selection: $app.interactionMode) {
+            Text("Code").tag("code")
+            if app.enforcesSessionControls { Text("Plan").tag("plan") }
+            Text("Chat").tag("chat")
+          }.pickerStyle(.menu).labelsHidden().fixedSize().disabled(app.active)
+            .accessibilityLabel("Interaction mode")
+          if app.interactionMode == "chat" {
+            Text("Chat").font(.caption).foregroundStyle(.secondary)
+              .help("Chat answers without tools.")
+          } else if app.enforcesSessionControls && app.interactionMode == "plan" {
+            Text("Ask").font(.caption).foregroundStyle(.secondary)
+              .help("Plan keeps Ask. Writes, shell, and network stay closed.")
+          } else if app.enforcesSessionControls {
+            Picker("Permission", selection: $app.permissionMode) {
+              Text("Ask").tag("ask")
+              Text("Auto-edit").tag("auto-edit")
+              Text("Full").tag("full")
+            }.pickerStyle(.menu).labelsHidden().fixedSize()
+              .accessibilityLabel("Permission mode")
+          }
+        }
         Menu {
           Button("Project text files…", action: app.attachFiles)
           Button("Images…", action: app.attachImages)
           Button("Paste image", action: app.pasteImage)
         } label: { Image(systemName: "paperclip") }
           .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().frame(width: 24)
-          .accessibilityLabel("Attach context").disabled(app.projectID.isEmpty || app.active)
+          .accessibilityLabel("Attach context").disabled(app.projectID.isEmpty)
         Button("Context…") { showContext = true }.font(.caption)
         Menu("Tasks") {
           Button("Open queue…") { showQueue = true }
           Button("Add draft to queue", action: app.enqueueDraft).disabled(app.draft.isEmpty || app.connectionDisconnected)
+          Button("Isolate draft in a worktree") { previewIsolation() }
+            .disabled(app.busy)
         }.menuStyle(.borderlessButton).fixedSize().font(.caption).disabled(app.projectID.isEmpty)
         if app.isACP && !app.agentCommands.isEmpty {
           Menu("Agent commands") {
@@ -699,7 +802,14 @@ struct CodingComposer: View {
             || app.connectionDisconnected || (!app.isManaged && app.model.isEmpty))
           .keyboardShortcut(.return, modifiers: .command)
       }
-    }.padding(16).brandSurface().padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
+    }
+    .onAppear {
+      if !app.enforcesSessionControls && app.interactionMode == "plan" { app.interactionMode = "code" }
+    }
+    .onChange(of: app.enforcesSessionControls) { _, enforced in
+      if !enforced && app.interactionMode == "plan" { app.interactionMode = "code" }
+    }
+    .padding(16).brandSurface().padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -719,6 +829,7 @@ struct CodingComposer: View {
         RouteControls()
         Picker("Interaction", selection: $app.interactionMode) {
           Text("Code").tag("code")
+          if app.enforcesSessionControls { Text("Plan").tag("plan") }
           Text("Chat").tag("chat")
         }.pickerStyle(.segmented).disabled(app.active)
       } else {
@@ -738,6 +849,70 @@ struct CodingComposer: View {
         }.disabled(app.checkingConnection || app.active)
       }
     }.padding(20).frame(minWidth: 540)
+  }
+  @ViewBuilder private var mentionChoices: some View {
+    if app.mentionQuery != nil && app.mentionMatches.isEmpty {
+      Text(app.files.isEmpty ? "Looking up project files…" : "No file matches @" + (app.mentionQuery ?? ""))
+        .font(.caption).foregroundStyle(.secondary)
+    } else if app.mentionQuery != nil {
+      VStack(alignment: .leading, spacing: 2) {
+        ForEach(app.mentionMatches, id: \.self) { path in
+          Button(path) { app.acceptMention(path) }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12, design: .monospaced))
+        }
+      }
+    }
+  }
+  private var isolateConfirmation: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Branch " + string(isolatePlan ?? [:], "branch"))
+        .font(.system(size: 13, design: .monospaced))
+      Text("The worktree is created from the latest commit, outside this checkout. Uncommitted files stay here. Nothing runs until you send a task in the new workspace.")
+        .font(.callout).foregroundStyle(.secondary)
+      Text(string(isolatePlan ?? [:], "path"))
+        .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(3)
+      HStack {
+        Button("Cancel") { isolatePlan = nil }
+        Button("Create worktree") { createIsolation() }.buttonStyle(BrandButtonStyle())
+          .disabled(app.busy)
+      }
+    }.padding(20).frame(width: 460)
+  }
+  private func previewIsolation() {
+    let project = app.projectID
+    let title = TaskIsolation.title(from: app.draft)
+    app.perform {
+      let plan = try await app.engine.call(
+        "tasks.isolate.preview", ["project": project, "title": title]) as? [String: Any] ?? [:]
+      guard app.projectID == project else { return }
+      self.isolatePlan = plan
+    }
+  }
+  private func createIsolation() {
+    guard let plan = isolatePlan else { return }
+    let project = app.projectID
+    let sourceComposerKey = app.composerKey
+    let carriedText = app.draft
+    let carriedFiles = app.contextFiles
+    let carriedImages = app.imageAttachments
+    app.perform {
+      let created = try await app.engine.call(
+        "tasks.isolate.create",
+        [
+          "project": project,
+          "fork_id": string(plan, "fork_id"),
+          "title": string(plan, "title"),
+          "expected_digest": string(plan, "digest"),
+        ]) as? [String: Any] ?? [:]
+      guard app.projectID == project else { return }
+      self.isolatePlan = nil
+      try await app.open(string(created, "path"))
+      guard app.projectID != project, !app.projectID.isEmpty else { return }
+      app.moveDraftToOpenedWorkspace(
+        text: carriedText, files: carriedFiles, images: carriedImages, fromProject: project,
+        fromComposerKey: sourceComposerKey)
+    }
   }
   @ViewBuilder private var attachments: some View {
     if !app.imageAttachments.isEmpty || !app.contextFiles.isEmpty {

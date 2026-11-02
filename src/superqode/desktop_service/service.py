@@ -613,9 +613,26 @@ class DesktopService:
                 ):
                     raise ValueError("Restore this archived thread before continuing it")
             if kind == "task":
-                if params.get("interaction_mode") == "chat" and (
-                    params.get("_desktop_route") or params.get("_desktop_connection")
-                ):
+                from .session_controls import accept, enforces_session_controls
+
+                accept(params)
+                external = bool(params.get("_desktop_route") or params.get("_desktop_connection"))
+                runtime = (params.get("_thread_harness") or {}).get("runtime")
+                enforced = (not external) and enforces_session_controls(runtime)
+                if params.get("interaction_mode") == "plan" and not enforced:
+                    raise ValueError(
+                        "Plan mode applies to a SuperQode harness that can enforce it. "
+                        "This agent uses its own tools and permissions."
+                    )
+                if params.get("permission_mode") and not enforced:
+                    if params.get("interaction_mode") == "chat":
+                        params.pop("permission_mode", None)
+                    else:
+                        raise ValueError(
+                            "Ask, Auto-edit, and Full apply to a SuperQode harness that can "
+                            "enforce them. This agent uses its own permissions."
+                        )
+                if params.get("interaction_mode") == "chat" and external:
                     raise ValueError("Direct chat requires a local or BYOK model connection")
                 window = int(params.get("context_window") or 0)
                 if window < 0 or window > 10_000_000:
@@ -1768,8 +1785,33 @@ class DesktopService:
             from .studio import handle
 
             return handle(self, method, params)
+        if method in {"creator.propose", "superagent.propose"}:
+            from .creator import propose
+
+            return propose(self, params)
+        if method in {"creator.save", "superagent.save"}:
+            from .creator import commit
+
+            return commit(self, params)
+        if method in {"creator.layout", "superagent.layout"}:
+            from .creator import layout
+
+            return layout(self, params)
+        if method in {"creator.monty", "superagent.monty"}:
+            from .creator import run_check
+
+            return run_check(self, params)
+        if method == "tasks.isolate.preview":
+            from .task_worktree import preview
+
+            return preview(self, params)
+        if method == "tasks.isolate.create":
+            from .task_worktree import create
+
+            return create(self, params)
         if method == "harnesses.list":
             from superqode.harness.catalog import list_harnesses
+            from .session_controls import enforces_session_controls
             from .studio import selection
 
             return [
@@ -1782,6 +1824,7 @@ class DesktopService:
                     "issue": h.issue,
                     "digest": h.digest,
                     "path": str(h.path) if h.path else None,
+                    "enforces_session_controls": enforces_session_controls(h.runtime),
                 }
                 for h in list_harnesses(self.project(params["project"]))
             ] + selection(self, params["project"])

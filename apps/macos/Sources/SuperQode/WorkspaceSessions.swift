@@ -63,6 +63,7 @@ import Foundation
     contextFiles = saved.files
     imageAttachments = saved.images.map { $0.mapValues { $0 as Any } }
     interactionMode = saved.mode
+    permissionMode = PermissionMemory.mode(for: composerKey, defaults: preferences)
     contextWindow = saved.contextWindow
     summarizeContext = saved.summarize
     reviewCommentStore.drafts = saved.reviewComments ?? [:]

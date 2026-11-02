@@ -48,6 +48,7 @@ class TaskQueues:
                     "context_files",
                     "image_ids",
                     "interaction_mode",
+                    "permission_mode",
                     "context_window",
                     "enable_summarization",
                     "acp_options",

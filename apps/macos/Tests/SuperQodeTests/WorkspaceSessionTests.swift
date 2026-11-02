@@ -198,6 +198,138 @@ final class WorkspaceSessionTests: XCTestCase {
     }
   }
 
+  @MainActor private func finishAcceptedSend(_ app: Workspace, engine: Engine) async {
+    await reply(engine, id: 2, result: app.jobs)
+    await reply(engine, id: 3, result: [:])
+    await reply(engine, id: 4, result: ["items": []])
+    await reply(engine, id: 5, result: [:])
+    await reply(engine, id: 6, result: [])
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while app.busy && ContinuousClock.now < deadline { await Task.yield() }
+    XCTAssertFalse(app.busy)
+  }
+
+  @MainActor func testAcceptedFullResetsOriginalDraftAfterThreadNavigation() async {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.harnesses = [["id": app.harness, "enforces_session_controls": true]]
+    app.model = "fixture-model"
+    app.draft = "Submitted task"
+    app.permissionMode = "full"
+    app.send(continueSession: false)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while engine.pendingRequestCount == 0 && ContinuousClock.now < deadline { await Task.yield() }
+    app.selectJob("b")
+    app.draft = "Keep the other thread"
+    app.permissionMode = "auto-edit"
+    await reply(engine, id: 1, result: ["id": "accepted"])
+    await finishAcceptedSend(app, engine: engine)
+
+    XCTAssertEqual(app.draft, "Keep the other thread")
+    XCTAssertEqual(app.permissionMode, "auto-edit")
+    let createdKey = WorkspaceRecoverySnapshot.key(project: "project", conversation: "accepted")
+    XCTAssertEqual(PermissionMemory.mode(for: createdKey, defaults: app.preferences), "full")
+    app.selectJob("")
+    XCTAssertEqual(app.permissionMode, "ask")
+    XCTAssertEqual(app.draft, "")
+  }
+
+  @MainActor func testAcceptedFullKeepsNewerTextButResetsItsPermission() async {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.harnesses = [["id": app.harness, "enforces_session_controls": true]]
+    app.model = "fixture-model"
+    app.draft = "Submitted task"
+    app.permissionMode = "full"
+    app.send(continueSession: false)
+    app.draft = "Next task typed while sending"
+    await reply(engine, id: 1, result: ["id": "accepted"])
+    await finishAcceptedSend(app, engine: engine)
+
+    XCTAssertEqual(app.composerConversationID, "")
+    XCTAssertEqual(app.draft, "Next task typed while sending")
+    XCTAssertEqual(app.permissionMode, "ask")
+    XCTAssertEqual(PermissionMemory.mode(for: app.composerKey, defaults: app.preferences), "ask")
+  }
+
+  @MainActor func testRejectedSendDoesNotResetPermissionOrDiscardDraft() async {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.harnesses = [["id": app.harness, "enforces_session_controls": true]]
+    app.model = "fixture-model"
+    app.draft = "Keep the rejected task"
+    app.permissionMode = "full"
+    app.send(continueSession: false)
+    await reply(engine, id: 1, error: "Connection unavailable")
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while app.busy && ContinuousClock.now < deadline { await Task.yield() }
+
+    XCTAssertFalse(app.busy)
+    XCTAssertEqual(app.draft, "Keep the rejected task")
+    XCTAssertEqual(app.permissionMode, "full")
+    XCTAssertEqual(PermissionMemory.mode(for: app.composerKey, defaults: app.preferences), "full")
+  }
+
+  @MainActor func testIsolationMovesExistingThreadDraftAndLeavesNewConversationAlone() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("committed".utf8).write(to: root.appendingPathComponent("tracked.txt"))
+    let app = workspace()
+    let images: [[String: Any]] = [["id": "staged-image", "name": "example.png"]]
+    app.draft = "Same goal"
+    app.contextFiles = ["tracked.txt", "uncommitted.txt"]
+    app.imageAttachments = images
+    app.saveDraft()
+    let unrelatedKey = app.composerKey
+    let unrelatedDraft = app.composerRecovery
+    app.selectJob("a")
+    app.draft = "Same goal"
+    app.contextFiles = ["tracked.txt", "uncommitted.txt"]
+    app.imageAttachments = images
+    app.permissionMode = "full"
+    app.saveDraft()
+    let sourceKey = app.composerKey
+    app.project = ["id": "isolated", "path": root.path]
+    app.restoreComposer(conversationID: "")
+    app.moveDraftToOpenedWorkspace(
+      text: "Same goal", files: ["tracked.txt", "uncommitted.txt"], images: images,
+      fromProject: "project", fromComposerKey: sourceKey)
+
+    XCTAssertEqual(app.draft, "Same goal")
+    XCTAssertEqual(app.contextFiles, ["tracked.txt"])
+    XCTAssertEqual(app.imageAttachments.first?["id"] as? String, "staged-image")
+    XCTAssertEqual(app.permissionMode, "ask")
+    XCTAssertEqual(app.recoverySnapshot.composers[sourceKey]?.text, "")
+    XCTAssertEqual(app.recoverySnapshot.composers[sourceKey]?.files, ["uncommitted.txt"])
+    XCTAssertEqual(app.recoverySnapshot.composers[sourceKey]?.images, [])
+    XCTAssertEqual(app.recoverySnapshot.composers[unrelatedKey], unrelatedDraft)
+  }
+
+  @MainActor func testIsolationPreservesLaterEditsToTheSourceThread() throws {
+    let app = workspace()
+    app.selectJob("a")
+    let sourceKey = app.composerKey
+    app.draft = "Later edit"
+    app.contextFiles = ["later.txt"]
+    app.imageAttachments = [["id": "later-image", "name": "later.png"]]
+    app.saveDraft()
+    let latest = app.composerRecovery
+    app.project = ["id": "isolated", "path": NSTemporaryDirectory()]
+    app.restoreComposer(conversationID: "")
+    app.moveDraftToOpenedWorkspace(
+      text: "Original task", files: [], images: [], fromProject: "project",
+      fromComposerKey: sourceKey)
+    XCTAssertEqual(app.recoverySnapshot.composers[sourceKey], latest)
+    XCTAssertEqual(app.draft, "Original task")
+  }
+
   @MainActor func testProjectSetupFailureLeavesPreviousDestinationAndDraftIntact() async {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)

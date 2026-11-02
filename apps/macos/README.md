@@ -26,6 +26,29 @@ No SuperQode account, App Store installation or separate Python installation is 
 
 The welcome page and **Help → Getting Started & Learning** guide you through coding, review and more advanced capabilities. The Home button returns to Welcome without closing your project or discarding drafts.
 
+## Composer controls and isolated drafts
+
+For a harness that enforces SuperQode controls, choose **Code**, **Plan** or
+**Chat** beside the composer. Plan inspects without writes, shell or network;
+Chat answers without tools. In Code, **Ask** prompts for changes, **Auto-edit**
+permits edits while keeping shell approval, and **Full** permits writes and shell
+within the harness's existing limits. Network still asks when the harness allows
+it. These are tool policies, not an OS sandbox. Unsupported agent/backend controls
+are hidden and rejected by the engine. The next new conversation returns to Ask
+after a Full task starts.
+
+Use `@` to attach an available project file, paste an image, or drop supported
+files into the composer. **Tasks → Isolate draft in a worktree** creates a branch
+from the current commit and moves your unsent prompt, images and available file
+attachments there. Uncommitted files remain in the source checkout; attachments
+missing from the worktree stay with its source draft. Review before pressing Send.
+
+**Super Agent** is a preview for drafting a harness and repository navigation
+layout. Review the proposal, save a revision with a reason, then explicitly enable
+it if a provider and model are bound. Generated harnesses use builtin tools with
+recursion off. The optional Monty check only prints a next-prompt template; it does
+not launch agents or install a plugin. Monty is not bundled in this macOS release.
+
 ## Your first harness check · no API key needed
 
 1. Open a project and choose **Evaluations** under **Improve & more**.
