@@ -206,16 +206,41 @@ struct ThinkingBar: View {
   }
 }
 
+/// Animate only the status text, without publishing changes to the workspace.
+struct WorkingStatusText: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @AppStorage("animatedInterface") private var animated = true
+  var body: some View {
+    Group {
+      if reduceMotion || !animated {
+        Text("Working…")
+      } else {
+        TimelineView(.animation(minimumInterval: 0.5)) { timeline in
+          let dots = Int(timeline.date.timeIntervalSinceReferenceDate * 2) % 3 + 1
+          Text("Working" + String(repeating: ".", count: dots))
+        }
+      }
+    }.frame(minWidth: 78, alignment: .leading)
+      .accessibilityElement(children: .ignore).accessibilityLabel("Working")
+  }
+}
+
 struct BrandActivityIndicator: View {
   var status = "running"
   var label: String {
-    status == "needs_approval" ? "Waiting for permission" : status == "cancelling" ? "Stopping agent" : status == "queued" ? "Preparing agent" : "Agent is working"
+    status == "needs_approval" ? "Waiting for permission" : status == "cancelling" ? "Stopping agent" : "Working…"
   }
   var body: some View {
     HStack(spacing: 9) {
-      if status == "needs_approval" { Image(systemName: "hand.raised").foregroundStyle(.orange) }
-      else { ThinkingBar().frame(width: 52) }
-      Text(label).font(.caption.weight(.medium)).modifier(BrandText())
+      if status == "needs_approval" {
+        Image(systemName: "hand.raised").foregroundStyle(.orange)
+        Text(label).font(.caption.weight(.medium)).modifier(BrandText())
+      } else if status == "cancelling" {
+        ThinkingBar().frame(width: 52)
+        Text(label).font(.caption.weight(.medium)).modifier(BrandText())
+      } else {
+        WorkingStatusText().font(.caption.weight(.medium)).modifier(BrandText())
+      }
     }.accessibilityElement(children: .ignore).accessibilityLabel(label)
   }
 }
@@ -227,12 +252,18 @@ struct AgentWorkingCard: View {
     HStack(spacing: 12) {
       BrandMark().frame(width: 25, height: 25)
       VStack(alignment: .leading, spacing: 8) {
-        Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
-        if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
-        Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity.isEmpty ? "Preparing the next step…" : activity)
-          .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-          .lineLimit(3).textSelection(.enabled).help(activity)
-          .accessibilityLabel("Current agent activity")
+        if status == "needs_approval" || status == "cancelling" {
+          Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+        } else {
+          WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+        }
+        if status == "cancelling" { ThinkingBar().frame(maxWidth: 320) }
+        if status == "needs_approval" || status == "cancelling" || !activity.isEmpty {
+          Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity)
+            .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+            .lineLimit(3).textSelection(.enabled).help(activity)
+            .accessibilityLabel("Current agent activity")
+        }
       }
       Spacer(minLength: 0)
     }.padding(16).frame(maxWidth: .infinity, alignment: .leading)

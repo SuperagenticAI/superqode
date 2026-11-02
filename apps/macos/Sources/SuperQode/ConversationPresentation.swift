@@ -88,8 +88,8 @@ func currentAgentActivity(_ events: [[String: Any]]) -> String {
   for (index, event) in events.enumerated() {
     let data = event["data"] as? [String: Any] ?? [:]
     let name = string(data, "event", string(event, "type"))
-    if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) { fallback = "Thinking through the next step…" }
-    if ["delta", "model_delta", "message.delta", "answer"].contains(name) { fallback = "Writing the response…" }
+    if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) { fallback = "" }
+    if ["delta", "model_delta", "message.delta", "answer"].contains(name) { fallback = "" }
     guard (starts + updates + ends).contains(name) else { continue }
     let payload = data["payload"] as? [String: Any] ?? data
     let id = string(payload, "toolCallId", string(payload, "tool_call_id", string(payload, "call_id", string(payload, "id", string(payload, "tool_name", "anonymous")))))
@@ -118,5 +118,5 @@ func currentAgentActivity(_ events: [[String: Any]]) -> String {
   }
   guard let id = order.max(by: { $0.value < $1.value })?.key, let tool = pending[id] else { return fallback }
   let action = agentToolAction(tool)
-  return action.isEmpty ? "Running tool…" : action
+  return action
 }

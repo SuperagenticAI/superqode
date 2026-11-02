@@ -31,7 +31,9 @@ stay in the source checkout, and source-only attachments remain with its draft.
 Nothing runs until you explicitly send the isolated task.
 
 The composer adds file mentions, image paste and file drops, repository
-navigation pins and a compact change summary. Super Agent is a reviewed
+navigation pins and a compact change summary. Agent progress uses a simple animated
+Working status, with real command/file details below and raw events in the
+expandable activity log. Super Agent is a reviewed
 preview: proposals bind the selected provider and model, saved revisions
 remain disabled until explicitly enabled, and generated harnesses use builtin
 tools with recursion off. Its optional Monty check prints a template; it does

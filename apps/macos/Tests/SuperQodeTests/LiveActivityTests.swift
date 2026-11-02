@@ -42,6 +42,6 @@ final class LiveActivityTests: XCTestCase {
     let command = "python -m tests " + String(repeating: "--include src/long/path ", count: 30)
     let events = [event("tool_call", ["tool_call_id": "one", "args": ["command": command]]), event("model.thinking", ["text": "Working"])]
     XCTAssertEqual(currentAgentActivity(events), command)
-    XCTAssertEqual(currentAgentActivity([event("model.thinking", [:])]), "Thinking through the next step…")
+    XCTAssertEqual(currentAgentActivity([event("model.thinking", [:])]), "")
   }
 }
