@@ -1,0 +1,17 @@
+{
+  "name": "fastmcp-slim",
+  "version": "3.4.10",
+  "source": {
+    "url": "https://raw.githubusercontent.com/PrefectHQ/fastmcp/1ea6f96c27080fa3b9ade042012f930834fd6722/LICENSE",
+    "hash": "sha256:43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+    "release_tag": "v3.4.10",
+    "commit": "1ea6f96c27080fa3b9ade042012f930834fd6722"
+  },
+  "note": "The wheel and source archive omit the license file. Preserve the upstream license from the exact release commit.",
+  "notices": [
+    "LICENSE"
+  ],
+  "notice_sha256": {
+    "LICENSE": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+  }
+}
