@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.2.1
+# SuperQode for macOS public beta 0.3.0
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -15,6 +15,25 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.0
+
+Version 0.3.0 (build 16) bundles Python engine 2.31.0 and adds Harness Studio,
+expanded thread organization and sharing, agent activity, reviewed external
+history handoffs, guided ACP setup and recovery, opt-in background execution,
+and a local-model workbench for discovery, downloads and server setup.
+
+Strands is available through ACP, CLI, TUI and native connection guidance.
+Its runtime is installed separately and preserves governed tool approvals.
+Opening the app does not install runtimes, download model weights or start
+paid model calls; setup and execution require explicit actions.
+
+Harness Studio saves immutable revisions, while unsaved drafts last only for
+the current session. Repeated checks use a restricted read/edit profile and
+do not certify a complete harness. External history imports reviewed text,
+not live sessions. Background execution requires opt-in and cannot survive
+engine or Mac loss. Local compatibility checks are not coding-quality scores.
+The Pro Settings section remains an illustrative preview.
 
 ## Version 0.2.1
 

@@ -57,6 +57,8 @@ def test_setup_installs_litellm_extra_in_separate_environment(tmp_path, monkeypa
     monkeypatch.setattr(strands_setup.subprocess, "run", run)
     assert strands_setup.setup_runtime(target, install=True) == {"strands-harness": "0.3.3"}
     assert "strands-harness[anthropic,openai,gemini,ollama,litellm]==0.3.3" in calls[0]
+    assert "litellm==1.103.1" in calls[0]
+    assert "filelock==4.2.1" in calls[0]
     assert calls[-1][2].endswith("superqode/harness/backends/strands_worker.py")
 
 

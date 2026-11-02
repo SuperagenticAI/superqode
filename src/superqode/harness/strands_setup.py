@@ -44,6 +44,10 @@ BASE_VARIABLES = {
 PACKAGES = (
     "strands-harness[anthropic,openai,gemini,ollama,litellm]==0.3.3",
     "strands-agents==1.63.0",
+    # Keep the patched client compatible with the fixed locking library.
+    # Later LiteLLM releases currently constrain filelock below its fixes.
+    "litellm==1.103.1",
+    "filelock==4.2.1",
 )
 
 

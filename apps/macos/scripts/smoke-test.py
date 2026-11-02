@@ -143,11 +143,23 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
     }
     # Exercise actual boot without --project, with an existing recent and a
     # saved editor destination. No clicks or provider requests are allowed.
-    from superqode.desktop_service.service import DesktopService
-
-    fixture = DesktopService(root / "state")
-    previous = fixture.open_project(str(project))
-    fixture.close()
+    # Seed with the packaged interpreter and engine, not the runner's Python.
+    runtime = BINARY.parent.parent / "Resources/runtime"
+    previous = json.loads(
+        subprocess.check_output(
+            [
+                str(runtime / "python/bin/python3"),
+                "-c",
+                "import json,sys; from superqode.desktop_service.service import DesktopService; "
+                "fixture=DesktopService(sys.argv[1]); "
+                "print(json.dumps(fixture.open_project(sys.argv[2]))); fixture.close()",
+                str(root / "state"),
+                str(project),
+            ],
+            env={**environment, "PYTHONPATH": str(runtime / "backend")},
+            text=True,
+        )
+    )
     recovery = root / "recovery"
     recovery.mkdir(mode=0o700)
     destination = {

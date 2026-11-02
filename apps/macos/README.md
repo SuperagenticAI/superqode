@@ -1,6 +1,6 @@
 # SuperQode for macOS
 
-Your code. Your agents. Your Mac. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
+The harness layer for coding agents. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
 Normal launch stays on Welcome until you open a folder or choose a recent project.
 Live agent activity shows the current command or file target across supported

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-11-02
+
+### Added
+
+- Native Harness Studio for importing/editing HarnessSpecs, saving immutable
+  revisions and running bounded read/edit checks before selecting a revision.
+- Thread search, pinning, archives, reviewed text sharing, worktree forks,
+  cross-project agent activity and explicitly connected external Codex history.
+- Searchable ACP agent catalog with guided setup, diagnostics, authentication
+  and interrupted-task recovery, plus opt-in background engine execution.
+- Local-model discovery, reviewed GGUF/MLX downloads, isolated MLX setup,
+  server controls, shared Hub cache configuration and compatibility checks.
+- Strands harness support across ACP, CLI, TUI and the native app, with a
+  separately installed runtime and governed tool approval bridge.
+
+### Fixed
+
+- Keep normal launch on Welcome until the user explicitly opens a project,
+  and show command/file targets in live activity across supported runtimes.
+- Update the CLI help and harness catalog contracts for the Strands commands,
+  and seed native smoke fixtures using the packaged Python engine.
+- Refresh compatible MCP authorization and JOSE dependencies, and patch file
+  locking and tracing dependencies in the bundled Mac runtime.
+- Pin compatible, patched client and locking versions in the isolated Strands
+  setup without changing its tool approval boundary.
+
+Ships alongside macOS **0.3.0 / build 16**, Public Beta. Harness Studio checks
+use a restricted read/edit profile; external history imports reviewed text,
+not live sessions. Background execution is opt-in and cannot survive engine or
+Mac loss. Pro remains an illustrative preview, not a commercial verifier.
+
 ## [2.30.0] - 2026-10-28
 
 ### Added

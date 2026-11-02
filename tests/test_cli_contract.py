@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 326
+EXPECTED_COMMAND_COUNT = 329
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -170,11 +170,13 @@ EXPECTED_COMMAND_COUNT = 326
 # choice list widens; no Click command is added or removed.
 # Harness2 adds the refine group and inspect, resume, cancel, and apply commands
 # (321 -> 326). Both Click renderers were verified against the new help tree.
-EXPECTED_HELP_TREE_SHA256 = "8eaba94e1c425595b0a46a72810f58cb4c39fd0874dfcc488c9d666a271ef80a"
+# Strands adds its setup group and setup/doctor commands (326 -> 329),
+# plus the governed ACP harness options and registry-derived choices.
+EXPECTED_HELP_TREE_SHA256 = "74cd88d28b5d44d2cb41bd1853bc1634d86f3d3283241349a2b8dd8f010ead55"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "ecd7c007290138be9b186a8bbaebf6e89c115c2a5b2bba71335989e162f0b3e5"
+    "de9aced4f0f79d63183ef80a33984488cbbb0e482825ca57fe1b0f37b1e3d117"
 )
 
 
