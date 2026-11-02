@@ -915,7 +915,7 @@ def test_ds4_managed_start_progress_and_success_show_stop_command(monkeypatch):
     assert "Stop with: :local stop ds4" in text
 
 
-def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
+def test_missing_mlx_prompt_targets_an_isolated_environment(monkeypatch):
     import superqode.local.servers as servers
     import superqode.providers.env_introspect as env_introspect
     from superqode.local.servers import LocalReadiness
@@ -954,6 +954,14 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
         ),
     )
 
+    import superqode.local.install as local_install
+
+    monkeypatch.setattr(
+        local_install, "runtime_python", lambda engine: Path("/tmp/managed-mlx/bin/python")
+    )
+    monkeypatch.setattr(
+        local_install.shutil, "which", lambda name: "/tmp/uv" if name == "uv" else None
+    )
     app = SuperQodeApp.__new__(SuperQodeApp)
     log = FakeLog()
 
@@ -961,18 +969,28 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
     text = "\n".join(render_plain(item) for item in log.items)
 
     assert handled is True
-    assert app._awaiting_local_dep_install == "mlx"
     assert app._awaiting_local_provider is False
-    assert app._prompts.is_active("local_dependency_install")
+    assert app._prompts.is_active("local_server_setup")
+    pending = app._prompts.active.data
+    assert pending["installation"].steps == (
+        ("/tmp/uv", "venv", "--python", "3.12", "--allow-existing", "/tmp/managed-mlx"),
+        (
+            "/tmp/uv",
+            "pip",
+            "install",
+            "--python",
+            "/tmp/managed-mlx/bin/python",
+            "mlx-lm>=0.31.0,<0.32.0",
+        ),
+    )
+    assert pending["command"] in text
     assert "Setup required" in text
-    assert "MLX local models" in text
-    assert "SuperQode dev checkout" in text
-    assert "the SuperQode checkout at /tmp/superqode" in text
-    assert "Exact command" in text
-    assert "uv pip install --python /tmp/superqode/.venv/bin/python" in text
-    assert "Install MLX now" in text
-    assert "Copy install command" in text
-    assert "I installed it — check again" in text
+    assert "Install MLX" in text
+    assert "own environment" in text
+    assert "app's Python packages are not modified" in text
+    assert "/tmp/superqode/.venv/bin/python" not in text
+    assert "Copy setup command" in text
+    assert "I completed setup" in text
     assert "click a row" in text
 
 
@@ -6934,6 +6952,7 @@ def test_connect_picker_can_open_harness_catalog(menu_version, monkeypatch):
             "uhp",
             "deepseek-harness",
             "deepagents",
+            "strands",
         ]
         return
 
@@ -6970,6 +6989,7 @@ def test_other_harnesses_profile_dispatch_opens_focused_optional_picker(menu_ver
             "uhp",
             "deepseek-harness",
             "deepagents",
+            "strands",
         ]
         assert calls[0][1]["subtitle"] == "Optional non-ACP harness integrations"
         return
