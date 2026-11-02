@@ -239,6 +239,7 @@ struct BrandActivityIndicator: View {
         ThinkingBar().frame(width: 52)
         Text(label).font(.caption.weight(.medium)).modifier(BrandText())
       } else {
+        ThinkingBar().frame(width: 52)
         WorkingStatusText().font(.caption.weight(.medium)).modifier(BrandText())
       }
     }.accessibilityElement(children: .ignore).accessibilityLabel(label)
@@ -257,7 +258,7 @@ struct AgentWorkingCard: View {
         } else {
           WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(BrandText())
         }
-        if status == "cancelling" { ThinkingBar().frame(maxWidth: 320) }
+        if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
         if status == "needs_approval" || status == "cancelling" || !activity.isEmpty {
           Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity)
             .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
