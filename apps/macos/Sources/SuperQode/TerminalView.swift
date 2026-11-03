@@ -110,11 +110,14 @@ struct ProjectTerminalHost: NSViewRepresentable {
 struct ProjectTerminalView: View {
   @EnvironmentObject var app: Workspace
   @ObservedObject var terminals: ProjectTerminals
+  var compact = false
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
+      if !compact {
       PageTitle(
         eyebrow: "Stay in the flow", title: "Project terminal",
         subtitle: "An interactive shell on your Mac, alongside your Agent Space.")
+      }
       HStack {
         Text(string(app.project, "path")).font(.caption.monospaced()).textSelection(.enabled)
         Spacer()
@@ -140,6 +143,6 @@ struct ProjectTerminalView: View {
             "Start a shell to run project commands, development servers or interactive tools. Shells keep running when you switch pages."
         )
       }
-    }.padding(26)
+    }.padding(compact ? 10 : 26)
   }
 }

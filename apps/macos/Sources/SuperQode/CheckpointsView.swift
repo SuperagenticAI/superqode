@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CheckpointsView: View {
+  var compact = false
   @EnvironmentObject var app: Workspace
   @State private var items: [[String: Any]] = []
   @State private var diff = ""
@@ -10,10 +11,12 @@ struct CheckpointsView: View {
   @State private var loadGeneration = 0
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
+      if !compact {
       PageTitle(
         eyebrow: "A way back", title: "Task checkpoints",
         subtitle:
           "Restore recorded task changes with revision checks. Your Git index stays unchanged.")
+      }
       HStack {
         Button("Refresh") { load() }
         Button("Undo last task") { restore("checkpoints.undo") }.disabled(!canUndo || app.anyActive)
@@ -63,7 +66,7 @@ struct CheckpointsView: View {
           text: diff.isEmpty ? "Choose a changed file to inspect its checkpoint diff." : diff
         ).padding(.leading, 14)
       }
-    }.padding(26).onAppear { load() }.onDisappear { loadGeneration += 1 }
+    }.padding(compact ? 10 : 26).onAppear { load() }.onDisappear { loadGeneration += 1 }
       .onChange(of: app.checkpointPath) { _, _ in loadSelectedDiff() }
   }
   private func load() {

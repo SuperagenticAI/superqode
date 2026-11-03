@@ -21,7 +21,7 @@ struct ThreadTabBar: View {
                       ThreadStatusIndicator(status: string(row, "status"))
                       Text(string(row, "conversation_title", string(row, "title", "Conversation")))
                         .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        .lineLimit(1).frame(maxWidth: 145)
+                        .lineLimit(1).frame(maxWidth: 200)
                     }.padding(.leading, 10).padding(.vertical, 9).contentShape(Rectangle())
                   }.buttonStyle(.plain)
                     .help(string(row, "conversation_title", string(row, "title")) + " · " + string(row, "status"))

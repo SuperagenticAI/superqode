@@ -19,6 +19,9 @@ struct WorkspaceNavigationGroup: Identifiable {
     .init(id: "tools", title: "Tools", symbol: "wrench.and.screwdriver", sections: ["Tools"]),
   ]
 
+  static func isWorkbench(_ section: String) -> Bool {
+    ["Workspace", "Review", "Files", "Terminal", "Checkpoints"].contains(section)
+  }
   static func containing(_ section: String) -> Self { all.first { $0.sections.contains(section) } ?? all[0] }
   static func symbol(for section: String) -> String {
     Sections.icons[Sections.names.firstIndex(of: section) ?? 0]
@@ -31,32 +34,33 @@ struct WorkspaceNavigationGroup: Identifiable {
 struct WorkspaceNavigationRail: View {
   @EnvironmentObject var app: Workspace
   var body: some View {
-    VStack(spacing: 8) {
-      Button { app.showWelcome = true } label: { BrandMark().frame(width: 30, height: 30).padding(.vertical, 16) }
+    VStack(spacing: 4) {
+      Button { app.showWelcome = true } label: { BrandMark().frame(width: 30, height: 30).padding(.vertical, 10) }
         .buttonStyle(.plain).accessibilityLabel("Welcome to SuperQode")
-      ForEach(WorkspaceNavigationGroup.all) { group in
-        let selected = group.sections.contains(app.section)
-        Button {
-          app.section = group.sections.first(where: {
-            WorkspaceNavigationGroup.available($0, hasProject: !app.projectID.isEmpty)
-          }) ?? group.sections[0]
-        } label: {
-          VStack(spacing: 6) {
-            Image(systemName: group.symbol).font(.system(size: 18, weight: .medium))
-            Text(group.title).font(.system(size: 9, weight: .medium)).lineLimit(1)
-          }.frame(width: 64, height: 54)
+      ForEach(["Workspace", "Harness Hub", "Harness Studio", "Super Agent", "Evaluations", "Optimization", "Models", "Tools"], id: \.self) { section in
+        let selected = section == "Workspace"
+          ? WorkspaceNavigationGroup.isWorkbench(app.section) || ["Threads", "Agent activity"].contains(app.section)
+          : app.section == section
+        Button { app.section = section } label: {
+          VStack(spacing: 5) {
+            Image(systemName: section == "Workspace" ? "bubble.left.and.bubble.right" : WorkspaceNavigationGroup.symbol(for: section))
+              .font(.system(size: 17, weight: .medium))
+            Text(section == "Workspace" ? "Threads" : Sections.title(for: section))
+              .font(.system(size: 11, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+          }.frame(width: 104, height: 52)
             .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.65))
-            .background(selected ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
-        }.buttonStyle(.plain).help(group.sections.map(Sections.title(for:)).joined(separator: " · "))
-          .accessibilityLabel(group.title).accessibilityAddTraits(selected ? .isSelected : [])
-          .disabled(!group.sections.contains { WorkspaceNavigationGroup.available($0, hasProject: !app.projectID.isEmpty) })
+            .background(selected ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        }.buttonStyle(.plain).help(Sections.title(for: section))
+          .accessibilityLabel(section == "Workspace" ? "Threads workspace" : Sections.title(for: section))
+          .accessibilityAddTraits(selected ? .isSelected : [])
+          .disabled(!WorkspaceNavigationGroup.available(section, hasProject: !app.projectID.isEmpty))
       }
       Spacer(minLength: 12)
       Button { app.showFeatureBrowser.toggle() } label: {
         VStack(spacing: 6) {
           Image(systemName: "square.grid.2x2").font(.system(size: 18))
           Text("Features").font(.system(size: 9, weight: .medium))
-        }.frame(width: 64, height: 50)
+        }.frame(width: 104, height: 50)
       }.buttonStyle(.plain).help("Explore all SuperQode features").accessibilityLabel("All features")
         .popover(isPresented: $app.showFeatureBrowser, arrowEdge: .trailing) {
           FeatureBrowserView().environmentObject(app)
@@ -65,39 +69,10 @@ struct WorkspaceNavigationRail: View {
         VStack(spacing: 6) {
           Image(systemName: "gearshape").font(.system(size: 18))
           Text("Settings").font(.system(size: 9, weight: .medium))
-        }.frame(width: 64, height: 50)
+        }.frame(width: 104, height: 50)
       }.buttonStyle(.plain).help("Settings")
-    }.padding(.horizontal, 4).padding(.bottom, 12).frame(width: 72)
+    }.padding(.horizontal, 4).padding(.bottom, 12).frame(width: 112)
       .background(Color.qPanel).disabled(app.openingProject || app.restoringNavigation)
-  }
-}
-
-struct WorkspaceFeatureBar: View {
-  @EnvironmentObject var app: Workspace
-  private var group: WorkspaceNavigationGroup { .containing(app.section) }
-  var body: some View {
-    HStack(spacing: 6) {
-      ForEach(group.sections, id: \.self) { section in
-        Button { app.section = section } label: {
-          Label(Sections.title(for: section), systemImage: WorkspaceNavigationGroup.symbol(for: section))
-            .font(.system(size: 11, weight: app.section == section ? .semibold : .regular))
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .foregroundStyle(app.section == section ? Color.primary : .secondary)
-            .background(app.section == section ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
-        }.buttonStyle(.plain).disabled(!WorkspaceNavigationGroup.available(section, hasProject: !app.projectID.isEmpty))
-          .accessibilityAddTraits(app.section == section ? .isSelected : [])
-      }
-      Spacer(minLength: 0)
-      if !app.repositoryPanels.isEmpty {
-        Menu {
-          ForEach(app.repositoryPanels, id: \.self) { section in
-            Button { app.section = section } label: { Label(Sections.title(for: section), systemImage: WorkspaceNavigationGroup.symbol(for: section)) }
-          }
-        } label: { Label("Pinned", systemImage: "pin") }.menuStyle(.borderlessButton).fixedSize()
-      }
-      Button { app.showFeatureBrowser = true } label: { Image(systemName: "square.grid.2x2").padding(8) }
-        .buttonStyle(.plain).help("All features").accessibilityLabel("Explore all features")
-    }.padding(.horizontal, 14).padding(.bottom, 6)
   }
 }
 

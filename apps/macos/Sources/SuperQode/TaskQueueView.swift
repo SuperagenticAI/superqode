@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TaskQueueView: View {
+  var compact = false
   @EnvironmentObject var app: Workspace
   @DialogDismiss var dismiss
   private var items: [[String: Any]] { app.taskQueue["items"] as? [[String: Any]] ?? [] }
@@ -9,7 +10,7 @@ struct TaskQueueView: View {
       HStack {
         Text("Project task queue").font(.title2.weight(.semibold))
         Spacer()
-        nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") }
+        if !compact { nativeButton("dialog.done", action: { dismiss() }, title: "Done") { Text("Done") } }
       }
       Text(
         "Tasks keep their selected connection and run independently in order. Attached files are read when each task starts. A failed or stopped run pauses the queue; restarting the app never resumes it automatically."
@@ -92,6 +93,6 @@ struct TaskQueueView: View {
           }
         }
       }.defaultScrollAnchor(.top)
-    }.padding(24).frame(width: 740, height: 600).background { BrandBackdrop() }
+    }.padding(compact ? 10 : 24).frame(width: compact ? nil : 740, height: compact ? nil : 600).background { BrandBackdrop() }
   }
 }

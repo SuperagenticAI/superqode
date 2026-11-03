@@ -667,6 +667,7 @@ struct EvaluationResult: View {
   }
 }
 struct FilesView: View {
+  var compact = false
   @EnvironmentObject var app: Workspace
   @State private var search = ""
   @State private var visibleFiles: [String] = []
@@ -690,11 +691,13 @@ struct FilesView: View {
   private var draftKey: String { loadedProject + "\n" + loadedPath }
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
+      if !compact {
       PageTitle(
         eyebrow: "Stay close to the code", title: "Project files",
         subtitle:
           "Read and edit project source files here. Save with a revision check, then review the diff."
       )
+      }
       if !app.recoveredFilePaths.isEmpty {
         Menu("Recovered drafts (\(app.recoveredFilePaths.count))") {
           ForEach(app.recoveredFilePaths, id: \.self) { path in
@@ -736,7 +739,7 @@ struct FilesView: View {
           }
         }.padding(.leading, 12).frame(minWidth: 420)
       }
-    }.padding(30).onAppear {
+    }.padding(compact ? 10 : 30).onAppear {
       loadedProject = app.projectID
       filterFiles()
       app.loadFiles()

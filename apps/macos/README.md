@@ -163,10 +163,27 @@ Navigation stays neutral; harness identities retain their icons, while approvals
 and errors keep distinct status colors. These Mac accent preferences are saved
 locally and do not import or change the TUI's full theme catalog or custom files.
 
-The labelled navigation rail keeps **Build**, **Harnesses**, **Quality**, **Local AI**,
-**Threads** and **Tools** visible. A feature bar shows the related destinations for
-that area. **Features** opens the complete feature browser; repository shortcuts
-remain available from **Pinned** when a repository layout is saved.
+The navigation rail names **Harness Hub**, **Harness Studio**, **Super Agent**,
+**Evaluations**, **Optimization**, **Local AI** and **Tools** directly. **Threads**
+returns to the conversation workbench. **Features** opens the complete feature
+browser. Repository shortcuts remain in the workbench's action menu.
+
+The open thread gives its transcript and composer the full workbench width by
+default. Agent activity starts expanded above the composer, with event details
+available to inspect. The read-only inspector opens only on request using
+**Changes** or **Review**, never automatically when a task completes. On smaller
+windows, **Hide changes** returns to the conversation. The inspector defaults to **This turn**,
+which reads recorded checkpoint changes. **Project changes** explicitly shows the
+current project's uncommitted edits; unrelated edits are not attributed to the
+selected agent. Empty or unavailable turn evidence never silently falls back to
+project changes. **Open full review** keeps line feedback, revision checks,
+staging and branch comparison available.
+
+**Files**, **Terminal**, **Tasks** and **Checkpoints** open project-scoped panels
+without changing the selected thread. Expand a panel to focus on editing, then
+restore the conversation. Shells and queued work still require explicit start.
+The composer's route chip controls the next message; its menu contains connection
+management. An offline engine disables Send and keeps the unsent draft.
 
 The sidebar is dedicated to project threads. Search by title or harness, or filter
 **All**, **Working**, **Needs you** and **Pinned**. Threads show recorded harness

@@ -57,6 +57,7 @@ private struct DialogAuditHost: View {
   @Published var recoveryIssue = ""
   @Published var loadingConversationDraft = false
   @Published var selectedFile = "" { didSet { persistDestination() } }
+  @Published var workbenchDrawer = ""
   @Published var inspectorVisible = false { didSet { persistDestination() } }
   @Published var checkpointID = "" { didSet { persistDestination() } }
   @Published var checkpointPath = "" { didSet { persistDestination() } }
@@ -1101,7 +1102,15 @@ private struct DialogAuditHost: View {
       self.savePreferences()
     }
   }
+  var canSubmitDraft: Bool {
+    connected && !loadingConversationDraft && !connectionDisconnected && !busy && !active
+      && !checkingConnection && !projectID.isEmpty && (isManaged || !model.isEmpty)
+      && detail["archived"] as? Bool != true
+      && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
   func send(continueSession: Bool) {
+    guard connected else { notice = "The local engine is offline. Your draft is kept; reconnect before sending."; return }
+
     guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
     guard !loadingConversationDraft, !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
       (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

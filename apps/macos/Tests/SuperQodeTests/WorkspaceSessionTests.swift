@@ -313,7 +313,9 @@ final class WorkspaceSessionTests: XCTestCase {
     app.model = "fixture-model"
     app.draft = "Submitted task"
     app.permissionMode = "full"
+    app.connected = true
     app.send(continueSession: false)
+    app.connected = false
     let deadline = ContinuousClock.now.advanced(by: .seconds(2))
     while engine.pendingRequestCount == 0 && ContinuousClock.now < deadline { await Task.yield() }
     app.selectJob("b")
@@ -340,7 +342,9 @@ final class WorkspaceSessionTests: XCTestCase {
     app.model = "fixture-model"
     app.draft = "Submitted task"
     app.permissionMode = "full"
+    app.connected = true
     app.send(continueSession: false)
+    app.connected = false
     app.draft = "Next task typed while sending"
     await reply(engine, id: 1, result: ["id": "accepted"])
     await finishAcceptedSend(app, engine: engine)
@@ -360,7 +364,9 @@ final class WorkspaceSessionTests: XCTestCase {
     app.model = "fixture-model"
     app.draft = "Keep the rejected task"
     app.permissionMode = "full"
+    app.connected = true
     app.send(continueSession: false)
+    app.connected = false
     await reply(engine, id: 1, error: "Connection unavailable")
     let deadline = ContinuousClock.now.advanced(by: .seconds(2))
     while app.busy && ContinuousClock.now < deadline { await Task.yield() }

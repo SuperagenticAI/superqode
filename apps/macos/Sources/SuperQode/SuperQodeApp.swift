@@ -6,6 +6,7 @@ import UserNotifications
 @MainActor final class ApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
   weak var workspace: Workspace?
   var bootReady = false
+  var openWorkspace: (() -> Void)?
   private var notificationDestination: (String, String)?
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
@@ -19,6 +20,20 @@ import UserNotifications
     }
     NSApp.appearance = NSAppearance(named: .darkAqua)
     NSApp.activate(ignoringOtherApps: true)
+    Task { @MainActor in
+      // A launch targeting a project can arrive without a restored window.
+      // Open this app's single workspace scene; never start work here.
+      for _ in 0..<20 {
+        if NSApp.windows.contains(where: { $0.isVisible && $0.title == "SuperQode" }) { return }
+        if let openWorkspace = self.openWorkspace { openWorkspace(); return }
+        try? await Task.sleep(for: .milliseconds(50))
+      }
+    }
+
+  }
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    if !flag { openWorkspace?() }
+    return true
   }
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     if let workspace,
@@ -83,6 +98,7 @@ import UserNotifications
     .defaultSize(width: 1440, height: 900)
     .windowStyle(.hiddenTitleBar)
     .commands {
+      WorkspaceWindowCommands(delegate: delegate)
       CommandGroup(replacing: .newItem) {
         WorkspaceCommandMenuItem(app: workspace, action: .openProject)
         WorkspaceCommandMenuItem(app: workspace, action: .newTask)
@@ -269,8 +285,6 @@ struct RootView: View {
           } label: {
             Image(systemName: "questionmark.circle")
           }.help("Getting started & learning (⌘?)")
-          Button("Connect…") { app.openConnections() }.disabled(
-            !app.connected || app.project.isEmpty)
           Pill(title: "ON YOUR MAC", color: .green)
           Button {
             if !app.project.isEmpty {
@@ -282,7 +296,6 @@ struct RootView: View {
         }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
           .horizontal, 12
         ).padding(.vertical, 6)
-        WorkspaceFeatureBar()
         ThreadTabBar()
         ForkWorkspaceBar()
         if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
@@ -300,13 +313,9 @@ struct RootView: View {
               case "Evaluations": EvaluationView()
               case "Optimization": OptimizationView()
               case "Tools": ToolsView()
-              case "Terminal": ProjectTerminalView(terminals: app.terminals)
-              case "Checkpoints": CheckpointsView().id(app.projectID)
-              case "Review": ReviewWorkspaceView(commentStore: app.reviewCommentStore).id(app.projectID + "\n" + app.selectedJob)
-              case "Files": FilesView().id(app.projectID)
               default: CodingView()
               }
-            }.id(app.section).transition(.opacity).disabled(app.openingProject || app.restoringNavigation).frame(
+            }.id(WorkspaceNavigationGroup.isWorkbench(app.section) ? "workbench" : app.section).transition(.opacity).disabled(app.openingProject || app.restoringNavigation).frame(
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
             .background(Color.qPanel)
@@ -391,62 +400,163 @@ struct CodingView: View {
   @State private var shareProject = ""
   @State private var showShare = false
   @State private var forkSource: [String: Any]?
+  @StateObject private var review = WorkbenchReview()
+  @State private var scope: ReviewScope = .turn
+  @State private var showFullReview = false
+  @State private var drawerExpanded = false
+  @State private var inspectorTab = "Changes"
+  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) }
   var body: some View {
-    HStack(spacing: 0) {
+    GeometryReader { geometry in
       VStack(spacing: 0) {
-        HStack(spacing: 12) {
-          if !app.selectedJob.isEmpty { HarnessIconStack(row: app.detail, size: 26) }
-          Text(app.selectedJob.isEmpty ? "New conversation" : string(app.detail, "conversation_title", string(app.detail, "title", "Conversation")))
-            .font(.system(size: 16, weight: .semibold)).lineLimit(1)
-          Spacer()
-          if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
-          if !app.selectedJob.isEmpty {
-            Button("Fork…", systemImage: "arrow.triangle.branch") {
-              forkSource = ["project": app.projectID, "id": app.selectedJob]
-            }.disabled(app.active || app.busy || string(app.detail, "kind") != "task")
-            Button("Share to thread…", systemImage: "arrowshape.turn.up.right") {
-              shareSource = app.selectedJob
-              shareProject = app.projectID
-              showShare = true
-            }.disabled(app.active || app.busy || app.loadingConversationDraft)
-            Button("New conversation", systemImage: "square.and.pencil") { app.selectJob("") }
-              .disabled(app.active || app.busy)
-            Button { app.inspectorVisible.toggle() } label: { Image(systemName: "sidebar.right") }
-              .help("Show changes and run details").accessibilityLabel("Show changes and run details")
-          }
-        }.padding(.horizontal, 24).padding(.vertical, 14)
+        workbenchToolbar
         Divider()
-        ChangeStrip()
         if app.detail["archived"] as? Bool == true {
-          HStack {
-            Label("Archived thread", systemImage: "archivebox")
-            Spacer()
-            Button("Restore thread") { app.restoreSelectedThread() }
-          }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10)
+          HStack { Label("Archived thread", systemImage: "archivebox"); Spacer(); Button("Restore thread") { app.restoreSelectedThread() } }
+            .font(.caption).padding(10)
         }
-        if app.selectedJob.isEmpty {
-          GettingStartedView(draftStore: app.draftStore).frame(minHeight: 220, maxHeight: .infinity)
-        } else {
-          EventStream().id(app.projectID + "\n" + app.selectedJob).frame(minHeight: 220, maxHeight: .infinity)
+        if app.connected && string(app.detail, "status") == "needs_approval",
+          let approval = app.events.last(where: { string($0, "type") == "approval" }) {
+          EventRow(event: approval, embeddedResponse: true).padding(10)
         }
+        if !drawerExpanded || app.workbenchDrawer.isEmpty {
+        HStack(spacing: 0) {
+          if !app.inspectorVisible || geometry.size.width >= 900 {
+            conversation.frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+          }
+          if app.inspectorVisible {
+            Divider()
+            inspector.frame(width: geometry.size.width >= 900 ? 350 : nil)
+          }
+        }.frame(maxHeight: .infinity)
         CodingComposer(draftStore: app.draftStore)
-      }.frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
-      if !app.selectedJob.isEmpty && app.inspectorVisible {
-        Divider()
-        InspectorView().frame(width: 300)
+        }
+        if !app.workbenchDrawer.isEmpty { drawer(height: geometry.size.height) }
       }
-    }.centeredDialog(isPresented: $showShare, title: "Share thread context") {
+      .task(id: reviewKey) {
+        guard app.connected else { review.reset(); return }
+        guard app.inspectorVisible else { return }
+        await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
+      }
+    }
+    .centeredDialog(isPresented: $showShare, title: "Share thread context") {
       ThreadShareView(project: shareProject, source: shareSource).environmentObject(app)
     }
     .centeredDialog(isPresented: Binding(get: { forkSource != nil }, set: { if !$0 { forkSource = nil } }), title: "Fork thread") {
       if let source = forkSource { ThreadForkView(project: string(source, "project"), source: string(source, "id")) }
     }
+    .sheet(isPresented: $showFullReview) {
+      VStack(spacing: 0) {
+        HStack { Text("Full review").font(.headline); Spacer(); Button("Done") { showFullReview = false } }.padding(14)
+        ReviewWorkspaceView(commentStore: app.reviewCommentStore).id(app.projectID + "\n" + app.selectedJob)
+      }.frame(width: 1000, height: 640).environmentObject(app)
+    }
+    .onAppear { focusSection() }
+    .onChange(of: app.section) { _, section in
+      focusSection()
+      if section == "Workspace" {
+        showFullReview = false
+        if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
+      }
+    }
     .onChange(of: app.selectedJob) { _, _ in
-      guard !app.projectID.isEmpty else { return }
-      app.perform { await app.refreshGit() }
+      scope = app.selectedJob.isEmpty ? .uncommitted : .turn
+      if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
+      if !app.projectID.isEmpty { app.perform { await app.refreshGit() } }
+    }
+    .onChange(of: app.projectID) { _, _ in app.workbenchDrawer = "" }
+    .onChange(of: string(app.detail, "kind")) { _, kind in
+      if !kind.isEmpty && kind != "task" { scope = .uncommitted }
+    }
+  }
+  private var inspector: some View {
+    VStack(spacing: 0) {
+      Picker("Thread inspector", selection: $inspectorTab) {
+        Text("Changes").tag("Changes")
+        Text("Checks").tag("Checks")
+        Text("Evidence").tag("Evidence")
+      }.pickerStyle(.segmented).labelsHidden().padding(10)
+      Divider()
+      if inspectorTab == "Changes" {
+        WorkbenchChangesView(review: review, scope: $scope, fullReview: openFullReview, refresh: refreshReview)
+      } else { InspectorView(fixedTab: inspectorTab) }
+    }
+  }
+  private var conversation: some View {
+    Group {
+      if app.selectedJob.isEmpty { GettingStartedView(draftStore: app.draftStore) }
+      else { EventStream().id(app.projectID + "\n" + app.selectedJob) }
+    }
+  }
+  private var workbenchToolbar: some View {
+    HStack(spacing: 12) {
+      if !app.selectedJob.isEmpty {
+        if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
+        else {
+          ThreadStatusIndicator(status: string(app.detail, "status"))
+          Text(ThreadStatusIndicator.title(string(app.detail, "status"))).font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      Spacer(minLength: 0)
+      Button(app.inspectorVisible ? "Hide changes" : "Changes", systemImage: app.inspectorVisible ? "bubble.left" : "sidebar.right") {
+        if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
+        app.inspectorVisible.toggle()
+      }.help("Show the conversation and changes side by side when space allows")
+      ForEach(["Files", "Terminal", "Tasks", "Checkpoints"], id: \.self) { tool in
+        Button(tool) { app.workbenchDrawer = app.workbenchDrawer == tool ? "" : tool; drawerExpanded = tool == "Files" && !app.workbenchDrawer.isEmpty }
+          .fontWeight(app.workbenchDrawer == tool ? .semibold : .regular)
+      }
+      Menu {
+        if !app.repositoryPanels.isEmpty {
+          ForEach(app.repositoryPanels, id: \.self) { section in Button(Sections.title(for: section)) { app.section = section } }
+          Divider()
+        }
+        Button("Fork thread…") { forkSource = ["project": app.projectID, "id": app.selectedJob] }
+          .disabled(app.active || app.busy || string(app.detail, "kind") != "task")
+        Button("Share to thread…") { shareSource = app.selectedJob; shareProject = app.projectID; showShare = true }
+          .disabled(app.selectedJob.isEmpty || app.active || app.busy || app.loadingConversationDraft)
+        Button("Export evidence…", action: app.exportEvidence).disabled(app.selectedJob.isEmpty)
+        Button("Full review…", action: openFullReview)
+      } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
+    }.font(.system(size: 11)).buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 10)
+  }
+  private func focusSection() {
+    if app.selectedJob.isEmpty { scope = .uncommitted }
+    switch app.section {
+    case "Review": app.inspectorVisible = true; inspectorTab = "Changes"; app.workbenchDrawer = ""; drawerExpanded = false
+    case "Files", "Terminal", "Checkpoints": app.workbenchDrawer = app.section; drawerExpanded = app.section == "Files"
+    default: break
+    }
+  }
+  private func openFullReview() {
+    app.reviewSelection.scope = scope; app.section = "Review"; showFullReview = true
+  }
+  private func refreshReview() {
+    guard app.connected else { return }
+    Task { await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope) }
+  }
+  private func drawer(height: CGFloat) -> some View {
+    VStack(spacing: 0) {
+      Divider()
+      HStack {
+        Text("PROJECT · " + app.workbenchDrawer.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+        Spacer()
+        Button { drawerExpanded.toggle() } label: { Image(systemName: drawerExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") }
+          .buttonStyle(.plain).accessibilityLabel(drawerExpanded ? "Restore conversation" : "Expand project panel")
+        Button { app.workbenchDrawer = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close project panel")
+      }.padding(.horizontal, 14).padding(.vertical, 8)
+      Group {
+        switch app.workbenchDrawer {
+        case "Files": FilesView(compact: true).id(app.projectID)
+        case "Terminal": ProjectTerminalView(terminals: app.terminals, compact: true)
+        case "Tasks": TaskQueueView(compact: true)
+        default: CheckpointsView(compact: true).id(app.projectID)
+        }
+      }.frame(height: drawerExpanded ? max(200, height - 70) : max(150, min(220, height * 0.30)))
     }
   }
 }
+
 struct ChangeStrip: View {
   @EnvironmentObject var app: Workspace
   var body: some View {
@@ -482,9 +592,10 @@ struct CodingComposer: View {
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == app.harness } ?? [:]
   }
-  private var connectionName: String {
-    app.connectionDisconnected ? "No connection" : app.isManaged ? string(route, "name", "Coding agent")
-      : (app.model.isEmpty ? "Choose a connection" : app.model)
+  private var routeDisplayName: String {
+    if app.connectionDisconnected { return "Connect an agent" }
+    let name = string(route, "name", app.harness)
+    return app.isManaged ? name : name + " · " + (app.model.isEmpty ? "Choose model" : app.model)
   }
   private var continuesConversation: Bool {
     app.canContinueConversation
@@ -516,33 +627,24 @@ struct CodingComposer: View {
   }
   private var composer: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 10) {
-        Image(systemName: app.isManaged ? "terminal" : "cpu").foregroundStyle(Brand.gradient)
-        Text(connectionName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-        Text(app.connectionDisconnected ? "Not connected" : app.isACP ? "ACP" : app.isManaged ? "Subscription / agent" : app.provider)
-          .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        if !app.isManaged && !app.connectionDisconnected {
-          Text(string(route, "name", app.harness)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        }
-        Spacer()
-        Button(app.connectionDisconnected ? "Connect…" : "Change connection…") { app.openConnections() }
-          .disabled(app.active || app.busy)
-          .help("Switch the agent or harness in this thread. Compatible sessions resume; other connections receive bounded conversation context.")
-        if app.isManaged {
-          Button { app.showConnectionInspector = true } label: { Image(systemName: "checkmark.shield") }
-            .help("Connection details and diagnostics").accessibilityLabel("Connection details and diagnostics")
-        }
-        if !app.connectionDisconnected {
-          nativeButton("connection.disconnect", action: app.disconnectConnection, title: "Disconnect coding agent") {
-            Label("Disconnect", systemImage: "xmark.circle").font(.caption)
-          }.disabled(app.anyActive || app.busy).help("Disconnect from this Agent Space. Saved sign-ins remain on your Mac.")
-        }
-        Button { showOptions.toggle() } label: { Image(systemName: "slider.horizontal.3") }
-          .disabled(app.connectionDisconnected)
-          .accessibilityLabel("Connection and model options").help("Connection and model options")
-          .popover(isPresented: $showOptions, arrowEdge: .top) {
-            connectionOptions
+      HStack(spacing: 8) {
+        Menu {
+          Button(app.connectionDisconnected ? "Connect an agent…" : "Change agent or model…") { app.openConnections() }
+            .disabled(!app.connected || app.active || app.busy)
+          Button("Connection and model options…") { showOptions = true }.disabled(app.connectionDisconnected)
+          if app.isManaged { Button("Connection diagnostics…") { app.showConnectionInspector = true } }
+          if !app.connectionDisconnected {
+            Divider()
+            Button("Disconnect", action: app.disconnectConnection).disabled(app.anyActive || app.busy)
           }
+        } label: {
+          Label(routeDisplayName, systemImage: app.isManaged ? "terminal" : "cpu")
+            .font(.system(size: 11)).lineLimit(1)
+        }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
+          .help("Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
+          .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
+        Spacer(minLength: 0)
+        if !app.connected { Label("Engine offline · draft kept", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.secondary) }
       }
       if app.isManaged || app.routeStatus["ready"] as? Bool == false {
         HStack {
@@ -595,7 +697,7 @@ struct CodingComposer: View {
         Text("Full runs writes and shell without a prompt. Network still asks. This app is not an OS sandbox.")
           .font(.caption).foregroundStyle(.orange)
       }
-      if !app.isManaged && !app.enforcesSessionControls && app.interactionMode != "chat" {
+      if app.connected && !app.connectionDisconnected && !route.isEmpty && !app.isManaged && !app.enforcesSessionControls && app.interactionMode != "chat" {
         Text("This harness runs its own tools and permissions. SuperQode Ask and Plan do not apply.")
           .font(.caption).foregroundStyle(.secondary)
       }
@@ -650,19 +752,13 @@ struct CodingComposer: View {
         if app.active {
           Button("Stop", systemImage: "stop.fill", action: app.cancel)
             .help("Stop the current run; wait for the agent to acknowledge cancellation")
-        } else {
-          Text(app.connectionDisconnected ? "Connect an agent to start coding" : continuesConversation ? "Continuing conversation" : "Enter to send · Shift+Enter for a new line")
-            .font(.caption).foregroundStyle(.secondary)
         }
         Button {
           app.send(continueSession: continuesConversation)
         } label: {
           Label(app.busy ? "Starting…" : "Send", systemImage: "arrow.up")
         }.buttonStyle(BrandButtonStyle())
-          .disabled(app.busy || app.active || app.checkingConnection || app.projectID.isEmpty
-            || app.detail["archived"] as? Bool == true
-            || app.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || app.connectionDisconnected || (!app.isManaged && app.model.isEmpty))
+          .disabled(!app.canSubmitDraft)
           .keyboardShortcut(.return, modifiers: .command)
       }
     }
@@ -977,9 +1073,15 @@ struct EventStream: View {
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
                 .id("response:" + app.selectedJob)
             }
+            if messages.isEmpty && !app.hasMoreRunEvents && !app.eventStreamOpen && !app.active {
+              VStack(alignment: .leading, spacing: 8) {
+                Text("No response text was recorded for this turn.").font(.callout)
+                Text("Inspect agent activity or export the recorded evidence. This is not a verification result.").font(.caption).foregroundStyle(.secondary)
+              }.padding(16)
+            }
             Color.clear.frame(height: 1).id("bottom")
           }.scrollTargetLayout().padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        }.scrollPosition(id: $visibleAnchor, anchor: .top)
+        }.scrollPosition(id: $visibleAnchor, anchor: follow ? .bottom : .top)
         .background(TranscriptScrollObserver { readingEarlier in
           pendingAnchor = nil
           positionNotice = ""
@@ -1013,7 +1115,7 @@ struct EventStream: View {
         VStack(spacing: 6) {
           if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
           if !activity.isEmpty {
-            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
+            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval", initiallyExpanded: true)
               .id(app.selectedJob)
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)
@@ -1135,18 +1237,21 @@ struct EventRow: View {
   }
 }
 struct InspectorView: View {
+  var fixedTab: String? = nil
   @EnvironmentObject var app: Workspace
   @State private var tab = "Changes"
   @State private var command = ""
   @State private var commit = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
+      if fixedTab == nil {
       Picker("Inspector", selection: $tab) {
         Text("Changes").tag("Changes")
         Text("Checks").tag("Checks")
         Text("Evidence").tag("Evidence")
       }.pickerStyle(.segmented)
-      if tab == "Changes" {
+      }
+      if (fixedTab ?? tab) == "Changes" {
         Button("Open review workspace") { app.section = "Review" }
         Text("Current project preview. Open Review to choose a turn, staged/unstaged layers or a branch comparison.")
           .font(.caption).foregroundStyle(.secondary)
@@ -1171,14 +1276,14 @@ struct InspectorView: View {
         TextField("Commit message", text: $commit).textFieldStyle(.roundedBorder)
         Button("Commit staged changes") { app.gitAction("git.commit", message: commit) }.disabled(
           commit.isEmpty || app.hasActiveWork(project: app.projectID))
-      } else if tab == "Checks" {
+      } else if (fixedTab ?? tab) == "Checks" {
         Text("Run a command in this project").font(.headline)
         Text(
           "Commands run with your Mac account’s permissions. Review commands before running them."
         ).font(.caption).foregroundStyle(.secondary)
         TextField("e.g. uv run pytest -q", text: $command).textFieldStyle(.roundedBorder)
         Button("Run check") { app.start("checks.start", extra: ["command": command]) }.disabled(
-          command.isEmpty || app.busy || app.anyActive)
+          !app.connected || command.isEmpty || app.busy || app.anyActive)
         Spacer()
       } else {
         Text("Recorded locally").font(.headline)
@@ -1200,7 +1305,7 @@ struct DiffView: View {
       LazyVStack(alignment: .leading, spacing: 1) {
         if text.isEmpty { Text("No diff to display").foregroundStyle(.tertiary) }
         ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
-          Text(line).foregroundStyle(ink(for: line)).textSelection(.enabled)
+          Text(line).foregroundStyle(ink(for: line)).textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
         }
       }.font(.system(size: 12, design: .monospaced)).padding(12).frame(
         maxWidth: .infinity, alignment: .leading)
