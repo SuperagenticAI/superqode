@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.2
+# SuperQode for macOS public beta 0.3.3
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -15,6 +15,24 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.3
+
+Version 0.3.3 (build 19) bundles Python engine 2.31.2. Agent Activity starts
+collapsed so the conversation has more room; Working text and the moving bar
+remain visible during a run. Harness Hub cards and details show available
+vendor logos, including Codex, Claude, Factory Droid and OpenCode.
+
+Local AI adds DS4 setup for DeepSeek V4. Select your existing ds4-server and
+GGUF weights, configure context and disk-KV storage, review the command and
+explicitly start a loopback server. The last reviewed settings are remembered.
+An existing server keeps its own settings. Once ready, select an advertised
+model for a supported harness or run an explicit readiness check. Only an
+app-owned server can be stopped from the app.
+
+DS4 installation and weight downloads remain separate. This release validates
+setup and server lifecycle; it does not claim a verified real DeepSeek coding
+run. Super Agent is still a preview, and Monty is not bundled.
 
 ## Version 0.3.2
 

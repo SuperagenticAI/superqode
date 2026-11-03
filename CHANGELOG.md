@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.2] - 2026-11-03
+
+### Added
+
+- Reviewed DS4 setup in the native Local AI workbench: select an existing
+  executable and downloaded GGUF, configure context and disk-KV directory/limit,
+  then explicitly start a loopback server. Reviewed settings are remembered.
+- DS4 model selection and endpoint binding for supported native harnesses,
+  readiness checks, recorded operation output and guarded app-owned Stop.
+- Custom DS4 executable support in the shared server manager and discovery of
+  GGUF weights in the conventional DS4 checkout. Default CLI/TUI behavior stays
+  unchanged. Contradictory DeepSeek model aliases are excluded from selection.
+
+### Changed
+
+- Agent Activity starts collapsed to leave space for the conversation. Animated
+  Working text and the moving progress bar remain visible while a run is active.
+- Harness Hub cards and details use available bundled vendor logos, including
+  Codex, Claude, Factory Droid and OpenCode.
+
+Ships alongside macOS **0.3.3 / build 19**, Public Beta. DS4 and weights are
+installed separately; opening or reviewing setup does not build, download or
+start inference. Server setup/lifecycle tests do not certify DeepSeek coding
+quality. Super Agent remains a preview, and Monty is not bundled.
+
 ## [2.31.1] - 2026-11-02
 
 ### Added
