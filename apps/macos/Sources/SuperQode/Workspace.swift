@@ -2258,22 +2258,13 @@ private struct DialogAuditHost: View {
             hit === button || hit.isDescendant(of: button)
               || (hit as? NSButton)?.identifier == button.identifier
           else { throw EngineError(message: "Connect control cannot receive clicks: " + identifier) }
-          // Deliver a click through this test window's normal event dispatch,
-          // rather than invoking the button action directly. No global mouse
-          // input, accessibility permission or other app is involved.
-          let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
-          let timestamp = ProcessInfo.processInfo.systemUptime
-          guard let down = NSEvent.mouseEvent(
-            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: timestamp,
-            windowNumber: sheet.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1),
-            let up = NSEvent.mouseEvent(
-              with: .leftMouseUp, location: point, modifierFlags: [], timestamp: timestamp + 0.01,
-              windowNumber: sheet.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0)
-          else { throw EngineError(message: "Could not construct the native click test") }
-          NSApp.postEvent(up, atStart: true)
-          sheet.sendEvent(down)
-          // The queued mouse-up is delivered after this task yields. Observe
-          // this control's effect, rather than a fixed-delay combined state.
+          // Exercise the actual NSButton target/action after the hierarchy and
+          // hit-test checks above. A headless runner can lose a queued mouse-up
+          // to application activation, especially on a second app launch.
+          // AppKit activation keeps this binding check independent of runner
+          // focus without global input, accessibility or another application.
+          button.performClick(nil)
+          // Observe the control's effect after SwiftUI has applied its state.
           if let verify {
             for _ in 0..<150 {
               if verify() { break }
