@@ -21,6 +21,15 @@ import Foundation
     preferences.set(threadTabsByProject, forKey: "nativeOpenThreadTabs")
   }
 
+  func cycleThreadTab(by offset: Int) {
+    guard !openingProject, !restoringNavigation, !openThreadTabs.isEmpty else { return }
+    let tabs = openThreadTabs
+    let current = tabs.firstIndex { string($0, "conversation_id", string($0, "id")) == selectedConversationID }
+    let next = current.map { (($0 + offset) % tabs.count + tabs.count) % tabs.count }
+      ?? (offset >= 0 ? 0 : tabs.count - 1)
+    selectJob(string(tabs[next], "id"), targetSection: "Workspace")
+  }
+
   func closeThreadTab(_ identity: String) {
     let visible = openThreadTabs
     let index = visible.firstIndex { string($0, "conversation_id", string($0, "id")) == identity }

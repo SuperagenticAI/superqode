@@ -85,6 +85,7 @@ private struct DialogAuditHost: View {
   @Published var showWelcome = true { didSet { persistDestination() } }
   @Published var starterTourRequested = false
   @Published var showLearningGuide = false
+  @Published var showFeatureBrowser = false
   @Published var showCommandPalette = false
   private weak var commandPaletteWindow: NSWindow?
   private weak var commandPaletteHostWindow: NSWindow?

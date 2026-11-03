@@ -36,6 +36,32 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertEqual(moved.dropped, ["../escape", "docs/../escape", "docs/..", "/absolute"])
   }
 
+  func testFeatureNavigationExposesEverySectionExactlyOnce() {
+    let sections = WorkspaceNavigationGroup.all.flatMap(\.sections)
+    XCTAssertEqual(Set(sections), Set(Sections.names))
+    XCTAssertEqual(sections.count, Set(sections).count)
+    for section in Sections.names {
+      XCTAssertTrue(WorkspaceNavigationGroup.containing(section).sections.contains(section))
+      XCTAssertTrue(WorkspaceNavigationGroup.available(section, hasProject: true))
+    }
+    XCTAssertTrue(WorkspaceNavigationGroup.available("Models", hasProject: false))
+    XCTAssertTrue(WorkspaceNavigationGroup.available("Agent activity", hasProject: false))
+    XCTAssertFalse(WorkspaceNavigationGroup.available("Review", hasProject: false))
+  }
+
+  func testThreadFiltersSearchHarnessesAndHumanReadableApprovalStatus() {
+    let row: [String: Any] = ["title": "Fix tests", "status": "needs_approval", "pinned": true,
+      "harnesses_used": [["id": "acp:claude", "name": "Claude"]]]
+    XCTAssertTrue(ThreadListFilter.needsYou.matches(row))
+    XCTAssertTrue(ThreadListFilter.pinned.matches(row))
+    XCTAssertFalse(ThreadListFilter.working.matches(row))
+    XCTAssertTrue(ThreadListFilter.search("  CLAUDE  ", in: row))
+    XCTAssertTrue(ThreadListFilter.search("Needs you", in: row))
+    XCTAssertFalse(ThreadListFilter.search("Codex", in: row))
+    XCTAssertTrue(ThreadListFilter.working.matches(["status": "queued"]))
+    XCTAssertFalse(ThreadListFilter.working.matches(["status": "completed"]))
+  }
+
   func testSendingFullReturnsTheNextNewConversationToAsk() {
     let suite = "superqode.permission.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!

@@ -99,6 +99,15 @@ import UserNotifications
       CommandMenu("Agent Space") {
         Button("Command Palette…", action: workspace.presentCommandPalette)
           .keyboardShortcut("k").disabled(workspace.showCommandPalette)
+        Button("All Features…") { workspace.showWelcome = false; workspace.showFeatureBrowser = true }
+          .disabled(workspace.openingProject || workspace.restoringNavigation)
+        Divider()
+        Button("Next Conversation Tab") { workspace.cycleThreadTab(by: 1) }
+          .keyboardShortcut(.tab, modifiers: .control)
+          .disabled(workspace.openThreadTabs.isEmpty || workspace.openingProject || workspace.restoringNavigation)
+        Button("Previous Conversation Tab") { workspace.cycleThreadTab(by: -1) }
+          .keyboardShortcut(.tab, modifiers: [.control, .shift])
+          .disabled(workspace.openThreadTabs.isEmpty || workspace.openingProject || workspace.restoringNavigation)
         Divider()
         ForEach(Sections.names, id: \.self) { name in
           WorkspaceCommandMenuItem(app: workspace, action: .section(name))
@@ -233,7 +242,9 @@ struct RootView: View {
   }
   private var workspaceShell: some View {
     HStack(spacing: 0) {
-      SidebarView().frame(width: 236).background(Color.qPanel)
+      WorkspaceNavigationRail()
+      Divider()
+      SidebarView().frame(width: 260).background(Color.qPanel)
         .disabled(app.openingProject || app.restoringNavigation)
       Divider()
       VStack(spacing: 0) {
@@ -250,9 +261,9 @@ struct RootView: View {
           Button(action: app.goForward) { Image(systemName: "chevron.right") }
             .disabled(app.forwardHistory.isEmpty || app.openingProject || app.restoringNavigation)
             .help("Forward (⌘])").accessibilityLabel("Forward")
-          Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium))
+          Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium)).lineLimit(1)
           Text("/").foregroundStyle(.tertiary)
-          Text(string(app.project, "name", "No project")).font(.system(size: 12)).foregroundStyle(
+          Text(string(app.project, "name", "No project")).font(.system(size: 12)).lineLimit(1).truncationMode(.middle).foregroundStyle(
             .secondary)
           Spacer()
           Button(action: app.presentCommandPalette) {
@@ -276,6 +287,7 @@ struct RootView: View {
         }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
           .horizontal, 12
         ).padding(.vertical, 6)
+        WorkspaceFeatureBar()
         ThreadTabBar()
         ForkWorkspaceBar()
         if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
@@ -333,161 +345,6 @@ struct RootView: View {
       reduceMotion || !animatedInterface ? nil : .easeInOut(duration: 0.18), value: app.section
     )
 
-  }
-}
-struct SidebarView: View {
-  @EnvironmentObject var app: Workspace
-  @AppStorage("nativeExpandedNavigation") private var expandedNavigation = false
-  var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      Button {
-        app.showWelcome = true
-      } label: {
-        HStack(spacing: 10) {
-          BrandMark().frame(width: 36, height: 36).accessibilityHidden(true)
-          VStack(alignment: .leading, spacing: 2) {
-            BrandWordmark()
-            Text("Build · Evaluate · Evolve").font(.caption)
-              .foregroundStyle(.secondary)
-          }
-        }
-      }.buttonStyle(.plain).help("Welcome to SuperQode")
-        .accessibilityLabel("SuperQode, Welcome")
-        .accessibilityHint("Return to the welcome page without closing your project.")
-        .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 16)
-      Button(action: app.chooseProject) {
-        HStack {
-          Image(systemName: "folder")
-          Text(string(app.project, "name", "Open project")).lineLimit(1)
-          Spacer()
-          Image(systemName: "plus").font(.caption)
-        }.padding(10)
-      }.buttonStyle(.plain).outlinedSurface(radius: 8).padding(.horizontal, 14)
-      if !app.projects.isEmpty {
-        Menu {
-          ForEach(app.projects, id: \.projectRowID) { row in
-            Button(string(row, "name", URL(fileURLWithPath: string(row, "path")).lastPathComponent)) {
-              app.perform { try await app.open(string(row, "path")) }
-            }
-          }
-        } label: {
-          Label("Recent projects", systemImage: "clock").font(.caption).foregroundStyle(.primary)
-        }.menuStyle(.borderlessButton).padding(.horizontal, 24).padding(.vertical, 10)
-      }
-      VSplitView {
-        VStack(alignment: .leading, spacing: 0) {
-          HStack {
-            Text("RECENT THREADS").font(.system(size: 11, weight: .bold, design: .monospaced))
-              .tracking(1.2).foregroundStyle(.secondary)
-            Spacer()
-            Button { app.section = "Threads" } label: { Image(systemName: "list.bullet") }
-              .help("All threads").accessibilityLabel("All threads")
-            Button { app.selectJob("", targetSection: "Workspace") } label: { Image(systemName: "plus") }
-              .help("New conversation").accessibilityLabel("New conversation")
-              .disabled(app.openingProject || app.restoringNavigation || app.busy)
-          }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 10)
-          recentRuns
-        }.frame(minHeight: 170, idealHeight: 280, maxHeight: .infinity)
-        ScrollView { navigationItems.padding(.bottom, 10) }
-          .frame(minHeight: 140, idealHeight: 240, maxHeight: .infinity)
-      }.frame(maxHeight: .infinity)
-      HStack(spacing: 8) {
-        Circle().fill(app.connected ? Color.green : Color.orange).frame(width: 6, height: 6)
-        Text(app.connected ? "LOCAL ENGINE" : "ENGINE OFFLINE").font(
-          .system(size: 11, design: .monospaced))
-        Spacer()
-        SettingsLink { Image(systemName: "gearshape") }.buttonStyle(.plain)
-      }.foregroundStyle(.secondary).padding(20)
-    }.frame(maxHeight: .infinity, alignment: .top).clipped()
-  }
-  private var primarySections: [String] {
-    ["Workspace", "Threads", "Agent activity", "Review", "Files", "Terminal", "Harness Hub", "Harness Studio", "Super Agent", "Models"]
-  }
-  private var navigationItems: some View {
-    VStack(spacing: 4) {
-      if !app.repositoryPanels.isEmpty {
-        Text("THIS REPOSITORY")
-          .font(.system(size: 11, weight: .bold, design: .monospaced))
-          .tracking(1.5)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, 12)
-          .padding(.bottom, 4)
-        ForEach(app.repositoryPanels, id: \.self) { name in
-          navigationButton(name)
-        }
-        Divider().padding(.vertical, 8)
-      }
-      ForEach(primarySections.filter { !app.repositoryPanels.contains($0) }, id: \.self) { name in
-        navigationButton(name)
-      }
-      DisclosureGroup("Improve & more", isExpanded: $expandedNavigation) {
-        VStack(spacing: 3) {
-          ForEach(Sections.names.filter { !primarySections.contains($0) && !app.repositoryPanels.contains($0) }, id: \.self) { name in
-            navigationButton(name)
-          }
-        }.padding(.top, 6)
-      }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 8)
-    }.padding(.horizontal, 14).padding(.top, 14)
-      .onChange(of: app.section) { _, name in
-        if !primarySections.contains(name) { expandedNavigation = true }
-      }
-  }
-  private func navigationButton(_ name: String) -> some View {
-    let index = Sections.names.firstIndex(of: name) ?? 0
-    return Button {
-      app.section = name
-    } label: {
-      HStack(spacing: 12) {
-        Image(systemName: Sections.icons[index]).frame(width: 19)
-        Text(Sections.title(for: name)).font(.system(size: 13, weight: app.section == name ? .semibold : .regular))
-        Spacer()
-      }.padding(.horizontal, 12).padding(.vertical, 9)
-        .foregroundStyle(app.section == name ? Color.primary : Color.primary.opacity(0.75))
-        .background(
-          Color.qPanel,
-          in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).stroke(app.section == name ? Color.qAccent : Color.clear, lineWidth: 1))
-    }.buttonStyle(.plain).disabled((app.project.isEmpty && !["Workspace", "Agent activity", "Models"].contains(name)) || app.openingProject || app.restoringNavigation)
-      .accessibilityAddTraits(app.section == name ? .isSelected : [])
-  }
-  private var recentRuns: some View {
-    ScrollViewReader { scroll in
-    ScrollView {
-      LazyVStack(spacing: 3) {
-        if app.recentConversations.isEmpty {
-          Text("Your conversations will appear here.").font(.caption).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-        }
-        ForEach(app.recentConversations, id: \.projectRowID) { job in
-          Button {
-            let destinationSection =
-              string(job, "kind") == "tool"
-              ? "Tools"
-              : ["optimization", "tuning"].contains(string(job, "kind"))
-                ? "Optimization" : string(job, "kind") == "evaluation" ? "Evaluations" : "Workspace"
-            app.selectJob(string(job, "id"), targetSection: destinationSection)
-          } label: {
-            VStack(alignment: .leading, spacing: 5) {
-              HStack(alignment: .top, spacing: 7) {
-                if string(job, "kind") == "task" { HarnessIconStack(row: job, size: 22, limit: 2) }
-                Text(string(job, "conversation_title", string(job, "title"))).font(.system(size: 12)).lineLimit(2)
-              }
-              Text(string(job, "kind") + " · " + string(job, "status")).font(
-                .system(size: 11, design: .monospaced)
-              ).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(
-              Color.qPanel,
-              in: RoundedRectangle(cornerRadius: 6))
-              .overlay(RoundedRectangle(cornerRadius: 6).stroke(app.selectedConversationID == string(job, "conversation_id", string(job, "id")) ? Color.qAccent : Color.clear, lineWidth: 1))
-          }.buttonStyle(.plain)
-            .id(string(job, "conversation_id", string(job, "id")))
-        }
-      }.padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 10)
-    }.onChange(of: app.selectedConversationID) { _, identity in
-      scroll.scrollTo(identity, anchor: .center)
-    }
-    }
   }
 }
 extension Dictionary where Key == String, Value == Any {

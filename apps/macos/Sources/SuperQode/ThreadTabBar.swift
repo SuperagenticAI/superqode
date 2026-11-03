@@ -17,10 +17,11 @@ struct ThreadTabBar: View {
                     app.selectJob(string(row, "id"), targetSection: "Workspace")
                   } label: {
                     HStack(spacing: 6) {
-                      Circle().fill(statusColor(string(row, "status"))).frame(width: 6, height: 6)
+                      ThreadHarnessIcons(row: row, size: 23, limit: 2)
+                      ThreadStatusIndicator(status: string(row, "status"))
                       Text(string(row, "conversation_title", string(row, "title", "Conversation")))
                         .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        .lineLimit(1).frame(maxWidth: 175)
+                        .lineLimit(1).frame(maxWidth: 145)
                     }.padding(.leading, 10).padding(.vertical, 9).contentShape(Rectangle())
                   }.buttonStyle(.plain)
                     .help(string(row, "conversation_title", string(row, "title")) + " · " + string(row, "status"))
@@ -61,13 +62,4 @@ struct ThreadTabBar: View {
     }
   }
 
-  private func statusColor(_ status: String) -> Color {
-    switch status {
-    case "needs_approval": return .orange
-    case "running", "queued", "cancelling": return .qAccent
-    case "completed": return .green
-    case "failed", "interrupted": return .red
-    default: return .secondary
-    }
-  }
 }

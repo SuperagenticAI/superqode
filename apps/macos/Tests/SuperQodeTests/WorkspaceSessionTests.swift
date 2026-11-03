@@ -54,6 +54,21 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.draft, "Keep B")
   }
 
+  @MainActor func testKeyboardTabCyclingWrapsAndPreservesEachDraft() {
+    let app = workspace()
+    app.selectJob("a"); app.draft = "Draft A"
+    app.selectJob("b"); app.draft = "Draft B"
+    app.cycleThreadTab(by: 1)
+    XCTAssertEqual(app.selectedConversationID, "root-a")
+    XCTAssertEqual(app.draft, "Draft A")
+    app.cycleThreadTab(by: -1)
+    XCTAssertEqual(app.selectedConversationID, "root-b")
+    XCTAssertEqual(app.draft, "Draft B")
+    app.openingProject = true
+    app.cycleThreadTab(by: 1)
+    XCTAssertEqual(app.selectedConversationID, "root-b")
+  }
+
   @MainActor func testThreadTabsPersistAndStayWithinTheirProject() {
     let app = workspace()
     app.selectJob("a")
