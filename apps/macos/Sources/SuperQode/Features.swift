@@ -70,10 +70,7 @@ struct HubView: View {
             } label: {
               VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                  Image(
-                    systemName: string(row, "integration_level") == "native"
-                      ? "diamond" : "square.stack.3d.up"
-                  ).font(.title2).foregroundStyle(Color.qAccent)
+                  HarnessIcon(identity: HarnessIdentity(row), size: 42)
                   Spacer()
                   Pill(
                     title: string(row, "readiness", "catalog"),
@@ -104,6 +101,7 @@ struct HubView: View {
       if let row = selected {
         VStack(alignment: .leading, spacing: 18) {
           HStack {
+            HarnessIcon(identity: HarnessIdentity(row), size: 42)
             Text(string(row, "name")).font(.title)
             Spacer()
             nativeButton("dialog.done", action: { selected = nil }, title: "Done") { Text("Done") }

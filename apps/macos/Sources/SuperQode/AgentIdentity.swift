@@ -12,11 +12,12 @@ struct HarnessIdentity: Identifiable, Equatable {
     id = referenceID
     name = string(row, "name", referenceID)
     let runtime = string(row, "runtime")
-    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini"]
+    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "claude-code": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini", "factory": "factory-droid", "droid": "factory-droid", "opencode": "opencode"]
     let reference = ["acp:", "connection:", "attach:", "vendor-key:"].first { referenceID.hasPrefix($0) }
       .map { String(referenceID.dropFirst($0.count)) } ?? referenceID
+    let fallback = runtimes[runtime] ?? runtimes[reference] ?? (["core", "pipy", "codegem", "systemone"].contains(referenceID) ? "superqode" : reference)
     iconKey = string(row, "icon_key", string(row, "agent_id",
-      string(row, "subscription_vendor", runtimes[runtime] ?? (["core", "pipy", "codegem", "systemone"].contains(referenceID) ? "superqode" : reference))))
+      string(row, "subscription_vendor", fallback)))
   }
 
   static func used(in row: [String: Any]) -> [HarnessIdentity] {

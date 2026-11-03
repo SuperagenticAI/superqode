@@ -6,6 +6,34 @@ import time
 from superqode.local import workbench
 
 
+def ds4_configuration(service):
+    from superqode.local.servers import (
+        ServerManager,
+        DS4_CHECKOUT,
+        DS4_DEFAULT_CTX,
+        DS4_DEFAULT_KV_DIR,
+        DS4_DEFAULT_KV_DISK_MB,
+    )
+
+    binary = ServerManager()._ds4_binary()
+    model = DS4_CHECKOUT / "ds4flash.gguf"
+    configuration = {
+        "binary": str(binary) if binary else "",
+        "model": str(model) if model.is_file() else "",
+        "context": DS4_DEFAULT_CTX,
+        "kv_disk_dir": str(DS4_DEFAULT_KV_DIR),
+        "kv_disk_space_mb": DS4_DEFAULT_KV_DISK_MB,
+    }
+    rows = service._all(
+        "SELECT plan FROM local_model_plans WHERE json_extract(plan,'$.engine')='ds4' "
+        "AND json_extract(plan,'$.action')='serve' ORDER BY created DESC LIMIT 1"
+    )
+    if rows:
+        saved = json.loads(rows[0]["plan"])
+        configuration.update({key: saved[key] for key in configuration if key in saved})
+    return configuration
+
+
 def overview(service):
     from dataclasses import asdict
     from superqode.local.hardware import detect_hardware
@@ -29,6 +57,14 @@ def servers(service):
     manager = ServerManager(registry_dir=registry)
     engines = []
     for engine in workbench.ENGINES:
+        if engine == "ds4":
+            from pathlib import Path
+
+            config = ds4_configuration(service)
+            manager = ServerManager(
+                registry_dir=registry,
+                ds4_binary=Path(config["binary"]) if config["binary"] else None,
+            )
         ready = asdict(manager.precheck(engine))
         handle = manager._load(engine)
         owned = bool(
@@ -50,9 +86,15 @@ def servers(service):
             {
                 **ready,
                 "id": engine,
-                "name": NAMES[engine],
+                "name": "DS4 · DeepSeek V4" if engine == "ds4" else NAMES[engine],
                 "can_stop": owned,
-                "install": install_plan(engine).to_dict(),
+                "install": {
+                    "automatic": False,
+                    "docs_url": "https://github.com/antirez/ds4",
+                    "guidance": "Build ds4-server separately, then choose the executable and your downloaded GGUF. No installation or download is automatic.",
+                }
+                if engine == "ds4"
+                else install_plan(engine).to_dict(),
                 "cache_control": engine in {"ollama", "llama.cpp"},
             }
         )
@@ -161,6 +203,16 @@ def available(engine):
         for row in payload.get("data", [])
         if isinstance(row, dict) and isinstance(row.get("id"), str) and 0 < len(row["id"]) <= 4096
     ]
+    if engine == "ds4":
+        from superqode.providers.local.ds4 import _contradicts_loaded_shape
+
+        models = [
+            row["id"]
+            for row in payload.get("data", [])
+            if isinstance(row, dict)
+            and row.get("id") in models
+            and not _contradicts_loaded_shape(row["id"], row.get("name"))
+        ]
     return {"endpoint": endpoint, "models": models, "provider": workbench.PROVIDERS[engine]}
 
 

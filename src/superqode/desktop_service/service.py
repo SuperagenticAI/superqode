@@ -1161,6 +1161,8 @@ class DesktopService:
 
             if method == "local.models.overview":
                 return local_models.overview(self)
+            if method == "local.models.ds4":
+                return local_models.ds4_configuration(self)
             if method == "local.models.servers":
                 return local_models.servers(self)
             if method == "local.models.search":

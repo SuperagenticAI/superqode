@@ -129,6 +129,15 @@ Hugging Face artifacts. Context/KV controls follow each runtime's capabilities.
 Downloads and setup have recorded output, progress and cancellation. Available
 formats, context sizes and cache settings depend on the selected server and model.
 
+**DS4 · DeepSeek V4** uses your separately installed `ds4-server` and downloaded
+GGUF weights. Choose **Configure & start…**, select the executable and weights,
+set context and the disk-KV cache directory/limit, then review the exact local
+command before running it. The last reviewed configuration is remembered.
+This UI does not build DS4 or download weights. The server binds to loopback on
+port 8000; an existing server keeps its current settings. Once ready, choose
+**Use model…** to bind an advertised model to a supported harness, or **Check…**
+for explicit readiness checks. Stop is available only for an app-owned process.
+
 **Storage & Hub access…** configures a shared Hub cache location and verifies a
 Hugging Face token, with optional macOS Keychain storage. **Harness compatibility…**
 shows every registered runtime and saved check evidence. A running server's
@@ -169,8 +178,9 @@ returns to the conversation workbench. **Features** opens the complete feature
 browser. Repository shortcuts remain in the workbench's action menu.
 
 The open thread gives its transcript and composer the full workbench width by
-default. Agent activity starts expanded above the composer, with event details
-available to inspect. The read-only inspector opens only on request using
+default. Agent activity starts collapsed above the composer; expand it to inspect
+the recorded events. Working text and the moving bar remain visible while a run
+is active. The read-only inspector opens only on request using
 **Changes** or **Review**, never automatically when a task completes. On smaller
 windows, **Hide changes** returns to the conversation. The inspector defaults to **This turn**,
 which reads recorded checkpoint changes. **Project changes** explicitly shows the

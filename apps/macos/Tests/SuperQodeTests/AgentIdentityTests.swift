@@ -37,6 +37,18 @@ final class AgentIdentityTests: XCTestCase {
     XCTAssertEqual(HarnessIdentity.visible(in: overflow, limit: 1).map(\.id), ["five"])
   }
 
+  func testHubHarnessesResolveBundledVendorLogosFromTheirRoute() {
+    for (id, runtime, asset) in [
+      ("codex-sdk", "codex-sdk", "Agent-codex-acp"),
+      ("claude-code", "claude-agent-sdk", "Agent-claude-acp"),
+      ("droid", "factory", "Agent-factory-droid"),
+      ("acp:opencode", "acp", "Agent-opencode"),
+    ] {
+      XCTAssertEqual(HarnessIdentity(["id": id, "runtime": runtime]).assetName, asset, id)
+    }
+    XCTAssertNil(HarnessIdentity(["id": "private-coder", "runtime": "custom"]).assetName)
+  }
+
   func testCatalogFiltersKeepMissingAgentsDiscoverableAndRejectStaleVerification() {
     let routes: [[String: Any]] = [
       ["id": "acp:missing", "name": "Missing", "available": false],

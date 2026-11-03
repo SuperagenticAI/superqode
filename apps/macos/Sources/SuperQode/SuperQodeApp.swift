@@ -1115,7 +1115,7 @@ struct EventStream: View {
         VStack(spacing: 6) {
           if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
           if !activity.isEmpty {
-            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval", initiallyExpanded: true)
+            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
               .id(app.selectedJob)
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)

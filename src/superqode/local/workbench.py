@@ -24,8 +24,14 @@ from .matrix import estimate_model_memory_gb, memory_fit_phrase, search_models
 from .servers import ServerManager, SPECS
 from .options import cache_options
 
-ENGINES = ("ollama", "lmstudio", "mlx", "llama.cpp")
-PROVIDERS = {"ollama": "ollama", "lmstudio": "lmstudio", "mlx": "mlx", "llama.cpp": "llamacpp"}
+ENGINES = ("ollama", "lmstudio", "mlx", "llama.cpp", "ds4")
+PROVIDERS = {
+    "ollama": "ollama",
+    "lmstudio": "lmstudio",
+    "mlx": "mlx",
+    "llama.cpp": "llamacpp",
+    "ds4": "ds4",
+}
 
 
 def fingerprint(plan):
@@ -204,6 +210,10 @@ def prepare(params, registry_dir, *, token=None):
     engine = params.get("engine", "ollama")
     if engine not in ENGINES or action not in {"download", "serve", "stop", "install", "verify"}:
         raise ValueError("Choose a supported local runtime and action")
+    if engine == "ds4" and action in {"download", "install"}:
+        raise ValueError(
+            "Set up ds4-server separately, then choose its executable and downloaded GGUF in Configure & start."
+        )
     plan = {"action": action, "engine": engine, "provider": PROVIDERS[engine]}
     manager = ServerManager(registry_dir=Path(registry_dir))
     if action == "verify":
@@ -322,7 +332,7 @@ def prepare(params, registry_dir, *, token=None):
             raise ValueError(
                 "Choose a context between 512 and 262144 tokens and a supported KV cache type"
             )
-        if engine in {"mlx", "lmstudio"} and cache != "auto":
+        if engine in {"mlx", "lmstudio", "ds4"} and cache != "auto":
             raise ValueError(
                 "This runtime's KV cache is controlled by its own loader; choose Automatic"
             )
@@ -333,6 +343,38 @@ def prepare(params, registry_dir, *, token=None):
         if engine == "mlx" and not Path(model).is_dir():
             raise ValueError("Download the MLX snapshot first and choose its local directory")
         extra, env = cache_options(engine, cache)
+        if engine == "ds4":
+            from .servers import DS4_DEFAULT_KV_DIR, DS4_DEFAULT_KV_DISK_MB
+
+            binary = str(params.get("binary") or manager._ds4_binary() or "").strip()
+            if not binary or any(ord(c) < 32 for c in binary):
+                raise ValueError("Choose an existing ds4-server executable")
+            executable = Path(binary).expanduser().resolve()
+            if not executable.is_file() or not os.access(executable, os.X_OK):
+                raise ValueError("Choose an existing ds4-server executable")
+            weights = Path(model).expanduser().resolve()
+            if not model or not weights.is_file() or weights.suffix.lower() != ".gguf":
+                raise ValueError("Choose an existing downloaded DS4 GGUF file")
+            raw_directory = params.get("kv_disk_dir", str(DS4_DEFAULT_KV_DIR))
+            if (
+                not isinstance(raw_directory, str)
+                or not raw_directory.strip()
+                or len(raw_directory) > 4096
+                or any(ord(c) < 32 for c in raw_directory)
+            ):
+                raise ValueError("Choose a disk-KV cache directory")
+            directory = Path(raw_directory).expanduser().resolve()
+            if directory.exists() and not directory.is_dir():
+                raise ValueError("The disk-KV cache location must be a directory")
+            disk_mb = params.get("kv_disk_space_mb", DS4_DEFAULT_KV_DISK_MB)
+            if type(disk_mb) is not int or not 512 <= disk_mb <= 1048576:
+                raise ValueError("Choose a disk-KV limit between 512 and 1048576 MB")
+            model = str(weights)
+            manager = ServerManager(registry_dir=Path(registry_dir), ds4_binary=executable)
+            extra = ["--kv-disk-dir", str(directory), "--kv-disk-space-mb", str(disk_mb)]
+            plan.update(
+                binary=str(executable), kv_disk_dir=str(directory), kv_disk_space_mb=disk_mb
+            )
         if engine == "lmstudio":
             extra += ["--bind", "127.0.0.1"]
         argv, environment, _ = manager.build_command(
@@ -354,6 +396,11 @@ def prepare(params, registry_dir, *, token=None):
             fit=fit(model),
             note="Already-running servers are adopted without changing their settings. MLX ignores requested context; LM Studio applies it at load. No weights are downloaded by server start.",
         )
+        if engine == "ds4":
+            plan["fit"] = fit(model, size_bytes=Path(model).stat().st_size)
+            plan["note"] = (
+                "Starts your selected DS4 executable with downloaded weights on 127.0.0.1:8000. Disk-KV cache uses the chosen directory and limit. Existing servers keep their settings; stop them in their owning app before reconfiguring. No build, weight download or inference is started by reviewing this plan."
+            )
     else:
         handle = manager._load(engine)
         if not handle or handle.adopted or handle.pid is None or not handle.process_start:
@@ -380,7 +427,7 @@ def prepare(params, registry_dir, *, token=None):
 def run(plan, registry_dir, emit, *, owner_job=None):
     from superqode.providers.huggingface import fetch
 
-    manager = ServerManager(registry_dir=Path(registry_dir))
+    manager = ServerManager(registry_dir=Path(registry_dir), ds4_binary=plan.get("binary"))
     action, engine = plan["action"], plan["engine"]
     if engine == "ollama":
         os.environ["OLLAMA_HOST"] = "http://127.0.0.1:11434"

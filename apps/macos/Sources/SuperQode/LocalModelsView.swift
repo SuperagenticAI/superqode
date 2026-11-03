@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor final class LocalModelLibrary: ObservableObject {
   @Published var overview: [String: Any] = [:]
@@ -167,7 +168,13 @@ struct LocalModelWorkbenchView: View {
       HStack { Label(string(row, "name", string(row, "id")), systemImage: "server.rack").font(.headline); Spacer(); Pill(title: string(row, "state")) }
       Text(string(row, "base_url")).font(.caption.monospaced()).foregroundStyle(.secondary)
       HStack {
-        if row["installed"] as? Bool != true {
+        if string(row, "id") == "ds4" {
+          Button("Configure & start…") { action = ["action": "serve", "engine": "ds4"] }.disabled(app.anyActive || string(row, "state") == "starting")
+          if row["running"] as? Bool == true {
+            Button("Use model…") { connecting = "ds4" }.disabled(app.projectID.isEmpty || app.anyActive)
+            Button("Check…") { action = ["action": "verify", "engine": "ds4"] }.disabled(app.anyActive)
+          }
+        } else if row["installed"] as? Bool != true {
           let install = row["install"] as? [String: Any] ?? [:]
           if install["automatic"] as? Bool == true {
             Button("Review installation…") { action = ["action": "install", "engine": string(row, "id")] }
@@ -181,6 +188,10 @@ struct LocalModelWorkbenchView: View {
           }
         }
       }.controlSize(.small)
+      if string(row, "id") == "ds4" {
+        Text("Use your own ds4-server and downloaded DeepSeek V4 GGUF. Configure context and disk-KV cache before starting.").font(.caption).foregroundStyle(.secondary)
+        Link("DS4 setup guide", destination: URL(string: "https://github.com/antirez/ds4")!).font(.caption)
+      }
       if row["can_stop"] as? Bool == true {
         Button("Review stop…") { action = ["action": "stop", "engine": string(row, "id")] }.font(.caption).disabled(app.anyActive)
       }
@@ -220,6 +231,9 @@ struct LocalModelActionView: View {
   @State private var context = 16384
   @State private var cache = "auto"
   @State private var check = "readiness"
+  @State private var ds4Binary = ""
+  @State private var ds4KVDirectory = ""
+  @State private var ds4DiskMB = 8192
   @State private var hubSetup = false
   @State private var reviewGeneration = 0
   @State private var fileGeneration = 0
@@ -228,11 +242,23 @@ struct LocalModelActionView: View {
   @State private var failure = ""
   @State private var closed = false
   @State private var commandID = UUID().uuidString
-  private var signature: String { engine + "\n" + model + "\n" + filename + "\n" + String(context) + "\n" + cache + "\n" + check }
-  private var parameters: [String: Any] { request.merging(["engine": engine, "model": model, "filename": filename, "context": context, "kv_cache": cache, "check": check]) { _, value in value } }
+  private var signature: String { [engine, model, filename, String(context), cache, check, ds4Binary, ds4KVDirectory, String(ds4DiskMB)].joined(separator: "\n") }
+  private var parameters: [String: Any] {
+    var values: [String: Any] = ["engine": engine, "model": model, "filename": filename, "context": context, "kv_cache": cache, "check": check]
+    if engine == "ds4" { values.merge(["binary": ds4Binary, "kv_disk_dir": ds4KVDirectory, "kv_disk_space_mb": ds4DiskMB]) { _, new in new } }
+    return request.merging(values) { _, value in value }
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text(string(request, "action") == "download" ? "Choose weights to download" : string(request, "action") == "verify" ? "Check model readiness" : "Configure your local runtime").font(.title2)
+      if engine == "ds4" && string(request, "action") == "serve" {
+        Text("DS4 · DeepSeek V4").font(.headline)
+        HStack {
+          TextField("ds4-server executable", text: $ds4Binary).textFieldStyle(.roundedBorder)
+          Button("Choose executable…") { chooseDS4Location(.executable) }
+        }
+        Text("Select an existing build. SuperQode does not install DS4 or download weights when you open this screen.").font(.caption).foregroundStyle(.secondary)
+      }
       if string(request, "action") == "verify" {
         Picker("Served model", selection: $model) { ForEach(servedModels, id: \.self) { Text($0).tag($0) } }
         Picker("Check", selection: $check) { Text("Model readiness probes").tag("readiness"); Text("Core read-tool roundtrip").tag("core-read") }.pickerStyle(.segmented)
@@ -247,7 +273,7 @@ struct LocalModelActionView: View {
         Button("Refresh model files") { Task { await loadFiles() } }.disabled(busy)
         Text("All split-GGUF shards are included. LM Studio imports a link to cached weights.").font(.caption).foregroundStyle(.secondary)
       }
-      TextField("Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve")
+      TextField(engine == "ds4" ? "Downloaded GGUF file" : "Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve")
       if string(request, "source") == "hf" {
         HStack {
           if let url = URL(string: "https://huggingface.co/" + model) { Link("Model card & access conditions", destination: url) }
@@ -257,12 +283,21 @@ struct LocalModelActionView: View {
       if string(request, "action") == "serve" {
         HStack {
           Stepper("Context: \(context.formatted()) tokens", value: $context, in: 512...262144, step: 512)
-          if ["mlx", "llama.cpp"].contains(engine) { Button("Choose weights…", action: chooseWeights) }
+          if ["mlx", "llama.cpp", "ds4"].contains(engine) { Button("Choose weights…", action: chooseWeights) }
         }
+        if engine == "ds4" {
+          HStack {
+            TextField("Disk-KV cache directory", text: $ds4KVDirectory).textFieldStyle(.roundedBorder)
+            Button("Choose cache…") { chooseDS4Location(.cache) }
+          }
+          Stepper("Disk-KV limit: \(ds4DiskMB.formatted()) MB", value: $ds4DiskMB, in: 512...1048576, step: 512)
+          Text("Local endpoint: http://127.0.0.1:8000/v1. Context and disk-KV settings apply when starting a new server. A running server keeps its current settings.").font(.caption).foregroundStyle(.secondary)
+        } else {
         Picker("KV cache", selection: $cache) {
           Text("Automatic").tag("auto"); Text("f16").tag("f16"); Text("q8_0").tag("q8_0"); Text("q4_0").tag("q4_0")
         }.disabled(!["ollama", "llama.cpp"].contains(engine))
         Text("Larger context needs more memory. Quantized KV enables Flash Attention where supported. Existing servers keep their settings; MLX controls context in its model and LM Studio at load.").font(.caption).foregroundStyle(.secondary)
+        }
       }
       Button("Review operation") { Task { await prepare() } }.disabled(busy || engine.isEmpty)
       if busy { ProgressView("Preparing local operation…") }
@@ -289,9 +324,21 @@ struct LocalModelActionView: View {
         Button("Cancel") { closed = true; dismiss() }.keyboardShortcut(.cancelAction)
         Button("Run reviewed operation", action: start).buttonStyle(BrandButtonStyle()).disabled(plan.isEmpty || busy)
       }
-    }.padding(24).frame(width: 760, height: 620)
+    }.padding(24).frame(width: 760, height: engine == "ds4" && string(request, "action") == "serve" ? 740 : 620)
       .task {
         engine = string(request, "engine", "ollama"); model = string(request, "model")
+        if engine == "ds4" && string(request, "action") == "serve" {
+          busy = true
+          do {
+            let config = try await app.engine.call("local.models.ds4") as? [String: Any] ?? [:]
+            guard !closed, !Task.isCancelled else { return }
+            ds4Binary = string(config, "binary"); ds4KVDirectory = string(config, "kv_disk_dir")
+            ds4DiskMB = config["kv_disk_space_mb"] as? Int ?? 8192
+            context = config["context"] as? Int ?? 32768
+            if model.isEmpty { model = string(config, "model") }
+          } catch { failure = error.localizedDescription }
+          busy = false
+        }
         if string(request, "action") == "verify" {
           busy = true
           defer { busy = false }
@@ -353,8 +400,19 @@ struct LocalModelActionView: View {
   }
   private func chooseWeights() {
     let panel = NSOpenPanel()
-    panel.canChooseFiles = engine == "llama.cpp"; panel.canChooseDirectories = engine == "mlx"; panel.allowsMultipleSelection = false
+    panel.canChooseFiles = ["llama.cpp", "ds4"].contains(engine); panel.canChooseDirectories = engine == "mlx"; panel.allowsMultipleSelection = false
+    if engine == "ds4" { panel.allowedContentTypes = [.init(filenameExtension: "gguf") ?? .data] }
     if panel.runModal() == .OK, let url = panel.url { model = url.path }
+  }
+  private enum DS4Location { case executable, cache }
+  private func chooseDS4Location(_ location: DS4Location) {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = location == .executable; panel.canChooseDirectories = location == .cache
+    panel.canCreateDirectories = location == .cache; panel.allowsMultipleSelection = false
+    panel.prompt = location == .executable ? "Choose executable" : "Choose cache"
+    if panel.runModal() == .OK, let url = panel.url {
+      if location == .executable { ds4Binary = url.path } else { ds4KVDirectory = url.path }
+    }
   }
 }
 

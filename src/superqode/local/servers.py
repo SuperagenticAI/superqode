@@ -211,6 +211,7 @@ def discover_gguf_models(limit: int = 50) -> List[dict]:
         Path.home() / "models",
         Path.home() / ".cache" / "llama.cpp",
         Path.home() / ".local" / "share" / "models",
+        DS4_CHECKOUT,
     ]
     seen: dict[str, dict] = {}
     # A user-configured Laguna file may live outside every conventional model
@@ -434,8 +435,11 @@ def _probe(url: str, timeout: float = _PROBE_TIMEOUT) -> bool:
 class ServerManager:
     """Launch, adopt, probe, and stop local model servers."""
 
-    def __init__(self, registry_dir: Path = SERVERS_DIR) -> None:
+    def __init__(
+        self, registry_dir: Path = SERVERS_DIR, *, ds4_binary: Optional[Path] = None
+    ) -> None:
         self.registry_dir = registry_dir
+        self.ds4_binary = Path(ds4_binary).expanduser() if ds4_binary else None
 
     # -- registry --------------------------------------------------------
 
@@ -621,6 +625,12 @@ class ServerManager:
         return False
 
     def _ds4_binary(self) -> Optional[Path]:
+        if self.ds4_binary is not None:
+            return (
+                self.ds4_binary
+                if self.ds4_binary.is_file() and os.access(self.ds4_binary, os.X_OK)
+                else None
+            )
         candidate = DS4_CHECKOUT / "ds4-server"
         if candidate.exists() and os.access(candidate, os.X_OK):
             return candidate

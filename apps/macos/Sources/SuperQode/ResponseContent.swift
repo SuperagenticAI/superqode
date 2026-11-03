@@ -190,11 +190,6 @@ struct AgentActivityView: View {
   let events: [[String: Any]]
   let active: Bool
   @State private var expanded = false
-  init(events: [[String: Any]], active: Bool, initiallyExpanded: Bool = false) {
-    self.events = events
-    self.active = active
-    _expanded = State(initialValue: initiallyExpanded)
-  }
   var body: some View {
     DisclosureGroup(isExpanded: $expanded) {
       ScrollView {
