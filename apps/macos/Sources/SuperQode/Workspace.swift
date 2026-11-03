@@ -46,6 +46,7 @@ private struct DialogAuditHost: View {
     }
     return alerts
   }()
+  @Published var threadTabsByProject: [String: [String]] = [:]
   var recoverySnapshot: WorkspaceRecoverySnapshot
   @Published var restoringNavigation = false
   var restoringComposer = false
@@ -71,6 +72,7 @@ private struct DialogAuditHost: View {
     self.recoverySnapshot = store.load()
     self.fileDrafts = recoverySnapshot.editors
     self.recoveryIssue = store.loadIssue
+    self.threadTabsByProject = preferences.dictionary(forKey: "nativeOpenThreadTabs") as? [String: [String]] ?? [:]
   }
   let engine: Engine
   let harnessStudio = HarnessStudioLibrary()
@@ -834,6 +836,7 @@ private struct DialogAuditHost: View {
     let identity = conversationID ?? summary.map { string($0, "conversation_id", id) }
     loadingConversationDraft = !id.isEmpty && identity == nil
     restoreComposer(conversationID: identity ?? id)
+    if let summary { rememberThreadTab(summary) }
     if let targetSection { section = targetSection }
     restoreSessionDestination()
     detail = [:]
@@ -868,6 +871,7 @@ private struct DialogAuditHost: View {
         }
         let page = try JobEventPage(result, after: cursor)
         let firstLoad = detail.isEmpty
+        if firstLoad { rememberThreadTab(result) }
         if firstLoad, loadingConversationDraft, let identity = result["conversation_id"] as? String, !identity.isEmpty {
           loadingConversationDraft = false
           restoreComposer(conversationID: identity)

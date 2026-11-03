@@ -276,6 +276,7 @@ struct RootView: View {
         }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
           .horizontal, 12
         ).padding(.vertical, 6)
+        ThreadTabBar()
         ForkWorkspaceBar()
         if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
           GettingStartedView(draftStore: app.draftStore)
@@ -353,7 +354,7 @@ struct SidebarView: View {
       }.buttonStyle(.plain).help("Welcome to SuperQode")
         .accessibilityLabel("SuperQode, Welcome")
         .accessibilityHint("Return to the welcome page without closing your project.")
-        .padding(.horizontal, 20).padding(.top, 26).padding(.bottom, 24)
+        .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 16)
       Button(action: app.chooseProject) {
         HStack {
           Image(systemName: "folder")
@@ -373,22 +374,23 @@ struct SidebarView: View {
           Label("Recent projects", systemImage: "clock").font(.caption).foregroundStyle(.primary)
         }.menuStyle(.borderlessButton).padding(.horizontal, 24).padding(.vertical, 10)
       }
-      navigationItems
-      Divider().padding(18)
-      HStack {
-        Text("THREADS & RUNS").font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(
-          1.5
-        )
-        .foregroundStyle(.secondary)
-        Spacer()
-        Button {
-          app.selectJob("", targetSection: "Workspace")
-        } label: {
-          Image(systemName: "plus")
-        }.buttonStyle(.plain).disabled(app.openingProject || app.restoringNavigation || app.busy)
-      }.padding(.horizontal, 24)
-      recentRuns
-      Spacer(minLength: 8)
+      VSplitView {
+        VStack(alignment: .leading, spacing: 0) {
+          HStack {
+            Text("RECENT THREADS").font(.system(size: 11, weight: .bold, design: .monospaced))
+              .tracking(1.2).foregroundStyle(.secondary)
+            Spacer()
+            Button { app.section = "Threads" } label: { Image(systemName: "list.bullet") }
+              .help("All threads").accessibilityLabel("All threads")
+            Button { app.selectJob("", targetSection: "Workspace") } label: { Image(systemName: "plus") }
+              .help("New conversation").accessibilityLabel("New conversation")
+              .disabled(app.openingProject || app.restoringNavigation || app.busy)
+          }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 10)
+          recentRuns
+        }.frame(minHeight: 170, idealHeight: 280, maxHeight: .infinity)
+        ScrollView { navigationItems.padding(.bottom, 10) }
+          .frame(minHeight: 140, idealHeight: 240, maxHeight: .infinity)
+      }.frame(maxHeight: .infinity)
       HStack(spacing: 8) {
         Circle().fill(app.connected ? Color.green : Color.orange).frame(width: 6, height: 6)
         Text(app.connected ? "LOCAL ENGINE" : "ENGINE OFFLINE").font(
@@ -450,8 +452,13 @@ struct SidebarView: View {
       .accessibilityAddTraits(app.section == name ? .isSelected : [])
   }
   private var recentRuns: some View {
+    ScrollViewReader { scroll in
     ScrollView {
       LazyVStack(spacing: 3) {
+        if app.recentConversations.isEmpty {
+          Text("Your conversations will appear here.").font(.caption).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+        }
         ForEach(app.recentConversations, id: \.projectRowID) { job in
           Button {
             let destinationSection =
@@ -474,8 +481,12 @@ struct SidebarView: View {
               in: RoundedRectangle(cornerRadius: 6))
               .overlay(RoundedRectangle(cornerRadius: 6).stroke(app.selectedConversationID == string(job, "conversation_id", string(job, "id")) ? Color.qAccent : Color.clear, lineWidth: 1))
           }.buttonStyle(.plain)
+            .id(string(job, "conversation_id", string(job, "id")))
         }
-      }.padding(.horizontal, 14).padding(.top, 8)
+      }.padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 10)
+    }.onChange(of: app.selectedConversationID) { _, identity in
+      scroll.scrollTo(identity, anchor: .center)
+    }
     }
   }
 }

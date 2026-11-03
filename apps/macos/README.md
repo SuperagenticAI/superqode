@@ -156,7 +156,17 @@ still interrupts work.
 - **Checkpoints:** inspect recorded changes and use guarded restoration, undo and redo.
 - **Terminal:** run interactive project commands in the integrated native terminal.
 
-Navigation starts with Agent Space, Review, Files and Terminal. **Improve & more** reveals additional tools as you need them. Native menus and keyboard shortcuts remain available.
+Recent threads sit near the top of the sidebar, above the workspace navigation.
+Both areas scroll independently; drag the divider to give either area more room.
+Opening a conversation adds a tab above the workspace, with its current status.
+Tabs stay in opening order, group turns from the same conversation, and are
+remembered separately for each project. Closing a tab keeps its conversation,
+unsent draft and running work; reopen it from Recent threads or All threads.
+The plus button starts a new conversation, and All threads opens the full library.
+
+Navigation includes Agent Space, Review, Files and Terminal. **Improve & more**
+reveals additional tools as you need them. Native menus and keyboard shortcuts
+remain available.
 
 **Command-K** opens the command palette. Search actions,
 the twelve most recent runs in the current project, or eight recent projects.

@@ -29,6 +29,45 @@ final class WorkspaceSessionTests: XCTestCase {
     return app
   }
 
+  @MainActor func testThreadTabsGroupTurnsAndClosingKeepsDrafts() {
+    let app = workspace()
+    app.selectJob("a")
+    app.draft = "Keep A"
+    app.selectJob("b")
+    app.draft = "Keep B"
+    app.selectJob("a-next")
+    XCTAssertEqual(app.openThreadTabs.count, 2)
+    XCTAssertEqual(app.threadTabsByProject["project"], ["root-a", "root-b"])
+    XCTAssertEqual(app.draft, "Keep A")
+    app.closeThreadTab("root-a")
+    XCTAssertEqual(app.selectedConversationID, "root-b")
+    XCTAssertEqual(app.draft, "Keep B")
+    XCTAssertEqual(app.jobs.count, 3, "Closing a tab must not delete or cancel a job")
+    app.selectJob("a")
+    XCTAssertEqual(app.draft, "Keep A")
+    app.closeThreadTab("root-b")
+    XCTAssertEqual(app.selectedConversationID, "root-a")
+    app.closeThreadTab("root-a")
+    XCTAssertTrue(app.selectedJob.isEmpty)
+    XCTAssertTrue(app.openThreadTabs.isEmpty)
+    app.selectJob("b")
+    XCTAssertEqual(app.draft, "Keep B")
+  }
+
+  @MainActor func testThreadTabsPersistAndStayWithinTheirProject() {
+    let app = workspace()
+    app.selectJob("a")
+    let restored = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: app.preferences)
+    restored.project = app.project
+    restored.jobs = app.jobs
+    XCTAssertEqual(restored.openThreadTabs.count, 1)
+    restored.project = ["id": "other"]
+    XCTAssertTrue(restored.openThreadTabs.isEmpty)
+    restored.rememberThreadTab(["id": "foreign", "project": "project", "kind": "task"])
+    restored.rememberThreadTab(["id": "check", "project": "other", "kind": "check"])
+    XCTAssertNil(restored.threadTabsByProject["other"])
+  }
+
   @MainActor func testStagedImagesDoNotAttachToAnotherConversation() async throws {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
