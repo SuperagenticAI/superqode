@@ -26,7 +26,7 @@ struct ThreadHarnessIcons: View {
   var limit = 2
   var body: some View {
     if !HarnessIdentity.used(in: row).isEmpty {
-      HarnessIconStack(row: row, size: size, limit: limit).fixedSize()
+      HarnessIconStack(row: row, size: size, limit: limit, emphasizeCurrent: false).fixedSize()
     } else {
       Image(systemName: string(row, "kind") == "evaluation" ? "checkmark.seal" : string(row, "kind") == "tool" ? "wrench.and.screwdriver" : "cpu")
         .font(.system(size: size * 0.5)).frame(width: size, height: size)
@@ -54,8 +54,8 @@ struct ThreadStatusIndicator: View {
   static func color(_ status: String) -> Color {
     switch status {
     case "needs_approval": return adaptive(dark: (1, 0.64, 0.20), light: (0.62, 0.31, 0))
-    case "running", "queued", "cancelling": return .qAccent
-    case "completed": return adaptive(dark: (0.25, 0.85, 0.45), light: (0.05, 0.43, 0.20))
+    case "running", "queued", "cancelling": return .secondary
+    case "completed": return .secondary
     case "failed", "interrupted": return adaptive(dark: (1, 0.38, 0.38), light: (0.74, 0.12, 0.18))
     default: return .secondary
     }
@@ -124,8 +124,8 @@ struct SidebarView: View {
             Button { filter = item } label: {
               Text(item.rawValue).font(.system(size: 10, weight: filter == item ? .semibold : .regular))
                 .padding(.horizontal, 8).padding(.vertical, 6)
-                .foregroundStyle(filter == item ? Color.qAccent : .secondary)
-                .background(filter == item ? Color.qAccent.opacity(0.13) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                .foregroundStyle(filter == item ? Color.primary : .secondary)
+                .background(filter == item ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
             }.buttonStyle(.plain).accessibilityAddTraits(filter == item ? .isSelected : [])
           }
         }
@@ -182,7 +182,7 @@ struct ThreadSidebarRow: View {
   private var status: String { string(row, "status") }
   private var statusTitle: String { ThreadStatusIndicator.title(status) }
   private var rowFill: Color {
-    selected ? Color.qAccent.opacity(0.12) : hovered ? Color.primary.opacity(0.045) : .clear
+    selected ? Color.primary.opacity(0.07) : hovered ? Color.primary.opacity(0.045) : .clear
   }
   private var destination: String {
     switch string(row, "kind") {
@@ -213,13 +213,13 @@ struct ThreadSidebarRow: View {
       }
     }.padding(.horizontal, 10).padding(.vertical, 11).contentShape(Rectangle())
       .background(rowFill, in: RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.qAccent.opacity(0.55) : Color.clear))
+      .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.primary.opacity(0.18) : Color.clear))
   }
   private var titleLine: some View {
     HStack(spacing: 5) {
       Text(title).font(.system(size: 12, weight: selected ? .semibold : .regular)).lineLimit(1)
       Spacer(minLength: 0)
-      if pinned { Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(Color.qAccent) }
+      if pinned { Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(.secondary) }
     }
   }
   private var statusLine: some View {

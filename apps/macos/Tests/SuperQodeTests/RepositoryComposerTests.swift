@@ -62,6 +62,33 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertFalse(ThreadListFilter.working.matches(["status": "completed"]))
   }
 
+  func testNativeAccentColorsStayReadableOnBothSurfaces() throws {
+    for hex in ["#000000", "#FFFFFF", "#777777", "#9C6ADE", "#4D8DDF", "#2F9D92", "#FFFF00"] {
+      let rgb = try XCTUnwrap(NativeAccent.parse(hex))
+      XCTAssertGreaterThanOrEqual((rgb.readable(dark: true).luminance + 0.05) / 0.05, 4.5, hex)
+      XCTAssertGreaterThanOrEqual(1.05 / (rgb.readable(dark: false).luminance + 0.05), 4.5, hex)
+    }
+    XCTAssertNil(NativeAccent.parse("#123"))
+    XCTAssertNil(NativeAccent.parse("#GG0000"))
+    XCTAssertNil(NativeAccent.parse("#12345678"))
+  }
+
+  @MainActor func testNativeAccentDefaultsToGraphiteAndPersistsCustomChoice() {
+    let suite = "superqode.accent.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: defaults)
+    XCTAssertEqual(app.accentChoice, "graphite")
+    app.accentChoice = "custom"
+    app.customAccentHex = "#4080A0"
+    let restored = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: defaults)
+    XCTAssertEqual(restored.accentChoice, "custom")
+    XCTAssertEqual(restored.customAccentHex, "#4080A0")
+    defaults.set("unknown-theme", forKey: NativeAccent.preferenceKey)
+    let fallback = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: defaults)
+    XCTAssertEqual(fallback.accentChoice, "graphite")
+  }
+
   func testSendingFullReturnsTheNextNewConversationToAsk() {
     let suite = "superqode.permission.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!

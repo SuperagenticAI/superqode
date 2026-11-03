@@ -156,6 +156,13 @@ still interrupts work.
 - **Checkpoints:** inspect recorded changes and use guarded restoration, undo and redo.
 - **Terminal:** run interactive project commands in the integrated native terminal.
 
+**Settings → Appearance** offers Dark, Light or System appearance and a separate
+native accent choice: Graphite (the neutral default), System, Purple, Blue, Teal
+or a custom color. Accent labels adapt for contrast against light/dark surfaces.
+Navigation stays neutral; harness identities retain their icons, while approvals
+and errors keep distinct status colors. These Mac accent preferences are saved
+locally and do not import or change the TUI's full theme catalog or custom files.
+
 The labelled navigation rail keeps **Build**, **Harnesses**, **Quality**, **Local AI**,
 **Threads** and **Tools** visible. A feature bar shows the related destinations for
 that area. **Features** opens the complete feature browser; repository shortcuts

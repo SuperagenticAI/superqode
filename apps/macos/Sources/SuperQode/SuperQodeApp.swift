@@ -143,12 +143,7 @@ enum Sections {
   ]
 }
 extension Color {
-  static let qAccent = Color(
-    nsColor: NSColor(name: nil) { appearance in
-      appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        ? NSColor(srgbRed: 0.79, green: 0.47, blue: 0.98, alpha: 1)
-        : NSColor(srgbRed: 0.392, green: 0.082, blue: 0.733, alpha: 1)
-    })
+  static var qAccent: Color { NativeAccent.accent() }
   static let qPanel = Color(nsColor: NSColor(name: nil) { appearance in
     appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .white
   })

@@ -45,8 +45,8 @@ struct WorkspaceNavigationRail: View {
             Image(systemName: group.symbol).font(.system(size: 18, weight: .medium))
             Text(group.title).font(.system(size: 9, weight: .medium)).lineLimit(1)
           }.frame(width: 64, height: 54)
-            .foregroundStyle(selected ? Color.qAccent : Color.primary.opacity(0.65))
-            .background(selected ? Color.qAccent.opacity(0.13) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.65))
+            .background(selected ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
         }.buttonStyle(.plain).help(group.sections.map(Sections.title(for:)).joined(separator: " · "))
           .accessibilityLabel(group.title).accessibilityAddTraits(selected ? .isSelected : [])
           .disabled(!group.sections.contains { WorkspaceNavigationGroup.available($0, hasProject: !app.projectID.isEmpty) })
@@ -82,8 +82,8 @@ struct WorkspaceFeatureBar: View {
           Label(Sections.title(for: section), systemImage: WorkspaceNavigationGroup.symbol(for: section))
             .font(.system(size: 11, weight: app.section == section ? .semibold : .regular))
             .padding(.horizontal, 10).padding(.vertical, 8)
-            .foregroundStyle(app.section == section ? Color.qAccent : .secondary)
-            .background(app.section == section ? Color.qAccent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .foregroundStyle(app.section == section ? Color.primary : .secondary)
+            .background(app.section == section ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
         }.buttonStyle(.plain).disabled(!WorkspaceNavigationGroup.available(section, hasProject: !app.projectID.isEmpty))
           .accessibilityAddTraits(app.section == section ? .isSelected : [])
       }
@@ -123,11 +123,11 @@ struct FeatureBrowserView: View {
                 app.section = section; app.showFeatureBrowser = false
               } label: {
                 HStack(spacing: 9) {
-                  Image(systemName: WorkspaceNavigationGroup.symbol(for: section)).frame(width: 22).foregroundStyle(Color.qAccent)
+                  Image(systemName: WorkspaceNavigationGroup.symbol(for: section)).frame(width: 22).foregroundStyle(.secondary)
                   Text(Sections.title(for: section)).font(.system(size: 12, weight: .medium))
                   if section == "Super Agent" { Text("PREVIEW").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary) }
                   Spacer()
-                  if app.section == section { Image(systemName: "checkmark").font(.caption).foregroundStyle(Color.qAccent) }
+                  if app.section == section { Image(systemName: "checkmark").font(.caption).foregroundStyle(.primary) }
                 }.padding(9).foregroundStyle(.primary)
                   .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 7))
                   .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.12)))

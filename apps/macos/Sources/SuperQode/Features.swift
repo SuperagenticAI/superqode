@@ -1007,6 +1007,7 @@ struct SettingsView: View {
             Text("Light").tag("light")
             Text("System").tag("system")
           }
+          NativeAccentSettings()
         }
         Section("Local engine") {
           LabeledContent("Status", value: app.connected ? (app.backgroundEngineMode ? "Connected to background engine" : "Connected over private pipes") : "Offline")

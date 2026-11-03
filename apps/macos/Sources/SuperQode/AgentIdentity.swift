@@ -58,6 +58,7 @@ struct HarnessIconStack: View {
   let row: [String: Any]
   var size: CGFloat = 26
   var limit = 3
+  var emphasizeCurrent = true
   private var identities: [HarnessIdentity] { HarnessIdentity.used(in: row) }
   private var description: String {
     let lastUsed = identities.first { $0.id == string(row, "harness") }?.name ?? ""
@@ -68,7 +69,7 @@ struct HarnessIconStack: View {
     HStack(spacing: -5) {
       ForEach(HarnessIdentity.visible(in: row, limit: limit)) { identity in
         HarnessIcon(identity: identity, size: size)
-          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(identity.id == string(row, "harness") ? Color.qAccent : .clear))
+          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? Color.qAccent : .clear))
       }
       if identities.count > limit {
         Text("+\(identities.count - limit)").font(.system(size: size * 0.38, weight: .semibold))

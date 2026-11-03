@@ -33,15 +33,15 @@ struct ThreadTabBar: View {
                     .accessibilityLabel("Close tab " + string(row, "conversation_title", string(row, "title")))
                     .help("Close tab. The conversation and its work are kept.")
                 }.padding(.trailing, 3)
-                  .background(selected ? Color.qAccent.opacity(0.13) : Color.qPanel,
+                  .background(selected ? Color.primary.opacity(0.07) : Color.qPanel,
                     in: RoundedRectangle(cornerRadius: 7))
-                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? Color.qAccent : Color.clear))
+                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? Color.primary.opacity(0.2) : Color.clear))
                   .id(identity)
               }
               if app.selectedJob.isEmpty {
                 Text("New conversation").font(.system(size: 12, weight: .semibold))
                   .padding(.horizontal, 12).padding(.vertical, 9)
-                  .background(Color.qAccent.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                  .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
                   .id("new-conversation")
               }
             }.padding(.horizontal, 12).padding(.vertical, 5)

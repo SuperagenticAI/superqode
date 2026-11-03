@@ -72,6 +72,8 @@ private struct DialogAuditHost: View {
     self.recoverySnapshot = store.load()
     self.fileDrafts = recoverySnapshot.editors
     self.recoveryIssue = store.loadIssue
+    self.accentChoice = (NativeAccent(rawValue: preferences.string(forKey: NativeAccent.preferenceKey) ?? "") ?? .graphite).rawValue
+    self.customAccentHex = preferences.string(forKey: NativeAccent.customKey) ?? "#777777"
     self.threadTabsByProject = preferences.dictionary(forKey: "nativeOpenThreadTabs") as? [String: [String]] ?? [:]
   }
   let engine: Engine
@@ -284,6 +286,12 @@ private struct DialogAuditHost: View {
   @Published var imageAttachments: [[String: Any]] = [] { didSet { scheduleDraftSave() } }
   @Published var taskQueue: [String: Any] = [:]
   private var lastQueueJob = ""
+  @Published var accentChoice = NativeAccent.graphite.rawValue {
+    didSet { preferences.set(accentChoice, forKey: NativeAccent.preferenceKey) }
+  }
+  @Published var customAccentHex = "#777777" {
+    didSet { preferences.set(customAccentHex, forKey: NativeAccent.customKey) }
+  }
   @Published var theme = "dark"
   @Published var busy = false
   @Published var candidate: [String: Any] = [:]
