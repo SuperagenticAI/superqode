@@ -416,12 +416,12 @@ struct SidebarView: View {
         }
         Divider().padding(.vertical, 8)
       }
-      ForEach(primarySections, id: \.self) { name in
+      ForEach(primarySections.filter { !app.repositoryPanels.contains($0) }, id: \.self) { name in
         navigationButton(name)
       }
       DisclosureGroup("Improve & more", isExpanded: $expandedNavigation) {
         VStack(spacing: 3) {
-          ForEach(Sections.names.filter { !primarySections.contains($0) }, id: \.self) { name in
+          ForEach(Sections.names.filter { !primarySections.contains($0) && !app.repositoryPanels.contains($0) }, id: \.self) { name in
             navigationButton(name)
           }
         }.padding(.top, 6)

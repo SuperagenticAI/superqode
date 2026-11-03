@@ -10,6 +10,32 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertEqual(inserted, "fix @src/app.swift extra")
   }
 
+  @MainActor func testReturnCompletesPartialMentionsButSendsCompletePaths() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.files = ["src/app.swift", "src/app.swift.bak"]
+    app.draft = "Review @src/app.swift"
+    app.noteComposerCursor(app.draft)
+    XCTAssertFalse(app.acceptTopMentionIfNeeded())
+    app.noteComposerCursor("Review @src/ap")
+    XCTAssertFalse(app.acceptTopMentionIfNeeded())
+    XCTAssertEqual(app.draft, "Review @src/app.swift")
+    app.draft = "Review @src/ap"
+    app.noteComposerCursor(app.draft)
+    XCTAssertTrue(app.acceptTopMentionIfNeeded())
+    XCTAssertEqual(app.draft, "Review @src/app.swift ")
+    XCTAssertEqual(app.contextFiles, ["src/app.swift"])
+    app.noteComposerCursor("Review @src/app.swift")
+    XCTAssertFalse(app.acceptTopMentionIfNeeded())
+  }
+
+  func testIsolationAcceptsDoubleDotsInFilenamesButRejectsParentComponents() {
+    let moved = TaskIsolation.handoff(
+      files: ["notes..md", "docs/v1..v2.md", "../escape", "docs/../escape", "docs/..", "/absolute"]
+    ) { _ in true }
+    XCTAssertEqual(moved.files, ["notes..md", "docs/v1..v2.md"])
+    XCTAssertEqual(moved.dropped, ["../escape", "docs/../escape", "docs/..", "/absolute"])
+  }
+
   func testSendingFullReturnsTheNextNewConversationToAsk() {
     let suite = "superqode.permission.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!

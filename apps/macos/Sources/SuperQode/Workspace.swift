@@ -1204,17 +1204,26 @@ private struct DialogAuditHost: View {
     panel.prompt = "Attach images"
     guard panel.runModal() == .OK else { return }
     let paths = panel.urls.map(\.path)
+    let sourceComposerKey = composerKey
     perform {
-      for path in paths {
-        guard self.imageAttachments.count < 4 else {
-          throw EngineError(message: "Attach up to four images.")
-        }
-        let item =
-          try await self.engine.call("images.stage", ["path": path]) as? [String: Any] ?? [:]
-        self.imageAttachments.append(item)
-      }
+      for path in paths { try await self.stageImage(path, for: sourceComposerKey) }
     }
   }
+  func stageImage(_ path: String, for sourceComposerKey: String) async throws {
+    guard composerKey == sourceComposerKey else {
+      notice = "The draft changed while loading the image. Attach it again in the intended thread."
+      return
+    }
+    guard imageAttachments.count < 4 else { throw EngineError(message: "Attach up to four images.") }
+    let item = try await engine.call("images.stage", ["path": path]) as? [String: Any] ?? [:]
+    guard composerKey == sourceComposerKey else {
+      notice = "The draft changed while loading the image. Attach it again in the intended thread."
+      return
+    }
+    guard imageAttachments.count < 4 else { throw EngineError(message: "Attach up to four images.") }
+    imageAttachments.append(item)
+  }
+
   func pasteImage() {
     guard let image = NSImage(pasteboard: .general), let data = image.tiffRepresentation,
       let bitmap = NSBitmapImageRep(data: data),
@@ -1225,15 +1234,11 @@ private struct DialogAuditHost: View {
     }
     let path = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString + ".png")
+    let sourceComposerKey = composerKey
     perform {
-      guard self.imageAttachments.count < 4 else {
-        throw EngineError(message: "Attach up to four images.")
-      }
       try png.write(to: path, options: .atomic)
       defer { try? FileManager.default.removeItem(at: path) }
-      let item =
-        try await self.engine.call("images.stage", ["path": path.path]) as? [String: Any] ?? [:]
-      self.imageAttachments.append(item)
+      try await self.stageImage(path.path, for: sourceComposerKey)
     }
   }
   func attachFiles() {
@@ -1279,20 +1284,7 @@ private struct DialogAuditHost: View {
     let kind = (path as NSString).pathExtension.lowercased()
     if ["png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "heic"].contains(kind) {
       let sourceComposerKey = composerKey
-      perform {
-        guard self.imageAttachments.count < 4 else {
-          throw EngineError(message: "Attach up to four images.")
-        }
-        let item = try await self.engine.call("images.stage", ["path": path]) as? [String: Any] ?? [:]
-        guard self.composerKey == sourceComposerKey else {
-          self.notice = "The draft changed while loading the image. Attach it again in the intended thread."
-          return
-        }
-        guard self.imageAttachments.count < 4 else {
-          throw EngineError(message: "Attach up to four images.")
-        }
-        self.imageAttachments.append(item)
-      }
+      perform { try await self.stageImage(path, for: sourceComposerKey) }
       return
     }
     let root = URL(fileURLWithPath: string(project, "path")).resolvingSymlinksInPath().path + "/"
@@ -1429,7 +1421,8 @@ private struct DialogAuditHost: View {
     mentionPrefix = prefix
   }
   func acceptTopMentionIfNeeded() -> Bool {
-    guard let path = mentionMatches.first else { return false }
+    guard !ComposerMentions.isComplete(text: draft, prefix: mentionPrefix, paths: files),
+      let path = mentionMatches.first else { return false }
     acceptMention(path)
     return true
   }

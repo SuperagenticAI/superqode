@@ -10,6 +10,13 @@ enum ComposerMentions {
     return String(token.dropFirst())
   }
 
+  static func isComplete(text: String, prefix: String, paths: [String]) -> Bool {
+    guard text.hasPrefix(prefix), query(in: prefix) != nil else { return false }
+    let suffix = text.dropFirst(prefix.count).prefix { !$0.isWhitespace }
+    guard let token = query(in: prefix + suffix) else { return false }
+    return paths.contains(token)
+  }
+
   static func insert(text: String, prefix: String, path: String) -> String {
     guard !path.isEmpty, !path.contains("\n"), !path.contains("\u{0000}"),
       text.hasPrefix(prefix), let range = tokenRange(in: prefix), prefix[range].hasPrefix("@")
@@ -79,7 +86,7 @@ enum TaskIsolation {
     var dropped: [String] = []
     for file in files {
       let path = file.trimmingCharacters(in: .whitespacesAndNewlines)
-      if path.isEmpty || path.hasPrefix("/") || path.contains("..") || !present(path) {
+      if path.isEmpty || path.hasPrefix("/") || path.split(separator: "/").contains("..") || !present(path) {
         dropped.append(file)
       } else {
         kept.append(path)

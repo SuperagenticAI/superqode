@@ -29,6 +29,47 @@ final class WorkspaceSessionTests: XCTestCase {
     return app
   }
 
+  @MainActor func testStagedImagesDoNotAttachToAnotherConversation() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.selectJob("a")
+    let key = app.composerKey
+    let staging = Task { try await app.stageImage("/tmp/paste.png", for: key) }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while engine.pendingRequestCount == 0 && ContinuousClock.now < deadline { await Task.yield() }
+    XCTAssertEqual(engine.pendingRequestCount, 1)
+    app.selectJob("b")
+    app.imageAttachments = [["id": "b-image", "name": "keep.png"]]
+    await reply(engine, id: 1, result: ["id": "pasted", "name": "paste.png"])
+    try await staging.value
+    XCTAssertEqual(app.imageAttachments.first?["id"] as? String, "b-image")
+    XCTAssertEqual(app.imageAttachments.count, 1)
+    app.selectJob("a")
+    XCTAssertTrue(app.imageAttachments.isEmpty)
+  }
+
+  @MainActor func testStagedImagesAttachToTheOriginalDraftAndRespectTheLimit() async throws {
+    let pipe = Pipe()
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    let key = app.composerKey
+    let staging = Task { try await app.stageImage("/tmp/paste.png", for: key) }
+    await reply(engine, id: 1, result: ["id": "pasted", "name": "paste.png"])
+    try await staging.value
+    XCTAssertEqual(app.imageAttachments.first?["id"] as? String, "pasted")
+    let second = Task { try await app.stageImage("/tmp/other.png", for: key) }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while engine.pendingRequestCount == 0 && ContinuousClock.now < deadline { await Task.yield() }
+    app.imageAttachments = (0..<4).map { ["id": "image-\($0)"] }
+    await reply(engine, id: 2, result: ["id": "extra"])
+    do { try await second.value; XCTFail("A delayed image must not exceed the attachment limit") }
+    catch { XCTAssertEqual(error.localizedDescription, "Attach up to four images.") }
+    XCTAssertEqual(app.imageAttachments.count, 4)
+  }
+
   @MainActor func testConversationDraftsRemainSeparateAndSiblingTurnsShareOneDraft() async {
     let app = workspace()
     app.draft = "New-task draft"
