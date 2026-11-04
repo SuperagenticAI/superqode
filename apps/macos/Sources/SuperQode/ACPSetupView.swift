@@ -3,7 +3,7 @@ import SwiftUI
 
 func verifiedACPConnection(route: [String: Any], metadata: [String: Any]) -> Bool {
   let digest = string(route, "digest")
-  return !digest.isEmpty && metadata["connected"] as? Bool == true
+  return route["available"] as? Bool == true && !digest.isEmpty && metadata["connected"] as? Bool == true
     && string(metadata, "last_check_error").isEmpty && string(metadata, "route_digest") == digest
 }
 
@@ -53,6 +53,12 @@ struct ACPSetupView: View {
       }
       if route["available"] as? Bool != true {
         Text(string(route, "issue", "Install the agent before connecting.")).foregroundStyle(.secondary)
+        Button("Check installation again") {
+          Task {
+            do { try await app.refreshDefinitions(); await loadInstall() }
+            catch { failure = error.localizedDescription }
+          }
+        }.disabled(app.busy || app.anyActive)
       }
       if route["custom"] as? Bool == true { Button("Edit configuration…", action: edit) }
       if !install.isEmpty && route["available"] as? Bool != true {
@@ -61,11 +67,14 @@ struct ACPSetupView: View {
             Text(string(install, "command")).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
             Text("This package-manager command installs third-party software on your Mac. Review the named package before continuing.")
               .font(.caption).foregroundStyle(.secondary)
+            if let requirements = install["requirements"] as? [[String: Any]], !requirements.isEmpty {
+              ConnectionRequirementsView(requirements: requirements)
+            }
             Button("Install agent…") {
               if app.confirm("Install this coding agent?", string(install, "command"), button: "Install") {
                 begin("acp-install", extra: ["expected_digest": string(install, "digest")])
               }
-            }
+            }.disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || app.busy || app.anyActive)
           }.padding(.top, 10)
         }
       } else if !string(route, "setup_note").isEmpty {
@@ -86,19 +95,19 @@ struct ACPSetupView: View {
           Button("Sign in · " + string(method, "name", string(method, "id"))) {
             begin(string(method, "type") == "terminal" ? "acp-terminal" : "acp-auth",
               extra: ["method": string(method, "id"), "expected_digest": string(route, "digest")])
-          }.disabled(app.anyActive || app.busy)
+          }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
         }
       }
       if !ready && !knownLogin.isEmpty {
         Button("Vendor sign-in · " + string(knownLogin, "name")) {
           if knownLogin["interactive"] as? Bool == true { terminalPlan = knownLogin }
           else { begin("subscription", extra: ["vendor": string(knownLogin, "vendor")]) }
-        }.disabled(app.anyActive || app.busy)
+        }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
       }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
       nativeButton("connect.use", action: { use(route, metadata) }, title: "Use this connection") {
         Text(ready ? "Use verified connection" : "Use this connection")
-      }.disabled(!ready || app.active || app.busy || app.projectID != project)
+      }.disabled(route["available"] as? Bool != true || !ready || app.active || app.busy || app.projectID != project)
       if ready {
         Text("Startup and session creation succeeded. Model entitlement, billing and task execution remain owned by the agent.")
           .font(.caption).foregroundStyle(.secondary)

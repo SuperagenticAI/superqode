@@ -88,10 +88,10 @@ def _cache_dir_model_id(entry: Path) -> str:
 
 def _cache_has_weights(entry: Path) -> bool:
     snapshots = entry / "snapshots"
-    if not snapshots.is_dir():
+    if snapshots.is_symlink() or not snapshots.is_dir():
         return False
     for snap in snapshots.iterdir():
-        if not snap.is_dir():
+        if snap.is_symlink() or not snap.is_dir():
             continue
         for pattern in ("*.safetensors", "*.gguf", "*.npz"):
             if any(snap.glob(pattern)):
@@ -100,8 +100,28 @@ def _cache_has_weights(entry: Path) -> bool:
 
 
 def _dir_size_gb(entry: Path) -> Optional[float]:
+    # Cache entries can contain user-created links to protected folders. Never
+    # recurse into those directories or stat external file targets for inventory.
     try:
-        total = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+        if entry.is_symlink():
+            return None
+        total = 0
+        seen = set()
+        pending = [entry]
+        while pending:
+            directory = pending.pop()
+            for path in directory.iterdir():
+                # Check the link itself before asking for any target metadata.
+                if path.is_symlink():
+                    continue
+                if path.is_dir():
+                    pending.append(path)
+                elif path.is_file():
+                    info = path.stat()
+                    identity = (info.st_dev, info.st_ino)
+                    if identity not in seen:
+                        total += info.st_size
+                        seen.add(identity)
         return round(total / (1024**3), 1)
     except OSError:
         return None
@@ -113,7 +133,7 @@ def list_hf_models(limit: int = 200) -> List[LocalModel]:
         return []
     out: List[LocalModel] = []
     for entry in sorted(root.glob("models--*")):
-        if not entry.is_dir() or not _cache_has_weights(entry):
+        if entry.is_symlink() or not entry.is_dir() or not _cache_has_weights(entry):
             continue
         model_id = _cache_dir_model_id(entry)
         out.append(
@@ -133,7 +153,7 @@ def _lmstudio_models_root() -> Optional[Path]:
         Path.home() / ".lmstudio" / "models",
         Path.home() / ".cache" / "lm-studio" / "models",
     ):
-        if candidate.is_dir():
+        if not candidate.is_symlink() and candidate.is_dir():
             return candidate
     return None
 
@@ -144,8 +164,10 @@ def list_lmstudio_models(limit: int = 200) -> List[LocalModel]:
         return []
     out: List[LocalModel] = []
     # LM Studio lays out models as <publisher>/<model>/<files>
-    for publisher in sorted(p for p in root.iterdir() if p.is_dir()):
-        for model_dir in sorted(m for m in publisher.iterdir() if m.is_dir()):
+    for publisher in sorted(p for p in root.iterdir() if not p.is_symlink() and p.is_dir()):
+        for model_dir in sorted(
+            m for m in publisher.iterdir() if not m.is_symlink() and m.is_dir()
+        ):
             out.append(
                 LocalModel(
                     model_id=f"lmstudio:{publisher.name}/{model_dir.name}",

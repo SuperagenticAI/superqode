@@ -7,6 +7,46 @@ import XCTest
 #endif
 
 final class WorkspaceSessionTests: XCTestCase {
+  @MainActor func testNewThreadDropsConnectionWithoutStoppingOtherWork() {
+    let app = workspace()
+    app.selectJob("a")
+    app.draft = "Keep this draft"
+    app.harness = "acp:qwen"
+    app.provider = "agent"
+    app.model = "last-model"
+    app.agentModel = "last-agent-model"
+    app.agentMode = "edit"
+    app.agentConfig = ["effort": "high"]
+    app.connectionMetadata = ["acp:qwen": ["connected": true]]
+    app.routeStatus = ["ready": true]
+    app.jobs.append(["id": "working", "project": "project", "status": "running"])
+    app.selectJob("", targetSection: "Workspace")
+    XCTAssertTrue(app.connectionDisconnected)
+    XCTAssertTrue(app.provider.isEmpty)
+    XCTAssertTrue(app.model.isEmpty)
+    XCTAssertTrue(app.agentModel.isEmpty)
+    XCTAssertTrue(app.agentMode.isEmpty)
+    XCTAssertTrue(app.agentConfig.isEmpty)
+    XCTAssertTrue(app.connectionMetadata.isEmpty)
+    XCTAssertTrue(app.routeStatus.isEmpty)
+    XCTAssertFalse(app.canSubmitDraft)
+    XCTAssertEqual(app.jobs.last?["status"] as? String, "running")
+    app.selectJob("a")
+    XCTAssertEqual(app.draft, "Keep this draft")
+  }
+
+  @MainActor func testStartupRouteResetDoesNotPersistOrContactAnAgent() {
+    let app = workspace()
+    app.harness = "connection:codex"
+    app.provider = "agent"
+    app.model = "remembered-model"
+    app.resetThreadConnection()
+    XCTAssertTrue(app.connectionDisconnected)
+    XCTAssertEqual(app.engine.pendingRequestCount, 0)
+    XCTAssertFalse(app.checkingConnection)
+    XCTAssertTrue(app.model.isEmpty)
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

@@ -3,6 +3,10 @@
 The harness layer for coding agents. A native workspace for coding, reviewing changes, exploring Harness Hub, evaluating results and improving harnesses.
 
 Normal launch stays on Welcome until you open a folder or choose a recent project.
+Launch and project opening do not inventory model caches or probe a remembered
+connection. Discover models explicitly in Local AI or connection setup. New
+threads start disconnected; choose an agent or local model before sending.
+Opening an existing thread restores its recorded connection where supported.
 Live agent activity shows the current command or file target across supported
 runtime event shapes.
 
@@ -48,6 +52,26 @@ layout. Review the proposal, save a revision with a reason, then explicitly enab
 it if a provider and model are bound. Generated harnesses use builtin tools with
 recursion off. The optional Monty check only prints a next-prompt template; it does
 not launch agents or install a plugin. Monty is not bundled in this macOS release.
+
+## Start with a local model
+
+Open a project, choose **Local AI**, then **Local Quick Start**. The guide puts
+models already available on running local servers first and offers small Qwen
+and Gemma starting choices when the detected memory permits. Review each step
+to install a missing runtime, start the server, download weights and run a
+bounded read-tool check on generated data. **Start coding** selects Core and
+the checked local model without sending a prompt.
+
+Progress is saved per project. Reopen the guide to observe an existing operation;
+failed or interrupted work requires an explicit retry, which reuses cached
+downloads. Closing the guide does not cancel its job. Engine shutdown can
+interrupt it. A runtime without an automatic install recipe links to its official
+installer; return and choose **Check again** afterward.
+
+These are starting choices, not measured quality guarantees. Download size can
+be unknown until transfer begins. The primary endpoint stays local; other tools
+and project configuration may use the network. The existing model library,
+storage controls and runtime configuration remain available for advanced setup.
 
 ## Your first harness check · no API key needed
 
@@ -102,6 +126,25 @@ unchanged; recorded external history does not imply live status or native resume
 - **Build your own:** start from a preset, use the guided builder, or import and edit a HarnessSpec.
 
 Connection options depend on the runtime. Supported ACP agents expose model, mode, configuration and slash-command controls when advertised. Resume and remote cancellation also depend on the selected runtime. Existing terminal credentials remain supported, and optional app-managed provider keys can be saved in macOS Keychain.
+
+Account sign-in shows agent progress and device-code instructions, with a manual
+browser link when the agent prints an HTTPS login address. Failed sign-in stays
+visible with recovery guidance and a retry action. Codex SDK uses the installed
+Codex CLI login; a forced sign-in waits for the CLI to finish successfully rather
+than accepting a credentials file left by an earlier login. Closing an unfinished
+sign-in cancels its process. A completed sign-in leaves a confirmation in Connect;
+choose **Use this connection** to continue.
+
+Connection setup names missing local components and links to vendor installation
+documentation. **Sign in** stays disabled when its vendor CLI is missing, and
+**Use this connection** stays disabled when its execution runtime is missing.
+After installing, choose **Check installation again**. An installed SDK can use
+an existing vendor login without a standalone CLI. Optional Python SDKs must be
+included in the app's engine; installing packages into an unrelated Python
+environment does not update the app.
+Reviewed agent installs also check for their package manager, such as Node.js
+and npm, uv or Bun. If it is missing, the install action is disabled and links
+to its official setup documentation.
 
 ACP setup now includes explicit official-registry refresh, reviewed installation,
 advertised agent/terminal sign-in and startup verification. Add, edit or remove

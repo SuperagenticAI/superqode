@@ -112,14 +112,14 @@ _TIER_RANK = {
 
 
 _QUANT_BYTES = [
-    (r"\b(2bit|q2)\b", 0.34),
-    (r"\b(3bit|q3)\b", 0.45),
-    (r"\b(4bit|q4|int4|awq|gptq)\b", 0.58),
-    (r"\b(5bit|q5)\b", 0.68),
-    (r"\b(6bit|q6)\b", 0.78),
-    (r"\b(8bit|q8|int8|fp8)\b", 1.05),
-    (r"\b(fp16|bf16|f16)\b", 2.0),
-    (r"\b(fp32|f32)\b", 4.0),
+    (r"(?<![a-z0-9])(2bit|q2)(?![a-z0-9])", 0.34),
+    (r"(?<![a-z0-9])(3bit|q3)(?![a-z0-9])", 0.45),
+    (r"(?<![a-z0-9])(4bit|q4|int4|awq|gptq)(?![a-z0-9])", 0.58),
+    (r"(?<![a-z0-9])(5bit|q5)(?![a-z0-9])", 0.68),
+    (r"(?<![a-z0-9])(6bit|q6)(?![a-z0-9])", 0.78),
+    (r"(?<![a-z0-9])(8bit|q8|int8|fp8)(?![a-z0-9])", 1.05),
+    (r"(?<![a-z0-9])(fp16|bf16|f16)(?![a-z0-9])", 2.0),
+    (r"(?<![a-z0-9])(fp32|f32)(?![a-z0-9])", 4.0),
 ]
 
 
@@ -136,7 +136,9 @@ def estimate_model_memory_gb(label: str, *, quantized_default: bool = True) -> O
     if not label:
         return None
     low = label.lower()
-    nums = [float(m) for m in re.findall(r"(\d+(?:\.\d+)?)\s*b(?!it)\b", low)]
+    # GGUF names use underscores as separators (30B_Q8_0, Q6_K). Word
+    # boundaries keep underscores inside words and silently miss these sizes.
+    nums = [float(m) for m in re.findall(r"(\d+(?:\.\d+)?)\s*b(?![a-z0-9])", low)]
     params = max([n for n in nums if 0 < n <= 2000], default=None)
     if not params:
         return None

@@ -111,6 +111,29 @@ def vendor_key_route(root: Path, entry_id: str):
     return route
 
 
+def installer_requirements(argv):
+    """Identify the local package manager required by a reviewed install plan."""
+    import shutil
+
+    binary = argv[0]
+    name = Path(binary).name
+    docs = {
+        "npm": ("Node.js and npm", "https://nodejs.org/en/download"),
+        "uv": ("uv", "https://docs.astral.sh/uv/getting-started/installation/"),
+        "bun": ("Bun", "https://bun.sh/docs/installation"),
+    }
+    label, url = docs.get(name, (name, ""))
+    return [
+        {
+            "id": "installer",
+            "name": label,
+            "installed": shutil.which(binary) is not None,
+            "instruction": f"Install {label} using its official setup instructions before installing this agent. Then choose Check installation again.",
+            "docs_url": url,
+        }
+    ]
+
+
 def install_plan(root: Path, reference: str):
     from superqode.providers.connection_profiles import get_connection_profile
     from superqode.providers.acp_registry import get_bundled_acp_catalog
@@ -124,7 +147,12 @@ def install_plan(root: Path, reference: str):
         raise ValueError(
             "This agent has no reviewed native install recipe. Use the vendor's setup instructions."
         )
-    return {"reference": reference, "command": plan.command, "argv": plan.argv}
+    return {
+        "reference": reference,
+        "command": plan.command,
+        "argv": plan.argv,
+        "requirements": installer_requirements(plan.argv),
+    }
 
 
 async def install_agent(root: Path, reference: str, status):
@@ -137,6 +165,9 @@ async def run_install_command(argv, status):
     import os
     import signal
 
+    missing = [r for r in installer_requirements(argv) if not r["installed"]]
+    if missing:
+        raise ValueError(" ".join(r["instruction"] + " " + r["docs_url"] for r in missing))
     process = await asyncio.create_subprocess_exec(
         *argv,
         stdout=asyncio.subprocess.PIPE,

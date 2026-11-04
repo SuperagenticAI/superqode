@@ -21,6 +21,16 @@ def test_get_login_spec_known_and_unknown():
         sl.get_login_spec("nope")
 
 
+def test_codex_login_honors_explicit_runtime_binary(monkeypatch, tmp_path):
+    binary = tmp_path / "my-codex"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o700)
+    monkeypatch.setenv("SUPERQODE_CODEX_BIN", str(binary))
+    assert sl.login_command(sl.CODEX_LOGIN) == [str(binary), "login", "--device-auth"]
+    binary.unlink()
+    assert sl.binary_path(sl.CODEX_LOGIN) is None
+
+
 def test_grok_auth_path_follows_grok_cli_auth(monkeypatch, tmp_path):
     """Grok's auth path must track grok_cli_auth.GROK_AUTH_FILE, not a frozen ~."""
     from superqode.providers import grok_cli_auth
@@ -187,3 +197,125 @@ def test_device_code_logins_are_still_allowed_through_the_piped_flow():
     """The guard must not touch Codex, Grok, or Copilot."""
     for product in ("codex", "grok", "copilot"):
         assert sl.get_login_spec(product).interactive_tty is False
+
+
+def test_forced_login_cannot_succeed_from_an_old_auth_file(monkeypatch, tmp_path):
+    import sys
+
+    auth = tmp_path / "auth.json"
+    auth.write_text('{"fixture": "old"}')
+    monkeypatch.setattr(sl, "binary_path", lambda _: sys.executable)
+    monkeypatch.setattr(
+        sl,
+        "login_command",
+        lambda _: [
+            sys.executable,
+            "-c",
+            "import sys; print('Device code expired', flush=True); sys.exit(2)",
+        ],
+    )
+    messages = []
+    result = asyncio.run(
+        sl.run_subscription_login(
+            "codex", force=True, auth_path=auth, open_browser=False, on_line=messages.append
+        )
+    )
+    assert not result.ok
+    assert result.returncode == 2
+    assert "Device code expired" in result.reason
+    assert any("Starting" in line for line in messages)
+    assert auth.read_text() == '{"fixture": "old"}'
+
+
+def test_forced_login_waits_for_updated_credentials(monkeypatch, tmp_path):
+    import sys
+
+    auth = tmp_path / "auth.json"
+    auth.write_text("old")
+    monkeypatch.setattr(sl, "binary_path", lambda _: sys.executable)
+    monkeypatch.setattr(
+        sl,
+        "login_command",
+        lambda _: [
+            sys.executable,
+            "-c",
+            "import pathlib,sys,time; time.sleep(0.05); pathlib.Path(sys.argv[1]).write_text('new fixture login')",
+            str(auth),
+        ],
+    )
+    result = asyncio.run(
+        sl.run_subscription_login(
+            "codex", force=True, auth_path=auth, open_browser=False, poll_interval=0.01
+        )
+    )
+    assert result.ok
+    assert auth.read_text() == "new fixture login"
+
+
+def test_cancelled_login_stops_the_cli_and_preserves_existing_credentials(monkeypatch, tmp_path):
+    import sys
+
+    auth = tmp_path / "auth.json"
+    auth.write_text("old")
+    monkeypatch.setattr(sl, "binary_path", lambda _: sys.executable)
+    monkeypatch.setattr(
+        sl,
+        "login_command",
+        lambda _: [
+            sys.executable,
+            "-c",
+            "import time; print('fixture waiting', flush=True); time.sleep(60)",
+        ],
+    )
+    processes = []
+    spawn = asyncio.create_subprocess_exec
+
+    async def capture(*args, **kwargs):
+        process = await spawn(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(sl.asyncio, "create_subprocess_exec", capture)
+
+    async def exercise():
+        ready = asyncio.Event()
+        operation = asyncio.create_task(
+            sl.run_subscription_login(
+                "codex",
+                force=True,
+                auth_path=auth,
+                open_browser=False,
+                on_line=lambda line: ready.set() if line == "fixture waiting" else None,
+            )
+        )
+        await asyncio.wait_for(ready.wait(), timeout=5)
+        operation.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await operation
+        assert processes[0].returncode is not None
+
+    asyncio.run(exercise())
+    assert auth.read_text() == "old"
+
+
+def test_forced_login_rejects_file_write_followed_by_cli_failure(monkeypatch, tmp_path):
+    import sys
+
+    auth = tmp_path / "auth.json"
+    auth.write_text("old")
+    monkeypatch.setattr(sl, "binary_path", lambda _: sys.executable)
+    monkeypatch.setattr(
+        sl,
+        "login_command",
+        lambda _: [
+            sys.executable,
+            "-c",
+            "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('partial fixture'); sys.exit(3)",
+            str(auth),
+        ],
+    )
+    result = asyncio.run(
+        sl.run_subscription_login("codex", force=True, auth_path=auth, open_browser=False)
+    )
+    assert not result.ok
+    assert result.returncode == 3

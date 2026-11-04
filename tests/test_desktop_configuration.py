@@ -13,6 +13,27 @@ from superqode.desktop_service.authentication import AuthenticationActions
 from superqode.desktop_service.service import DesktopService
 
 
+def test_agent_install_explains_missing_node_and_blocks_subprocess(monkeypatch, tmp_path):
+    from superqode.desktop_service.configuration import install_plan, run_install_command
+
+    installed = False
+    monkeypatch.setattr("shutil.which", lambda binary: "/vendor/npm" if installed else None)
+    plan = install_plan(tmp_path, "qwen-code")
+    requirement = plan["requirements"][0]
+    assert requirement["name"] == "Node.js and npm"
+    assert not requirement["installed"]
+    assert requirement["docs_url"] == "https://nodejs.org/en/download"
+
+    async def unexpected_spawn(*args, **kwargs):
+        pytest.fail("A missing installer must never start a subprocess")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", unexpected_spawn)
+    with pytest.raises(ValueError, match="Install Node.js and npm.*https://nodejs.org/en/download"):
+        asyncio.run(run_install_command(plan["argv"], lambda _: None))
+    installed = True
+    assert install_plan(tmp_path, "qwen-code")["requirements"][0]["installed"]
+
+
 def test_guided_wizard_uses_shared_builder_and_no_tool_boundaries(tmp_path):
     catalog = options()
     assert any(r["id"] == "coding" for r in catalog["starters"])

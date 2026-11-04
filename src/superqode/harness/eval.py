@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from .evaluators import evaluate_content, validate_evaluator
+from .evaluators import EvaluationResult, evaluate_content, validate_evaluator
 from .loader import load_harness_spec
 from .store import create_harness_store
 from .kernel import init_harness
@@ -348,7 +348,12 @@ async def _run_eval_task(
             content = result.content or ""
             run_id = result.run_id
         usage = _usage_from_result(result)
-        evaluation = await evaluate_content(content, task, spec=spec)
+        execution_error = _execution_error(result)
+        evaluation = (
+            EvaluationResult(evaluator="execution", status="error", reason=execution_error)
+            if execution_error
+            else await evaluate_content(content, task, spec=spec)
+        )
         passed = evaluation.status == "passed"
         reason = evaluation.reason
         return {
@@ -411,6 +416,23 @@ async def _run_eval_task(
                 ]
             ),
         }
+
+
+def _execution_error(result: Any) -> str | None:
+    """A matching answer is evidence only after all execution actually completes."""
+    if getattr(result, "failures", ()):
+        return "Workflow execution has failed steps; output was not graded."
+    runs = getattr(result, "results", (result,))
+    if not runs:
+        return "No completed harness execution was recorded; output was not graded."
+    for run in runs:
+        response = getattr(run, "response", None)
+        reason = getattr(response, "stopped_reason", None)
+        if reason != "complete":
+            return f"Harness execution did not complete ({reason or 'unknown'}); output was not graded."
+        if getattr(response, "error", None) or getattr(response, "schema_errors", None):
+            return "Harness execution recorded an error; output was not graded."
+    return None
 
 
 def _score_content(content: str, task: dict[str, Any]) -> tuple[bool, str]:

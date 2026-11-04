@@ -65,11 +65,21 @@ struct LocalModelWorkbenchView: View {
   @State private var workflow = false
   @State private var setup = false
   @State private var compatibility = false
+  @State private var quickStart = false
   private var rows: [[String: Any]] { library.hits.filter { !fitsOnly || ($0["fit"] as? [String: Any])?["likely_fits"] as? Bool == true } }
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       PageTitle(eyebrow: "Your models. Your machine.", title: "Local AI",
         subtitle: "Find weights, review their size, start a server and choose a harness to code with.")
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Start coding with a local model").font(.headline)
+          Text("Reuse a model or get guided through download, setup and a tool check.").font(.callout).foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Local Quick Start…") { quickStart = true }.buttonStyle(BrandButtonStyle()).disabled(app.projectID.isEmpty)
+      }.padding(16).brandSurface()
+      if app.projectID.isEmpty { Text("Open a project to use Local Quick Start.").font(.caption).foregroundStyle(.secondary) }
       HStack {
         let hardware = library.overview["hardware"] as? [String: Any] ?? [:]
         Label(string(hardware, "chip", "Detecting device…"), systemImage: "desktopcomputer")
@@ -160,6 +170,9 @@ struct LocalModelWorkbenchView: View {
       }) { LocalModelSetupView().environmentObject(app) }
       .centeredDialog(isPresented: $compatibility, title: "Local harness compatibility") {
         LocalModelCompatibilityView(project: app.projectID).environmentObject(app)
+      }
+      .centeredDialog(isPresented: $quickStart, title: "Local Quick Start") {
+        LocalQuickStartView(project: app.projectID).environmentObject(app)
       }
   }
   private func search() { Task { await library.search(engine: app.engine, query: query, source: source, format: format) } }

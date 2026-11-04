@@ -323,6 +323,7 @@ def remove_custom_agent(service, params):
 
 def install_plan(service, project, reference):
     from .configuration import install_plan as bundled_plan
+    from .configuration import installer_requirements
 
     root = service.project(project)
     try:
@@ -343,6 +344,7 @@ def install_plan(service, project, reference):
             raise ValueError("This agent needs the vendor's manual installation workflow") from None
         plan = {"reference": reference, "argv": argv, "command": shlex.join(argv)}
     plan["reference"] = reference
+    plan["requirements"] = installer_requirements(plan["argv"])
     plan["digest"] = hashlib.sha256(json.dumps(plan["argv"]).encode()).hexdigest()
     return plan
 

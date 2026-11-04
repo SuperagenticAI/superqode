@@ -499,9 +499,8 @@ private struct DialogAuditHost: View {
       connected = true
       capabilities = try await engine.call("capabilities") as? [String: Any] ?? [:]
       let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
-      provider = string(settings, "provider", "openai")
-      model = string(settings, "model")
-      harness = string(settings, "harness", "superqode")
+      // A fresh blank thread always starts without a remembered account.
+      resetThreadConnection()
       theme = string(settings, "theme", "dark")
       savedCredentialProviders = settings["credential_providers"] as? [String] ?? []
       for provider in savedCredentialProviders {
@@ -522,8 +521,8 @@ private struct DialogAuditHost: View {
       packs = try await engine.call("evals.packs") as? [[String: Any]] ?? []
       let args = ProcessInfo.processInfo.arguments
       try await openStartupProject(arguments: args)
-      if project.isEmpty { await refreshModels() }
-      await checkRoute()
+      // Welcome must not inventory model caches or probe a remembered account.
+      // Local AI / connection setup performs discovery on explicit navigation.
       await refreshJobs()
       poller = Task { [weak self] in
         var nextJobs = ContinuousClock.now
@@ -658,9 +657,9 @@ private struct DialogAuditHost: View {
     // destination was Welcome. History/restart restoration can apply Welcome
     // separately after open returns.
     showWelcome = false
+    if selectedJob.isEmpty { resetThreadConnection() }
     perform {
       await self.refreshGit()
-      await self.refreshModels()
       await self.loadRepositoryLayout()
     }
     if isManaged && recordHistory { perform { await self.checkManagedConnection() } }
@@ -827,6 +826,23 @@ private struct DialogAuditHost: View {
       self.error = error.localizedDescription
     }
   }
+  /// Reset composer routing only; running jobs retain their own connections.
+  func resetThreadConnection() {
+    connectionGeneration += 1
+    connectionTestGeneration += 1
+    checkingConnection = false
+    restoreSelectedConnection = false
+    harness = "disconnected"
+    provider = ""
+    model = ""
+    agentModel = ""
+    agentMode = ""
+    agentConfig = [:]
+    connectionMetadata = [:]
+    routeStatus = [:]
+    verifiedRoute = ""
+  }
+
   func selectJob(_ id: String, restoreConnection: Bool = true,
     conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil) {
     saveDraft()
@@ -857,6 +873,9 @@ private struct DialogAuditHost: View {
     eventStreamOpen = false
     activityLoadError = ""
     candidate = [:]
+    if id.isEmpty && restoreConnection {
+      resetThreadConnection()
+    }
     if !id.isEmpty && connected { perform { await self.refreshDetail() } }
   }
   func refreshDetail() async {

@@ -225,7 +225,7 @@ def discover_gguf_models(limit: int = 50) -> List[dict]:
             if len(seen) >= limit:
                 return list(seen.values())
     for root in roots:
-        if not root.exists():
+        if root.is_symlink() or not root.exists():
             continue
         try:
             for path in root.rglob("*.gguf"):

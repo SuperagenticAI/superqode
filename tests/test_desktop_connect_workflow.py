@@ -76,7 +76,83 @@ def test_subscription_menu_works_without_installed_vendor_binaries(desktop, monk
     vendors = connection_menu(root, "vendors")["rows"]
     codex = next(row for row in vendors if row["id"] == "codex")
     assert codex["route"]["subscription_vendor"] == "codex"
-    assert "login" not in codex
+    assert not codex["login"]["available"]
+    assert codex["login"]["command"] == []
+    assert not codex["setup_ready"]
+    assert not codex["route"]["available"]
+    requirement = codex["requirements"][0]
+    assert requirement["name"] == "Codex (ChatGPT) CLI"
+    assert "@openai/codex" in requirement["instruction"]
+    assert requirement["docs_url"] == "https://developers.openai.com/codex/cli/"
+
+
+@pytest.mark.parametrize("profile_id", ["codex-sdk", "copilot"])
+@pytest.mark.parametrize(
+    "runtime_installed,cli_installed", [(False, False), (False, True), (True, False), (True, True)]
+)
+def test_sdk_and_sign_in_prerequisites_are_independent(
+    desktop, monkeypatch, profile_id, runtime_installed, cli_installed
+):
+    from dataclasses import replace
+    from superqode.providers import connection_profiles as profiles
+
+    profile = replace(profiles.get_connection_profile(profile_id), detect=lambda: runtime_installed)
+    monkeypatch.setattr(profiles, "list_connection_profiles", lambda menu: [profile])
+    monkeypatch.setattr(profiles, "get_connection_profile", lambda reference: profile)
+    monkeypatch.setattr(
+        "superqode.providers.subscription_login.binary_path",
+        lambda spec: "/vendor/cli" if cli_installed else None,
+    )
+    _, _, root = desktop
+    row = connection_menu(root, "vendors")["rows"][0]
+    assert row["menu"] == "vendors"
+    assert row["setup_ready"] is runtime_installed
+    assert row["route"]["available"] is runtime_installed
+    assert row["login"]["available"] is cli_installed
+    assert bool(row["login"]["command"]) is cli_installed
+    cli = row["requirements"][0]
+    assert cli["installed"] is cli_installed
+    assert not cli["required_for_connection"]
+    runtime = row["requirements"][1]
+    assert runtime["installed"] is runtime_installed
+    assert runtime["docs_url"].startswith("https://")
+    if profile_id == "codex-sdk":
+        assert "another environment does not update the app" in runtime["instruction"]
+
+
+def test_cli_requirement_blocks_connection_even_if_profile_probe_is_stale(desktop, monkeypatch):
+    from dataclasses import replace
+    from superqode.providers import connection_profiles as profiles
+
+    profile = replace(profiles.get_connection_profile("codex"), detect=lambda: True)
+    monkeypatch.setattr(profiles, "get_connection_profile", lambda reference: profile)
+    monkeypatch.setattr("superqode.providers.subscription_login.binary_path", lambda spec: None)
+    _, _, root = desktop
+    route = profile_route(root, "codex")
+    assert not route["available"]
+    assert "@openai/codex" in route["issue"]
+
+
+def test_rechecking_connection_menu_detects_new_cli_installation(desktop, monkeypatch):
+    from dataclasses import replace
+    from superqode.providers import connection_profiles as profiles
+
+    installed = False
+    profile = replace(profiles.get_connection_profile("codex"), detect=lambda: installed)
+    monkeypatch.setattr(profiles, "list_connection_profiles", lambda menu: [profile])
+    monkeypatch.setattr(profiles, "get_connection_profile", lambda reference: profile)
+    monkeypatch.setattr(
+        "superqode.providers.subscription_login.binary_path",
+        lambda spec: "/vendor/codex" if installed else None,
+    )
+    service, project, _ = desktop
+    params = {"project": project["id"], "menu": "vendors"}
+    first = service.dispatch("connect.menu", params)["rows"][0]
+    assert not first["setup_ready"] and not first["login"]["available"]
+    installed = True
+    refreshed = service.dispatch("connect.menu", params)["rows"][0]
+    assert refreshed["setup_ready"] and refreshed["login"]["available"]
+    assert refreshed["route"]["available"]
 
 
 @pytest.mark.parametrize(

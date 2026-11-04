@@ -226,6 +226,17 @@ def test_unknown_size_and_memory_are_not_a_fit_guarantee(monkeypatch):
     assert report["estimate_gb"] is None and not report["likely_fits"]
 
 
+def test_q8_weights_are_not_recommended_as_q4_on_a_32gb_mac(monkeypatch):
+    monkeypatch.setattr(
+        workbench,
+        "detect_hardware",
+        lambda: HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=32),
+    )
+    report = workbench.fit("Qwen-30B-Q8_0")
+    assert report["estimate_gb"] == 31.5
+    assert not report["likely_fits"]
+
+
 def test_native_install_job_is_projectless_idempotent_and_gets_no_provider_secrets(
     desktop, monkeypatch, tmp_path
 ):

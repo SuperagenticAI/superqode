@@ -1146,6 +1146,16 @@ class DesktopService:
             from . import hub_access
             from superqode.local import workbench
 
+            if method.startswith("local.models.quickstart."):
+                from . import local_quickstart
+
+                if method == "local.models.quickstart.catalog":
+                    return local_quickstart.catalog(self, params["project"])
+                if method == "local.models.quickstart.prepare":
+                    return local_quickstart.prepare(self, params)
+                if method == "local.models.quickstart.start":
+                    return local_quickstart.start(self, params)
+
             if method == "local.models.storage":
                 from superqode.local import storage
 

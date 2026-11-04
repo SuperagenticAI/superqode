@@ -118,6 +118,12 @@ final class EngineFrames {
       .appendingPathComponent("SuperQode").path
     let child = Process()
     child.executableURL = executable
+    // Finder may supply an unrelated working directory. Keep imports and
+    // relative discovery inside app-owned storage until a project is selected.
+    let workingDirectory = URL(fileURLWithPath: state, isDirectory: true)
+    try FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true,
+      attributes: [.posixPermissions: 0o700])
+    child.currentDirectoryURL = workingDirectory
     backgroundMode = management || (background ?? (UserDefaults.standard.bool(forKey: "nativeBackgroundEngine") && !ProcessInfo.processInfo.arguments.contains("--smoke-test")))
     child.arguments = ["-u", "-m", backgroundMode ? "superqode.desktop_service.daemon" : "superqode.desktop_service.service", "--state", state]
     if management { child.arguments?.append("--manage") }

@@ -4,12 +4,13 @@ import XCTest
 
 final class ACPOnboardingTests: XCTestCase {
   func testVerificationRequiresCurrentLaunchAndSuccessfulCheck() {
-    let route: [String: Any] = ["digest": "current"]
+    let route: [String: Any] = ["digest": "current", "available": true]
     XCTAssertTrue(verifiedACPConnection(route: route, metadata: ["connected": true, "route_digest": "current"]))
     XCTAssertFalse(verifiedACPConnection(route: route, metadata: ["connected": true, "route_digest": "old"]))
     XCTAssertFalse(verifiedACPConnection(route: route, metadata: ["connected": false, "route_digest": "current"]))
     XCTAssertFalse(verifiedACPConnection(route: route, metadata: ["connected": true, "route_digest": "current", "last_check_error": "disconnected"]))
     XCTAssertFalse(verifiedACPConnection(route: [:], metadata: ["connected": true, "route_digest": ""]))
+    XCTAssertFalse(verifiedACPConnection(route: ["digest": "current", "available": false], metadata: ["connected": true, "route_digest": "current"]))
   }
 
   @MainActor func testTerminalExitCodesDistinguishSuccessfulAndFailedSignIn() async throws {

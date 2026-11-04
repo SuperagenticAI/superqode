@@ -91,6 +91,7 @@ struct ConnectionView: View {
   @State private var authentication: [String: Any]?
   @State private var terminalError = ""
   @State private var terminalLogin: [String]?
+  @State private var loginNotice = ""
   init(initialPage: String = "menu:root") {
     _path = State(
       initialValue: initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage])
@@ -227,10 +228,15 @@ struct ConnectionView: View {
       .centeredDialog(
         isPresented: Binding(
           get: { terminalLogin != nil }, set: { if !$0 { terminalLogin = nil } }),
-        title: "Sign in"
+        title: "Sign in", onDismiss: {
+          if loginNotice.hasPrefix("Starting sign-in") {
+            loginNotice = "Sign-in closed before completion. Try again or follow the agent’s sign-in instructions."
+          }
+        }
       ) {
         if let arguments = terminalLogin {
           TerminalLoginView(terminals: app.terminals, arguments: arguments) {
+            loginNotice = "Sign-in completed. Check the connection before starting a task."
             menuCache = [:]
             app.perform { try await app.refreshDefinitions() }
           }.environmentObject(app)
@@ -239,10 +245,18 @@ struct ConnectionView: View {
       .centeredDialog(
         isPresented: Binding(
           get: { authentication != nil }, set: { if !$0 { authentication = nil } }),
-        title: "Authentication"
+        title: "Authentication", onDismiss: {
+          if loginNotice.hasPrefix("Starting sign-in") {
+            loginNotice = "Sign-in closed before completion. Try signing in again, or complete the agent’s sign-in in Terminal and check the connection."
+          }
+        }
       ) {
         if let request = authentication {
-          AuthenticationProgressView(request: request) { _ in
+          AuthenticationProgressView(request: request) { result in
+            if result["signed_in"] as? Bool == true {
+              loginNotice = "Sign-in completed. Choose Use this connection to continue. Model access is verified by the agent when you start a task."
+              app.notice = loginNotice
+            }
             authentication = nil
             menuCache = [:]
             app.perform {
@@ -448,74 +462,105 @@ struct ConnectionView: View {
           dismiss()
         }, edit: { customEditing = route; push("custom-acp") })
       } else {
-      if let login = selected["login"] as? [String: Any] {
-        Button("Sign in to " + string(login, "label")) {
-          if login["interactive"] as? Bool == true {
-            terminalLogin = login["command"] as? [String] ?? []
-          } else {
-            authentication = ["action": "subscription", "vendor": string(login, "id")]
+        if let requirements = selected["requirements"] as? [[String: Any]], !requirements.isEmpty {
+          ConnectionRequirementsView(requirements: requirements)
+          Button("Check installation again") { Task { await recheckPrerequisites() } }
+            .disabled(loading || app.busy || app.anyActive)
+        }
+        if let login = selected["login"] as? [String: Any] {
+          Button("Sign in to " + string(login, "label")) {
+            terminalError = ""
+            loginNotice = "Starting sign-in. Follow the instructions in the sign-in window."
+            if login["interactive"] as? Bool == true {
+              terminalLogin = login["command"] as? [String] ?? []
+            } else {
+              authentication = ["action": "subscription", "vendor": string(login, "id")]
+            }
+          }.disabled(login["available"] as? Bool != true || loading || app.busy || app.anyActive)
+          if !terminalError.isEmpty { Text(terminalError).foregroundStyle(.orange) }
+          if !loginNotice.isEmpty { Text(loginNotice).font(.callout).textSelection(.enabled) }
+          if string(selected, "id") == "codex-sdk" {
+            Text("Codex SDK signs in through the installed Codex CLI. If SDK setup is unavailable, choose Codex CLI from Existing subscription to use the same account without the optional SDK.")
+              .font(.caption).foregroundStyle(.secondary)
           }
         }
-        if !terminalError.isEmpty { Text(terminalError).foregroundStyle(.orange) }
-      }
-      if let initialRoute = selected["route"] as? [String: Any] {
-        let route =
-          app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
-        Pill(title: string(route, "auth", "Agent-managed authentication"), color: .qAccent)
-        Text(
-          "Use the vendor’s existing local sign-in. The agent owns its model and coding loop; no separate model or harness configuration is needed."
-        ).foregroundStyle(.secondary)
-        Text(
-          "Subscription access and billing remain unverified until the vendor connects. SuperQode removes known API-key overrides for explicit subscription routes."
-        ).font(.caption).foregroundStyle(.secondary)
-        if route["available"] as? Bool != true {
+        if let initialRoute = selected["route"] as? [String: Any] {
+          let route =
+            app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
+          Pill(title: string(route, "auth", "Agent-managed authentication"), color: .qAccent)
           Text(
-            string(route, "issue", "Install and sign in to this agent in Terminal, then reconnect.")
+            "Use the vendor’s existing local sign-in. The agent owns its model and coding loop; no separate model or harness configuration is needed."
+          ).foregroundStyle(.secondary)
+          Text(
+            "Subscription access and billing remain unverified until the vendor connects. SuperQode removes known API-key overrides for explicit subscription routes."
+          ).font(.caption).foregroundStyle(.secondary)
+          if route["available"] as? Bool != true {
+            Text(
+              string(route, "issue", "Install and sign in to this agent in Terminal, then reconnect.")
+            ).textSelection(.enabled)
+          }
+          nativeButton("connect.use", action: {
+            app.chooseConnection(route)
+            dismiss()
+          }) { Text("Use this connection") }
+            .disabled(route["available"] as? Bool != true || selected["setup_ready"] as? Bool == false || loading || app.busy || app.anyActive)
+        } else {
+          let issue = string(selected, "issue")
+          Text(
+            issue.isEmpty
+              ? "This catalog entry does not expose an executable connection. Review its setup notes or choose another connection."
+              : issue
           ).textSelection(.enabled)
-        }
-        nativeButton("connect.use", action: {
-          app.chooseConnection(route)
-          dismiss()
-        }) { Text("Use this connection") }
-          .disabled(route["available"] as? Bool != true)
-      } else {
-        let issue = string(selected, "issue")
-        Text(
-          issue.isEmpty
-            ? "This catalog entry does not expose an executable connection. Review its setup notes or choose another connection."
-            : issue
-        ).textSelection(.enabled)
-        if !string(selected, "setup_note").isEmpty {
-          Text(string(selected, "setup_note")).font(.caption).foregroundStyle(.secondary)
-        }
-        if string(selected, "connector") == "plan-guidance" {
-          Text(
-            "This model subscription integration is experimental and unavailable in the terminal too. Use a vendor subscription agent from Existing harnesses → Subscriptions instead."
-          ).font(.callout).foregroundStyle(.secondary)
-          Button("Browse subscription agents") { push("menu:vendors") }
-        }
-        Button("Choose an existing HarnessSpec") { push("harnesses") }
-      }
-      if let plan = connectionInstallPlan(selected, routes: app.harnesses) {
-        Divider().padding(.top, 8)
-        Label("Installation required", systemImage: "arrow.down.circle").font(.headline)
-        Text("Install this agent on your Mac, then use the connection above.")
-          .font(.callout).foregroundStyle(.secondary)
-        CodeBlock(text: string(plan, "command")).frame(height: 70)
-        Button("Install this agent…") {
-          if app.confirm(
-            "Install this coding agent?",
-            "Run the reviewed package-manager command on this Mac:\n" + string(plan, "command"),
-            button: "Install")
-          {
-            authentication = [
-              "action": "install", "project": app.projectID, "reference": string(plan, "reference"),
-            ]
+          if !string(selected, "setup_note").isEmpty {
+            Text(string(selected, "setup_note")).font(.caption).foregroundStyle(.secondary)
           }
+          if string(selected, "connector") == "plan-guidance" {
+            Text(
+              "This model subscription integration is experimental and unavailable in the terminal too. Use a vendor subscription agent from Existing harnesses → Subscriptions instead."
+            ).font(.callout).foregroundStyle(.secondary)
+            Button("Browse subscription agents") { push("menu:vendors") }
+          }
+          Button("Choose an existing HarnessSpec") { push("harnesses") }
         }
-      }
+        if let plan = connectionInstallPlan(selected, routes: app.harnesses) {
+          Divider().padding(.top, 8)
+          Label("Installation required", systemImage: "arrow.down.circle").font(.headline)
+          Text("Install this agent on your Mac, then use the connection above.")
+            .font(.callout).foregroundStyle(.secondary)
+          CodeBlock(text: string(plan, "command")).frame(height: 70)
+          if let requirements = plan["requirements"] as? [[String: Any]], !requirements.isEmpty {
+            ConnectionRequirementsView(requirements: requirements)
+          }
+          Button("Install this agent…") {
+            if app.confirm(
+              "Install this coding agent?",
+              "Run the reviewed package-manager command on this Mac:\n" + string(plan, "command"),
+              button: "Install")
+            {
+              authentication = [
+                "action": "install", "project": app.projectID, "reference": string(plan, "reference"),
+              ]
+            }
+          }.disabled((plan["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || loading || app.busy || app.anyActive)
+        }
       }
     }
+  }
+  private func recheckPrerequisites() async {
+    let identity = page
+    let project = app.projectID
+    let reference = string(selected, "id")
+    loading = true
+    defer { loading = false }
+    do {
+      let refreshed = try await app.engine.call("connect.menu", ["project": project, "menu": string(selected, "menu", "vendors")]) as? [String: Any] ?? [:]
+      try await app.refreshDefinitions()
+      guard page == identity, app.projectID == project else { return }
+      if let row = (refreshed["rows"] as? [[String: Any]])?.first(where: { string($0, "id") == reference }) {
+        details[identity] = row
+      }
+      menuCache = [:]; failure = ""
+    } catch { if page == identity { failure = error.localizedDescription } }
   }
   private func activate(_ row: [String: Any]) {
     if let vendor = row["vendor_key"] as? [String: Any], string(row, "harness_ref").isEmpty,

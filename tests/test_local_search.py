@@ -92,6 +92,24 @@ def test_memory_estimate_from_name():
     assert est("4bit-only-no-params") is None
 
 
+@pytest.mark.parametrize(
+    "label,expected",
+    [
+        ("Qwen-30B_Q8_0.gguf", 31.5),
+        ("Qwen-30B-Q6_K.gguf", 23.4),
+        ("Qwen-30B-Q2_K.gguf", 10.2),
+        ("Qwen-30B-A3B_Q5_K_M.gguf", 20.4),
+        ("Qwen_30B_BF16", 60.0),
+        ("Qwen-30B-Q80", 17.4),
+        ("Qwen-30B-Q8custom", 17.4),
+    ],
+)
+def test_gguf_separators_preserve_weight_precision(label, expected):
+    from superqode.local.matrix import estimate_model_memory_gb
+
+    assert estimate_model_memory_gb(label) == expected
+
+
 def test_memory_fit_phrase_verdicts():
     from superqode.local.matrix import memory_fit_phrase as fit
 

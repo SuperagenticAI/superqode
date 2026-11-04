@@ -82,8 +82,16 @@ async def run(provider, model, endpoint, directory, emit):
             for event in result.events
         )
         answer = result.content.strip() == marker
+        response = result.response
+        execution_complete = (
+            response.stopped_reason == "complete"
+            and not response.error
+            and not response.schema_errors
+        )
         return {
-            "status": "passed" if read and answer else "failed",
+            "status": "passed" if read and answer and execution_complete else "failed",
+            "execution_complete": execution_complete,
+            "stopped_reason": response.stopped_reason,
             "backend": "builtin",
             "profile": "Core read-only test profile",
             "profile_digest": digest,

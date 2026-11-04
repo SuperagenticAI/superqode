@@ -243,6 +243,10 @@ def get_login_spec(product: str) -> SubscriptionLoginSpec:
 
 
 def binary_path(spec: SubscriptionLoginSpec) -> Optional[str]:
+    if spec.id == "codex":
+        from superqode.runtime.codex_cli import codex_binary
+
+        return codex_binary()
     return shutil.which(spec.binary)
 
 
@@ -374,6 +378,11 @@ async def run_subscription_login(
             auth_path=target_auth,
         )
 
+    def login_completed(returncode=None):
+        # A forced login must finish successfully; an old or partially written
+        # auth file must not close the dialog before the CLI finishes.
+        return has_local_login(spec, path=target_auth) and (not force or returncode == 0)
+
     if binary_path(spec) is None:
         return LoginResult(
             ok=False,
@@ -416,6 +425,7 @@ async def run_subscription_login(
                         break
 
     process: Optional[asyncio.subprocess.Process] = None
+    _emit(f"Starting {spec.label} sign-in. Waiting for the vendor's login instructions…")
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -447,7 +457,7 @@ async def run_subscription_login(
 
     try:
         while True:
-            if has_local_login(spec, path=target_auth):
+            if login_completed(process.returncode):
                 # Credentials landed; stop the CLI if it is still waiting.
                 if process.returncode is None:
                     process.terminate()
@@ -480,6 +490,15 @@ async def run_subscription_login(
                 continue
             except asyncio.CancelledError:
                 raise
+    except asyncio.CancelledError:
+        if process.returncode is None:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+        raise
     finally:
         if not reader.done():
             try:
@@ -490,7 +509,7 @@ async def run_subscription_login(
             _emit(buffer)
             buffer = ""
 
-    if has_local_login(spec, path=target_auth):
+    if not timed_out and login_completed(returncode):
         return LoginResult(
             ok=True,
             reason="signed in",
@@ -500,7 +519,7 @@ async def run_subscription_login(
             returncode=returncode,
         )
 
-    if spec.success_on_zero_exit and returncode == 0:
+    if not timed_out and spec.success_on_zero_exit and returncode == 0:
         if spec.id == MUSE_LOGIN.id:
             # Muse leaves nothing probeable behind, so a clean exit is the only
             # evidence the sign-in happened. Record it or the user is asked to

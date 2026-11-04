@@ -1167,8 +1167,21 @@ struct EventRow: View {
         VStack(alignment: .leading, spacing: 10) {
           Label("Permission requested", systemImage: "hand.raised").font(.headline).foregroundStyle(
             .orange)
-          Text(pretty(data["tool"])).font(.system(size: 11, design: .monospaced)).textSelection(
-            .enabled)
+          let tool = data["tool"] as? [String: Any] ?? [:]
+          let arguments = tool["arguments"] as? [String: Any]
+            ?? tool["rawInput"] as? [String: Any] ?? [:]
+          Text(string(tool, "title", string(tool, "tool_name", string(tool, "name", "Review the requested action before allowing it."))))
+            .textSelection(.enabled)
+          if let command = tool["command"] as? String ?? arguments["command"] as? String {
+            Text(command).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+          }
+          if let path = tool["path"] as? String ?? arguments["path"] as? String {
+            Text(path).font(.callout).textSelection(.enabled)
+          }
+          DisclosureGroup("Technical details") {
+            Text(pretty(data["tool"])).font(.system(size: 11, design: .monospaced))
+              .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+          }.font(.caption)
           if data["preview_truncated"] as? Bool == true {
             Text(
               "This request preview is truncated. Deny it if you need complete details before allowing the action."

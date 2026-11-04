@@ -5,6 +5,7 @@ import json
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 
 import pytest
 
@@ -136,3 +137,66 @@ def test_core_read_check_executes_one_tool_and_keeps_project_untouched(
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize(
+    "stop,error,schema_errors",
+    [
+        ("error", "fixture failure", None),
+        ("cancelled", None, None),
+        ("max_iterations", None, None),
+        ("complete", "fixture failure", None),
+        ("complete", None, ["invalid output"]),
+    ],
+)
+@pytest.mark.asyncio
+async def test_matching_read_evidence_cannot_hide_failed_execution(
+    tmp_path, monkeypatch, stop, error, schema_errors
+):
+    from superqode.agent.loop import AgentResponse
+    from superqode.local.coding_check import run
+
+    class Session:
+        async def run(self, request):
+            marker = (request.working_directory / "verification.txt").read_text().strip()
+            return SimpleNamespace(
+                response=AgentResponse(
+                    content=marker,
+                    messages=[],
+                    tool_calls_made=1,
+                    iterations=1,
+                    stopped_reason=stop,
+                    error=error,
+                    schema_errors=schema_errors,
+                ),
+                content=marker,
+                events=[
+                    SimpleNamespace(
+                        type="tool_result",
+                        data={"tool_name": "read", "success": True, "output": marker},
+                    )
+                ],
+                iterations=1,
+                tool_calls_made=1,
+                tokens_in=10,
+                tokens_out=2,
+            )
+
+    class Kernel:
+        async def session(self):
+            return Session()
+
+    async def initialize(*args, **kwargs):
+        return Kernel()
+
+    monkeypatch.setattr("superqode.harness.init_harness", initialize)
+    report = await run(
+        "lmstudio", "fixture-model", "http://127.0.0.1:1234/v1", tmp_path, lambda *args: None
+    )
+    assert all(check["ok"] for check in report["checks"])
+    assert report["status"] == "failed"
+    assert report["execution_complete"] is False
+    assert report["stopped_reason"] == stop
+    assert report["tokens_in"] == 10
+    assert report["tokens_out"] == 2
+    assert not list(tmp_path.glob("core-read-check-*"))

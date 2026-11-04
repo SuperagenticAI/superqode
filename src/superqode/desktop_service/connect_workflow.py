@@ -93,6 +93,85 @@ def runtime_catalog():
     return rows
 
 
+def connection_requirements(profile, route=None):
+    """Local prerequisites only; presence never certifies account entitlement."""
+    from superqode.providers.subscription_env import resolve_vendor
+    from superqode.providers.subscription_login import get_login_spec, binary_path
+    from superqode.providers.harness_catalog import get_entry
+
+    docs = {
+        "codex": "https://developers.openai.com/codex/cli/",
+        "copilot": "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+        "grok": "https://x.ai/cli",
+        "muse": "https://dev.meta.ai/",
+        "prime-agent": "https://github.com/PrimeIntellect-ai/prime-agent",
+        "fx": "https://github.com/vercel-labs/fx",
+    }
+    rows = []
+    try:
+        login = get_login_spec(resolve_vendor(profile.id) or profile.id)
+        rows.append(
+            {
+                "id": "cli",
+                "name": login.label + " CLI",
+                "installed": binary_path(login) is not None,
+                "instruction": login.install_hint,
+                "docs_url": docs.get(login.id, ""),
+                "required_for_connection": profile.id not in {"codex-sdk", "copilot"},
+            }
+        )
+    except KeyError:
+        pass
+    if profile.id == "codex-sdk":
+        rows.append(
+            {
+                "id": "sdk",
+                "name": "Codex Python SDK in the SuperQode engine",
+                "installed": profile.available,
+                "instruction": "Use an app build that includes the Codex SDK, or choose Codex CLI to use the same account without this optional SDK. Installing Python packages in another environment does not update the app.",
+                "docs_url": "https://developers.openai.com/codex/sdk/",
+                "required_for_connection": True,
+            }
+        )
+    elif profile.id == "copilot":
+        rows.append(
+            {
+                "id": "runtime",
+                "name": "GitHub Copilot CLI or SDK runtime",
+                "installed": profile.available,
+                "instruction": "Install GitHub Copilot CLI with npm install -g @github/copilot, or use an app build that includes the Copilot SDK. The SDK can download its runtime on first connection.",
+                "docs_url": docs["copilot"],
+                "required_for_connection": True,
+            }
+        )
+    elif not rows and (route or {}).get("desktop_kind") == "acp":
+        rows.append(
+            {
+                "id": "agent",
+                "name": profile.label + " local launcher",
+                "installed": route["available"],
+                "instruction": route.get("issue") or profile.unavailable_hint,
+                "docs_url": route.get("website", ""),
+            }
+        )
+    elif not rows and profile.connector in {"runtime", "copilot", "prime-rpc"}:
+        entry = get_entry(profile.id)
+        rows.append(
+            {
+                "id": "runtime",
+                "name": profile.label + " runtime",
+                "installed": profile.available,
+                "instruction": profile.unavailable_hint,
+                "docs_url": "https://antigravity.google/docs/cli-install"
+                if profile.id == "antigravity"
+                else (entry.homepage or entry.repository)
+                if entry
+                else "",
+            }
+        )
+    return rows
+
+
 def profile_route(root: Path, profile_id: str):
     from superqode.providers.connection_profiles import get_connection_profile
     from superqode.providers.subscription_env import resolve_vendor
@@ -134,13 +213,19 @@ def profile_route(root: Path, profile_id: str):
         runtime = "prime-agent"
     if profile.connector not in {"runtime", "copilot", "prime-rpc"}:
         raise ValueError("This profile needs a model, protocol address or harness setup first")
+    requirements = connection_requirements(profile)
+    missing = [
+        row
+        for row in requirements
+        if row.get("required_for_connection", True) and not row["installed"]
+    ]
     route = {
         "id": "connection:" + profile.id,
         "name": profile.label,
         "description": profile.description,
         "runtime": runtime,
-        "available": profile.available,
-        "issue": profile.unavailable_hint,
+        "available": profile.available and not missing,
+        "issue": " ".join(row["instruction"] for row in missing) or profile.unavailable_hint,
         "desktop_kind": "connection",
         "kind": "runtime",
         "subscription_vendor": resolve_vendor(profile.id)
@@ -173,6 +258,7 @@ def connection_menu(root: Path, menu: str):
             "runtime": p.runtime or "",
             "provider": p.byok_provider or "",
             "next": MENU_CONNECTORS.get(p.connector, ""),
+            "menu": menu,
         }
         if p.connector == "language-harness-picker":
             row["next"] = "by-language:" + p.label
@@ -205,19 +291,25 @@ def connection_menu(root: Path, menu: str):
             row["route"] = profile_route(root, p.id)
         except ValueError:
             pass
+        row["requirements"] = connection_requirements(p, row.get("route"))
+        row["setup_ready"] = all(
+            r["installed"] for r in row["requirements"] if r.get("required_for_connection", True)
+        )
         if p.auth_mode == "subscription" or p.connector in {"runtime", "copilot", "acp"}:
             from superqode.providers.subscription_env import resolve_vendor
-            from superqode.providers.subscription_login import get_login_spec, login_command
+            from superqode.providers.subscription_login import get_login_spec, binary_path
 
             try:
                 login = get_login_spec(resolve_vendor(p.id) or p.id)
+                binary = binary_path(login)
                 row["login"] = {
                     "id": login.id,
                     "label": login.label,
-                    "command": login_command(login),
+                    "command": [binary, *login.login_args] if binary else [],
+                    "available": binary is not None,
                     "interactive": login.interactive_tty,
                 }
-            except (KeyError, FileNotFoundError):
+            except KeyError:
                 pass
         from .configuration import install_plan
 
