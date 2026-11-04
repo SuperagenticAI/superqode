@@ -34,6 +34,11 @@ output text matches. Local cache inventory avoids linked directories and externa
 file targets, GGUF estimates handle underscore-separated names, and saved workspace
 recovery remains readable after atomic writes on macOS.
 
+Generic evaluations do not yet create a fresh workspace for every task and
+candidate. Runs that modify files can affect later trials; use disposable fixtures
+and independently verify comparisons before adopting a candidate. Text-matching
+graders alone do not establish that a code change passes project tests.
+
 ## Version 0.3.3
 
 Version 0.3.3 (build 19) bundles Python engine 2.31.2. Agent Activity starts

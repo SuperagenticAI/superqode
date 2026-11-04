@@ -1799,7 +1799,9 @@ private struct DialogAuditHost: View {
         try await engine.call(
           "evaluations.start",
           [
-            "project": projectID, "harness": harness, "provider": "ollama",
+            // Project opening now intentionally clears the composer route.
+            // This setup-only check chooses its fixture harness explicitly.
+            "project": projectID, "harness": "no-tool", "provider": "ollama",
             "model": "native-setup-only", "tasks": string(packs[0], "path"), "live": false,
             "command_id": UUID().uuidString,
           ]) as? [String: Any] ?? [:]
