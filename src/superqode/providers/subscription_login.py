@@ -485,7 +485,12 @@ async def run_subscription_login(
                 break
 
             try:
-                await asyncio.wait_for(asyncio.shield(reader), timeout=poll_interval)
+                if reader.done():
+                    # EOF can arrive before process exit. Waiting on a finished
+                    # reader would spin without letting the child watcher run.
+                    await asyncio.wait_for(process.wait(), timeout=poll_interval)
+                else:
+                    await asyncio.wait_for(asyncio.shield(reader), timeout=poll_interval)
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:

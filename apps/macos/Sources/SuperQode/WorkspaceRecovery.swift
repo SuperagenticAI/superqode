@@ -146,7 +146,10 @@ final class WorkspaceRecoveryStore {
       throw RecoveryError.invalidFile
     }
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-    try data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
+    // Recovery is reopened across UI and background-engine lifecycles. Use
+    // login-session protection; unless-open files can become unreadable after
+    // closing on macOS. The directory and file also retain 0700/0600 modes.
+    try data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
   }
 

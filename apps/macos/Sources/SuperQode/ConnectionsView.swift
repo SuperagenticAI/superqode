@@ -70,6 +70,9 @@ struct ConnectionSourcesView: View {
         if saving { ProgressView().controlSize(.small) }
       }.padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
     }.defaultScrollAnchor(.top)
+      .task(id: mode) {
+        if mode == "Local model" { await app.refreshModels() }
+      }
       .onAppear {
         if !cloudProviders.contains(where: { string($0, "id") == selectedProvider }),
           let first = cloudProviders.first

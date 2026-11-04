@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.3
+# SuperQode for macOS public beta 0.3.4
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -15,6 +15,24 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.4
+
+Version 0.3.4 (build 20) bundles Python engine 2.31.3. Connection setup now explains
+missing CLIs, SDKs and package managers, offers installation rechecks, and keeps
+sign-in open until the vendor finishes successfully. Failed sign-in can be retried;
+cancellation stops the pending CLI.
+
+Local Quick Start guides an explicitly selected model through reviewed setup,
+download and a bounded read-only tool check on generated data. Reopening resumes
+progress; failed steps require an explicit retry. The existing local-model picker
+refreshes when opened, without scanning caches on Welcome. New blank conversations
+start disconnected rather than inheriting a remembered account.
+
+Evaluation and local checks reject incomplete or failed executions even when
+output text matches. Local cache inventory avoids linked directories and external
+file targets, GGUF estimates handle underscore-separated names, and saved workspace
+recovery remains readable after atomic writes on macOS.
 
 ## Version 0.3.3
 

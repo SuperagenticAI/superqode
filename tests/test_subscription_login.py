@@ -319,3 +319,35 @@ def test_forced_login_rejects_file_write_followed_by_cli_failure(monkeypatch, tm
     )
     assert not result.ok
     assert result.returncode == 3
+
+
+def test_forced_login_waits_for_exit_after_stdout_closes(monkeypatch, tmp_path):
+    import sys
+
+    auth = tmp_path / "auth.json"
+    monkeypatch.setattr(sl, "binary_path", lambda _: sys.executable)
+    monkeypatch.setattr(
+        sl,
+        "login_command",
+        lambda _: [
+            sys.executable,
+            "-c",
+            "import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text('fixture'); "
+            "os.close(1); os.close(2); time.sleep(0.1)",
+            str(auth),
+        ],
+    )
+
+    async def exercise():
+        # The outer deadline also catches a reader-EOF loop that starves the
+        # event loop: that loop would return a false five-second timeout.
+        return await asyncio.wait_for(
+            sl.run_subscription_login(
+                "codex", force=True, auth_path=auth, open_browser=False, poll_interval=0.01
+            ),
+            timeout=2,
+        )
+
+    result = asyncio.run(exercise())
+    assert result.ok
+    assert result.returncode == 0

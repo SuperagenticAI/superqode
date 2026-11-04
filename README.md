@@ -52,7 +52,7 @@
 
 The app bundles its Python engine. You do not need to install Python, use the App Store or create a SuperQode account. External agents and local model servers may require their own setup. Provider subscriptions and usage charges still apply.
 
-**Public beta 0.1.11:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256).
+**Public beta 0.3.4:** Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental; full terminal feature parity is not included. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256).
 
 ## Code, measure and improve in one workspace
 

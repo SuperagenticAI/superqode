@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.3] - 2026-11-04
+
+### Added
+
+- Project-scoped Local Quick Start in the Mac app, with reviewed runtime setup,
+  model downloads and bounded Core read-tool verification. Setup progress can be
+  reopened, and failed steps require an explicit retry.
+- Clear local CLI, SDK and installer prerequisites for supported agent connections,
+  with installation rechecks and sign-in recovery guidance.
+
+### Fixed
+
+- Forced vendor sign-in waits for successful CLI completion instead of accepting
+  an existing or partially written credential file. EOF no longer starves process
+  completion, and cancellation stops the sign-in process.
+- Failed, cancelled, incomplete and schema-invalid harness executions cannot pass
+  an evaluation or local coding check merely by producing matching output.
+- Local model inventory skips linked directories and external file targets;
+  GGUF memory estimates recognise underscore-separated size and quantization names.
+- Welcome does not inventory model caches or probe a remembered account. Blank
+  conversations require an explicit connection; opening the local model picker
+  discovers installed models on demand.
+- Native workspace recovery uses login-session file protection so saved drafts
+  remain readable after atomic writes on macOS, with private file permissions.
+
+Ships alongside macOS **0.3.4 / build 20**, Public Beta. Super Agent and Pro remain
+previews. Optional runtimes and model weights require their own setup.
+
 ## [2.31.2] - 2026-11-03
 
 ### Added
