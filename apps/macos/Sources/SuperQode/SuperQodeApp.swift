@@ -498,7 +498,7 @@ struct CodingView: View {
             .disabled(app.workbenchDrawer != "Files").allowsHitTesting(app.workbenchDrawer == "Files")
             .accessibilityHidden(app.workbenchDrawer != "Files")
         }
-        if !app.workbenchDrawer.isEmpty && app.workbenchDrawer != "Files" {
+        if !app.workbenchDrawer.isEmpty && app.workbenchDrawer != "Files" && WorkspaceNavigationGroup.usesCodingWorkspace(app.section) {
           drawer(height: size.height, name: app.workbenchDrawer)
         }
       }.id(app.projectID)
@@ -509,7 +509,7 @@ struct CodingView: View {
   }
   private var inspector: some View {
     Group {
-      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) { activeInspector }
+      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) && !app.drawerExpanded { activeInspector }
     }
   }
   private var activeInspector: some View {
@@ -528,7 +528,7 @@ struct CodingView: View {
   private var conversation: some View {
     Group {
       if app.selectedJob.isEmpty { GettingStartedView(draftStore: app.draftStore) }
-      else { EventStream(suspended: !WorkspaceNavigationGroup.usesCodingWorkspace(app.section)).id(app.projectID + "\n" + app.selectedJob) }
+      else { EventStream(suspended: !WorkspaceNavigationGroup.usesCodingWorkspace(app.section) || app.drawerExpanded).id(app.projectID + "\n" + app.selectedJob) }
     }
   }
   private var workbenchToolbar: some View {
