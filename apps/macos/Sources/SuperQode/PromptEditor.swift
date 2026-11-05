@@ -4,6 +4,7 @@ import SwiftUI
 /// Preserve native text editing and IME composition, with chat-style Return.
 struct PromptEditor: NSViewRepresentable {
   @Binding var text: String
+  @Environment(\.isEnabled) private var enabled
   var onCursorPrefix: (String) -> Void = { _ in }
   var onImagePaste: () -> Void = {}
   var onInterceptReturn: () -> Bool = { false }
@@ -73,6 +74,7 @@ struct PromptEditor: NSViewRepresentable {
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     context.coordinator.parent = self
     guard let editor = scroll.documentView as? Editor else { return }
+    if editor.isEditable != enabled { editor.isEditable = enabled }
     editor.submit = submit
     editor.onImagePaste = onImagePaste
     editor.onInterceptReturn = onInterceptReturn

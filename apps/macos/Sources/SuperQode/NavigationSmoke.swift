@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor extension Workspace {
@@ -9,6 +10,15 @@ import Foundation
     var currentPhase = section
     var worstPhase = ""
     var timings: [[String: Any]] = []
+    var initialComposer: PromptEditor.Editor?
+    func composer(in view: NSView) -> PromptEditor.Editor? {
+      if let editor = view as? PromptEditor.Editor { return editor }
+      return view.subviews.lazy.compactMap { composer(in: $0) }.first
+    }
+    func mountedComposer() -> PromptEditor.Editor? {
+      guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
+      return composer(in: content)
+    }
     let arguments = ProcessInfo.processInfo.arguments
     let snapshotIndex = arguments.firstIndex(of: "--snapshot-dir")
     let directory = snapshotIndex.flatMap { arguments.count > $0 + 1 ? URL(fileURLWithPath: arguments[$0 + 1]) : nil }
@@ -39,12 +49,14 @@ import Foundation
         section = destination
         try await Task.sleep(for: .milliseconds(30))
         timings.append(["section": destination, "input_resume_ms": (ProcessInfo.processInfo.systemUptime - started) * 1000])
+        if initialComposer == nil && destination == "Workspace" { initialComposer = mountedComposer() }
       }
     }
     heartbeat.cancel()
     await heartbeat.value
     await profile.value
     return ["section_changes": 18, "worst_ui_heartbeat_ms": worstTick * 1000,
+      "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
       "slowest_phase": worstPhase, "steps": timings]
   }
 }

@@ -146,6 +146,48 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertTrue(app.connectionDisconnected)
   }
 
+  @MainActor func testSectionNavigationPublishesCompletePaneStateOnce() {
+    let app = workspace()
+    var states: [WorkbenchNavigationState] = []
+    let subscription = app.$navigationState.dropFirst().sink { states.append($0) }
+    app.section = "Files"
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.last?.section, "Files")
+    XCTAssertEqual(states.last?.drawer, "Files")
+    XCTAssertEqual(states.last?.expanded, true)
+    app.section = "Review"
+    XCTAssertEqual(states.count, 2)
+    XCTAssertEqual(states.last?.section, "Review")
+    XCTAssertEqual(states.last?.drawer, "")
+    XCTAssertEqual(states.last?.expanded, false)
+    XCTAssertEqual(states.last?.inspector, true)
+    // Clicking the selected destination publishes nothing further.
+    app.section = "Review"
+    XCTAssertEqual(states.count, 2)
+    subscription.cancel()
+  }
+
+  @MainActor func testThreadAndPanelActionsApplyNavigationBeforeViewCallbacks() {
+    let app = workspace()
+    app.selectJob("a")
+    app.toggleWorkbenchDrawer("Files")
+    XCTAssertTrue(app.drawerExpanded)
+    app.toggleWorkbenchInspector()
+    XCTAssertTrue(app.inspectorVisible)
+    XCTAssertFalse(app.drawerExpanded)
+    XCTAssertTrue(app.workbenchDrawer.isEmpty)
+    app.toggleWorkbenchDrawer("Files")
+    app.selectJob("a", targetSection: "Workspace")
+    XCTAssertFalse(app.drawerExpanded)
+    XCTAssertTrue(app.workbenchDrawer.isEmpty)
+    app.section = "Files"
+    app.selectJob("b", targetSection: "Review")
+    XCTAssertEqual(app.section, "Review")
+    XCTAssertTrue(app.inspectorVisible)
+    XCTAssertFalse(app.drawerExpanded)
+    XCTAssertTrue(app.workbenchDrawer.isEmpty)
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

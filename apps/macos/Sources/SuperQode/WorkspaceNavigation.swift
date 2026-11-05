@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// One publication per navigation intent. View callbacks must not publish
+/// dependent pane changes while SwiftUI is flushing its current view graph.
+struct WorkbenchNavigationState: Equatable {
+  var section = "Workspace"
+  var drawer = ""
+  var expanded = false
+  var inspector = false
+
+  mutating func select(_ destination: String) {
+    section = destination
+    switch destination {
+    case "Review": inspector = true; drawer = ""; expanded = false
+    case "Files", "Terminal", "Checkpoints": drawer = destination; expanded = destination == "Files"
+    case "Workspace": closeExpandedDrawer()
+    default: expanded = false
+    }
+  }
+
+  mutating func closeExpandedDrawer() {
+    if expanded { drawer = ""; expanded = false }
+  }
+}
+
 struct WorkspaceNavigationGroup: Identifiable {
   let id: String
   let title: String

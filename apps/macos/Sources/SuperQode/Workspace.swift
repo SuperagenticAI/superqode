@@ -58,8 +58,44 @@ private struct DialogAuditHost: View {
   @Published var recoveryIssue = ""
   @Published var loadingConversationDraft = false
   @Published var selectedFile = "" { didSet { persistDestination() } }
-  @Published var workbenchDrawer = ""
-  @Published var inspectorVisible = false { didSet { persistDestination() } }
+  @Published private(set) var navigationState = WorkbenchNavigationState()
+  var workbenchDrawer: String {
+    get { navigationState.drawer }
+    set {
+      var next = navigationState; next.drawer = newValue
+      if newValue.isEmpty { next.expanded = false }
+      if next != navigationState { navigationState = next }
+    }
+  }
+  var drawerExpanded: Bool {
+    get { navigationState.expanded }
+    set {
+      var next = navigationState; next.expanded = newValue && !next.drawer.isEmpty
+      if next != navigationState { navigationState = next }
+    }
+  }
+  var inspectorVisible: Bool {
+    get { navigationState.inspector }
+    set {
+      var next = navigationState; next.inspector = newValue
+      guard next != navigationState else { return }
+      navigationState = next
+      persistDestination()
+    }
+  }
+  func toggleWorkbenchDrawer(_ name: String) {
+    var next = navigationState
+    next.drawer = next.drawer == name ? "" : name
+    next.expanded = name == "Files" && !next.drawer.isEmpty
+    if next != navigationState { navigationState = next }
+  }
+  func toggleWorkbenchInspector() {
+    var next = navigationState
+    next.closeExpandedDrawer()
+    next.inspector.toggle()
+    navigationState = next
+    persistDestination()
+  }
   @Published var checkpointID = "" { didSet { persistDestination() } }
   @Published var checkpointPath = "" { didSet { persistDestination() } }
   @Published var reviewSelection = ReviewSelection() { didSet { persistDestination() } }
@@ -169,13 +205,15 @@ private struct DialogAuditHost: View {
   @Published var notice = ""
   @Published var navigationHistory: [WorkspaceDestination] = []
   @Published var forwardHistory: [WorkspaceDestination] = []
-  @Published var section = "Workspace" {
-    didSet {
-      if oldValue != section && !restoringNavigation {
-        var previous = currentDestination
-        previous.section = oldValue
-        recordNavigation(previous)
-      }
+  var section: String {
+    get { navigationState.section }
+    set {
+      let previous = currentDestination
+      var next = navigationState; next.select(newValue)
+      guard next != navigationState else { return }
+      let changedSection = newValue != section
+      navigationState = next
+      if changedSection && !restoringNavigation { recordNavigation(previous) }
       persistDestination()
     }
   }
@@ -626,6 +664,7 @@ private struct DialogAuditHost: View {
     composerConversationID = ""
     loadingConversationDraft = false
     selectedFile = ""
+    workbenchDrawer = ""
     inspectorVisible = false
     checkpointID = ""
     checkpointPath = ""
@@ -859,7 +898,7 @@ private struct DialogAuditHost: View {
     // explicit restoration still perform the complete reset below.
     if !id.isEmpty, id == selectedJob, restoreConnection, recordHistory,
       !loadingConversationDraft, conversationID == nil || conversationID == composerConversationID {
-      if let targetSection, targetSection != section { section = targetSection }
+      if let targetSection { section = targetSection }
       if showWelcome { showWelcome = false }
       return
     }
@@ -870,6 +909,9 @@ private struct DialogAuditHost: View {
     let wasRestoring = restoringNavigation
     restoringNavigation = true
     defer { restoringNavigation = wasRestoring; persistDestination() }
+    var nextNavigation = navigationState
+    nextNavigation.closeExpandedDrawer()
+    if nextNavigation != navigationState { navigationState = nextNavigation }
     detailGeneration += 1
     restoreSelectedConnection = restoreConnection
     conversationHistory = []
@@ -881,8 +923,8 @@ private struct DialogAuditHost: View {
     loadingConversationDraft = !id.isEmpty && identity == nil
     restoreComposer(conversationID: identity ?? id)
     if let summary { rememberThreadTab(summary) }
-    if let targetSection { section = targetSection }
     restoreSessionDestination()
+    if let targetSection { section = targetSection }
     detail = [:]
     events = []
     eventCursor = 0
@@ -2059,6 +2101,9 @@ private struct DialogAuditHost: View {
       report["background_engine"] = try await smokeBackgroundEngine()
       let navigation = try await smokeNavigationResponsiveness()
       report["navigation_performance"] = navigation
+      guard navigation["composer_editor_preserved"] as? Bool == true else {
+        throw EngineError(message: "Navigation recreated the native composer instead of preserving it")
+      }
       if (navigation["worst_ui_heartbeat_ms"] as? Double ?? .infinity) >= 250 {
         throw EngineError(message: "Workspace navigation blocked UI input: \(navigation)")
       }

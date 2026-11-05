@@ -403,9 +403,8 @@ struct CodingView: View {
   @StateObject private var review = WorkbenchReview()
   @State private var scope: ReviewScope = .turn
   @State private var showFullReview = false
-  @State private var drawerExpanded = false
   @State private var inspectorTab = "Changes"
-  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) }
+  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab }
   var body: some View {
     GeometryReader { geometry in
       VStack(spacing: 0) {
@@ -419,23 +418,32 @@ struct CodingView: View {
           let approval = app.events.last(where: { string($0, "type") == "approval" }) {
           EventRow(event: approval, embeddedResponse: true).padding(10)
         }
-        if !drawerExpanded || app.workbenchDrawer.isEmpty {
-        HStack(spacing: 0) {
-          if !app.inspectorVisible || geometry.size.width >= 900 {
-            conversation.frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+        ZStack(alignment: .bottom) {
+          VStack(spacing: 0) {
+            let wide = geometry.size.width >= 900
+            let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(ZStackLayout())
+            layout {
+              conversation.frame(minWidth: wide ? 400 : nil, maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(!wide && app.inspectorVisible ? 0 : 1)
+                .allowsHitTesting(wide || !app.inspectorVisible)
+                .accessibilityHidden(!wide && app.inspectorVisible)
+              if app.inspectorVisible {
+                if wide { Divider() }
+                inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
+              }
+            }.frame(maxHeight: .infinity)
+            CodingComposer(draftStore: app.draftStore)
           }
-          if app.inspectorVisible {
-            Divider()
-            inspector.frame(width: geometry.size.width >= 900 ? 350 : nil)
-          }
-        }.frame(maxHeight: .infinity)
-        CodingComposer(draftStore: app.draftStore)
+          .padding(.bottom, !app.workbenchDrawer.isEmpty && !app.drawerExpanded ? max(150, min(220, geometry.size.height * 0.30)) : 0)
+          .opacity(app.drawerExpanded ? 0 : 1)
+          .disabled(app.drawerExpanded).allowsHitTesting(!app.drawerExpanded)
+          .accessibilityHidden(app.drawerExpanded)
+          if !app.workbenchDrawer.isEmpty { drawer(height: geometry.size.height).background(Color.qPanel) }
         }
-        if !app.workbenchDrawer.isEmpty { drawer(height: geometry.size.height) }
       }
       .task(id: reviewKey) {
         guard app.connected else { review.reset(); return }
-        guard app.inspectorVisible else { return }
+        guard app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
         await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
       }
     }
@@ -456,14 +464,11 @@ struct CodingView: View {
       focusSection()
       if section == "Workspace" {
         showFullReview = false
-        if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
       }
     }
     .onChange(of: app.selectedJob) { _, _ in
       scope = app.selectedJob.isEmpty ? .uncommitted : .turn
-      if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
     }
-    .onChange(of: app.projectID) { _, _ in app.workbenchDrawer = "" }
     .onChange(of: string(app.detail, "kind")) { _, kind in
       if !kind.isEmpty && kind != "task" { scope = .uncommitted }
     }
@@ -498,11 +503,10 @@ struct CodingView: View {
       }
       Spacer(minLength: 0)
       Button(app.inspectorVisible ? "Hide changes" : "Changes", systemImage: app.inspectorVisible ? "bubble.left" : "sidebar.right") {
-        if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
-        app.inspectorVisible.toggle()
+        app.toggleWorkbenchInspector()
       }.help("Show the conversation and changes side by side when space allows")
       ForEach(["Files", "Terminal", "Tasks", "Checkpoints"], id: \.self) { tool in
-        Button(tool) { app.workbenchDrawer = app.workbenchDrawer == tool ? "" : tool; drawerExpanded = tool == "Files" && !app.workbenchDrawer.isEmpty }
+        Button(tool) { app.toggleWorkbenchDrawer(tool) }
           .fontWeight(app.workbenchDrawer == tool ? .semibold : .regular)
       }
       Menu {
@@ -520,12 +524,10 @@ struct CodingView: View {
     }.font(.system(size: 11)).buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 10)
   }
   private func focusSection() {
-    if app.selectedJob.isEmpty { scope = .uncommitted }
-    switch app.section {
-    case "Review": app.inspectorVisible = true; inspectorTab = "Changes"; app.workbenchDrawer = ""; drawerExpanded = false
-    case "Files", "Terminal", "Checkpoints": app.workbenchDrawer = app.section; drawerExpanded = app.section == "Files"
-    default: break
-    }
+    // Local focus only. Workspace pane state is applied atomically by the
+    // navigation action, never from this view-graph callback.
+    if app.selectedJob.isEmpty && scope != .uncommitted { scope = .uncommitted }
+    if app.section == "Review" && inspectorTab != "Changes" { inspectorTab = "Changes" }
   }
   private func openFullReview() {
     app.reviewSelection.scope = scope; app.section = "Review"; showFullReview = true
@@ -540,8 +542,8 @@ struct CodingView: View {
       HStack {
         Text("PROJECT · " + app.workbenchDrawer.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
         Spacer()
-        Button { drawerExpanded.toggle() } label: { Image(systemName: drawerExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") }
-          .buttonStyle(.plain).accessibilityLabel(drawerExpanded ? "Restore conversation" : "Expand project panel")
+        Button { app.drawerExpanded.toggle() } label: { Image(systemName: app.drawerExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") }
+          .buttonStyle(.plain).accessibilityLabel(app.drawerExpanded ? "Restore conversation" : "Expand project panel")
         Button { app.workbenchDrawer = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close project panel")
       }.padding(.horizontal, 14).padding(.vertical, 8)
       Group {
@@ -551,7 +553,7 @@ struct CodingView: View {
         case "Tasks": TaskQueueView(compact: true)
         default: CheckpointsView(compact: true).id(app.projectID)
         }
-      }.frame(height: drawerExpanded ? max(200, height - 70) : max(150, min(220, height * 0.30)))
+      }.frame(height: app.drawerExpanded ? max(200, height - 70) : max(150, min(220, height * 0.30)))
     }
   }
 }
