@@ -259,8 +259,8 @@ struct RootView: View {
     case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Models": ModelsView()
-    case "Evaluations": EvaluationView()
-    case "Optimization": OptimizationView()
+    case "Evaluations", "Optimization":
+      ExperimentView(optimize: app.section == "Optimization").id(app.projectID)
     case "Tools": ToolsView()
     default: EmptyView()
     }

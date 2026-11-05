@@ -266,7 +266,7 @@ struct ExperimentView: View {
   private var candidates: [String] {
     variant.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
   }
-  private var inspectionKey: String { app.projectID + "\n" + suite + "\n" + split + "\n" + variant }
+  private var inspectionKey: String { app.projectID + "\n" + suite + "\n" + split + "\n" + variant + "\n" + String(optimize) }
   var result: [String: Any] { imported ?? (app.detail["result"] as? [String: Any] ?? [:]) }
   var relevant: Bool { string(app.detail, "kind") == (optimize ? "optimization" : "evaluation") }
   var body: some View {
@@ -416,6 +416,17 @@ struct ExperimentView: View {
         }
       }.padding(30)
     }.onAppear { if suite.isEmpty { suite = app.packs.first.map { string($0, "path") } ?? "" } }
+      .onChange(of: optimize) { _, _ in
+        // Keep the common form and suite mounted, but require fresh consent
+        // and suite diagnostics before a different kind of live experiment.
+        live = false
+        imported = nil
+        diagnostics = [:]
+        diagnosticError = ""
+        workflow = nil
+        configurationMode = nil
+        showTuning = false
+      }
       .task(id: inspectionKey) { await inspectSuite() }
       .task(id: app.projectID + app.selectedJob + String(app.active)) { await loadHistory() }
       .sheet(isPresented: $showTuning) {
