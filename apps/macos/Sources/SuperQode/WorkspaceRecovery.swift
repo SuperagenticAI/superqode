@@ -130,7 +130,7 @@ final class WorkspaceRecoveryStore {
     _ snapshot: WorkspaceRecoverySnapshot, completion: @escaping @MainActor (Error?) -> Void
   ) {
     // Keep only the newest waiting snapshot when storage is slow. Every caller
-    // receives the result of saving that snapshot or a newer one containing it.
+    // receives the result of saving that snapshot or a newer one superseding it.
     pendingLock.lock()
     let completions = (pending?.1 ?? []) + [completion]
     pending = (snapshot, completions)

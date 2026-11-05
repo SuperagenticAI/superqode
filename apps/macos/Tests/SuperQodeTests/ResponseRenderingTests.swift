@@ -55,7 +55,7 @@ final class ResponseRenderingTests: XCTestCase {
     let document = await preparation.value
     let total = Date().timeIntervalSince(start)
     XCTAssertEqual(document?.blocks.count, 20_000)
-    XCTAssertLessThan(heartbeat, total)
+    XCTAssertLessThan(heartbeat, 0.25, "Response formatting stalled the UI actor")
     print("Response preparation: \(text.utf8.count) bytes, UI heartbeat \(heartbeat * 1000) ms, formatted \(total * 1000) ms")
   }
 

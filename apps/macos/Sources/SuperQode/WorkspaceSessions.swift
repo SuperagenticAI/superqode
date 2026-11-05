@@ -175,11 +175,11 @@ import Foundation
       let generation = self.recoverySaveGeneration
       self.recoveryStore.saveInBackground(self.recoverySnapshot) { [weak self] error in
         guard let self, generation == self.recoverySaveGeneration else { return }
-        self.recoveryIssue =
-          error.map {
-            "Draft recovery could not be saved. Copy or save your edits before quitting. "
-              + $0.localizedDescription
-          } ?? ""
+        let issue = error.map {
+          "Draft recovery could not be saved. Copy or save your edits before quitting. "
+            + $0.localizedDescription
+        } ?? ""
+        if self.recoveryIssue != issue { self.recoveryIssue = issue }
       }
     }
   }
