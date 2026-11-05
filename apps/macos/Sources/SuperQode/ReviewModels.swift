@@ -174,19 +174,20 @@ func decodeReview<T: Decodable>(_ value: Any) throws -> T {
 }
 
 
-/// Decode and validate large revision responses away from the AppKit event loop.
-/// Cancellation propagates to the worker, and callers recheck their navigation
-/// generation after awaiting it before publishing any result.
-func prepareReview<Value>(_ value: Any, decode: @escaping (Any) throws -> Value) async throws -> Value {
-  let worker = Task.detached(priority: .userInitiated) {
+/// Serialize expensive preparation on a worker actor so rapid file changes
+/// cannot flood the CPU with decoders. Cancelled queued work is skipped, and
+/// callers recheck their navigation generation before publishing a result.
+private actor ReviewPreparationWorker {
+  static let shared = ReviewPreparationWorker()
+
+  func prepare<Value>(_ value: Any, decode: (Any) throws -> Value) throws -> Value {
     try Task.checkCancellation()
     let prepared = try decode(value)
     try Task.checkCancellation()
     return prepared
   }
-  return try await withTaskCancellationHandler {
-    let prepared = try await worker.value
-    try Task.checkCancellation()
-    return prepared
-  } onCancel: { worker.cancel() }
+}
+
+func prepareReview<Value>(_ value: Any, decode: @escaping (Any) throws -> Value) async throws -> Value {
+  try await ReviewPreparationWorker.shared.prepare(value, decode: decode)
 }

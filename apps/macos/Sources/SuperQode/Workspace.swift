@@ -860,6 +860,7 @@ private struct DialogAuditHost: View {
     if !id.isEmpty, id == selectedJob, restoreConnection, recordHistory,
       !loadingConversationDraft, conversationID == nil || conversationID == composerConversationID {
       if let targetSection, targetSection != section { section = targetSection }
+      if showWelcome { showWelcome = false }
       return
     }
     saveDraft(flush: false)

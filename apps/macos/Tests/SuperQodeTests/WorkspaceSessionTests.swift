@@ -118,6 +118,10 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.model, "current-model")
     XCTAssertEqual(app.navigationHistory, previousHistory)
     XCTAssertEqual(app.engine.pendingRequestCount, 0)
+    app.showWelcome = true
+    app.selectJob("a", targetSection: "Workspace")
+    XCTAssertFalse(app.showWelcome, "Opening the selected thread from Welcome must navigate into the workspace")
+    XCTAssertEqual(app.events.count, 1)
     app.section = "Review"
     app.selectJob("a", targetSection: "Workspace")
     XCTAssertEqual(app.section, "Workspace")
