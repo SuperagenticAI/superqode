@@ -14,7 +14,7 @@ import Foundation
     }
     selectJob(target, conversationID: identity, targetSection: "Workspace")
     draft += (draft.isEmpty ? "" : "\n\n") + text
-    saveDraft()
+    saveDraft(flush: false)
     showWelcome = false
     notice = "Thread context added to the destination draft. Review it before sending."
     return true
@@ -243,7 +243,7 @@ import Foundation
       return false
     }
     draft += (draft.isEmpty ? "" : "\n\n") + text
-    saveDraft()
+    saveDraft(flush: false)
     section = "Workspace"
     notice = "Review feedback added to your draft. Review the message before sending."
     return true

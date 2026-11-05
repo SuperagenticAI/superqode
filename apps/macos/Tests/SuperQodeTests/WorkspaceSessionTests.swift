@@ -71,7 +71,7 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertNil(app.composerHarnessIdentity)
   }
 
-  @MainActor func testThreadSwitchDoesNotWaitForDiskAndQuitFlushKeepsBothDrafts() throws {
+  @MainActor func testThreadSwitchAndReviewFeedbackDoNotWaitForDiskAndQuitKeepsBothDrafts() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
     let writer = DispatchQueue(label: "test.navigation.slow-storage")
@@ -86,12 +86,15 @@ final class WorkspaceSessionTests: XCTestCase {
     app.draft = "Keep B"
     app.selectJob("a")
     XCTAssertEqual(app.draft, "Keep A")
+    app.section = "Review"
+    XCTAssertTrue(app.appendReviewFeedback("Feedback", project: app.projectID, conversation: app.composerKey))
+    XCTAssertEqual(app.section, "Workspace")
     XCTAssertLessThan(Date().timeIntervalSince(start), 1, "Navigation waited for the blocked recovery writer")
     release.signal()
     app.saveDraft(flush: false)
     XCTAssertTrue(app.flushRecovery())
     let saved = WorkspaceRecoveryStore(directory: directory).load()
-    XCTAssertEqual(saved.composers[WorkspaceRecoverySnapshot.key(project: "project", conversation: "root-a")]?.text, "Keep A")
+    XCTAssertEqual(saved.composers[WorkspaceRecoverySnapshot.key(project: "project", conversation: "root-a")]?.text, "Keep A\n\nFeedback")
     XCTAssertEqual(saved.composers[WorkspaceRecoverySnapshot.key(project: "project", conversation: "root-b")]?.text, "Keep B")
   }
 

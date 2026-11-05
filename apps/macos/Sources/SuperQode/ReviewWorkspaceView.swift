@@ -440,7 +440,7 @@ struct ReviewWorkspaceView: View {
         }
         if app.appendReviewFeedback(text, project: project, conversation: conversation) {
           commentStore.drafts.removeValue(forKey: snapshot)
-          app.saveDraft()
+          app.saveDraft(flush: false)
         }
       } catch { if generation == fileGeneration { failure = error.localizedDescription } }
     }
