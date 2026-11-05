@@ -107,6 +107,28 @@ async def test_repository_grading_without_fixture_never_falls_back_to_text():
     assert result.status == "ungraded"
 
 
+@pytest.mark.asyncio
+async def test_python_checks_prefer_trial_src_over_an_installed_original(tmp_path, monkeypatch):
+    original = tmp_path / "installed-original"
+    original.mkdir()
+    (original / "calculator.py").write_text("VALUE = 'original'")
+    root = tmp_path / "trial"
+    (root / "src").mkdir(parents=True)
+    (root / "src/calculator.py").write_text("VALUE = 'candidate'")
+    monkeypatch.setenv("PYTHONPATH", str(original))
+    result = await _command(
+        {
+            "argv": [
+                sys.executable,
+                "-c",
+                f"import sys; sys.path.append({str(original)!r}); import calculator; assert calculator.VALUE == 'candidate'",
+            ]
+        },
+        root,
+    )
+    assert result["passed"]
+
+
 @pytest.mark.parametrize(
     "config",
     [

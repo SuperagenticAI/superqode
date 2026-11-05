@@ -126,6 +126,9 @@ async def _command(config, root):
         "GIT_INDEX_FILE",
     ):
         environment.pop(name, None)
+    # Prefer the trial for both flat and src-layout projects. An editable
+    # installation in the chosen interpreter must not grade the source checkout.
+    environment["PYTHONPATH"] = os.pathsep.join((str(root), str(root / "src")))
     argv = config["argv"]
     process = await asyncio.create_subprocess_exec(
         *argv,

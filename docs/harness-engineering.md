@@ -160,6 +160,8 @@ with the trial as their working directory. They can access the network and other
 host resources. Commands use argv lists without an implicit shell and must exit
 zero. Install their test dependencies in the chosen interpreter beforehand; the
 runner does not install dependencies or copy a project's virtual environment.
+Python checks prefer the trial's root and `src` directory over inherited source
+paths or editable installs from the original checkout.
 Each command has a timeout, bounded output and cancellation cleanup. File assertions
 support `exists`, `contains` and `sha256`. `protected_paths` prevents agents from
 changing the selected check files; default protection covers common test and runner
