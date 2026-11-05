@@ -22,6 +22,7 @@ final class WorkspaceSessionTests: XCTestCase {
     app.jobs.append(["id": "working", "project": "project", "status": "running"])
     app.selectJob("", targetSection: "Workspace")
     XCTAssertTrue(app.connectionDisconnected)
+    XCTAssertNil(app.composerHarnessIdentity)
     XCTAssertTrue(app.provider.isEmpty)
     XCTAssertTrue(app.model.isEmpty)
     XCTAssertTrue(app.agentModel.isEmpty)
@@ -45,6 +46,29 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.engine.pendingRequestCount, 0)
     XCTAssertFalse(app.checkingConnection)
     XCTAssertTrue(app.model.isEmpty)
+  }
+
+  @MainActor func testRepeatedNewThreadActionsNeverReuseAChosenDraftConnection() {
+    let app = workspace()
+    app.connected = true
+    app.harnesses = [["id": "acp:opencode", "name": "OpenCode", "agent_id": "opencode"]]
+    app.harness = "acp:opencode"
+    app.provider = "agent"
+    app.model = "last-model"
+    XCTAssertEqual(app.composerHarnessIdentity?.name, "OpenCode")
+    app.runWorkspaceCommand(.newTask)
+    XCTAssertTrue(app.selectedJob.isEmpty)
+    XCTAssertTrue(app.connectionDisconnected)
+    XCTAssertNil(app.composerHarnessIdentity)
+    XCTAssertTrue(app.model.isEmpty)
+    XCTAssertTrue(app.conversationHistory.isEmpty)
+    XCTAssertEqual(app.engine.pendingRequestCount, 0)
+    // A manually chosen route can have a colourful badge in an unsent draft.
+    app.harness = "acp:opencode"
+    XCTAssertNotNil(app.composerHarnessIdentity)
+    // Pressing New again clears that draft's route too.
+    app.selectJob("", targetSection: "Workspace")
+    XCTAssertNil(app.composerHarnessIdentity)
   }
 
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)

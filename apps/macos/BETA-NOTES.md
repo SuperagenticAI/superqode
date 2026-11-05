@@ -18,6 +18,12 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 
 ## Unreleased
 
+Thread lists, tabs and the composer use consistent harness colour accents,
+including monochrome agent marks such as OpenCode. New conversations stay
+disconnected and show a neutral placeholder until a connection is chosen.
+Light/dark palettes keep harness labels legible; custom harness colours remain
+stable between launches. Badge colour identifies the harness, not its status.
+
 Evaluation tasks and candidates now use independent copies of one captured input
 fixture and fresh harness state. Repository graders can run reviewed commands,
 assert file contents and reject changes to protected tests. Verifier commands are

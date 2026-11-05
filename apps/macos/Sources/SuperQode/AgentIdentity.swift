@@ -26,7 +26,7 @@ struct HarnessIdentity: Identifiable, Equatable {
     let identities = history.map(HarnessIdentity.init).filter { seen.insert($0.id).inserted }
     if !identities.isEmpty { return identities }
     let reference = string(row, "harness")
-    return reference.isEmpty ? [] : [HarnessIdentity(["id": reference])]
+    return reference.isEmpty || reference == "disconnected" ? [] : [HarnessIdentity(["id": reference])]
   }
 
   static func visible(in row: [String: Any], limit: Int) -> [HarnessIdentity] {
@@ -42,15 +42,21 @@ struct HarnessIdentity: Identifiable, Equatable {
 struct HarnessIcon: View {
   let identity: HarnessIdentity
   var size: CGFloat = 30
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
         Image(nsImage: image).renderingMode(identity.iconKey == "superqode" ? .original : .template)
-          .resizable().scaledToFit()
-      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
-    }.padding(size * 0.23).frame(width: size, height: size)
-      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
-      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
+          .resizable().scaledToFit().foregroundStyle(identity.symbolGradient)
+      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(identity.symbolGradient) }
+    }.padding(size * 0.18).frame(width: size, height: size)
+      .background {
+        RoundedRectangle(cornerRadius: size * 0.28).fill(Color.qPanel)
+        RoundedRectangle(cornerRadius: size * 0.28)
+          .fill(identity.symbolGradient.opacity(scheme == .dark ? 0.18 : 0.09))
+      }
+      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(identity.accent.opacity(contrast == .increased ? 0.85 : 0.35), lineWidth: contrast == .increased ? 1.5 : 1))
       .accessibilityLabel(identity.name).help(identity.name)
   }
 }
@@ -70,7 +76,7 @@ struct HarnessIconStack: View {
     HStack(spacing: -5) {
       ForEach(HarnessIdentity.visible(in: row, limit: limit)) { identity in
         HarnessIcon(identity: identity, size: size)
-          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? Color.qAccent : .clear))
+          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? identity.accent : .clear, lineWidth: 2))
       }
       if identities.count > limit {
         Text("+\(identities.count - limit)").font(.system(size: size * 0.38, weight: .semibold))

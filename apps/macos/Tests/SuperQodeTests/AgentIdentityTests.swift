@@ -1,7 +1,40 @@
 import XCTest
+import AppKit
 @testable import SuperQode
 
 final class AgentIdentityTests: XCTestCase {
+  func testHarnessAccentsFollowAgentIdentityRatherThanModelOrDisplayName() {
+    let openCode = HarnessIdentity(["id": "acp:opencode", "name": "OpenCode", "model": "claude"])
+    let sameAgent = HarnessIdentity(["id": "acp:opencode", "name": "Local coding", "model": "qwen"])
+    XCTAssertEqual(openCode.colorFamily, sameAgent.colorFamily)
+    XCTAssertEqual(openCode.colorFamily, HarnessIdentity(["id": "opencode-v2"]).colorFamily)
+    XCTAssertNotEqual(openCode.colorFamily, HarnessIdentity(["id": "connection:codex", "runtime": "codex-cli"]).colorFamily)
+    XCTAssertNotEqual(openCode.colorFamily, HarnessIdentity(["id": "core", "model": "opencode"]).colorFamily)
+    XCTAssertTrue(HarnessIdentity.used(in: ["harness": "disconnected"]).isEmpty)
+  }
+
+  func testHarnessLabelColoursHaveReadableContrastOnSelectedLightAndDarkRows() {
+    func luminance(_ channels: [CGFloat]) -> Double {
+      let values = channels.map { channel -> Double in
+        let value = Double(channel)
+        return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+      }
+      return zip(values, [0.2126, 0.7152, 0.0722]).reduce(0) { $0 + $1.0 * $1.1 }
+    }
+    for family in HarnessColorFamily.allCases {
+      for dark in [false, true] {
+        let color = family.nsColor(dark: dark)
+        let channels = [color.redComponent, color.greenComponent, color.blueComponent]
+        let panel: CGFloat = dark ? 0.1 : 0.96
+        let background = channels.map { panel * 0.9 + $0 * 0.1 }
+        let foregroundLuminance = luminance(channels)
+        let backgroundLuminance = luminance(background)
+        let contrast = (max(foregroundLuminance, backgroundLuminance) + 0.05) / (min(foregroundLuminance, backgroundLuminance) + 0.05)
+        XCTAssertGreaterThanOrEqual(contrast, 4.5, "\(family) · \(dark ? "dark" : "light")")
+      }
+    }
+  }
+
   func testClientDirectoryHasUniquePublicWebsiteDestinations() {
     XCTAssertFalse(ACPClientDirectory.projects.isEmpty)
     XCTAssertEqual(Set(ACPClientDirectory.projects.map(\.id)).count, ACPClientDirectory.projects.count)

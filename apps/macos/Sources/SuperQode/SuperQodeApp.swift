@@ -638,10 +638,17 @@ struct CodingComposer: View {
             Button("Disconnect", action: app.disconnectConnection).disabled(app.anyActive || app.busy)
           }
         } label: {
-          Label(routeDisplayName, systemImage: app.isManaged ? "terminal" : "cpu")
-            .font(.system(size: 11)).lineLimit(1)
+          HStack(spacing: 7) {
+            if let identity = app.composerHarnessIdentity {
+              HarnessIcon(identity: identity, size: 23)
+            } else {
+              Image(systemName: "cable.connector").foregroundStyle(.secondary)
+                .frame(width: 23, height: 23)
+            }
+            Text(routeDisplayName).font(.system(size: 11)).lineLimit(1)
+          }
         }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
-          .help("Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
+          .help(app.connectionDisconnected ? "No agent connected. Choose a connection for this new thread." : "Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
           .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
         Spacer(minLength: 0)
         if !app.connected { Label("Engine offline · draft kept", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.secondary) }

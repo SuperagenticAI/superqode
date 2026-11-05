@@ -1766,7 +1766,7 @@ private struct DialogAuditHost: View {
         for page in [
           "menu:root", "menu:vendors", "menu:protocols", "source:key", "configure:wizard",
           "configure:rlm", "configure:rlm-routing", "systemone",
-          "runtimes", "acp", "acp-clients", "custom-acp", "acp-setup-preview", "thread-identities-preview",
+          "runtimes", "acp", "acp-clients", "custom-acp", "acp-setup-preview", "thread-identities-preview", "thread-identities-preview-light",
         ] {
           try await captureConnectionPage(page, directory: destination)
         }
@@ -2505,10 +2505,13 @@ private struct DialogAuditHost: View {
       backing: .buffered, defer: false)
     panel.isReleasedWhenClosed = false
     let content: AnyView
-    if page == "thread-identities-preview" {
+    let lightPreview = page == "thread-identities-preview-light"
+    if page.hasPrefix("thread-identities-preview") {
       let examples: [[String: Any]] = [
         ["id": "preview-codex", "title": "Investigate the authentication flow", "harness": "acp:codex", "harnesses_used": [
           ["id": "acp:codex", "name": "Codex", "icon_key": "codex"]]],
+        ["id": "preview-opencode", "title": "Build with an open-source coding harness", "harness": "acp:opencode", "harnesses_used": [
+          ["id": "acp:opencode", "name": "OpenCode", "icon_key": "opencode"]]],
         ["id": "preview-mixed", "title": "Review API contracts across agents", "harness": "acp:claude", "harnesses_used": [
           ["id": "acp:codex", "name": "Codex", "icon_key": "codex"],
           ["id": "acp:claude", "name": "Claude", "icon_key": "claude"],
@@ -2519,22 +2522,28 @@ private struct DialogAuditHost: View {
       ]
       content = AnyView(VStack(alignment: .leading, spacing: 24) {
         PageTitle(eyebrow: "Thread identity preview", title: "Know which agents did the work",
-          subtitle: "Example threads · saved harness identities, multiple agents and a neutral fallback.")
+          subtitle: "Example threads · colour accents identify the harness; a blank conversation stays disconnected.")
+        HStack(spacing: 10) {
+          Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(.secondary)
+          Text("New conversation").font(.headline)
+          Spacer()
+          Text("No connection").font(.callout).foregroundStyle(.secondary)
+        }.padding(14).brandSurface()
         ForEach(examples, id: \.projectRowID) { row in
           HStack(spacing: 18) {
             HarnessIconStack(row: row, size: 38)
             VStack(alignment: .leading, spacing: 8) {
               Text(string(row, "title")).font(.headline)
               Text(HarnessIdentity.used(in: row).map(\.name).joined(separator: " · "))
-                .font(.callout).foregroundStyle(.secondary)
+                .font(.callout).foregroundStyle(HarnessIdentity.current(in: row)?.accent ?? Color.secondary)
             }
             Spacer()
-          }.padding(22).brandSurface()
+          }.padding(16).brandSurface()
         }
-        Text("The accent border marks the last used harness. Missing icons use a neutral agent symbol.")
+        Text("Colour is a harness identity accent, not connection status. Custom harnesses get a stable colour and a generic symbol.")
           .font(.caption).foregroundStyle(.secondary)
         Spacer()
-      }.padding(28).frame(width: 860, height: 740).background(Color.qPanel).preferredColorScheme(.dark))
+      }.padding(28).frame(width: 860, height: 740).background(Color.qPanel).preferredColorScheme(lightPreview ? .light : .dark))
     } else if page == "acp-setup-preview" {
       let route: [String: Any] = ["id": "acp:setup-preview", "name": "ACP setup preview", "desktop_kind": "acp",
         "available": true, "digest": "preview", "command": "example-agent --acp", "registry_source": "Setup preview"]
@@ -2554,11 +2563,11 @@ private struct DialogAuditHost: View {
     } else {
       content = AnyView(ConnectionView(initialPage: page).environmentObject(self).preferredColorScheme(.dark))
     }
-    let styled = page.hasPrefix("local-") ? AnyView(content.foregroundStyle(Color.white).environment(\.colorScheme, .dark)) : AnyView(content.foregroundStyle(Color.white))
+    let styled = page.hasPrefix("local-") ? AnyView(content.foregroundStyle(Color.white).environment(\.colorScheme, .dark)) : AnyView(content.foregroundStyle(lightPreview ? Color.black : Color.white).environment(\.colorScheme, lightPreview ? .light : .dark))
     let view = NSHostingView(rootView: styled)
-    view.appearance = NSAppearance(named: .darkAqua)
+    view.appearance = NSAppearance(named: lightPreview ? .aqua : .darkAqua)
     panel.contentView = view
-    panel.appearance = NSAppearance(named: .darkAqua)
+    panel.appearance = NSAppearance(named: lightPreview ? .aqua : .darkAqua)
     if page == "local-storage-hub" { panel.setContentSize(NSSize(width: 780, height: 620)) }
     if page == "local-harness-compatibility" { panel.setContentSize(NSSize(width: 920, height: 680)) }
     panel.orderFront(nil)

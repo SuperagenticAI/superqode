@@ -156,4 +156,5 @@ jobs:
           path: |
             apps/macos/artifacts/smoke-report.json
             apps/macos/artifacts-strands/smoke-report.json
+            apps/macos/artifacts/connect-thread-identities-preview*.png
           if-no-files-found: ignore

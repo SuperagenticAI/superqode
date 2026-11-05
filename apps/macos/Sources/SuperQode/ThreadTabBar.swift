@@ -12,6 +12,7 @@ struct ThreadTabBar: View {
               ForEach(app.openThreadTabs, id: \.projectRowID) { row in
                 let identity = string(row, "conversation_id", string(row, "id"))
                 let selected = app.selectedConversationID == identity
+                let accent = HarnessIdentity.current(in: row)?.accent ?? Color.secondary
                 HStack(spacing: 6) {
                   Button {
                     app.selectJob(string(row, "id"), targetSection: "Workspace")
@@ -33,15 +34,27 @@ struct ThreadTabBar: View {
                     .accessibilityLabel("Close tab " + string(row, "conversation_title", string(row, "title")))
                     .help("Close tab. The conversation and its work are kept.")
                 }.padding(.trailing, 3)
-                  .background(selected ? Color.primary.opacity(0.07) : Color.qPanel,
+                  .background(selected ? accent.opacity(0.10) : Color.qPanel,
                     in: RoundedRectangle(cornerRadius: 7))
-                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? Color.primary.opacity(0.2) : Color.clear))
+                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? accent.opacity(0.4) : Color.clear))
                   .id(identity)
               }
               if app.selectedJob.isEmpty {
-                Text("New conversation").font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 7) {
+                  if let harness = app.composerHarnessIdentity {
+                    HarnessIcon(identity: harness, size: 23)
+                  } else {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                      .foregroundStyle(.secondary).frame(width: 23, height: 23)
+                  }
+                  Text("New conversation").font(.system(size: 12, weight: .semibold))
+                  Text(app.composerHarnessIdentity?.name ?? "No connection")
+                    .font(.system(size: 10)).foregroundStyle(app.composerHarnessIdentity?.accent ?? Color.secondary)
+                    .lineLimit(1)
+                }
                   .padding(.horizontal, 12).padding(.vertical, 9)
                   .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
+                  .help(app.composerHarnessIdentity.map { "Selected harness: " + $0.name } ?? "No harness connected. Choose a connection before sending a message.")
                   .id("new-conversation")
               }
             }.padding(.horizontal, 12).padding(.vertical, 5)
