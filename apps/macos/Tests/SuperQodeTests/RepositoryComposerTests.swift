@@ -137,6 +137,11 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertEqual(app.accentChoice, "graphite")
     app.accentChoice = "custom"
     app.customAccentHex = "#4080A0"
+    let firstAccent = NativeAccent.accent(defaults: defaults)
+    app.customAccentHex = "#B04050"
+    XCTAssertNotEqual(NativeAccent.accent(defaults: defaults), firstAccent)
+    app.customAccentHex = "#4080A0"
+    XCTAssertEqual(NativeAccent.accent(defaults: defaults), firstAccent)
     let restored = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: defaults)
     XCTAssertEqual(restored.accentChoice, "custom")
     XCTAssertEqual(restored.customAccentHex, "#4080A0")

@@ -7,6 +7,11 @@ enum NativeAccent: String, CaseIterable {
   var title: String { rawValue.capitalized }
   static let preferenceKey = "nativeAccentChoice"
   static let customKey = "nativeCustomAccent"
+  private static let colors: NSCache<NSString, NSColor> = {
+    let cache = NSCache<NSString, NSColor>()
+    cache.countLimit = 64
+    return cache
+  }()
 
   struct RGB: Equatable {
     let red: Double
@@ -50,13 +55,17 @@ enum NativeAccent: String, CaseIterable {
     case .custom: hex = defaults.string(forKey: customKey) ?? "#777777"
     case .system: hex = "#777777"
     }
+    let key = (choice.rawValue + ":" + hex) as NSString
+    if let color = colors.object(forKey: key) { return Color(nsColor: color) }
     let rgb = parse(hex) ?? parse("#777777")!
-    return Color(nsColor: NSColor(name: nil) { appearance in
-      let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-      let graphite = dark ? RGB(red: 0.68, green: 0.68, blue: 0.68) : RGB(red: 0.3, green: 0.3, blue: 0.3)
-      let value = (choice == .graphite ? graphite : rgb).readable(dark: dark)
+    let dark = (choice == .graphite ? RGB(red: 0.68, green: 0.68, blue: 0.68) : rgb).readable(dark: true)
+    let light = (choice == .graphite ? RGB(red: 0.3, green: 0.3, blue: 0.3) : rgb).readable(dark: false)
+    let color = NSColor(name: nil) { appearance in
+      let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
       return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
-    })
+    }
+    colors.setObject(color, forKey: key)
+    return Color(nsColor: color)
   }
 }
 

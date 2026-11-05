@@ -56,11 +56,14 @@ enum HarnessColorFamily: String, CaseIterable {
     return NSColor(srgbRed: Double((rgb >> 16) & 255) / 255,
       green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255, alpha: 1)
   }
-  var color: Color {
-    Color(nsColor: NSColor(name: nil) { appearance in
-      self.nsColor(dark: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
-    })
-  }
+  // Stable colour identities avoid replacing dynamic AppKit colour providers
+  // for every badge on each navigation or engine update.
+  private static let colors = Dictionary(uniqueKeysWithValues: allCases.map { family in
+    (family, Color(nsColor: NSColor(name: nil) { appearance in
+      family.nsColor(dark: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+    }))
+  })
+  var color: Color { Self.colors[self]! }
 }
 
 extension HarnessIdentity {

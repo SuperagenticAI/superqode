@@ -1,11 +1,14 @@
 import AppKit
 
 @MainActor extension Workspace {
-  var workspaceCommands: [WorkspaceCommand] {
+  private var workspaceCommandIdleReason: String? {
+    openingProject || restoringNavigation || switchingBackgroundEngine ? "Wait for navigation or engine reconnection to finish."
+      : busy ? "Wait for the current operation to finish." : nil
+  }
+  private var workspaceBaseCommands: [WorkspaceCommand] {
     let engineReason = connected ? nil : "Wait for the local engine to connect."
     let projectReason = project.isEmpty ? "Open a project first." : engineReason
-    let idleReason = openingProject || restoringNavigation || switchingBackgroundEngine ? "Wait for navigation or engine reconnection to finish."
-      : busy ? "Wait for the current operation to finish." : nil
+    let idleReason = workspaceCommandIdleReason
     var commands: [WorkspaceCommand] = [
       .init(action: .openProject, title: "Open Project…", detail: "Choose a local repository",
         symbol: "folder.badge.plus", keywords: "repository folder", key: "o",
@@ -61,24 +64,35 @@ import AppKit
         keywords: name == "Workspace" ? "chat conversation coding" : name.lowercased(),
         key: index < 9 ? String(index + 1) : nil, disabledReason: projectReason ?? idleReason)
     }
+    return commands
+  }
+
+  var workspaceCommands: [WorkspaceCommand] {
+    var commands = workspaceBaseCommands
+    let disabledReason = connected ? workspaceCommandIdleReason : "Wait for the local engine to connect."
     commands += recentConversations.prefix(12).map { run in
       WorkspaceCommand(action: .run(string(run, "id")),
         title: string(run, "conversation_title", string(run, "title", "Untitled run")),
         detail: "Recent run · " + string(run, "status"), symbol: "bubble.left.and.bubble.right",
-        keywords: "session conversation " + string(run, "kind"), disabledReason: engineReason ?? idleReason)
+        keywords: "session conversation " + string(run, "kind"), disabledReason: disabledReason)
     }
     commands += projects.prefix(8).map { row in
       let path = string(row, "path")
       return WorkspaceCommand(action: .project(path),
         title: string(row, "name", URL(fileURLWithPath: path).lastPathComponent),
         detail: "Recent project · " + path, symbol: "folder", keywords: "repository",
-        disabledReason: engineReason ?? idleReason)
+        disabledReason: disabledReason)
     }
     return commands
   }
 
   func workspaceCommand(_ action: WorkspaceCommandAction) -> WorkspaceCommand? {
-    workspaceCommands.first { $0.action == action }
+    // Every native menu item observes the workspace. Resolving a fixed action
+    // must not regroup recent conversations and rebuild all dynamic commands.
+    switch action {
+    case .run, .project: return workspaceCommands.first { $0.action == action }
+    default: return workspaceBaseCommands.first { $0.action == action }
+    }
   }
 
   /// Resolve again at execution time: availability may have changed since search.

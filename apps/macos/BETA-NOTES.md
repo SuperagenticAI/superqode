@@ -24,6 +24,8 @@ keeps the transcript and review mounted beneath Files while suspending transcrip
 rendering on other feature pages. Response formatting and review
 preparation run away from the UI thread. Recovery writes are coalesced in the
 background, and unchanged model/file/Git state avoids unnecessary redraws.
+Native menu actions avoid rebuilding recent history on each update, and accent
+colour providers are reused while still following appearance and preference changes.
 Navigation checks cover first-open and repeated navigation through workspace
 panels and the main feature pages. Local readiness recognizes reasoning streams,
 and read-tool evidence distinguishes an empty final reply from a marker reply.
