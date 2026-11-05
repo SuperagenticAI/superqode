@@ -29,7 +29,8 @@ colour providers are reused while still following appearance and preference chan
 Switching Evaluations and Optimization keeps the suite form mounted, clears live-run
 consent and rechecks suite diagnostics before a different experiment. Harness Studio
 keeps its editing view mounted across project navigation, and inactive editors and
-dialogs do not receive focus or run refresh work.
+dialogs do not receive focus or run refresh work. Studio uses the same native
+source editor as project files, with code colouring and revision-aware buffer updates.
 Navigation checks cover first-open and repeated navigation through workspace
 panels and the main feature pages. Local readiness recognizes reasoning streams,
 and read-tool evidence distinguishes an empty final reply from a marker reply.

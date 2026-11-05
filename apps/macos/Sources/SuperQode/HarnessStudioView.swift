@@ -87,7 +87,6 @@ struct HarnessStudioView: View {
   @EnvironmentObject var app: Workspace
   @ObservedObject var library: HarnessStudioLibrary
   var active = true
-  @FocusState private var definitionFocused: Bool
   @State private var tab = "Definition"
   @State private var preset = "core"
   @State private var reason = ""
@@ -114,7 +113,6 @@ struct HarnessStudioView: View {
     }.padding(28)
       .onChange(of: active) { _, visible in
         if !visible {
-          if definitionFocused { definitionFocused = false }
           if checkSheet { checkSheet = false }
           if output != nil { output = nil }
         }
@@ -145,9 +143,9 @@ struct HarnessStudioView: View {
           Button("Load") { Task { await library.load(engine: app.engine, reference: preset) } }.disabled(library.busy)
           Button("Import…", action: importYAML).disabled(library.busy)
         }
-        TextEditor(text: $library.text).font(.system(size: 12, design: .monospaced))
-          .focused($definitionFocused)
-          .scrollContentBackground(.hidden).padding(10).brandSurface()
+        SourceEditor(text: $library.text, path: library.name + ".yaml", editable: true,
+          documentID: "harness-studio:" + app.projectID, active: active)
+          .brandSurface()
         Text("Drafts stay in this app session. Save revision persists a snapshot and the project definition.").font(.caption2).foregroundStyle(.secondary)
         TextField("Reason for this revision", text: $reason).textFieldStyle(.roundedBorder)
         HStack {

@@ -12,11 +12,14 @@ struct SourceEditor: NSViewRepresentable {
   let path: String
   var editable: Bool
   var documentID = ""
+  var active = true
   @Environment(\.isEnabled) private var enabled
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
 
   final class Editor: NSTextView {
+    var sourceDocumentID = ""
+    var interactionEnabled = true
     var highContrast = false
     override func drawBackground(in rect: NSRect) {
       super.drawBackground(in: rect)
@@ -121,11 +124,21 @@ struct SourceEditor: NSViewRepresentable {
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     context.coordinator.parent = self
     guard let editor = scroll.documentView as? Editor else { return }
-    editor.isEditable = editable && enabled
+    editor.interactionEnabled = enabled && active
+    editor.isEditable = editable && editor.interactionEnabled
+    if !editor.interactionEnabled, editor.window?.firstResponder === editor {
+      Task { @MainActor [weak editor] in
+        await Task.yield()
+        guard let editor, !editor.interactionEnabled,
+          let window = editor.window, window.firstResponder === editor else { return }
+        window.makeFirstResponder(nil)
+      }
+    }
     editor.isSelectable = true
     editor.highContrast = contrast == .increased || reduceTransparency
     editor.setAccessibilityLabel((editable ? "Edit " : "Source for ") + path)
     let identity = documentID.isEmpty ? path : documentID
+    editor.sourceDocumentID = identity
     if context.coordinator.documentID != identity || editor.string != text {
       context.coordinator.documentID = identity
       context.coordinator.styling?.cancel()

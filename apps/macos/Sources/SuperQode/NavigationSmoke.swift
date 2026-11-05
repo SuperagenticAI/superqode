@@ -13,11 +13,10 @@ import Foundation
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return composer(in: content)
     }
-    @MainActor func mountedStudioEditor() -> NSTextView? {
-      @MainActor func find(in view: NSView) -> NSTextView? {
-        if let editor = view as? NSTextView,
-          !(editor is PromptEditor.Editor), !(editor is SourceEditor.Editor),
-          editor.string == harnessStudio.text { return editor }
+    @MainActor func mountedStudioEditor() -> SourceEditor.Editor? {
+      @MainActor func find(in view: NSView) -> SourceEditor.Editor? {
+        if let editor = view as? SourceEditor.Editor,
+          editor.sourceDocumentID == "harness-studio:" + projectID { return editor }
         return view.subviews.lazy.compactMap { find(in: $0) }.first
       }
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
@@ -34,7 +33,7 @@ import Foundation
       var worstPhase = ""
       var timings: [[String: Any]] = []
       var initialComposer: PromptEditor.Editor?
-      var initialStudioEditor: NSTextView?
+      var initialStudioEditor: SourceEditor.Editor?
       var studioEditorPreserved = true
       let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
@@ -71,6 +70,9 @@ import Foundation
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
         "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
         "studio_editor_preserved": initialStudioEditor != nil && studioEditorPreserved,
+        "studio_editor_disabled_while_hidden": initialStudioEditor.map {
+          !$0.interactionEnabled && !$0.isEditable && $0.window?.firstResponder !== $0
+        } ?? false,
         "slowest_phase": worstPhase, "steps": timings]
     }
 
@@ -109,6 +111,9 @@ import Foundation
   }
   guard result["studio_editor_preserved"] as? Bool == true else {
     throw EngineError(message: "Navigation recreated the Harness Studio editor instead of preserving it")
+  }
+  guard result["studio_editor_disabled_while_hidden"] as? Bool == true else {
+    throw EngineError(message: "The hidden Harness Studio editor still accepts input or retains focus")
   }
   guard (result["worst_ui_heartbeat_ms"] as? Double ?? .infinity) < 250 else {
     throw EngineError(message: "Workspace navigation blocked UI input: \(result)")
