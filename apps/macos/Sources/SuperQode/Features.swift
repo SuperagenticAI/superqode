@@ -363,7 +363,7 @@ struct ExperimentView: View {
               Toggle("Live evaluation · run harnesses and allow model charges", isOn: $live)
               Text(
                 live
-                  ? "Live evaluations execute suite tasks using the selected route."
+                  ? "Each task and candidate uses a fresh fixture copy. Live runs execute agents and any reviewed repository checks, and may incur model charges. Copies are not an OS sandbox."
                   : "Setup check validates the configuration and skips execution. It does not measure coding quality."
               ).font(.caption).foregroundStyle(.secondary)
             }
@@ -455,6 +455,17 @@ struct ExperimentView: View {
           Text("Configurations: baseline + \(String(describing: diagnostics["candidate_count"] ?? 0)) candidates").font(.caption)
         }
         Text(string(diagnostics, "tasks_hash")).font(.caption2.monospaced()).textSelection(.enabled)
+        ForEach(diagnostics["repository_checks"] as? [[String: Any]] ?? [], id: \.projectRowID) { check in
+          VStack(alignment: .leading, spacing: 5) {
+            Text("Repository checks · " + string(check, "id")).font(.caption.weight(.semibold))
+            ForEach(check["commands"] as? [String] ?? [], id: \.self) { command in
+              Text(command).font(.caption.monospaced()).textSelection(.enabled)
+            }
+            if let paths = check["file_assertions"] as? [String], !paths.isEmpty {
+              Text("File assertions: " + paths.joined(separator: ", ")).font(.caption)
+            }
+          }
+        }
         ForEach(diagnostics["warnings"] as? [String] ?? [], id: \.self) { warning in
           Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
         }
@@ -581,13 +592,13 @@ struct ExperimentView: View {
       && !app.confirm(
         optimize ? "Start live optimization?" : "Start live evaluation?",
         optimize
-          ? "Allow model calls with up to \(maxEvals) evaluations and a $\(maxCost) engine cost budget. Tasks execute on this Mac."
-          : "This suite will run tasks and may incur provider charges.", button: "Start run")
+          ? "Allow model calls with up to \(maxEvals) evaluations and a $\(maxCost) engine cost budget. Suite tasks and the reviewed verifier commands execute on this Mac."
+          : "This suite will run agents and the repository checks shown below the suite selector. Each trial uses a fixture copy. Commands run on this Mac and may use the network; model calls may incur provider charges.", button: "Start run")
     {
       return
     }
     imported = nil
-    var params: [String: Any] = ["tasks": suite, "live": live]
+    var params: [String: Any] = ["tasks": suite, "live": live, "tasks_hash": string(diagnostics, "tasks_hash")]
     if optimize {
       params.merge([
         "method": "omni", "max_evals": maxEvals, "max_cost": maxCost,

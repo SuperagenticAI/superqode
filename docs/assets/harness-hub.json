@@ -786,7 +786,7 @@
       "continuity": "fresh-session",
       "provider": "",
       "model": "",
-      "setup": "run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`",
+      "setup": "Install with `npm install -g @qwen-code/qwen-code`, then run `qwen` and enter `/auth` to configure your provider or plan",
       "warning": "",
       "project_path": "",
       "homepage": "https://github.com/QwenLM/qwen-code",
@@ -796,7 +796,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://docs.superqode.dev/providers/qwen-code/",
-      "install_command": "run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`",
+      "install_command": "Install with `npm install -g @qwen-code/qwen-code`, then run `qwen` and enter `/auth` to configure your provider or plan",
       "tui_commands": [
         ":connect qwen-code",
         ":harness switch qwen-code",
@@ -829,9 +829,9 @@
           "description": ""
         },
         {
-          "title": "Authenticate your Qwen account",
-          "command": "qwen auth",
-          "description": ""
+          "title": "Configure your Qwen provider or plan",
+          "command": "qwen",
+          "description": "Inside Qwen Code, enter /auth. The standalone qwen auth command has been removed. Use the endpoint and key for your region and plan."
         }
       ],
       "openness": "open",

@@ -178,7 +178,10 @@ private struct ACPInteractiveSignIn: View {
     } else {
       VStack(alignment: .leading, spacing: 18) {
         Text("Review terminal sign-in").font(.title2)
-        Text("The agent advertised these arguments and environment values. The configured agent executable owns this login process.").foregroundStyle(.secondary)
+        Text(string(plan, "instructions").isEmpty ? "The agent advertised these arguments and environment values. The configured agent executable owns this login process." : "Review the vendor setup command. The vendor CLI owns authentication and model access.").foregroundStyle(.secondary)
+        if !string(plan, "instructions").isEmpty {
+          Text(string(plan, "instructions")).font(.callout).textSelection(.enabled)
+        }
         CodeBlock(text: pretty(["arguments": plan["argv"] ?? [], "environment": plan["env"] ?? [:]])).frame(height: 230)
         Button("Start sign-in", action: { started = true }).buttonStyle(BrandButtonStyle())
       }.padding(24).frame(width: 700)

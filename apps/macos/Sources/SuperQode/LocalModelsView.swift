@@ -127,10 +127,23 @@ struct LocalModelWorkbenchView: View {
                   Pill(title: string(row, "format").uppercased())
                   if row["gated"] as? Bool == true { Label("Access required", systemImage: "lock").font(.caption) }
                   Spacer()
-                  Button("Review download…") {
-                    action = ["action": "download", "model": string(row, "id"), "source": string(row, "source"),
-                      "format": string(row, "format"), "engine": string(row, "format") == "mlx" ? "mlx" : source == "lmstudio" ? "lmstudio" : string(row, "source") == "ollama" ? "ollama" : "llama.cpp"]
+                  if row["manual_setup"] as? Bool == true {
+                    Button("Configure DS4…") { action = ["action": "serve", "engine": "ds4"] }
+                      .disabled(app.anyActive)
+                  } else if string(row, "format") == "weights" {
+                    Button("Find GGUF / MLX builds") {
+                      query = string(row, "id").components(separatedBy: "/").last ?? ""
+                      source = "hf"; search()
+                    }
+                  } else {
+                    Button("Review download…") {
+                      action = ["action": "download", "model": string(row, "id"), "source": string(row, "source"),
+                        "format": string(row, "format"), "engine": string(row, "format") == "mlx" ? "mlx" : source == "lmstudio" ? "lmstudio" : string(row, "source") == "ollama" ? "ollama" : "llama.cpp"]
+                    }
                   }
+                }
+                if let url = URL(string: string(row, "docs_url")), url.scheme == "https" {
+                  Link("Model documentation", destination: url).font(.caption)
                 }
               }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
             }

@@ -216,7 +216,7 @@ available under `:connect byok zai`.
 ### Qwen Code (connector: acp, agent: qwen)
 
 Runs QwenLM's first-party Qwen Code agent through its stable ACP mode. Requires
-the `qwen` command and authentication from `qwen auth`.
+the `qwen` command and authentication by running `qwen` and entering `/auth`.
 
 ### Kimi Code (connector: acp, agent: kimi)
 

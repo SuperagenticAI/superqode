@@ -56,10 +56,14 @@ not launch agents or install a plugin. Monty is not bundled in this macOS releas
 ## Start with a local model
 
 Open a project, choose **Local AI**, then **Local Quick Start**. The guide puts
-models already available on running local servers first and offers small Qwen
-and Gemma starting choices when the detected memory permits. Review each step
+models already available on all five supported local servers first and offers
+Fast, Balanced and Capable Qwen starting presets plus a Gemma alternative when
+the detected memory permits. These are starting presets, not measured rankings.
+Review each step
 to install a missing runtime, start the server, download weights and run a
-bounded read-tool check on generated data. **Start coding** selects Core and
+tool-call/context probes and a bounded Core read-tool check on generated data.
+The result shows the reported loaded context and warnings, including unknown
+context. Existing server settings are preserved. **Start coding** selects Core and
 the checked local model without sending a prompt.
 
 Progress is saved per project. Reopen the guide to observe an existing operation;
@@ -72,6 +76,16 @@ These are starting choices, not measured quality guarantees. Download size can
 be unknown until transfer begins. The primary endpoint stays local; other tools
 and project configuration may use the network. The existing model library,
 storage controls and runtime configuration remain available for advanced setup.
+
+Recommended search includes Hugging Face families. Select an exact GGUF or MLX
+conversion to review its immutable revision, files and download size. Original
+FP8/BF16 weights are not presented as ready-to-run GGUFs. DS4 recommendations open
+the existing reviewed setup flow for your own executable and weights.
+
+Provider setup highlights Chinese providers and aggregators with official docs,
+key variable names and default endpoints. **Qwen China API** and **Qwen International
+API** keep separate credentials. These are metered API routes; Coding Plan and
+Token Plan keys belong in Qwen Code's interactive `/auth` flow.
 
 ## Your first harness check · no API key needed
 

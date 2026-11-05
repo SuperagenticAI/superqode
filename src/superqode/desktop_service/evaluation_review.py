@@ -57,7 +57,12 @@ def _grading_issue(task):
     method = evaluation.get("evaluator")
     if method == "execution" and task.get("status") == "error":
         return ""  # An operational failure is not graded, but loses a baseline success.
-    if not isinstance(method, str) or method not in {"contains", "decision", "jev_rubric"}:
+    if not isinstance(method, str) or method not in {
+        "contains",
+        "decision",
+        "jev_rubric",
+        "repository",
+    }:
         return "The grading method is missing or unsupported."
     return ""
 

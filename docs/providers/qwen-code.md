@@ -9,7 +9,8 @@ surface.
 
 ```bash
 npm install -g @qwen-code/qwen-code
-qwen auth
+qwen
+# Inside Qwen Code, enter /auth to configure your provider or plan.
 ```
 
 Verify that SuperQode can discover it:

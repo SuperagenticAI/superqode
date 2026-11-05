@@ -79,7 +79,12 @@ def test_guided_chain_keeps_existing_steps_and_verified_selection_after_restart(
     status["running"] = True
     advance(service, params, "download")
     models.append(choices[0]["model"])
-    advance(service, params, "verify", {"verification": {"status": "passed"}})
+    advance(
+        service,
+        params,
+        "verify",
+        {"verification": {"status": "passed", "readiness": {"status": "ready"}}},
+    )
     assert service.dispatch("local.models.quickstart.prepare", params)["step"] == "ready"
     # Recreate the desktop service using the same persisted database.
     from superqode.desktop_service.service import DesktopService

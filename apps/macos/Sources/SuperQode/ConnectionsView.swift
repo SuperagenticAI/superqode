@@ -22,6 +22,9 @@ struct ConnectionSourcesView: View {
       return true
     }
   }
+  private var featuredProviders: [[String: Any]] {
+    cloudProviders.filter { ["deepseek", "qwen-cn", "qwen-intl", "alibaba", "moonshot", "zai", "zhipu", "minimax", "doubao", "siliconflow", "openrouter"].contains(string($0, "id")) }
+  }
   private var cloud: [String: Any] {
     cloudProviders.first { string($0, "id") == selectedProvider } ?? [:]
   }
@@ -142,10 +145,31 @@ struct ConnectionSourcesView: View {
 
   private var cloudContent: some View {
     VStack(alignment: .leading, spacing: 16) {
+      if !featuredProviders.isEmpty {
+        Text("Chinese models and aggregators").font(.headline)
+        Text("Choose a provider to see its key type, model examples and official setup guide. API keys and coding-plan subscriptions use different routes.")
+          .font(.caption).foregroundStyle(.secondary)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], alignment: .leading) {
+          ForEach(featuredProviders, id: \.projectRowID) { provider in
+            Button(string(provider, "name")) {
+              selectedProvider = string(provider, "id")
+            }.disabled(saving)
+          }
+        }
+      }
       Picker("Provider", selection: $selectedProvider) {
         ForEach(cloudProviders, id: \.projectRowID) { row in
           Text(string(row, "name")).tag(string(row, "id"))
         }
+      }
+      if !string(cloud, "notes").isEmpty { Text(string(cloud, "notes")).font(.callout).foregroundStyle(.secondary) }
+      if !string(cloud, "default_base_url").isEmpty {
+        Text("Default endpoint: " + string(cloud, "default_base_url")).font(.caption.monospaced()).textSelection(.enabled)
+      }
+      Text("Key environment variable: " + (cloud["credential_variables"] as? [String] ?? []).joined(separator: " or "))
+        .font(.caption).foregroundStyle(.secondary)
+      if let url = URL(string: string(cloud, "docs_url")), url.scheme == "https", url.user == nil, url.password == nil {
+        Link("Official provider setup and pricing", destination: url)
       }
       HStack {
         TextField("Model ID", text: $selectedModel).textFieldStyle(.roundedBorder)
@@ -170,9 +194,6 @@ struct ConnectionSourcesView: View {
         Pill(title: "CREDENTIAL CONFIGURED · NOT VERIFIED", color: .orange)
       }
       HStack {
-        if let url = URL(string: string(cloud, "docs_url")), url.scheme == "https" {
-          Link("Provider setup", destination: url)
-        }
         Spacer()
         if app.savedCredentialProviders.contains(selectedProvider) {
           Button("Forget saved key", role: .destructive) {

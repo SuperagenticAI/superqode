@@ -16,6 +16,26 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
+## Unreleased
+
+Evaluation tasks and candidates now use independent copies of one captured input
+fixture and fresh harness state. Repository graders can run reviewed commands,
+assert file contents and reject changes to protected tests. Verifier commands are
+shown before native live runs and suite contents are pinned at submission. Older
+held-out reports without isolation evidence must be rerun before candidate adoption.
+Copies are not an OS sandbox; trusted verifier commands run as your user.
+
+Local Quick Start adds Fast, Balanced and Capable starting suggestions, tool-call
+and context probes, and a Core read-tool check. Missing context and probe warnings
+remain visible. Recommended search includes Hugging Face families and the DS4
+route; original weights require an appropriate conversion rather than an automatic
+GGUF download. Provider setup adds Qwen regional API choices, Chinese-provider
+shortcuts, key/endpoint guidance and official docs. Qwen Code setup uses `/auth`
+inside its interactive CLI.
+
+Pro verification remains a preview. These changes do not publish a release or
+replace project CI and QA.
+
 ## Version 0.3.4
 
 Version 0.3.4 (build 20) bundles Python engine 2.31.3. Connection setup now explains
@@ -34,7 +54,7 @@ output text matches. Local cache inventory avoids linked directories and externa
 file targets, GGUF estimates handle underscore-separated names, and saved workspace
 recovery remains readable after atomic writes on macOS.
 
-Generic evaluations do not yet create a fresh workspace for every task and
+In version 0.3.4, generic evaluations do not create a fresh workspace for every task and
 candidate. Runs that modify files can affect later trials; use disposable fixtures
 and independently verify comparisons before adopting a candidate. Text-matching
 graders alone do not establish that a code change passes project tests.

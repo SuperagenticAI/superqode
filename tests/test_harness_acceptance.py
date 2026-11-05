@@ -12,12 +12,14 @@ def report():
             "split": "held-out",
             "status": "passed",
             "evaluation": {"status": "passed", "evaluator": "decision"},
+            "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
         }
     ]
     return {
         "live": True,
         "split": "held-out",
         "task_count": 1,
+        "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
         "variants": [{"tasks": deepcopy(tasks)}, {"tasks": deepcopy(tasks)}],
     }
 
@@ -32,6 +34,9 @@ def test_graded_matched_heldout_tasks_can_pass():
         lambda r: r.update(live=False),
         lambda r: r.update(split="all"),
         lambda r: r.update(task_count=0),
+        lambda r: r.pop("workspace"),
+        lambda r: r["variants"][1]["tasks"][0].pop("workspace"),
+        lambda r: r["variants"][1]["tasks"][0]["workspace"].update(snapshot_sha256="b" * 64),
         lambda r: r["variants"][1].update(tasks=[]),
         lambda r: r["variants"][1]["tasks"][0].update(status="error"),
         lambda r: r["variants"][1]["tasks"][0].update(status=[]),

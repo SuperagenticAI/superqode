@@ -452,6 +452,10 @@ class DesktopService:
             if self._closing:
                 raise ValueError("The desktop engine is shutting down")
             root = self.project(project_id)
+            if kind in {"evaluation", "optimization"}:
+                from .experiments import reviewed_suite
+
+                params = {**params, "_suite_content": reviewed_suite(root, params)}
             if kind != "local" and self._all(
                 "SELECT id FROM jobs WHERE kind='local' AND status IN ('running','queued','needs_approval','cancelling') AND json_extract(request,'$.local_plan.action') IN ('serve','stop','install')"
             ):
@@ -1602,6 +1606,23 @@ class DesktopService:
                 if params["reference"].startswith("acp:")
                 else profile_route(root, params["reference"].removeprefix("connection:"))
             )
+            if params["reference"] == "acp:qwen":
+                import shutil
+
+                binary = shutil.which("qwen")
+                if not binary:
+                    raise ValueError(
+                        "Install Qwen Code with npm install -g @qwen-code/qwen-code, then check installation again. https://qwenlm.github.io/qwen-code-docs/"
+                    )
+                return {
+                    "vendor": "qwen-code",
+                    "name": "Qwen Code setup",
+                    "interactive": True,
+                    "argv": [binary],
+                    "env": {},
+                    "unset_env": [],
+                    "instructions": "In Qwen Code, enter /auth and choose your provider, region and plan. Coding Plan, Token Plan and metered API keys use different endpoints. Exit Qwen when setup is complete, then check the connection here. Closing the CLI alone does not verify model access.",
+                }
             vendor = route.get("subscription_vendor") or resolve_vendor(
                 params["reference"].removeprefix("acp:")
             )

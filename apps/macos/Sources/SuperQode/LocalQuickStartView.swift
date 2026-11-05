@@ -28,6 +28,10 @@ struct LocalQuickStartView: View {
       }.disabled(busy || state == "working")
       if let row = choices.first(where: { string($0, "id") == selection }) {
         Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
+        if let context = row["suggested_context"] as? Int {
+          Text("Suggested starting context: \(context.formatted()) tokens. Existing server settings are kept; the readiness check reports the loaded context when available.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
       }
       Text("Suggestions are starting points. Context and other apps also need memory.").font(.caption).foregroundStyle(.secondary)
       ScrollView {
@@ -47,13 +51,16 @@ struct LocalQuickStartView: View {
               Text("Download size is reported during transfer. Free disk: " + localBytes(plan["disk_free_bytes"]))
               Text("Existing cached weights are reused. No coding prompt is sent by downloading.").font(.caption)
             }
-            if state == "verify" { Text("This starts a bounded local read-only check on generated data, without reading your project.").font(.caption) }
+            if state == "verify" { Text("Checks loaded context, tool-call shapes and context recall, then runs a Core read-tool check on generated data. No project files are read.").font(.caption) }
             DisclosureGroup("Advanced operation details") {
               Text(string(plan, "command")).font(.caption.monospaced()).textSelection(.enabled)
             }
           } else if !string(step, "message").isEmpty {
             Text(string(step, "message"))
             if let url = URL(string: string(step, "url")), url.scheme == "https" { Link("Open official installation guide", destination: url) }
+          }
+          if let verification = step["verification"] as? [String: Any], !verification.isEmpty {
+            LocalReadinessSummary(verification: verification)
           }
           if !output.isEmpty { DisclosureGroup("Setup output") { Text(output).font(.caption.monospaced()).textSelection(.enabled) } }
           if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
@@ -144,5 +151,32 @@ struct LocalQuickStartView: View {
       app.chooseHarness("core"); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
       app.section = "Workspace"; closed = true; dismiss()
     } catch { failure = error.localizedDescription }
+  }
+}
+
+
+private struct LocalReadinessSummary: View {
+  let verification: [String: Any]
+  private var readiness: [String: Any] { verification["readiness"] as? [String: Any] ?? [:] }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Local check results").font(.headline)
+      if let window = readiness["context_window"] as? Int {
+        Text("Reported context: \(window.formatted()) tokens · " + string(readiness, "context_source")).font(.caption)
+      } else {
+        Text("Loaded context was not reported. Keep context conservative; no maximum context size was verified.").font(.caption).foregroundStyle(.orange)
+      }
+      ForEach(verification["checks"] as? [[String: Any]] ?? [], id: \.projectRowID) { check in
+        Label(string(check, "name"), systemImage: check["ok"] as? Bool == true ? "checkmark.circle" : "exclamationmark.circle")
+          .font(.caption).foregroundStyle(check["ok"] as? Bool == true ? Color.secondary : .orange)
+      }
+      ForEach(readiness["checks"] as? [[String: Any]] ?? [], id: \.projectRowID) { check in
+        Label(string(check, "name") + ": " + string(check, "detail"), systemImage: check["ok"] as? Bool == true ? "checkmark.circle" : "exclamationmark.circle")
+          .font(.caption).foregroundStyle(check["ok"] as? Bool == true ? Color.secondary : .orange)
+      }
+      ForEach(readiness["warnings"] as? [String] ?? [], id: \.self) { warning in
+        Text(warning).font(.caption).foregroundStyle(.orange)
+      }
+    }
   }
 }

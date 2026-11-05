@@ -29,12 +29,19 @@ def catalog(service, project):
     engines = local_models.servers(service)
     choices = {}
 
-    def add(engine, model, name, detail, installed):
+    def add(engine, model, name, detail, installed, *, preset="running", context=None):
         if any(word in model.lower() for word in ("embed", "rerank", "cloud")):
             return
         identity = hashlib.sha256((engine + "\n" + model).encode()).hexdigest()[:24]
         choices[identity] = dict(
-            id=identity, engine=engine, model=model, name=name, detail=detail, installed=installed
+            id=identity,
+            engine=engine,
+            model=model,
+            name=name,
+            detail=detail,
+            installed=installed,
+            preset=preset,
+            suggested_context=context,
         )
 
     for engine in engines:
@@ -47,21 +54,54 @@ def catalog(service, project):
     # Keep the first setup small. These are starting choices, not quality claims.
     memory = hardware.available_memory_gb
     if memory and memory >= 8:
-        suggestions = [("qwen3.5:2b", "Qwen · smaller download", "Start with a small local model.")]
+        suggestions = [
+            (
+                "qwen3.5:2b",
+                "Fast · Qwen 2B",
+                "A small starting model for limited memory.",
+                "fast",
+                8192,
+            )
+        ]
         if memory >= 16:
             suggestions += [
-                ("qwen3.5:9b", "Qwen · more capable", "Needs more memory than the smaller Qwen."),
-                ("gemma4:e4b", "Gemma · alternative", "Google's open model family."),
+                (
+                    "qwen3.5:9b",
+                    "Balanced · Qwen 9B",
+                    "More memory and latency than Fast.",
+                    "balanced",
+                    16384,
+                ),
+                (
+                    "gemma4:e4b",
+                    "Gemma · alternative",
+                    "Google's open model family.",
+                    "alternative",
+                    16384,
+                ),
             ]
-        for model, name, detail in suggestions:
+        if memory >= 48:
+            suggestions.append(
+                (
+                    "qwen3.5:27b",
+                    "Capable · Qwen 27B",
+                    "A larger starting model for high-memory machines.",
+                    "capable",
+                    32768,
+                )
+            )
+        for model, name, detail, preset, context in suggestions:
             identity = hashlib.sha256(("ollama\n" + model).encode()).hexdigest()[:24]
             if identity not in choices:
                 add(
                     "ollama",
                     model,
                     name,
-                    detail + " Download size is reported during transfer.",
+                    detail
+                    + " Exact artifact size is reported during transfer; these are not measured speed or quality rankings.",
                     False,
+                    preset=preset,
+                    context=context,
                 )
     saved = _read(service, project)
     previous = saved.get("selection")
@@ -99,10 +139,17 @@ def prepare(service, params):
                         "step": "retry",
                         "job": row["id"],
                         "message": "Setup stopped. Review its output, then retry. Completed downloads are reused.",
+                        "verification": result.get("verification", {}),
                     }
                 state = {"choice": choice_id}
             elif state.get("step") == "verify":
-                state["verified"] = True
+                verification = result.get("verification") or {}
+                # Older Core-only checks must run the new readiness checks too.
+                state["verified"] = (verification.get("readiness") or {}).get("status") in {
+                    "ready",
+                    "warning",
+                }
+                state["verification"] = verification
         else:
             state = {"choice": choice_id}
 
@@ -142,17 +189,24 @@ def prepare(service, params):
         if engine != "ollama":
             raise ValueError("Start this model from Advanced setup, then check again")
         step = "serve"
-        options["context"] = 8192
+        options["context"] = choice.get("suggested_context") or 8192
     elif model not in local_models.available(engine)["models"]:
         if engine != "ollama":
             raise ValueError("Load the selected model in its server, then check again")
         step = "download"
         options["source"] = "ollama"
     elif state.get("verified"):
-        return finish({"step": "ready", "engine": engine, "model": model})
+        return finish(
+            {
+                "step": "ready",
+                "engine": engine,
+                "model": model,
+                "verification": state.get("verification", {}),
+            }
+        )
     else:
         step = "verify"
-        options["check"] = "core-read"
+        options["check"] = "quickstart"
     plan = local_models.prepare(service, {**options, "action": step})
     return finish({"step": step, "plan": plan, "engine": engine, "model": model})
 

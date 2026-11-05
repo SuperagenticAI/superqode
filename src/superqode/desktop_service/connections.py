@@ -81,6 +81,11 @@ def list_connections(credentials: dict[str, str]):
                 else "not configured",
                 "example_models": definition.example_models,
                 "docs_url": definition.docs_url,
+                "category": definition.category.value,
+                "notes": definition.notes,
+                "credential_variables": list(definition.env_vars),
+                "default_base_url": definition.default_base_url,
+                "base_url_env": definition.base_url_env or "",
                 "verified": False,
             }
         )

@@ -145,9 +145,11 @@ def test_changed_candidate_cannot_pass_a_stale_adoption_gate(desktop):
         "split": "held-out",
         "status": "passed",
         "evaluation": {"evaluator": "contains", "status": "passed"},
+        "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
     }
     result = {
         "heldout_eval": {
+            "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
             "live": True,
             "split": "held-out",
             "task_count": 1,

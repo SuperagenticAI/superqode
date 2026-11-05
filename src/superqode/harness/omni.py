@@ -6,6 +6,7 @@ import asyncio
 import json
 import shutil
 import threading
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from superqode.skillopt import (
 )
 
 from .eval import load_eval_tasks, run_harness_eval
+from .eval_workspace import EvaluationWorkspace
 from .loader import harness_spec_to_dict, load_harness_spec
 from .self_improve import audit_harness_candidate, record_candidate_audit
 
@@ -128,126 +130,139 @@ def optimize_harness_with_omni(
     baseline_path = baseline_dir / "harness.yaml"
     baseline_path.write_text(source_text, encoding="utf-8")
 
-    evaluator = _HarnessOmniEvaluator(
-        baseline_spec_path=baseline_path,
-        tasks_path=task_source,
-        tasks=tasks,
-        eval_dir=eval_dir,
-        provider=provider,
-        model=model,
-        runtime=runtime,
-        working_dir=Path(working_dir).expanduser().resolve(),
-        sandbox_backend=sandbox_backend,
-        live=live,
-    )
-    objective = (
-        f"Optimize the complete SuperQode HarnessSpec `{source_spec.name}` while "
-        "preserving its identity, safety boundaries, and previously passing behavior."
-    )
-    background = (
-        "The candidate is a complete YAML HarnessSpec. Only edit surfaces permitted "
-        "by the baseline optimization policy. Invalid, out-of-scope, protected, "
-        "permission-widening, or check-weakening candidates receive score zero. "
-        "Prefer narrow changes to context, workflow, model policy, and agent tools."
-    )
-    result = _run_modern_optimizer(
-        engine=engine,
-        continuation_engine=continuation_engine,
-        seed_candidate=source_text,
-        evaluator=evaluator.evaluate,
-        dataset=train_tasks,
-        valset=val_tasks,
-        test_set=test_tasks,
-        objective=objective,
-        background=background,
-        output_dir=out,
-        max_evals=max_evals,
-        explore_max_evals=explore_max_evals,
-        max_token_cost=max_token_cost,
-        reflection_lm=reflection_lm,
-        optimizer_model=optimizer_model,
-        optimizer_effort=optimizer_effort,
-        agent_sandbox=agent_sandbox,
-        max_workers=max_workers,
-        seed=seed,
-        max_candidate_proposals=max_candidate_proposals,
-        candidate_selection_strategy=candidate_selection_strategy,
-        frontier_type=frontier_type,
-        acceptance_criterion=acceptance_criterion,
-        cache_evaluation=cache_evaluation,
-        use_merge=use_merge,
-        max_merge_invocations=max_merge_invocations,
-        reflection_minibatch_size=reflection_minibatch_size,
-    )
-
-    staged_path = staged_dir / "best_harness.yaml"
-    staged_path.write_text(_best_skill_text(result), encoding="utf-8")
-    load_harness_spec(staged_path)
-    candidate_audit = audit_harness_candidate(
-        base_spec_path=baseline_path,
-        candidate_spec_path=staged_path,
-        tasks_path=task_source,
-        ledger_path=out / "candidate-ledger.jsonl",
-        require_heldout=False,
-        allow_ungated=True,
-    )
-    heldout_eval = asyncio.run(
-        run_harness_eval(
-            spec_paths=[baseline_path, staged_path],
+    with ExitStack() as stack:
+        workspace_snapshot = (
+            stack.enter_context(
+                EvaluationWorkspace(
+                    working_dir,
+                    exclude_paths=(task_source, source, out),
+                )
+            )
+            if live
+            else None
+        )
+        evaluator = _HarnessOmniEvaluator(
+            baseline_spec_path=baseline_path,
             tasks_path=task_source,
+            tasks=tasks,
+            eval_dir=eval_dir,
             provider=provider,
             model=model,
             runtime=runtime,
             working_dir=Path(working_dir).expanduser().resolve(),
             sandbox_backend=sandbox_backend,
-            live=True,
-            eval_split="held-out",
+            live=live,
+            workspace_snapshot=workspace_snapshot,
         )
-    )
-    from .acceptance import heldout_acceptance
+        objective = (
+            f"Optimize the complete SuperQode HarnessSpec `{source_spec.name}` while "
+            "preserving its identity, safety boundaries, and previously passing behavior."
+        )
+        background = (
+            "The candidate is a complete YAML HarnessSpec. Only edit surfaces permitted "
+            "by the baseline optimization policy. Invalid, out-of-scope, protected, "
+            "permission-widening, or check-weakening candidates receive score zero. "
+            "Prefer narrow changes to context, workflow, model policy, and agent tools."
+        )
+        result = _run_modern_optimizer(
+            engine=engine,
+            continuation_engine=continuation_engine,
+            seed_candidate=source_text,
+            evaluator=evaluator.evaluate,
+            dataset=train_tasks,
+            valset=val_tasks,
+            test_set=test_tasks,
+            objective=objective,
+            background=background,
+            output_dir=out,
+            max_evals=max_evals,
+            explore_max_evals=explore_max_evals,
+            max_token_cost=max_token_cost,
+            reflection_lm=reflection_lm,
+            optimizer_model=optimizer_model,
+            optimizer_effort=optimizer_effort,
+            agent_sandbox=agent_sandbox,
+            max_workers=max_workers,
+            seed=seed,
+            max_candidate_proposals=max_candidate_proposals,
+            candidate_selection_strategy=candidate_selection_strategy,
+            frontier_type=frontier_type,
+            acceptance_criterion=acceptance_criterion,
+            cache_evaluation=cache_evaluation,
+            use_merge=use_merge,
+            max_merge_invocations=max_merge_invocations,
+            reflection_minibatch_size=reflection_minibatch_size,
+        )
 
-    heldout_gate = heldout_acceptance(heldout_eval)
-    accepted = bool(candidate_audit.get("accepted") and heldout_gate["accepted"])
-    heldout_gate["accepted"] = accepted
-    candidate_audit = {
-        **candidate_audit,
-        "optimizer_policy_accepted": bool(candidate_audit.get("accepted")),
-        "heldout_gate": heldout_gate,
-        "accepted": accepted,
-        "decision": "accepted" if accepted else "rejected",
-    }
-    record_candidate_audit(
-        candidate_audit,
-        ledger_path=out / "candidate-ledger.jsonl",
-        notes="GEPA Omni final candidate after sealed held-out gate",
-    )
-    baseline_score = heldout_gate["baseline_score"]
-    best_score = heldout_gate["candidate_score"]
-    result_metadata = _result_metadata(result)
-    total_evals = result_metadata.get(
-        "omni_total_evals",
-        getattr(result, "total_evals", None),
-    )
-    report_json = out / "report.json"
-    report_md = out / "report.md"
-    payload = HarnessOmniOptimizationResult(
-        engine=engine,
-        output_dir=out,
-        baseline_spec_path=baseline_path,
-        staged_spec_path=staged_path,
-        report_json_path=report_json,
-        report_md_path=report_md,
-        baseline_score=baseline_score,
-        best_score=best_score,
-        total_evals=int(total_evals) if total_evals is not None else None,
-        candidate_audit=candidate_audit,
-        heldout_eval=heldout_eval,
-        accepted=accepted,
-        metadata={**result_metadata, "heldout_gate": heldout_gate},
-    )
-    report_json.write_text(json.dumps(payload.to_dict(), indent=2) + "\n", encoding="utf-8")
-    report_md.write_text(render_harness_omni_result(payload) + "\n", encoding="utf-8")
-    return payload
+        staged_path = staged_dir / "best_harness.yaml"
+        staged_path.write_text(_best_skill_text(result), encoding="utf-8")
+        load_harness_spec(staged_path)
+        candidate_audit = audit_harness_candidate(
+            base_spec_path=baseline_path,
+            candidate_spec_path=staged_path,
+            tasks_path=task_source,
+            ledger_path=out / "candidate-ledger.jsonl",
+            require_heldout=False,
+            allow_ungated=True,
+        )
+        heldout_eval = asyncio.run(
+            run_harness_eval(
+                spec_paths=[baseline_path, staged_path],
+                tasks_path=task_source,
+                provider=provider,
+                model=model,
+                runtime=runtime,
+                working_dir=Path(working_dir).expanduser().resolve(),
+                sandbox_backend=sandbox_backend,
+                live=True,
+                workspace_snapshot=workspace_snapshot,
+                eval_split="held-out",
+            )
+        )
+        from .acceptance import heldout_acceptance
+
+        heldout_gate = heldout_acceptance(heldout_eval)
+        accepted = bool(candidate_audit.get("accepted") and heldout_gate["accepted"])
+        heldout_gate["accepted"] = accepted
+        candidate_audit = {
+            **candidate_audit,
+            "optimizer_policy_accepted": bool(candidate_audit.get("accepted")),
+            "heldout_gate": heldout_gate,
+            "accepted": accepted,
+            "decision": "accepted" if accepted else "rejected",
+        }
+        record_candidate_audit(
+            candidate_audit,
+            ledger_path=out / "candidate-ledger.jsonl",
+            notes="GEPA Omni final candidate after sealed held-out gate",
+        )
+        baseline_score = heldout_gate["baseline_score"]
+        best_score = heldout_gate["candidate_score"]
+        result_metadata = _result_metadata(result)
+        total_evals = result_metadata.get(
+            "omni_total_evals",
+            getattr(result, "total_evals", None),
+        )
+        report_json = out / "report.json"
+        report_md = out / "report.md"
+        payload = HarnessOmniOptimizationResult(
+            engine=engine,
+            output_dir=out,
+            baseline_spec_path=baseline_path,
+            staged_spec_path=staged_path,
+            report_json_path=report_json,
+            report_md_path=report_md,
+            baseline_score=baseline_score,
+            best_score=best_score,
+            total_evals=int(total_evals) if total_evals is not None else None,
+            candidate_audit=candidate_audit,
+            heldout_eval=heldout_eval,
+            accepted=accepted,
+            metadata={**result_metadata, "heldout_gate": heldout_gate},
+        )
+        report_json.write_text(json.dumps(payload.to_dict(), indent=2) + "\n", encoding="utf-8")
+        report_md.write_text(render_harness_omni_result(payload) + "\n", encoding="utf-8")
+        return payload
 
 
 class _HarnessOmniEvaluator:
@@ -264,6 +279,7 @@ class _HarnessOmniEvaluator:
         working_dir: Path,
         sandbox_backend: str,
         live: bool,
+        workspace_snapshot: EvaluationWorkspace | None = None,
     ) -> None:
         self.baseline_spec_path = baseline_spec_path
         self.tasks_path = tasks_path
@@ -275,6 +291,7 @@ class _HarnessOmniEvaluator:
         self.working_dir = working_dir
         self.sandbox_backend = sandbox_backend
         self.live = live
+        self.workspace_snapshot = workspace_snapshot
         self._lock = threading.Lock()
         self._counter = 0
         self._baseline_scores: dict[str, float] = {}
@@ -335,6 +352,7 @@ class _HarnessOmniEvaluator:
                     working_dir=self.working_dir,
                     sandbox_backend=self.sandbox_backend,
                     live=self.live,
+                    workspace_snapshot=self.workspace_snapshot,
                 )
             )
         except Exception as exc:  # noqa: BLE001

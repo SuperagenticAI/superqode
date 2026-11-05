@@ -928,7 +928,11 @@ _SETUP_STEPS_BY_ID = {
     ),
     "qwen-code": (
         HubSetupStep("Install Qwen Code", "npm install -g @qwen-code/qwen-code"),
-        HubSetupStep("Authenticate your Qwen account", "qwen auth"),
+        HubSetupStep(
+            "Configure your Qwen provider or plan",
+            "qwen",
+            description="Inside Qwen Code, enter /auth. The standalone qwen auth command has been removed. Use the endpoint and key for your region and plan.",
+        ),
     ),
     "kimi-code": (
         HubSetupStep(

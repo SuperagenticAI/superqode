@@ -112,6 +112,56 @@ def search(query, source="recommended", kind="gguf", *, token=None):
                             "origin": "Shared TUI recommendation catalog; availability is checked when pulling.",
                         }
                     )
+                elif len(parts) >= 3 and parts[:2] == ["hf", "download"]:
+                    try:
+                        repo = _repo(parts[2])
+                    except ValueError:
+                        continue
+                    lower = repo.lower()
+                    artifact = "gguf" if "gguf" in lower else "mlx" if "mlx" in lower else "weights"
+                    engines = (
+                        ["mlx"]
+                        if artifact == "mlx"
+                        else ["llama.cpp", "ollama", "lmstudio"]
+                        if artifact == "gguf"
+                        else []
+                    )
+                    rows.append(
+                        {
+                            "id": repo,
+                            "name": hit.name,
+                            "source": "hf",
+                            "format": artifact,
+                            "role": hit.role,
+                            "engines": engines,
+                            "fit": {
+                                "estimate_gb": None,
+                                "likely_fits": False,
+                                "verdict": "Choose an exact artifact to check download size and memory",
+                            },
+                            "origin": "Shared TUI catalog · Hugging Face. Original weights may need a GGUF or MLX conversion.",
+                            "docs_url": "https://huggingface.co/" + repo,
+                        }
+                    )
+                elif parts == ["superqode", "providers", "ds4", "server"]:
+                    rows.append(
+                        {
+                            "id": "ds4:deepseek-v4-flash",
+                            "name": hit.name,
+                            "source": "ds4",
+                            "format": "gguf",
+                            "role": hit.role,
+                            "engines": ["ds4"],
+                            "manual_setup": True,
+                            "fit": {
+                                "likely_fits": False,
+                                "estimate_gb": None,
+                                "verdict": "Choose your exact GGUF and inspect its size before starting",
+                            },
+                            "origin": "DS4 route · requires an existing ds4-server build and compatible DeepSeek GGUF. No automatic download.",
+                            "docs_url": "https://github.com/antirez/ds4",
+                        }
+                    )
         unique = {}
         for row in rows:
             previous = unique.get(row["id"])
@@ -225,7 +275,7 @@ def prepare(params, registry_dir, *, token=None):
         ):
             raise ValueError("Choose a model advertised by this local server")
         check = params.get("check", "readiness")
-        if check not in {"readiness", "core-read"}:
+        if check not in {"readiness", "core-read", "quickstart"}:
             raise ValueError("Choose model readiness probes or the Core read-tool check")
         plan.update(
             model=model,
@@ -240,6 +290,12 @@ def prepare(params, registry_dir, *, token=None):
                 title=f"Core read-tool check · {model}",
                 command="Execute a bounded Core read-only profile against generated verification.txt",
                 note="Sends up to three model turns and executes the Core read tool in a disposable directory. No project files, writes, shell, MCP or delegation. Checks actual Core tool use, not a full coding task or every harness.",
+            )
+        if check == "quickstart":
+            plan.update(
+                title=f"Local coding readiness · {model}",
+                command="Probe loaded context and tool-call shapes, then execute Core read on generated data",
+                note="Sends bounded local prompts for context recall and tool-call shapes, then up to three Core read-tool turns. No project files are read or edited. Unknown context and model limits are reported rather than assumed.",
             )
     elif action == "install":
         recipe = install_plan(engine)
@@ -441,10 +497,21 @@ def run(plan, registry_dir, emit, *, owner_job=None):
             raise ValueError(
                 "The server no longer advertises this model. Load it and review the check again."
             )
-        if plan.get("check") == "core-read":
+        if plan.get("check") in {"core-read", "quickstart"}:
             import asyncio
             from .coding_check import run as run_coding_check
 
+            readiness = None
+            if plan.get("check") == "quickstart":
+                emit(
+                    "stage",
+                    {
+                        "message": "Checking loaded context, tool-call shapes and context recall on generated prompts."
+                    },
+                )
+                readiness = run_smoke(
+                    engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=384
+                ).to_dict()
             report = asyncio.run(
                 run_coding_check(
                     plan["provider"],
@@ -454,13 +521,40 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                     emit,
                 )
             )
+            if readiness is not None:
+                from superqode.providers.local.context_probe import probe_base_url
+
+                # A cold Ollama model may report loaded context only after a turn.
+                context = asyncio.run(
+                    probe_base_url(plan["endpoint"].removesuffix("/v1"), plan["model"])
+                )
+                if context:
+                    readiness["context_window"], readiness["context_source"] = context
+                    readiness["warnings"] = [
+                        w
+                        for w in readiness.get("warnings", [])
+                        if not w.startswith("Loaded context window was not detected;")
+                    ]
+                    readiness["checks"] = [c for c in readiness["checks"] if c["name"] != "context"]
+                    readiness["checks"].append(
+                        {
+                            "name": "context",
+                            "ok": True,
+                            "detail": f"{context[0]} tokens from {context[1]}",
+                        }
+                    )
+                report["readiness"] = readiness
+                if readiness["status"] == "failed":
+                    report["status"] = "failed"
         else:
             report = run_smoke(
                 engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=384
             ).to_dict()
         result = {
             "verification": report,
-            "scope": "core-read-tool"
+            "scope": "local-coding-readiness"
+            if plan.get("check") == "quickstart"
+            else "core-read-tool"
             if plan.get("check") == "core-read"
             else "model-endpoint-readiness",
             "provider": plan["provider"],

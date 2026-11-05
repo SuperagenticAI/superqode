@@ -1157,7 +1157,9 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         acp_agent="qwen",
         self_contained=True,
         detect=_qwen_code_ready,
-        unavailable_hint=("run `npm install -g @qwen-code/qwen-code`, then run `qwen auth`"),
+        unavailable_hint=(
+            "Install with `npm install -g @qwen-code/qwen-code`, then run `qwen` and enter `/auth` to configure your provider or plan"
+        ),
     ),
     ConnectionProfile(
         id="kimi-code",

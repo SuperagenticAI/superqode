@@ -175,7 +175,11 @@ async def evaluate(request, directory):
     from superqode.harness.eval import eval_pack_path, run_harness_eval
 
     snapshot_spec(request, directory / "harness.yaml")
-    tasks = eval_pack_path(request["tasks"])
+    if "_suite_content" in request:
+        tasks = directory / "tasks.yaml"
+        tasks.write_text(request["_suite_content"], encoding="utf-8")
+    else:
+        tasks = eval_pack_path(request["tasks"])
     specs = [directory / "harness.yaml"]
     from .experiments import candidate_paths
 
@@ -208,7 +212,11 @@ def optimize(request, directory):
     from superqode.harness.eval import eval_pack_path
 
     snapshot_spec(request, directory / "harness.yaml")
-    tasks = eval_pack_path(request["tasks"])
+    if "_suite_content" in request:
+        tasks = directory / "tasks.yaml"
+        tasks.write_text(request["_suite_content"], encoding="utf-8")
+    else:
+        tasks = eval_pack_path(request["tasks"])
     method = request.get("method") or "omni"
     if not request.get("live"):
         raise ValueError("Optimization requires explicit permission to make model calls")

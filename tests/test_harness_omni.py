@@ -158,6 +158,7 @@ def test_harness_omni_stages_candidate_and_runs_final_heldout_gate(tmp_path, mon
             "live": True,
             "split": "held-out",
             "task_count": 1,
+            "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
             "variants": [
                 {
                     "harness": "demo",
@@ -170,6 +171,7 @@ def test_harness_omni_stages_candidate_and_runs_final_heldout_gate(tmp_path, mon
                             "split": "held-out",
                             "status": "passed",
                             "evaluation": {"evaluator": "contains", "status": "passed"},
+                            "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
                         }
                     ],
                 },
@@ -184,6 +186,7 @@ def test_harness_omni_stages_candidate_and_runs_final_heldout_gate(tmp_path, mon
                             "split": "held-out",
                             "status": "passed",
                             "evaluation": {"evaluator": "contains", "status": "passed"},
+                            "workspace": {"mode": "isolated-copy", "snapshot_sha256": "a" * 64},
                         }
                     ],
                 },

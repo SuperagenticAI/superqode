@@ -1,6 +1,8 @@
 """Read-only suite diagnostics used before native experiment execution."""
 
 from pathlib import Path
+import hashlib
+import shlex
 
 from superqode.harness.eval import eval_pack_path, filter_eval_tasks, load_eval_tasks
 from superqode.harness.loader import load_harness_spec
@@ -65,6 +67,18 @@ def inspect_suite(root, params):
         warnings.append("Optimization needs both held-in training and sealed held-out tasks.")
     if not tasks:
         warnings.append("No tasks match the selected split.")
+    repository_checks = []
+    for task in tasks:
+        grader = task.get("evaluator") or {}
+        if grader.get("type") == "repository":
+            repository_checks.append(
+                {
+                    "id": str(task["id"]),
+                    "commands": [shlex.join(c["argv"]) for c in grader.get("commands", [])],
+                    "file_assertions": [f["path"] for f in grader.get("files", [])],
+                    "require_changes": grader.get("require_changes", False),
+                }
+            )
     return {
         "tasks_hash": data["tasks_hash"],
         "task_count": len(tasks),
@@ -73,7 +87,27 @@ def inspect_suite(root, params):
         "candidate_count": len(candidates) + len(suite_candidates),
         "smoke_task_ids": smoke,
         "warnings": warnings,
+        "repository_checks": repository_checks,
         "optimization_ready": bool(
             data["split_counts"]["held-in"] and data["split_counts"]["held-out"] and not smoke
         ),
     }
+
+
+def reviewed_suite(root, params):
+    """Pin suite bytes so later edits cannot change reviewed verifier commands."""
+    inspection = inspect_suite(root, params)
+    value = str(params.get("tasks") or "")
+    path = eval_pack_path(str(root / value) if (root / value).exists() else value)
+    raw = path.read_bytes()
+    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    if digest != inspection["tasks_hash"]:
+        raise ValueError("The evaluation suite changed. Review it again before starting.")
+    expected = params.get("tasks_hash")
+    if expected and expected != digest:
+        raise ValueError(
+            "The evaluation suite changed since review. Check its verifier commands again."
+        )
+    if params.get("live") is True and inspection["repository_checks"] and expected != digest:
+        raise ValueError("Review the repository verifier commands before starting this live suite.")
+    return raw.decode("utf-8")

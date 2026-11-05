@@ -23,7 +23,7 @@ and normalized events supported by each adapter.
 | Factory Droid | Install and authenticate the Droid CLI | `:connect droid` | `superqode agents doctor droid` | [ACP Coding Agents](../providers/acp.md) |
 | Kiro / Amazon Q Developer | Install Kiro CLI and complete vendor sign-in | `:connect kiro` | `superqode agents doctor kiro` | [ACP Coding Agents](../providers/acp.md) |
 | Kimi Code | `uv tool install kimi-cli --no-cache`, then complete Kimi CLI setup | `:connect kimi-code` | `superqode agents doctor kimi` | [Kimi Code](../providers/kimi.md#kimi-code-subscription-and-acp) |
-| Qwen Code | `npm install -g @qwen-code/qwen-code`, then `qwen auth` | `:connect qwen-code` | `superqode agents doctor qwen` | [Qwen Code](../providers/qwen-code.md) |
+| Qwen Code | `npm install -g @qwen-code/qwen-code`, then run `qwen` and enter `/auth` | `:connect qwen-code` | `superqode agents doctor qwen` | [Qwen Code](../providers/qwen-code.md) |
 | Deep Agents Code | `curl -LsSf https://langch.in/dcode \| bash`, then `dcode` and `/auth` | `:connect deepagents-code` | `superqode agents doctor deepagents-code` | [LangChain DeepAgents](../providers/deepagents.md) |
 | fx | `curl -fsSL https://fx.sh/setup.sh \| bash`, then `fx login` | `:connect fx` | `superqode agents doctor fx` | [fx](../providers/fx.md) |
 | fx (API key) | `fx setup` or set `AI_GATEWAY_API_KEY` | `:connect fx-key` | `superqode agents doctor fx` | [fx](../providers/fx.md) |

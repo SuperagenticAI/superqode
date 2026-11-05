@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import hashlib
+from contextlib import ExitStack
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from .kernel import init_harness
 from .spec import WorkflowMode
 from .testing import build_failure_digest
 from .workflow import run_workflow, workflow_steps_from_spec
+from .eval_workspace import EvaluationWorkspace
 
 EVAL_SPLITS = ("all", "held-in", "held-out")
 
@@ -63,7 +65,8 @@ def eval_pack_path(pack_id: str) -> Path:
 
 
 def load_eval_tasks(path: str | Path) -> dict[str, Any]:
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    raw = Path(path).read_bytes()
+    data = yaml.safe_load(raw.decode("utf-8")) or {}
     if not isinstance(data, dict):
         raise ValueError("Eval task file must be a mapping")
     tasks = data.get("tasks", [])
@@ -88,7 +91,7 @@ def load_eval_tasks(path: str | Path) -> dict[str, Any]:
     if variants is not None and not isinstance(variants, list):
         raise ValueError("Eval variants must be a list")
     return {
-        "tasks_hash": "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+        "tasks_hash": "sha256:" + hashlib.sha256(raw).hexdigest(),
         "tasks": normalized_tasks,
         "variants": variants or [],
         "metadata": data.get("metadata") or {},
@@ -108,6 +111,7 @@ async def run_harness_eval(
     live: bool = False,
     eval_split: str = "all",
     recovery_store: str | Path | None = None,
+    workspace_snapshot: EvaluationWorkspace | None = None,
 ) -> dict[str, Any]:
     task_file = load_eval_tasks(tasks_path)
     split = _normalize_eval_filter(eval_split)
@@ -121,49 +125,74 @@ async def run_harness_eval(
     if not specs:
         raise ValueError("At least one harness spec is required")
 
-    started = time.monotonic()
-    variant_results = []
-    for spec_path in specs:
-        variant_results.append(
-            await _run_variant_eval(
-                spec_path=spec_path,
-                tasks=tasks,
-                provider=provider,
-                model=model,
-                runtime=runtime,
-                working_dir=working_dir,
-                sandbox_backend=sandbox_backend,
-                live=live,
-                **({"recovery_store": recovery_store} if recovery_store is not None else {}),
+    with ExitStack() as stack:
+        workspace_snapshot = workspace_snapshot or (
+            stack.enter_context(
+                EvaluationWorkspace(
+                    working_dir,
+                    exclude_paths=(
+                        *specs,
+                        tasks_path,
+                        *((recovery_store,) if recovery_store else ()),
+                    ),
+                )
             )
+            if live
+            else None
         )
-    baseline = variant_results[0]
-    for item in variant_results:
-        item["delta_vs_baseline"] = round(item["score"] - baseline["score"], 3)
-        item["regressions_vs_baseline"] = _regressions(baseline, item)
-        item["regressed"] = bool(item["regressions_vs_baseline"])
-    best = max(variant_results, key=lambda item: (item["score"], -item["duration_seconds"]))
-    # Seesaw verdict: a candidate variant regresses if it breaks any task the
-    # baseline solved. The baseline itself cannot regress against itself.
-    regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
-    return {
-        "tasks_file": str(tasks_path),
-        "tasks_hash": task_file.get("tasks_hash"),
-        "task_metadata": task_file.get("metadata") or {},
-        "split": split,
-        "task_count": len(tasks),
-        "split_counts": task_file.get("split_counts") or eval_task_split_counts(task_file["tasks"]),
-        "live": live,
-        "status": "passed"
-        if all(item["status"] != "error" for item in variant_results)
-        else "failed",
-        "duration_seconds": round(time.monotonic() - started, 3),
-        "baseline": baseline["harness"],
-        "best": best["harness"],
-        "regressed": bool(regressed_variants),
-        "regressed_variants": regressed_variants,
-        "variants": variant_results,
-    }
+        if (
+            workspace_snapshot is not None
+            and workspace_snapshot.source != Path(working_dir).resolve()
+        ):
+            raise ValueError("Evaluation snapshot belongs to a different fixture")
+        started = time.monotonic()
+        variant_results = []
+        for spec_path in specs:
+            variant_results.append(
+                await _run_variant_eval(
+                    spec_path=spec_path,
+                    tasks=tasks,
+                    provider=provider,
+                    model=model,
+                    runtime=runtime,
+                    working_dir=working_dir,
+                    sandbox_backend=sandbox_backend,
+                    live=live,
+                    **({"workspace_snapshot": workspace_snapshot} if live else {}),
+                    **({"recovery_store": recovery_store} if recovery_store is not None else {}),
+                )
+            )
+        baseline = variant_results[0]
+        for item in variant_results:
+            item["delta_vs_baseline"] = round(item["score"] - baseline["score"], 3)
+            item["regressions_vs_baseline"] = _regressions(baseline, item)
+            item["regressed"] = bool(item["regressions_vs_baseline"])
+        best = max(variant_results, key=lambda item: (item["score"], -item["duration_seconds"]))
+        # Seesaw verdict: a candidate variant regresses if it breaks any task the
+        # baseline solved. The baseline itself cannot regress against itself.
+        regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
+        return {
+            "workspace": {"mode": "isolated-copy", "snapshot_sha256": workspace_snapshot.digest}
+            if workspace_snapshot
+            else {"mode": "setup-only"},
+            "tasks_file": str(tasks_path),
+            "tasks_hash": task_file.get("tasks_hash"),
+            "task_metadata": task_file.get("metadata") or {},
+            "split": split,
+            "task_count": len(tasks),
+            "split_counts": task_file.get("split_counts")
+            or eval_task_split_counts(task_file["tasks"]),
+            "live": live,
+            "status": "passed"
+            if all(item["status"] != "error" for item in variant_results)
+            else "failed",
+            "duration_seconds": round(time.monotonic() - started, 3),
+            "baseline": baseline["harness"],
+            "best": best["harness"],
+            "regressed": bool(regressed_variants),
+            "regressed_variants": regressed_variants,
+            "variants": variant_results,
+        }
 
 
 def harness_eval_regressions(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[str]:
@@ -203,14 +232,11 @@ async def _run_variant_eval(
     sandbox_backend: str,
     live: bool,
     recovery_store: str | Path | None = None,
+    workspace_snapshot: EvaluationWorkspace | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     spec = load_harness_spec(spec_path)
     task_results = []
-    kernel = None
-    if live:
-        store = create_harness_store("memory")
-        kernel = await init_harness(spec, store=store)
     recovery = None
     if recovery_store is not None and live:
         from superqode.evaluation.recovery import EvaluationRecovery
@@ -224,7 +250,8 @@ async def _run_variant_eval(
                 "model": model,
                 "runtime": runtime,
                 "sandbox": sandbox_backend,
-                "format_version": 1,
+                "format_version": 2,
+                "snapshot_sha256": workspace_snapshot.digest if workspace_snapshot else None,
             },
             tasks=tasks,
             working_directory=Path(working_dir),
@@ -232,17 +259,29 @@ async def _run_variant_eval(
     for task in tasks:
 
         async def execute_case(task=task):
-            return await _run_eval_task(
-                spec=spec,
-                kernel=kernel,
-                task=task,
-                provider=provider,
-                model=model,
-                runtime=runtime,
-                working_dir=working_dir,
-                sandbox_backend=sandbox_backend,
-                live=live,
-            )
+            async def execute(root, kernel):
+                return await _run_eval_task(
+                    spec=spec,
+                    kernel=kernel,
+                    task=task,
+                    provider=provider,
+                    model=model,
+                    runtime=runtime,
+                    working_dir=root,
+                    sandbox_backend=sandbox_backend,
+                    live=live,
+                    workspace_snapshot=workspace_snapshot,
+                )
+
+            if not live:
+                return await execute(working_dir, None)
+            if workspace_snapshot is None:
+                raise ValueError("Live evaluation requires an isolated fixture snapshot")
+            with workspace_snapshot.trial() as root:
+                kernel = await init_harness(spec, store=create_harness_store("memory"))
+                row = await execute(root, kernel)
+                row["workspace"] = workspace_snapshot.evidence(root)
+                return row
 
         task_results.append(
             await recovery.run_case(str(task["id"]), execute_case)
@@ -311,6 +350,7 @@ async def _run_eval_task(
     working_dir: str | Path,
     sandbox_backend: str,
     live: bool,
+    workspace_snapshot: EvaluationWorkspace | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     if not live:
@@ -323,6 +363,9 @@ async def _run_eval_task(
             "reason": "pass --live to execute eval tasks",
         }
     try:
+        from copy import deepcopy
+
+        grader = deepcopy(task.get("evaluator") or {})
         if spec.workflow.mode != WorkflowMode.SINGLE:
             result = await run_workflow(
                 kernel,
@@ -349,11 +392,19 @@ async def _run_eval_task(
             run_id = result.run_id
         usage = _usage_from_result(result)
         execution_error = _execution_error(result)
-        evaluation = (
-            EvaluationResult(evaluator="execution", status="error", reason=execution_error)
-            if execution_error
-            else await evaluate_content(content, task, spec=spec)
-        )
+        if execution_error:
+            evaluation = EvaluationResult(
+                evaluator="execution", status="error", reason=execution_error
+            )
+        elif grader.get("type") == "repository" and workspace_snapshot is not None:
+            from .repository_grader import evaluate
+
+            evaluation = await evaluate(
+                grader, Path(working_dir), workspace_snapshot.manifest, workspace_snapshot.digest
+            )
+        else:
+            evaluation = await evaluate_content(content, task, spec=spec)
+
         passed = evaluation.status == "passed"
         reason = evaluation.reason
         return {

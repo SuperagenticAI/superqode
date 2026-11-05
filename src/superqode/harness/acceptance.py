@@ -13,6 +13,18 @@ def heldout_acceptance(report: dict) -> dict:
         issues.append("A live held-out evaluation is required.")
     if type(count) is not int or count < 1:
         issues.append("A non-empty held-out task count is required.")
+    workspace = report.get("workspace")
+    snapshot = workspace.get("snapshot_sha256") if isinstance(workspace, dict) else None
+    if (
+        not isinstance(workspace, dict)
+        or workspace.get("mode") != "isolated-copy"
+        or not isinstance(snapshot, str)
+        or len(snapshot) != 64
+        or any(c not in "0123456789abcdef" for c in snapshot)
+    ):
+        issues.append(
+            "Rerun held-out comparisons with isolated evaluation workspaces before adoption."
+        )
     if not isinstance(variants, list) or len(variants) < 2:
         return {
             "accepted": False,
@@ -42,6 +54,13 @@ def heldout_acceptance(report: dict) -> dict:
             if identity in rows:
                 issues.append("Duplicate task identity.")
             rows[identity] = row
+            trial = row.get("workspace")
+            if (
+                not isinstance(trial, dict)
+                or trial.get("mode") != "isolated-copy"
+                or trial.get("snapshot_sha256") != snapshot
+            ):
+                issues.append("Every held-out trial must use the same isolated fixture snapshot.")
             evaluation = row.get("evaluation")
             evidence = evaluation.get("evidence", {}) if isinstance(evaluation, dict) else {}
             if (
@@ -49,7 +68,8 @@ def heldout_acceptance(report: dict) -> dict:
                 or row.get("status") not in ("passed", "failed")
                 or not isinstance(evaluation, dict)
                 or evaluation.get("status") != row.get("status")
-                or evaluation.get("evaluator") not in ("contains", "decision", "jev_rubric")
+                or evaluation.get("evaluator")
+                not in ("contains", "decision", "jev_rubric", "repository")
                 or not isinstance(evidence, dict)
                 or evidence.get("smoke_only", False) is not False
             ):

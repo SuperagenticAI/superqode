@@ -22,6 +22,20 @@ Local providers offer:
 
 ## Quick Start: Zero To Local Coding
 
+In the macOS app, open **Local AI → Local Quick Start**. Existing running models
+from Ollama, LM Studio, MLX, llama.cpp and DS4 appear before download suggestions.
+Memory-gated Fast, Balanced and Capable Qwen presets and a Gemma alternative are
+starting choices. Exact artifact size, runtime buffers and loaded context still
+need checking; the preset labels are not measured speed or coding-quality scores.
+After model setup, explicitly run the tool-call/context probes and Core read-tool
+check. Unknown context and readiness warnings remain visible before coding.
+
+Recommended search now includes the shared catalog's Hugging Face families.
+Original weights link to GGUF/MLX conversion search rather than assuming that
+full-precision or FP8 weights can run in a desktop GGUF engine. Download review
+pins the selected repository revision and exact files. No download starts merely
+by browsing recommendations.
+
 If your runtime is missing, install it from the TUI with `:local install ollama`
 (or `lmstudio`, `llama.cpp`, `sglang`, `vllm`, `mlx`). The CLI equivalent is
 `superqode local install ollama`. SuperQode shows the installation command and

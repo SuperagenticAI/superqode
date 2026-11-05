@@ -195,7 +195,8 @@ kimi
 # Complete /login, then exit Kimi Code and run :connect kimi-code in SuperQode.
 
 npm install -g @qwen-code/qwen-code
-qwen auth
+qwen
+# Inside Qwen Code, enter /auth to configure your provider or plan.
 # Then run :connect qwen-code in SuperQode.
 ```
 

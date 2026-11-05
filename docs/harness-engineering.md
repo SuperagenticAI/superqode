@@ -125,6 +125,53 @@ superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml --live --json
 superqode local bench --agentic
 ```
 
+Live generic evaluations capture the input fixture once and create a separate
+copy for every task and candidate, with fresh harness state. Git-visible files
+include local edits and untracked files; ignored files, dependency caches and
+source Git history are excluded, as are the selected suite and harness definition
+files. Git fixtures get independent repositories. Omni uses the same captured
+fixture throughout search and the final held-out comparison.
+Plain directories also work. Fixtures are limited to 50,000 files and 256 MiB;
+links outside the fixture are rejected. Copies are removed after each trial.
+This provides comparison isolation, not an OS sandbox for tools or shell commands.
+
+A `repository` evaluator grades actual files and command outcomes instead of the
+agent's final answer. For example:
+
+```yaml
+tasks:
+  - id: fix-addition
+    split: held-out
+    prompt: Fix calculator.py so add(2, 3) returns 5. Keep tests unchanged.
+    evaluator:
+      type: repository
+      require_changes: true
+      protected_paths: [tests, conftest.py, pyproject.toml]
+      commands:
+        - argv: [python3, -m, pytest, tests/test_calculator.py, -q]
+          timeout_seconds: 60
+      files:
+        - path: calculator.py
+          exists: true
+```
+
+Use trusted suites: verifier commands run on your machine after the agent finishes,
+with the trial as their working directory. They can access the network and other
+host resources. Commands use argv lists without an implicit shell and must exit
+zero. Install their test dependencies in the chosen interpreter beforehand; the
+runner does not install dependencies or copy a project's virtual environment.
+Each command has a timeout, bounded output and cancellation cleanup. File assertions
+support `exists`, `contains` and `sha256`. `protected_paths` prevents agents from
+changing the selected check files; default protection covers common test and runner
+configuration names. Override it explicitly for tasks that legitimately edit those
+files. Check return codes are evidence, not a guarantee against adversarial code.
+
+Reports record input and grader digests, changed paths, exit codes and check output.
+Native custom-suite inspection lists the verifier commands before live execution
+and pins reviewed suite content. Held-out adoption rejects older reports without
+matching isolated-workspace evidence. This remains separate from commercial Pro
+verification and does not replace CI or QA.
+
 See [Run, Measure, Optimize](advanced/harness-optimization.md) and the
 [Benchmark Runner](advanced/benchmark-runner.md).
 
