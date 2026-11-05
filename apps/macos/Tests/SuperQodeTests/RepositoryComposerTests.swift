@@ -31,6 +31,24 @@ final class RepositoryComposerTests: XCTestCase {
     composerSubscription.cancel()
   }
 
+  @MainActor func testDisabledComposerCannotSubmitBehindAnExpandedPanel() throws {
+    let editor = PromptEditor.Editor()
+    var submissions = 0
+    var intercepted = 0
+    editor.submit = { submissions += 1 }
+    editor.onInterceptReturn = { intercepted += 1; return false }
+    let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+      modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+      characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+    editor.isEditable = false
+    editor.keyDown(with: event)
+    XCTAssertEqual(submissions, 0)
+    XCTAssertEqual(intercepted, 0)
+    editor.isEditable = true
+    editor.keyDown(with: event)
+    XCTAssertEqual(submissions, 1)
+  }
+
   func testMentionQueryUsesTheTokenAtTheCursor() {
     XCTAssertEqual(ComposerMentions.query(in: "see @src/app"), "src/app")
     XCTAssertEqual(ComposerMentions.query(in: "mail a@b.com"), nil)

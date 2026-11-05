@@ -15,6 +15,7 @@ struct PromptEditor: NSViewRepresentable {
     var onImagePaste: () -> Void = {}
     var onInterceptReturn: () -> Bool = { false }
     override func keyDown(with event: NSEvent) {
+      guard isEditable else { return }
       if (event.keyCode == 36 || event.keyCode == 76), !hasMarkedText(),
         event.modifierFlags.intersection([.shift, .option, .control]).isEmpty {
         if !onInterceptReturn() { submit() }
@@ -23,6 +24,7 @@ struct PromptEditor: NSViewRepresentable {
       }
     }
     override func paste(_ sender: Any?) {
+      guard isEditable else { return }
       let board = NSPasteboard.general
       let hasText = !(board.string(forType: .string) ?? "").isEmpty
       if !hasText, NSImage(pasteboard: board) != nil {
