@@ -158,6 +158,7 @@ jobs:
           path: |
             apps/macos/artifacts/smoke-report.json
             apps/macos/artifacts/navigation-main-thread-sample.txt
+            apps/macos/artifacts/native-app-stderr.log
             apps/macos/artifacts-strands/smoke-report.json
             apps/macos/artifacts/connect-thread-identities-preview*.png
           if-no-files-found: ignore

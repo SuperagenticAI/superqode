@@ -228,6 +228,7 @@ with tempfile.TemporaryDirectory(prefix="superqode-native-") as temporary:
         )
     except subprocess.TimeoutExpired as error:
         fail_smoke(f"Native smoke timed out: {error.stderr}")
+    (ARTIFACTS / "native-app-stderr.log").write_text(result.stderr)
     if not report.exists():
         fail_smoke(
             f"Native application returned {result.returncode} without a report: {result.stderr[-3000:]}"
