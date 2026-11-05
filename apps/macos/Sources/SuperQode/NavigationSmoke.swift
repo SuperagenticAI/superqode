@@ -5,15 +5,15 @@ import Foundation
   /// Exercise mounted editors and inspectors. Profile only after a failed
   /// timing pass: suspending threads for stack samples must not affect its gate.
   func smokeNavigationResponsiveness() async throws -> [String: Any] {
-    func composer(in view: NSView) -> PromptEditor.Editor? {
+    @MainActor func composer(in view: NSView) -> PromptEditor.Editor? {
       if let editor = view as? PromptEditor.Editor { return editor }
       return view.subviews.lazy.compactMap { composer(in: $0) }.first
     }
-    func mountedComposer() -> PromptEditor.Editor? {
+    @MainActor func mountedComposer() -> PromptEditor.Editor? {
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return composer(in: content)
     }
-    func measure() async throws -> [String: Any] {
+    @MainActor func measure() async throws -> [String: Any] {
       let sections = ["Workspace", "Files", "Review", "Terminal", "Checkpoints", "Workspace"]
       var worstTick = 0.0
       var currentPhase = section
