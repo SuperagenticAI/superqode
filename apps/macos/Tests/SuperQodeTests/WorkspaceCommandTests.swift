@@ -80,6 +80,26 @@ final class WorkspaceCommandTests: XCTestCase {
     XCTAssertEqual(app.section, "Terminal")
   }
 
+  @MainActor func testMenuAvailabilityTracksConnectionHistoryAndActiveOperations() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.connected = true
+    app.project = ["id": "project", "path": "/tmp/project"]
+    XCTAssertTrue(app.workspaceCommand(.connect)?.isEnabled == true)
+    app.switchingBackgroundEngine = true
+    XCTAssertFalse(app.workspaceCommand(.connect)?.isEnabled ?? true)
+    app.switchingBackgroundEngine = false
+    XCTAssertTrue(app.workspaceCommand(.connect)?.isEnabled == true)
+    app.selectedJob = "run"
+    XCTAssertTrue(app.workspaceCommand(.exportEvidence)?.isEnabled == true)
+    app.selectedJob = ""
+    XCTAssertFalse(app.workspaceCommand(.exportEvidence)?.isEnabled ?? true)
+    app.connected = false
+    XCTAssertFalse(app.workspaceCommand(.connect)?.isEnabled ?? true)
+    app.connected = true
+    app.project = [:]
+    XCTAssertFalse(app.workspaceCommand(.connect)?.isEnabled ?? true)
+  }
+
   @MainActor func testRecentRunsAreScopedToCurrentProject() {
     let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true

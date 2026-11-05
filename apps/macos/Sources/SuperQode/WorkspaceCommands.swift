@@ -6,6 +6,18 @@ import AppKit
       : busy ? "Wait for the current operation to finish." : nil
   }
   private var workspaceBaseCommands: [WorkspaceCommand] {
+    // Menus contain many individually observed items. Reuse their catalog when
+    // unrelated navigation, transcript or draft changes publish the workspace.
+    let state = [connected, project.isEmpty, openingProject, restoringNavigation,
+      switchingBackgroundEngine, busy, isManaged, navigationHistory.isEmpty,
+      forwardHistory.isEmpty, showWelcome, selectedJob.isEmpty]
+    if let cache = baseCommandCache, cache.state == state { return cache.commands }
+    let commands = makeWorkspaceBaseCommands()
+    baseCommandCache = (state, commands)
+    return commands
+  }
+
+  private func makeWorkspaceBaseCommands() -> [WorkspaceCommand] {
     let engineReason = connected ? nil : "Wait for the local engine to connect."
     let projectReason = project.isEmpty ? "Open a project first." : engineReason
     let idleReason = workspaceCommandIdleReason

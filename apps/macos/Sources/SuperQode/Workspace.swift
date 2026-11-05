@@ -30,6 +30,7 @@ private struct DialogAuditHost: View {
 @MainActor final class Workspace: ObservableObject {
   let recoveryStore: WorkspaceRecoveryStore
   let preferences: UserDefaults
+  var baseCommandCache: (state: [Bool], commands: [WorkspaceCommand])?
   lazy var threadNotifications: ThreadNotifications = {
     let alerts = ThreadNotifications(preferences: preferences)
     alerts.openThread = { [weak self] project, job in

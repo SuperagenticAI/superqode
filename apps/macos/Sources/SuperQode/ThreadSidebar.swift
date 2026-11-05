@@ -51,12 +51,14 @@ struct ThreadStatusIndicator: View {
     default: return status.isEmpty ? "Recorded" : status.capitalized
     }
   }
+  private static let attentionColor = adaptive(dark: (1, 0.64, 0.20), light: (0.62, 0.31, 0))
+  private static let failureColor = adaptive(dark: (1, 0.38, 0.38), light: (0.74, 0.12, 0.18))
   static func color(_ status: String) -> Color {
     switch status {
-    case "needs_approval": return adaptive(dark: (1, 0.64, 0.20), light: (0.62, 0.31, 0))
+    case "needs_approval": return attentionColor
     case "running", "queued", "cancelling": return .secondary
     case "completed": return .secondary
-    case "failed", "interrupted": return adaptive(dark: (1, 0.38, 0.38), light: (0.74, 0.12, 0.18))
+    case "failed", "interrupted": return failureColor
     default: return .secondary
     }
   }
