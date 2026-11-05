@@ -81,7 +81,7 @@ def run_smoke(
     model: str = "",
     repo_path: str | Path | None = None,
     api_key: str = "",
-    max_tokens: int = 384,
+    max_tokens: int = 1024,
 ) -> SmokeReport:
     """Run a local coding readiness probe without reading or editing the repo."""
     repo = str(Path(repo_path).resolve()) if repo_path else ""

@@ -53,7 +53,7 @@ def run_optimization(
     targets: Iterable[tuple[str, str]],
     *,
     roles: Iterable[str] = DEFAULT_ROLES,
-    max_tokens: int = 384,
+    max_tokens: int = 1024,
     api_key: str = "",
     repo_profile: RepoProfile | None = None,
 ) -> OptimizationReport:

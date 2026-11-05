@@ -510,7 +510,7 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                     },
                 )
                 readiness = run_smoke(
-                    engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=384
+                    engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=1024
                 ).to_dict()
             report = asyncio.run(
                 run_coding_check(
@@ -548,7 +548,7 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                     report["status"] = "failed"
         else:
             report = run_smoke(
-                engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=384
+                engine=engine, endpoint=plan["endpoint"], model=plan["model"], max_tokens=1024
             ).to_dict()
         result = {
             "verification": report,

@@ -202,7 +202,7 @@ def run_bench(
 def run_agentic_bench(
     endpoint: str,
     model: str,
-    max_tokens: int = 384,
+    max_tokens: int = 1024,
     api_key: str = "",
 ) -> BenchResult:
     """Run lightweight agent-control probes against a local model endpoint.
@@ -311,6 +311,20 @@ def _tool_probe_body(model: str, prompt: str, *, max_tokens: int) -> dict[str, A
     }
 
 
+def _reasoning_delta(delta: dict[str, Any]) -> str:
+    """Visible reasoning/thinking text from OpenAI-compatible stream deltas.
+
+    Local reasoning models (Qwen3, DeepSeek-R1 style, Ollama thinking) often
+    emit tokens under reasoning_content, reasoning, or thinking before any
+    assistant content. Treat those as proof the endpoint is alive.
+    """
+    for key in ("reasoning_content", "reasoning", "thinking"):
+        value = delta.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
 def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> StreamResult:
     """Stream one chat completion and collect text plus tool-call deltas."""
     url = endpoint.rstrip("/") + "/chat/completions"
@@ -339,12 +353,14 @@ def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> Stre
                 continue
             choices = event.get("choices") or []
             delta = (choices[0].get("delta") or {}) if choices else {}
-            content = delta.get("content") or delta.get("reasoning_content")
-            if content:
+            content = delta.get("content")
+            reasoning = _reasoning_delta(delta)
+            if content or reasoning:
                 if first_token_at is None:
                     first_token_at = time.monotonic()
-                content_parts.append(str(content))
                 chunks += 1
+                if content:
+                    content_parts.append(str(content))
             for tool_delta in delta.get("tool_calls") or []:
                 if first_token_at is None:
                     first_token_at = time.monotonic()

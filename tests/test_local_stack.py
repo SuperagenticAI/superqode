@@ -472,6 +472,21 @@ def test_run_bench_empty_stream(monkeypatch):
     assert "no content" in result.error
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["reasoning_content", "reasoning", "thinking"],
+)
+def test_run_bench_accepts_reasoning_only_stream(monkeypatch, field):
+    """Qwen-style models may spend the whole budget thinking with no prose."""
+    chunks = [{"choices": [{"delta": {field: "step"}}]} for _ in range(8)]
+    monkeypatch.setattr("superqode.local.bench.urlopen", lambda req, timeout=None: _sse(*chunks))
+    result = run_bench("http://localhost:9999/v1", "qwen3:8b", max_tokens=64)
+    assert result.ok
+    assert result.ttft_s is not None
+    assert result.completion_tokens == 8
+    assert result.error == ""
+
+
 def test_run_bench_connection_error(monkeypatch):
     def boom(req, timeout=None):
         raise OSError("connection refused")

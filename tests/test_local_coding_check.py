@@ -200,3 +200,53 @@ async def test_matching_read_evidence_cannot_hide_failed_execution(
     assert report["tokens_in"] == 10
     assert report["tokens_out"] == 2
     assert not list(tmp_path.glob("core-read-check-*"))
+
+@pytest.mark.asyncio
+async def test_successful_read_passes_when_reasoning_leaves_empty_content(
+    tmp_path, monkeypatch
+):
+    """Reasoning models may burn the token budget after a successful tool read."""
+    from superqode.agent.loop import AgentResponse
+    from superqode.local.coding_check import run
+
+    class Session:
+        async def run(self, request):
+            marker = (request.working_directory / "verification.txt").read_text().strip()
+            return SimpleNamespace(
+                response=AgentResponse(
+                    content="",
+                    messages=[],
+                    tool_calls_made=1,
+                    iterations=2,
+                    stopped_reason="complete",
+                    error=None,
+                    schema_errors=None,
+                ),
+                content="",
+                events=[
+                    SimpleNamespace(
+                        type="tool_result",
+                        data={"tool_name": "read", "success": True, "output": marker + "\n"},
+                    )
+                ],
+                iterations=2,
+                tool_calls_made=1,
+                tokens_in=40,
+                tokens_out=384,
+            )
+
+    class Kernel:
+        async def session(self):
+            return Session()
+
+    async def initialize(*args, **kwargs):
+        return Kernel()
+
+    monkeypatch.setattr("superqode.harness.init_harness", initialize)
+    report = await run(
+        "ollama", "qwen3:8b", "http://127.0.0.1:11434/v1", tmp_path, lambda *args: None
+    )
+    assert report["status"] == "passed"
+    assert report["execution_complete"] is True
+    assert all(check["ok"] for check in report["checks"])
+
