@@ -60,11 +60,16 @@ final class WorkbenchReviewTests: XCTestCase {
     await pending(1, engine)
     engine.receive(["id": 1, "result": listing(label: "Turn A", files: [["id": "file", "path": "main.py", "layer": "turn", "change": "modified"]])])
     await pending(1, engine)
+    await review.select("file", engine: engine)
+    XCTAssertEqual(engine.pendingRequestCount, 1, "Clicking the loading file must reuse its request")
     engine.receive(["id": 2, "result": ["id": "file", "path": "main.py", "layer": "turn", "scope": "turn", "label": "Turn A", "hunks": [], "issue": "", "truncated": false, "can_stage": false]])
     await load.value
     XCTAssertEqual(review.document?.path, "main.py")
     XCTAssertEqual(review.document?.scope, .turn)
     XCTAssertTrue(review.failure.isEmpty)
+    await review.select("file", engine: engine)
+    XCTAssertEqual(review.document?.path, "main.py", "Clicking the loaded file must keep the diff visible")
+    XCTAssertEqual(engine.pendingRequestCount, 0)
   }
 
   @MainActor func testDisconnectClearsChangesAndRejectsAnOutstandingResponse() async {

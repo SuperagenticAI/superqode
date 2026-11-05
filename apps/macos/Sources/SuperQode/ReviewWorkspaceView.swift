@@ -109,7 +109,7 @@ struct ReviewWorkspaceView: View {
       .onDisappear {
         listingGeneration += 1
         fileGeneration += 1
-        app.saveDraft()
+        app.saveDraft(flush: false)
       }
   }
 
@@ -356,7 +356,8 @@ struct ReviewWorkspaceView: View {
         let response = try await app.engine.call("review.list", params)
         guard generation == listingGeneration, project == app.projectID, job == app.selectedJob
         else { return }
-        let next: ReviewListing = try decodeReview(response)
+        let next: ReviewListing = try await prepareReview(response, decode: decodeReview)
+        guard generation == listingGeneration, project == app.projectID, job == app.selectedJob else { return }
         listing = next
         loadingList = false
         if next.files.contains(where: { $0.id == app.reviewSelection.fileID }) {
@@ -393,7 +394,9 @@ struct ReviewWorkspaceView: View {
         guard generation == fileGeneration, project == app.projectID, job == app.selectedJob,
           item.id == app.reviewSelection.fileID
         else { return }
-        let next = try ReviewDocument.decode(response)
+        let next = try await prepareReview(response, decode: ReviewDocument.decode)
+        guard generation == fileGeneration, project == app.projectID, job == app.selectedJob,
+          item.id == app.reviewSelection.fileID else { return }
         guard next.id == item.id, next.path == item.path else {
           throw EngineError(message: "The review file changed. Refresh to continue.")
         }

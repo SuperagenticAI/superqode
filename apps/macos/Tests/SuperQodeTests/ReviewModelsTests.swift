@@ -26,6 +26,42 @@ final class ReviewModelsTests: XCTestCase {
     ]
   }
 
+  @MainActor func testReviewPreparationRunsOffUIThreadAndRejectsCancelledResult() async throws {
+    let started = expectation(description: "review worker started")
+    let release = DispatchSemaphore(value: 0)
+    defer { release.signal() }
+    let preparation = Task {
+      try await prepareReview("fixture") { value -> String in
+        XCTAssertFalse(Thread.isMainThread, "Review decoding must not block AppKit input")
+        started.fulfill()
+        _ = release.wait(timeout: .now() + 3)
+        return value as! String
+      }
+    }
+    await fulfillment(of: [started], timeout: 2)
+    // The UI actor reaches here while decoding is still blocked on its worker.
+    preparation.cancel()
+    release.signal()
+    do {
+      _ = try await preparation.value
+      XCTFail("A cancelled review must not publish its late result")
+    } catch is CancellationError {} catch { XCTFail("Unexpected error: \(error)") }
+  }
+
+  func testBackgroundReviewStillValidatesRevisionCoordinates() async throws {
+    let prepared = try await prepareReview(response(), decode: ReviewDocument.decode)
+    XCTAssertTrue(prepared.complete)
+    XCTAssertEqual(prepared.hunks[0].lines[1].newLine, 1)
+    var invalid = response()
+    invalid["hunks"] = [["id": 0, "header": "hunk", "lines": [
+      ["id": 0, "kind": "add", "text": "x", "old_line": 1, "new_line": 1, "no_newline": false]
+    ]]]
+    do {
+      _ = try await prepareReview(invalid, decode: ReviewDocument.decode)
+      XCTFail("Invalid review coordinates were accepted")
+    } catch { XCTAssertTrue(error is EngineError || error is DecodingError) }
+  }
+
   func testReviewDecodesBothSidesAndRevisionIdentity() throws {
     let document = try ReviewDocument.decode(response())
     XCTAssertTrue(document.complete)

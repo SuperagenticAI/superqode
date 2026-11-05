@@ -345,9 +345,9 @@ struct RootView: View {
           }.padding(12).background(Color.qAccent.opacity(0.1))
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }.animation(
-      reduceMotion || !animatedInterface ? nil : .easeInOut(duration: 0.18), value: app.section
-    )
+    }
+    // Section changes replace substantial editors and inspectors. A shell-wide
+    // animation retains both pages and animates all their layout work per click.
 
   }
 }
@@ -462,7 +462,6 @@ struct CodingView: View {
     .onChange(of: app.selectedJob) { _, _ in
       scope = app.selectedJob.isEmpty ? .uncommitted : .turn
       if drawerExpanded { app.workbenchDrawer = ""; drawerExpanded = false }
-      if !app.projectID.isEmpty { app.perform { await app.refreshGit() } }
     }
     .onChange(of: app.projectID) { _, _ in app.workbenchDrawer = "" }
     .onChange(of: string(app.detail, "kind")) { _, kind in

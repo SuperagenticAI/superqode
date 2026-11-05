@@ -854,6 +854,14 @@ private struct DialogAuditHost: View {
 
   func selectJob(_ id: String, restoreConnection: Bool = true,
     conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil) {
+    // Reselecting the current recorded turn is navigation, not a reload. Keep
+    // its transcript, connection and draft mounted. New-thread actions and
+    // explicit restoration still perform the complete reset below.
+    if !id.isEmpty, id == selectedJob, restoreConnection, recordHistory,
+      !loadingConversationDraft, conversationID == nil || conversationID == composerConversationID {
+      if let targetSection, targetSection != section { section = targetSection }
+      return
+    }
     saveDraft(flush: false)
     if recordHistory, id != selectedJob || targetSection.map({ $0 != section }) == true {
       recordNavigation(currentDestination)
@@ -974,7 +982,7 @@ private struct DialogAuditHost: View {
     do {
       let status = try await engine.call("git.status", ["project": id]) as? [String: Any] ?? [:]
       guard id == projectID, generation == gitGeneration, !Task.isCancelled else { return }
-      git = status
+      if !NSDictionary(dictionary: git).isEqual(to: status) { git = status }
     } catch { if id == projectID, generation == gitGeneration, !Task.isCancelled { git = ["error": error.localizedDescription] } }
   }
   func refreshModels() async {
@@ -2048,6 +2056,7 @@ private struct DialogAuditHost: View {
         try await captureConnectionPage("local-harness-compatibility", directory: externalSnapshots)
       }
       report["background_engine"] = try await smokeBackgroundEngine()
+      report["navigation_performance"] = try await smokeNavigationResponsiveness()
       if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
         section = "Workspace"
         selectJob(taskID)
@@ -2123,6 +2132,20 @@ private struct DialogAuditHost: View {
       throw EngineError(message: "Background response formatting lost content")
     }
     let formattingMS = (ProcessInfo.processInfo.systemUptime - richStart) * 1000
+    let reviewLines: [[String: Any]] = (0..<20_000).map { index in
+      ["id": index, "kind": "add", "text": "A changed line with Chinese text 你好", "new_line": index + 1, "old_line": NSNull(), "no_newline": false]
+    }
+    let revision: [String: Any] = [
+      "id": "performance-file", "path": "large.swift", "scope": "uncommitted", "layer": "unstaged", "label": "Large revision",
+      "hunks": [["id": 0, "header": "@@ -0,0 +1,20000 @@", "lines": reviewLines]],
+      "issue": "", "truncated": false, "can_stage": false,
+    ]
+    let reviewStart = ProcessInfo.processInfo.systemUptime
+    let review = try await prepareReview(revision, decode: ReviewDocument.decode)
+    guard review.hunks.first?.lines.count == 20_000 else {
+      throw EngineError(message: "Background review preparation lost diff lines")
+    }
+    let reviewMS = (ProcessInfo.processInfo.systemUptime - reviewStart) * 1000
     let payload = String(repeating: "p", count: 512000)
     let saved = try await engine.call("settings.get") as? [String: Any] ?? [:]
     let previousDrafts = saved["drafts"] ?? [:]
@@ -2147,6 +2170,7 @@ private struct DialogAuditHost: View {
     return ["draft_edits": 1000, "workspace_invalidations": workspaceChanges,
             "stream_characters": 614400, "stream_projection_ms": renderMS,
             "formatted_response_bytes": richText.utf8.count, "response_formatting_ms": formattingMS,
+            "review_lines": 20000, "review_preparation_ms": reviewMS,
             "engine_roundtrips": 8, "payload_bytes_each_way": 512000,
             "worst_ui_heartbeat_ms": worstTick * 1000]
   }

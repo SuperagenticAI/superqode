@@ -95,6 +95,50 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(saved.composers[WorkspaceRecoverySnapshot.key(project: "project", conversation: "root-b")]?.text, "Keep B")
   }
 
+  @MainActor func testReselectingCurrentThreadKeepsTranscriptDraftAndConnectionMounted() {
+    let app = workspace()
+    app.selectJob("a", targetSection: "Workspace")
+    app.detail = ["status": "completed", "kind": "task"]
+    app.events = [["type": "output", "data": ["text": "Current response"]]]
+    app.conversationHistory = [["id": "earlier", "response": "Earlier response"]]
+    app.draft = "Unsent follow-up"
+    app.harness = "acp:qwen"
+    app.model = "current-model"
+    let previousHistory = app.navigationHistory
+    var changes = 0
+    let subscription = app.objectWillChange.sink { changes += 1 }
+    for _ in 0..<100 { app.selectJob("a", targetSection: "Workspace") }
+    subscription.cancel()
+    XCTAssertEqual(changes, 0)
+    XCTAssertEqual(app.events.count, 1)
+    XCTAssertEqual(app.conversationHistory.count, 1)
+    XCTAssertEqual(app.detail["status"] as? String, "completed")
+    XCTAssertEqual(app.draft, "Unsent follow-up")
+    XCTAssertEqual(app.harness, "acp:qwen")
+    XCTAssertEqual(app.model, "current-model")
+    XCTAssertEqual(app.navigationHistory, previousHistory)
+    XCTAssertEqual(app.engine.pendingRequestCount, 0)
+    app.section = "Review"
+    app.selectJob("a", targetSection: "Workspace")
+    XCTAssertEqual(app.section, "Workspace")
+    XCTAssertEqual(app.events.count, 1)
+    XCTAssertEqual(app.draft, "Unsent follow-up")
+  }
+
+  @MainActor func testExplicitThreadRestorationAndNewThreadStillReset() {
+    let app = workspace()
+    app.selectJob("a")
+    app.events = [["type": "output"]]
+    app.selectJob("a", recordHistory: false)
+    XCTAssertTrue(app.events.isEmpty)
+    app.harness = "acp:qwen"
+    app.selectJob("")
+    XCTAssertTrue(app.connectionDisconnected)
+    app.harness = "acp:qwen"
+    app.selectJob("")
+    XCTAssertTrue(app.connectionDisconnected)
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

@@ -172,3 +172,21 @@ func decodeReview<T: Decodable>(_ value: Any) throws -> T {
   }
   return try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: value))
 }
+
+
+/// Decode and validate large revision responses away from the AppKit event loop.
+/// Cancellation propagates to the worker, and callers recheck their navigation
+/// generation after awaiting it before publishing any result.
+func prepareReview<Value>(_ value: Any, decode: @escaping (Any) throws -> Value) async throws -> Value {
+  let worker = Task.detached(priority: .userInitiated) {
+    try Task.checkCancellation()
+    let prepared = try decode(value)
+    try Task.checkCancellation()
+    return prepared
+  }
+  return try await withTaskCancellationHandler {
+    let prepared = try await worker.value
+    try Task.checkCancellation()
+    return prepared
+  } onCancel: { worker.cancel() }
+}
