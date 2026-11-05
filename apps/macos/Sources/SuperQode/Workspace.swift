@@ -2057,7 +2057,11 @@ private struct DialogAuditHost: View {
         try await captureConnectionPage("local-harness-compatibility", directory: externalSnapshots)
       }
       report["background_engine"] = try await smokeBackgroundEngine()
-      report["navigation_performance"] = try await smokeNavigationResponsiveness()
+      let navigation = try await smokeNavigationResponsiveness()
+      report["navigation_performance"] = navigation
+      if (navigation["worst_ui_heartbeat_ms"] as? Double ?? .infinity) >= 250 {
+        throw EngineError(message: "Workspace navigation blocked UI input: \(navigation)")
+      }
       if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
         section = "Workspace"
         selectJob(taskID)

@@ -140,6 +140,8 @@ jobs:
                       print("::error title=Broken bundle symlink::" + message)
           PY
       - name: Native app smoke with loopback model fixtures
+        env:
+          SUPERQODE_NAV_PROFILE: "1"
         run: python3 apps/macos/scripts/smoke-test.py
       - name: Native Strands smoke with loopback Responses API fixture
         env:
@@ -155,6 +157,7 @@ jobs:
           name: native-smoke-report
           path: |
             apps/macos/artifacts/smoke-report.json
+            apps/macos/artifacts/navigation-main-thread-sample.txt
             apps/macos/artifacts-strands/smoke-report.json
             apps/macos/artifacts/connect-thread-identities-preview*.png
           if-no-files-found: ignore
