@@ -7,14 +7,17 @@ struct WorkbenchNavigationState: Equatable {
   var drawer = ""
   var expanded = false
   var inspector = false
+  var filesMounted = false
 
   mutating func select(_ destination: String) {
     section = destination
     switch destination {
     case "Review": inspector = true; drawer = ""; expanded = false
-    case "Files", "Terminal", "Checkpoints": drawer = destination; expanded = destination == "Files"
+    case "Files", "Terminal", "Checkpoints":
+      drawer = destination; expanded = destination == "Files"
+      if destination == "Files" { filesMounted = true }
     case "Workspace": closeExpandedDrawer()
-    default: expanded = false
+    default: break
     }
   }
 

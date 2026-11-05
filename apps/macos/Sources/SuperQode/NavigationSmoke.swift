@@ -20,7 +20,10 @@ import Foundation
       var worstPhase = ""
       var timings: [[String: Any]] = []
       var initialComposer: PromptEditor.Editor?
+      let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
+        signal.yield(true)
+        signal.finish()
         while !Task.isCancelled {
           let start = ProcessInfo.processInfo.systemUptime
           let startedPhase = currentPhase
@@ -30,6 +33,8 @@ import Foundation
         }
       }
       defer { heartbeat.cancel() }
+      var readiness = ready.makeAsyncIterator()
+      _ = await readiness.next()
       for _ in 0..<3 {
         for destination in sections {
           currentPhase = destination
@@ -65,5 +70,15 @@ import Foundation
     result["profiled_diagnostic_navigation"] = try await measure()
     await profile.value
     return result
+  }
+}
+
+
+@MainActor func requireResponsiveNavigation(_ result: [String: Any]) throws {
+  guard result["composer_editor_preserved"] as? Bool == true else {
+    throw EngineError(message: "Navigation recreated the native composer instead of preserving it")
+  }
+  guard (result["worst_ui_heartbeat_ms"] as? Double ?? .infinity) < 250 else {
+    throw EngineError(message: "Workspace navigation blocked UI input: \(result)")
   }
 }

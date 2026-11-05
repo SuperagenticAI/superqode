@@ -63,6 +63,7 @@ private struct DialogAuditHost: View {
     get { navigationState.drawer }
     set {
       var next = navigationState; next.drawer = newValue
+      if newValue == "Files" { next.filesMounted = true }
       if newValue.isEmpty { next.expanded = false }
       if next != navigationState { navigationState = next }
     }
@@ -87,6 +88,12 @@ private struct DialogAuditHost: View {
     var next = navigationState
     next.drawer = next.drawer == name ? "" : name
     next.expanded = name == "Files" && !next.drawer.isEmpty
+    if name == "Files" { next.filesMounted = true }
+    if next != navigationState { navigationState = next }
+  }
+  func resetWorkbenchPanels() {
+    var next = navigationState
+    next.drawer = ""; next.expanded = false; next.inspector = false; next.filesMounted = false
     if next != navigationState { navigationState = next }
   }
   func toggleWorkbenchInspector() {
@@ -664,8 +671,7 @@ private struct DialogAuditHost: View {
     composerConversationID = ""
     loadingConversationDraft = false
     selectedFile = ""
-    workbenchDrawer = ""
-    inspectorVisible = false
+    resetWorkbenchPanels()
     checkpointID = ""
     checkpointPath = ""
     reviewSelection = ReviewSelection()
@@ -1562,7 +1568,7 @@ private struct DialogAuditHost: View {
     perform {
       let files = try await self.engine.call("files.list", ["project": id]) as? [String] ?? []
       guard id == self.projectID, generation == self.filesGeneration else { return }
-      self.files = files
+      if self.files != files { self.files = files }
     }
   }
   func shutdown() {
@@ -1671,6 +1677,9 @@ private struct DialogAuditHost: View {
       }
       report["agent_icons"] = "passed; all \(Set(BundledAgentIcons.assets.values).count) bundled ACP glyphs loaded"
       report["performance"] = try await verifyResponsiveness()
+      let coldNavigation = try await smokeNavigationResponsiveness()
+      report["navigation_cold_performance"] = coldNavigation
+      try requireResponsiveNavigation(coldNavigation)
       report["coding_inputs"] = try verifyCodingInputs()
       report["source_editor"] = try await verifySourceEditor()
       report["centered_dialogs"] = try await verifyCenteredDialogs()
@@ -2101,12 +2110,7 @@ private struct DialogAuditHost: View {
       report["background_engine"] = try await smokeBackgroundEngine()
       let navigation = try await smokeNavigationResponsiveness()
       report["navigation_performance"] = navigation
-      guard navigation["composer_editor_preserved"] as? Bool == true else {
-        throw EngineError(message: "Navigation recreated the native composer instead of preserving it")
-      }
-      if (navigation["worst_ui_heartbeat_ms"] as? Double ?? .infinity) >= 250 {
-        throw EngineError(message: "Workspace navigation blocked UI input: \(navigation)")
-      }
+      try requireResponsiveNavigation(navigation)
       if let index = args.firstIndex(of: "--snapshot-dir"), args.count > index + 1 {
         section = "Workspace"
         selectJob(taskID)

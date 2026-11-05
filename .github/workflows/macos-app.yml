@@ -161,4 +161,9 @@ jobs:
             apps/macos/artifacts/native-app-stderr.log
             apps/macos/artifacts-strands/smoke-report.json
             apps/macos/artifacts/connect-thread-identities-preview*.png
+            apps/macos/artifacts/workspace-*.png
+            apps/macos/artifacts/files.png
+            apps/macos/artifacts/review.png
+            apps/macos/artifacts/terminal.png
+            apps/macos/artifacts/checkpoints.png
           if-no-files-found: ignore

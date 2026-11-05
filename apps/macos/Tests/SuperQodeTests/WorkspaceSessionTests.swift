@@ -188,6 +188,22 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertTrue(app.workbenchDrawer.isEmpty)
   }
 
+  @MainActor func testFilePaneCacheStaysWithinItsProject() {
+    let app = workspace()
+    XCTAssertFalse(app.navigationState.filesMounted)
+    app.section = "Files"
+    XCTAssertTrue(app.navigationState.filesMounted)
+    app.section = "Models"
+    XCTAssertTrue(app.navigationState.filesMounted)
+    app.section = "Review"
+    XCTAssertTrue(app.navigationState.filesMounted)
+    XCTAssertTrue(app.workbenchDrawer.isEmpty)
+    app.resetWorkbenchPanels()
+    XCTAssertFalse(app.navigationState.filesMounted)
+    XCTAssertFalse(app.drawerExpanded)
+    XCTAssertFalse(app.inspectorVisible)
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

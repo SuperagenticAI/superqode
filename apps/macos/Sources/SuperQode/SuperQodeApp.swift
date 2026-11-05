@@ -251,6 +251,20 @@ struct RootView: View {
       CommandPaletteView().environmentObject(app)
     }
   }
+  @ViewBuilder private var featureContent: some View {
+    switch app.section {
+    case "Threads": ThreadsView(library: app.threadLibrary(for: app.projectID)).id(app.projectID)
+    case "Agent activity": AgentFleetView()
+    case "Harness Hub": HubView()
+    case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
+    case "Super Agent": CreatorModeView().id(app.projectID)
+    case "Models": ModelsView()
+    case "Evaluations": EvaluationView()
+    case "Optimization": OptimizationView()
+    case "Tools": ToolsView()
+    default: EmptyView()
+    }
+  }
   private var workspaceShell: some View {
     HStack(spacing: 0) {
       WorkspaceNavigationRail()
@@ -302,20 +316,16 @@ struct RootView: View {
           GettingStartedView(draftStore: app.draftStore)
         } else {
           GeometryReader { geometry in
-            Group {
-              switch app.section {
-              case "Threads": ThreadsView(library: app.threadLibrary(for: app.projectID)).id(app.projectID)
-              case "Agent activity": AgentFleetView()
-              case "Harness Hub": HubView()
-              case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
-              case "Super Agent": CreatorModeView().id(app.projectID)
-              case "Models": ModelsView()
-              case "Evaluations": EvaluationView()
-              case "Optimization": OptimizationView()
-              case "Tools": ToolsView()
-              default: CodingView()
+            ZStack {
+              if !app.projectID.isEmpty {
+                CodingView().id(app.projectID)
+                  .opacity(WorkspaceNavigationGroup.isWorkbench(app.section) ? 1 : 0)
+                  .disabled(!WorkspaceNavigationGroup.isWorkbench(app.section))
+                  .allowsHitTesting(WorkspaceNavigationGroup.isWorkbench(app.section))
+                  .accessibilityHidden(!WorkspaceNavigationGroup.isWorkbench(app.section))
               }
-            }.id(WorkspaceNavigationGroup.isWorkbench(app.section) ? "workbench" : app.section).transition(.opacity).disabled(app.openingProject || app.restoringNavigation).frame(
+              featureContent
+            }.disabled(app.openingProject || app.restoringNavigation).frame(
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
             .background(Color.qPanel)
@@ -404,10 +414,9 @@ struct CodingView: View {
   @State private var scope: ReviewScope = .turn
   @State private var showFullReview = false
   @State private var inspectorTab = "Changes"
-  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab }
+  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab + "\n" + String(WorkspaceNavigationGroup.isWorkbench(app.section)) }
   var body: some View {
-    GeometryReader { geometry in
-      VStack(spacing: 0) {
+    VStack(spacing: 0) {
         workbenchToolbar
         Divider()
         if app.detail["archived"] as? Bool == true {
@@ -418,35 +427,13 @@ struct CodingView: View {
           let approval = app.events.last(where: { string($0, "type") == "approval" }) {
           EventRow(event: approval, embeddedResponse: true).padding(10)
         }
-        ZStack(alignment: .bottom) {
-          VStack(spacing: 0) {
-            let wide = geometry.size.width >= 900
-            let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(ZStackLayout())
-            layout {
-              conversation.frame(minWidth: wide ? 400 : nil, maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(!wide && app.inspectorVisible ? 0 : 1)
-                .allowsHitTesting(wide || !app.inspectorVisible)
-                .accessibilityHidden(!wide && app.inspectorVisible)
-              if app.inspectorVisible {
-                if wide { Divider() }
-                inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
-              }
-            }.frame(maxHeight: .infinity)
-            CodingComposer(draftStore: app.draftStore)
-          }
-          .padding(.bottom, !app.workbenchDrawer.isEmpty && !app.drawerExpanded ? max(150, min(220, geometry.size.height * 0.30)) : 0)
-          .opacity(app.drawerExpanded ? 0 : 1)
-          .disabled(app.drawerExpanded).allowsHitTesting(!app.drawerExpanded)
-          .accessibilityHidden(app.drawerExpanded)
-          if !app.workbenchDrawer.isEmpty { drawer(height: geometry.size.height).background(Color.qPanel) }
-        }
-      }
-      .task(id: reviewKey) {
+        GeometryReader { pane in workbenchContent(size: pane.size) }
+    }
+    .task(id: reviewKey) {
         guard app.connected else { review.reset(); return }
-        guard app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
+        guard WorkspaceNavigationGroup.isWorkbench(app.section), app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
         await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
       }
-    }
     .centeredDialog(isPresented: $showShare, title: "Share thread context") {
       ThreadShareView(project: shareProject, source: shareSource).environmentObject(app)
     }
@@ -473,7 +460,52 @@ struct CodingView: View {
       if !kind.isEmpty && kind != "task" { scope = .uncommitted }
     }
   }
+  private func drawerContentHeight(_ height: CGFloat, expanded: Bool) -> CGFloat {
+    expanded ? max(200, height - 41) : max(150, min(220, height * 0.30))
+  }
+  private func workbenchContent(size: CGSize) -> some View {
+    return ZStack(alignment: .bottom) {
+      VStack(spacing: 0) {
+        let wide = size.width >= 900
+        let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(ZStackLayout())
+        layout {
+          conversation.frame(minWidth: wide ? 400 : nil, maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(!wide && app.inspectorVisible ? 0 : 1)
+            .allowsHitTesting(wide || !app.inspectorVisible)
+            .accessibilityHidden(!wide && app.inspectorVisible)
+          if app.inspectorVisible {
+            if wide { Divider() }
+            inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
+          }
+        }.frame(maxHeight: .infinity)
+        CodingComposer(draftStore: app.draftStore)
+      }
+      .padding(.bottom, !app.workbenchDrawer.isEmpty && !app.drawerExpanded ? drawerContentHeight(size.height, expanded: false) + 41 : 0)
+      .opacity(app.drawerExpanded ? 0 : 1)
+      .disabled(app.drawerExpanded).allowsHitTesting(!app.drawerExpanded)
+      .accessibilityHidden(app.drawerExpanded)
+      ZStack(alignment: .bottom) {
+        if app.navigationState.filesMounted {
+          drawer(height: size.height, name: "Files")
+            .opacity(app.workbenchDrawer == "Files" ? 1 : 0)
+            .disabled(app.workbenchDrawer != "Files").allowsHitTesting(app.workbenchDrawer == "Files")
+            .accessibilityHidden(app.workbenchDrawer != "Files")
+        }
+        if !app.workbenchDrawer.isEmpty && app.workbenchDrawer != "Files" {
+          drawer(height: size.height, name: app.workbenchDrawer)
+        }
+      }.id(app.projectID)
+        .frame(height: app.workbenchDrawer.isEmpty ? 0 : drawerContentHeight(size.height, expanded: app.drawerExpanded) + 41)
+        .clipped()
+        .accessibilityHidden(app.workbenchDrawer.isEmpty)
+    }
+  }
   private var inspector: some View {
+    Group {
+      if WorkspaceNavigationGroup.isWorkbench(app.section) { activeInspector }
+    }
+  }
+  private var activeInspector: some View {
     VStack(spacing: 0) {
       Picker("Thread inspector", selection: $inspectorTab) {
         Text("Changes").tag("Changes")
@@ -489,7 +521,7 @@ struct CodingView: View {
   private var conversation: some View {
     Group {
       if app.selectedJob.isEmpty { GettingStartedView(draftStore: app.draftStore) }
-      else { EventStream().id(app.projectID + "\n" + app.selectedJob) }
+      else { EventStream(suspended: !WorkspaceNavigationGroup.isWorkbench(app.section)).id(app.projectID + "\n" + app.selectedJob) }
     }
   }
   private var workbenchToolbar: some View {
@@ -536,24 +568,25 @@ struct CodingView: View {
     guard app.connected else { return }
     Task { await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope) }
   }
-  private func drawer(height: CGFloat) -> some View {
-    VStack(spacing: 0) {
+  private func drawer(height: CGFloat, name: String) -> some View {
+    let expanded = app.workbenchDrawer == name ? app.drawerExpanded : name == "Files"
+    return VStack(spacing: 0) {
       Divider()
       HStack {
-        Text("PROJECT · " + app.workbenchDrawer.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+        Text("PROJECT · " + name.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
         Spacer()
         Button { app.drawerExpanded.toggle() } label: { Image(systemName: app.drawerExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") }
           .buttonStyle(.plain).accessibilityLabel(app.drawerExpanded ? "Restore conversation" : "Expand project panel")
         Button { app.workbenchDrawer = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close project panel")
-      }.padding(.horizontal, 14).padding(.vertical, 8)
+      }.padding(.horizontal, 14).frame(height: 40)
       Group {
-        switch app.workbenchDrawer {
+        switch name {
         case "Files": FilesView(compact: true).id(app.projectID)
         case "Terminal": ProjectTerminalView(terminals: app.terminals, compact: true)
         case "Tasks": TaskQueueView(compact: true)
         default: CheckpointsView(compact: true).id(app.projectID)
         }
-      }.frame(height: app.drawerExpanded ? max(200, height - 70) : max(150, min(220, height * 0.30)))
+      }.frame(height: drawerContentHeight(height, expanded: expanded))
     }
   }
 }
@@ -980,6 +1013,7 @@ struct HistoricalConversationTurn: View, Equatable {
 }
 
 struct EventStream: View {
+  var suspended = false
   @EnvironmentObject var app: Workspace
   @State private var follow = true
   @State private var visibleAnchor: String?
@@ -999,6 +1033,11 @@ struct EventStream: View {
     return anchors
   }
   var body: some View {
+    Group {
+      if suspended { Color.clear } else { transcript }
+    }
+  }
+  private var transcript: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
     VStack(spacing: 0) {
