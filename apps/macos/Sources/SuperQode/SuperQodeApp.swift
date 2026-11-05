@@ -1061,7 +1061,7 @@ struct EventStream: View {
   private var transcript: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
-    VStack(spacing: 0) {
+    return VStack(spacing: 0) {
       HStack {
         Text("CONVERSATION").font(.system(size: 12, design: .monospaced)).foregroundStyle(
           .secondary)
