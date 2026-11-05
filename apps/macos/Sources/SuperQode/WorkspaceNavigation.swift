@@ -8,6 +8,7 @@ struct WorkbenchNavigationState: Equatable {
   var expanded = false
   var inspector = false
   var filesMounted = false
+  var studioMounted = false
 
   mutating func select(_ destination: String) {
     section = destination
@@ -17,6 +18,7 @@ struct WorkbenchNavigationState: Equatable {
       drawer = destination; expanded = destination == "Files"
       if destination == "Files" { filesMounted = true }
     case "Workspace": closeExpandedDrawer()
+    case "Harness Studio": studioMounted = true
     default: break
     }
   }

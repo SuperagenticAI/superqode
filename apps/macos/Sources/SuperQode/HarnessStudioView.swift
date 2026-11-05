@@ -76,7 +76,9 @@ import SwiftUI
     do {
       let rows = try await engine.call("studio.list", ["project": identity]) as? [[String: Any]] ?? []
       let checks = try await engine.call("studio.evidence", ["project": identity]) as? [[String: Any]] ?? []
-      guard project == identity, !Task.isCancelled else { return }; catalog = rows; evidence = checks
+      guard project == identity, !Task.isCancelled else { return }
+      if !NSArray(array: catalog).isEqual(to: rows) { catalog = rows }
+      if !NSArray(array: evidence).isEqual(to: checks) { evidence = checks }
     } catch { if project == identity { failure = error.localizedDescription } }
   }
 }
@@ -84,6 +86,8 @@ import SwiftUI
 struct HarnessStudioView: View {
   @EnvironmentObject var app: Workspace
   @ObservedObject var library: HarnessStudioLibrary
+  var active = true
+  @FocusState private var definitionFocused: Bool
   @State private var tab = "Definition"
   @State private var preset = "core"
   @State private var reason = ""
@@ -108,7 +112,15 @@ struct HarnessStudioView: View {
       else if tab == "Revisions" { revisions }
       else { evidence }
     }.padding(28)
-      .task(id: app.projectID) {
+      .onChange(of: active) { _, visible in
+        if !visible {
+          if definitionFocused { definitionFocused = false }
+          if checkSheet { checkSheet = false }
+          if output != nil { output = nil }
+        }
+      }
+      .task(id: app.projectID + "\n" + String(active)) {
+        guard active else { return }
         library.enter(app.projectID)
         guard !app.projectID.isEmpty else { return }
         if library.text.isEmpty { await library.load(engine: app.engine) }
@@ -134,6 +146,7 @@ struct HarnessStudioView: View {
           Button("Import…", action: importYAML).disabled(library.busy)
         }
         TextEditor(text: $library.text).font(.system(size: 12, design: .monospaced))
+          .focused($definitionFocused)
           .scrollContentBackground(.hidden).padding(10).brandSurface()
         Text("Drafts stay in this app session. Save revision persists a snapshot and the project definition.").font(.caption2).foregroundStyle(.secondary)
         TextField("Reason for this revision", text: $reason).textFieldStyle(.roundedBorder)

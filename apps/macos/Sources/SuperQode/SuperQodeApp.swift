@@ -256,7 +256,6 @@ struct RootView: View {
     case "Threads": ThreadsView(library: app.threadLibrary(for: app.projectID)).id(app.projectID)
     case "Agent activity": AgentFleetView()
     case "Harness Hub": HubView()
-    case "Harness Studio": HarnessStudioView(library: app.harnessStudio)
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Models": ModelsView()
     case "Evaluations", "Optimization":
@@ -323,6 +322,14 @@ struct RootView: View {
                   .disabled(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
                   .allowsHitTesting(WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
                   .accessibilityHidden(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
+              }
+              if app.navigationState.studioMounted && !app.projectID.isEmpty {
+                HarnessStudioView(library: app.harnessStudio, active: app.section == "Harness Studio")
+                  .id(app.projectID)
+                  .opacity(app.section == "Harness Studio" ? 1 : 0)
+                  .disabled(app.section != "Harness Studio")
+                  .allowsHitTesting(app.section == "Harness Studio")
+                  .accessibilityHidden(app.section != "Harness Studio")
               }
               featureContent
             }.disabled(app.openingProject || app.restoringNavigation).frame(

@@ -13,17 +13,29 @@ import Foundation
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return composer(in: content)
     }
+    @MainActor func mountedStudioEditor() -> NSTextView? {
+      @MainActor func find(in view: NSView) -> NSTextView? {
+        if let editor = view as? NSTextView,
+          !(editor is PromptEditor.Editor), !(editor is SourceEditor.Editor),
+          editor.string == harnessStudio.text { return editor }
+        return view.subviews.lazy.compactMap { find(in: $0) }.first
+      }
+      guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
+      return find(in: content)
+    }
     @MainActor func measure(passes: Int) async throws -> [String: Any] {
       let sections = [
         "Workspace", "Files", "Review", "Terminal", "Checkpoints", "Workspace",
         "Harness Hub", "Harness Studio", "Super Agent", "Evaluations", "Optimization",
-        "Models", "Tools", "Threads", "Workspace",
+        "Models", "Tools", "Threads", "Workspace", "Harness Studio", "Workspace",
       ]
       var worstTick = 0.0
       var currentPhase = section
       var worstPhase = ""
       var timings: [[String: Any]] = []
       var initialComposer: PromptEditor.Editor?
+      var initialStudioEditor: NSTextView?
+      var studioEditorPreserved = true
       let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
         signal.yield(true)
@@ -47,12 +59,18 @@ import Foundation
           try await Task.sleep(for: .milliseconds(30))
           timings.append(["section": destination, "input_resume_ms": (ProcessInfo.processInfo.systemUptime - started) * 1000])
           if initialComposer == nil && destination == "Workspace" { initialComposer = mountedComposer() }
+          if destination == "Harness Studio" {
+            let editor = mountedStudioEditor()
+            if let initialStudioEditor { studioEditorPreserved = studioEditorPreserved && editor === initialStudioEditor }
+            else { initialStudioEditor = editor; studioEditorPreserved = editor != nil }
+          }
         }
       }
       heartbeat.cancel()
       await heartbeat.value
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
         "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
+        "studio_editor_preserved": initialStudioEditor != nil && studioEditorPreserved,
         "slowest_phase": worstPhase, "steps": timings]
     }
 
@@ -88,6 +106,9 @@ import Foundation
   }
   guard result["composer_editor_preserved"] as? Bool == true else {
     throw EngineError(message: "Navigation recreated the native composer instead of preserving it")
+  }
+  guard result["studio_editor_preserved"] as? Bool == true else {
+    throw EngineError(message: "Navigation recreated the Harness Studio editor instead of preserving it")
   }
   guard (result["worst_ui_heartbeat_ms"] as? Double ?? .infinity) < 250 else {
     throw EngineError(message: "Workspace navigation blocked UI input: \(result)")
