@@ -414,7 +414,7 @@ struct CodingView: View {
   @State private var scope: ReviewScope = .turn
   @State private var showFullReview = false
   @State private var inspectorTab = "Changes"
-  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab + "\n" + String(WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) }
+  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + inspectorTab + "\n" + String(WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) }
   var body: some View {
     VStack(spacing: 0) {
         workbenchToolbar
@@ -431,7 +431,7 @@ struct CodingView: View {
     }
     .task(id: reviewKey) {
         guard app.connected else { review.reset(); return }
-        guard WorkspaceNavigationGroup.usesCodingWorkspace(app.section), app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
+        guard WorkspaceNavigationGroup.usesCodingWorkspace(app.section), app.inspectorVisible, inspectorTab == "Changes" else { return }
         await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
       }
     .centeredDialog(isPresented: $showShare, title: "Share thread context") {
@@ -509,7 +509,9 @@ struct CodingView: View {
   }
   private var inspector: some View {
     Group {
-      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) && !app.drawerExpanded { activeInspector }
+      // Keep Changes/Diff mounted while Files is expanded. Tearing it down made
+      // Files -> Review remount DiffView and stall the UI under load.
+      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) { activeInspector }
     }
   }
   private var activeInspector: some View {
@@ -528,7 +530,12 @@ struct CodingView: View {
   private var conversation: some View {
     Group {
       if app.selectedJob.isEmpty { GettingStartedView(draftStore: app.draftStore) }
-      else { EventStream(suspended: !WorkspaceNavigationGroup.usesCodingWorkspace(app.section) || app.drawerExpanded).id(app.projectID + "\n" + app.selectedJob) }
+      else {
+        EventStream(
+          suspended: !WorkspaceNavigationGroup.usesCodingWorkspace(app.section),
+          covered: app.drawerExpanded
+        ).id(app.projectID + "\n" + app.selectedJob)
+      }
     }
   }
   private var workbenchToolbar: some View {
@@ -1035,6 +1042,9 @@ struct HistoricalConversationTurn: View, Equatable {
 
 struct EventStream: View {
   var suspended = false
+  /// Soft-hide while a workbench drawer covers the transcript. Retains the
+  /// mounted ScrollView so returning from Files does not rebuild history.
+  var covered = false
   @EnvironmentObject var app: Workspace
   @State private var follow = true
   @State private var visibleAnchor: String?
@@ -1055,7 +1065,13 @@ struct EventStream: View {
   }
   var body: some View {
     Group {
-      if suspended { Color.clear } else { transcript }
+      if suspended { Color.clear }
+      else {
+        transcript
+          .opacity(covered ? 0 : 1)
+          .allowsHitTesting(!covered)
+          .accessibilityHidden(covered)
+      }
     }
   }
   private var transcript: some View {
