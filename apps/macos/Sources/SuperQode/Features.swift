@@ -677,6 +677,7 @@ struct EvaluationResult: View {
 }
 struct FilesView: View {
   var compact = false
+  var active = true
   @EnvironmentObject var app: Workspace
   @State private var search = ""
   @State private var visibleFiles: [String] = []
@@ -762,6 +763,15 @@ struct FilesView: View {
       Text(
         "Enter a project path, such as Sources/Feature.swift. Parent folders are created as needed. Existing files are never overwritten."
       )
+    }
+    .onChange(of: active) { _, visible in
+      if !visible {
+        if creating { creating = false }
+        if comparing { comparing = false }
+      } else {
+        app.loadFiles()
+        if !dirty && !loading && !saving { load() }
+      }
     }
     .onChange(of: search) { _, _ in filterFiles() }
     .onChange(of: app.files) { _, _ in filterFiles() }

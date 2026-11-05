@@ -319,10 +319,10 @@ struct RootView: View {
             ZStack {
               if !app.projectID.isEmpty {
                 CodingView().id(app.projectID)
-                  .opacity(WorkspaceNavigationGroup.isWorkbench(app.section) ? 1 : 0)
-                  .disabled(!WorkspaceNavigationGroup.isWorkbench(app.section))
-                  .allowsHitTesting(WorkspaceNavigationGroup.isWorkbench(app.section))
-                  .accessibilityHidden(!WorkspaceNavigationGroup.isWorkbench(app.section))
+                  .opacity(WorkspaceNavigationGroup.usesCodingWorkspace(app.section) ? 1 : 0)
+                  .disabled(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
+                  .allowsHitTesting(WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
+                  .accessibilityHidden(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
               }
               featureContent
             }.disabled(app.openingProject || app.restoringNavigation).frame(
@@ -414,7 +414,7 @@ struct CodingView: View {
   @State private var scope: ReviewScope = .turn
   @State private var showFullReview = false
   @State private var inspectorTab = "Changes"
-  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab + "\n" + String(WorkspaceNavigationGroup.isWorkbench(app.section)) }
+  private var reviewKey: String { app.projectID + "\n" + app.selectedJob + "\n" + scope.rawValue + "\n" + string(app.detail, "status") + "\n" + String(app.connected) + "\n" + String(app.inspectorVisible) + "\n" + String(app.drawerExpanded) + "\n" + inspectorTab + "\n" + String(WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) }
   var body: some View {
     VStack(spacing: 0) {
         workbenchToolbar
@@ -431,7 +431,7 @@ struct CodingView: View {
     }
     .task(id: reviewKey) {
         guard app.connected else { review.reset(); return }
-        guard WorkspaceNavigationGroup.isWorkbench(app.section), app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
+        guard WorkspaceNavigationGroup.usesCodingWorkspace(app.section), app.inspectorVisible, !app.drawerExpanded, inspectorTab == "Changes" else { return }
         await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
       }
     .centeredDialog(isPresented: $showShare, title: "Share thread context") {
@@ -447,6 +447,13 @@ struct CodingView: View {
       }.frame(width: 1000, height: 640).environmentObject(app)
     }
     .onAppear { focusSection() }
+    .onChange(of: WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) { _, visible in
+      if !visible {
+        if showFullReview { showFullReview = false }
+        if showShare { showShare = false }
+        if forkSource != nil { forkSource = nil }
+      }
+    }
     .onChange(of: app.section) { _, section in
       focusSection()
       if section == "Workspace" {
@@ -502,7 +509,7 @@ struct CodingView: View {
   }
   private var inspector: some View {
     Group {
-      if WorkspaceNavigationGroup.isWorkbench(app.section) { activeInspector }
+      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) { activeInspector }
     }
   }
   private var activeInspector: some View {
@@ -521,7 +528,7 @@ struct CodingView: View {
   private var conversation: some View {
     Group {
       if app.selectedJob.isEmpty { GettingStartedView(draftStore: app.draftStore) }
-      else { EventStream(suspended: !WorkspaceNavigationGroup.isWorkbench(app.section)).id(app.projectID + "\n" + app.selectedJob) }
+      else { EventStream(suspended: !WorkspaceNavigationGroup.usesCodingWorkspace(app.section)).id(app.projectID + "\n" + app.selectedJob) }
     }
   }
   private var workbenchToolbar: some View {
@@ -581,7 +588,7 @@ struct CodingView: View {
       }.padding(.horizontal, 14).frame(height: 40)
       Group {
         switch name {
-        case "Files": FilesView(compact: true).id(app.projectID)
+        case "Files": FilesView(compact: true, active: app.workbenchDrawer == "Files" && WorkspaceNavigationGroup.usesCodingWorkspace(app.section)).id(app.projectID)
         case "Terminal": ProjectTerminalView(terminals: app.terminals, compact: true)
         case "Tasks": TaskQueueView(compact: true)
         default: CheckpointsView(compact: true).id(app.projectID)
@@ -652,7 +659,21 @@ struct CodingComposer: View {
       isolateConfirmation
     }
     .onChange(of: draftStore.text) { _, _ in app.scheduleDraftSave() }
-    .onChange(of: app.selectedJob) { _, _ in composerFocused = true }
+    .onChange(of: app.selectedJob) { _, _ in
+      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) && !app.drawerExpanded { composerFocused = true }
+    }
+    .onChange(of: WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) { _, visible in
+      if !visible {
+        if composerFocused { composerFocused = false }
+        if showQueue { showQueue = false }
+        if showContext { showContext = false }
+        if showOptions { showOptions = false }
+        if isolatePlan != nil { isolatePlan = nil }
+      }
+    }
+    .onChange(of: app.drawerExpanded) { _, expanded in
+      if expanded && composerFocused { composerFocused = false }
+    }
     .onChange(of: app.projectID) { _, _ in requestedFiles = false }
     .onChange(of: app.mentionPrefix) { _, _ in
       if !requestedFiles, app.mentionQuery != nil, app.files.isEmpty {

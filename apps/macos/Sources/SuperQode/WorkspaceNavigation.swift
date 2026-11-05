@@ -45,6 +45,9 @@ struct WorkspaceNavigationGroup: Identifiable {
     .init(id: "tools", title: "Tools", symbol: "wrench.and.screwdriver", sections: ["Tools"]),
   ]
 
+  static func usesCodingWorkspace(_ section: String) -> Bool {
+    isWorkbench(section) || !all.contains { $0.sections.contains(section) }
+  }
   static func isWorkbench(_ section: String) -> Bool {
     ["Workspace", "Review", "Files", "Terminal", "Checkpoints"].contains(section)
   }

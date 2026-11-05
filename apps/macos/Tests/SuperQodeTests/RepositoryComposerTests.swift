@@ -83,6 +83,15 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertEqual(moved.dropped, ["../escape", "docs/../escape", "docs/..", "/absolute"])
   }
 
+  func testConfiguredCodingDestinationsKeepTheirWorkspaceHost() {
+    for section in ["Workspace", "Review", "Files", "Terminal", "Checkpoints", "Project custom panel"] {
+      XCTAssertTrue(WorkspaceNavigationGroup.usesCodingWorkspace(section), section)
+    }
+    for section in ["Models", "Threads", "Agent activity", "Harness Hub", "Harness Studio", "Super Agent", "Evaluations", "Optimization", "Tools"] {
+      XCTAssertFalse(WorkspaceNavigationGroup.usesCodingWorkspace(section), section)
+    }
+  }
+
   func testFeatureNavigationExposesEverySectionExactlyOnce() {
     let sections = WorkspaceNavigationGroup.all.flatMap(\.sections)
     XCTAssertEqual(Set(sections), Set(Sections.names))
