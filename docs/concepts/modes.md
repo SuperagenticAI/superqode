@@ -566,6 +566,7 @@ The built-in provider registry contains these hosted routes:
 | Poolside | `poolside` | Mistral AI | `mistral` |
 | DeepSeek | `deepseek` | Z.AI general API | `zai` |
 | Zhipu AI | `zhipu` | Alibaba DashScope | `alibaba` |
+| Qwen China API | `qwen-cn` | Qwen International API | `qwen-intl` |
 | MiniMax | `minimax` | Moonshot AI | `moonshot` |
 | SiliconFlow | `siliconflow` | Baidu | `baidu` |
 | ByteDance Doubao | `doubao` | OpenRouter | `openrouter` |

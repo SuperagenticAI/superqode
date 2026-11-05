@@ -43,6 +43,9 @@ def relative_path(value):
 
 
 def validate(config):
+    unknown = set(config) - {"type", "commands", "files", "protected_paths", "require_changes"}
+    if unknown:
+        raise ValueError("Unknown repository grader fields: " + ", ".join(sorted(unknown)))
     commands, files = config.get("commands", []), config.get("files", [])
     if (
         not isinstance(commands, list)
@@ -55,6 +58,8 @@ def validate(config):
     for command in commands:
         if not isinstance(command, dict):
             raise ValueError("Repository commands require argv and an optional timeout_seconds")
+        if set(command) - {"argv", "timeout_seconds", "name"}:
+            raise ValueError("Unknown repository command field; use argv and timeout_seconds")
         argv = command.get("argv")
         if (
             not isinstance(argv, list)
@@ -78,6 +83,10 @@ def validate(config):
     for item in files:
         if not isinstance(item, dict):
             raise ValueError("Repository file assertions require a path")
+        if set(item) - {"path", "exists", "contains", "sha256"}:
+            raise ValueError(
+                "Unknown repository file assertion; use path, exists, contains or sha256"
+            )
         relative_path(item.get("path"))
         if "exists" in item and type(item["exists"]) is not bool:
             raise ValueError("File exists assertions must be booleans")

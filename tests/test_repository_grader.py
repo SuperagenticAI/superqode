@@ -119,6 +119,9 @@ async def test_repository_grading_without_fixture_never_falls_back_to_text():
         {"files": [{"path": "C:/outside"}]},
         {"files": [{"path": "file", "exists": "yes"}]},
         {"files": [{"path": "file", "sha256": "x"}]},
+        {"files": [{"path": "file"}], "comands": [{"argv": ["false"]}]},
+        {"commands": [{"argv": ["python"], "timeout": 1}]},
+        {"files": [{"path": "file", "contain": "expected"}]},
     ],
 )
 def test_invalid_grader_configuration_is_rejected_before_any_model_call(config):

@@ -3,6 +3,30 @@ import XCTest
 @testable import SuperQode
 
 final class EngineTests: XCTestCase {
+  @MainActor func testClosedEnginePipeReportsAnErrorWithoutTerminatingTheApp() async throws {
+    let pipe = Pipe()
+    defer { withExtendedLifetime(pipe) {} }
+    let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    var exits = 0
+    engine.onExit = { exits += 1 }
+    try pipe.fileHandleForReading.close()
+    do {
+      _ = try await engine.call("test")
+      XCTFail("Expected a closed connection error")
+    } catch {
+      XCTAssertTrue(error.localizedDescription.contains("connection closed"))
+    }
+    XCTAssertEqual(engine.pendingRequestCount, 0)
+    XCTAssertEqual(exits, 1)
+    do {
+      _ = try await engine.call("test")
+      XCTFail("Disconnected engines must reject new requests")
+    } catch {
+      XCTAssertTrue(error.localizedDescription.contains("not running"))
+    }
+    engine.stop()
+  }
+
   func testFragmentedRepliesAreDeliveredOnce() async {
     let frames = EngineFrames()
     let received = expectation(description: "reply")
@@ -34,6 +58,7 @@ final class EngineTests: XCTestCase {
 
   @MainActor func testTimeoutReleasesPendingCallAndIgnoresLateReply() async {
     let pipe = Pipe()
+    defer { withExtendedLifetime(pipe) {} }
     let engine = Engine(requestTimeout: .milliseconds(20), input: pipe.fileHandleForWriting)
     do {
       _ = try await engine.call("test")
@@ -46,6 +71,7 @@ final class EngineTests: XCTestCase {
 
   @MainActor func testCancellationReleasesPendingCall() async {
     let pipe = Pipe()
+    defer { withExtendedLifetime(pipe) {} }
     let engine = Engine(input: pipe.fileHandleForWriting)
     let request = Task { try await engine.call("test") }
     while engine.pendingRequestCount == 0 { await Task.yield() }
@@ -60,6 +86,7 @@ final class EngineTests: XCTestCase {
 
   @MainActor func testReplyCancelsDeadline() async throws {
     let pipe = Pipe()
+    defer { withExtendedLifetime(pipe) {} }
     let engine = Engine(requestTimeout: .milliseconds(30), input: pipe.fileHandleForWriting)
     let request = Task { try await engine.call("test") }
     while engine.pendingRequestCount == 0 { await Task.yield() }

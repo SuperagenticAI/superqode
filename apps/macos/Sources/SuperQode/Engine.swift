@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Darwin)
+  import Darwin
+#endif
 
 struct EngineError: LocalizedError {
   let message: String
@@ -69,7 +72,16 @@ final class EngineFrames {
   init(requestTimeout: Duration = .seconds(30), input: FileHandle? = nil) {
     self.requestTimeout = requestTimeout
     self.input = input
-    self.acceptingRequests = input != nil
+    self.acceptingRequests = input.map(Self.prepareInput) ?? false
+  }
+
+  private static func prepareInput(_ handle: FileHandle) -> Bool {
+    #if canImport(Darwin)
+      // A closed engine pipe must throw EPIPE, never terminate the Mac app.
+      return fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1) != -1
+    #else
+      return true
+    #endif
   }
 
   private func finish(_ id: Int, error: Error) {
@@ -143,6 +155,9 @@ final class EngineFrames {
     child.standardOutput = outgoing
     child.standardError = errors
     input = incoming.fileHandleForWriting
+    guard input.map(Self.prepareInput) == true else {
+      throw EngineError(message: "Could not prepare the local engine connection. Relaunch SuperQode to reconnect.")
+    }
     let frames = self.frames
     outgoing.fileHandleForReading.readabilityHandler = { [weak self] handle in
       let data = handle.availableData
@@ -215,6 +230,7 @@ final class EngineFrames {
     }
     sequence += 1
     let id = sequence
+    let connectionGeneration = generation
     try Task.checkCancellation()
     return try await withTaskCancellationHandler(
       operation: {
@@ -238,7 +254,14 @@ final class EngineFrames {
                 throw EngineError(message: "Request exceeds the local protocol limit.")
               }
               data.append(10)
-              try input.write(contentsOf: data)
+              do {
+                try input.write(contentsOf: data)
+              } catch {
+                Task { @MainActor in
+                  guard self.generation == connectionGeneration else { return }
+                  self.failAll(EngineError(message: "Local engine connection closed while sending a request. Relaunch SuperQode to reconnect."))
+                }
+              }
             } catch {
               Task { @MainActor in self.finish(id, error: error) }
             }

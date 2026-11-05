@@ -36,6 +36,9 @@ inside its interactive CLI.
 Pro verification remains a preview. These changes do not publish a release or
 replace project CI and QA.
 
+Closed engine pipes report a recoverable connection error instead of allowing
+SIGPIPE to terminate the Mac app during a send or cancellation race.
+
 ## Version 0.3.4
 
 Version 0.3.4 (build 20) bundles Python engine 2.31.3. Connection setup now explains
