@@ -201,10 +201,9 @@ async def test_matching_read_evidence_cannot_hide_failed_execution(
     assert report["tokens_out"] == 2
     assert not list(tmp_path.glob("core-read-check-*"))
 
+
 @pytest.mark.asyncio
-async def test_successful_read_passes_when_reasoning_leaves_empty_content(
-    tmp_path, monkeypatch
-):
+async def test_successful_read_passes_when_reasoning_leaves_empty_content(tmp_path, monkeypatch):
     """Reasoning models may burn the token budget after a successful tool read."""
     from superqode.agent.loop import AgentResponse
     from superqode.local.coding_check import run
@@ -249,4 +248,3 @@ async def test_successful_read_passes_when_reasoning_leaves_empty_content(
     assert report["status"] == "passed"
     assert report["execution_complete"] is True
     assert all(check["ok"] for check in report["checks"])
-
