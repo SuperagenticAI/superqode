@@ -166,4 +166,34 @@ final class WorkspaceRecoveryTests: XCTestCase {
     XCTAssertEqual(
       WorkspaceRecoveryStore(directory: directory).load().composers["draft"]?.text, "final")
   }
+
+  func testSlowStorageCoalescesPendingSnapshotsAndCompletesEveryCaller() throws {
+    let directory = try directory()
+    let writer = DispatchQueue(label: "test.recovery.slow-writer")
+    let release = DispatchSemaphore(value: 0)
+    writer.async { _ = release.wait(timeout: .now() + 5) }
+    defer { release.signal() }
+    let store = WorkspaceRecoveryStore(directory: directory, writer: writer)
+    var obsolete = WorkspaceRecoverySnapshot()
+    // This snapshot would fail the storage limit if unnecessarily encoded.
+    obsolete.composers["draft"] = ComposerRecovery(text: String(repeating: "x", count: WorkspaceRecoveryStore.maximumBytes + 1))
+    let completed = expectation(description: "all coalesced callbacks")
+    completed.expectedFulfillmentCount = 3
+    store.saveInBackground(obsolete) { error in
+      XCTAssertNil(error)
+      completed.fulfill()
+    }
+    for text in ["intermediate", "latest"] {
+      var snapshot = WorkspaceRecoverySnapshot()
+      snapshot.composers["draft"] = ComposerRecovery(text: text)
+      store.saveInBackground(snapshot) { error in
+        XCTAssertNil(error)
+        completed.fulfill()
+      }
+    }
+    release.signal()
+    wait(for: [completed], timeout: 5)
+    XCTAssertEqual(WorkspaceRecoveryStore(directory: directory).load().composers["draft"]?.text, "latest")
+  }
+
 }

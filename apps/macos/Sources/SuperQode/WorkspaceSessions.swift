@@ -103,7 +103,7 @@ import Foundation
       let target = (forward ? forwardHistory : navigationHistory).last
     else { return }
     let previous = currentDestination
-    saveDraft()
+    saveDraft(flush: false)
     if target.projectID == projectID {
       applyDestination(target)
       if forward {
@@ -132,7 +132,7 @@ import Foundation
   }
 
   func restoreDestination(_ destination: WorkspaceDestination) async throws {
-    if !restoringNavigation { saveDraft() }
+    if !restoringNavigation { saveDraft(flush: false) }
     restoringNavigation = true
     defer {
       restoringNavigation = false
@@ -149,7 +149,7 @@ import Foundation
   }
 
   func applyDestination(_ destination: WorkspaceDestination) {
-    if !restoringNavigation { saveDraft() }
+    if !restoringNavigation { saveDraft(flush: false) }
     let previous = restoringNavigation
     restoringNavigation = true
     selectJob(

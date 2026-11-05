@@ -586,7 +586,9 @@ struct CodingComposer: View {
   @State private var requestedFiles = false
   @FocusState private var composerFocused: Bool
   private var composerHeight: CGFloat {
-    let lines = max(1, app.draft.components(separatedBy: "\n").count)
+    // Height stops growing after eight lines. Avoid allocating every line of
+    // a large pasted prompt on each subsequent keystroke.
+    let lines = 1 + draftStore.text.utf8.lazy.filter { $0 == 10 }.prefix(7).count
     return min(180, max(54, CGFloat(lines) * 22 + 16))
   }
   private var route: [String: Any] {
@@ -964,7 +966,7 @@ struct HistoricalConversationTurn: View, Equatable {
       if !response.isEmpty {
         VStack(alignment: .leading, spacing: 10) {
           Text(harness).font(.caption).foregroundStyle(.secondary)
-          ResponseDocument(text: response)
+          ResponseDocument(text: response).equatable()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
           .modifier(ConversationSurface())
       }
@@ -1127,7 +1129,7 @@ struct EventStream: View {
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)
       }
-    }.onDisappear { savePosition(); app.flushRecovery() }
+    }.onDisappear { savePosition(); app.scheduleRecoverySave() }
   }
   private func savePosition() {
     guard initialized else { return }

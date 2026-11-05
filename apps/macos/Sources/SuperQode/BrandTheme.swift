@@ -149,14 +149,14 @@ struct AgentResponseView: View {
   @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     Group {
-      if embedded { ResponseDocument(text: text) }
+      if embedded { ResponseDocument(text: text).equatable() }
       else {
         VStack(alignment: .leading, spacing: 14) {
           HStack(spacing: 7) {
             BrandMark().frame(width: 18, height: 18)
             Text("SuperQode").font(.system(size: 12, weight: .semibold)).foregroundStyle(Brand.wordmarkGradient(scheme))
           }
-          ResponseDocument(text: text)
+          ResponseDocument(text: text).equatable()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
       }
     }.foregroundStyle(colourful && scheme == .dark && contrast != .increased

@@ -1,7 +1,36 @@
+import AppKit
+import SwiftUI
 import XCTest
 @testable import SuperQode
 
 final class RepositoryComposerTests: XCTestCase {
+  @MainActor func testTypingAndCursorCallbacksOnlyInvalidateComposer() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.files = ["src/app.swift"]
+    var workspaceChanges = 0
+    var composerChanges = 0
+    let workspaceSubscription = app.objectWillChange.sink { workspaceChanges += 1 }
+    let composerSubscription = app.draftStore.objectWillChange.sink { composerChanges += 1 }
+    let prompt = PromptEditor(
+      text: Binding(get: { app.draftStore.text }, set: { app.draftStore.text = $0 }),
+      onCursorPrefix: app.noteComposerCursor) {}
+    let coordinator = PromptEditor.Coordinator(prompt)
+    let editor = PromptEditor.Editor()
+    for index in 0..<100 {
+      editor.string = "Draft \(index) @src/ap"
+      editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+      coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: editor))
+      coordinator.textViewDidChangeSelection(Notification(name: NSTextView.didChangeSelectionNotification, object: editor))
+    }
+    XCTAssertEqual(workspaceChanges, 0, "Keystrokes must not redraw the sidebar, transcript and inspectors")
+    XCTAssertGreaterThanOrEqual(composerChanges, 100)
+    XCTAssertEqual(app.mentionQuery, "src/ap")
+    XCTAssertEqual(app.mentionMatches, ["src/app.swift"])
+    XCTAssertEqual(app.draft, "Draft 99 @src/ap")
+    workspaceSubscription.cancel()
+    composerSubscription.cancel()
+  }
+
   func testMentionQueryUsesTheTokenAtTheCursor() {
     XCTAssertEqual(ComposerMentions.query(in: "see @src/app"), "src/app")
     XCTAssertEqual(ComposerMentions.query(in: "mail a@b.com"), nil)

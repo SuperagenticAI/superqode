@@ -767,7 +767,7 @@ struct FilesView: View {
     .onChange(of: app.files) { _, _ in filterFiles() }
     .onChange(of: app.recoveredFilePaths) { _, _ in filterFiles() }
     .onChange(of: app.selectedFile) { _, _ in stash(); load() }
-    .onDisappear { stash(); app.flushRecovery(); loadGeneration += 1 }
+    .onDisappear { stash(); app.scheduleRecoverySave(); loadGeneration += 1 }
     .centeredDialog(isPresented: $comparing, title: "Compare recovered edits") {
       VStack(alignment: .leading, spacing: 12) {
         Text(loadedPath).font(.headline.monospaced())

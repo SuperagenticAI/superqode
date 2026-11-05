@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor final class DraftStore: ObservableObject {
   @Published var text = ""
+  @Published var cursorPrefix = ""
 }
 
 @MainActor final class ReviewCommentStore: ObservableObject {
@@ -280,7 +281,15 @@ private struct DialogAuditHost: View {
   }
   @Published var repositoryPanels: [String] = []
   @Published var repositoryLayoutName = ""
-  @Published var mentionPrefix = ""
+  // Cursor notifications arrive for every keystroke and selection movement.
+  // Keep them local to the composer rather than invalidating the workspace.
+  var mentionPrefix: String {
+    get { draftStore.cursorPrefix }
+    set {
+      guard draftStore.cursorPrefix != newValue else { return }
+      draftStore.cursorPrefix = newValue
+    }
+  }
   @Published var contextWindow = "" { didSet { scheduleDraftSave() } }
   @Published var summarizeContext = false { didSet { scheduleDraftSave() } }
   @Published var contextFiles: [String] = [] { didSet { scheduleDraftSave() } }
@@ -564,7 +573,7 @@ private struct DialogAuditHost: View {
   }
   func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil) async throws {
     guard !openingProject else { throw EngineError(message: "Wait for the current project to finish opening.") }
-    saveDraft()
+    saveDraft(flush: false)
     let previous = currentDestination
     let savedDestinations = recoverySnapshot.projectDestinations
     projectGeneration += 1
@@ -845,7 +854,7 @@ private struct DialogAuditHost: View {
 
   func selectJob(_ id: String, restoreConnection: Bool = true,
     conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil) {
-    saveDraft()
+    saveDraft(flush: false)
     if recordHistory, id != selectedJob || targetSection.map({ $0 != section }) == true {
       recordNavigation(currentDestination)
     }
@@ -2078,7 +2087,10 @@ private struct DialogAuditHost: View {
     let preview = Workspace()
     var workspaceChanges = 0
     let subscription = preview.objectWillChange.sink { workspaceChanges += 1 }
-    for index in 0..<1000 { preview.draftStore.text = "Draft \(index)" }
+    for index in 0..<1000 {
+      preview.draftStore.text = "Draft \(index)"
+      preview.noteComposerCursor(preview.draftStore.text)
+    }
     subscription.cancel()
     guard workspaceChanges == 0 else {
       throw EngineError(message: "Typing still invalidates the entire workspace")
@@ -2102,6 +2114,15 @@ private struct DialogAuditHost: View {
       }
     }
     defer { heartbeat.cancel() }
+    let richText = String(repeating: "## Result\n\nHello **world** with `code`.\n\n```swift\nlet value = 42\n```\n\n", count: 2500)
+    let richStart = ProcessInfo.processInfo.systemUptime
+    guard let prepared = await prepareResponseDocument(richText), prepared.blocks.count == 7500,
+      let coloured = await prepareHighlightedSource(SourceHighlightKey(
+        code: String(repeating: "let value = 42\n", count: 5000), language: "swift", highContrast: false)),
+      coloured.characters.count == 75000 else {
+      throw EngineError(message: "Background response formatting lost content")
+    }
+    let formattingMS = (ProcessInfo.processInfo.systemUptime - richStart) * 1000
     let payload = String(repeating: "p", count: 512000)
     let saved = try await engine.call("settings.get") as? [String: Any] ?? [:]
     let previousDrafts = saved["drafts"] ?? [:]
@@ -2121,10 +2142,11 @@ private struct DialogAuditHost: View {
     heartbeat.cancel()
     await heartbeat.value
     guard worstTick < 0.25 else {
-      throw EngineError(message: "Engine I/O blocked the UI heartbeat for more than 250 ms")
+      throw EngineError(message: "Response formatting or engine I/O blocked the UI heartbeat for more than 250 ms")
     }
     return ["draft_edits": 1000, "workspace_invalidations": workspaceChanges,
             "stream_characters": 614400, "stream_projection_ms": renderMS,
+            "formatted_response_bytes": richText.utf8.count, "response_formatting_ms": formattingMS,
             "engine_roundtrips": 8, "payload_bytes_each_way": 512000,
             "worst_ui_heartbeat_ms": worstTick * 1000]
   }

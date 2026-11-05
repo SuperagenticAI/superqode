@@ -55,11 +55,17 @@ struct WorkspaceRecoverySnapshot: Codable {
 final class WorkspaceRecoveryStore {
   static let maximumBytes = 32 * 1024 * 1024
   private let directory: URL?
-  private let writer = DispatchQueue(label: "ai.superqode.workspace-recovery")
+  private let writer: DispatchQueue
+  private let pendingLock = NSLock()
+  private var pending: (WorkspaceRecoverySnapshot, [@MainActor (Error?) -> Void])?
+  private var writerScheduled = false
   private(set) var loadIssue = ""
   private var blocked = false
 
-  init(directory: URL?) { self.directory = directory }
+  init(directory: URL?, writer: DispatchQueue = DispatchQueue(label: "ai.superqode.workspace-recovery", qos: .utility)) {
+    self.directory = directory
+    self.writer = writer
+  }
 
   static func applicationStore() -> WorkspaceRecoveryStore {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -123,13 +129,34 @@ final class WorkspaceRecoveryStore {
   func saveInBackground(
     _ snapshot: WorkspaceRecoverySnapshot, completion: @escaping @MainActor (Error?) -> Void
   ) {
-    writer.async {
+    // Keep only the newest waiting snapshot when storage is slow. Every caller
+    // receives the result of saving that snapshot or a newer one containing it.
+    pendingLock.lock()
+    let completions = (pending?.1 ?? []) + [completion]
+    pending = (snapshot, completions)
+    if !writerScheduled {
+      writerScheduled = true
+      writer.async { self.drainPendingWrites() }
+    }
+    pendingLock.unlock()
+  }
+
+  private func drainPendingWrites() {
+    while true {
+      pendingLock.lock()
+      guard let (snapshot, completions) = pending else {
+        writerScheduled = false
+        pendingLock.unlock()
+        return
+      }
+      pending = nil
+      pendingLock.unlock()
       let failure: Error?
       do {
         try self.write(snapshot)
         failure = nil
       } catch { failure = error }
-      DispatchQueue.main.async { completion(failure) }
+      DispatchQueue.main.async { completions.forEach { $0(failure) } }
     }
   }
 

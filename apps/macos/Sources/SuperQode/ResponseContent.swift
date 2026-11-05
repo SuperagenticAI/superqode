@@ -22,6 +22,7 @@ func responseBlocks(_ source: String) -> [ResponseBlock] {
     return value.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
   }
   while index < lines.count {
+    if Task.isCancelled { return [] }
     let line = lines[index]
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
@@ -31,6 +32,7 @@ func responseBlocks(_ source: String) -> [ResponseBlock] {
       index += 1
       var code: [String] = []
       while index < lines.count && !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix(marker) {
+        if Task.isCancelled { return [] }
         code.append(lines[index]); index += 1
       }
       blocks.append(.code(language, code.joined(separator: "\n")))
@@ -77,27 +79,31 @@ func responseInline(_ text: String) -> AttributedString {
     ?? AttributedString(text)
 }
 
-struct ResponseDocument: View {
+struct ResponseDocument: View, Equatable {
   let text: String
+  @State private var prepared: PreparedResponseDocument?
+  static func == (lhs: Self, rhs: Self) -> Bool { lhs.text == rhs.text }
   var body: some View {
+    let remainder = prepared?.remainingText(in: text)
+    let blocks = remainder == nil ? [] : prepared?.blocks ?? []
     VStack(alignment: .leading, spacing: 14) {
-      ForEach(Array(responseBlocks(text).enumerated()), id: \.offset) { _, block in
+      ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
         switch block {
         case .paragraph(let value):
-          Text(responseInline(value)).lineSpacing(5).fixedSize(horizontal: false, vertical: true)
+          Text(value).lineSpacing(5).fixedSize(horizontal: false, vertical: true)
         case .heading(let level, let value):
-          Text(responseInline(value)).font(.system(size: level == 1 ? 24 : level == 2 ? 20 : 17, weight: .semibold))
+          Text(value).font(.system(size: level == 1 ? 24 : level == 2 ? 20 : 17, weight: .semibold))
             .padding(.top, 6).accessibilityAddTraits(.isHeader)
         case .code(let language, let code): ResponseCodeBlock(language: language, code: code)
         case .item(let marker, let value):
           HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(marker).foregroundStyle(.secondary).frame(minWidth: 18, alignment: .trailing)
-            Text(responseInline(value)).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
+            Text(value).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
           }
         case .quote(let value):
           HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2).fill(Color.qAccent.opacity(0.6)).frame(width: 3)
-            Text(responseInline(value)).foregroundStyle(.secondary).lineSpacing(4)
+            Text(value).foregroundStyle(.secondary).lineSpacing(4)
           }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 4)
         case .table(let rows):
           ScrollView(.horizontal) {
@@ -105,7 +111,7 @@ struct ResponseDocument: View {
               ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 GridRow {
                   ForEach(Array(row.enumerated()), id: \.offset) { _, value in
-                    Text(responseInline(value)).fontWeight(index == 0 ? .semibold : .regular)
+                    Text(value).fontWeight(index == 0 ? .semibold : .regular)
                   }
                 }
                 if index == 0 { Divider().gridCellUnsizedAxes(.horizontal) }
@@ -115,6 +121,14 @@ struct ResponseDocument: View {
         case .rule: Divider().padding(.vertical, 4)
         }
       }
+      if remainder != "" {
+        // New tokens stay visible immediately while rich formatting catches up.
+        Text(remainder ?? text).lineSpacing(5).fixedSize(horizontal: false, vertical: true)
+      }
+    }.task(id: text) {
+      let value = await prepareResponseDocument(text)
+      guard !Task.isCancelled else { return }
+      prepared = value
     }.font(.system(size: 15)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
   }
 }
@@ -161,6 +175,11 @@ struct ResponseCodeBlock: View {
   let code: String
   @Environment(\.colorSchemeContrast) private var contrast
   @State private var copied = false
+  @State private var highlighted: AttributedString?
+  @State private var highlightedKey: SourceHighlightKey?
+  private var highlightKey: SourceHighlightKey {
+    SourceHighlightKey(code: code, language: language, highContrast: contrast == .increased)
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
@@ -175,7 +194,7 @@ struct ResponseCodeBlock: View {
       }.padding(.horizontal, 14).padding(.vertical, 9)
       Divider()
       ScrollView(.horizontal) {
-        Text(highlightedSource(code, language: language, dark: true, highContrast: contrast == .increased))
+        Text(highlightedKey == highlightKey ? highlighted ?? AttributedString(code) : AttributedString(code))
           .font(.system(size: 13, design: .monospaced)).lineSpacing(3).textSelection(.enabled)
           .fixedSize(horizontal: true, vertical: false).padding(14)
       }
@@ -183,6 +202,13 @@ struct ResponseCodeBlock: View {
       .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.16), lineWidth: 1))
       .environment(\.colorScheme, .dark)
       .onChange(of: code) { _, _ in copied = false }
+      .task(id: highlightKey) {
+        let key = highlightKey
+        let value = await prepareHighlightedSource(key)
+        guard !Task.isCancelled else { return }
+        highlighted = value
+        highlightedKey = key
+      }
   }
 }
 
