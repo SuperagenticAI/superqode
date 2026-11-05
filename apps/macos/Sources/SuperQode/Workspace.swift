@@ -2671,7 +2671,10 @@ private struct DialogAuditHost: View {
     if page == "local-storage-hub" { panel.setContentSize(NSSize(width: 780, height: 620)) }
     if page == "local-harness-compatibility" { panel.setContentSize(NSSize(width: 920, height: 680)) }
     panel.orderFront(nil)
-    defer { panel.close() }
+    // Closing a retained NSWindow does not detach its hosting view. Snapshot
+    // previews must release their view graphs so invisible connection pages
+    // do not keep observing workspace changes during later navigation checks.
+    defer { panel.orderOut(nil); panel.contentView = nil; panel.close() }
     try await Task.sleep(for: .milliseconds(450))
     view.layoutSubtreeIfNeeded()
     guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
@@ -2706,7 +2709,7 @@ private struct DialogAuditHost: View {
       panel.contentView = host
       panel.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
       panel.orderFront(nil)
-      defer { panel.close() }
+      defer { panel.orderOut(nil); panel.contentView = nil; panel.close() }
       try await Task.sleep(for: .milliseconds(250))
       host.layoutSubtreeIfNeeded()
       guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { throw EngineError(message: "Connection inspector could not render") }
