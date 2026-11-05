@@ -533,7 +533,12 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                     readiness["warnings"] = [
                         w
                         for w in readiness.get("warnings", [])
-                        if not w.startswith("Loaded context window was not detected;")
+                        if not w.startswith(
+                            (
+                                "Loaded context window was not detected;",
+                                "Context window was not detected;",
+                            )
+                        )
                     ]
                     readiness["checks"] = [c for c in readiness["checks"] if c["name"] != "context"]
                     readiness["checks"].append(

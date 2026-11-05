@@ -247,4 +247,6 @@ async def test_successful_read_passes_when_reasoning_leaves_empty_content(tmp_pa
     )
     assert report["status"] == "passed"
     assert report["execution_complete"] is True
+    assert report["final_reply_empty"] is True
+    assert report["final_reply_matches_marker"] is False
     assert all(check["ok"] for check in report["checks"])

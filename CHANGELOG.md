@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.4] - 2026-11-05
+
+### Added
+
+- Independent input-fixture copies and fresh harness state for evaluation tasks
+  and optimization candidates, with isolation evidence and repository graders.
+- Reviewed repository verifier commands, file assertions and protected test paths;
+  native suite contents are pinned at submission before execution.
+- Local Quick Start model-size suggestions, context and tool-call probes, expanded
+  local model search and regional provider setup guidance.
+
+### Fixed
+
+- macOS navigation preserves composer and file editors, applies pane changes
+  together and keeps covered review/transcript panes mounted when returning from Files.
+- Response formatting and review preparation run away from the UI thread;
+  unchanged state avoids redraws and recovery writes coalesce in the background.
+- Closed engine pipes report a recoverable error instead of terminating the app.
+- Harness badges consistently identify routes; new conversations remain explicitly
+  disconnected until a connection is chosen.
+
 ## [2.31.3] - 2026-11-04
 
 ### Added

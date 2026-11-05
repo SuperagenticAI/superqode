@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.4
+# SuperQode for macOS public beta 0.3.5
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -16,7 +16,17 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
-## Unreleased
+## Version 0.3.5
+
+Version 0.3.5 (build 21) bundles Python engine 2.31.4. Workspace navigation
+keeps the composer and file editor mounted, applies pane changes together and
+keeps the transcript and review mounted beneath Files while suspending transcript
+rendering on other feature pages. Response formatting and review
+preparation run away from the UI thread. Recovery writes are coalesced in the
+background, and unchanged model/file/Git state avoids unnecessary redraws.
+Navigation checks cover first-open and repeated navigation through workspace
+panels and the main feature pages. Local readiness recognizes reasoning streams,
+and read-tool evidence distinguishes an empty final reply from a marker reply.
 
 Thread lists, tabs and the composer use consistent harness colour accents,
 including monochrome agent marks such as OpenCode. New conversations stay
@@ -39,8 +49,7 @@ GGUF download. Provider setup adds Qwen regional API choices, Chinese-provider
 shortcuts, key/endpoint guidance and official docs. Qwen Code setup uses `/auth`
 inside its interactive CLI.
 
-Pro verification remains a preview. These changes do not publish a release or
-replace project CI and QA.
+Pro verification remains a preview. These changes do not replace project CI and QA.
 
 Closed engine pipes report a recoverable connection error instead of allowing
 SIGPIPE to terminate the Mac app during a send or cancellation race.

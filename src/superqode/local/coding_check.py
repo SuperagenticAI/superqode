@@ -105,8 +105,10 @@ async def run(provider, model, endpoint, directory, emit):
             "model": model,
             "checks": [
                 {"name": "read executed successfully", "ok": read},
-                {"name": "returned generated marker", "ok": marker_proven},
+                {"name": "generated marker observed in tool result or reply", "ok": marker_proven},
             ],
+            "final_reply_matches_marker": answer,
+            "final_reply_empty": not result.content.strip(),
             "iterations": result.iterations,
             "tool_calls": result.tool_calls_made,
             "tokens_in": result.tokens_in,
