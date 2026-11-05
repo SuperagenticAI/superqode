@@ -738,10 +738,21 @@ struct FilesView: View {
         }.frame(minWidth: 220, idealWidth: 300, maxWidth: 400)
         VStack(alignment: .leading, spacing: 12) {
           fileToolbar
-          SourceEditor(text: Binding(get: { content }, set: { content = $0; stash() }),
-            path: loadedPath, editable: editing, documentID: loadedProject + "\n" + loadedPath)
-            .disabled(loading || saving).clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+          // Defer the native text view until a file is chosen so first Files
+          // navigation mounts the list without constructing SourceEditor.
+          if selected.isEmpty && !editing {
+            Text("Select a file to read or edit.")
+              .font(.callout).foregroundStyle(.secondary)
+              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+              .padding(12)
+              .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 8))
+              .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+          } else {
+            SourceEditor(text: Binding(get: { content }, set: { content = $0; stash() }),
+              path: loadedPath, editable: editing, documentID: loadedProject + "\n" + loadedPath)
+              .disabled(loading || saving).clipShape(RoundedRectangle(cornerRadius: 8))
+              .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+          }
           if app.anyActive {
             Text("Saving is paused while an agent or experiment is active in a project.").font(
               .caption
