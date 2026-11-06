@@ -12,10 +12,12 @@ import sys
 
 from superqode.providers.acp_registry import registry_short_name
 
+from agent_brand_colours import SOURCES as BRAND_SOURCES, coloured
+
 root = Path(__file__).resolve().parents[1]
 source = Path(sys.argv[1])
 registry = json.loads((source / "registry.json").read_text())
-assets, origins = {}, []
+assets, origins, brand = {}, [], []
 for agent in registry["agents"]:
     identity = agent["id"]
     if not re.fullmatch(r"[a-zA-Z0-9._-]+", identity):
@@ -32,7 +34,13 @@ for agent in registry["agents"]:
     destination = root / "resources/Assets.xcassets" / (asset + ".imageset")
     destination.mkdir(exist_ok=True)
     # Registry glyphs use CSS currentColor; asset templates supply the native tint.
-    (destination / "icon.svg").write_text(content.replace("currentColor", "#000000"))
+    glyph = content.replace("currentColor", "#000000")
+    recolour = coloured(identity)
+    if recolour:
+        # Official coloured marks keep their brand colours; the rest stay templates.
+        glyph = recolour(glyph)
+        brand.append(asset)
+    (destination / "icon.svg").write_text(glyph)
     (destination / "Contents.json").write_text(
         json.dumps(
             {
@@ -40,7 +48,7 @@ for agent in registry["agents"]:
                 "info": {"author": "xcode", "version": 1},
                 "properties": {
                     "preserves-vector-representation": True,
-                    "template-rendering-intent": "template",
+                    "template-rendering-intent": "original" if recolour else "template",
                 },
             },
             indent=2,
@@ -62,6 +70,9 @@ lines = [
     "  static let assets: [String: String] = [",
 ]
 lines += [f"    {json.dumps(key)}: {json.dumps(value)}," for key, value in sorted(assets.items())]
+lines += ["  ]", "  /// Official marks that keep their brand colours instead of a template tint.",
+  "  static let brandColoured: Set<String> = ["]
+lines += [f"    {json.dumps(value)}," for value in sorted(brand)]
 lines += ["  ]", "}", ""]
 (root / "Sources/SuperQode/BundledAgentIcons.swift").write_text("\n".join(lines))
 (root / "resources/agent-icons-provenance.json").write_text(
@@ -70,6 +81,10 @@ lines += ["  ]", "}", ""]
             "source": "https://github.com/agentclientprotocol/registry",
             "registry_license": "Apache-2.0",
             "icons": origins,
+            "brand_colours": {
+                identity: {"colours": colours, "source": source}
+                for identity, (colours, source) in sorted(BRAND_SOURCES.items())
+            },
         },
         indent=2,
     )

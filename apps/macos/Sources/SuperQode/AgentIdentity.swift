@@ -6,6 +6,11 @@ struct HarnessIdentity: Identifiable, Equatable {
   let name: String
   let iconKey: String
   var assetName: String? { iconKey == "superqode" ? "BrandMark" : BundledAgentIcons.assets[iconKey] }
+  /// Coloured official marks render as drawn; monochrome marks follow the appearance.
+  var keepsBrandColours: Bool {
+    guard let assetName else { return false }
+    return assetName == "BrandMark" || BundledAgentIcons.brandColoured.contains(assetName)
+  }
 
   init(_ row: [String: Any]) {
     let referenceID = string(row, "id", string(row, "harness", "core"))
@@ -45,9 +50,9 @@ struct HarnessIcon: View {
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
-        // Only genuinely coloured marks keep their colours; bundled SVGs stay neutral.
-        Image(nsImage: image).renderingMode(identity.iconKey == "superqode" ? .original : .template)
-          .resizable().scaledToFit()
+        // Only the glyph carries colour, and only when the official mark is coloured.
+        Image(nsImage: image).renderingMode(identity.keepsBrandColours ? .original : .template)
+          .resizable().scaledToFit().foregroundStyle(.primary)
       } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
     }.padding(size * 0.18).frame(width: size, height: size)
       .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))

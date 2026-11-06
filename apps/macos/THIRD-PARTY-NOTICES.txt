@@ -7,6 +7,8 @@ The upstream license is preserved as ACP-REGISTRY-LICENSE.txt and per-icon
 source URLs/hashes are in agent-icons-provenance.json. Glyphs identify third-party
 agents; their names and marks belong to their respective owners. Registry
 currentColor glyphs are rendered as native templates for light/dark appearances.
+Marks whose official logo is coloured keep the registry paths with their owner's
+published brand colours; the colours and sources are listed under brand_colours.
 
 The bundled Python interpreter's license is in
 runtime/python/lib/python3.13/LICENSE.txt. Python dependency metadata and supplied

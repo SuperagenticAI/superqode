@@ -12,6 +12,16 @@ final class AgentIdentityTests: XCTestCase {
     XCTAssertTrue(HarnessIdentity.used(in: ["harness": "disconnected"]).isEmpty)
   }
 
+  func testOnlyOfficiallyColouredMarksKeepBrandColours() {
+    for id in ["acp:claude", "acp:gemini", "acp:qwen-code", "acp:mistral-vibe", "acp:junie", "acp:cortex-code", "core"] {
+      XCTAssertTrue(HarnessIdentity(["id": id]).keepsBrandColours, id)
+    }
+    for id in ["acp:codex", "acp:grok-build", "acp:cursor", "acp:github-copilot-cli", "acp:opencode", "acp:kimi", "acp:custom-research"] {
+      XCTAssertFalse(HarnessIdentity(["id": id]).keepsBrandColours, id)
+    }
+    XCTAssertTrue(BundledAgentIcons.brandColoured.isSubset(of: Set(BundledAgentIcons.assets.values)))
+  }
+
   func testClientDirectoryHasUniquePublicWebsiteDestinations() {
     XCTAssertFalse(ACPClientDirectory.projects.isEmpty)
     XCTAssertEqual(Set(ACPClientDirectory.projects.map(\.id)).count, ACPClientDirectory.projects.count)
