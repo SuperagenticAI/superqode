@@ -20,6 +20,20 @@ struct JobScreen: View {
   @State private var confirmStop = false
   private var job: RemoteRecord { RemoteRecord(raw: detail) }
   private var pending: [String: JSONValue] { detail.object("pending_approval") }
+  private var failureMessage: String {
+    guard job.text("status") == "failed" else { return "" }
+    let result = detail.object("result")
+    if !result.text("error").isEmpty { return String(result.text("error").prefix(4000)) }
+    for event in events.reversed() {
+      let data = event.raw.object("data")
+      if event.text("type") == "error", !data.text("message").isEmpty { return String(data.text("message").prefix(4000)) }
+      if event.text("type") == "harness_event", ["error", "failure", "failed"].contains(data.text("event")) {
+        let message = data.object("payload").text("message", data.object("payload").text("text"))
+        if !message.isEmpty { return String(message.prefix(4000)) }
+      }
+    }
+    return "Open run activity for the recorded details, or inspect this run on your Mac."
+  }
   private var assistantText: String {
     events.compactMap { event -> String? in
       let data = event.raw.object("data")
@@ -36,6 +50,7 @@ struct JobScreen: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 18) {
         ConnectionStatus()
+        if acting { ProgressView("Waiting for your Mac…") }
         if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning) }
         CompanionCard {
           HStack {
@@ -47,6 +62,13 @@ struct JobScreen: View {
           let request = detail.object("request")
           Text(request.text("model", "Agent-managed model")).font(.caption).foregroundStyle(.secondary)
           if !detail.object("remote_origin").isEmpty { Label("Requested from \(detail.object("remote_origin").text("name"))", systemImage: "iphone").font(.caption) }
+        }
+        if !failureMessage.isEmpty {
+          CompanionCard {
+            Label("The agent could not complete this run", systemImage: "exclamationmark.triangle").font(.headline).foregroundStyle(CompanionTheme.warning)
+            Text(failureMessage).font(.subheadline).textSelection(.enabled)
+            Text("Connection and provider setup is managed on your Mac. This run has not been restarted automatically.").font(.caption).foregroundStyle(.secondary)
+          }
         }
         if !historyCursor.isEmpty { Button("Load earlier turns") { Task { await loadHistory(before: historyCursor) } } }
         ForEach(earlier) { turn in
@@ -80,12 +102,17 @@ struct JobScreen: View {
         if job.active, store.permissions.contains("steer"), detail.object("control_capabilities").flag("steer") {
           CompanionCard {
             Text("Guide the active run").font(.headline)
-            TextField("Add direction without restarting", text: $steering, axis: .vertical).lineLimit(2...5)
-            Button("Send guidance") { Task {
-              if await act("jobs.steer", ["id": .string(identity), "text": .string(steering)], key: steerKey) {
-                steering = ""; steerKey = UUID().uuidString
+            TextField("Add direction without restarting", text: $steering, axis: .vertical).lineLimit(2...5).disabled(acting)
+              .onChange(of: steering) { _, _ in if !acting { steerKey = UUID().uuidString } }
+            Button("Send guidance") {
+              let text = steering
+              let key = steerKey
+              Task {
+                if await act("jobs.steer", ["id": .string(identity), "text": .string(text)], key: key) {
+                  steering = ""; steerKey = UUID().uuidString
+                }
               }
-            } }.disabled(acting || !store.canMutate || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }.disabled(acting || !store.canMutate || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           }
         }
         if !events.isEmpty {

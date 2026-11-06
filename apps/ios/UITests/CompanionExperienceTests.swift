@@ -1,6 +1,14 @@
 import XCTest
 
 final class CompanionExperienceTests: XCTestCase {
+  func testFailedRunExplainsTheRepairWithoutExpandingActivity() {
+    let app = XCUIApplication()
+    app.launchArguments = ["--design-preview", "failed", "-companionAppearance", "dark"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["The agent could not complete this run"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["The local model server is unavailable. Start Ollama on your Mac, then check this connection."].exists)
+    XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "\"error\"")).count, 0)
+  }
   func testNewConversationStartsBlankAndCannotSubmitSampleData() {
     let app = XCUIApplication()
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]

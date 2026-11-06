@@ -19,14 +19,14 @@ team=""
 bundle="dev.superqode.companion"
 root=$(cd "$(dirname "$0")/.." && pwd)
 output="$root/build/SuperQode.xcarchive"
-provisioning=()
+allow_provisioning=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --team) team="${2:?Provide a Team ID}"; shift 2 ;;
     --bundle-id) bundle="${2:?Provide a bundle identifier}"; shift 2 ;;
     --output) output="${2:?Provide an archive path}"; shift 2 ;;
-    --allow-provisioning) provisioning=(-allowProvisioningUpdates); shift ;;
+    --allow-provisioning) allow_provisioning=true; shift ;;
     *) usage; exit 2 ;;
   esac
 done
@@ -47,9 +47,13 @@ if [[ -e "$output" ]]; then
   exit 2
 fi
 mkdir -p "$(dirname "$output")"
-xcodebuild archive -project "$root/SuperQodeCompanion.xcodeproj" \
+archive_args=(archive -project "$root/SuperQodeCompanion.xcodeproj" \
   -scheme SuperQodeCompanion -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$output" DEVELOPMENT_TEAM="$team" PRODUCT_BUNDLE_IDENTIFIER="$bundle" \
-  CODE_SIGN_STYLE=Automatic "${provisioning[@]}"
+  CODE_SIGN_STYLE=Automatic)
+if [[ "$allow_provisioning" == true ]]; then
+  archive_args+=(-allowProvisioningUpdates)
+fi
+xcodebuild "${archive_args[@]}"
 echo "Archive created: $output"
 echo "Open it in Xcode Organizer to validate and choose distribution when you are ready."

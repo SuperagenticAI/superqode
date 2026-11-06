@@ -6,6 +6,8 @@ enum ExploreWorkspace {
   static let profile = "sample-local-qwen"
   static let conversation = "sample-conversation"
   static let evaluation = "sample-evaluation"
+  static let failedRun = "sample-failed"
+  static let failure = "The local model server is unavailable. Start Ollama on your Mac, then check this connection."
   static let address = "https://studio-mac.sample-tailnet.ts.net:47832"
   static let prompt = "Make the request queue resilient to reconnects and show me the tests."
   static let answer = """
@@ -46,6 +48,8 @@ enum ExploreWorkspace {
       "title": .string("Routing decisions · held-out evaluation"), "status": .string("completed"), "harness": .string("core"), "updated": .number(1_798_999_000)]),
     RemoteRecord(raw: ["id": .string("sample-approval"), "project": .string(project), "kind": .string("task"),
       "title": .string("Run the final regression checks"), "conversation_title": .string("One last check before the review"), "status": .string("needs_approval"), "harness": .string("core"), "updated": .number(1_799_001_000)]),
+    RemoteRecord(raw: ["id": .string(failedRun), "project": .string(project), "kind": .string("task"),
+      "title": .string("Check the local connection"), "status": .string("failed"), "harness": .string("core"), "updated": .number(1_798_998_000)]),
   ]
   static let permissions: [String] = ["read", "tasks", "evaluate", "approve", "cancel", "steer"]
   static var catalog: JSONValue {
@@ -79,6 +83,10 @@ struct ExploreTransport: CompanionTransport {
       record["request"] = .object(["prompt": .string(ExploreWorkspace.prompt), "model": .string("qwen3-coder:30b"), "harness": .string("core")])
       let events: [JSONValue] = params.number("after") > 0 ? [] : [.object(["sequence": .number(1), "type": .string("answer"), "data": .object(["text": .string(ExploreWorkspace.answer)])])]
       record["events"] = .array(events)
+      if id == ExploreWorkspace.failedRun {
+        record["result"] = .object(["error": .string(ExploreWorkspace.failure)])
+        record["events"] = .array(params.number("after") > 0 ? [] : [.object(["sequence": .number(1), "type": .string("error"), "data": .object(["message": .string(ExploreWorkspace.failure)])])])
+      }
       record["next_sequence"] = .number(1)
       record["has_more_events"] = .bool(false)
       if id == ExploreWorkspace.evaluation { record["result"] = ExploreWorkspace.result }
@@ -104,7 +112,7 @@ enum CompanionPreview {
     let args = ProcessInfo.processInfo.arguments
     if let index = args.firstIndex(of: "--design-preview"), args.count > index + 1 {
       switch args[index + 1] {
-      case "activity", "conversation", "approval", "evaluation": store.selectedTab = 1
+      case "activity", "conversation", "approval", "evaluation", "failed": store.selectedTab = 1
       case "lab": store.selectedTab = 2
       case "settings": store.selectedTab = 3
       default: break
@@ -120,6 +128,7 @@ enum CompanionPreview {
     case "conversation": return OpenedRun(id: ExploreWorkspace.conversation)
     case "approval": return OpenedRun(id: "sample-approval")
     case "evaluation": return OpenedRun(id: ExploreWorkspace.evaluation)
+    case "failed": return OpenedRun(id: ExploreWorkspace.failedRun)
     default: return nil
     }
     #else

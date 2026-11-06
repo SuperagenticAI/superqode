@@ -53,14 +53,14 @@ struct PairMacScreen: View {
         if !store.message.isEmpty {
           Label(store.message, systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary)
         }
+        Button { store.enterExploreMode() } label: { Label("Explore the app with sample data", systemImage: "eye") }.font(.subheadline)
+          .disabled(store.connecting)
         VStack(alignment: .leading, spacing: 14) {
           setupStep("1", "Your private connection", "Install Tailscale on your Mac and iPhone and sign in to your own private network.")
           setupStep("2", "You approve access", "Pair once and approve the phone on your Mac. Share only the workspaces and connections you choose.")
           setupStep("3", "Pick up from anywhere", "Leave the Mac awake and online. Open the companion from mobile data or another Wi-Fi network.")
         }
         NavigationLink { CompanionSetupGuide() } label: { Label("Setup guide and account help", systemImage: "questionmark.circle") }.font(.subheadline)
-        Button { store.enterExploreMode() } label: { Label("Explore the app with sample data", systemImage: "eye") }.font(.subheadline)
-          .disabled(store.connecting)
         Label("No hosted SuperQode backend", systemImage: "checkmark.shield")
           .font(.caption).foregroundStyle(CompanionTheme.accent)
       }.padding(24).frame(maxWidth: 620).frame(maxWidth: .infinity)
