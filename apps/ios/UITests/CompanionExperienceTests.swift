@@ -12,8 +12,9 @@ final class CompanionExperienceTests: XCTestCase {
     let files = app.buttons["project.files"]
     XCTAssertTrue(files.waitForExistence(timeout: 5))
     files.tap()
-    XCTAssertTrue(app.staticTexts["README.md"].waitForExistence(timeout: 5))
-    app.staticTexts["README.md"].tap()
+    let readme = app.buttons["project.file.README.md"]
+    XCTAssertTrue(readme.waitForExistence(timeout: 5))
+    readme.tap()
     app.buttons["Edit"].tap()
     XCTAssertTrue(app.textViews["file.editor"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["Review save"].isEnabled)

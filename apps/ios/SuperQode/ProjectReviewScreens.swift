@@ -15,7 +15,7 @@ struct FilesScreen: View {
       ForEach(files.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }, id: \.self) { path in
         NavigationLink { FilePreviewScreen(project: project, path: path) } label: {
           Label(path, systemImage: "doc.text").font(.subheadline)
-        }.listRowBackground(CompanionTheme.panel)
+        }.accessibilityIdentifier("project.file." + path).listRowBackground(CompanionTheme.panel)
       }
       if !loading && files.isEmpty && issue.isEmpty { ContentUnavailableView("No files to display", systemImage: "doc.text.magnifyingglass") }
     }.scrollContentBackground(.hidden).background(CompanionTheme.background)
