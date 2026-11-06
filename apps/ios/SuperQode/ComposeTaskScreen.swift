@@ -15,11 +15,14 @@ struct ComposeTaskScreen: View {
   @State private var discard = false
   @State private var showFiles = false
   @State private var showContext = false
+  @State private var showingAttachments = false
   @FocusState private var editing: Bool
-  init(project: String, parent: String? = nil, restored: LocalDraft? = nil) {
+  init(project: String, parent: String? = nil, restored: LocalDraft? = nil, enqueue: Bool = false) {
     self.project = project
     self.parent = parent
-    _draft = State(initialValue: restored ?? LocalDraft(project: project, parent: parent))
+    var initial = restored ?? LocalDraft(project: project, parent: parent)
+    if restored == nil { initial.enqueue = enqueue }
+    _draft = State(initialValue: initial)
   }
   private var profiles: [RemoteRecord] { store.profiles.filter { $0.text("project") == project } }
   private var profile: RemoteRecord? { profiles.first { $0.id == draft.profile } }
@@ -37,7 +40,6 @@ struct ComposeTaskScreen: View {
         if !store.reachable { Button("Reconnect to Mac") { Task { await store.refresh() } } }
         if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
         connectionCard
-        contextCard
         CompanionCard {
           HStack {
             Text("What are we building?").font(.headline)
@@ -53,6 +55,10 @@ struct ComposeTaskScreen: View {
             if !draft.prompt.isEmpty { Button("Copy") { PrivateClipboard.copy(draft.prompt) }.font(.caption) }
           }
         }
+        DisclosureGroup("Reference files and images · \((draft.contextFiles ?? []).count + (draft.images ?? []).count)", isExpanded: $showingAttachments) {
+          contextCard
+          MobileImageAttachments(draft: $draft, frozen: frozen || submitting)
+        }.font(.subheadline)
         if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
         if submitted {
           Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
@@ -60,15 +66,15 @@ struct ComposeTaskScreen: View {
           pendingRequestCard
         } else {
           Button { editing = false; Task { await submit() } } label: {
-            HStack { if submitting { ProgressView().tint(.white) }; Label("Send to \(store.macName)", systemImage: "arrow.up") }
+            HStack { if submitting { ProgressView().tint(.white) }; Label(draft.enqueue == true ? "Add to queue" : "Send to \(store.macName)", systemImage: "arrow.up") }
           }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
-            .disabled(submitting || !store.canMutate || !store.permissions.contains("tasks") || wrongMac || !supportedMode || (draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
+            .disabled(submitting || !store.canMutate || !store.permissions.contains("tasks") || (draft.enqueue == true && !store.permissions.contains("queue")) || wrongMac || !supportedMode || (draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
           if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
-          Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. You can close the phone app and return to the same job later.")
+          Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. Queued tasks run when their queue is started. You can return to the same recorded work later.")
             .font(.caption).foregroundStyle(.secondary)
         }
       }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
-    }.background(CompanionTheme.background).navigationTitle(parent == nil ? "New conversation" : "Continue conversation")
+    }.background(CompanionTheme.background).navigationTitle(draft.enqueue == true ? "Queue a task" : parent == nil ? "New conversation" : "Continue conversation")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close") }
@@ -166,11 +172,13 @@ struct ComposeTaskScreen: View {
   private func open(_ identity: String) async {
     submitted = true
     try? await store.drafts.remove(draft.id)
+    if draft.attempt?.method == "queue.add" { dismiss(); return }
     startedRun = OpenedRun(id: identity)
     await store.refreshActivity()
   }
   private func submit() async {
-    guard let api = store.api, store.canMutate, store.permissions.contains("tasks"), !wrongMac, !submitting, !draft.isExperiment else { return }
+    guard let api = store.api, store.canMutate, store.permissions.contains("tasks"), !wrongMac, !submitting, !draft.isExperiment, draft.fileEdit == nil else { return }
+    guard draft.enqueue != true || store.permissions.contains("queue") else { return }
     guard draft.attempt != nil || supportedMode else { return }
     submitting = true; issue = ""
     defer { submitting = false }
@@ -178,12 +186,24 @@ struct ComposeTaskScreen: View {
       var params: [String: JSONValue] = ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode)]
       if let parent = draft.parent { params["parent_id"] = .string(parent) }
       if let paths = draft.contextFiles, !paths.isEmpty { params["context_files"] = .array(paths.map(JSONValue.string)) }
-      draft.attempt = SubmissionAttempt(key: UUID().uuidString, params: params)
+      do {
+        for index in (draft.images ?? []).indices {
+          guard let image = draft.images?[index], image.macID == nil else { continue }
+          let bytes = try await store.drafts.imageData(draft: draft.id, image: image)
+          let result = try await api.rpc("images.upload", ["project": .string(project), "name": .string(image.name), "data": .string(bytes.base64EncodedString())], key: image.id).object
+          guard !result.text("id").isEmpty else { throw CompanionError("The Mac did not confirm the image upload.") }
+          draft.images?[index].macID = result.text("id")
+          try await store.drafts.save(draft)
+        }
+      } catch { issue = error.localizedDescription; return }
+      let images = (draft.images ?? []).compactMap(\.macID)
+      if !images.isEmpty { params["image_ids"] = .array(images.map(JSONValue.string)) }
+      draft.attempt = SubmissionAttempt(key: UUID().uuidString, params: params, method: draft.enqueue == true ? "queue.add" : "tasks.start")
     }
     guard let attempt = draft.attempt else { return }
     do {
       try await store.drafts.save(draft)
-      let result = try await api.rpc("tasks.start", attempt.params, key: attempt.key).object
+      let result = try await api.rpc(attempt.method ?? "tasks.start", attempt.params, key: attempt.key).object
       guard !result.text("id").isEmpty else { throw CompanionError("The Mac returned no run ID. Check the saved request status before retrying.") }
       await open(result.text("id"))
     } catch { issue = error.localizedDescription }

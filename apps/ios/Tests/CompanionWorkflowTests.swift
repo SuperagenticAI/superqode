@@ -46,6 +46,41 @@ private actor WorkflowTransport: CompanionTransport {
 }
 
 final class CompanionWorkflowTests: XCTestCase {
+  func testProtectedImageDraftSurvivesRelaunchAndIsRemovedWithDraft() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let repository = DraftRepository(directory: directory)
+    var draft = LocalDraft(project: "project")
+    let bytes = Data([1, 2, 3, 4])
+    let image = try await repository.stageImage(draft: draft.id, name: "fixture.png", data: bytes)
+    draft.images = [image]
+    try await repository.save(draft)
+    let restored = try await DraftRepository(directory: directory).list()
+    XCTAssertEqual(restored.first?.images, [image])
+    XCTAssertEqual(restored.first?.profile, "")
+    let protected = directory.appendingPathComponent("draft-images").appendingPathComponent(draft.id).appendingPathComponent(image.id)
+    XCTAssertEqual(try protected.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+    let attrs = try FileManager.default.attributesOfItem(atPath: protected.path)
+    XCTAssertEqual(attrs[.protectionKey] as? FileProtectionType, .complete)
+    let original = try await repository.imageData(draft: draft.id, image: image)
+    XCTAssertEqual(original, bytes)
+    try await repository.remove(draft.id)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: protected.path))
+  }
+  func testEmptyNewFileAndQueuedTaskDraftsKeepTheirOriginalKind() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let repository = DraftRepository(directory: directory)
+    var file = LocalDraft(project: "project")
+    file.fileEdit = SavedFileEdit(path: "empty.py", digest: "", text: "", create: true)
+    try await repository.save(file)
+    var queued = LocalDraft(project: "project")
+    queued.prompt = "Review this later"; queued.enqueue = true
+    try await repository.save(queued)
+    let restored = try await repository.list()
+    XCTAssertEqual(restored.first { $0.id == file.id }?.fileEdit, file.fileEdit)
+    XCTAssertEqual(restored.first { $0.id == queued.id }?.enqueue, true)
+  }
   func testFeatureInventoryLoadsAndDoesNotClaimMacOnlyFeaturesAreMobile() {
     XCTAssertEqual(CompanionFeature.all.count, 34)
     let terminal = CompanionFeature.all.first { $0.id == "terminal" }

@@ -128,13 +128,14 @@ struct DraftsScreen: View {
       if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       ForEach(drafts) { draft in
         NavigationLink {
-          if draft.isExperiment { EvaluationScreen(project: draft.project, restored: draft) }
+          if draft.fileEdit != nil { FileEditorScreen(project: draft.project, path: draft.fileEdit?.path ?? "", restored: draft) }
+          else if draft.isExperiment { EvaluationScreen(project: draft.project, restored: draft) }
           else { ComposeTaskScreen(project: draft.project, parent: draft.parent, restored: draft) }
         } label: {
           VStack(alignment: .leading, spacing: 8) {
             Label(draft.attempt == nil ? "Unsent draft" : "Saved request", systemImage: draft.attempt == nil ? "square.and.pencil" : "arrow.triangle.2.circlepath")
               .font(.caption).foregroundStyle(draft.attempt == nil ? CompanionTheme.accent : .orange)
-            Text(draft.prompt).lineLimit(3)
+            Text(draft.fileEdit?.path ?? (draft.prompt.isEmpty ? "Image draft" : draft.prompt)).lineLimit(3)
             Text(draft.updated, style: .relative).font(.caption).foregroundStyle(.secondary)
           }.padding(.vertical, 6)
         }.swipeActions { Button("Delete", role: .destructive) { deleting = draft } }

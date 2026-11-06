@@ -51,12 +51,12 @@ enum ExploreWorkspace {
     RemoteRecord(raw: ["id": .string(failedRun), "project": .string(project), "kind": .string("task"),
       "title": .string("Check the local connection"), "status": .string("failed"), "harness": .string("core"), "updated": .number(1_798_998_000)]),
   ]
-  static let permissions: [String] = ["read", "tasks", "evaluate", "approve", "cancel", "steer"]
+  static let permissions: [String] = ["read", "tasks", "evaluate", "approve", "cancel", "steer", "edit", "queue", "restore"]
   static var catalog: JSONValue {
     .object(["protocol": .number(1), "device": .object(["name": .string("Sample iPhone")]),
       "permissions": .array(permissions.map(JSONValue.string)), "profiles": .array([.object(profileRecord.raw)]),
       "suites": .array([.object(["id": .string("decision-routing"), "name": .string("Labelled route decisions"), "description": .string("Sample evaluation suite"), "tasks": .number(6)])]),
-      "features": .object(["threads": .array(["search", "pagination", "rename", "pin", "archive"].map(JSONValue.string)), "request_reconciliation": .bool(true), "context_files": .bool(true), "review_stage": .bool(true), "project_inspection": .array(["review", "checkpoints", "queue", "workorders"].map(JSONValue.string))])])
+      "features": .object(["threads": .array(["search", "pagination", "rename", "pin", "archive"].map(JSONValue.string)), "request_reconciliation": .bool(true), "context_files": .bool(true), "editing": .bool(true), "image_upload": .bool(true), "queue_management": .bool(true), "checkpoint_restore": .bool(true), "review_stage": .bool(true), "project_inspection": .array(["review", "checkpoints", "queue", "workorders"].map(JSONValue.string))])])
   }
   static let result: JSONValue = {
     guard let url = Bundle.main.url(forResource: "SampleEvaluation", withExtension: "json"),
@@ -110,6 +110,8 @@ struct ExploreTransport: CompanionTransport {
     case "files.read": return .object(["path": .string(params.text("path")), "text": .string("import Foundation\n\nstruct CodingRequest: Codable {\n  let id: UUID\n  let prompt: String\n}\n")])
     case "git.status": return .object(["branch": .string("feat/resilient-queue"), "status": .string(" M Sources/RequestQueue.swift"), "stat": .string("1 file changed, 3 insertions(+), 1 deletion(-)"), "diff": .string("diff --git a/RequestQueue.swift b/RequestQueue.swift\n@@ -1,3 +1,5 @@\n- await queue.start(prompt)\n+ let state = try await queue.status(request.id)\n+ guard state == .notStarted else { return }\n+ try await queue.submit(request)\n")])
     case "experiments.list": return .array([.object(ExploreWorkspace.jobs[1].raw)])
+    case "conversations.share": return .object(["text": .string("Shared sample context: " + ExploreWorkspace.prompt + "\n" + ExploreWorkspace.answer), "omitted_messages": .number(0)])
+    case "jobs.export": return .object(["name": .string("superqode-sample.md"), "content": .string("# Sample recorded evidence\n\n" + ExploreWorkspace.answer), "truncated": .bool(false)])
     case "context.preview": return .object(["prompt": .string(params.text("prompt") + "\n\nSample reference material."), "files": .array((params["context_files"]?.array ?? []).map { .object(["path": $0, "sha256": .string("sample-only-file-fingerprint"), "bytes": .number(85)]) }), "image_count": .number(0)])
     case "review.list": return .object(["label": .string("Sample working-tree changes"), "files": .array([.object(ExploreWorkspace.reviewFile)]), "excluded_count": .number(0), "truncated": .bool(false)])
     case "review.diff": return .object(ExploreWorkspace.reviewFile.merging(["snapshot_id": .string("sample-review-snapshot"), "hunks": .array([ExploreWorkspace.reviewHunk]), "truncated": .bool(false), "issue": .string(""), "can_stage": .bool(true)]) { _, new in new })

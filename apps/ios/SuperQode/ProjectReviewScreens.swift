@@ -7,6 +7,7 @@ struct FilesScreen: View {
   @State private var query = ""
   @State private var issue = ""
   @State private var loading = true
+  @State private var creating = false
   var body: some View {
     List {
       if loading { ProgressView("Loading project files…") }
@@ -19,6 +20,8 @@ struct FilesScreen: View {
       if !loading && files.isEmpty && issue.isEmpty { ContentUnavailableView("No files to display", systemImage: "doc.text.magnifyingglass") }
     }.scrollContentBackground(.hidden).background(CompanionTheme.background)
       .navigationTitle("Project files").searchable(text: $query)
+      .toolbar { Button("New file", systemImage: "doc.badge.plus") { creating = true }.disabled(!store.canMutate || !store.permissions.contains("edit")) }
+      .sheet(isPresented: $creating, onDismiss: { Task { await load() } }) { NavigationStack { FileEditorScreen(project: project, path: "", creating: true) } }
       .task { await load() }.refreshable { await load() }
   }
   private func load() async {
@@ -44,6 +47,7 @@ struct FilePreviewScreen: View {
       else if !issue.isEmpty { ContentUnavailableView("File unavailable", systemImage: "doc.badge.ellipsis", description: Text(issue)) }
       else { MobileCodeBlock(code: content, language: URL(fileURLWithPath: path).pathExtension, fullHeight: true).padding(12) }
     }.background(CompanionTheme.background).navigationTitle(URL(fileURLWithPath: path).lastPathComponent).navigationBarTitleDisplayMode(.inline)
+      .toolbar { NavigationLink("Edit") { FileEditorScreen(project: project, path: path) }.disabled(!store.permissions.contains("edit")) }
       .task {
         guard let api = store.api else { loading = false; return }
         defer { loading = false }

@@ -32,7 +32,10 @@ def context_paths(value):
 
 
 def queue_snapshot(value):
+    from .remote_editing import revision
+
     return {
+        "revision": revision(value),
         "running": value.get("running") is True,
         "truncated": len(value.get("items", [])) > 100,
         "items": [
@@ -66,7 +69,15 @@ def checkpoint_snapshot(value):
                 "changes_truncated": len(changes) > 500,
             }
         )
-    return {"items": items, "truncated": len(value.get("items", [])) > 50}
+    from .remote_editing import revision
+
+    return {
+        "items": items,
+        "truncated": len(value.get("items", [])) > 50,
+        "revision": revision(value),
+        "can_undo": value.get("can_undo") is True,
+        "can_redo": value.get("can_redo") is True,
+    }
 
 
 def workorder_snapshot(value):

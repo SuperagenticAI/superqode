@@ -45,15 +45,15 @@
     "id": "files",
     "title": "Project files",
     "group": "Daily development",
-    "status": "Inspect",
-    "detail": "Read and copy highlighted source. Editing and creating files remain Mac workflows.",
+    "status": "On iPhone",
+    "detail": "Read highlighted project source, create files and save edits against the exact loaded revision with a separately approved editing grant. Conflicting saves can be compared with current Mac content before an explicit new save.",
     "workflow": "Project files",
     "mac_sections": [
       "Files"
     ],
     "mac_tools": [],
     "macRoute": "Features → Files",
-    "parity": "partial"
+    "parity": "available"
   },
   {
     "id": "context",
@@ -71,12 +71,13 @@
     "id": "images",
     "title": "Images and screenshots",
     "group": "Daily development",
-    "status": "On Mac",
-    "detail": "Attach images using the Mac composer. The phone does not upload image attachments yet.",
+    "status": "On iPhone",
+    "detail": "Attach up to four PNG, JPEG, GIF or WebP images. Other photo formats are converted on the phone. Image drafts are protected locally; uploads are private, idempotent and bound to this device and project. Model image support still applies.",
     "mac_sections": [],
     "mac_tools": [],
     "macRoute": "Threads workspace → attach images",
-    "parity": "mac_only"
+    "parity": "available",
+    "workflow": "Code"
   },
   {
     "id": "evaluation",
@@ -189,27 +190,27 @@
     "id": "queue",
     "title": "Task queue",
     "group": "Execution and recovery",
-    "status": "Inspect",
-    "detail": "Inspect queued tasks and open their runs. Starting, pausing, reordering, removal and retry remain Mac actions.",
+    "status": "On iPhone",
+    "detail": "Add tasks through shared connections; inspect, run, pause, reorder, remove and reset retries using explicit queue permission and a reviewed queue revision. Mac-only routes and control overrides cannot be started through this grant.",
     "workflow": "Task queue",
     "mac_sections": [],
     "mac_tools": [],
     "macRoute": "Threads workspace → task queue",
-    "parity": "partial"
+    "parity": "available"
   },
   {
     "id": "checkpoints",
     "title": "Task checkpoints",
     "group": "Execution and recovery",
-    "status": "Inspect",
-    "detail": "Inspect recorded file changes. Undo, redo and restoration remain on the Mac.",
+    "status": "On iPhone",
+    "detail": "Inspect recorded diffs; explicitly undo, redo or restore sealed checkpoints with restoration permission. Changed checkpoint state and later file edits are refused by the Mac.",
     "workflow": "Checkpoints",
     "mac_sections": [
       "Checkpoints"
     ],
     "mac_tools": [],
     "macRoute": "Features → Checkpoints",
-    "parity": "partial"
+    "parity": "available"
   },
   {
     "id": "forks",
@@ -432,12 +433,13 @@
     "id": "handoff",
     "title": "Thread handoff",
     "group": "Daily development",
-    "status": "On Mac",
-    "detail": "Prepare cross-thread handoff/context packages on the Mac. The phone can continue a recorded thread and copy text but cannot import a handoff package yet.",
+    "status": "On iPhone",
+    "detail": "Review bounded visible thread context, share it or prepare a fresh conversation with no inherited connection, permissions, images or private reasoning. Export recorded evidence as Markdown, JSON or HTML.",
     "mac_sections": [],
     "mac_tools": [],
     "macRoute": "Threads workspace → handoff",
-    "parity": "mac_only"
+    "parity": "available",
+    "workflow": "Conversations"
   },
   {
     "id": "windows",

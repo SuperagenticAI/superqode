@@ -70,7 +70,14 @@ def application(access):
                 body = bytearray()
                 async for chunk in request.stream():
                     body.extend(chunk)
-                    if len(body) > MAX_BODY:
+                    limit_bytes = (
+                        6 * 1024 * 1024
+                        if request.url.path == "/v1/images"
+                        else 2 * 1024 * 1024
+                        if request.url.path == "/v1/files"
+                        else MAX_BODY
+                    )
+                    if len(body) > limit_bytes:
                         return response({"error": "Request is too large"}, 413)
             payload = json.loads(body)
             if not isinstance(payload, dict):
@@ -111,6 +118,17 @@ def application(access):
                         or not isinstance(payload.get("params", {}), dict)
                     ):
                         raise ValueError("Provide a method and object parameters")
+                    permitted_upload = {
+                        "/v1/images": {"images.upload"},
+                        "/v1/files": {"files.write", "files.create"},
+                    }
+                    if (
+                        request.url.path in permitted_upload
+                        and payload["method"] not in permitted_upload[request.url.path]
+                    ):
+                        raise ValueError(
+                            "Use this endpoint only for its supported attachment or file action"
+                        )
                     result = await asyncio.to_thread(
                         access.rpc,
                         device,
@@ -145,7 +163,7 @@ def application(access):
     return Starlette(
         routes=[
             Route(path, endpoint, methods=["POST"])
-            for path in ("/v1/pair", "/v1/pair/claim", "/v1/rpc")
+            for path in ("/v1/pair", "/v1/pair/claim", "/v1/rpc", "/v1/images", "/v1/files")
         ]
     )
 

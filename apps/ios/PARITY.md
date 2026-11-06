@@ -6,7 +6,7 @@ The inventory accounts for all 14 Mac navigation areas and 24 typed Tools catego
 
 ## Finding
 
-Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, evaluation and staged optimization are available on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, queue management, checkpoint restoration, terminal/Git administration and notifications still require additional work.
+Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, images, file editing, queue controls, checkpoint restoration, evidence export, evaluation and staged optimization are implemented on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, WorkOrder management, terminal/Git administration and notifications still require additional work.
 
 The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every major workflow is searchable in All features with its actual availability.
 
@@ -19,10 +19,10 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 | Coding and planning | Partial | Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, protected drafts and recovery of interrupted submissions. Native phone tasks use Ask; Auto-edit and Full overrides remain Mac controls. | Threads workspace → composer |
 | Conversation library | Available | Search, paginate, rename, pin, archive and continue recorded project conversations. | Threads workspace |
 | Contextual review | Available | Review uncommitted, branch or completed-turn changes. Prepare line-bound feedback. Staging requires a separate permission approved on the Mac. | Features → Review |
-| Project files | Partial | Read and copy highlighted source. Editing and creating files remain Mac workflows. | Features → Files |
+| Project files | Available | Read highlighted project source, create files and save edits against the exact loaded revision with a separately approved editing grant. Conflicting saves can be compared with current Mac content before an explicit new save. | Features → Files |
 | Reference files | Available | Attach up to ten non-sensitive UTF-8 files to Code/Plan and preview their context before sending. | Threads workspace → attach files |
-| Images and screenshots | Mac only | Attach images using the Mac composer. The phone does not upload image attachments yet. | Threads workspace → attach images |
-| Thread handoff | Mac only | Prepare cross-thread handoff/context packages on the Mac. The phone can continue a recorded thread and copy text but cannot import a handoff package yet. | Threads workspace → handoff |
+| Images and screenshots | Available | Attach up to four PNG, JPEG, GIF or WebP images. Other photo formats are converted on the phone. Image drafts are protected locally; uploads are private, idempotent and bound to this device and project. Model image support still applies. | Threads workspace → attach images |
+| Thread handoff | Available | Review bounded visible thread context, share it or prepare a fresh conversation with no inherited connection, permissions, images or private reasoning. Export recorded evidence as Markdown, JSON or HTML. | Threads workspace → handoff |
 | Windows, tabs and command palette | Mac only | Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and searchable All features. | Workspace windows / thread tabs / command palette |
 
 ### Harness quality
@@ -44,8 +44,8 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 | Workflow | Phone parity | Current behavior and gaps | Mac entry point |
 | --- | --- | --- | --- |
 | WorkOrders and workers | Partial | Track tasks, budgets, worker responsiveness and acceptance checks. Creation and execution management remain on the Mac. | Tools → WorkOrders → Live WorkOrder board |
-| Task queue | Partial | Inspect queued tasks and open their runs. Starting, pausing, reordering, removal and retry remain Mac actions. | Threads workspace → task queue |
-| Task checkpoints | Partial | Inspect recorded file changes. Undo, redo and restoration remain on the Mac. | Features → Checkpoints |
+| Task queue | Available | Add tasks through shared connections; inspect, run, pause, reorder, remove and reset retries using explicit queue permission and a reviewed queue revision. Mac-only routes and control overrides cannot be started through this grant. | Threads workspace → task queue |
+| Task checkpoints | Available | Inspect recorded diffs; explicitly undo, redo or restore sealed checkpoints with restoration permission. Changed checkpoint state and later file edits are refused by the Mac. | Features → Checkpoints |
 | Forks and Git changes | Mac only | Create isolated fork workspaces and review/merge their commits on the Mac. The phone does not commit, merge or switch branches. | Threads workspace → fork / review branch |
 | Terminal | Mac only | Interactive terminal and generic CLI workflows remain on the Mac. Agent tool requests can still be reviewed through exact-request approvals on the phone. | Features → Terminal |
 | Execution recovery | Mac only | Resolve interrupted writer ownership and acknowledge recovery from the Mac. The phone can inspect run errors and stop permitted jobs. | Workspace → execution recovery |
@@ -68,7 +68,7 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 
 ## Next implementation priorities
 
-1. Complete the coding loop: image uploads, file editing, revision-bound queue management and guarded checkpoint restoration. Preserve project scope and explicit device permissions.
+1. Complete advanced execution management: WorkOrder creation/review, scoped Git/fork workflows, context compaction and execution recovery. Preserve project scope and explicit device permissions.
 2. Complete the harness lifecycle: custom suites and candidate selection, Studio authoring/version history, routing/tuning, evidence export and separately authorized adoption/promotion. A displayed score never authorizes a release.
 3. Add scoped Mac administration: local-engine/model lifecycle and installer/readiness feedback, supported subscription sign-in, MCP/skills configuration and external-session import. Provider credentials must not become readable through generic remote RPCs.
 4. Add private interactive terminal/Git workflows only with their own reviewed authorization model. Do not expose the existing generic CLI/tool runner just to make every button callable.

@@ -50,7 +50,7 @@ WRITES = {
     "threads.update": ("tasks", {"project", "id", "title", "pinned", "archived"}),
     "tasks.start": (
         "tasks",
-        {"profile", "prompt", "parent_id", "interaction_mode", "context_files"},
+        {"profile", "prompt", "parent_id", "interaction_mode", "context_files", "image_ids"},
     ),
     "evaluations.start": ("evaluate", {"profile", "tasks", "tasks_hash", "live", "split"}),
     "optimizations.start": (
@@ -61,6 +61,12 @@ WRITES = {
     "jobs.cancel": ("cancel", {"id"}),
     "jobs.steer": ("steer", {"id", "text"}),
 }
+
+
+from . import remote_editing
+
+READS.update(remote_editing.READS)
+WRITES.update(remote_editing.WRITES)
 
 
 def available_profiles(access, device):
@@ -106,6 +112,12 @@ def dispatch(access, device, method, params, key):
             return {"state": "not_recorded"}
         if saved[0]["result"] is not None:
             result = json.loads(saved[0]["result"])
+            if (
+                isinstance(result, dict)
+                and result.get("project")
+                and result["project"] not in projects
+            ):
+                raise PermissionError("This project is no longer shared")
             if isinstance(result, dict) and result.get("id"):
                 rows = service._all("SELECT project FROM jobs WHERE id=?", (result["id"],))
                 if rows and rows[0]["project"] not in projects:
@@ -142,6 +154,10 @@ def dispatch(access, device, method, params, key):
                 "push_notifications": False,
                 "project_inspection": ["review", "checkpoints", "queue", "workorders"],
                 "context_files": True,
+                "editing": True,
+                "image_upload": True,
+                "queue_management": True,
+                "checkpoint_restore": True,
                 "review_stage": True,
             },
         }
@@ -190,7 +206,11 @@ def dispatch(access, device, method, params, key):
         and "project" not in request
     ):
         raise ValueError("Choose a shared project")
-    if "id" in request and method != "checkpoints.diff":
+    if "id" in request and not (
+        method.startswith("checkpoints.")
+        or method.startswith("queue.")
+        or method.startswith("images.")
+    ):
         identity = text(request["id"], "a job ID")
         found = service._all("SELECT project FROM jobs WHERE id=?", (identity,))
         if not found or found[0]["project"] not in projects:
@@ -205,6 +225,7 @@ def dispatch(access, device, method, params, key):
     if method == "checkpoints.diff":
         request["path"] = project_path(request.get("path"))
         request["id"] = text(request.get("id"), "a checkpoint ID", 200)
+    remote_editing.prepare(access, device, method, request, profile, permissions)
     if "context_files" in request:
         request["context_files"] = context_paths(request["context_files"])
         if request.get("interaction_mode") == "chat" and request["context_files"]:
@@ -315,11 +336,13 @@ def dispatch(access, device, method, params, key):
             (device["id"], key, signature, time.time()),
         )
     try:
-        result = service.dispatch(method, request)
+        result = remote_editing.execute(access, device, method, request, profiles)
     except BaseException:
         if method in WRITES:
             access._audit(device["id"], method + ":failed", request.get("project", ""), job or "")
         raise
+    if method in remote_editing.WRITES and isinstance(result, dict):
+        result = {**result, "project": request["project"]}
     if method == "jobs.get":
         result["pending_request_id"] = service.pending.get(job)
         result["pending_approval"] = None
@@ -357,7 +380,7 @@ def dispatch(access, device, method, params, key):
         }
     if method == "context.preview":
         result = {k: result.get(k) for k in ("prompt", "files", "image_count")}
-    elif method == "queue.list":
+    elif method.startswith("queue.") and isinstance(result, dict) and "items" in result:
         result = queue_snapshot(result)
     elif method == "workorders.snapshot":
         result = workorder_snapshot(result)

@@ -143,6 +143,6 @@ struct RemoteAPI: CompanionTransport {
   }
 
   func rpc(_ method: String, _ params: [String: JSONValue] = [:], key: String? = nil) async throws -> JSONValue {
-    try await post("v1/rpc", ["method": .string(method), "params": .object(params)], key: key)
+    try await post(method == "images.upload" ? "v1/images" : ["files.write", "files.create"].contains(method) ? "v1/files" : "v1/rpc", ["method": .string(method), "params": .object(params)], key: key)
   }
 }

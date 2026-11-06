@@ -90,6 +90,12 @@ struct JobScreen: View {
         } else if job.text("status") == "needs_approval" {
           Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(CompanionTheme.warning)
         }
+        if !detail.text("project").isEmpty {
+          CompanionCard {
+            NavigationLink("Export recorded evidence") { RecordedEvidenceExportScreen(project: detail.text("project"), job: identity) }
+            if job.text("kind") == "task", !job.active { NavigationLink("Handoff to a new thread") { ThreadHandoffScreen(project: detail.text("project"), job: identity) } }
+          }
+        }
         if !assistantText.isEmpty {
           CompanionCard {
             Label("Agent", systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)

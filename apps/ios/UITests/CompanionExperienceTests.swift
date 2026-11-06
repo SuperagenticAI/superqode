@@ -1,6 +1,22 @@
 import XCTest
 
 final class CompanionExperienceTests: XCTestCase {
+  func testFileEditingIsInspectableButCannotSaveSampleData() {
+    let app = XCUIApplication()
+    app.launchArguments = ["--design-preview", "projects"]
+    app.launch()
+    XCTAssertTrue(app.buttons["workflow.code"].waitForExistence(timeout: 10))
+    let workspace = app.staticTexts["SuperQode Studio"]
+    for _ in 0..<5 { if workspace.isHittable { break }; app.swipeUp() }
+    workspace.tap()
+    app.buttons["Files"].tap()
+    XCTAssertTrue(app.staticTexts["README.md"].waitForExistence(timeout: 5))
+    app.staticTexts["README.md"].tap()
+    app.buttons["Edit"].tap()
+    XCTAssertTrue(app.textViews["file.editor"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["Review save"].isEnabled)
+  }
+
   func testHomePromotesDeveloperWorkflowsAndLabelsTerminalAsMacOnly() {
     let app = XCUIApplication()
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]

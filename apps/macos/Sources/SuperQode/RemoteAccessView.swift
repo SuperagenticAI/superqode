@@ -28,6 +28,7 @@ struct RemoteAccessSettingsView: View {
   @State private var localOnly = true
   @State private var allowOptimization = false
   @State private var allowReview = false
+  @State private var extraPermissions: Set<String> = []
   @State private var profileName = ""
   @State private var reflectionModel = ""
   @State private var optimizerModel = ""
@@ -184,10 +185,17 @@ struct RemoteAccessSettingsView: View {
         Toggle("Allow staged optimization", isOn: $allowOptimization)
         Toggle("Allow staging reviewed files", isOn: $allowReview)
         Text("Staging changes the Git index after a review on the phone. It does not commit or merge code.").font(.caption).foregroundStyle(.secondary)
+        ForEach([("edit", "Allow file editing and creation"), ("queue", "Allow queue management"), ("restore", "Allow checkpoint restoration")], id: \.0) { permission, title in
+          Toggle(title, isOn: Binding(get: { extraPermissions.contains(permission) }, set: { enabled in
+            if enabled { extraPermissions.insert(permission) } else { extraPermissions.remove(permission) }
+          }))
+        }
+        Text("Editing and restoration change project files. Queue controls can start work through shared connections. These permissions are off by default.").font(.caption).foregroundStyle(.secondary)
         Button("Create pairing invitation") { action {
           var permissions = ["read", "tasks", "evaluate", "approve", "cancel", "steer"]
           if allowOptimization { permissions.append("optimize") }
           if allowReview { permissions.append("review") }
+          permissions.append(contentsOf: extraPermissions.sorted())
           invitation = try await call("remote.pairing.create", ["profiles": Array(selectedProfiles), "permissions": permissions])
         } }.disabled(!running || selectedProfiles.isEmpty)
         if let expires = invitation["expires"] as? Double, Date(timeIntervalSince1970: expires) > Date() {

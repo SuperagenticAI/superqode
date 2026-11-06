@@ -56,7 +56,7 @@ def document(entries, sections, tools):
         "",
         "## Finding",
         "",
-        "Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, evaluation and staged optimization are available on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, queue management, checkpoint restoration, terminal/Git administration and notifications still require additional work.",
+        "Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, images, file editing, queue controls, checkpoint restoration, evidence export, evaluation and staged optimization are implemented on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, WorkOrder management, terminal/Git administration and notifications still require additional work.",
         "",
         "The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every major workflow is searchable in All features with its actual availability.",
         "",
@@ -82,7 +82,7 @@ def document(entries, sections, tools):
         [
             "## Next implementation priorities",
             "",
-            "1. Complete the coding loop: image uploads, file editing, revision-bound queue management and guarded checkpoint restoration. Preserve project scope and explicit device permissions.",
+            "1. Complete advanced execution management: WorkOrder creation/review, scoped Git/fork workflows, context compaction and execution recovery. Preserve project scope and explicit device permissions.",
             "2. Complete the harness lifecycle: custom suites and candidate selection, Studio authoring/version history, routing/tuning, evidence export and separately authorized adoption/promotion. A displayed score never authorizes a release.",
             "3. Add scoped Mac administration: local-engine/model lifecycle and installer/readiness feedback, supported subscription sign-in, MCP/skills configuration and external-session import. Provider credentials must not become readable through generic remote RPCs.",
             "4. Add private interactive terminal/Git workflows only with their own reviewed authorization model. Do not expose the existing generic CLI/tool runner just to make every button callable.",
