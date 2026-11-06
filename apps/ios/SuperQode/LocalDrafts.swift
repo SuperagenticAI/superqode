@@ -74,7 +74,7 @@ actor DraftRepository {
     let image = DraftImage(name: name, bytes: data.count)
     let directory = imageDirectory(draft)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
-    let target = directory.appendingPathComponent(image.id)
+    var target = directory.appendingPathComponent(image.id)
     try data.write(to: target, options: [.atomic, .completeFileProtection])
     // Atomic replacement can discard protection on the destination. Apply it
     // to the final path, never merely to the temporary replacement.
