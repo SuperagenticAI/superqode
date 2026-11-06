@@ -71,7 +71,7 @@ struct ExploreTransport: CompanionTransport {
     case "jobs.list": return .array(ExploreWorkspace.jobs.map { .object($0.raw) })
     case "threads.list":
       let query = params.text("query").lowercased()
-      let items = ExploreWorkspace.jobs.filter { $0.text("kind") == "task" && (query.isEmpty || $0.text("conversation_title").lowercased().contains(query)) }
+      let items = ExploreWorkspace.jobs.filter { $0.text("kind") == "task" && (params.text("view") != "pinned" || $0.flag("pinned")) && (query.isEmpty || $0.text("conversation_title").lowercased().contains(query)) }
       return .object(["items": .array(params.text("view") == "archived" ? [] : items.map { .object($0.raw) }), "next_cursor": .string("")])
     case "jobs.get":
       let id = params.text("id")

@@ -6,7 +6,7 @@ This is a new source-build preview, not the released macOS/Python version or a p
 
 ## Build
 
-Open `apps/ios/SuperQodeCompanion.xcodeproj`, select the `SuperQodeCompanion` scheme and an iPhone simulator, and Run. There are no third-party iOS package dependencies. For a physical iPhone, choose your own development team and signing identity in Xcode. The app reuses the original Mac logo, icon and purple/pink/orange palette, with light/dark themes and native Dynamic Type. Tap **Explore the app with sample data** to browse without accounts or a connected Mac; sample actions cannot execute. See [RELEASE.md](RELEASE.md) for Apple account setup, physical-device signing and the local archive helper.
+Open `apps/ios/SuperQodeCompanion.xcodeproj`, select the `SuperQodeCompanion` scheme and an iPhone simulator, and Run. There are no third-party iOS package dependencies. For a physical iPhone, choose your own development team and signing identity in Xcode. The app reuses the original Mac logo, icon and purple/pink/orange palette, with light/dark themes and native Dynamic Type and the same bundled harness logos as the Mac. Tap **Explore the app with sample data** to browse without accounts or a connected Mac; sample actions cannot execute. See [RELEASE.md](RELEASE.md) for Apple account setup, physical-device signing and the local archive helper.
 
 Account-free simulator verification with ad-hoc signing (required for Keychain access):
 
@@ -39,7 +39,7 @@ Keep the Mac awake, online and logged in. The preview does not silently change s
 | Projects | Only explicitly shared project connections |
 | New tasks and conversations | Code/Chat and supported Plan mode; each new composer starts with no selected connection |
 | Conversation library | Search, pagination, pinned/archived views and scoped rename/pin/archive |
-| Protected drafts | Device-only unsent text, explicit resume, original request ID retained after interrupted submission |
+| Protected drafts | Device-only unsent text and experiment requests, explicit resume, original request ID retained after interrupted submission |
 | Presentation | Original branding, light/dark themes, native markdown, selectable highlighted code and colored diffs |
 | Existing jobs | Shared Mac job history, paged events, transcript, progress, status and continuation |
 | Approvals | Exact current request, approve once or deny; confirmation captures the reviewed request |
@@ -74,7 +74,7 @@ All endpoints are served through private HTTPS. The loopback backend accepts the
 
 The catalog returns protocol version, device expiry, permission names, approved profiles, built-in suites and supported feature descriptions. Read methods: `companion.request_status`, `projects.list`, `jobs.list`, `jobs.get`, `threads.list`, `threads.get`, `conversations.get`, `files.list`, `files.read`, `git.status`, `experiments.list`, `evals.inspect`. Mutations: `threads.update`, `tasks.start`, `evaluations.start`, `optimizations.start`, `jobs.approve`, `jobs.cancel`, `jobs.steer`. See `remote_rpc.py` for exact parameter allowlists. Start requests select `profile`; they cannot inject a provider, model, shell command, endpoint, credential or permission override.
 
-`companion.request_status` takes the original `{ "key": "<idempotency-key>" }` and returns `not_recorded`, `uncertain`, `accepted` or `completed`, with an existing result when available. It never replays a command and is scoped to the same device and currently shared project. The composer saves the immutable original payload and key before submission, offers an explicit status check, and reuses them for retries. A new conversation always starts blank; saved drafts are resumed separately. Drafts are protected files excluded from backups, capped at 20 entries/4 MiB, and can be cleared in Settings.
+`companion.request_status` takes the original `{ "key": "<idempotency-key>" }` and returns `not_recorded`, `uncertain`, `accepted` or `completed`, with an existing result when available. It never replays a command and is scoped to the same device and currently shared project. Coding and experiment composers save the immutable original payload and key before submission, offers an explicit status check, and reuses them for retries. A new conversation always starts blank; saved drafts are resumed separately. Drafts are protected files excluded from backups, capped at 20 entries/4 MiB, and can be cleared in Settings.
 
 The local management methods begin with `remote.` and are only available through the existing native control pipe/private engine socket. They cannot be called through the HTTP RPC endpoint. The phone cannot open arbitrary projects, change provider credentials, invoke generic CLI commands, commit/merge code, restore checkpoints or adopt optimization candidates.
 

@@ -33,6 +33,15 @@ enum CompanionTheme {
     if lower.contains("glm") || lower.contains("kimi") { return .pink }
     return accent
   }
+  static func harnessAsset(_ name: String) -> String? {
+    let lower = name.lowercased()
+    if ["core", "no-tool", "pipy", "codegem", "systemone", "superqode"].contains(lower) { return "BrandMark" }
+    if let exact = BundledAgentIcons.assets[lower] { return exact }
+    for key in ["qwen", "claude", "codex", "gemini", "glm", "kimi", "opencode", "copilot"] {
+      if lower.contains(key), let asset = BundledAgentIcons.assets[key == "glm" ? "glm-acp-agent" : key] { return asset }
+    }
+    return nil
+  }
 }
 
 struct SuperQodeMark: View {
@@ -84,7 +93,10 @@ struct HarnessBadge: View {
   var body: some View {
     let color = CompanionTheme.harnessColor(name)
     HStack(spacing: 6) {
-      Image(systemName: "sparkles").symbolRenderingMode(.hierarchical)
+      if let asset = CompanionTheme.harnessAsset(name) {
+        Image(asset).renderingMode(asset == "BrandMark" ? .original : .template)
+          .resizable().scaledToFit().frame(width: 16, height: 16).accessibilityHidden(true)
+      } else { Image(systemName: "sparkles").symbolRenderingMode(.hierarchical) }
       Text(name).lineLimit(1)
     }.font(.caption.weight(.semibold)).foregroundStyle(color)
       .padding(.horizontal, 10).padding(.vertical, 6)

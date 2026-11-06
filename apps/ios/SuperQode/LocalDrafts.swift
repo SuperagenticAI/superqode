@@ -3,6 +3,7 @@ import Foundation
 struct SubmissionAttempt: Codable, Equatable, Sendable {
   let key: String
   let params: [String: JSONValue]
+  var method: String? = nil
 }
 
 struct LocalDraft: Codable, Identifiable, Equatable, Sendable {
@@ -15,6 +16,7 @@ struct LocalDraft: Codable, Identifiable, Equatable, Sendable {
   var mode = "code"
   var updated = Date()
   var attempt: SubmissionAttempt?
+  var isExperiment: Bool { ["evaluations.start", "optimizations.start"].contains(attempt?.method ?? "") }
 }
 
 /// Device-only unsent text. An interrupted submission keeps its original request ID.

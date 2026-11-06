@@ -11,6 +11,8 @@ final class CompanionExperienceTests: XCTestCase {
     let connection = app.buttons["composer.connection"]
     XCTAssertTrue(connection.waitForExistence(timeout: 5))
     XCTAssertTrue((connection.label + String(describing: connection.value)).contains("Choose a connection"))
+    connection.tap()
+    app.buttons["Qwen · Local"].tap()
     let prompt = app.textViews["composer.prompt"]
     prompt.tap()
     prompt.typeText("Check reconnect handling")

@@ -95,7 +95,7 @@ struct ProjectsScreen: View {
         if attention > 0 {
           Button { store.activityFilter = "Approvals"; store.selectedTab = 1 } label: {
             HStack {
-              Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
+              Image(systemName: "hand.raised.fill").foregroundStyle(CompanionTheme.warning)
               VStack(alignment: .leading, spacing: 3) {
                 Text("\(attention) action\(attention == 1 ? "" : "s") waiting for you").font(.subheadline.bold())
                 Text("Review the exact action before it runs.").font(.caption).foregroundStyle(.secondary)
@@ -202,7 +202,7 @@ struct JobRow: View {
       }
       HStack {
         Text(job.text("status").replacingOccurrences(of: "_", with: " ").capitalized)
-          .foregroundStyle(job.text("status") == "needs_approval" ? Color.orange : job.text("status") == "failed" ? Color.red : Color.secondary)
+          .foregroundStyle(job.text("status") == "needs_approval" ? CompanionTheme.warning : job.text("status") == "failed" ? Color.red : Color.secondary)
         Spacer()
         if !job.text("harness").isEmpty { HarnessBadge(name: job.text("harness")) }
       }.font(.caption)
@@ -232,19 +232,19 @@ struct CompanionSettingsScreen: View {
       }.listRowBackground(CompanionTheme.panel)
       Section("Appearance") {
         Picker("Theme", selection: $appearance) { ForEach(CompanionAppearance.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) } }
-        Text("The original SuperQode mark and purple, pink and orange palette, with system-aware surfaces and accessible text.").font(.caption).foregroundStyle(.secondary)
+        Text("Follow your device appearance, or choose a light or dark workspace.").font(.caption).foregroundStyle(.secondary)
       }.listRowBackground(CompanionTheme.panel)
       Section("Your data") {
         Label("Provider credentials stay on your Mac", systemImage: "desktopcomputer")
         Label("Device authorization stays in Keychain", systemImage: "key.fill")
         Text("Unsent drafts use protected storage on this iPhone and are excluded from backups. Completed job history stays on the Mac; requested output is displayed here.").font(.footnote).foregroundStyle(.secondary)
         Button("Delete saved drafts on this iPhone", role: .destructive) { clearDrafts = true }.disabled(store.isPreview)
-        if !issue.isEmpty { Text(issue).foregroundStyle(.orange) }
+        if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       }.listRowBackground(CompanionTheme.panel)
       Section("Help & about") {
         NavigationLink("Setup guide and privacy") { CompanionSetupGuide() }
         Link("Private connection setup", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
-        Link("Source and build guide", destination: URL(string: "https://github.com/SuperagenticAI/superqode")!)
+        Link("Source repository", destination: URL(string: "https://github.com/SuperagenticAI/superqode")!)
         Text("Keep the Mac awake and online. Providers can use their own cloud services. Background push notifications, provider installation, terminals and candidate adoption are not included in this version.").font(.footnote).foregroundStyle(.secondary)
         LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Source build")
       }.listRowBackground(CompanionTheme.panel)

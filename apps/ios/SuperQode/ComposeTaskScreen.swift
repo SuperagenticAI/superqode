@@ -29,7 +29,7 @@ struct ComposeTaskScreen: View {
       VStack(alignment: .leading, spacing: 20) {
         ConnectionStatus()
         if !store.reachable { Button("Reconnect to Mac") { Task { await store.refresh() } } }
-        if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(.orange) }
+        if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
         connectionCard
         CompanionCard {
           HStack {
@@ -46,9 +46,9 @@ struct ComposeTaskScreen: View {
             if !draft.prompt.isEmpty { Button("Copy") { PrivateClipboard.copy(draft.prompt) }.font(.caption) }
           }
         }
-        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange).textSelection(.enabled) }
+        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
         if submitted {
-          Label("Your task is running on the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+          Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         } else if frozen {
           pendingRequestCard
         } else {
@@ -145,7 +145,7 @@ struct ComposeTaskScreen: View {
     await store.refreshActivity()
   }
   private func submit() async {
-    guard let api = store.api, store.canMutate, !wrongMac, !submitting else { return }
+    guard let api = store.api, store.canMutate, !wrongMac, !submitting, !draft.isExperiment else { return }
     submitting = true; issue = ""
     defer { submitting = false }
     if draft.attempt == nil {

@@ -12,6 +12,13 @@ MAC = ROOT / "apps/macos"
 def main():
     source = MAC / "resources/Assets.xcassets/BrandMark.imageset"
     shutil.copytree(source, IOS / "Assets.xcassets/BrandMark.imageset", dirs_exist_ok=True)
+    for source in (MAC / "resources/Assets.xcassets").glob("Agent-*.imageset"):
+        shutil.copytree(source, IOS / "Assets.xcassets" / source.name, dirs_exist_ok=True)
+    shutil.copyfile(
+        MAC / "Sources/SuperQode/BundledAgentIcons.swift", IOS / "BundledAgentIcons.swift"
+    )
+    for name in ["ACP-REGISTRY-LICENSE.txt", "agent-icons-provenance.json"]:
+        shutil.copyfile(MAC / "resources" / name, IOS / name)
     text = (MAC / "Sources/SuperQode/ResponseContent.swift").read_text()
     contract = text[
         text.index("/// A local, non-HTML renderer") : text.index("struct ResponseDocument:")

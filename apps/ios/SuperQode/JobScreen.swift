@@ -36,13 +36,13 @@ struct JobScreen: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 18) {
         ConnectionStatus()
-        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange) }
+        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning) }
         CompanionCard {
           HStack {
             HarnessBadge(name: detail.object("request").text("harness", "Run"))
             Spacer()
             Text(job.text("status").replacingOccurrences(of: "_", with: " ").capitalized)
-              .font(.caption).foregroundStyle(job.text("status") == "needs_approval" ? Color.orange : Color.secondary)
+              .font(.caption).foregroundStyle(job.text("status") == "needs_approval" ? CompanionTheme.warning : Color.secondary)
           }
           let request = detail.object("request")
           Text(request.text("model", "Agent-managed model")).font(.caption).foregroundStyle(.secondary)
@@ -66,7 +66,7 @@ struct JobScreen: View {
         if !pending.isEmpty {
           approvalCard
         } else if job.text("status") == "needs_approval" {
-          Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(.orange)
+          Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(CompanionTheme.warning)
         }
         if !assistantText.isEmpty {
           CompanionCard {
@@ -140,7 +140,7 @@ struct JobScreen: View {
   private var approvalCard: some View {
     let snapshot = pending
     return CompanionCard {
-      Label("Your approval is needed", systemImage: "hand.raised.fill").font(.headline).foregroundStyle(.orange)
+      Label("Your approval is needed", systemImage: "hand.raised.fill").font(.headline).foregroundStyle(CompanionTheme.warning)
       let tool = snapshot.object("tool")
       Text(tool.text("tool", tool.text("name", "Agent action"))).font(.headline)
       let arguments = tool.object("arguments").isEmpty ? tool.object("args") : tool.object("arguments")

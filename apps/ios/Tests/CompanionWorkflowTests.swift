@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import UIKit
 @testable import SuperQodeCompanion
 
 private actor MemoryVault: DeviceCredentialVault {
@@ -45,6 +46,11 @@ private actor WorkflowTransport: CompanionTransport {
 }
 
 final class CompanionWorkflowTests: XCTestCase {
+  @MainActor func testOriginalBrandAndRegisteredHarnessMarksAreBundled() {
+    XCTAssertNotNil(UIImage(named: "BrandMark"))
+    for asset in Set(BundledAgentIcons.assets.values) { XCTAssertNotNil(UIImage(named: asset), asset) }
+    XCTAssertNotNil(Bundle.main.url(forResource: "ACP-REGISTRY-LICENSE", withExtension: "txt"))
+  }
   private var credential: DeviceCredential {
     DeviceCredential(address: ExploreWorkspace.address, token: "fixture-only", device: "fixture-device")
   }
@@ -140,6 +146,23 @@ final class CompanionWorkflowTests: XCTestCase {
     var draft = LocalDraft(project: "project"); draft.prompt = "Preserve my earlier text"
     do { try await DraftRepository(directory: directory).save(draft); XCTFail("Corrupt storage was overwritten") }
     catch { XCTAssertEqual(try Data(contentsOf: file), original) }
+  }
+  func testSavedExperimentPreservesMethodConsentAndBudgetAcrossRelaunch() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let repository = DraftRepository(directory: directory)
+    var draft = LocalDraft(project: "project")
+    draft.prompt = "Optimize reviewed suite"
+    let params: [String: JSONValue] = ["tasks_hash": .string("reviewed-hash"), "live": .bool(true), "max_evals": .number(4), "max_cost": .number(1)]
+    draft.attempt = SubmissionAttempt(key: "original-experiment", params: params, method: "optimizations.start")
+    try await repository.save(draft)
+    let restored = try await DraftRepository(directory: directory).list()
+    XCTAssertEqual(restored.first?.attempt?.params, params)
+    XCTAssertEqual(restored.first?.attempt?.key, "original-experiment")
+    XCTAssertEqual(restored.first?.attempt?.method, "optimizations.start")
+    XCTAssertEqual(restored.first?.isExperiment, true)
+    let oldAttempt = Data(#"{"key":"old-task","params":{"prompt":"Continue"}}"#.utf8)
+    XCTAssertNil(try JSONDecoder().decode(SubmissionAttempt.self, from: oldAttempt).method)
   }
   func testNativeMarkupPreservesCodeListsAndTables() {
     let source = "## Result\n\n```swift\nlet value = 1\n```\n\n- Safe by default\n\n| Check | Result |\n| --- | --- |\n| Queue | Passed |"

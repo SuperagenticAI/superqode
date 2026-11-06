@@ -58,7 +58,7 @@ struct ProjectScreen: View {
         Picker("Conversations", selection: $filter) {
           Text("Recent").tag("active"); Text("Pinned").tag("pinned"); Text("Archived").tag("archived")
         }.pickerStyle(.segmented).listRowBackground(Color.clear)
-        if !library.issue.isEmpty { Text(library.issue).foregroundStyle(.orange) }
+        if !library.issue.isEmpty { Text(library.issue).foregroundStyle(CompanionTheme.warning) }
         if library.loading && library.items.isEmpty { ProgressView("Loading conversations…") }
         ForEach(library.items) { thread in
           NavigationLink { JobScreen(identity: thread.id) } label: { JobRow(job: thread) }
@@ -124,9 +124,12 @@ struct DraftsScreen: View {
         Text("Unsent text is saved only on this iPhone, with device protection and backup exclusion. Drafts never start work automatically.")
           .font(.footnote).foregroundStyle(.secondary)
       }.listRowBackground(Color.clear)
-      if !issue.isEmpty { Text(issue).foregroundStyle(.orange) }
+      if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       ForEach(drafts) { draft in
-        NavigationLink { ComposeTaskScreen(project: draft.project, parent: draft.parent, restored: draft) } label: {
+        NavigationLink {
+          if draft.isExperiment { EvaluationScreen(project: draft.project, restored: draft) }
+          else { ComposeTaskScreen(project: draft.project, parent: draft.parent, restored: draft) }
+        } label: {
           VStack(alignment: .leading, spacing: 8) {
             Label(draft.attempt == nil ? "Unsent draft" : "Saved request", systemImage: draft.attempt == nil ? "square.and.pencil" : "arrow.triangle.2.circlepath")
               .font(.caption).foregroundStyle(draft.attempt == nil ? CompanionTheme.accent : .orange)

@@ -26,7 +26,7 @@ struct HarnessLabScreen: View {
             Text("Choose a workspace").tag("")
             ForEach(store.projects) { Text($0.text("name")).tag($0.id) }
           }
-          if !issue.isEmpty { Text(issue).foregroundStyle(.orange) }
+          if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
           ForEach(experiments) { experiment in
             NavigationLink { JobScreen(identity: experiment.id) } label: { CompanionCard { JobRow(job: experiment) } }.buttonStyle(.plain)
           }
