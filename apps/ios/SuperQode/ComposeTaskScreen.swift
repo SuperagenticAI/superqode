@@ -56,7 +56,7 @@ struct ComposeTaskScreen: View {
             HStack { if submitting { ProgressView().tint(.white) }; Label("Send to \(store.macName)", systemImage: "arrow.up") }
           }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
             .disabled(submitting || !store.canMutate || wrongMac || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
-          Text("Your Mac runs the task. You can close the phone app and return to the same job later.")
+          Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. You can close the phone app and return to the same job later.")
             .font(.caption).foregroundStyle(.secondary)
         }
       }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)

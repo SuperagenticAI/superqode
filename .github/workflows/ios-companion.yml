@@ -2,6 +2,7 @@ name: Private iOS companion
 
 on:
   push:
+    branches: [main]
     paths:
       - "apps/ios/**"
       - "apps/macos/Sources/SuperQode/RemoteAccessView.swift"

@@ -155,6 +155,7 @@ struct ProjectsScreen: View {
     }
   }
   private func refreshDraftCount() async {
+    guard !store.isPreview else { draftCount = 0; return }
     draftCount = (try? await store.drafts.list().filter { $0.origin == store.address }.count) ?? 0
   }
 }

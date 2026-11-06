@@ -147,6 +147,7 @@ struct DraftsScreen: View {
       } message: { Text("Deleting a draft does not cancel a job already accepted by the Mac.") }
   }
   private func load() async {
+    guard !store.isPreview else { drafts = []; issue = ""; return }
     do { drafts = try await store.drafts.list().filter { $0.origin == store.address }; issue = "" }
     catch { issue = error.localizedDescription }
   }
