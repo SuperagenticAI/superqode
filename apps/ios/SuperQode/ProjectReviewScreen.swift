@@ -113,7 +113,9 @@ struct ReviewedFileScreen: View {
       .task { await load() }.interactiveDismissDisabled(working)
       .sheet(item: $feedbackDraft) { draft in NavigationStack { ComposeTaskScreen(project: params.text("project"), parent: parent, restored: draft) } }
       .confirmationDialog("Stage \(file.text("path"))?", isPresented: Binding(get: { stageRequest != nil }, set: { if !$0 { stageRequest = nil } }), titleVisibility: .visible) {
-        Button("Stage reviewed file") { if let snapshot = stageRequest { Task { await stage(snapshot) } } }
+        if let snapshot = stageRequest {
+          Button("Stage reviewed file") { Task { await stage(snapshot) } }
+        }
       } message: { Text("This updates the Git index with the reviewed file. If its revision changed, the Mac refuses the request. It does not commit or merge changes.") }
   }
   private var feedback: some View {
