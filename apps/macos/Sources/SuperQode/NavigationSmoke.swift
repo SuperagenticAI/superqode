@@ -22,6 +22,15 @@ import Foundation
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return find(in: content)
     }
+    @MainActor func mountedModelSearch() -> NSTextField? {
+      @MainActor func find(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField,
+          field.placeholderString == "Search families or enter an Ollama tag" { return field }
+        return view.subviews.lazy.compactMap { find(in: $0) }.first
+      }
+      guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
+      return find(in: content)
+    }
     @MainActor func measure(passes: Int) async throws -> [String: Any] {
       let sections = [
         "Workspace", "Files", "Review", "Terminal", "Checkpoints", "Workspace",
@@ -35,6 +44,8 @@ import Foundation
       var initialComposer: PromptEditor.Editor?
       var initialStudioEditor: SourceEditor.Editor?
       var studioEditorPreserved = true
+      var initialModelSearch: NSTextField?
+      var modelSearchPreserved = true
       let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
         signal.yield(true)
@@ -58,6 +69,11 @@ import Foundation
           try await Task.sleep(for: .milliseconds(30))
           timings.append(["section": destination, "input_resume_ms": (ProcessInfo.processInfo.systemUptime - started) * 1000])
           if initialComposer == nil && destination == "Workspace" { initialComposer = mountedComposer() }
+          if destination == "Models" {
+            let field = mountedModelSearch()
+            if let initialModelSearch { modelSearchPreserved = modelSearchPreserved && field === initialModelSearch }
+            else { initialModelSearch = field; modelSearchPreserved = field != nil }
+          }
           if destination == "Harness Studio" {
             let editor = mountedStudioEditor()
             if let initialStudioEditor { studioEditorPreserved = studioEditorPreserved && editor === initialStudioEditor }
@@ -69,6 +85,8 @@ import Foundation
       await heartbeat.value
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
         "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
+        "model_search_preserved": initialModelSearch != nil && modelSearchPreserved,
+        "model_search_disabled_while_hidden": initialModelSearch.map { !$0.isEnabled } ?? false,
         "studio_editor_preserved": initialStudioEditor != nil && studioEditorPreserved,
         "studio_editor_disabled_while_hidden": initialStudioEditor.map {
           !$0.interactionEnabled && !$0.isEditable && $0.window?.firstResponder !== $0
@@ -105,6 +123,10 @@ import Foundation
 @MainActor func requireResponsiveNavigation(_ result: [String: Any]) throws {
   if let firstOpen = result["first_open"] as? [String: Any] {
     try requireResponsiveNavigation(firstOpen)
+  }
+  guard result["model_search_preserved"] as? Bool == true,
+    result["model_search_disabled_while_hidden"] as? Bool == true else {
+    throw EngineError(message: "Navigation recreated the Local AI search or left it enabled while hidden")
   }
   guard result["composer_editor_preserved"] as? Bool == true else {
     throw EngineError(message: "Navigation recreated the native composer instead of preserving it")

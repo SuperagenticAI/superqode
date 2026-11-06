@@ -10,6 +10,7 @@ struct WorkbenchNavigationState: Equatable {
   var inspector = false
   var filesMounted = false
   var studioMounted = false
+  var modelsMounted = false
 
   mutating func select(_ destination: String) {
     section = destination
@@ -20,6 +21,7 @@ struct WorkbenchNavigationState: Equatable {
       if destination == "Files" { filesMounted = true }
     case "Workspace": closeExpandedDrawer()
     case "Harness Studio": studioMounted = true
+    case "Models": modelsMounted = true
     default: break
     }
   }

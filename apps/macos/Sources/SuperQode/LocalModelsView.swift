@@ -25,21 +25,24 @@ import UniformTypeIdentifiers
     do {
       let value = try await engine.call("local.models.overview") as? [String: Any] ?? [:]
       guard !Task.isCancelled else { return }
-      overview = value; failure = ""
+      if !NSDictionary(dictionary: overview).isEqual(to: value) { overview = value }
+      if !failure.isEmpty { failure = "" }
     } catch { failure = error.localizedDescription }
   }
   func refreshJobs(engine: Engine) async {
     do {
-      jobs = try await engine.call("local.models.jobs") as? [[String: Any]] ?? []
+      let value = try await engine.call("local.models.jobs") as? [[String: Any]] ?? []
       let servers = try await engine.call("local.models.servers") as? [[String: Any]] ?? []
       guard !Task.isCancelled else { return }
-      overview["engines"] = servers
+      if !NSArray(array: jobs).isEqual(to: value) { jobs = value }
+      if !NSArray(array: overview["engines"] as? [[String: Any]] ?? []).isEqual(to: servers) { overview["engines"] = servers }
     }
     catch { failure = error.localizedDescription }
   }
 }
 
 struct ModelsView: View {
+  var active = true
   @State private var tab = "local"
   var body: some View {
     VStack(spacing: 0) {
@@ -47,12 +50,13 @@ struct ModelsView: View {
         Text("Local AI · discover and run").tag("local")
         Text("Existing models and provider routes").tag("routes")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
-      if tab == "local" { LocalModelWorkbenchView() } else { ModelRoutesView() }
+      if tab == "local" { LocalModelWorkbenchView(active: active) } else { ModelRoutesView() }
     }
   }
 }
 
 struct LocalModelWorkbenchView: View {
+  var active = true
   @EnvironmentObject var app: Workspace
   @StateObject private var library = LocalModelLibrary()
   @State private var query = ""
@@ -155,18 +159,27 @@ struct LocalModelWorkbenchView: View {
         }.padding(.bottom, 16)
       }
     }.padding(28)
-      .task {
-        await library.search(engine: app.engine, query: "", source: "recommended", format: "gguf")
+      .onChange(of: active) { _, visible in
+        if !visible {
+          action = nil; connecting = nil; log = nil
+          workflow = false; setup = false; compatibility = false; quickStart = false
+        }
+      }
+      .task(id: active) {
+        guard active else { return }
+        if library.hits.isEmpty { await library.search(engine: app.engine, query: query, source: source, format: format) }
         await library.refresh(engine: app.engine)
         await library.refreshJobs(engine: app.engine)
       }
-      .task {
+      .task(id: active) {
+        guard active else { return }
         while !Task.isCancelled {
           do { try await Task.sleep(for: .seconds(3)) } catch { return }
           await library.refreshJobs(engine: app.engine)
         }
       }
       .centeredDialog(isPresented: Binding(get: { action != nil }, set: { if !$0 { action = nil } }), title: "Local model operation", onDismiss: {
+        guard active else { return }
         Task { await library.refreshJobs(engine: app.engine); await library.refresh(engine: app.engine) }
       }) { if let action { LocalModelActionView(request: action).environmentObject(app) } }
       .centeredDialog(isPresented: Binding(get: { connecting != nil }, set: { if !$0 { connecting = nil } }), title: "Use a local model") {
@@ -179,6 +192,7 @@ struct LocalModelWorkbenchView: View {
         ToolsView(workflow: "local bench").environmentObject(app).frame(width: 920, height: 680)
       }
       .centeredDialog(isPresented: $setup, title: "Local AI setup", onDismiss: {
+        guard active else { return }
         Task { await library.refresh(engine: app.engine) }
       }) { LocalModelSetupView().environmentObject(app) }
       .centeredDialog(isPresented: $compatibility, title: "Local harness compatibility") {

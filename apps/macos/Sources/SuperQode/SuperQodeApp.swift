@@ -257,7 +257,6 @@ struct RootView: View {
     case "Agent activity": AgentFleetView()
     case "Harness Hub": HubView()
     case "Super Agent": CreatorModeView().id(app.projectID)
-    case "Models": ModelsView()
     case "Evaluations", "Optimization":
       ExperimentView(optimize: app.section == "Optimization").id(app.projectID)
     case "Tools": ToolsView()
@@ -330,6 +329,13 @@ struct RootView: View {
                   .disabled(app.section != "Harness Studio")
                   .allowsHitTesting(app.section == "Harness Studio")
                   .accessibilityHidden(app.section != "Harness Studio")
+              }
+              if app.navigationState.modelsMounted {
+                ModelsView(active: app.section == "Models").id(app.projectID)
+                  .opacity(app.section == "Models" ? 1 : 0)
+                  .disabled(app.section != "Models")
+                  .allowsHitTesting(app.section == "Models")
+                  .accessibilityHidden(app.section != "Models")
               }
               featureContent
             }.disabled(app.openingProject || app.restoringNavigation).frame(
