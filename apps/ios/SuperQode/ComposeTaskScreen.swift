@@ -13,6 +13,8 @@ struct ComposeTaskScreen: View {
   @State private var submitted = false
   @State private var startedRun: OpenedRun?
   @State private var discard = false
+  @State private var showFiles = false
+  @State private var showContext = false
   @FocusState private var editing: Bool
   init(project: String, parent: String? = nil, restored: LocalDraft? = nil) {
     self.project = project
@@ -35,6 +37,7 @@ struct ComposeTaskScreen: View {
         if !store.reachable { Button("Reconnect to Mac") { Task { await store.refresh() } } }
         if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
         connectionCard
+        contextCard
         CompanionCard {
           HStack {
             Text("What are we building?").font(.headline)
@@ -59,7 +62,8 @@ struct ComposeTaskScreen: View {
           Button { editing = false; Task { await submit() } } label: {
             HStack { if submitting { ProgressView().tint(.white) }; Label("Send to \(store.macName)", systemImage: "arrow.up") }
           }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
-            .disabled(submitting || !store.canMutate || wrongMac || !supportedMode || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
+            .disabled(submitting || !store.canMutate || !store.permissions.contains("tasks") || wrongMac || !supportedMode || (draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
+          if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
           Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. You can close the phone app and return to the same job later.")
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -71,6 +75,8 @@ struct ComposeTaskScreen: View {
         ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = false } }
       }
       .interactiveDismissDisabled(submitting)
+      .sheet(isPresented: $showFiles) { NavigationStack { ContextFilesScreen(profile: draft.profile, initial: draft.contextFiles ?? []) { draft.contextFiles = $0 } } }
+      .sheet(isPresented: $showContext) { NavigationStack { ContextPreviewScreen(params: ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode), "context_files": .array((draft.contextFiles ?? []).map(JSONValue.string))]) } }
       .navigationDestination(item: $startedRun) { JobScreen(identity: $0.id).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }
       .task {
         if draft.origin.isEmpty { draft.origin = store.address }
@@ -124,6 +130,20 @@ struct ComposeTaskScreen: View {
     }
   }
 
+  private var contextCard: some View {
+    CompanionCard {
+      Label("Reference files", systemImage: "paperclip").font(.headline)
+      ForEach(draft.contextFiles ?? [], id: \.self) { path in Text(path).font(.caption.monospaced()).lineLimit(2) }
+      Button((draft.contextFiles ?? []).isEmpty ? "Attach project files" : "Change attachments") { showFiles = true }
+        .disabled(frozen || submitting || draft.profile.isEmpty || draft.mode == "chat" || !store.reachable || !store.features.flag("context_files"))
+      if !(draft.contextFiles ?? []).isEmpty {
+        Button("Review prepared context") { showContext = true }.disabled(submitting || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.mode == "chat" || !store.reachable)
+        Button("Remove attachments", role: .destructive) { draft.contextFiles = [] }.disabled(frozen || submitting)
+      }
+      Text(draft.mode == "chat" ? "Project reference files require Code or Plan. Remove attachments or change mode before sending." : "Choose a connection, then attach up to ten project text files. Credentials and sensitive paths are excluded.").font(.caption).foregroundStyle(.secondary)
+    }
+  }
+
   private var pendingRequestCard: some View {
     CompanionCard {
       Label("Your request is saved", systemImage: "arrow.triangle.2.circlepath").font(.headline)
@@ -150,13 +170,14 @@ struct ComposeTaskScreen: View {
     await store.refreshActivity()
   }
   private func submit() async {
-    guard let api = store.api, store.canMutate, !wrongMac, !submitting, !draft.isExperiment else { return }
+    guard let api = store.api, store.canMutate, store.permissions.contains("tasks"), !wrongMac, !submitting, !draft.isExperiment else { return }
     guard draft.attempt != nil || supportedMode else { return }
     submitting = true; issue = ""
     defer { submitting = false }
     if draft.attempt == nil {
       var params: [String: JSONValue] = ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode)]
       if let parent = draft.parent { params["parent_id"] = .string(parent) }
+      if let paths = draft.contextFiles, !paths.isEmpty { params["context_files"] = .array(paths.map(JSONValue.string)) }
       draft.attempt = SubmissionAttempt(key: UUID().uuidString, params: params)
     }
     guard let attempt = draft.attempt else { return }

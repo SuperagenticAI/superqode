@@ -96,8 +96,15 @@ struct JobScreen: View {
             AssistantText(text: assistantText).equatable()
           }
         }
-        if !detail.object("result").isEmpty, job.text("kind") != "task" {
+        if !detail.object("result").isEmpty, ["evaluation", "optimization"].contains(job.text("kind")) {
           EvaluationResultCard(result: detail.object("result"))
+        } else if !detail.object("result").isEmpty && job.text("kind") != "task" {
+          CompanionCard {
+            Label("Recorded result", systemImage: "doc.text").font(.headline)
+            if !detail.object("result").text("summary").isEmpty { Text(detail.object("result").text("summary")) }
+            JSONDetails(title: "Result details", value: .object(detail.object("result")))
+            Text("Specialized configuration and management for this workflow remain on your Mac.").font(.caption).foregroundStyle(.secondary)
+          }
         }
         if job.active, store.permissions.contains("steer"), detail.object("control_capabilities").flag("steer") {
           CompanionCard {
@@ -130,6 +137,9 @@ struct JobScreen: View {
               }
             }
           }.font(.subheadline)
+        }
+        if !job.active, job.text("kind") == "task" {
+          NavigationLink { ProjectReviewScreen(project: job.text("project"), job: identity) } label: { Label("Review this turn", systemImage: "text.magnifyingglass") }
         }
         if !job.active, job.text("kind") == "task", store.permissions.contains("tasks") {
           Button { continueThread = true } label: { Label("Continue conversation", systemImage: "arrow.turn.down.right") }
@@ -231,13 +241,23 @@ struct EvaluationResultCard: View {
   var body: some View {
     CompanionCard {
       Label("Evaluation evidence", systemImage: "chart.bar.xaxis").font(.headline)
+      let evidence = result.object("heldout_eval").isEmpty ? result : result.object("heldout_eval")
+      if evidence["live"] == .bool(false) {
+        Label("Setup validation only", systemImage: "info.circle").foregroundStyle(CompanionTheme.warning)
+        Text("Skipped model calls do not measure harness quality.").font(.caption).foregroundStyle(.secondary)
+      }
       let gate = result.object("adoption_gate")
       if !gate.isEmpty {
         Label(gate.flag("accepted") ? "Acceptance checks passed" : "Candidate held for review", systemImage: gate.flag("accepted") ? "checkmark.seal.fill" : "hand.raised.fill")
           .foregroundStyle(gate.flag("accepted") ? CompanionTheme.accent : .orange)
       }
       if !result.text("summary").isEmpty { Text(result.text("summary")) }
-      ForEach((result["variants"]?.array ?? []).enumerated().map { RemoteRecord(raw: $0.element.object.merging(["id": .string(String($0.offset))]) { old, _ in old }) }) { variant in
+      let comparison = result.object("comparison")
+      if comparison.flag("available") {
+        if let first = comparison.records("candidates").first { OutcomeCounts(counts: first.raw.object("counts")) }
+        NavigationLink { EvaluationComparisonScreen(comparison: comparison) } label: { Label("Compare task outcomes", systemImage: "arrow.left.arrow.right") }
+      } else if !comparison.text("message").isEmpty { Text(comparison.text("message")).font(.caption).foregroundStyle(.secondary) }
+      ForEach((evidence["variants"]?.array ?? []).enumerated().map { RemoteRecord(raw: $0.element.object.merging(["id": .string(String($0.offset))]) { old, _ in old }) }) { variant in
         VStack(alignment: .leading, spacing: 5) {
           Text(variant.text("name", variant.text("harness", "Variant"))).font(.subheadline.bold())
           Text("Passed \(Int(variant.raw.number("passed"))) · Failed \(Int(variant.raw.number("failed"))) · Skipped \(Int(variant.raw.number("skipped")))")

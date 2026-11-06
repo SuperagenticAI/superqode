@@ -46,8 +46,12 @@ Open the `.xcarchive` in Organizer, Validate App, and choose your distribution o
 
 ## Review and release checks
 
+Read [PARITY.md](PARITY.md) before describing mobile capabilities. The app highlights daily coding, review, evaluation and optimization; its inventory explicitly marks partial, preview and Mac-only workflows. Run `python3 apps/ios/scripts/audit-parity.py --check` when Mac navigation or Tools categories change.
+
 - Run the iOS unit tests, including the isolated Keychain test, submission recovery and draft-protection tests. Review dark/light simulator captures.
 - Install on a physical iPhone/iPad and check camera pairing, protected drafts, text input, large accessibility text, rotation, VoiceOver and reconnection.
+- Verify revision-bound review feedback, stale-diff refusal and optional staging with both read-only and Review-enabled device grants. Confirm attached context contains only selected project files.
+- Compare a real baseline/candidate run, including regressions, incomplete grading and missing cost records. Check WorkOrders, queue and checkpoint inspection against the Mac; their management stays there.
 - Verify cellular access, Mac engine restart, sleep/wake behavior, approvals, stop, grant expiry and revocation with a real Tailscale account.
 - Check a real installed local model and any vendor harnesses you intend to list as supported. No universal control of other apps' private sessions is claimed.
 - Resolve failing Mac-side release checks before distributing the companion as public-ready. The preview branch previously recorded inconsistent Mac navigation timing; keep that gate visible.

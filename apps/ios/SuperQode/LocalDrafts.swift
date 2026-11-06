@@ -14,6 +14,7 @@ struct LocalDraft: Codable, Identifiable, Equatable, Sendable {
   var profile = ""
   var prompt = ""
   var mode = "code"
+  var contextFiles: [String]? = nil
   var updated = Date()
   var attempt: SubmissionAttempt?
   var isExperiment: Bool { ["evaluations.start", "optimizations.start"].contains(attempt?.method ?? "") }

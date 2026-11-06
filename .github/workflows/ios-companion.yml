@@ -7,7 +7,8 @@ on:
       - "apps/ios/**"
       - "apps/macos/Sources/SuperQode/RemoteAccessView.swift"
       - "src/superqode/desktop_service/remote_*.py"
-      - "tests/test_desktop_companion.py"
+      - "tests/test_desktop_companion*.py"
+      - "tests/test_ios_feature_parity.py"
       - ".github/workflows/ios-companion.yml"
   pull_request:
     paths:
@@ -29,6 +30,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Verify the Mac feature inventory
+        run: python3 apps/ios/scripts/audit-parity.py --check
       - name: Build and test the ad-hoc signed companion
         shell: bash
         run: |
@@ -56,7 +59,7 @@ jobs:
           xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion
           sleep 2
           xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-pairing.png"
-          for scenario in projects conversation lab; do
+          for scenario in projects conversation evaluation lab; do
             xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion --design-preview "$scenario" -companionAppearance dark
             sleep 2
             xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-$scenario.png"

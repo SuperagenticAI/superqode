@@ -2,11 +2,12 @@ import SwiftUI
 
 struct HarnessLabScreen: View {
   @EnvironmentObject private var store: CompanionStore
-  @State private var section = "Connections"
+  @State private var section = "Experiments"
   @State private var project = ""
   @State private var experiments: [RemoteRecord] = []
-  @State private var launching: String?
+  @State private var launching: ExperimentLaunch?
   @State private var issue = ""
+  init(initialSection: String = "Experiments") { _section = State(initialValue: initialSection) }
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 22) {
@@ -17,7 +18,7 @@ struct HarnessLabScreen: View {
           Text("Your harnesses, local models and evaluation results, together.").font(.subheadline).foregroundStyle(.secondary)
         }.padding(.top, 12)
         Picker("Harness lab", selection: $section) {
-          Text("Connections").tag("Connections"); Text("Experiments").tag("Experiments")
+          Text("Evaluate & improve").tag("Experiments"); Text("Connections").tag("Connections")
         }.pickerStyle(.segmented)
         if section == "Connections" {
           ForEach(store.profiles) { profile in connection(profile) }
@@ -27,6 +28,8 @@ struct HarnessLabScreen: View {
             Text("Choose a workspace").tag("")
             ForEach(store.projects) { Text($0.text("name")).tag($0.id) }
           }
+          workflowCard("Evaluate a harness", detail: "Validate a suite or run reviewed live tasks. Compare outcomes, cost and regressions.", symbol: "checkmark.seal", intent: .evaluate)
+          workflowCard("Optimize a harness", detail: "Stage a candidate within explicit budgets and inspect its held-out evidence.", symbol: "slider.horizontal.3", intent: .optimize)
           if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
           ForEach(experiments) { experiment in
             NavigationLink { JobScreen(identity: experiment.id) } label: { CompanionCard { JobRow(job: experiment) } }.buttonStyle(.plain)
@@ -35,19 +38,29 @@ struct HarnessLabScreen: View {
             ContentUnavailableView("Your next improvement starts here", systemImage: "chart.bar.xaxis",
               description: Text("Run a setup check or a reviewed live evaluation. Results stay recorded on your Mac."))
           }
-          Button { launching = project } label: { Label("New evaluation", systemImage: "plus") }
-            .buttonStyle(CompanionPrimaryButton())
-            .disabled(project.isEmpty || !store.canMutate || (!store.permissions.contains("evaluate") && !store.permissions.contains("optimize")))
         }
         Text("Execution uses the Mac's configured harness and policy. Local-only connections never fall back to an unverified cloud optimizer.")
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20).frame(maxWidth: 900).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("Harness lab").companionNavigationBrand()
-      .task(id: project) { await load() }
-      .refreshable { await store.refresh(); await load() }
-      .sheet(isPresented: Binding(get: { launching != nil }, set: { if !$0 { launching = nil } }), onDismiss: { Task { await load() } }) {
-        if let launching { NavigationStack { EvaluationScreen(project: launching) } }
+      .task(id: project) {
+        if project.isEmpty && store.projects.count == 1 { project = store.projects[0].id }
+        else { await load() }
       }
+      .refreshable { await store.refresh(); await load() }
+      .sheet(item: $launching, onDismiss: { Task { await load() } }) { launch in
+        NavigationStack { EvaluationScreen(project: launch.project, intent: launch.intent, initialProfile: launch.profile) }
+      }
+  }
+  private func workflowCard(_ title: String, detail: String, symbol: String, intent: EvaluationIntent) -> some View {
+    CompanionCard {
+      Label(title, systemImage: symbol).font(.headline).foregroundStyle(CompanionTheme.accent)
+      Text(detail).font(.subheadline).foregroundStyle(.secondary)
+      Button(intent == .evaluate ? "Set up evaluation" : "Set up optimization") { launching = ExperimentLaunch(project: project, intent: intent) }
+        .buttonStyle(CompanionPrimaryButton()).disabled(project.isEmpty)
+      if project.isEmpty { Text("Choose a shared workspace first.").font(.caption).foregroundStyle(.secondary) }
+      if intent == .optimize { Text("Candidate adoption and promotion stay on your Mac.").font(.caption).foregroundStyle(.secondary) }
+    }
   }
   private func connection(_ profile: RemoteRecord) -> some View {
     CompanionCard {
@@ -63,8 +76,7 @@ struct HarnessLabScreen: View {
         if profile.flag("optimization") { Label("Optimization", systemImage: "slider.horizontal.3") }
       }.font(.caption).foregroundStyle(.secondary)
       if profile.flag("evaluation") {
-        Button("Evaluate this workspace") { launching = profile.text("project") }
-          .disabled(!store.canMutate || !store.permissions.contains("evaluate"))
+        Button("Evaluate this connection") { launching = ExperimentLaunch(project: profile.text("project"), profile: profile.id) }
       }
     }
   }

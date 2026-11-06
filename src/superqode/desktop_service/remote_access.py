@@ -17,7 +17,7 @@ import uuid
 from . import remote_network
 from .redaction import redact
 
-PERMISSIONS = {"read", "tasks", "evaluate", "optimize", "approve", "cancel", "steer"}
+PERMISSIONS = {"read", "tasks", "evaluate", "optimize", "approve", "cancel", "steer", "review"}
 DEFAULT_PERMISSIONS = ["read", "tasks", "approve", "cancel", "steer", "evaluate"]
 PORT = 47831
 PAIR_TTL = 300

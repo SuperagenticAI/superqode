@@ -1,11 +1,21 @@
 import SwiftUI
 
+enum EvaluationIntent: String { case evaluate, optimize }
+
+struct ExperimentLaunch: Identifiable {
+  let id = UUID()
+  let project: String
+  var intent = EvaluationIntent.evaluate
+  var profile: String? = nil
+}
+
 struct EvaluationScreen: View {
   let project: String
   @EnvironmentObject private var store: CompanionStore
   @Environment(\.dismiss) private var dismiss
   @State private var selectedProfile = ""
   @State private var suite = ""
+  @State private var split = "all"
   @State private var optimize = false
   @State private var live = false
   @State private var inspection: [String: JSONValue] = [:]
@@ -18,9 +28,11 @@ struct EvaluationScreen: View {
   @State private var maxCost = 1.0
   @State private var startedRun: OpenedRun?
   @State private var submitted = false
-  init(project: String, restored: LocalDraft? = nil) {
+  init(project: String, intent: EvaluationIntent = .evaluate, initialProfile: String? = nil, restored: LocalDraft? = nil) {
     self.project = project
     _savedRequest = State(initialValue: restored ?? LocalDraft(project: project))
+    _optimize = State(initialValue: intent == .optimize)
+    _selectedProfile = State(initialValue: initialProfile ?? "")
   }
   private var frozen: Bool { savedRequest.attempt != nil || submitted }
   private var wrongMac: Bool { !savedRequest.origin.isEmpty && savedRequest.origin != store.address }
@@ -51,7 +63,15 @@ struct EvaluationScreen: View {
           ForEach(store.suites) { Text($0.text("name")).tag($0.id) }
         }
         Toggle("Stage an optimized candidate", isOn: $optimize)
-          .disabled(!store.permissions.contains("optimize") || profile?.flag("optimization") != true)
+          .disabled(!optimize && (!store.permissions.contains("optimize") || profile?.flag("optimization") != true))
+        if optimize && (!store.permissions.contains("optimize") || profile?.flag("optimization") != true) {
+          Text("Enable optimization for this phone and configure both reflection and optimizer models on the Mac. Choose an optimization-capable connection.").font(.caption).foregroundStyle(CompanionTheme.warning)
+        }
+        if !optimize {
+          Picker("Task split", selection: $split) {
+            Text("All tasks").tag("all"); Text("Held-in").tag("held-in"); Text("Held-out").tag("held-out")
+          }
+        }
         if profile?.flag("local_only") == true {
           Text("Local-only optimization is held until its reflection and optimizer routes can be verified locally. No cloud defaults are used.").font(.caption).foregroundStyle(.secondary)
         }
@@ -104,11 +124,14 @@ struct EvaluationScreen: View {
           suite = attempt.params.text("tasks")
           optimize = attempt.method == "optimizations.start"
           live = attempt.params.flag("live")
+          split = attempt.params.text("split", "all")
           if optimize { maxEvals = Int(attempt.params.number("max_evals")); maxCost = attempt.params.number("max_cost") }
         }
       }
-      .onChange(of: selectedProfile) { _, _ in if !frozen { inspection = [:]; optimize = false } }
+      .onChange(of: selectedProfile) { _, _ in if !frozen { inspection = [:] } }
       .onChange(of: suite) { _, _ in if !frozen { inspection = [:] } }
+      .onChange(of: split) { _, _ in if !frozen { inspection = [:] } }
+      .onChange(of: optimize) { _, _ in if !frozen { inspection = [:] } }
       .confirmationDialog("Run live work on your Mac?", isPresented: $confirmLive, titleVisibility: .visible) {
         Button(optimize ? "Run within selected budgets" : "Run reviewed suite") { Task { await start() } }
       } message: { Text("This authorizes model calls and the verifier commands you reviewed. Commands can affect isolated evaluation workspaces and use the network according to the Mac's policy.") }
@@ -123,7 +146,7 @@ struct EvaluationScreen: View {
     guard let api = store.api, !working, !frozen else { return }
     working = true; issue = ""
     defer { working = false }
-    do { inspection = try await api.rpc("evals.inspect", ["profile": .string(selectedProfile), "tasks": .string(suite)]).object }
+    do { inspection = try await api.rpc("evals.inspect", ["profile": .string(selectedProfile), "tasks": .string(suite), "split": .string(optimize ? "all" : split)]).object }
     catch { issue = error.localizedDescription }
   }
   private func start() async {
@@ -133,6 +156,7 @@ struct EvaluationScreen: View {
     defer { working = false }
     if savedRequest.attempt == nil {
       var params: [String: JSONValue] = ["profile": .string(selectedProfile), "tasks": .string(suite), "tasks_hash": .string(inspection.text("tasks_hash")), "live": .bool(live)]
+      if !optimize { params["split"] = .string(split) }
       if optimize { params["max_evals"] = .number(Double(maxEvals)); params["max_cost"] = .number(maxCost) }
       savedRequest.prompt = (optimize ? "Optimize " : "Evaluate ") + suite
       savedRequest.profile = selectedProfile

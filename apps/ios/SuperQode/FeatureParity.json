@@ -1,0 +1,453 @@
+[
+  {
+    "id": "coding",
+    "title": "Coding and planning",
+    "group": "Daily development",
+    "status": "On iPhone",
+    "detail": "Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, protected drafts and recovery of interrupted submissions. Native phone tasks use Ask; Auto-edit and Full overrides remain Mac controls.",
+    "workflow": "Code",
+    "mac_sections": [
+      "Workspace"
+    ],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → composer",
+    "parity": "partial"
+  },
+  {
+    "id": "threads",
+    "title": "Conversation library",
+    "group": "Daily development",
+    "status": "On iPhone",
+    "detail": "Search, paginate, rename, pin, archive and continue recorded project conversations.",
+    "workflow": "Conversations",
+    "mac_sections": [
+      "Threads"
+    ],
+    "mac_tools": [],
+    "macRoute": "Threads workspace",
+    "parity": "available"
+  },
+  {
+    "id": "review",
+    "title": "Contextual review",
+    "group": "Daily development",
+    "status": "On iPhone",
+    "detail": "Review uncommitted, branch or completed-turn changes. Prepare line-bound feedback. Staging requires a separate permission approved on the Mac.",
+    "workflow": "Review",
+    "mac_sections": [
+      "Review"
+    ],
+    "mac_tools": [],
+    "macRoute": "Features → Review",
+    "parity": "available"
+  },
+  {
+    "id": "files",
+    "title": "Project files",
+    "group": "Daily development",
+    "status": "Inspect",
+    "detail": "Read and copy highlighted source. Editing and creating files remain Mac workflows.",
+    "workflow": "Project files",
+    "mac_sections": [
+      "Files"
+    ],
+    "mac_tools": [],
+    "macRoute": "Features → Files",
+    "parity": "partial"
+  },
+  {
+    "id": "context",
+    "title": "Reference files",
+    "group": "Daily development",
+    "status": "On iPhone",
+    "detail": "Attach up to ten non-sensitive UTF-8 files to Code/Plan and preview their context before sending.",
+    "workflow": "Code",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → attach files",
+    "parity": "available"
+  },
+  {
+    "id": "images",
+    "title": "Images and screenshots",
+    "group": "Daily development",
+    "status": "On Mac",
+    "detail": "Attach images using the Mac composer. The phone does not upload image attachments yet.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → attach images",
+    "parity": "mac_only"
+  },
+  {
+    "id": "evaluation",
+    "title": "Harness evaluation",
+    "group": "Harness quality",
+    "status": "On iPhone",
+    "detail": "Inspect bundled suites, choose task splits, validate setup and explicitly authorize live runs. Custom suites and candidate definitions are configured on the Mac.",
+    "workflow": "Evaluate",
+    "mac_sections": [
+      "Evaluations"
+    ],
+    "mac_tools": [],
+    "macRoute": "Evaluations",
+    "parity": "partial"
+  },
+  {
+    "id": "optimization",
+    "title": "Harness optimization",
+    "group": "Harness quality",
+    "status": "Staged",
+    "detail": "Run configured optimization with explicit budgets, review held-out evidence and compare improvements/regressions. Adoption stays on the Mac; local-only optimizer routes are not yet verified.",
+    "workflow": "Optimize",
+    "mac_sections": [
+      "Optimization"
+    ],
+    "mac_tools": [],
+    "macRoute": "Optimization",
+    "parity": "partial"
+  },
+  {
+    "id": "studio",
+    "title": "Harness Studio",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "Use Harness Studio on the Mac to edit, validate, version and activate harness definitions. The phone does not edit or activate definitions yet.",
+    "mac_sections": [
+      "Harness Studio"
+    ],
+    "mac_tools": [],
+    "macRoute": "Harness Studio",
+    "parity": "mac_only"
+  },
+  {
+    "id": "hub",
+    "title": "Harness Hub",
+    "group": "Harness quality",
+    "status": "Shared harnesses",
+    "detail": "Use harnesses explicitly shared by your Mac. Discovering, installing and configuring new harnesses remains in the Mac's Harness Hub.",
+    "workflow": "Shared connections",
+    "mac_sections": [
+      "Harness Hub"
+    ],
+    "mac_tools": [],
+    "macRoute": "Harness Hub",
+    "parity": "partial"
+  },
+  {
+    "id": "benchmarks",
+    "title": "Benchmarks and failure mining",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "The Mac exposes CLI-backed benchmark, doctor, failure-mining and advanced optimization workflows. They are not native phone workflows yet.",
+    "mac_sections": [],
+    "mac_tools": [
+      "harness",
+      "benchmark",
+      "gauge",
+      "optimize"
+    ],
+    "macRoute": "Tools → Harness workflows / Benchmarks / Quality gauges",
+    "parity": "mac_only"
+  },
+  {
+    "id": "routing",
+    "title": "Routing and tuning",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "Configure RLM routing/budgets and tune routing examples on the Mac. Shared harnesses use those settings when the phone starts work.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Harness Studio / Evaluations → routing and tuning",
+    "parity": "mac_only"
+  },
+  {
+    "id": "promotion",
+    "title": "Candidate promotion",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "Review adoption gates, stage, canary, activate or roll back candidates on the Mac. Evidence on the phone never authorizes promotion.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Optimization → adoption / Tools → Harness workflows",
+    "parity": "mac_only"
+  },
+  {
+    "id": "workorders",
+    "title": "WorkOrders and workers",
+    "group": "Execution and recovery",
+    "status": "Inspect",
+    "detail": "Track tasks, budgets, worker responsiveness and acceptance checks. Creation and execution management remain on the Mac.",
+    "workflow": "WorkOrders",
+    "mac_sections": [],
+    "mac_tools": [
+      "work"
+    ],
+    "macRoute": "Tools → WorkOrders → Live WorkOrder board",
+    "parity": "partial"
+  },
+  {
+    "id": "queue",
+    "title": "Task queue",
+    "group": "Execution and recovery",
+    "status": "Inspect",
+    "detail": "Inspect queued tasks and open their runs. Starting, pausing, reordering, removal and retry remain Mac actions.",
+    "workflow": "Task queue",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → task queue",
+    "parity": "partial"
+  },
+  {
+    "id": "checkpoints",
+    "title": "Task checkpoints",
+    "group": "Execution and recovery",
+    "status": "Inspect",
+    "detail": "Inspect recorded file changes. Undo, redo and restoration remain on the Mac.",
+    "workflow": "Checkpoints",
+    "mac_sections": [
+      "Checkpoints"
+    ],
+    "mac_tools": [],
+    "macRoute": "Features → Checkpoints",
+    "parity": "partial"
+  },
+  {
+    "id": "forks",
+    "title": "Forks and Git changes",
+    "group": "Execution and recovery",
+    "status": "On Mac",
+    "detail": "Create isolated fork workspaces and review/merge their commits on the Mac. The phone does not commit, merge or switch branches.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → fork / review branch",
+    "parity": "mac_only"
+  },
+  {
+    "id": "terminal",
+    "title": "Terminal",
+    "group": "Execution and recovery",
+    "status": "On Mac",
+    "detail": "Interactive terminal and generic CLI workflows remain on the Mac. Agent tool requests can still be reviewed through exact-request approvals on the phone.",
+    "mac_sections": [
+      "Terminal"
+    ],
+    "mac_tools": [],
+    "macRoute": "Features → Terminal",
+    "parity": "mac_only"
+  },
+  {
+    "id": "recovery",
+    "title": "Execution recovery",
+    "group": "Execution and recovery",
+    "status": "On Mac",
+    "detail": "Resolve interrupted writer ownership and acknowledge recovery from the Mac. The phone can inspect run errors and stop permitted jobs.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Workspace → execution recovery",
+    "parity": "mac_only"
+  },
+  {
+    "id": "local",
+    "title": "Local models",
+    "group": "Connections and setup",
+    "status": "Shared routes",
+    "detail": "Use shared local-model connections from the phone. Downloading models, engine lifecycle, compatibility checks and new route setup remain in Local AI on the Mac.",
+    "workflow": "Shared connections",
+    "mac_sections": [
+      "Models"
+    ],
+    "mac_tools": [
+      "local",
+      "models"
+    ],
+    "macRoute": "Models → Local AI",
+    "parity": "partial"
+  },
+  {
+    "id": "providers",
+    "title": "Providers and subscriptions",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Install/sign in to agents and configure API keys on the Mac. Share supported connections with the phone; provider credentials stay there.",
+    "mac_sections": [],
+    "mac_tools": [
+      "providers",
+      "profiles"
+    ],
+    "macRoute": "Connection settings → Providers / Subscriptions",
+    "parity": "mac_only"
+  },
+  {
+    "id": "tools",
+    "title": "Tools, MCP and skills",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Configure these in the Mac app. Shared harnesses retain their configured capabilities, permissions and tools when invoked from the phone.",
+    "mac_sections": [
+      "Tools"
+    ],
+    "mac_tools": [
+      "mcp",
+      "skills",
+      "tools"
+    ],
+    "macRoute": "Tools → MCP servers / Skills / Tool registry",
+    "parity": "mac_only"
+  },
+  {
+    "id": "external",
+    "title": "External session import",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Discover and import external agent sessions on the Mac. The phone can use supported routes shared through SuperQode, not control arbitrary private sessions in other apps.",
+    "mac_sections": [],
+    "mac_tools": [
+      "sessions"
+    ],
+    "macRoute": "Threads workspace → external sessions",
+    "parity": "mac_only"
+  },
+  {
+    "id": "push",
+    "title": "Background notifications",
+    "group": "Connections and setup",
+    "status": "Not built",
+    "detail": "Updates and approvals refresh while the phone app is open. Work continues on the Mac when the app closes; background push notifications are not implemented.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Settings → Notifications",
+    "parity": "mac_only"
+  },
+  {
+    "id": "pro",
+    "title": "Super Agent / Pro",
+    "group": "Connections and setup",
+    "status": "Mac preview",
+    "detail": "This is a Mac preview with neutral open-source hooks, not a finished autonomous release gate or shipped mobile feature.",
+    "mac_sections": [
+      "Super Agent"
+    ],
+    "mac_tools": [],
+    "macRoute": "Super Agent preview",
+    "parity": "preview"
+  },
+  {
+    "id": "activity",
+    "title": "Run activity and approvals",
+    "group": "Execution and recovery",
+    "status": "On iPhone",
+    "detail": "Inspect live runs, approve or deny exact requests, steer supported runs and stop permitted jobs. Updates resume when the phone app returns to the foreground.",
+    "workflow": "Activity",
+    "mac_sections": [
+      "Agent activity"
+    ],
+    "mac_tools": [],
+    "macRoute": "Features → Agent activity",
+    "parity": "available"
+  },
+  {
+    "id": "memory",
+    "title": "Memory and context compaction",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Manage memory, context-window limits, summarization and manual compaction on the Mac. The phone uses the shared harness configuration.",
+    "mac_sections": [],
+    "mac_tools": [
+      "memory"
+    ],
+    "macRoute": "Tools → Memory / Workspace → context preview",
+    "parity": "mac_only"
+  },
+  {
+    "id": "policy",
+    "title": "Trust, policy and sandboxes",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Configure project trust, tool permissions, sandbox policy and execution recovery on the Mac. Native phone tasks use Ask; they cannot override the policy.",
+    "mac_sections": [],
+    "mac_tools": [
+      "policy",
+      "sandbox",
+      "trust"
+    ],
+    "macRoute": "Tools → Project trust / Policy / Sandboxes",
+    "parity": "mac_only"
+  },
+  {
+    "id": "diagnostics",
+    "title": "Runtime diagnostics",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Inspect and repair runtime readiness using Mac diagnostics and doctor workflows.",
+    "mac_sections": [],
+    "mac_tools": [
+      "runtime",
+      "doctor"
+    ],
+    "macRoute": "Tools → Runtime diagnostics / Diagnostics",
+    "parity": "mac_only"
+  },
+  {
+    "id": "plugins",
+    "title": "Plugins and A2A credentials",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Install plugins and configure A2A credentials on the Mac. Existing supported connections can be explicitly shared.",
+    "mac_sections": [],
+    "mac_tools": [
+      "plugins",
+      "a2a-keys"
+    ],
+    "macRoute": "Tools → Plugins / A2A credentials",
+    "parity": "mac_only"
+  },
+  {
+    "id": "skillopt",
+    "title": "Skill optimization",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "Use the Mac Tools forms for skill optimization and its evidence. This is separate from staged harness optimization.",
+    "mac_sections": [],
+    "mac_tools": [
+      "skillopt"
+    ],
+    "macRoute": "Tools → Skill optimization",
+    "parity": "mac_only"
+  },
+  {
+    "id": "creator",
+    "title": "Agent factory and Creator Mode",
+    "group": "Harness quality",
+    "status": "Mac preview",
+    "detail": "Author, inspect, save and enable reviewed agent drafts on the Mac. Experimental Creator/Super Agent interfaces are not finished mobile features.",
+    "mac_sections": [],
+    "mac_tools": [
+      "agents",
+      "factory"
+    ],
+    "macRoute": "Super Agent / Tools → Agent factory",
+    "parity": "preview"
+  },
+  {
+    "id": "handoff",
+    "title": "Thread handoff",
+    "group": "Daily development",
+    "status": "On Mac",
+    "detail": "Prepare cross-thread handoff/context packages on the Mac. The phone can continue a recorded thread and copy text but cannot import a handoff package yet.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Threads workspace → handoff",
+    "parity": "mac_only"
+  },
+  {
+    "id": "windows",
+    "title": "Windows, tabs and command palette",
+    "group": "Daily development",
+    "status": "On Mac",
+    "detail": "Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and searchable All features.",
+    "mac_sections": [],
+    "mac_tools": [],
+    "macRoute": "Workspace windows / thread tabs / command palette",
+    "parity": "mac_only"
+  }
+]

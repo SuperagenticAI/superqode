@@ -34,6 +34,8 @@ Keep the Mac awake, online and logged in. The preview does not silently change s
 
 ## Implemented surfaces
 
+Code, Review, Evaluate and Optimize are prominent workspace actions. The in-app **All developer features** inventory links to working phone surfaces and names the remaining Mac workflows. See [PARITY.md](PARITY.md) for the source audit covering all 14 Mac navigation areas and 24 Tools categories. This coverage is an inventory, not a claim of full feature parity.
+
 | Capability | Companion behavior |
 | --- | --- |
 | Projects | Only explicitly shared project connections |
@@ -44,8 +46,10 @@ Keep the Mac awake, online and logged in. The preview does not silently change s
 | Existing jobs | Shared Mac job history, paged events, transcript, progress, status and continuation |
 | Approvals | Exact current request, approve once or deny; confirmation captures the reviewed request |
 | Live steering and stop | Uses the existing runtime capability and cancellation checks |
-| Project review | Read-only files, working-tree status and diffs; existing path/sensitive-file checks apply |
-| Evaluation | Bundled suites, verifier inspection, setup validation and explicitly authorized live execution |
+| Project review | Working-tree, branch and completed-turn diffs; revision-bound line feedback; file staging only with a separately approved Review grant |
+| Explicit context | Select up to ten project text files, inspect the assembled input and retain attachments in protected drafts |
+| Project operations | Inspect WorkOrders, workers, budgets and checks; queued jobs; saved checkpoint diffs. Management and checkpoint restore stay on the Mac |
+| Evaluation | Bundled suites, verifier inspection, split selection, setup validation, explicitly authorized live execution and recorded task-level baseline/candidate comparisons |
 | Optimization | Explicit Mac-configured reflection/optimizer models, evaluation/cost limits and staged evidence; no remote adoption |
 | Harness selection | Routes explicitly configured and shared by the Mac, including existing supported native/ACP/protocol routes |
 | Device access | Mac-approved pairing, network-identity binding, scoped permissions, expiry, local audit and revocation |
@@ -72,7 +76,7 @@ All endpoints are served through private HTTPS. The loopback backend accepts the
 - `POST /v1/rpc`: `{ "method": "companion.catalog", "params": {} }`, using `Authorization: Bearer <device-token>`. Success is `{ "result": ... }`; failure is `{ "error": "repair message" }` with a non-2xx status.
 - Mutations require a unique `Idempotency-Key`. Reuse it only for the exact same request. A changed payload is rejected. An uncertain action is not automatically executed again; inspect activity first.
 
-The catalog returns protocol version, device expiry, permission names, approved profiles, built-in suites and supported feature descriptions. Read methods: `companion.request_status`, `projects.list`, `jobs.list`, `jobs.get`, `threads.list`, `threads.get`, `conversations.get`, `files.list`, `files.read`, `git.status`, `experiments.list`, `evals.inspect`. Mutations: `threads.update`, `tasks.start`, `evaluations.start`, `optimizations.start`, `jobs.approve`, `jobs.cancel`, `jobs.steer`. See `remote_rpc.py` for exact parameter allowlists. Start requests select `profile`; they cannot inject a provider, model, shell command, endpoint, credential or permission override.
+The catalog returns protocol version, device expiry, permission names, approved profiles, built-in suites and supported feature descriptions. Read methods: `companion.request_status`, `projects.list`, `jobs.list`, `jobs.get`, `threads.list`, `threads.get`, `conversations.get`, `files.list`, `files.read`, `git.status`, `experiments.list`, `evals.inspect`, `review.list`, `review.diff`, `review.feedback`, `checkpoints.list`, `checkpoints.diff`, `queue.list`, `workorders.snapshot`, `context.preview`. Mutations: `review.stage`, `threads.update`, `tasks.start`, `evaluations.start`, `optimizations.start`, `jobs.approve`, `jobs.cancel`, `jobs.steer`. See `remote_rpc.py` for exact parameter allowlists. File staging requires the optional `review` permission, disabled by default; existing grants do not gain it. Feedback prepares a draft and never executes automatically. Start requests select `profile`; they cannot inject a provider, model, shell command, endpoint, credential or permission override.
 
 `companion.request_status` takes the original `{ "key": "<idempotency-key>" }` and returns `not_recorded`, `uncertain`, `accepted` or `completed`, with an existing result when available. It never replays a command and is scoped to the same device and currently shared project. Coding and experiment composers save the immutable original payload and key before submission, offers an explicit status check, and reuses them for retries. A new conversation always starts blank; saved drafts are resumed separately. Drafts are protected files excluded from backups, capped at 20 entries/4 MiB, and can be cleared in Settings.
 
@@ -82,6 +86,6 @@ Requests, response sizes, active connections and pairing attempts are bounded. A
 
 ## Remaining release validation
 
-Run the existing macOS build/tests plus the ad-hoc signed iOS simulator workflow and the account-free `tests/test_desktop_companion.py` suite (`.venv/bin/python -m pytest tests/test_desktop_companion.py`). The iOS workflow runs real Keychain, connection lifecycle, draft recovery, markdown/highlighting tests and UI checks for blank conversations and collapsed approval details, and captures pairing, workspace, conversation and harness-lab screens. These tests use isolated sample data, not a real private Mac connection. A real Mac/iPhone pair must verify Tailscale variants, trusted HTTPS, camera pairing, Keychain, cellular access, repeated disconnect/reconnect, foreground/background transitions, sleep/wake, engine restart and credential revocation.
+Run the existing macOS build/tests plus the ad-hoc signed iOS simulator workflow and the account-free `tests/test_desktop_companion.py` suites (`.venv/bin/python -m pytest tests/test_desktop_companion.py tests/test_desktop_companion_workflows.py tests/test_ios_feature_parity.py`). Run `python3 apps/ios/scripts/audit-parity.py --check` to detect inventory drift. The iOS workflow runs real Keychain, connection lifecycle, draft recovery, markdown/highlighting tests and UI checks for blank conversations and collapsed approval details, and captures pairing, workspace, conversation, evaluation and harness-lab screens. These tests use isolated sample data, not a real private Mac connection. A real Mac/iPhone pair must verify Tailscale variants, trusted HTTPS, camera pairing, Keychain, cellular access, repeated disconnect/reconnect, foreground/background transitions, sleep/wake, engine restart and credential revocation.
 
 This preview does not include APNs/background push, raw terminal sessions, remote provider installation, local model downloads, harness editing, commits/merges or candidate adoption. Those remain Mac workflows. Do not advertise full mobile feature parity or universal external-app compatibility until the remaining surfaces and vendor-specific paths are implemented and verified.

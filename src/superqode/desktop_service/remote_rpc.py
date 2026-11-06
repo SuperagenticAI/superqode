@@ -7,6 +7,13 @@ from pathlib import Path
 import time
 
 from .remote_access import digest, text
+from .remote_project import (
+    context_paths,
+    project_path,
+    queue_snapshot,
+    checkpoint_snapshot,
+    workorder_snapshot,
+)
 
 READS = {
     "threads.list": {"project", "query", "view", "limit", "cursor"},
@@ -18,10 +25,33 @@ READS = {
     "files.read": {"project", "path"},
     "evals.inspect": {"profile", "tasks", "split"},
     "experiments.list": {"project"},
+    "review.list": {"project", "scope", "job", "base_ref"},
+    "review.diff": {"project", "scope", "job", "base_ref", "file_id"},
+    "review.feedback": {
+        "project",
+        "scope",
+        "job",
+        "base_ref",
+        "file_id",
+        "snapshot_id",
+        "hunk_id",
+        "start",
+        "end",
+        "comment",
+    },
+    "checkpoints.list": {"project"},
+    "checkpoints.diff": {"project", "id", "path"},
+    "queue.list": {"project"},
+    "workorders.snapshot": {"project"},
+    "context.preview": {"profile", "prompt", "context_files", "interaction_mode"},
 }
 WRITES = {
+    "review.stage": ("review", {"project", "scope", "job", "base_ref", "file_id", "snapshot_id"}),
     "threads.update": ("tasks", {"project", "id", "title", "pinned", "archived"}),
-    "tasks.start": ("tasks", {"profile", "prompt", "parent_id", "interaction_mode"}),
+    "tasks.start": (
+        "tasks",
+        {"profile", "prompt", "parent_id", "interaction_mode", "context_files"},
+    ),
     "evaluations.start": ("evaluate", {"profile", "tasks", "tasks_hash", "live", "split"}),
     "optimizations.start": (
         "optimize",
@@ -110,6 +140,9 @@ def dispatch(access, device, method, params, key):
                 "terminal": False,
                 "provider_setup": "On the Mac",
                 "push_notifications": False,
+                "project_inspection": ["review", "checkpoints", "queue", "workorders"],
+                "context_files": True,
+                "review_stage": True,
             },
         }
     if method == "projects.list":
@@ -142,7 +175,22 @@ def dispatch(access, device, method, params, key):
         request["project"] = profile["project"]
     if "project" in request and request["project"] not in projects:
         raise PermissionError("This project is not shared with this device")
-    if "id" in request:
+    if (
+        method
+        in {
+            "review.list",
+            "review.diff",
+            "review.feedback",
+            "review.stage",
+            "checkpoints.list",
+            "checkpoints.diff",
+            "queue.list",
+            "workorders.snapshot",
+        }
+        and "project" not in request
+    ):
+        raise ValueError("Choose a shared project")
+    if "id" in request and method != "checkpoints.diff":
         identity = text(request["id"], "a job ID")
         found = service._all("SELECT project FROM jobs WHERE id=?", (identity,))
         if not found or found[0]["project"] not in projects:
@@ -154,6 +202,25 @@ def dispatch(access, device, method, params, key):
         relative = text(request.get("path"), "a project file path", 1000)
         if Path(relative).is_absolute() or ".." in Path(relative).parts:
             raise ValueError("Choose a relative path inside the shared project")
+    if method == "checkpoints.diff":
+        request["path"] = project_path(request.get("path"))
+        request["id"] = text(request.get("id"), "a checkpoint ID", 200)
+    if "context_files" in request:
+        request["context_files"] = context_paths(request["context_files"])
+        if request.get("interaction_mode") == "chat" and request["context_files"]:
+            raise ValueError("Use Code or Plan to attach project reference files")
+        from .context import attach_project_text
+
+        attach_project_text(
+            service.project(request["project"]),
+            text(request.get("prompt"), "a prompt", 32000),
+            request["context_files"],
+        )
+    if method == "context.preview":
+        if not profile:
+            raise ValueError("Choose a shared connection to preview context")
+        request["prompt"] = text(request.get("prompt"), "a prompt", 32000)
+        request["harness"] = profile["harness"]
     if method.startswith("eval") or method == "optimizations.start":
         if not profile or not profile["evaluation"]:
             raise ValueError("Choose a native evaluation-capable connection shared by the Mac")
@@ -288,6 +355,14 @@ def dispatch(access, device, method, params, key):
                 "remote_origin",
             }
         }
+    if method == "context.preview":
+        result = {k: result.get(k) for k in ("prompt", "files", "image_count")}
+    elif method == "queue.list":
+        result = queue_snapshot(result)
+    elif method == "workorders.snapshot":
+        result = workorder_snapshot(result)
+    elif method == "checkpoints.list":
+        result = checkpoint_snapshot(result)
     if method in WRITES:
         safe = access.clean(result)
         service._write(

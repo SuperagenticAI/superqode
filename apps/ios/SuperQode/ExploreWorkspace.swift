@@ -56,12 +56,20 @@ enum ExploreWorkspace {
     .object(["protocol": .number(1), "device": .object(["name": .string("Sample iPhone")]),
       "permissions": .array(permissions.map(JSONValue.string)), "profiles": .array([.object(profileRecord.raw)]),
       "suites": .array([.object(["id": .string("decision-routing"), "name": .string("Labelled route decisions"), "description": .string("Sample evaluation suite"), "tasks": .number(6)])]),
-      "features": .object(["threads": .array(["search", "pagination", "rename", "pin", "archive"].map(JSONValue.string)), "request_reconciliation": .bool(true)])])
+      "features": .object(["threads": .array(["search", "pagination", "rename", "pin", "archive"].map(JSONValue.string)), "request_reconciliation": .bool(true), "context_files": .bool(true), "review_stage": .bool(true), "project_inspection": .array(["review", "checkpoints", "queue", "workorders"].map(JSONValue.string))])])
   }
-  static var result: JSONValue {
-    .object(["live": .bool(true), "summary": .string("Both splits passed the labelled routing checks."),
-      "variants": .array([.object(["name": .string("Core · Qwen3 Coder"), "harness": .string("core"), "passed": .number(6), "failed": .number(0), "skipped": .number(0)])])])
-  }
+  static let result: JSONValue = {
+    guard let url = Bundle.main.url(forResource: "SampleEvaluation", withExtension: "json"),
+      let bytes = try? Data(contentsOf: url), let value = try? JSONDecoder().decode(JSONValue.self, from: bytes) else { return .object(["summary": .string("Sample evidence is unavailable.")]) }
+    return value
+  }()
+  static let reviewFile: [String: JSONValue] = ["id": .string("sample-file"), "path": .string("Sources/RequestQueue.swift"), "layer": .string("unstaged"), "change": .string("M")]
+  static let reviewHunk: JSONValue = .object(["id": .number(0), "header": .string("@@ -1,2 +1,3 @@"), "lines": .array([
+    .object(["kind": .string("context"), "text": .string("import Foundation"), "old_line": .number(1), "new_line": .number(1)]),
+    .object(["kind": .string("delete"), "text": .string("await queue.start(prompt)"), "old_line": .number(2), "new_line": .null]),
+    .object(["kind": .string("add"), "text": .string("let state = try await queue.status(request.id)"), "old_line": .null, "new_line": .number(2)]),
+    .object(["kind": .string("add"), "text": .string("guard state == .notStarted else { return }"), "old_line": .null, "new_line": .number(3)]),
+  ])])
 }
 
 struct ExploreTransport: CompanionTransport {
@@ -81,7 +89,7 @@ struct ExploreTransport: CompanionTransport {
       let id = params.text("id")
       var record = (ExploreWorkspace.jobs.first { $0.id == id } ?? ExploreWorkspace.jobs[0]).raw
       record["request"] = .object(["prompt": .string(ExploreWorkspace.prompt), "model": .string("qwen3-coder:30b"), "harness": .string("core")])
-      let events: [JSONValue] = params.number("after") > 0 ? [] : [.object(["sequence": .number(1), "type": .string("answer"), "data": .object(["text": .string(ExploreWorkspace.answer)])])]
+      let events: [JSONValue] = params.number("after") > 0 || id == ExploreWorkspace.evaluation ? [] : [.object(["sequence": .number(1), "type": .string("answer"), "data": .object(["text": .string(ExploreWorkspace.answer)])])]
       record["events"] = .array(events)
       if id == ExploreWorkspace.failedRun {
         record["result"] = .object(["error": .string(ExploreWorkspace.failure)])
@@ -89,7 +97,10 @@ struct ExploreTransport: CompanionTransport {
       }
       record["next_sequence"] = .number(1)
       record["has_more_events"] = .bool(false)
-      if id == ExploreWorkspace.evaluation { record["result"] = ExploreWorkspace.result }
+      if id == ExploreWorkspace.evaluation {
+        record["result"] = ExploreWorkspace.result
+        record["request"] = .object(["model": .string("qwen3-coder:30b"), "harness": .string("core")])
+      }
       if id == "sample-approval" {
         record["pending_approval"] = .object(["request_id": .string("sample-request"), "tool": .object(["name": .string("Run checks"), "arguments": .object(["command": .string("python -m pytest tests/test_request_queue.py -q")])])])
       }
@@ -99,6 +110,14 @@ struct ExploreTransport: CompanionTransport {
     case "files.read": return .object(["path": .string(params.text("path")), "text": .string("import Foundation\n\nstruct CodingRequest: Codable {\n  let id: UUID\n  let prompt: String\n}\n")])
     case "git.status": return .object(["branch": .string("feat/resilient-queue"), "status": .string(" M Sources/RequestQueue.swift"), "stat": .string("1 file changed, 3 insertions(+), 1 deletion(-)"), "diff": .string("diff --git a/RequestQueue.swift b/RequestQueue.swift\n@@ -1,3 +1,5 @@\n- await queue.start(prompt)\n+ let state = try await queue.status(request.id)\n+ guard state == .notStarted else { return }\n+ try await queue.submit(request)\n")])
     case "experiments.list": return .array([.object(ExploreWorkspace.jobs[1].raw)])
+    case "context.preview": return .object(["prompt": .string(params.text("prompt") + "\n\nSample reference material."), "files": .array((params["context_files"]?.array ?? []).map { .object(["path": $0, "sha256": .string("sample-only-file-fingerprint"), "bytes": .number(85)]) }), "image_count": .number(0)])
+    case "review.list": return .object(["label": .string("Sample working-tree changes"), "files": .array([.object(ExploreWorkspace.reviewFile)]), "excluded_count": .number(0), "truncated": .bool(false)])
+    case "review.diff": return .object(ExploreWorkspace.reviewFile.merging(["snapshot_id": .string("sample-review-snapshot"), "hunks": .array([ExploreWorkspace.reviewHunk]), "truncated": .bool(false), "issue": .string(""), "can_stage": .bool(true)]) { _, new in new })
+    case "review.feedback": return .object(["text": .string("Review feedback for the sample RequestQueue.swift revision:\n" + params.text("comment"))])
+    case "queue.list": return .object(["running": .bool(false), "items": .array([.object(["id": .string("sample-queue"), "state": .string("pending"), "job": .string(""), "request": .object(["prompt": .string("Run the reviewed regression checks"), "harness": .string("core")])])])])
+    case "checkpoints.list": return .object(["items": .array([.object(["id": .string("sample-checkpoint"), "name": .string("Before the queue update"), "timestamp": .string("Sample checkpoint"), "sealed": .bool(true), "changes": .array([.object(["path": .string("Sources/RequestQueue.swift"), "change_type": .string("modified")])])])])])
+    case "checkpoints.diff": return .object(["diff": .string("-await queue.start(prompt)\n+try await queue.submit(request)\n")])
+    case "workorders.snapshot": return .object(["items": .array([.object(["work_order_id": .string("sample-order"), "goal": .string("Make request delivery reliable"), "status": .string("needs_review"), "harness": .string("core"), "elapsed_seconds": .number(42), "tasks": .array([.object(["task_id": .string("sample-task"), "title": .string("Verify reconnect behavior"), "role": .string("verifier"), "status": .string("completed"), "worker_id": .string("sample-worker")])]), "workers": .array([.object(["worker_id": .string("sample-worker"), "responsive": .bool(true)])]), "gates": .object(["check_results": .number(1), "last_check_passed": .bool(true), "approved_reviews": .number(0)]), "budget": .object(["max_cost_usd": .number(1)]), "usage": .object(["cost_usd": .number(0)])])])])
     case "evals.inspect": return .object(["tasks_hash": .string("sample-hash"), "task_count": .number(6), "warnings": .array([]), "repository_checks": .array([])])
     default: throw CompanionError("Explore mode is read-only. Pair your own Mac to use this action.")
     }

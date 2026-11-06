@@ -1,6 +1,34 @@
 import XCTest
 
 final class CompanionExperienceTests: XCTestCase {
+  func testHomePromotesDeveloperWorkflowsAndLabelsTerminalAsMacOnly() {
+    let app = XCUIApplication()
+    app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]
+    app.launch()
+    for action in ["code", "review", "evaluate", "optimize"] {
+      XCTAssertTrue(app.buttons["workflow." + action].waitForExistence(timeout: 10))
+    }
+    app.buttons["All features"].tap()
+    let search = app.searchFields.firstMatch
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    search.tap(); search.typeText("Terminal")
+    app.staticTexts["Terminal"].tap()
+    XCTAssertTrue(app.staticTexts["On Mac"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["Start terminal"].exists)
+  }
+  func testEvaluationComparisonShowsReportedZeroAndUnknownCost() {
+    let app = XCUIApplication()
+    app.launchArguments = ["--design-preview", "evaluation", "-companionAppearance", "dark"]
+    app.launch()
+    let compare = app.buttons["Compare task outcomes"]
+    XCTAssertTrue(compare.waitForExistence(timeout: 10))
+    compare.tap()
+    let baseline = app.staticTexts["Baseline cost"]
+    for _ in 0..<4 { if baseline.isHittable { break }; app.swipeUp() }
+    XCTAssertTrue(baseline.exists)
+    XCTAssertTrue(app.staticTexts["$0.0000"].exists)
+    XCTAssertTrue(app.staticTexts["Unknown"].firstMatch.exists)
+  }
   func testFailedRunExplainsTheRepairWithoutExpandingActivity() {
     let app = XCUIApplication()
     app.launchArguments = ["--design-preview", "failed", "-companionAppearance", "dark"]

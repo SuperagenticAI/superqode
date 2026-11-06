@@ -104,6 +104,7 @@ struct ProjectsScreen: View {
             }.padding(16).background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
           }.buttonStyle(.plain)
         }
+        DeveloperShortcuts()
         HStack {
           Text("Workspaces").font(.title3.bold())
           Spacer()
@@ -122,6 +123,7 @@ struct ProjectsScreen: View {
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("Workspaces").companionNavigationBrand()
+      .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { AllFeaturesScreen() } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("All features") } }
       .sheet(isPresented: $showingDrafts, onDismiss: { Task { await refreshDraftCount() } }) { NavigationStack { DraftsScreen() } }
       .task { await refreshDraftCount() }
       .refreshable { await store.refresh(); await refreshDraftCount() }
@@ -243,10 +245,11 @@ struct CompanionSettingsScreen: View {
         if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       }.listRowBackground(CompanionTheme.panel)
       Section("Help & about") {
+        NavigationLink("All developer features") { AllFeaturesScreen() }
         NavigationLink("Setup guide and privacy") { CompanionSetupGuide() }
         Link("Private connection setup", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
         Link("Source repository", destination: URL(string: "https://github.com/SuperagenticAI/superqode")!)
-        Text("Keep the Mac awake and online. Providers can use their own cloud services. Background push notifications, provider installation, terminals and candidate adoption are not included in this version.").font(.footnote).foregroundStyle(.secondary)
+        Text("Keep the Mac awake and online. Providers can use their own cloud services. All developer features lists which workflows are available here and which still require the Mac.").font(.footnote).foregroundStyle(.secondary)
         LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Source build")
       }.listRowBackground(CompanionTheme.panel)
     }.scrollContentBackground(.hidden).background(CompanionTheme.background).navigationTitle("Settings").companionNavigationBrand()

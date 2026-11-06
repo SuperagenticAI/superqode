@@ -46,6 +46,56 @@ private actor WorkflowTransport: CompanionTransport {
 }
 
 final class CompanionWorkflowTests: XCTestCase {
+  func testFeatureInventoryLoadsAndDoesNotClaimMacOnlyFeaturesAreMobile() {
+    XCTAssertEqual(CompanionFeature.all.count, 34)
+    let terminal = CompanionFeature.all.first { $0.id == "terminal" }
+    XCTAssertEqual(terminal?.parity, "mac_only")
+    XCTAssertNil(terminal?.workflow)
+    XCTAssertEqual(CompanionFeature.all.first { $0.id == "pro" }?.parity, "preview")
+    XCTAssertEqual(CompanionFeature.all.first { $0.id == "review" }?.workflow, .review)
+  }
+  func testComparisonUsesEngineRegressionsAndKeepsUnknownCostDistinctFromZero() {
+    let comparison = ExploreWorkspace.result.object.object("comparison")
+    XCTAssertTrue(comparison.flag("available"))
+    XCTAssertEqual(comparison.text("scope"), "held-out")
+    let candidate = comparison.records("candidates")[0].raw
+    XCTAssertEqual(candidate.text("state"), "regressed")
+    XCTAssertEqual(candidate.object("counts").number("regression"), 1)
+    XCTAssertEqual(candidate.object("counts").number("improvement"), 1)
+    XCTAssertEqual(evidenceMetric(candidate["baseline_cost_usd"], currency: true), "$0.0000")
+    XCTAssertEqual(evidenceMetric(candidate["candidate_cost_usd"], currency: true), "Unknown")
+    let rows = candidate.records("rows")
+    XCTAssertEqual(rows.filter { ComparisonFilter.regressions.includes($0) }.map { $0.text("id") }, ["queue-reconnect"])
+    XCTAssertEqual(rows.filter { ComparisonFilter.improvements.includes($0) }.map { $0.text("id") }, ["cancel-routing"])
+    XCTAssertTrue(ComparisonFilter.incomplete.includes(RemoteRecord(raw: ["outcome": .string("unchanged"), "fully_graded": .bool(false)])))
+  }
+  func testContextPickerHidesSensitiveAndKnownBinaryPaths() {
+    XCTAssertTrue(visibleContextPath("Sources/模型.swift"))
+    for path in ["/etc/passwd", "../outside", ".env", ".env.local/config", ".aws/config", ".ssh/id_rsa", ".git/config", ".superqode/checkpoints/snapshot", "image.png", "model.gguf"] {
+      XCTAssertFalse(visibleContextPath(path), path)
+    }
+  }
+  func testReviewIntegerParametersHaveIntegerJSONTokens() throws {
+    let value = JSONValue.object(["hunk_id": .number(0), "start": .number(1), "end": .number(3)])
+    let wire = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
+    XCTAssertTrue(wire.contains("\"hunk_id\":0"))
+    XCTAssertFalse(wire.contains("0.0"))
+    XCTAssertFalse(wire.contains("1.0"))
+    XCTAssertFalse(wire.contains("3.0"))
+  }
+  func testReferenceFilesSurviveDraftRelaunchWithoutSelectingAnotherConnection() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let repository = DraftRepository(directory: directory)
+    var draft = LocalDraft(project: "project")
+    draft.prompt = "Inspect these explicit files"
+    draft.contextFiles = ["Sources/模型.swift", "README.md"]
+    try await repository.save(draft)
+    let restored = try await DraftRepository(directory: directory).list()
+    XCTAssertEqual(restored.first?.contextFiles, draft.contextFiles)
+    XCTAssertEqual(restored.first?.profile, "")
+    XCTAssertEqual(LocalDraft(project: "new-project").contextFiles, nil)
+  }
   @MainActor func testOriginalBrandAndRegisteredHarnessMarksAreBundled() {
     XCTAssertNotNil(UIImage(named: "BrandMark"))
     for asset in Set(BundledAgentIcons.assets.values) { XCTAssertNotNil(UIImage(named: asset), asset) }
@@ -111,7 +161,7 @@ final class CompanionWorkflowTests: XCTestCase {
     XCTAssertFalse(store.paired)
   }
   func testExploreTransportCannotExecuteActions() async {
-    for method in ["tasks.start", "jobs.approve", "threads.update", "remote.start", "optimizations.start"] {
+    for method in ["tasks.start", "jobs.approve", "threads.update", "remote.start", "optimizations.start", "review.stage", "queue.run"] {
       do { _ = try await ExploreTransport().rpc(method, [:], key: "fixture"); XCTFail("Explore mode accepted a write") }
       catch { XCTAssertTrue(error.localizedDescription.contains("read-only")) }
     }

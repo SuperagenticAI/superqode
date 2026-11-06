@@ -49,10 +49,11 @@ struct ProjectScreen: View {
       Section {
         HStack(spacing: 12) {
           NavigationLink { FilesScreen(project: project.id) } label: { Label("Files", systemImage: "doc.text") }
-          NavigationLink { ChangesScreen(project: project.id) } label: { Label("Changes", systemImage: "arrow.triangle.branch") }
+          NavigationLink { ProjectReviewScreen(project: project.id) } label: { Label("Review", systemImage: "text.magnifyingglass") }
           Button { evaluate = true } label: { Label("Evaluate", systemImage: "chart.bar.xaxis") }
             .disabled(!store.permissions.contains("evaluate") && !store.permissions.contains("optimize"))
         }.font(.subheadline).buttonStyle(.borderless)
+        NavigationLink("All project tools") { ProjectToolsScreen(project: project) }
       }.listRowBackground(CompanionTheme.panel)
       Section {
         Picker("Conversations", selection: $filter) {
