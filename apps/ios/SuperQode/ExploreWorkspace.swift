@@ -37,7 +37,7 @@ enum ExploreWorkspace {
   static let profileRecord = RemoteRecord(raw: [
     "id": .string(profile), "name": .string("Qwen · Local"), "project": .string(project),
     "harness": .string("core"), "provider": .string("ollama"), "model": .string("qwen3-coder:30b"),
-    "local_only": .bool(true), "evaluation": .bool(true), "optimization": .bool(false),
+    "local_only": .bool(true), "evaluation": .bool(true), "optimization": .bool(false), "chat": .bool(true),
     "enforces_controls": .bool(true), "permission_note": .string("Ask before edits and commands"),
   ])
   static let jobs: [RemoteRecord] = [

@@ -37,7 +37,7 @@ Keep the Mac awake, online and logged in. The preview does not silently change s
 | Capability | Companion behavior |
 | --- | --- |
 | Projects | Only explicitly shared project connections |
-| New tasks and conversations | Code/Chat and supported Plan mode; each new composer starts with no selected connection |
+| New tasks and conversations | Code, Direct Chat for local/API model connections, and supported Plan mode; each new composer starts with no selected connection |
 | Conversation library | Search, pagination, pinned/archived views and scoped rename/pin/archive |
 | Protected drafts | Device-only unsent text and experiment requests, explicit resume, original request ID retained after interrupted submission |
 | Presentation | Original branding, light/dark themes, native markdown, selectable highlighted code and colored diffs |

@@ -483,3 +483,25 @@ def test_request_reconciliation_never_replays_and_is_bound_to_device(companion, 
     access.handle("remote.profiles.remove", {"id": profile["id"]})
     with pytest.raises(PermissionError):
         access.rpc(device, "companion.request_status", {"key": "pending"})
+
+
+def test_direct_chat_capability_rejects_agent_managed_routes_before_reserving(companion):
+    service, _, _, profile, access = companion
+    _, device = pair(access, profile)
+    assert access.rpc(device, "companion.catalog", {})["profiles"][0]["chat"] is True
+    access.handle("remote.profiles.save", {**profile, "provider": "agent"})
+    assert access.rpc(device, "companion.catalog", {})["profiles"][0]["chat"] is False
+    with pytest.raises(ValueError, match="Direct Chat requires"):
+        access.rpc(
+            device,
+            "tasks.start",
+            {"profile": profile["id"], "prompt": "Hello", "interaction_mode": "chat"},
+            "unsupported-chat",
+        )
+    assert (
+        service._all(
+            "SELECT key FROM companion_commands WHERE device=? AND key=?",
+            (device["id"], "unsupported-chat"),
+        )
+        == []
+    )

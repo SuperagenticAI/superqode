@@ -41,6 +41,7 @@ def available_profiles(access, device):
                 for k in ("id", "name", "project", "harness", "provider", "model", "local_only")
             },
             "evaluation": p["evaluation"],
+            "chat": bool(p["native"] and p["provider"].lower() != "agent" and p["model"]),
             "optimization": bool(
                 p["native"]
                 and not p["local_only"]
@@ -203,6 +204,14 @@ def dispatch(access, device, method, params, key):
                 mode = request.get("interaction_mode", "code")
                 if mode not in {"code", "chat", "plan"}:
                     raise ValueError("Choose Code, Plan or Chat")
+                if mode == "chat" and (
+                    not profile["native"]
+                    or profile["provider"].lower() == "agent"
+                    or not profile["model"]
+                ):
+                    raise ValueError(
+                        "Direct Chat requires a local or API model connection. Use Code for conversations with this agent."
+                    )
                 if profile["enforces_controls"]:
                     request["permission_mode"] = "ask"
                 if request.get("parent_id"):

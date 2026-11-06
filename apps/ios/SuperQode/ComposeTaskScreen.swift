@@ -23,6 +23,10 @@ struct ComposeTaskScreen: View {
   private var profile: RemoteRecord? { profiles.first { $0.id == draft.profile } }
   private var frozen: Bool { draft.attempt != nil || submitted }
   private var wrongMac: Bool { !draft.origin.isEmpty && draft.origin != store.address }
+  private var supportedMode: Bool {
+    draft.mode == "code" || (draft.mode == "plan" && profile?.flag("enforces_controls") == true)
+      || (draft.mode == "chat" && profile?.flag("chat") == true)
+  }
 
   var body: some View {
     ScrollView {
@@ -55,7 +59,7 @@ struct ComposeTaskScreen: View {
           Button { editing = false; Task { await submit() } } label: {
             HStack { if submitting { ProgressView().tint(.white) }; Label("Send to \(store.macName)", systemImage: "arrow.up") }
           }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
-            .disabled(submitting || !store.canMutate || wrongMac || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
+            .disabled(submitting || !store.canMutate || wrongMac || !supportedMode || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
           Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. You can close the phone app and return to the same job later.")
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -85,7 +89,7 @@ struct ComposeTaskScreen: View {
       }
       .onDisappear { saveOnExit() }
       .onChange(of: scenePhase) { _, phase in if phase != .active { saveOnExit() } }
-      .onChange(of: draft.profile) { _, _ in if draft.mode == "plan", profile?.flag("enforces_controls") != true { draft.mode = "code" } }
+      .onChange(of: profile) { _, _ in if !frozen && !supportedMode { draft.mode = "code" } }
       .confirmationDialog("Discard this saved request?", isPresented: $discard, titleVisibility: .visible) {
         Button("Discard draft", role: .destructive) { Task {
           do { try await store.drafts.remove(draft.id); submitted = true; dismiss() }
@@ -108,13 +112,14 @@ struct ComposeTaskScreen: View {
         HarnessBadge(name: profile.text("harness"))
         Text(profile.text("permission_note")).font(.caption).foregroundStyle(.secondary)
         if !profile.flag("local_only") { Label("This connection may use cloud models", systemImage: "cloud").font(.caption).foregroundStyle(.secondary) }
+        if !profile.flag("chat") { Text("Use Code for conversations with this agent. Direct Chat requires a local or API model connection.").font(.caption).foregroundStyle(.secondary) }
       } else {
         Text("Every new conversation starts without a connection. Choose one explicitly.").font(.caption).foregroundStyle(.secondary)
       }
       Picker("Mode", selection: $draft.mode) {
         Text("Code").tag("code")
         Text("Plan").tag("plan").disabled(profile?.flag("enforces_controls") != true)
-        Text("Chat").tag("chat")
+        Text("Chat").tag("chat").disabled(profile?.flag("chat") != true)
       }.pickerStyle(.segmented).disabled(frozen || submitting)
     }
   }
@@ -146,6 +151,7 @@ struct ComposeTaskScreen: View {
   }
   private func submit() async {
     guard let api = store.api, store.canMutate, !wrongMac, !submitting, !draft.isExperiment else { return }
+    guard draft.attempt != nil || supportedMode else { return }
     submitting = true; issue = ""
     defer { submitting = false }
     if draft.attempt == nil {
