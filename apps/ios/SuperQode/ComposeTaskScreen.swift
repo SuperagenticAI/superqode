@@ -141,8 +141,8 @@ struct ComposeTaskScreen: View {
   private func open(_ identity: String) async {
     submitted = true
     try? await store.drafts.remove(draft.id)
-    await store.refreshActivity()
     startedRun = OpenedRun(id: identity)
+    await store.refreshActivity()
   }
   private func submit() async {
     guard let api = store.api, store.canMutate, !wrongMac, !submitting else { return }
