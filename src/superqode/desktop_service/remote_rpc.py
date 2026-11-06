@@ -20,6 +20,7 @@ READS = {
     "experiments.list": {"project"},
 }
 WRITES = {
+    "threads.update": ("tasks", {"project", "id", "title", "pinned", "archived"}),
     "tasks.start": ("tasks", {"profile", "prompt", "parent_id", "interaction_mode"}),
     "evaluations.start": ("evaluate", {"profile", "tasks", "tasks_hash", "live", "split"}),
     "optimizations.start": (
@@ -62,6 +63,32 @@ def dispatch(access, device, method, params, key):
     permissions = set(json.loads(device["permissions"]))
     if "read" not in permissions:
         raise PermissionError("This device does not have read access")
+    if method == "companion.request_status":
+        if not isinstance(params, dict) or set(params) != {"key"}:
+            raise ValueError("Provide the original request ID")
+        key = text(params["key"], "the original request ID", 128)
+        saved = service._all(
+            "SELECT result FROM companion_commands WHERE device=? AND key=?",
+            (device["id"], key),
+        )
+        if not saved:
+            return {"state": "not_recorded"}
+        if saved[0]["result"] is not None:
+            result = json.loads(saved[0]["result"])
+            if isinstance(result, dict) and result.get("id"):
+                rows = service._all("SELECT project FROM jobs WHERE id=?", (result["id"],))
+                if rows and rows[0]["project"] not in projects:
+                    raise PermissionError("This job's project is no longer shared")
+            return {"state": "completed", "result": result}
+        accepted = service._all(
+            "SELECT id,project FROM jobs WHERE json_extract(request,'$.command_id')=? LIMIT 1",
+            (f"companion:{device['id']}:{key}",),
+        )
+        if accepted:
+            if accepted[0]["project"] not in projects:
+                raise PermissionError("This job's project is no longer shared")
+            return {"state": "accepted", "result": {"id": accepted[0]["id"]}}
+        return {"state": "uncertain"}
     if method == "companion.catalog":
         return {
             "protocol": 1,
@@ -73,6 +100,8 @@ def dispatch(access, device, method, params, key):
                 for p in service.dispatch("evals.packs", {})
             ],
             "features": {
+                "request_reconciliation": True,
+                "threads": ["search", "pagination", "rename", "pin", "archive"],
                 "tasks": True,
                 "evaluations": True,
                 "optimization": "Staged candidates only; adoption stays on the Mac",

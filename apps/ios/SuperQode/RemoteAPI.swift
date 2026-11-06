@@ -87,7 +87,22 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
   }
 }
 
-struct RemoteAPI: Sendable {
+protocol CompanionTransport: Sendable {
+  func post(_ path: String, _ payload: [String: JSONValue], key: String?) async throws -> JSONValue
+  func rpc(_ method: String, _ params: [String: JSONValue], key: String?) async throws -> JSONValue
+}
+
+extension CompanionTransport {
+  func post(_ path: String, _ payload: [String: JSONValue]) async throws -> JSONValue {
+    try await post(path, payload, key: nil)
+  }
+  func rpc(_ method: String) async throws -> JSONValue { try await rpc(method, [:], key: nil) }
+  func rpc(_ method: String, _ params: [String: JSONValue]) async throws -> JSONValue {
+    try await rpc(method, params, key: nil)
+  }
+}
+
+struct RemoteAPI: CompanionTransport {
   let address: URL
   let token: String?
   private static let session: URLSession = {

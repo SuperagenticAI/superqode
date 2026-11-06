@@ -54,7 +54,7 @@ struct JobScreen: View {
             Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
             Text(turn.text("prompt")).textSelection(.enabled)
             Divider()
-            AssistantText(text: turn.text("response"))
+            AssistantText(text: turn.text("response")).equatable()
           }
         }
         if !detail.object("request").text("prompt").isEmpty {
@@ -63,16 +63,16 @@ struct JobScreen: View {
             Text(detail.object("request").text("prompt")).textSelection(.enabled)
           }
         }
-        if !assistantText.isEmpty {
-          CompanionCard {
-            Label("Agent", systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)
-            AssistantText(text: assistantText)
-          }
-        }
         if !pending.isEmpty {
           approvalCard
         } else if job.text("status") == "needs_approval" {
           Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(.orange)
+        }
+        if !assistantText.isEmpty {
+          CompanionCard {
+            Label("Agent", systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)
+            AssistantText(text: assistantText).equatable()
+          }
         }
         if !detail.object("result").isEmpty, job.text("kind") != "task" {
           EvaluationResultCard(result: detail.object("result"))
@@ -85,7 +85,7 @@ struct JobScreen: View {
               if await act("jobs.steer", ["id": .string(identity), "text": .string(steering)], key: steerKey) {
                 steering = ""; steerKey = UUID().uuidString
               }
-            } }.disabled(acting || !store.reachable || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } }.disabled(acting || !store.canMutate || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           }
         }
         if !events.isEmpty {
@@ -106,10 +106,10 @@ struct JobScreen: View {
         }
         if !job.active, job.text("kind") == "task", store.permissions.contains("tasks") {
           Button { continueThread = true } label: { Label("Continue conversation", systemImage: "arrow.turn.down.right") }
-            .buttonStyle(.borderedProminent).foregroundStyle(.black)
+            .buttonStyle(CompanionPrimaryButton())
         }
         if job.active, store.permissions.contains("cancel") {
-          Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting || !store.reachable)
+          Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting || !store.canMutate)
         }
       }.padding(20)
     }.background(CompanionTheme.background)
@@ -148,12 +148,12 @@ struct JobScreen: View {
       if !arguments.text("path").isEmpty { Text(arguments.text("path")).font(.caption).textSelection(.enabled) }
       JSONDetails(title: "Action details", value: .object(tool))
       HStack {
-        Button("Approve once") { approvalSnapshot = snapshot; confirmApproval = true }.buttonStyle(.borderedProminent).foregroundStyle(.black)
+        Button("Approve once") { approvalSnapshot = snapshot; confirmApproval = true }.buttonStyle(CompanionPrimaryButton())
         Button("Deny", role: .destructive) {
           let request = snapshot.text("request_id")
           Task { _ = await act("jobs.approve", ["id": .string(identity), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(identity):\(request)") }
         }
-      }.disabled(acting || !store.reachable || !store.permissions.contains("approve"))
+      }.disabled(acting || !store.canMutate || !store.permissions.contains("approve"))
     }
   }
 
@@ -187,7 +187,7 @@ struct JobScreen: View {
     catch { issue = error.localizedDescription }
   }
   private func act(_ method: String, _ params: [String: JSONValue], key: String) async -> Bool {
-    guard let api = store.api, !acting else { return false }
+    guard let api = store.api, store.canMutate, !acting else { return false }
     acting = true; issue = ""
     defer { acting = false }
     do {
@@ -196,24 +196,6 @@ struct JobScreen: View {
       await store.refreshActivity()
       return true
     } catch { issue = error.localizedDescription; return false }
-  }
-}
-
-struct AssistantText: View {
-  let text: String
-  var body: some View {
-    let pieces = text.components(separatedBy: "```")
-    VStack(alignment: .leading, spacing: 12) {
-      ForEach(Array(pieces.enumerated()), id: \.offset) { index, part in
-        if index % 2 == 1 {
-          ScrollView(.horizontal) {
-            Text(part).font(.system(.caption, design: .monospaced)).textSelection(.enabled).padding(12)
-          }.background(.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
-        } else if !part.isEmpty {
-          Text(part).textSelection(.enabled).lineSpacing(4)
-        }
-      }
-    }
   }
 }
 

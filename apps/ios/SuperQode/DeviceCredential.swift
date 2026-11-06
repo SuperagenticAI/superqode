@@ -7,6 +7,24 @@ struct DeviceCredential: Codable, Sendable {
   let device: String
 }
 
+protocol DeviceCredentialVault: Sendable {
+  func load() async throws -> DeviceCredential?
+  func save(_ credential: DeviceCredential) async throws
+  func remove() async throws
+}
+
+struct KeychainCredentialVault: DeviceCredentialVault {
+  func load() async throws -> DeviceCredential? {
+    try await Task.detached { try DeviceKeychain.load() }.value
+  }
+  func save(_ credential: DeviceCredential) async throws {
+    try await Task.detached { try DeviceKeychain.save(credential) }.value
+  }
+  func remove() async throws {
+    try await Task.detached { try DeviceKeychain.remove() }.value
+  }
+}
+
 enum DeviceKeychain {
   private static func query(_ account: String) -> [String: Any] {
     [kSecClass as String: kSecClassGenericPassword,

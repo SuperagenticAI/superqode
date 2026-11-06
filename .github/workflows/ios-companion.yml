@@ -34,8 +34,8 @@ jobs:
           set -euo pipefail
           device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for runtime,devices in data["devices"].items() if "iOS" in runtime for device in devices if device["name"].startswith("iPhone")))')
           echo "COMPANION_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
-          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
-      - name: Capture the native pairing screen
+          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
+      - name: Capture branded native screens
         shell: bash
         run: |
           set -euo pipefail
@@ -50,6 +50,15 @@ jobs:
           xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion
           sleep 2
           xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-pairing.png"
+          for scenario in projects conversation lab; do
+            xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion --design-preview "$scenario" -companionAppearance dark
+            sleep 2
+            xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-$scenario.png"
+          done
+          xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion --design-preview projects -companionAppearance light
+          sleep 2
+          xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-projects-light.png"
+          cp apps/ios/SuperQode/Assets.xcassets/AppIcon.appiconset/AppIcon.png "$RUNNER_TEMP/superqode-ios-icon.png"
       - name: Keep native test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,5 +66,5 @@ jobs:
           name: ios-companion-test-results
           path: |
             ${{ runner.temp }}/superqode-ios-tests.xcresult
-            ${{ runner.temp }}/superqode-ios-pairing.png
+            ${{ runner.temp }}/superqode-ios-*.png
           if-no-files-found: ignore

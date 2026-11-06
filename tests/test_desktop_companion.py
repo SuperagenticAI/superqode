@@ -402,3 +402,84 @@ def test_device_grant_persists_across_engine_restart_without_storing_bearer(comp
         assert token not in json.dumps(restored._all("SELECT * FROM companion_devices"))
     finally:
         restored.close()
+
+
+def test_remote_thread_library_can_rename_pin_and_archive_with_project_scope(companion):
+    service, project, _, profile, access = companion
+    _, device = pair(access, profile)
+    add_run(service, project, "organized-run")
+    access.rpc(
+        device,
+        "threads.update",
+        {
+            "project": project["id"],
+            "id": "organized-run",
+            "title": "Release review",
+            "pinned": True,
+        },
+        "organize-1",
+    )
+    page = access.rpc(
+        device, "threads.list", {"project": project["id"], "query": "Release", "view": "pinned"}
+    )
+    assert page["items"][0]["conversation_title"] == "Release review"
+    access.rpc(
+        device,
+        "threads.update",
+        {"project": project["id"], "id": "organized-run", "archived": True},
+        "organize-2",
+    )
+    assert (
+        access.rpc(device, "threads.list", {"project": project["id"], "view": "active"})["items"]
+        == []
+    )
+    assert access.rpc(device, "threads.list", {"project": project["id"], "view": "archived"})[
+        "items"
+    ]
+    _, read_only = pair(access, profile, ["read"])
+    with pytest.raises(PermissionError):
+        access.rpc(
+            read_only,
+            "threads.update",
+            {"project": project["id"], "id": "organized-run", "archived": False},
+            "read-only",
+        )
+
+
+def test_request_reconciliation_never_replays_and_is_bound_to_device(companion, monkeypatch):
+    service, project, _, profile, access = companion
+    _, device = pair(access, profile)
+    assert access.rpc(device, "companion.request_status", {"key": "pending"}) == {
+        "state": "not_recorded"
+    }
+    service._write(
+        "INSERT INTO companion_commands VALUES(?,?,?,NULL,?)",
+        (device["id"], "pending", "digest", 1),
+    )
+    assert access.rpc(device, "companion.request_status", {"key": "pending"}) == {
+        "state": "uncertain"
+    }
+    add_run(service, project, "accepted-run")
+    service._write(
+        "UPDATE jobs SET request=? WHERE id=?",
+        (json.dumps({"command_id": f"companion:{device['id']}:pending"}), "accepted-run"),
+    )
+    assert access.rpc(device, "companion.request_status", {"key": "pending"}) == {
+        "state": "accepted",
+        "result": {"id": "accepted-run"},
+    }
+    service._write(
+        "UPDATE companion_commands SET result=? WHERE device=? AND key=?",
+        (json.dumps({"id": "accepted-run"}), device["id"], "pending"),
+    )
+    assert (
+        access.rpc(device, "companion.request_status", {"key": "pending"})["state"] == "completed"
+    )
+    _, other_device = pair(access, profile)
+    assert (
+        access.rpc(other_device, "companion.request_status", {"key": "pending"})["state"]
+        == "not_recorded"
+    )
+    access.handle("remote.profiles.remove", {"id": profile["id"]})
+    with pytest.raises(PermissionError):
+        access.rpc(device, "companion.request_status", {"key": "pending"})
