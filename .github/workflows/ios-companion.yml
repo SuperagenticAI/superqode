@@ -42,7 +42,7 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -parallel-testing-enabled NO -test-timeouts-enabled YES -maximum-test-execution-time-allowance 180 -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
       - name: Capture branded native screens
-        if: always()
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail

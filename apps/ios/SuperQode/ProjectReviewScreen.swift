@@ -89,7 +89,7 @@ struct ReviewedFileScreen: View {
   private var complete: Bool { !loading && !document.text("snapshot_id").isEmpty && document.text("issue").isEmpty && !document.flag("truncated") }
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
+      LazyVStack(alignment: .leading, spacing: 18) {
         ConnectionStatus()
         if loading { ProgressView("Reading reviewed revisions…") }
         if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
