@@ -65,6 +65,11 @@ jobs:
           sleep 2
           xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-projects-light.png"
           cp apps/ios/SuperQode/Assets.xcassets/AppIcon.appiconset/AppIcon.png "$RUNNER_TEMP/superqode-ios-icon.png"
+      - name: Compile the iPhone release configuration without distribution credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/superqode-ios-release-build" CODE_SIGNING_ALLOWED=NO
       - name: Keep native test results
         if: always()
         uses: actions/upload-artifact@v4
