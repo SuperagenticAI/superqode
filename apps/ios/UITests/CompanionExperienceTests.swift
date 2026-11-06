@@ -29,7 +29,7 @@ final class CompanionExperienceTests: XCTestCase {
     for _ in 0..<4 { if baseline.isHittable { break }; app.swipeUp() }
     XCTAssertTrue(baseline.exists)
     XCTAssertTrue(app.staticTexts["$0.0000"].exists)
-    XCTAssertTrue(app.staticTexts["Unknown"].firstMatch.exists)
+    XCTAssertTrue(app.staticTexts.matching(identifier: "Unknown").firstMatch.exists)
   }
   func testFailedRunExplainsTheRepairWithoutExpandingActivity() {
     let app = XCUIApplication()
