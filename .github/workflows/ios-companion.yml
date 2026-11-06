@@ -1,0 +1,43 @@
+name: Private iOS companion
+
+on:
+  push:
+    paths:
+      - "apps/ios/**"
+      - "apps/macos/Sources/SuperQode/RemoteAccessView.swift"
+      - "src/superqode/desktop_service/remote_*.py"
+      - "tests/test_desktop_companion.py"
+      - ".github/workflows/ios-companion.yml"
+  pull_request:
+    paths:
+      - "apps/ios/**"
+      - "src/superqode/desktop_service/remote_*.py"
+      - ".github/workflows/ios-companion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-companion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test the unsigned companion
+        shell: bash
+        run: |
+          set -euo pipefail
+          device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for runtime,devices in data["devices"].items() if "iOS" in runtime for device in devices if device["name"].startswith("iPhone")))')
+          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO
+      - name: Keep native test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-companion-test-results
+          path: ${{ runner.temp }}/superqode-ios-tests.xcresult
+          if-no-files-found: ignore

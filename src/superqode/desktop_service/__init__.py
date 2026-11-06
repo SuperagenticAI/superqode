@@ -1,1 +1,1 @@
-"""Local, pipe-only application service for SuperQode Desktop."""
+"""Local application engine with optional private companion access."""

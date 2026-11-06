@@ -1064,6 +1064,9 @@ struct SettingsView: View {
             "Connect model stores optional provider keys in macOS Keychain. Desktop preferences contain provider IDs, not secrets. Existing terminal credentials remain supported."
           ).font(.caption).foregroundStyle(.secondary)
         }
+        Section("Private remote access") {
+          PrivateRemoteAccessControls()
+        }
         Section {
           Button("Connect…") { app.openConnections() }.disabled(app.project.isEmpty)
           Button("Save preferences", action: app.savePreferences)

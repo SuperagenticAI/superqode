@@ -1,4 +1,4 @@
-"""Desktop commands over an inherited JSON-lines pipe; no network listener."""
+"""Desktop commands over a local pipe; private companion access is opt-in."""
 
 from __future__ import annotations
 
@@ -125,6 +125,11 @@ class DesktopService:
         self.task_queues = TaskQueues(self)
         for row in self._all("SELECT id FROM jobs WHERE kind='task' AND status='interrupted'"):
             self._notify(row["id"], "interrupted")
+        from .remote_access import RemoteAccess
+
+        self.companion = RemoteAccess(self)
+        if self.companion.config.get("enabled"):
+            self._background(self.companion.resume)
 
     def _all(self, query, args=()):
         with self.lock:
@@ -893,6 +898,8 @@ class DesktopService:
             )
 
     def dispatch(self, method: str, params: dict):
+        if method.startswith("remote."):
+            return self.companion.handle(method, params)
         if method == "engine.status":
             return {
                 "mode": "attached",
@@ -2183,6 +2190,8 @@ class DesktopService:
             if self._closed:
                 return
             self._closing = True
+        self.companion.stop()
+        with self.lock:
             self.task_queues.enabled.clear()
         self.authentication.begin_close()
         for job_id in list(self.processes):
