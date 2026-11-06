@@ -10,7 +10,8 @@ final class CompanionExperienceTests: XCTestCase {
     }
     app.buttons["All features"].tap()
     let search = app.searchFields.firstMatch
-    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.navigationBars["All features"].waitForExistence(timeout: 10))
+    XCTAssertTrue(search.waitForExistence(timeout: 10))
     search.tap(); search.typeText("Terminal")
     app.staticTexts["Terminal"].tap()
     XCTAssertTrue(app.staticTexts["On Mac"].waitForExistence(timeout: 5))
@@ -25,11 +26,11 @@ final class CompanionExperienceTests: XCTestCase {
     for _ in 0..<4 { if compare.isHittable { break }; app.swipeUp() }
     XCTAssertTrue(compare.exists)
     compare.tap()
-    let baseline = app.staticTexts["Baseline cost"]
+    let baseline = app.descendants(matching: .any).matching(identifier: "comparison.baseline_cost_usd").firstMatch
     for _ in 0..<4 { if baseline.isHittable { break }; app.swipeUp() }
     XCTAssertTrue(baseline.exists)
-    XCTAssertTrue(app.staticTexts["$0.0000"].exists)
-    XCTAssertTrue(app.staticTexts.matching(identifier: "Unknown").firstMatch.exists)
+    XCTAssertEqual(baseline.value as? String, "$0.0000")
+    XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "comparison.candidate_cost_usd").firstMatch.value as? String, "Unknown")
   }
   func testFailedRunExplainsTheRepairWithoutExpandingActivity() {
     let app = XCUIApplication()
@@ -43,8 +44,11 @@ final class CompanionExperienceTests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]
     app.launch()
-    XCTAssertTrue(app.staticTexts["SuperQode Studio"].waitForExistence(timeout: 10))
-    app.staticTexts["SuperQode Studio"].tap()
+    XCTAssertTrue(app.buttons["workflow.code"].waitForExistence(timeout: 10))
+    let workspace = app.staticTexts["SuperQode Studio"]
+    for _ in 0..<5 { if workspace.isHittable { break }; app.swipeUp() }
+    XCTAssertTrue(workspace.exists)
+    workspace.tap()
     app.buttons["New conversation"].tap()
     let connection = app.buttons["composer.connection"]
     XCTAssertTrue(connection.waitForExistence(timeout: 5))

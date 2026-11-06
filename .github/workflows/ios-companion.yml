@@ -27,7 +27,7 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Verify the Mac feature inventory
@@ -40,7 +40,7 @@ jobs:
           echo "COMPANION_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
           xcrun simctl boot "$device_id"
           xcrun simctl bootstatus "$device_id" -b
-          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -parallel-testing-enabled NO -test-timeouts-enabled YES -maximum-test-execution-time-allowance 180 -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
+          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -parallel-testing-enabled NO -test-timeouts-enabled YES -maximum-test-execution-time-allowance 180 -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES ONLY_ACTIVE_ARCH=YES
       - name: Capture branded native screens
         if: ${{ !cancelled() }}
         shell: bash

@@ -148,7 +148,7 @@ struct AllFeaturesScreen: View {
           }
         }
       }
-    }.navigationTitle("All features").searchable(text: $query, prompt: "Find a developer workflow")
+    }.navigationTitle("All features").searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a developer workflow")
       .scrollContentBackground(.hidden).background(CompanionTheme.background)
   }
 }

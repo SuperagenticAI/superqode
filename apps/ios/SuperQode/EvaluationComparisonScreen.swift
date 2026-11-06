@@ -66,10 +66,13 @@ struct EvaluationComparisonScreen: View {
       }.listRowBackground(Color.clear)
     }.scrollContentBackground(.hidden).background(CompanionTheme.background)
       .navigationTitle("Task comparison").navigationBarTitleDisplayMode(.inline)
-      .searchable(text: $query, prompt: "Find task by ID")
+      .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find task by ID")
   }
   private func metric(_ title: String, _ key: String, currency: Bool = false, delta: Bool = false) -> some View {
-    LabeledContent(title, value: evidenceMetric(candidate[key], currency: currency, delta: delta)).font(.subheadline.monospacedDigit())
+    let value = evidenceMetric(candidate[key], currency: currency, delta: delta)
+    return LabeledContent(title, value: value).font(.subheadline.monospacedDigit())
+      .accessibilityElement(children: .ignore).accessibilityLabel(title).accessibilityValue(value)
+      .accessibilityIdentifier("comparison." + key)
   }
   private func task(_ row: RemoteRecord) -> some View {
     DisclosureGroup {
