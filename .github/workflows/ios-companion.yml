@@ -28,13 +28,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test the unsigned companion
+      - name: Build and test the ad-hoc signed companion
         shell: bash
         run: |
           set -euo pipefail
           device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for runtime,devices in data["devices"].items() if "iOS" in runtime for device in devices if device["name"].startswith("iPhone")))')
           echo "COMPANION_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
-          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
       - name: Capture the native pairing screen
         shell: bash
         run: |

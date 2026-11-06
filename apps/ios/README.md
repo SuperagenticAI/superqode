@@ -8,14 +8,14 @@ This is a new source-build preview, not the released macOS/Python version or a p
 
 Open `apps/ios/SuperQodeCompanion.xcodeproj`, select the `SuperQodeCompanion` scheme and an iPhone simulator, and Run. There are no third-party iOS package dependencies. For a physical iPhone, choose your own development team and signing identity in Xcode. The app reuses the existing SuperQode icon.
 
-Unsigned simulator verification:
+Account-free simulator verification with ad-hoc signing (required for Keychain access):
 
 ```bash
 xcodebuild test \
   -project apps/ios/SuperQodeCompanion.xcodeproj \
   -scheme SuperQodeCompanion \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
 ```
 
 Choose an installed simulator name using `xcrun simctl list devices available`. The `Private iOS companion` GitHub workflow chooses an installed iPhone automatically. Signing, App Store metadata, icon validation and device distribution remain separate release work; this branch does not publish anything.
@@ -77,6 +77,6 @@ Requests, response sizes, active connections and pairing attempts are bounded. A
 
 ## Remaining release validation
 
-Run the existing macOS build/tests plus the unsigned iOS simulator workflow and the account-free `tests/test_desktop_companion.py` suite. A real Mac/iPhone pair must verify Tailscale variants, trusted HTTPS, camera pairing, Keychain, cellular access, repeated disconnect/reconnect, foreground/background transitions, sleep/wake, engine restart and credential revocation.
+Run the existing macOS build/tests plus the ad-hoc signed iOS simulator workflow and the account-free `tests/test_desktop_companion.py` suite. A real Mac/iPhone pair must verify Tailscale variants, trusted HTTPS, camera pairing, Keychain, cellular access, repeated disconnect/reconnect, foreground/background transitions, sleep/wake, engine restart and credential revocation.
 
 This preview does not include APNs/background push, raw terminal sessions, remote provider installation, local model downloads, harness editing, commits/merges or candidate adoption. Those remain Mac workflows. Do not advertise full mobile feature parity or universal external-app compatibility until the remaining surfaces and vendor-specific paths are implemented and verified.

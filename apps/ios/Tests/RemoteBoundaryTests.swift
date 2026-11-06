@@ -3,6 +3,18 @@ import XCTest
 @testable import SuperQodeCompanion
 
 final class RemoteBoundaryTests: XCTestCase {
+  func testDeviceCredentialKeychainRoundTripInAnIsolatedAccount() throws {
+    let account = "test-" + UUID().uuidString
+    defer { try? DeviceKeychain.remove(account: account) }
+    XCTAssertNil(try DeviceKeychain.load(account: account))
+    let credential = DeviceCredential(address: "https://home.tailnet-example.ts.net:47832", token: "fixture-only", device: "test-device")
+    try DeviceKeychain.save(credential, account: account)
+    let loaded = try XCTUnwrap(DeviceKeychain.load(account: account))
+    XCTAssertEqual(loaded.token, credential.token)
+    XCTAssertEqual(loaded.address, credential.address)
+    try DeviceKeychain.remove(account: account)
+    XCTAssertNil(try DeviceKeychain.load(account: account))
+  }
   func testOnlyPrivateHTTPSMacOriginsAreAccepted() throws {
     XCTAssertEqual(try PrivateMacAddress.parse("https://home.tailnet-example.ts.net/").absoluteString,
       "https://home.tailnet-example.ts.net")
