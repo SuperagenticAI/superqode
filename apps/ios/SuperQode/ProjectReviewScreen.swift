@@ -122,7 +122,12 @@ struct ReviewedFileScreen: View {
       Picker("Hunk", selection: $selectedHunk) { ForEach(Array(hunks.enumerated()), id: \.offset) { index, item in Text(item.text("header")).tag(index) } }
       Stepper("First displayed row: \(firstRow)", value: $firstRow, in: 1...max(1, lines.count))
       Stepper("Last displayed row: \(lastRow)", value: $lastRow, in: firstRow...max(firstRow, lines.count))
-      Text("Row numbers include the context lines shown in this hunk. Select up to 80 rows.").font(.caption).foregroundStyle(.secondary)
+      Text("Row numbers include context lines in this hunk. Check the numbered excerpt below before preparing feedback. Select up to 80 rows.").font(.caption).foregroundStyle(.secondary)
+      if !lines.isEmpty {
+        MobileCodeBlock(code: lines.enumerated().filter { $0.offset >= firstRow - 1 && $0.offset <= lastRow - 1 }.prefix(80).map { index, line in
+          "\(index + 1) | " + (line.text("kind") == "add" ? "+" : line.text("kind") == "delete" ? "-" : " ") + line.text("text")
+        }.joined(separator: "\n"), language: "Selected rows")
+      }
       TextField("What should change?", text: $comment, axis: .vertical).lineLimit(3...7)
       Button("Prepare feedback draft") { Task { await prepare() } }
         .disabled(working || !store.reachable || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || comment.count > 4000 || lastRow - firstRow >= 80 || lines.isEmpty)

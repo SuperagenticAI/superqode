@@ -130,6 +130,7 @@ struct WorkOrderDetailScreen: View {
         ForEach(Array(order.records("workers").enumerated()), id: \.offset) { _, worker in
           LabeledContent(worker.text("worker_id"), value: worker.flag("responsive") ? "Responsive" : "Not responding")
         }
+        if order.flag("workers_truncated") { Text("More workers are available on the Mac.").font(.caption) }
       }.listRowBackground(CompanionTheme.panel)
       Section("Checks and reviews") {
         let gates = order.object("gates")

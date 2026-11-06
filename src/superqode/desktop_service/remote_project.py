@@ -34,6 +34,7 @@ def context_paths(value):
 def queue_snapshot(value):
     return {
         "running": value.get("running") is True,
+        "truncated": len(value.get("items", [])) > 100,
         "items": [
             {
                 **{k: row.get(k, "") for k in ("id", "state", "job", "error")},
@@ -65,7 +66,7 @@ def checkpoint_snapshot(value):
                 "changes_truncated": len(changes) > 500,
             }
         )
-    return {"items": items}
+    return {"items": items, "truncated": len(value.get("items", [])) > 50}
 
 
 def workorder_snapshot(value):
@@ -111,6 +112,7 @@ def workorder_snapshot(value):
                     fields(worker, ("worker_id", "status", "responsive", "updated_at"))
                     for worker in item.get("workers", [])[:50]
                 ],
+                "workers_truncated": len(item.get("workers", [])) > 50,
                 "gates": {
                     k: item.get("gates", {}).get(k)
                     for k in (

@@ -21,7 +21,9 @@ final class CompanionExperienceTests: XCTestCase {
     app.launchArguments = ["--design-preview", "evaluation", "-companionAppearance", "dark"]
     app.launch()
     let compare = app.buttons["Compare task outcomes"]
-    XCTAssertTrue(compare.waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["Evaluation evidence"].waitForExistence(timeout: 10))
+    for _ in 0..<4 { if compare.isHittable { break }; app.swipeUp() }
+    XCTAssertTrue(compare.exists)
     compare.tap()
     let baseline = app.staticTexts["Baseline cost"]
     for _ in 0..<4 { if baseline.isHittable { break }; app.swipeUp() }
