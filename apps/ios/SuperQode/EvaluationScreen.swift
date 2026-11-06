@@ -18,11 +18,15 @@ struct EvaluationScreen: View {
   private var profiles: [RemoteRecord] { store.profiles.filter { $0.text("project") == project && $0.flag("evaluation") } }
   private var profile: RemoteRecord? { profiles.first { $0.id == selectedProfile } }
   private var canStart: Bool {
-    !working && !selectedProfile.isEmpty && !inspection.text("tasks_hash").isEmpty
+    !working && store.reachable && !selectedProfile.isEmpty && !inspection.text("tasks_hash").isEmpty
       && (optimize ? store.permissions.contains("optimize") && profile?.flag("optimization") == true && live : store.permissions.contains("evaluate"))
   }
   var body: some View {
     Form {
+      Section {
+        ConnectionStatus()
+        if !store.reachable { Button("Check Mac connection") { Task { await store.refresh() } } }
+      }
       Section {
         Label("Measure what your harness can do", systemImage: "chart.bar.xaxis").font(.headline)
         Text("Runs use the Mac's evaluation engine and recorded evidence. Setup validation skips model execution.").font(.subheadline).foregroundStyle(.secondary)
@@ -50,7 +54,7 @@ struct EvaluationScreen: View {
         }
       }
       Section("Review before running") {
-        Button("Inspect suite and verifier commands") { Task { await inspect() } }.disabled(working || selectedProfile.isEmpty || suite.isEmpty)
+        Button("Inspect suite and verifier commands") { Task { await inspect() } }.disabled(working || !store.reachable || selectedProfile.isEmpty || suite.isEmpty)
         if !inspection.isEmpty {
           LabeledContent("Tasks", value: String(Int(inspection.number("task_count"))))
           ForEach((inspection["warnings"]?.array ?? []).map(\.text), id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }

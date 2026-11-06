@@ -96,6 +96,10 @@ def dispatch(access, device, method, params, key):
     if not isinstance(params, dict) or set(params) - allowed:
         raise ValueError("Unsupported parameters for this companion action")
     request = dict(params)
+    if "live" in request and type(request["live"]) is not bool:
+        raise ValueError("Live execution requires an explicit true or false value")
+    if method == "jobs.approve" and type(request.get("allow")) is not bool:
+        raise ValueError("Approve or deny this exact pending request explicitly")
     permission = WRITES[method][0] if method in WRITES else "read"
     if permission not in permissions:
         raise PermissionError("Allow this action in the Mac's device pairing permissions first")
@@ -126,6 +130,16 @@ def dispatch(access, device, method, params, key):
         suites = {p["id"] for p in service.dispatch("evals.packs", {})}
         if request.get("tasks") not in suites:
             raise ValueError("Choose a bundled suite; custom verifier setup stays on the Mac")
+        if profile["local_only"]:
+            from superqode.harness.eval import eval_pack_path, load_eval_tasks
+
+            suite = load_eval_tasks(eval_pack_path(request["tasks"]))
+            if suite["variants"] or any(
+                (task.get("evaluator") or {}).get("type") == "jev_rubric" for task in suite["tasks"]
+            ):
+                raise ValueError(
+                    "This suite has alternate harnesses or a model-based grader whose local routes are not verified. Choose a deterministic single-harness suite for Local only."
+                )
         if request.get("live") is True and not request.get("tasks_hash"):
             raise ValueError(
                 "Review the suite and its verifier commands before starting a live run"

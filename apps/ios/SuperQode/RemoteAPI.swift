@@ -64,9 +64,9 @@ enum PrivateMacAddress {
       value.scheme == "https", let host = value.host?.lowercased(),
       host.hasSuffix(".ts.net"), host.split(separator: ".").count >= 4,
       host.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") }),
-      value.port == nil || value.port == 443, value.user == nil, value.password == nil,
+      value.port == nil || value.port == 443 || value.port == 47832, value.user == nil, value.password == nil,
       value.path.isEmpty || value.path == "/", value.query == nil, value.fragment == nil,
-      let url = URL(string: "https://" + host)
+      let url = URL(string: "https://" + host + (value.port == 47832 ? ":47832" : ""))
     else { throw CompanionError("Enter your Mac's private https://name.tailnet.ts.net address. Public tunnels and HTTP addresses are not supported.") }
     return url
   }

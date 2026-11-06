@@ -10,7 +10,7 @@ from test_desktop_service import desktop  # noqa: F401
 from test_desktop_session_identity import add_run
 from superqode.desktop_service import remote_network
 from superqode.desktop_service.remote_access import digest
-from superqode.desktop_service.remote_http import application, RemoteServer
+from superqode.desktop_service.remote_http import application, RemoteServer, MAX_BODY
 
 ORIGIN = "https://home.example-tailnet.ts.net"
 PRINCIPAL = "owner@example.test"
@@ -254,7 +254,7 @@ async def test_http_rejects_funnel_foreign_origin_bad_host_and_oversized_body(co
             assert response.status_code == 403
         response = await client.post(
             "/v1/rpc",
-            content=b"x" * 65537,
+            content=b"x" * (MAX_BODY + 1),
             headers={"Tailscale-User-Login": PRINCIPAL, "Content-Type": "application/json"},
         )
         assert response.status_code == 413
@@ -274,7 +274,9 @@ def test_private_network_check_refuses_funnel_and_wrong_proxy(monkeypatch):
     serving.clear()
     assert not remote_network.inspect()["ready"]
     serving["Web"] = {
-        "home.example-tailnet.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:47831"}}}
+        "home.example-tailnet.ts.net:47832": {
+            "Handlers": {"/": {"Proxy": "http://127.0.0.1:47831"}}
+        }
     }
     assert remote_network.inspect()["ready"]
 
@@ -300,3 +302,103 @@ def test_actual_listener_is_loopback_only_and_stops_without_stopping_engine(comp
         server.stop()
     assert not server.running
     assert service.dispatch("projects.list", {})
+
+
+def test_private_setup_never_overwrites_existing_services_or_enables_funnel(monkeypatch):
+    monkeypatch.setattr(remote_network, "tailscale_binary", lambda: "/fixture/tailscale")
+    monkeypatch.setattr(
+        remote_network, "inspect", lambda port: {"ready": False, "private_url": ORIGIN}
+    )
+    config = {
+        "Web": {"home.example-tailnet.ts.net:47832": {"Handlers": {"/": {"Proxy": "http://other"}}}}
+    }
+    monkeypatch.setattr(remote_network, "command", lambda *args: config)
+    executed = []
+    monkeypatch.setattr(
+        remote_network.subprocess,
+        "run",
+        lambda argv, **kwargs: executed.append(argv) or SimpleNamespace(returncode=0),
+    )
+    with pytest.raises(ValueError, match="left unchanged"):
+        remote_network.setup()
+    assert not executed
+    config.clear()
+    config["Web"] = {
+        "home.example-tailnet.ts.net:443": {"Handlers": {"/": {"Proxy": "http://other-app"}}}
+    }
+    remote_network.setup()
+    assert executed == [
+        ["/fixture/tailscale", "serve", "--bg", "--https=47832", "http://127.0.0.1:47831"]
+    ]
+
+
+def test_approval_snapshot_is_current_even_after_event_pagination(companion):
+    service, project, _, profile, access = companion
+    _, device = pair(access, profile)
+    add_run(service, project, "approval-job")
+    for identity in ("old", "current"):
+        service._write(
+            "INSERT INTO events(job,payload) VALUES(?,?)",
+            (
+                "approval-job",
+                json.dumps(
+                    {
+                        "type": "approval",
+                        "data": {"request_id": identity, "tool": {"name": identity}},
+                    }
+                ),
+            ),
+        )
+    service.pending["approval-job"] = "current"
+    result = access.rpc(device, "jobs.get", {"id": "approval-job", "after": 10000})
+    assert result["events"] == []
+    assert result["pending_approval"]["request_id"] == "current"
+    with pytest.raises(ValueError, match="stale"):
+        access.rpc(
+            device,
+            "jobs.approve",
+            {"id": "approval-job", "request_id": "old", "allow": True},
+            "old-approval",
+        )
+    assert service.pending["approval-job"] == "current"
+
+
+def test_local_suite_cannot_add_unverified_grader_or_variant(companion, monkeypatch):
+    import superqode.harness.eval as evaluation
+
+    service, project, _, profile, access = companion
+    service._write(
+        "INSERT INTO local_model_bindings VALUES(?,?,?,?,?)",
+        (project["id"], "core", "ollama", "fixture", "http://127.0.0.1:11434/v1"),
+    )
+    local = access.handle("remote.profiles.save", {**profile, "local_only": True})
+    _, device = pair(access, local)
+    monkeypatch.setattr(
+        evaluation,
+        "load_eval_tasks",
+        lambda path: {"variants": [{"spec": "cloud-harness"}], "tasks": []},
+    )
+    with pytest.raises(ValueError, match="local routes are not verified"):
+        access.rpc(device, "evals.inspect", {"profile": local["id"], "tasks": "decision-routing"})
+
+
+def test_device_grant_persists_across_engine_restart_without_storing_bearer(companion):
+    from superqode.desktop_service.service import DesktopService
+
+    service, _, _, profile, access = companion
+    token, original = pair(access, profile)
+    access.config["enabled"] = False
+    access._save()
+    root = service.root
+    service.close()
+    restored = DesktopService(root)
+    try:
+        device = restored.companion.authenticate(token, PRINCIPAL)
+        assert device["id"] == original["id"]
+        assert (
+            restored.companion.rpc(device, "companion.catalog", {})["profiles"][0]["id"]
+            == profile["id"]
+        )
+        assert token not in json.dumps(restored._all("SELECT * FROM companion_devices"))
+    finally:
+        restored.close()

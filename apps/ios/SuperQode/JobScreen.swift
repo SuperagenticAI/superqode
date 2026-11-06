@@ -85,7 +85,7 @@ struct JobScreen: View {
               if await act("jobs.steer", ["id": .string(identity), "text": .string(steering)], key: steerKey) {
                 steering = ""; steerKey = UUID().uuidString
               }
-            } }.disabled(acting || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } }.disabled(acting || !store.reachable || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           }
         }
         if !events.isEmpty {
@@ -98,9 +98,7 @@ struct JobScreen: View {
                   Text(event.text("type").replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.bold())
                   let data = event.raw.object("data")
                   if !data.text("message").isEmpty { Text(data.text("message")).font(.caption).foregroundStyle(.secondary) }
-                  DisclosureGroup("Details") {
-                    Text(JSONValue.object(data).pretty).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
-                  }.font(.caption)
+                  JSONDetails(title: "Details", value: .object(data))
                 }.padding(.vertical, 4)
               }
             }
@@ -111,7 +109,7 @@ struct JobScreen: View {
             .buttonStyle(.borderedProminent).foregroundStyle(.black)
         }
         if job.active, store.permissions.contains("cancel") {
-          Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting)
+          Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting || !store.reachable)
         }
       }.padding(20)
     }.background(CompanionTheme.background)
@@ -140,20 +138,22 @@ struct JobScreen: View {
   }
 
   private var approvalCard: some View {
-    CompanionCard {
+    let snapshot = pending
+    return CompanionCard {
       Label("Your approval is needed", systemImage: "hand.raised.fill").font(.headline).foregroundStyle(.orange)
-      let tool = pending.object("tool")
+      let tool = snapshot.object("tool")
       Text(tool.text("tool", tool.text("name", "Agent action"))).font(.headline)
       let arguments = tool.object("arguments").isEmpty ? tool.object("args") : tool.object("arguments")
       if !arguments.text("command").isEmpty { Text(arguments.text("command")).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
       if !arguments.text("path").isEmpty { Text(arguments.text("path")).font(.caption).textSelection(.enabled) }
-      DisclosureGroup("Action details") {
-        Text(JSONValue.object(tool).pretty).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-      }.font(.subheadline)
+      JSONDetails(title: "Action details", value: .object(tool))
       HStack {
-        Button("Approve once") { approvalSnapshot = pending; confirmApproval = true }.buttonStyle(.borderedProminent).foregroundStyle(.black)
-        Button("Deny", role: .destructive) { Task { _ = await act("jobs.approve", ["id": .string(identity), "request_id": .string(pending.text("request_id")), "allow": .bool(false)], key: "deny:\(identity):\(pending.text("request_id"))") } }
-      }.disabled(acting || !store.permissions.contains("approve"))
+        Button("Approve once") { approvalSnapshot = snapshot; confirmApproval = true }.buttonStyle(.borderedProminent).foregroundStyle(.black)
+        Button("Deny", role: .destructive) {
+          let request = snapshot.text("request_id")
+          Task { _ = await act("jobs.approve", ["id": .string(identity), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(identity):\(request)") }
+        }
+      }.disabled(acting || !store.reachable || !store.permissions.contains("approve"))
     }
   }
 
@@ -235,8 +235,29 @@ struct EvaluationResultCard: View {
             .font(.caption).foregroundStyle(.secondary)
         }
       }
-      DisclosureGroup("Full evidence") { Text(JSONValue.object(result).pretty).font(.system(.caption2, design: .monospaced)).textSelection(.enabled) }
+      JSONDetails(title: "Full evidence", value: .object(result))
       Text("Optimization candidates remain staged. Review and adoption happen on the Mac.").font(.caption).foregroundStyle(.secondary)
     }
+  }
+}
+
+struct JSONDetails: View {
+  let title: String
+  let value: JSONValue
+  @State private var expanded = false
+  @State private var formatted = ""
+  var body: some View {
+    DisclosureGroup(isExpanded: $expanded) {
+      if expanded {
+        Text(formatted).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+      }
+    } label: { Text(title).font(.caption) }
+      .task(id: expanded ? value : .null) {
+        guard expanded else { formatted = ""; return }
+        let current = value
+        let rendered = await Task.detached(priority: .utility) { current.pretty }.value
+        guard !Task.isCancelled else { return }
+        formatted = rendered
+      }
   }
 }

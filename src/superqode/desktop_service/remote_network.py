@@ -8,6 +8,8 @@ import shutil
 import subprocess
 from urllib.parse import urlsplit
 
+HTTPS_PORT = 47832
+
 
 def private_origin(value):
     """Accept a concrete HTTPS tailnet hostname, never a public tunnel URL."""
@@ -20,7 +22,7 @@ def private_origin(value):
             and parsed.hostname
             and parsed.hostname.endswith(".ts.net")
             and len(parsed.hostname.split(".")) >= 4
-            and parsed.port in (None, 443)
+            and parsed.port in (None, 443, HTTPS_PORT)
             and not parsed.username
             and not parsed.password
             and parsed.path in ("", "/")
@@ -32,7 +34,8 @@ def private_origin(value):
         valid = False
     if not valid:
         raise ValueError("Use a private HTTPS Tailscale hostname without a path or credentials")
-    return "https://" + parsed.hostname.lower()
+    suffix = f":{parsed.port}" if parsed.port not in (None, 443) else ""
+    return "https://" + parsed.hostname.lower() + suffix
 
 
 def tailscale_binary():
@@ -51,7 +54,7 @@ def tailscale_binary():
 
 def command(binary, *arguments):
     result = subprocess.run(
-        [binary, *arguments], capture_output=True, text=True, timeout=8, check=False
+        [binary, *arguments], capture_output=True, text=True, timeout=3, check=False
     )
     if result.returncode or len(result.stdout) > 1_000_000:
         raise ValueError("Open Tailscale, sign in and enable it, then check the connection again")
@@ -68,7 +71,7 @@ def inspect(port=47831):
         "issue": "Install Tailscale on this Mac and your iPhone, then sign in to your private network.",
         "docs": "https://tailscale.com/docs/features/tailscale-serve",
         "download": "https://tailscale.com/download",
-        "command": f"tailscale serve --bg http://127.0.0.1:{port}",
+        "command": f"tailscale serve --bg --https={HTTPS_PORT} http://127.0.0.1:{port}",
     }
     if not binary:
         return result
@@ -77,14 +80,14 @@ def inspect(port=47831):
         if status.get("BackendState") != "Running":
             raise ValueError("Open Tailscale and connect this Mac before enabling remote access")
         host = str((status.get("Self") or {}).get("DNSName") or "").rstrip(".")
-        result["private_url"] = private_origin("https://" + host)
+        result["private_url"] = private_origin(f"https://{host}:{HTTPS_PORT}")
         serving = command(binary, "serve", "status", "--json")
         # Refuse any public Funnel configuration, even when a different port is public.
         if any((serving.get("AllowFunnel") or {}).values()):
             raise ValueError(
                 "Public Tailscale Funnel is enabled. Disable Funnel before using private remote access."
             )
-        web = (serving.get("Web") or {}).get(host + ":443", {})
+        web = (serving.get("Web") or {}).get(f"{host}:{HTTPS_PORT}", {})
         handler = (web.get("Handlers") or {}).get("/", {})
         if handler.get("Proxy") not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
             raise ValueError(
@@ -102,3 +105,42 @@ def inspect(port=47831):
             else "Tailscale could not be checked. Open Tailscale and retry."
         )
     return result
+
+
+def setup(port=47831):
+    """Explicit user action: create a private proxy only when no service is replaced."""
+    current = inspect(port)
+    if current["ready"]:
+        return current
+    binary = tailscale_binary()
+    if not binary or not current["private_url"]:
+        raise ValueError(current["issue"])
+    config = command(binary, "serve", "status", "--json")
+    if any(config.get("AllowFunnel", {}).values()):
+        raise ValueError("Disable public Funnel in Tailscale before configuring private access")
+    hostname = urlsplit(current["private_url"]).hostname
+    # A dedicated private HTTPS port coexists with another app's Serve root.
+    if (config.get("Web") or {}).get(f"{hostname}:{HTTPS_PORT}") or (config.get("TCP") or {}).get(
+        str(HTTPS_PORT)
+    ):
+        raise ValueError(
+            "Existing Tailscale services were left unchanged. Review the private Serve command and configure its route manually."
+        )
+    try:
+        result = subprocess.run(
+            [binary, "serve", "--bg", f"--https={HTTPS_PORT}", f"http://127.0.0.1:{port}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError(
+            "Tailscale setup did not finish. Complete the private Serve command in Terminal and verify again."
+        ) from None
+    if result.returncode:
+        raise ValueError(
+            "Tailscale needs additional setup or approval. Follow the private Serve documentation or run the displayed command, then verify again."
+        )
+    return inspect(port)

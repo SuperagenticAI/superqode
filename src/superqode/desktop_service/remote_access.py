@@ -202,6 +202,8 @@ class RemoteAccess:
                 return self.status()
             if method == "remote.network.check":
                 return remote_network.inspect(PORT)
+            if method == "remote.network.setup":
+                return remote_network.setup(PORT)
             if method == "remote.profiles.save":
                 profile = self.validate_profile(params)
                 profiles = [p for p in self.config.get("profiles", []) if p["id"] != profile["id"]]

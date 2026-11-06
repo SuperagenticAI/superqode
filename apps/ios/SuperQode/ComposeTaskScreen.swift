@@ -17,6 +17,8 @@ struct ComposeTaskScreen: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
+        ConnectionStatus()
+        if !store.reachable { Button("Check Mac connection") { Task { await store.refresh() } } }
         CompanionCard {
           Label(parent == nil ? "A fresh start" : "Continue this conversation", systemImage: "bubble.left.and.bubble.right")
             .font(.headline)
@@ -47,7 +49,7 @@ struct ComposeTaskScreen: View {
           HStack { if submitting { ProgressView() }; Label("Run on my Mac", systemImage: "arrow.up") }
             .fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 10)
         }.buttonStyle(.borderedProminent).foregroundStyle(.black)
-          .disabled(submitting || selectedProfile.isEmpty || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || prompt.count > 32000)
+          .disabled(submitting || !store.reachable || selectedProfile.isEmpty || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || prompt.count > 32000)
         Text("Closing this screen does not cancel a submitted job. Inspect Activity before retrying if the connection drops.")
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20)

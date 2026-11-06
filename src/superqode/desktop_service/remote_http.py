@@ -15,7 +15,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-MAX_BODY = 64 * 1024
+MAX_BODY = 160 * 1024
 MAX_RESPONSE = 8 * 1024 * 1024
 
 
@@ -61,7 +61,7 @@ def application(access):
         bucket = buckets[request.url.path]
         while bucket and bucket[0] < now - 60:
             bucket.popleft()
-        limit = 10 if request.url.path == "/v1/pair" else 300
+        limit = 10 if request.url.path == "/v1/pair" else 1200
         if len(bucket) >= limit:
             return response({"error": "Too many requests. Wait a minute and retry."}, 429)
         bucket.append(now)
@@ -94,6 +94,17 @@ def application(access):
                     authorization = request.headers.get("authorization", "")
                     credential = authorization[7:] if authorization.startswith("Bearer ") else ""
                     device = await asyncio.to_thread(access.authenticate, credential, principal)
+                    device_bucket = buckets[device["id"]]
+                    while device_bucket and device_bucket[0] < now - 60:
+                        device_bucket.popleft()
+                    if len(device_bucket) >= 240:
+                        return response(
+                            {
+                                "error": "This device is sending requests too quickly. Wait a minute and retry."
+                            },
+                            429,
+                        )
+                    device_bucket.append(now)
                     if (
                         set(payload) - {"method", "params"}
                         or not isinstance(payload.get("method"), str)

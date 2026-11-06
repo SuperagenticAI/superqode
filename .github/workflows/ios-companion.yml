@@ -34,10 +34,16 @@ jobs:
           set -euo pipefail
           device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for runtime,devices in data["devices"].items() if "iOS" in runtime for device in devices if device["name"].startswith("iPhone")))')
           xcodebuild test -project apps/ios/SuperQodeCompanion.xcodeproj -scheme SuperQodeCompanion -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/superqode-ios-build" -resultBundlePath "$RUNNER_TEMP/superqode-ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO
+          xcrun simctl ui "$device_id" appearance dark
+          xcrun simctl launch --terminate-running-process "$device_id" dev.superqode.companion
+          sleep 2
+          xcrun simctl io "$device_id" screenshot "$RUNNER_TEMP/superqode-ios-pairing.png"
       - name: Keep native test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ios-companion-test-results
-          path: ${{ runner.temp }}/superqode-ios-tests.xcresult
+          path: |
+            ${{ runner.temp }}/superqode-ios-tests.xcresult
+            ${{ runner.temp }}/superqode-ios-pairing.png
           if-no-files-found: ignore

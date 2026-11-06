@@ -6,6 +6,8 @@ final class RemoteBoundaryTests: XCTestCase {
   func testOnlyPrivateHTTPSMacOriginsAreAccepted() throws {
     XCTAssertEqual(try PrivateMacAddress.parse("https://home.tailnet-example.ts.net/").absoluteString,
       "https://home.tailnet-example.ts.net")
+    XCTAssertEqual(try PrivateMacAddress.parse("https://home.tailnet-example.ts.net:47832").absoluteString,
+      "https://home.tailnet-example.ts.net:47832")
     for value in ["http://home.tailnet-example.ts.net", "https://public.example", "https://127.0.0.1",
       "https://name.ts.net", "https://user:secret@home.tailnet-example.ts.net", "https://home.tailnet-example.ts.net/path",
       "https://home.tailnet-example.ts.net?token=secret", "https://home.tailnet-example.ts.net:8443",
