@@ -259,7 +259,6 @@ struct RootView: View {
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Evaluations", "Optimization":
       ExperimentView(optimize: app.section == "Optimization").id(app.projectID)
-    case "Tools": ToolsView()
     default: EmptyView()
     }
   }
@@ -336,6 +335,13 @@ struct RootView: View {
                   .disabled(app.section != "Models")
                   .allowsHitTesting(app.section == "Models")
                   .accessibilityHidden(app.section != "Models")
+              }
+              if app.navigationState.toolsMounted && !app.projectID.isEmpty {
+                ToolsView(active: app.section == "Tools").id(app.projectID)
+                  .opacity(app.section == "Tools" ? 1 : 0)
+                  .disabled(app.section != "Tools")
+                  .allowsHitTesting(app.section == "Tools")
+                  .accessibilityHidden(app.section != "Tools")
               }
               featureContent
             }.disabled(app.openingProject || app.restoringNavigation).frame(

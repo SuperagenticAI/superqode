@@ -49,6 +49,7 @@ struct ProjectScreen: View {
       Section {
         HStack(spacing: 12) {
           NavigationLink { FilesScreen(project: project.id) } label: { Label("Files", systemImage: "doc.text") }
+            .accessibilityIdentifier("project.files")
           NavigationLink { ProjectReviewScreen(project: project.id) } label: { Label("Review", systemImage: "text.magnifyingglass") }
           Button { evaluate = true } label: { Label("Evaluate", systemImage: "chart.bar.xaxis") }
             .disabled(!store.permissions.contains("evaluate") && !store.permissions.contains("optimize"))

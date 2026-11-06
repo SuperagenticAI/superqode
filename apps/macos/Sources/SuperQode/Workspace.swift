@@ -98,7 +98,7 @@ private struct DialogAuditHost: View {
   }
   func resetWorkbenchPanels() {
     var next = navigationState
-    next.drawer = ""; next.expanded = false; next.inspector = false; next.filesMounted = false; next.studioMounted = false; next.modelsMounted = false
+    next.drawer = ""; next.expanded = false; next.inspector = false; next.filesMounted = false; next.studioMounted = false; next.modelsMounted = false; next.toolsMounted = false
     if next != navigationState { navigationState = next }
   }
   func toggleWorkbenchInspector() {

@@ -131,3 +131,7 @@ def _isolate_connection_defaults(tmp_path_factory, monkeypatch, request):
     monkeypatch.setenv("SUPERQODE_RUNTIME", "")
     monkeypatch.delenv("SUPERQODE_RUNTIME", raising=False)
     monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
+    # Local verification can leave these process-wide settings behind. Keep
+    # later tests on the built-in endpoint defaults unless they opt in.
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    monkeypatch.delenv("OLLAMA_API_BASE", raising=False)

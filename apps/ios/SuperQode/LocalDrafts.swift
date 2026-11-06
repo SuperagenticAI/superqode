@@ -74,8 +74,11 @@ actor DraftRepository {
     let image = DraftImage(name: name, bytes: data.count)
     let directory = imageDirectory(draft)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
-    var target = directory.appendingPathComponent(image.id)
+    let target = directory.appendingPathComponent(image.id)
     try data.write(to: target, options: [.atomic, .completeFileProtection])
+    // Atomic replacement can discard protection on the destination. Apply it
+    // to the final path, never merely to the temporary replacement.
+    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: target.path)
     var flags = URLResourceValues(); flags.isExcludedFromBackup = true
     try target.setResourceValues(flags)
     return image
@@ -97,6 +100,7 @@ actor DraftRepository {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
       attributes: [.protectionKey: FileProtectionType.complete])
     try bytes.write(to: file, options: [.atomic, .completeFileProtection])
+    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: file.path)
     var url = file
     var flags = URLResourceValues()
     flags.isExcludedFromBackup = true

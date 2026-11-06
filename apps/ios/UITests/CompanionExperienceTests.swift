@@ -9,7 +9,9 @@ final class CompanionExperienceTests: XCTestCase {
     let workspace = app.staticTexts["SuperQode Studio"]
     for _ in 0..<5 { if workspace.isHittable { break }; app.swipeUp() }
     workspace.tap()
-    app.buttons["Files"].tap()
+    let files = app.buttons["project.files"]
+    XCTAssertTrue(files.waitForExistence(timeout: 5))
+    files.tap()
     XCTAssertTrue(app.staticTexts["README.md"].waitForExistence(timeout: 5))
     app.staticTexts["README.md"].tap()
     app.buttons["Edit"].tap()
