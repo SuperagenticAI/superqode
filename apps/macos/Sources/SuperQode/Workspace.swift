@@ -2633,7 +2633,7 @@ private struct DialogAuditHost: View {
       ]
       content = AnyView(VStack(alignment: .leading, spacing: 24) {
         PageTitle(eyebrow: "Thread identity preview", title: "Know which agents did the work",
-          subtitle: "Example threads · colour accents identify the harness; a blank conversation stays disconnected.")
+          subtitle: "Example threads · logos identify the harnesses; a blank conversation stays disconnected.")
         HStack(spacing: 10) {
           Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(.secondary)
           Text("New conversation").font(.headline)
@@ -2646,12 +2646,12 @@ private struct DialogAuditHost: View {
             VStack(alignment: .leading, spacing: 8) {
               Text(string(row, "title")).font(.headline)
               Text(HarnessIdentity.used(in: row).map(\.name).joined(separator: " · "))
-                .font(.callout).foregroundStyle(HarnessIdentity.current(in: row)?.accent ?? Color.secondary)
+                .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
           }.padding(16).brandSurface()
         }
-        Text("Colour is a harness identity accent, not connection status. Custom harnesses get a stable colour and a generic symbol.")
+        Text("Logos retain their own colours when available. Missing and monochrome logos stay neutral; the border marks the last used harness.")
           .font(.caption).foregroundStyle(.secondary)
         Spacer()
       }.padding(28).frame(width: 860, height: 740).background(Color.qPanel).preferredColorScheme(lightPreview ? .light : .dark))

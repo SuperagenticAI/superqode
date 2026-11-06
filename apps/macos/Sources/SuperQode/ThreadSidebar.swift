@@ -178,13 +178,12 @@ struct ThreadSidebarRow: View {
     return HarnessIdentity.current(in: row)?.name
       ?? (string(row, "kind") == "task" ? "Harness not recorded" : string(row, "kind").capitalized)
   }
-  private var harnessAccent: Color { HarnessIdentity.current(in: row)?.accent ?? .secondary }
   private var selected: Bool { app.selectedConversationID == identity }
   private var pinned: Bool { row["pinned"] as? Bool == true }
   private var status: String { string(row, "status") }
   private var statusTitle: String { ThreadStatusIndicator.title(status) }
   private var rowFill: Color {
-    selected ? harnessAccent.opacity(0.10) : hovered ? harnessAccent.opacity(0.045) : .clear
+    selected ? Color.primary.opacity(0.07) : hovered ? Color.primary.opacity(0.045) : .clear
   }
   private var destination: String {
     switch string(row, "kind") {
@@ -215,7 +214,7 @@ struct ThreadSidebarRow: View {
       }
     }.padding(.horizontal, 10).padding(.vertical, 11).contentShape(Rectangle())
       .background(rowFill, in: RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? harnessAccent.opacity(0.4) : Color.clear))
+      .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.primary.opacity(0.18) : Color.clear))
   }
   private var titleLine: some View {
     HStack(spacing: 5) {
@@ -226,7 +225,7 @@ struct ThreadSidebarRow: View {
   }
   private var statusLine: some View {
     HStack(spacing: 5) {
-      Text(harnessLabel).lineLimit(1).foregroundStyle(harnessAccent).help("Last used harness: " + harnessLabel)
+      Text(harnessLabel).lineLimit(1).foregroundStyle(.secondary).help("Last used harness: " + harnessLabel)
       Spacer(minLength: 2)
       ThreadStatusIndicator(status: status)
       Text(statusTitle).foregroundStyle(ThreadStatusIndicator.color(status)).lineLimit(1)

@@ -12,7 +12,6 @@ struct ThreadTabBar: View {
               ForEach(app.openThreadTabs, id: \.projectRowID) { row in
                 let identity = string(row, "conversation_id", string(row, "id"))
                 let selected = app.selectedConversationID == identity
-                let accent = HarnessIdentity.current(in: row)?.accent ?? Color.secondary
                 HStack(spacing: 6) {
                   Button {
                     app.selectJob(string(row, "id"), targetSection: "Workspace")
@@ -34,9 +33,9 @@ struct ThreadTabBar: View {
                     .accessibilityLabel("Close tab " + string(row, "conversation_title", string(row, "title")))
                     .help("Close tab. The conversation and its work are kept.")
                 }.padding(.trailing, 3)
-                  .background(selected ? accent.opacity(0.10) : Color.qPanel,
+                  .background(selected ? Color.primary.opacity(0.07) : Color.qPanel,
                     in: RoundedRectangle(cornerRadius: 7))
-                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? accent.opacity(0.4) : Color.clear))
+                  .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? Color.primary.opacity(0.2) : Color.clear))
                   .id(identity)
               }
               if app.selectedJob.isEmpty {
@@ -49,7 +48,7 @@ struct ThreadTabBar: View {
                   }
                   Text("New conversation").font(.system(size: 12, weight: .semibold))
                   Text(app.composerHarnessIdentity?.name ?? "No connection")
-                    .font(.system(size: 10)).foregroundStyle(app.composerHarnessIdentity?.accent ?? Color.secondary)
+                    .font(.system(size: 10)).foregroundStyle(Color.secondary)
                     .lineLimit(1)
                 }
                   .padding(.horizontal, 12).padding(.vertical, 9)

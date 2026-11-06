@@ -42,21 +42,16 @@ struct HarnessIdentity: Identifiable, Equatable {
 struct HarnessIcon: View {
   let identity: HarnessIdentity
   var size: CGFloat = 30
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
+        // Only genuinely coloured marks keep their colours; bundled SVGs stay neutral.
         Image(nsImage: image).renderingMode(identity.iconKey == "superqode" ? .original : .template)
-          .resizable().scaledToFit().foregroundStyle(identity.symbolGradient)
-      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(identity.symbolGradient) }
+          .resizable().scaledToFit()
+      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
     }.padding(size * 0.18).frame(width: size, height: size)
-      .background {
-        RoundedRectangle(cornerRadius: size * 0.28).fill(Color.qPanel)
-        RoundedRectangle(cornerRadius: size * 0.28)
-          .fill(identity.symbolGradient.opacity(scheme == .dark ? 0.18 : 0.09))
-      }
-      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(identity.accent.opacity(contrast == .increased ? 0.85 : 0.35), lineWidth: contrast == .increased ? 1.5 : 1))
+      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
+      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
       .accessibilityLabel(identity.name).help(identity.name)
   }
 }
@@ -76,10 +71,10 @@ struct HarnessIconStack: View {
     HStack(spacing: -5) {
       ForEach(HarnessIdentity.visible(in: row, limit: limit)) { identity in
         HarnessIcon(identity: identity, size: size)
-          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? identity.accent : .clear, lineWidth: 2))
+          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? Color.primary.opacity(0.16) : .clear))
       }
       if identities.count > limit {
-        Text("+\(identities.count - limit)").font(.system(size: size * 0.38, weight: .semibold))
+        Text("+\(identities.count - limit)").foregroundStyle(.secondary).font(.system(size: size * 0.38, weight: .semibold))
           .frame(width: size, height: size).background(Color.qPanel, in: Circle())
           .overlay(Circle().strokeBorder(.primary.opacity(0.16)))
       }
