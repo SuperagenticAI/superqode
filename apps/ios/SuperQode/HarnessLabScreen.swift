@@ -10,6 +10,7 @@ struct HarnessLabScreen: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 22) {
+        ConnectionStatus()
         VStack(alignment: .leading, spacing: 8) {
           Text("Evaluate what works.").font(.system(.title, design: .rounded, weight: .bold))
           Text("Improve with evidence.").font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(CompanionTheme.accent)
