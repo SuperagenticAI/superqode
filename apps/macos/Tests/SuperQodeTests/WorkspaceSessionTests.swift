@@ -1,3 +1,4 @@
+import Observation
 import XCTest
 
 @testable import SuperQode
@@ -146,24 +147,33 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertTrue(app.connectionDisconnected)
   }
 
-  @MainActor func testSectionNavigationPublishesCompletePaneStateOnce() {
+  @MainActor func testSectionNavigationObservesPaneStateWithoutBroadcastingWorkspace() {
     let app = workspace()
-    var states: [WorkbenchNavigationState] = []
-    let subscription = app.$navigationState.dropFirst().sink { states.append($0) }
+    var workspaceChanges = 0
+    let subscription = app.objectWillChange.sink { workspaceChanges += 1 }
+    var navigationChanges = 0
+    func observeNavigation() {
+      withObservationTracking { _ = app.navigationState } onChange: {
+        MainActor.assumeIsolated { navigationChanges += 1 }
+      }
+    }
+    observeNavigation()
     app.section = "Files"
-    XCTAssertEqual(states.count, 1)
-    XCTAssertEqual(states.last?.section, "Files")
-    XCTAssertEqual(states.last?.drawer, "Files")
-    XCTAssertEqual(states.last?.expanded, true)
+    XCTAssertEqual(navigationChanges, 1)
+    XCTAssertEqual(app.navigationState.section, "Files")
+    XCTAssertEqual(app.navigationState.drawer, "Files")
+    XCTAssertTrue(app.navigationState.expanded)
+    observeNavigation()
     app.section = "Review"
-    XCTAssertEqual(states.count, 2)
-    XCTAssertEqual(states.last?.section, "Review")
-    XCTAssertEqual(states.last?.drawer, "")
-    XCTAssertEqual(states.last?.expanded, false)
-    XCTAssertEqual(states.last?.inspector, true)
-    // Clicking the selected destination publishes nothing further.
+    XCTAssertEqual(navigationChanges, 2)
+    XCTAssertEqual(app.navigationState.section, "Review")
+    XCTAssertEqual(app.navigationState.drawer, "")
+    XCTAssertFalse(app.navigationState.expanded)
+    XCTAssertTrue(app.navigationState.inspector)
+    observeNavigation()
     app.section = "Review"
-    XCTAssertEqual(states.count, 2)
+    XCTAssertEqual(navigationChanges, 2)
+    XCTAssertEqual(workspaceChanges, 0, "Navigation must not rebuild unrelated workspace observers")
     subscription.cancel()
   }
 

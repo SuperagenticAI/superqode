@@ -59,7 +59,11 @@ private struct DialogAuditHost: View {
   @Published var recoveryIssue = ""
   @Published var loadingConversationDraft = false
   @Published var selectedFile = "" { didSet { persistDestination() } }
-  @Published private(set) var navigationState = WorkbenchNavigationState()
+  let navigation = WorkbenchNavigationStore()
+  var navigationState: WorkbenchNavigationState {
+    get { navigation.state }
+    set { if navigation.state != newValue { navigation.state = newValue } }
+  }
   var workbenchDrawer: String {
     get { navigationState.drawer }
     set {
@@ -211,8 +215,14 @@ private struct DialogAuditHost: View {
   @Published var connected = false
   @Published var error: String?
   @Published var notice = ""
-  @Published var navigationHistory: [WorkspaceDestination] = []
-  @Published var forwardHistory: [WorkspaceDestination] = []
+  var navigationHistory: [WorkspaceDestination] {
+    get { navigation.history }
+    set { if navigation.history != newValue { navigation.history = newValue } }
+  }
+  var forwardHistory: [WorkspaceDestination] {
+    get { navigation.forwardHistory }
+    set { if navigation.forwardHistory != newValue { navigation.forwardHistory = newValue } }
+  }
   var section: String {
     get { navigationState.section }
     set {

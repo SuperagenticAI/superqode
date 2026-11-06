@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 /// One publication per navigation intent. View callbacks must not publish
 /// dependent pane changes while SwiftUI is flushing its current view graph.
@@ -26,6 +27,14 @@ struct WorkbenchNavigationState: Equatable {
   mutating func closeExpandedDrawer() {
     if expanded { drawer = ""; expanded = false }
   }
+}
+
+/// Navigation changes invalidate only views that read navigation. Publishing
+/// them on Workspace also rebuilt every thread row, menu and retained feature.
+@Observable @MainActor final class WorkbenchNavigationStore {
+  var state = WorkbenchNavigationState()
+  var history: [WorkspaceDestination] = []
+  var forwardHistory: [WorkspaceDestination] = []
 }
 
 struct WorkspaceNavigationGroup: Identifiable {
