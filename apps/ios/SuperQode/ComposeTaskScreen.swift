@@ -37,58 +37,43 @@ struct ComposeTaskScreen: View {
     draft.mode == "code" || (draft.mode == "plan" && profile?.flag("enforces_controls") == true)
       || (draft.mode == "chat" && profile?.flag("chat") == true)
   }
+  private var canSend: Bool {
+    !submitting && store.canMutate && store.permissions.contains("tasks")
+      && (draft.enqueue != true || store.permissions.contains("queue")) && !wrongMac && supportedMode
+      && !(draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) && !draft.profile.isEmpty
+      && !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.prompt.count <= 32000
+  }
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        HStack {
-          Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close")
-          Spacer()
-        }
-        ConnectionStatus()
-        if !store.reachable { Button("Try again") { Task { await store.refresh() } } }
-        if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
-        connectionCard
-        CompanionCard {
           HStack {
-            Text(parent == nil ? "New thread" : "Continue").font(.headline)
+            Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close")
             Spacer()
             if saved { Label("Saved on iPhone", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary) }
           }
-          TextEditor(text: $draft.prompt).frame(minHeight: 200).scrollContentBackground(.hidden)
-            .focused($editing).disabled(frozen || submitting)
-            .accessibilityLabel("Task prompt").accessibilityIdentifier("composer.prompt")
-          HStack {
-            Text("\(draft.prompt.count.formatted()) / 32,000").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            Spacer()
-            if !draft.prompt.isEmpty { Button("Copy") { PrivateClipboard.copy(draft.prompt) }.font(.caption) }
+          ConnectionStatus()
+          if !store.reachable { Button("Try again") { Task { await store.refresh() } } }
+          if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
+          connectionCard
+          DisclosureGroup("Reference files and images · \((draft.contextFiles ?? []).count + (draft.images ?? []).count)", isExpanded: $showingAttachments) {
+            contextCard
+            MobileImageAttachments(draft: $draft, frozen: frozen || submitting)
+          }.font(.subheadline)
+          if submitted {
+            Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+          } else if frozen {
+            if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
+            pendingRequestCard
+          } else {
+            if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
+            Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. Queued tasks run when their queue is started. You can return to the same recorded work later.")
+              .font(.caption).foregroundStyle(.secondary)
+            promptDock
           }
-        }
-        DisclosureGroup("Reference files and images · \((draft.contextFiles ?? []).count + (draft.images ?? []).count)", isExpanded: $showingAttachments) {
-          contextCard
-          MobileImageAttachments(draft: $draft, frozen: frozen || submitting)
-        }.font(.subheadline)
-        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
-        if submitted {
-          Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        } else if frozen {
-          pendingRequestCard
-        } else {
-          Button {
-            editing = false
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            Task { await submit() }
-          } label: {
-            HStack { if submitting { ProgressView().tint(.white) }; Label(draft.enqueue == true ? "Add to queue" : "Send", systemImage: "arrow.up") }
-          }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
-            .disabled(submitting || !store.canMutate || !store.permissions.contains("tasks") || (draft.enqueue == true && !store.permissions.contains("queue")) || wrongMac || !supportedMode || (draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
-          if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
-          Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. Queued tasks run when their queue is started. You can return to the same recorded work later.")
-            .font(.caption).foregroundStyle(.secondary)
-        }
-      }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
+        }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
     }
-    .scrollDismissesKeyboard(.immediately)
+    .scrollDismissesKeyboard(.interactively)
     .background(CompanionTheme.background).navigationTitle(draft.enqueue == true ? "Queue a task" : parent == nil ? "New thread" : "Continue conversation")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -130,6 +115,50 @@ struct ComposeTaskScreen: View {
           catch { issue = error.localizedDescription }
         } }
       } message: { Text("This removes the iPhone draft. It does not cancel a task the Mac may already have accepted. Check Activity before starting another.") }
+  }
+
+  private var promptDock: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(draft.enqueue == true ? "Task" : "Message").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        Spacer()
+        Text("\(draft.prompt.count.formatted()) / 32,000").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+        if !draft.prompt.isEmpty { Button("Copy") { PrivateClipboard.copy(draft.prompt) }.font(.caption2) }
+      }
+      if !issue.isEmpty {
+        Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(CompanionTheme.warning).textSelection(.enabled)
+      }
+      HStack(alignment: .bottom, spacing: 8) {
+        TextEditor(text: $draft.prompt)
+          .frame(minHeight: 88)
+          .scrollContentBackground(.hidden)
+          .focused($editing)
+          .disabled(frozen || submitting)
+          .accessibilityLabel("Task prompt")
+          .accessibilityIdentifier("composer.prompt")
+          .padding(.horizontal, 10)
+          .padding(.vertical, 6)
+          .background(CompanionTheme.background, in: RoundedRectangle(cornerRadius: 14))
+        Button {
+          editing = false
+          UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+          Task { await submit() }
+        } label: {
+          Image(systemName: draft.enqueue == true ? "plus.circle.fill" : "arrow.up.circle.fill")
+            .font(.system(size: 32))
+            .frame(width: 36, height: 36)
+            .foregroundStyle(canSend ? CompanionTheme.accent : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("composer.send")
+        .accessibilityLabel(draft.enqueue == true ? "Add to queue" : "Send")
+        .disabled(!canSend)
+      }
+    }
+    .padding(.horizontal, 12)
+    .padding(.top, 8)
+    .padding(.bottom, 6)
+    .background(.bar)
   }
 
   private var connectionCard: some View {

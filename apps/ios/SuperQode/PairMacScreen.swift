@@ -62,7 +62,7 @@ struct PairMacScreen: View {
         VStack(alignment: .leading, spacing: 14) {
           setupStep("1", "Create a Tailscale account", "The companion uses your own Tailscale network. Tailscale's free plan covers personal use; business use follows Tailscale's terms. SuperQode does not put you on a shared network.")
           setupStep("2", "Install Tailscale", "Install it on your Mac and on this iPhone.")
-          setupStep("3", "Join the same tailnet", "The Mac and this iPhone must be on the same tailnet, either signed in to the same account or with the Mac shared to you.")
+          setupStep("3", "Sign in on both devices", "The Mac and this iPhone must join the same private Tailscale network. Use the same account, or share the Mac with this iPhone.")
           setupStep("4", "Create an invitation", "On the Mac, open Private remote access and create an invitation.")
           setupStep("5", "Approve this iPhone", "Scan the invitation here, then approve this iPhone on the Mac.")
           setupStep("6", "Confirm mobile data", "Turn off Wi-Fi once to confirm it works on mobile data.")

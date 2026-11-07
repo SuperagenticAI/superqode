@@ -190,14 +190,14 @@ struct JobScreen: View {
         }
       }.padding(20)
     }
-    .scrollDismissesKeyboard(.immediately)
+    .scrollDismissesKeyboard(.interactively)
     .background(CompanionTheme.background)
       .safeAreaInset(edge: .bottom, spacing: 0) {
         VStack(spacing: 0) {
           if showWorking {
             CompanionWorkingCard(status: workingStatus)
               .padding(.horizontal, 12)
-              .padding(.top, 10)
+              .padding(.top, 8)
               .padding(.bottom, 4)
           }
           if job.text("kind") == "task" || detail.isEmpty { replyBar }
@@ -284,7 +284,11 @@ struct JobScreen: View {
           Task { await deliverPending() }
         }.font(.caption.weight(.semibold))
       }
-    }.padding(12).background(.bar)
+    }
+    .padding(.horizontal, 12)
+    .padding(.top, 8)
+    .padding(.bottom, 6)
+    .background(.bar)
   }
 
   private var selectedConnectionLabel: String {
