@@ -69,9 +69,15 @@ struct HarnessIcon: View {
     }
   }
 
+  /// Colour marks need a non-template copy. Make it once per asset, not on every render.
+  @MainActor private static var colourCopies: [String: NSImage] = [:]
+
   private func sourceImage(_ image: NSImage) -> NSImage {
+    guard identity.keepsBrandColours, let asset = identity.assetName else { return image }
+    if let cached = Self.colourCopies[asset] { return cached }
     let picture = (image.copy() as? NSImage) ?? image
-    if identity.keepsBrandColours { picture.isTemplate = false }
+    picture.isTemplate = false
+    Self.colourCopies[asset] = picture
     return picture
   }
 }

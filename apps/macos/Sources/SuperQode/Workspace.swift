@@ -1,5 +1,8 @@
 import AppKit
+import os
 import SwiftUI
+
+private let remoteSyncLog = Logger(subsystem: "dev.superqode.app", category: "remote-sync")
 
 @MainActor final class DraftStore: ObservableObject {
   @Published var text = ""
@@ -654,6 +657,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       // Welcome must not inventory model caches or probe a remembered account.
       // Local AI / connection setup performs discovery on explicit navigation.
       await refreshJobs()
+      await refreshRemoteAccessState()
       poller = Task { [weak self] in
         var nextJobs = ContinuousClock.now
         while !Task.isCancelled {
@@ -663,8 +667,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           guard !Task.isCancelled else { return }
           if ContinuousClock.now >= nextJobs {
             await self.refreshJobs()
-            await self.applyPhoneConnection()
-            nextJobs = ContinuousClock.now.advanced(by: .seconds(1))
+            // The shared-project check runs only while private remote access is on.
+            if self.remoteAccessRunning { await self.applyPhoneConnection() }
+            nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
           }
           if self.activityLoadError.isEmpty && (self.active || self.hasMoreRunEvents || self.eventStreamOpen) {
             await self.refreshDetail()
@@ -846,34 +851,73 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     await checkRoute()
     notice = "Local endpoint binding cleared. Future requests use the provider configuration."
   }
-  private var appliedPhoneRevision = 0
+  /// Whether private remote access is on. Set at launch and by Remote Access settings.
+  @Published var remoteAccessRunning = false
+  /// A phone run in a conversation the Mac does not have open. Shown as a banner, never auto-opened.
+  @Published var phoneRunBanner: [String: Any] = [:]
+  /// Last phone revision applied per project. Seeded from the engine on first sight so an
+  /// older phone change never overwrites the Mac's saved harness at launch.
+  private var appliedPhoneRevisions: [String: Int] = [:]
   private var applyingPhoneConnection = false
 
+  func refreshRemoteAccessState() async {
+    guard let status = try? await engine.call("remote.status") as? [String: Any] else { return }
+    remoteAccessRunning = status["running"] as? Bool == true
+    seedPhoneRevisions(status["profiles"] as? [[String: Any]] ?? [])
+  }
+
+  private func seedPhoneRevisions(_ profiles: [[String: Any]]) {
+    for profile in profiles {
+      let project = string(profile, "project")
+      if !project.isEmpty && appliedPhoneRevisions[project] == nil {
+        appliedPhoneRevisions[project] = (profile["revision"] as? NSNumber)?.intValue ?? 0
+      }
+    }
+  }
+
+  private func reportSyncIssue(_ message: String) {
+    remoteSyncLog.error("\(message, privacy: .public)")
+    notice = message
+  }
+
   func syncSharedProjectConnection() async {
-    guard !applyingPhoneConnection, !projectID.isEmpty, !connectionDisconnected else { return }
-    guard let status = try? await engine.call("remote.status") as? [String: Any],
-      let profiles = status["profiles"] as? [[String: Any]],
+    guard remoteAccessRunning, !applyingPhoneConnection, !projectID.isEmpty, !connectionDisconnected else { return }
+    let status: [String: Any]
+    do { status = try await engine.call("remote.status") as? [String: Any] ?? [:] }
+    catch { reportSyncIssue("Couldn’t check the phone's shared project. " + error.localizedDescription); return }
+    guard let profiles = status["profiles"] as? [[String: Any]],
       let existing = profiles.first(where: { string($0, "project") == projectID }) else { return }
     if string(existing, "harness") == harness && string(existing, "provider") == provider
       && string(existing, "model") == model { return }
-    _ = try? await engine.call("remote.profiles.save", [
-      "project": projectID, "name": string(existing, "name", string(project, "name")),
-      "harness": harness, "provider": provider, "model": model,
-      "local_only": existing["local_only"] as? Bool ?? false, "source": "mac",
-    ])
+    do {
+      let saved = try await engine.call("remote.profiles.save", [
+        "project": projectID, "name": string(existing, "name", string(project, "name")),
+        "harness": harness, "provider": provider, "model": model,
+        // The engine treats a missing value as Local only. Keep the same default here.
+        "local_only": existing["local_only"] as? Bool ?? true, "source": "mac",
+      ]) as? [String: Any] ?? [:]
+      appliedPhoneRevisions[projectID] = (saved["revision"] as? NSNumber)?.intValue
+        ?? appliedPhoneRevisions[projectID]
+    } catch {
+      reportSyncIssue("The phone still uses the earlier harness for this project. " + error.localizedDescription)
+    }
   }
 
   func applyPhoneConnection() async {
     guard !applyingPhoneConnection, !projectID.isEmpty else { return }
-    guard let status = try? await engine.call("remote.status") as? [String: Any],
-      let profiles = status["profiles"] as? [[String: Any]],
-      let profile = profiles.first(where: { string($0, "project") == projectID }),
-      string(profile, "source") == "phone" else { return }
+    let status: [String: Any]
+    do { status = try await engine.call("remote.status") as? [String: Any] ?? [:] }
+    catch { remoteSyncLog.error("remote.status failed: \(error.localizedDescription, privacy: .public)"); return }
+    remoteAccessRunning = status["running"] as? Bool == true
+    let profiles = status["profiles"] as? [[String: Any]] ?? []
+    seedPhoneRevisions(profiles)
+    guard let profile = profiles.first(where: { string($0, "project") == projectID }) else { return }
     let revision = (profile["revision"] as? NSNumber)?.intValue ?? 0
-    guard revision > appliedPhoneRevision else { return }
+    guard revision > appliedPhoneRevisions[projectID, default: 0] else { return }
+    appliedPhoneRevisions[projectID] = revision
+    guard string(profile, "source") == "phone" else { return }
     applyingPhoneConnection = true
     defer { applyingPhoneConnection = false }
-    appliedPhoneRevision = revision
     let nextHarness = string(profile, "harness")
     if !nextHarness.isEmpty && nextHarness != harness { chooseHarness(nextHarness) }
     let nextProvider = string(profile, "provider", provider)
@@ -883,6 +927,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       model = nextModel
       savePreferences()
     }
+  }
+
+  func openPhoneRun() {
+    let id = string(phoneRunBanner, "id")
+    let conversation = string(phoneRunBanner, "conversation_id", id)
+    phoneRunBanner = [:]
+    guard !id.isEmpty else { return }
+    selectJob(id, restoreConnection: false, conversationID: conversation, targetSection: "Workspace")
   }
 
   func savePreferences() {
@@ -997,18 +1049,21 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       if !projectID.isEmpty {
         let phoneTurn = phoneTurnToOpen(
           jobs: jobs, projectID: projectID, seen: seenPhoneJobs, includeFinished: primedPhoneJobs)
-        if !phoneTurn.isEmpty, phoneTurn != selectedJob, !busy {
+        if !phoneTurn.isEmpty, phoneTurn != selectedJob {
           let row = jobs.first { string($0, "id") == phoneTurn } ?? [:]
-          selectJob(
-            phoneTurn, restoreConnection: false,
-            conversationID: string(row, "conversation_id", phoneTurn), targetSection: "Workspace")
-        }
-        if phoneTurn.isEmpty || !busy {
-          for row in jobs where string(row, "project") == projectID && !string(row, "phone_origin").isEmpty {
-            seenPhoneJobs.insert(string(row, "id"))
+          let conversation = string(row, "conversation_id", phoneTurn)
+          // Never take over what the Mac has open. The open conversation follows its own tip below.
+          if conversation != selectedConversationID {
+            phoneRunBanner = [
+              "id": phoneTurn, "conversation_id": conversation,
+              "title": string(row, "conversation_title", string(row, "title", "New run")),
+            ]
           }
-          primedPhoneJobs = true
         }
+        for row in jobs where string(row, "project") == projectID && !string(row, "phone_origin").isEmpty {
+          seenPhoneJobs.insert(string(row, "id"))
+        }
+        primedPhoneJobs = true
       }
       if followConversationTip, !busy, !selectedJob.isEmpty {
         let row = jobs.first { string($0, "id") == selectedJob } ?? [:]

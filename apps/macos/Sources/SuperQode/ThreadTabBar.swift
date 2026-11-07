@@ -71,7 +71,32 @@ struct ThreadTabBar: View {
         }.buttonStyle(.plain).help("All threads").accessibilityLabel("Show all threads")
       }.disabled(app.openingProject || app.restoringNavigation)
       Divider()
+      if !string(app.phoneRunBanner, "id").isEmpty { PhoneRunBanner() }
     }
   }
 
+}
+
+/// A quiet note that the iPhone started work in another conversation.
+struct PhoneRunBanner: View {
+  @EnvironmentObject var app: Workspace
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "iphone").foregroundStyle(.secondary)
+      Text("New run from iPhone").font(.caption.weight(.semibold))
+      Text(string(app.phoneRunBanner, "title")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      Spacer()
+      Button("Open") { app.openPhoneRun() }.controlSize(.small)
+        .accessibilityIdentifier("phone-run.open")
+      Button { app.phoneRunBanner = [:] } label: { Image(systemName: "xmark") }
+        .buttonStyle(.plain).controlSize(.small).help("Dismiss")
+        .accessibilityLabel("Dismiss new run from iPhone")
+        .accessibilityIdentifier("phone-run.dismiss")
+    }.padding(.horizontal, 12).padding(.vertical, 6)
+      .background(Color.primary.opacity(0.04))
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier("phone-run.banner")
+    Divider()
+  }
 }

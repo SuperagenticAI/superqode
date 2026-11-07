@@ -33,10 +33,14 @@ struct RemoteAccessSettingsView: View {
   @State private var reflectionModel = ""
   @State private var optimizerModel = ""
   @State private var selectedProfiles: Set<String> = []
+  @State private var profileChoices: [String: [[String: Any]]] = [:]
   private var running: Bool { status["running"] as? Bool == true }
   private var profiles: [[String: Any]] { status["profiles"] as? [[String: Any]] ?? [] }
   private var pairings: [[String: Any]] { status["pairings"] as? [[String: Any]] ?? [] }
   private var devices: [[String: Any]] { status["devices"] as? [[String: Any]] ?? [] }
+  private var activeDevices: [[String: Any]] {
+    devices.filter { !($0["revoked"] is Double) && ($0["expires"] as? Double ?? 0) > Date().timeIntervalSince1970 }
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -69,6 +73,7 @@ struct RemoteAccessSettingsView: View {
       if working { ProgressView().controlSize(.small).padding(8) }
     }.frame(width: 740, height: 760).background(Color.qPanel)
       .onChange(of: string(invitation, "code")) { _, _ in pairingImage = makeQRImage() }
+      .onChange(of: running) { _, value in app.remoteAccessRunning = value }
       .task {
         do { status = try await call("remote.status"); network = try await call("remote.network.check") }
         catch { self.error = error.localizedDescription }
@@ -124,7 +129,7 @@ struct RemoteAccessSettingsView: View {
   private var sharingSection: some View {
     GroupBox("2. Share a project connection") {
       VStack(alignment: .leading, spacing: 10) {
-        Text("Share a project once. Changing its harness or model on the Mac updates the phone, and a change on the phone updates the Mac. Credentials stay on the Mac.").font(.caption).foregroundStyle(.secondary)
+        Text("Share a project once. Changing its harness or model on the Mac updates the phone. A phone can switch only to the harnesses you allow below, and only phones you choose can open the project. Credentials stay on the Mac.").font(.caption).foregroundStyle(.secondary)
         if !app.projectID.isEmpty {
           Text("Current selection: \(string(app.project, "name")) · \(app.harness) · \(app.model.isEmpty ? "Agent-managed model" : app.model)")
           TextField("Connection name", text: $profileName)
@@ -149,17 +154,28 @@ struct RemoteAccessSettingsView: View {
           } }.disabled(app.harness.isEmpty)
         } else { Text("Open a project and select a connection on the Mac first.").foregroundStyle(.secondary) }
         ForEach(profiles, id: \.remoteID) { profile in
-          HStack {
-            Toggle(isOn: Binding(get: { selectedProfiles.contains(string(profile, "id")) }, set: { selected in
-              if selected { selectedProfiles.insert(string(profile, "id")) } else { selectedProfiles.remove(string(profile, "id")) }
-            })) {
-              VStack(alignment: .leading) {
-                Text(string(profile, "name")).fontWeight(.medium)
-                Text("\(string(profile, "harness")) · \(profile["local_only"] as? Bool == true ? "Local only" : "Agent/provider managed")").font(.caption).foregroundStyle(.secondary)
-              }
+          VStack(alignment: .leading, spacing: 8) {
+            HStack {
+              Toggle(isOn: Binding(get: { selectedProfiles.contains(string(profile, "id")) }, set: { selected in
+                if selected { selectedProfiles.insert(string(profile, "id")) } else { selectedProfiles.remove(string(profile, "id")) }
+              })) {
+                VStack(alignment: .leading) {
+                  Text(string(profile, "name")).fontWeight(.medium)
+                  Text("\(string(profile, "harness")) · \(profile["local_only"] as? Bool == true ? "Local only" : "Agent/provider managed")").font(.caption).foregroundStyle(.secondary)
+                }
+              }.accessibilityIdentifier("remote.share.invite." + string(profile, "id"))
+              Button("Remove", role: .destructive) { action { _ = try await call("remote.profiles.remove", ["id": string(profile, "id")]) } }
             }
-            Button("Remove", role: .destructive) { action { _ = try await call("remote.profiles.remove", ["id": string(profile, "id")]) } }
-          }
+            SharedProjectAccess(profile: profile, devices: activeDevices, choices: profileChoices[string(profile, "id")],
+              loadChoices: { loadChoices(profile) },
+              setAllowed: { allowed in action { _ = try await call("remote.profiles.save", allowListParams(profile, allowed)) } },
+              setDevice: { device, allow in action {
+                _ = try await call("remote.devices.grant", ["id": device, "profile": string(profile, "id"), "allow": allow])
+              } })
+          }.padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        }
+        if !profiles.isEmpty {
+          Text("Turn a project on above to include it in the next pairing invitation.").font(.caption).foregroundStyle(.secondary)
         }
       }.padding(10)
     }
@@ -174,7 +190,7 @@ struct RemoteAccessSettingsView: View {
         Button("Enable private remote access") { action { _ = try await call("remote.start") } }
           .buttonStyle(.borderedProminent)
           .disabled(network["ready"] as? Bool != true || !app.backgroundEngineMode)
-        Text("No harness or model is required to pair. Turn on the background engine above, then enable access.")
+        Text("Turn on the background engine above, then enable access. Share at least one project before pairing a phone.")
           .font(.caption).foregroundStyle(.secondary)
       }
     }
@@ -183,7 +199,7 @@ struct RemoteAccessSettingsView: View {
   private var pairingSection: some View {
     GroupBox("3. Pair your iPhone") {
       VStack(alignment: .leading, spacing: 12) {
-        Text("Create a five-minute invitation and scan it in the companion. Approve the phone here. A harness can be shared after the phone is paired.")
+        Text("Choose the shared projects this phone may open, create a five-minute invitation and scan it in the companion. Approve the phone here. Projects shared later reach a phone only when you turn that phone on for them.")
         Toggle("Allow staged optimization", isOn: $allowOptimization)
         Toggle("Allow staging reviewed files", isOn: $allowReview)
         Text("Staging changes the Git index after a review on the phone. It does not commit or merge code.").font(.caption).foregroundStyle(.secondary)
@@ -199,7 +215,10 @@ struct RemoteAccessSettingsView: View {
           if allowReview { permissions.append("review") }
           permissions.append(contentsOf: extraPermissions.sorted())
           invitation = try await call("remote.pairing.create", ["profiles": Array(selectedProfiles), "permissions": permissions])
-        } }.disabled(!running)
+        } }.disabled(!running || selectedProfiles.isEmpty)
+        if running && selectedProfiles.isEmpty {
+          Text("Share a project above and turn it on for this invitation first.").font(.caption).foregroundStyle(.secondary)
+        }
         if let expires = invitation["expires"] as? Double, Date(timeIntervalSince1970: expires) > Date() {
           HStack(alignment: .top, spacing: 18) {
             if let image = pairingImage { Image(nsImage: image).interpolation(.none).resizable().frame(width: 150, height: 150).padding(8).background(.white, in: RoundedRectangle(cornerRadius: 12)) }
@@ -248,6 +267,24 @@ struct RemoteAccessSettingsView: View {
     }
   }
 
+  private func loadChoices(_ profile: [String: Any]) {
+    let id = string(profile, "id")
+    Task { @MainActor in
+      do {
+        let result = try await call("remote.profiles.choices", ["project": string(profile, "project")])
+        profileChoices[id] = result["choices"] as? [[String: Any]] ?? []
+      } catch { self.error = error.localizedDescription }
+    }
+  }
+  private func allowListParams(_ profile: [String: Any], _ allowed: [String]) -> [String: Any] {
+    [
+      "project": string(profile, "project"), "name": string(profile, "name"),
+      "harness": string(profile, "harness"), "provider": string(profile, "provider"), "model": string(profile, "model"),
+      "local_only": profile["local_only"] as? Bool ?? true,
+      "reflection_model": string(profile, "reflection_model"), "optimizer_model": string(profile, "optimizer_model"),
+      "allowed_harnesses": allowed,
+    ]
+  }
   private func call(_ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {
     try await app.engine.call(method, params) as? [String: Any] ?? [:]
   }
@@ -276,6 +313,51 @@ struct RemoteAccessSettingsView: View {
     url.queryItems = [URLQueryItem(name: "server", value: string(invitation, "private_url"))]
     url.fragment = string(invitation, "code")
     return url.string
+  }
+}
+
+/// Which phones may open one shared project, and which harnesses they may switch to.
+private struct SharedProjectAccess: View {
+  let profile: [String: Any]
+  let devices: [[String: Any]]
+  let choices: [[String: Any]]?
+  let loadChoices: () -> Void
+  let setAllowed: ([String]) -> Void
+  let setDevice: (String, Bool) -> Void
+  private var profileID: String { profile["id"] as? String ?? "" }
+  private var currentHarness: String { profile["harness"] as? String ?? "" }
+  private var allowed: [String] {
+    let list = profile["allowed_harnesses"] as? [String] ?? []
+    return list.isEmpty ? [currentHarness] : list
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      DisclosureGroup("Phones that can open this project") {
+        if devices.isEmpty { Text("No paired phones yet.").font(.caption).foregroundStyle(.secondary) }
+        ForEach(devices, id: \.remoteID) { device in
+          let id = device["id"] as? String ?? ""
+          let granted = (device["profiles"] as? [String] ?? []).contains(profileID)
+          Toggle(device["name"] as? String ?? "iPhone", isOn: Binding(get: { granted }, set: { setDevice(id, $0) }))
+            .accessibilityIdentifier("remote.share.device." + id)
+        }
+      }.font(.caption)
+      DisclosureGroup("Harnesses the phone may switch to") {
+        Text("Off by default except this project's harness and SuperQode's built-in harnesses, which use the model chosen here. Turn on paid subscriptions or cloud agents only if the phone should use them.")
+          .font(.caption).foregroundStyle(.secondary)
+        if choices == nil { ProgressView().controlSize(.small).onAppear(perform: loadChoices) }
+        else if choices?.isEmpty == true { Text("No other harnesses are set up on this Mac.").font(.caption).foregroundStyle(.secondary) }
+        ForEach(choices ?? [], id: \.remoteID) { choice in
+          let id = choice["id"] as? String ?? ""
+          Toggle(choice["name"] as? String ?? id, isOn: Binding(get: { allowed.contains(id) }, set: { on in
+            var next = allowed.filter { $0 != id }
+            if on { next.append(id) }
+            setAllowed(next)
+          })).disabled(id == currentHarness)
+            .accessibilityIdentifier("remote.share.harness." + id)
+        }
+      }.font(.caption)
+    }
   }
 }
 
