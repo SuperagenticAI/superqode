@@ -50,6 +50,7 @@ def pair(access, profile, permissions=None):
 def test_one_project_share_keeps_later_harness_changes(companion):
     service, project, _, profile, access = companion
     assert profile["id"] == "project:" + project["id"]
+    assert "core" in profile["allowed_harnesses"]
     updated = access.handle(
         "remote.profiles.save",
         {
@@ -73,40 +74,87 @@ def test_one_project_share_keeps_later_harness_changes(companion):
         {"project": project["id"], "harness": "core", "provider": "ollama", "model": "from-phone"},
         "switch-harness",
     )
-    assert switched["source"] == "phone"
-    assert switched["model"] == "from-phone"
-    assert access.profiles(device)[0]["model"] == "from-phone"
+    # A built-in harness keeps the model chosen on the Mac, not one sent by the phone.
+    assert switched["model"] == "changed"
+    assert access.profiles(device)[0]["model"] == "changed"
 
 
-def test_phone_can_pair_before_a_harness_is_shared(desktop):
-    (
-        service,
-        project,
-        _,
-    ) = desktop
-    access = service.companion
-    access.config.update(enabled=True, private_url=ORIGIN)
-    access.server = SimpleNamespace(running=True, stop=lambda: None)
-    with pytest.raises(ValueError, match="Choose the Mac connections"):
-        access.handle("remote.pairing.create", {"profiles": ["missing"]})
-    invitation = access.handle("remote.pairing.create", {"profiles": []})
-    pending = access.request_pairing(invitation["code"], "My phone", PRINCIPAL)
-    access.handle("remote.pairing.approve", {"id": pending["id"]})
-    claimed = access.claim_pairing(pending["id"], pending["claim"], PRINCIPAL)
-    device = access.authenticate(claimed["token"], PRINCIPAL)
-    assert access.rpc(device, "projects.list", {}) == []
-    access.handle(
+def test_phone_harness_switch_is_limited_to_the_mac_allow_list(companion):
+    _, project, _, profile, access = companion
+    _, device = pair(access, profile)
+    with pytest.raises(PermissionError, match="Allow this harness"):
+        access.rpc(
+            device,
+            "project.connection",
+            {"project": project["id"], "harness": "acp:codex", "provider": "openai", "model": "x"},
+            "switch-to-cloud",
+        )
+    narrowed = access.handle(
         "remote.profiles.save",
         {
             "project": project["id"],
-            "name": "Later",
+            "name": "Home model",
             "harness": "core",
             "provider": "ollama",
             "model": "fixture",
             "local_only": False,
+            "allowed_harnesses": [],
         },
     )
+    assert narrowed["allowed_harnesses"] == ["core"]
+    choices = access.rpc(device, "project.connections", {"project": project["id"]})
+    assert {choice["id"] for choice in choices} <= {"core"}
+    with pytest.raises(PermissionError, match="Allow this harness"):
+        access.rpc(
+            device,
+            "project.connection",
+            {"project": project["id"], "harness": "no-tool", "provider": "", "model": ""},
+            "switch-to-no-tool",
+        )
+    with pytest.raises(ValueError, match="Choose the harnesses"):
+        access.handle(
+            "remote.profiles.save",
+            {**narrowed, "allowed_harnesses": "core"},
+        )
+
+
+def test_new_shares_reach_only_the_phones_chosen_on_the_mac(desktop):
+    service, project, _ = desktop
+    access = service.companion
+    access.config.update(enabled=True, private_url=ORIGIN)
+    access.server = SimpleNamespace(running=True, stop=lambda: None)
+    share = {
+        "project": project["id"],
+        "name": "Home model",
+        "harness": "core",
+        "provider": "ollama",
+        "model": "fixture",
+        "local_only": False,
+    }
+    with pytest.raises(ValueError, match="Share a project"):
+        access.handle("remote.pairing.create", {"profiles": []})
+    with pytest.raises(ValueError, match="Choose the Mac connections"):
+        access.handle("remote.pairing.create", {"profiles": ["missing"]})
+    profile = access.handle("remote.profiles.save", share)
+    _, device = pair(access, profile)
     assert [item["id"] for item in access.rpc(device, "projects.list", {})] == [project["id"]]
+    access.handle("remote.profiles.remove", {"id": profile["id"]})
+    again = access.handle("remote.profiles.save", share)
+    assert again["id"] == profile["id"]
+    # Sharing the project again does not hand it back to an earlier phone.
+    assert access.rpc(device, "projects.list", {}) == []
+    listed = access.handle("remote.status", {})["devices"][0]
+    assert listed["profiles"] == []
+    access.handle(
+        "remote.devices.grant", {"id": device["id"], "profile": again["id"], "allow": True}
+    )
+    assert [item["id"] for item in access.rpc(device, "projects.list", {})] == [project["id"]]
+    access.handle(
+        "remote.devices.grant", {"id": device["id"], "profile": again["id"], "allow": False}
+    )
+    assert access.rpc(device, "projects.list", {}) == []
+    with pytest.raises(ValueError, match="Share this project"):
+        access.handle("remote.devices.grant", {"id": device["id"], "profile": "x", "allow": True})
 
 
 def test_pairing_requires_invitation_local_approval_and_correct_claim(companion):

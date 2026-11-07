@@ -194,7 +194,7 @@ def dispatch(access, device, method, params, key):
     if "project" in request and request["project"] not in projects:
         raise PermissionError("This project is not shared with this device")
     if method == "project.connections":
-        return access.connection_choices(request["project"])
+        return access.phone_connection_choices(device, request["project"])
     if (
         method
         in {
