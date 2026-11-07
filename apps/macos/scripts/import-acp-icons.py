@@ -70,8 +70,11 @@ lines = [
     "  static let assets: [String: String] = [",
 ]
 lines += [f"    {json.dumps(key)}: {json.dumps(value)}," for key, value in sorted(assets.items())]
-lines += ["  ]", "  /// Official marks that keep their brand colours instead of a template tint.",
-  "  static let brandColoured: Set<String> = ["]
+lines += [
+    "  ]",
+    "  /// Official marks that keep their brand colours instead of a template tint.",
+    "  static let brandColoured: Set<String> = [",
+]
 lines += [f"    {json.dumps(value)}," for value in sorted(brand)]
 lines += ["  ]", "}", ""]
 (root / "Sources/SuperQode/BundledAgentIcons.swift").write_text("\n".join(lines))
