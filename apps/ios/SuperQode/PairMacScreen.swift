@@ -141,11 +141,14 @@ struct CompanionSetupGuide: View {
         Text("The companion works with your Tailscale account. Personal noncommercial use can qualify for its free plan; business use follows Tailscale's terms.")
         Link("Tailscale plans", destination: URL(string: "https://tailscale.com/pricing")!)
         Text("Model and agent credentials stay configured on the Mac. The companion stores its own device authorization in this iPhone's Keychain.")
-        Text("For source builds, add your Apple Developer account in Xcode Settings → Accounts and select your team under Signing & Capabilities. No Apple password or private signing key belongs in the source code.")
       }
       Section("Privacy") {
         Text("Tailscale supplies the private network and may relay encrypted traffic. SuperQode runs no cloud relay for your prompts, files or results. Cloud models still receive prompts from the providers you configure. Choose a verified Local only connection when you want local inference.")
         Text("Phone access can be revoked on the Mac. Unsent drafts are protected on this iPhone and excluded from backups. Work continues on the Mac when the phone app closes; live updates resume when you reopen it.")
+        Link("Privacy policy", destination: URL(string: "https://superqode.dev/privacy")!)
+          .accessibilityIdentifier("guide.privacy")
+        Link("Support", destination: URL(string: "https://superqode.dev/support")!)
+          .accessibilityIdentifier("guide.support")
       }
     }.navigationTitle("Get started").navigationBarTitleDisplayMode(.inline)
       .scrollContentBackground(.hidden).background(CompanionTheme.background)

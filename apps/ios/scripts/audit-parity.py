@@ -50,7 +50,7 @@ def document(entries, sections, tools):
     lines = [
         "# macOS and iOS feature audit",
         "",
-        "Generated from `SuperQode/FeatureParity.json`, the same inventory used by the iOS All features screen.",
+        "Generated from `SuperQode/FeatureParity.json`. The iOS app lists only the Available and Partial entries, on its What you can do on iPhone screen.",
         "",
         f"The inventory accounts for all {len(sections)} Mac navigation areas and {len(tools)} typed Tools categories. This is inventory coverage, not a claim of complete mobile functionality.",
         "",
@@ -58,7 +58,7 @@ def document(entries, sections, tools):
         "",
         "Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, images, file editing, queue controls, checkpoint restoration, evidence export, evaluation and staged optimization are implemented on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, WorkOrder management, terminal/Git administration and notifications still require additional work.",
         "",
-        "The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every major workflow is searchable in All features with its actual availability.",
+        "The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every workflow the phone supports is searchable in What you can do on iPhone.",
         "",
         "## Workflow comparison",
         "",

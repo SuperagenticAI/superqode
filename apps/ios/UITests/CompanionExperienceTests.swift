@@ -18,7 +18,7 @@ final class CompanionExperienceTests: XCTestCase {
     XCTAssertFalse(app.buttons["Review save"].isEnabled)
   }
 
-  func testHomePromotesDeveloperWorkflowsAndLabelsTerminalAsMacOnly() {
+  func testHomePromotesDeveloperWorkflowsAndListsOnlyPhoneFeatures() {
     let app = XCUIApplication()
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]
     app.launch()
@@ -26,14 +26,15 @@ final class CompanionExperienceTests: XCTestCase {
       let shortcut = element(app, "workflow." + action)
       XCTAssertTrue(reveal(shortcut, in: app))
     }
-    app.buttons["All features"].tap()
+    app.buttons["features.toolbar"].tap()
     let search = app.searchFields.firstMatch
-    XCTAssertTrue(app.navigationBars["All features"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.navigationBars["On this iPhone"].waitForExistence(timeout: 10))
     XCTAssertTrue(search.waitForExistence(timeout: 10))
     search.tap(); search.typeText("Terminal")
-    app.staticTexts["Terminal"].tap()
-    XCTAssertTrue(app.staticTexts["On Mac"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.buttons["Start terminal"].exists)
+    XCTAssertFalse(app.staticTexts["Terminal"].waitForExistence(timeout: 2))
+    search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Task queue")
+    app.staticTexts["Task queue"].tap()
+    XCTAssertTrue(app.buttons["Open task queue"].waitForExistence(timeout: 5))
   }
   func testEvaluationComparisonShowsReportedZeroAndUnknownCost() {
     let app = XCUIApplication()

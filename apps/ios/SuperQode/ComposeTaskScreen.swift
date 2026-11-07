@@ -233,12 +233,15 @@ struct ComposeTaskScreen: View {
         .disabled(frozen || submitting || choosingHarness)
         .accessibilityIdentifier("composer.harness")
         .accessibilityLabel("Harness")
+        .accessibilityValue(selectedHarness.map { harnessButtonTitle($0) } ?? "None chosen")
+        .accessibilityHint("Choose the harness and model for this conversation")
       }
       Picker("Mode", selection: $draft.mode) {
         Text("Code").tag("code")
         Text("Plan").tag("plan").disabled(profile?.flag("enforces_controls") != true)
         Text("Chat").tag("chat").disabled(profile?.flag("chat") != true)
       }.pickerStyle(.segmented).disabled(frozen || submitting)
+        .accessibilityIdentifier("composer.mode")
     }
   }
 
@@ -295,6 +298,7 @@ struct ComposeTaskScreen: View {
                   .contentShape(Rectangle())
               }
               .buttonStyle(.plain)
+              .accessibilityIdentifier("harness.choice." + choice.id)
               .disabled(choosingHarness || !HarnessChoiceGroup.readyOnMac(choice))
             }
           } header: {

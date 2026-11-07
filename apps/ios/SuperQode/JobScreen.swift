@@ -332,6 +332,9 @@ struct JobScreen: View {
         .font(.caption.weight(.semibold))
       }
       .accessibilityIdentifier("thread.harness")
+      .accessibilityLabel("Harness")
+      .accessibilityValue(selectedConnectionLabel)
+      .accessibilityHint("Choose the harness and model for the next message")
       .disabled(acting || !store.canMutate)
       HStack(alignment: .bottom, spacing: 8) {
         TextField("Message", text: $reply, axis: .vertical)
@@ -343,6 +346,7 @@ struct JobScreen: View {
           Text("Send").font(.body.weight(.semibold))
         }
         .accessibilityLabel("Send")
+        .accessibilityIdentifier("thread.send")
         .disabled(acting || detail.isEmpty || !store.canMutate || !store.permissions.contains("tasks") || reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
       if pendingHold && !issue.isEmpty {

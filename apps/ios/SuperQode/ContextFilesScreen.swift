@@ -85,7 +85,7 @@ struct ContextPreviewScreen: View {
       DisclosureGroup("Show prepared model input", isExpanded: $expanded) {
         if expanded { Text(result.text("prompt")).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
       }
-    }.navigationTitle("Context preview").scrollContentBackground(.hidden).background(CompanionTheme.background)
+    }.navigationTitle("Check context").scrollContentBackground(.hidden).background(CompanionTheme.background)
       .toolbar { Button("Done") { dismiss() } }
       .task {
         defer { loading = false }

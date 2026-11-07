@@ -131,7 +131,7 @@ struct ProjectsScreen: View {
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("Workspaces").companionNavigationBrand()
-      .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { AllFeaturesScreen() } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("All features") } }
+      .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { AllFeaturesScreen() } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("What you can do on iPhone").accessibilityIdentifier("features.toolbar") } }
       .sheet(isPresented: $showingDrafts, onDismiss: { Task { await refreshDraftCount() } }) { NavigationStack { DraftsScreen() } }
       .task { await refreshDraftCount() }
       .refreshable { await store.refresh(); await refreshDraftCount() }
@@ -228,6 +228,12 @@ struct CompanionSettingsScreen: View {
   @State private var disconnect = false
   @State private var clearDrafts = false
   @State private var issue = ""
+  private var appVersion: String {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let version = info["CFBundleShortVersionString"] as? String ?? ""
+    let build = info["CFBundleVersion"] as? String ?? ""
+    return build.isEmpty ? version : version + " (" + build + ")"
+  }
   var body: some View {
     List {
       Section {
@@ -238,9 +244,9 @@ struct CompanionSettingsScreen: View {
         LabeledContent("Mac", value: store.macName)
         Text(store.address).font(.caption.monospaced()).textSelection(.enabled).foregroundStyle(.secondary)
         if let expires = store.deviceExpires { LabeledContent("Authorization expires", value: expires.formatted(date: .abbreviated, time: .omitted)) }
-        Button("Check connection") { Task { await store.refresh() } }
+        Button("Check connection") { Task { await store.refresh() } }.accessibilityIdentifier("settings.check")
         if store.isPreview { Button("Connect my own Mac") { store.exitExploreMode() } }
-        else { Button("Disconnect this iPhone", role: .destructive) { disconnect = true } }
+        else { Button("Disconnect this iPhone", role: .destructive) { disconnect = true }.accessibilityIdentifier("settings.disconnect") }
       }.listRowBackground(CompanionTheme.panel)
       Section("Appearance") {
         Picker("Theme", selection: $appearance) { ForEach(CompanionAppearance.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) } }
@@ -254,12 +260,16 @@ struct CompanionSettingsScreen: View {
         if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       }.listRowBackground(CompanionTheme.panel)
       Section("Help & about") {
-        NavigationLink("All developer features") { AllFeaturesScreen() }
+        NavigationLink("What you can do on iPhone") { AllFeaturesScreen() }
         NavigationLink("Setup guide and privacy") { CompanionSetupGuide() }
-        Link("Private connection setup", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
+        Link("Privacy policy", destination: URL(string: "https://superqode.dev/privacy")!)
+          .accessibilityIdentifier("settings.privacy")
+        Link("Support", destination: URL(string: "https://superqode.dev/support")!)
+          .accessibilityIdentifier("settings.support")
+        Link("Tailscale Serve guide", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
         Link("Source repository", destination: URL(string: "https://github.com/SuperagenticAI/superqode")!)
-        Text("Keep the Mac awake and online. Providers can use their own cloud services. All developer features lists which workflows are available here and which still require the Mac.").font(.footnote).foregroundStyle(.secondary)
-        LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Source build")
+        Text("Keep the Mac awake and online. Providers can use their own cloud services. What you can do on iPhone lists the workflows available here. Everything else stays in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary)
+        LabeledContent("Version", value: appVersion)
       }.listRowBackground(CompanionTheme.panel)
     }.scrollContentBackground(.hidden).background(CompanionTheme.background).navigationTitle("Settings").companionNavigationBrand()
       .confirmationDialog("Disconnect this iPhone?", isPresented: $disconnect, titleVisibility: .visible) {

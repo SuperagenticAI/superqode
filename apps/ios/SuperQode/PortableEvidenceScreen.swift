@@ -35,7 +35,7 @@ struct RecordedEvidenceExportScreen: View {
           if result.flag("truncated") { Text("This run exceeds the mobile export limit. Export the complete evidence from your Mac.").foregroundStyle(CompanionTheme.warning) }
           Button("Save to Files…") { exporting = true }.disabled(result.text("content").isEmpty)
           ShareLink(item: result.text("content")) { Label("Share export", systemImage: "square.and.arrow.up") }
-          DisclosureGroup("Preview export", isExpanded: $expanded) {
+          DisclosureGroup("Show export", isExpanded: $expanded) {
             if expanded { Text(result.text("content")).font(.caption.monospaced()).textSelection(.enabled) }
           }
         }

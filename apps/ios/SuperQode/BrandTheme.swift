@@ -49,9 +49,21 @@ enum CompanionTheme {
     if lower.contains("glm") || lower.contains("kimi") { return .pink }
     return accent
   }
+  /// Third-party harness logos can be swapped for a generic symbol, for example if App Review
+  /// asks for it. Build with the STORE_GENERIC_HARNESS_ICONS Swift flag, or set
+  /// SQGenericHarnessIcons to YES in Info.plist. The default keeps the bundled logos.
+  static let genericHarnessIcons: Bool = {
+    #if STORE_GENERIC_HARNESS_ICONS
+    return true
+    #else
+    return Bundle.main.object(forInfoDictionaryKey: "SQGenericHarnessIcons") as? Bool ?? false
+    #endif
+  }()
+
   static func harnessAsset(_ name: String) -> String? {
     let lower = name.lowercased()
     if ["core", "no-tool", "pipy", "codegem", "systemone", "superqode"].contains(lower) { return "BrandMark" }
+    if genericHarnessIcons { return nil }
     if let exact = BundledAgentIcons.assets[lower] { return exact }
     for key in ["qwen", "claude", "codex", "gemini", "glm", "kimi", "opencode", "copilot"] {
       if lower.contains(key), let asset = BundledAgentIcons.assets[key == "glm" ? "glm-acp-agent" : key] { return asset }
@@ -73,7 +85,7 @@ struct SuperQodeWordmark: View {
   var body: some View {
     HStack(spacing: 10) {
       SuperQodeMark(size: compact ? 24 : 34)
-      Text("SUPERQODE").font(.system(size: compact ? 13 : 16, weight: .bold))
+      Text("SUPERQODE").font(compact ? Font.footnote.bold() : Font.callout.bold())
         .tracking(1.1).foregroundStyle(.primary)
     }.accessibilityElement(children: .ignore).accessibilityLabel("SuperQode")
   }
@@ -154,14 +166,14 @@ struct CompanionWorkingCard: View {
       SuperQodeMark(size: 25)
       VStack(alignment: .leading, spacing: 8) {
         if waiting || stopping {
-          Text(label).font(.system(size: 13, weight: .semibold)).modifier(CompanionBrandText())
+          Text(label).font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
         } else {
-          WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(CompanionBrandText())
+          WorkingStatusText().font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
         }
         if !waiting { ThinkingBar() }
         if waiting || stopping || !activity.isEmpty {
           Text(waiting ? "Waiting for your approval" : stopping ? "Waiting for the agent to stop" : activity)
-            .font(.system(size: 12, design: .monospaced))
+            .font(.caption.monospaced())
             .foregroundStyle(.secondary)
             .lineLimit(3)
             .fixedSize(horizontal: false, vertical: true)
@@ -212,6 +224,7 @@ struct HarnessMark: View {
     if key == "superqode" || ["core", "no-tool", "pipy", "codegem", "systemone"].contains(key) {
       return "BrandMark"
     }
+    if CompanionTheme.genericHarnessIcons { return nil }
     if let exact = BundledAgentIcons.assets[key] { return exact }
     return CompanionTheme.harnessAsset(iconKey.isEmpty ? name : iconKey)
   }
@@ -353,7 +366,11 @@ struct MacModelChoiceSheet: View {
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Uses this model for the conversation")
+        .accessibilityIdentifier("model.choice." + choice.text("model"))
       }
+      .accessibilityIdentifier("model.list")
       .navigationTitle("Model")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -383,6 +400,8 @@ struct HarnessChoiceLabel: View {
       Spacer(minLength: 8)
       if selected { Image(systemName: "checkmark").foregroundStyle(CompanionTheme.accent) }
     }
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(selected ? [.isSelected] : [])
   }
 }
 

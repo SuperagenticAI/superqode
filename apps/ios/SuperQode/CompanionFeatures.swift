@@ -105,7 +105,7 @@ struct ProjectToolsScreen: View {
       }
       Section("Harness quality") { tool(.evaluate); tool(.optimize) }
       Section("Execution and history") { tool(.workorders); tool(.queue); tool(.checkpoints) }
-      Section { NavigationLink("All features and availability") { AllFeaturesScreen() } }
+      Section { NavigationLink("What you can do on iPhone") { AllFeaturesScreen() }.accessibilityIdentifier("features.all") }
     }.navigationTitle("Project tools").scrollContentBackground(.hidden).background(CompanionTheme.background)
   }
   private func tool(_ workflow: DeveloperWorkflow) -> some View {
@@ -127,15 +127,21 @@ struct CompanionFeature: Identifiable, Decodable {
       let data = try? Data(contentsOf: url), let items = try? JSONDecoder().decode([Self].self, from: data) else { return [] }
     return items
   }()
+  /// Entries the phone implements, fully or in part.
+  static let onIPhone: [Self] = all.filter { ["available", "partial"].contains($0.parity) }
 }
 
 struct AllFeaturesScreen: View {
   @State private var query = ""
   private let groups = ["Daily development", "Harness quality", "Execution and recovery", "Connections and setup"]
-  private var visible: [CompanionFeature] { CompanionFeature.all.filter { query.isEmpty || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(query) } }
+  /// Only workflows this iPhone can actually use. Mac-only and Mac-side experiments stay
+  /// in PARITY.md and are never listed in the app.
+  private var visible: [CompanionFeature] {
+    CompanionFeature.onIPhone.filter { query.isEmpty || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(query) }
+  }
   var body: some View {
     List {
-      Section { Text("Every major Mac workflow, with its actual phone availability. Inspect means read-only; On Mac means the phone does not implement that action yet.").font(.footnote).foregroundStyle(.secondary) }
+      Section { Text("Everything you can do from this iPhone. Inspect means read-only. Setup, installs and other workflows stay in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary) }
       ForEach(groups, id: \.self) { group in
         let items = visible.filter { $0.group == group }
         if !items.isEmpty {
@@ -151,7 +157,7 @@ struct AllFeaturesScreen: View {
           }
         }
       }
-    }.navigationTitle("All features").searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a developer workflow")
+    }.navigationTitle("On this iPhone").searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a developer workflow")
       .scrollContentBackground(.hidden).background(CompanionTheme.background)
   }
 }

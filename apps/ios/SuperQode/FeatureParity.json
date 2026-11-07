@@ -60,7 +60,7 @@
     "title": "Reference files",
     "group": "Daily development",
     "status": "On iPhone",
-    "detail": "Attach up to ten non-sensitive UTF-8 files to Code/Plan and preview their context before sending.",
+    "detail": "Attach up to ten non-sensitive UTF-8 files to Code/Plan and check their context before sending.",
     "workflow": "Code",
     "mac_sections": [],
     "mac_tools": [],
@@ -98,7 +98,7 @@
     "title": "Harness optimization",
     "group": "Harness quality",
     "status": "Staged",
-    "detail": "Run configured optimization with explicit budgets, review held-out evidence and compare improvements/regressions. Adoption stays on the Mac; local-only optimizer routes are not yet verified.",
+    "detail": "Run configured optimization with explicit budgets, review held-out evidence and compare improvements/regressions. Adoption stays on the Mac. Local-only optimization is not offered.",
     "workflow": "Optimize",
     "mac_sections": [
       "Optimization"
@@ -125,7 +125,7 @@
     "title": "Harness Hub",
     "group": "Harness quality",
     "status": "Shared harnesses",
-    "detail": "Switch a shared project to the harnesses allowed for it on the Mac (by default the shared harness plus built-in harnesses using the Mac's model). Discovering, installing, configuring and allowing new harnesses remains on the Mac.",
+    "detail": "Switch a shared project to any harness listed in Connect on the Mac, unless the Mac turned it off for the phone. SuperQode harnesses use a model already connected on the Mac. Discovering, installing and configuring harnesses remains on the Mac.",
     "workflow": "Shared connections",
     "mac_sections": [
       "Harness Hub"
@@ -446,7 +446,7 @@
     "title": "Windows, tabs and command palette",
     "group": "Daily development",
     "status": "On Mac",
-    "detail": "Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and searchable All features.",
+    "detail": "Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and a searchable What you can do on iPhone list.",
     "mac_sections": [],
     "mac_tools": [],
     "macRoute": "Workspace windows / thread tabs / command palette",

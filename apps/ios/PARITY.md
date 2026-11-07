@@ -1,6 +1,6 @@
 # macOS and iOS feature audit
 
-Generated from `SuperQode/FeatureParity.json`, the same inventory used by the iOS All features screen.
+Generated from `SuperQode/FeatureParity.json`. The iOS app lists only the Available and Partial entries, on its What you can do on iPhone screen.
 
 The inventory accounts for all 14 Mac navigation areas and 24 typed Tools categories. This is inventory coverage, not a claim of complete mobile functionality.
 
@@ -8,7 +8,7 @@ The inventory accounts for all 14 Mac navigation areas and 24 typed Tools catego
 
 Full macOS parity is not implemented. Daily coding, contextual review, explicit approvals, reference files, images, file editing, queue controls, checkpoint restoration, evidence export, evaluation and staged optimization are implemented on the phone. Several are partial: custom evaluation/candidate setup, local-model lifecycle, harness authoring, routing/tuning, WorkOrder management, terminal/Git administration and notifications still require additional work.
 
-The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every major workflow is searchable in All features with its actual availability.
+The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens on Evaluate & improve, with separate evaluation and optimization setup. WorkOrders, queues and checkpoints are discoverable in project tools; every workflow the phone supports is searchable in What you can do on iPhone.
 
 ## Workflow comparison
 
@@ -20,19 +20,19 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 | Conversation library | Available | Search, paginate, rename, pin, archive and continue recorded project conversations. | Threads workspace |
 | Contextual review | Available | Review uncommitted, branch or completed-turn changes. Prepare line-bound feedback. Staging requires a separate permission approved on the Mac. | Features → Review |
 | Project files | Available | Read highlighted project source, create files and save edits against the exact loaded revision with a separately approved editing grant. Conflicting saves can be compared with current Mac content before an explicit new save. | Features → Files |
-| Reference files | Available | Attach up to ten non-sensitive UTF-8 files to Code/Plan and preview their context before sending. | Threads workspace → attach files |
+| Reference files | Available | Attach up to ten non-sensitive UTF-8 files to Code/Plan and check their context before sending. | Threads workspace → attach files |
 | Images and screenshots | Available | Attach up to four PNG, JPEG, GIF or WebP images. Other photo formats are converted on the phone. Image drafts are protected locally; uploads are private, idempotent and bound to this device and project. Model image support still applies. | Threads workspace → attach images |
 | Thread handoff | Available | Review bounded visible thread context, share it or prepare a fresh conversation with no inherited connection, permissions, images or private reasoning. Export recorded evidence as Markdown, JSON or HTML. | Threads workspace → handoff |
-| Windows, tabs and command palette | Mac only | Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and searchable All features. | Workspace windows / thread tabs / command palette |
+| Windows, tabs and command palette | Mac only | Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and a searchable What you can do on iPhone list. | Workspace windows / thread tabs / command palette |
 
 ### Harness quality
 
 | Workflow | Phone parity | Current behavior and gaps | Mac entry point |
 | --- | --- | --- | --- |
 | Harness evaluation | Partial | Inspect bundled suites, choose task splits, validate setup and explicitly authorize live runs. Custom suites and candidate definitions are configured on the Mac. | Evaluations |
-| Harness optimization | Partial | Run configured optimization with explicit budgets, review held-out evidence and compare improvements/regressions. Adoption stays on the Mac; local-only optimizer routes are not yet verified. | Optimization |
+| Harness optimization | Partial | Run configured optimization with explicit budgets, review held-out evidence and compare improvements/regressions. Adoption stays on the Mac. Local-only optimization is not offered. | Optimization |
 | Harness Studio | Mac only | Use Harness Studio on the Mac to edit, validate, version and activate harness definitions. The phone does not edit or activate definitions yet. | Harness Studio |
-| Harness Hub | Partial | Switch a shared project to the harnesses allowed for it on the Mac (by default the shared harness plus built-in harnesses using the Mac's model). Discovering, installing, configuring and allowing new harnesses remains on the Mac. | Harness Hub |
+| Harness Hub | Partial | Switch a shared project to any harness listed in Connect on the Mac, unless the Mac turned it off for the phone. SuperQode harnesses use a model already connected on the Mac. Discovering, installing and configuring harnesses remains on the Mac. | Harness Hub |
 | Benchmarks and failure mining | Mac only | The Mac exposes CLI-backed benchmark, doctor, failure-mining and advanced optimization workflows. They are not native phone workflows yet. | Tools → Harness workflows / Benchmarks / Quality gauges |
 | Routing and tuning | Mac only | Configure RLM routing/budgets and tune routing examples on the Mac. Shared harnesses use those settings when the phone starts work. | Harness Studio / Evaluations → routing and tuning |
 | Candidate promotion | Mac only | Review adoption gates, stage, canary, activate or roll back candidates on the Mac. Evidence on the phone never authorizes promotion. | Optimization → adoption / Tools → Harness workflows |
