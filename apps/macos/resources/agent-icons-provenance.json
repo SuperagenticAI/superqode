@@ -14,8 +14,8 @@
     },
     {
       "id": "antigravity-acp",
-      "url": "https://cdn.agentclientprotocol.com/registry/v1/latest/antigravity-acp.svg",
-      "sha256": "ef068db27db956dbf947b59a3e6d21e8aa170656c55ff04d0b66fa673ea852c1"
+      "url": "https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png",
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e"
     },
     {
       "id": "auggie",
@@ -217,5 +217,35 @@
       "url": "https://cdn.agentclientprotocol.com/registry/v1/latest/vtcode.svg",
       "sha256": "6f116d7447056cfe38e3512e4957a1360e3be21a72da9589ac702e073513ff5d"
     }
-  ]
+  ],
+  "brand_colours": {
+    "antigravity-acp": {
+      "colours": "official full-color icon",
+      "source": "https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png"
+    },
+    "claude-acp": {
+      "colours": "#D97757",
+      "source": "https://claude.ai (simple-icons Claude, Claude Code)"
+    },
+    "cortex-code": {
+      "colours": "#29B5E8",
+      "source": "https://www.snowflake.com/brand-guidelines/"
+    },
+    "gemini": {
+      "colours": "#3186FF, #08B962, #F94543, #FABC12",
+      "source": "https://gemini.google.com (current Gemini spark)"
+    },
+    "junie": {
+      "colours": "#48E054",
+      "source": "https://www.jetbrains.com/junie/"
+    },
+    "mistral-vibe": {
+      "colours": "#FFAF01, #FF8204, #FA500F, #E61300, #C4001D",
+      "source": "https://mistral.ai/brand"
+    },
+    "qwen-code": {
+      "colours": "#6950EF",
+      "source": "https://qwen.ai (simple-icons QWen)"
+    }
+  }
 }

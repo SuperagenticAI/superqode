@@ -32,23 +32,26 @@ enum DeveloperWorkflow: String, CaseIterable, Identifiable, Codable {
 }
 
 struct DeveloperShortcuts: View {
+  @State private var selected: DeveloperWorkflow?
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("Build. Verify. Improve.").font(.title3.bold())
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 12)], spacing: 12) {
-        ForEach([DeveloperWorkflow.code, .review, .evaluate, .optimize]) { workflow in
-          NavigationLink { WorkflowProjectPicker(workflow: workflow) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-              Image(systemName: workflow.symbol).font(.title2).foregroundStyle(CompanionTheme.accent)
-              Text(workflow.rawValue).font(.headline).foregroundStyle(.primary)
-              Text(workflow.subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading).padding(16)
-              .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 18))
-              .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(CompanionTheme.accent.opacity(0.25)))
-          }.buttonStyle(.plain).accessibilityIdentifier("workflow." + workflow.id.lowercased())
-        }
+      VStack(spacing: 12) {
+        HStack(spacing: 12) { shortcut(.code); shortcut(.review) }
+        HStack(spacing: 12) { shortcut(.evaluate); shortcut(.optimize) }
       }
-    }
+    }.navigationDestination(item: $selected) { WorkflowProjectPicker(workflow: $0) }
+  }
+  private func shortcut(_ workflow: DeveloperWorkflow) -> some View {
+    Button { selected = workflow } label: {
+      VStack(alignment: .leading, spacing: 10) {
+        Image(systemName: workflow.symbol).font(.title2).foregroundStyle(CompanionTheme.accent)
+        Text(workflow.rawValue).font(.headline).foregroundStyle(.primary)
+        Text(workflow.subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+      }.frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading).padding(16)
+        .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(CompanionTheme.accent.opacity(0.25)))
+    }.buttonStyle(.plain).accessibilityIdentifier("workflow." + workflow.id.lowercased())
   }
 }
 

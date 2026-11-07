@@ -27,6 +27,52 @@ private struct DialogAuditHost: View {
   }
 }
 
+/// The turn the open conversation should show. A running turn wins over a newer finished one.
+func conversationTipID(jobs: [[String: Any]], conversationID: String, projectID: String) -> String {
+  guard !conversationID.isEmpty else { return "" }
+  let live: Set<String> = ["running", "needs_approval", "queued", "cancelling"]
+  let turns = jobs.filter { row in
+    let id = string(row, "id")
+    let kind = string(row, "kind")
+    return !id.isEmpty && string(row, "project", projectID) == projectID
+      && string(row, "conversation_id", id) == conversationID && (kind.isEmpty || kind == "task")
+  }
+  guard let tip = turns.max(by: { jobRank($0, live: live) < jobRank($1, live: live) }) else { return "" }
+  return string(tip, "id")
+}
+
+private func jobRank(_ row: [String: Any], live: Set<String>) -> (Int, Double, String) {
+  (live.contains(string(row, "status")) ? 1 : 0, jobStamp(row), string(row, "id"))
+}
+
+/// A phone run the Mac has not opened yet. A running turn wins over one that already finished.
+func phoneTurnToOpen(
+  jobs: [[String: Any]], projectID: String, seen: Set<String>, includeFinished: Bool
+) -> String {
+  guard !projectID.isEmpty else { return "" }
+  let live: Set<String> = ["running", "needs_approval", "queued", "cancelling"]
+  let arrived = jobs.filter { row in
+    let id = string(row, "id")
+    let kind = string(row, "kind")
+    return !id.isEmpty && !seen.contains(id) && !string(row, "phone_origin").isEmpty
+      && string(row, "project") == projectID
+      && (kind.isEmpty || kind == "task")
+      && (includeFinished || live.contains(string(row, "status")))
+  }
+  guard let tip = arrived.max(by: { jobRank($0, live: live) < jobRank($1, live: live) }) else {
+    return ""
+  }
+  return string(tip, "id")
+}
+
+private func jobStamp(_ row: [String: Any]) -> Double {
+  let value = row["updated"] ?? row["created"]
+  if let number = value as? Double { return number }
+  if let number = value as? Int { return Double(number) }
+  if let number = value as? NSNumber { return number.doubleValue }
+  return 0
+}
+
 @MainActor final class Workspace: ObservableObject {
   let recoveryStore: WorkspaceRecoveryStore
   let preferences: UserDefaults
@@ -291,6 +337,10 @@ private struct DialogAuditHost: View {
     return library
   }
   @Published var selectedJob = ""
+  /// Stay on the latest turn of the open conversation as new messages arrive.
+  private var followConversationTip = true
+  private var seenPhoneJobs: Set<String> = []
+  private var primedPhoneJobs = false
   @Published var detail: [String: Any] = [:]
   @Published var events: [[String: Any]] = []
   @Published private(set) var hasMoreRunEvents = false
@@ -540,7 +590,22 @@ private struct DialogAuditHost: View {
     return string(selected, "conversation_id", selectedJob)
   }
   var active: Bool {
-    ["running", "needs_approval", "queued", "cancelling"].contains(string(detail, "status"))
+    let live: Set<String> = ["running", "needs_approval", "queued", "cancelling"]
+    let detailStatus = string(detail, "status")
+    if !detailStatus.isEmpty { return live.contains(detailStatus) }
+    guard !selectedJob.isEmpty, let row = jobs.first(where: { string($0, "id") == selectedJob }) else {
+      return false
+    }
+    return live.contains(string(row, "status"))
+  }
+  /// Detail loads after the jobs list. The working bar uses the list status until then.
+  var activityStatus: String {
+    let detailStatus = string(detail, "status")
+    if !detailStatus.isEmpty { return detailStatus }
+    guard !selectedJob.isEmpty, let row = jobs.first(where: { string($0, "id") == selectedJob }) else {
+      return ""
+    }
+    return string(row, "status")
   }
   var anyActive: Bool {
     jobs.contains {
@@ -598,7 +663,8 @@ private struct DialogAuditHost: View {
           guard !Task.isCancelled else { return }
           if ContinuousClock.now >= nextJobs {
             await self.refreshJobs()
-            nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
+            await self.applyPhoneConnection()
+            nextJobs = ContinuousClock.now.advanced(by: .seconds(1))
           }
           if self.activityLoadError.isEmpty && (self.active || self.hasMoreRunEvents || self.eventStreamOpen) {
             await self.refreshDetail()
@@ -780,6 +846,45 @@ private struct DialogAuditHost: View {
     await checkRoute()
     notice = "Local endpoint binding cleared. Future requests use the provider configuration."
   }
+  private var appliedPhoneRevision = 0
+  private var applyingPhoneConnection = false
+
+  func syncSharedProjectConnection() async {
+    guard !applyingPhoneConnection, !projectID.isEmpty, !connectionDisconnected else { return }
+    guard let status = try? await engine.call("remote.status") as? [String: Any],
+      let profiles = status["profiles"] as? [[String: Any]],
+      let existing = profiles.first(where: { string($0, "project") == projectID }) else { return }
+    if string(existing, "harness") == harness && string(existing, "provider") == provider
+      && string(existing, "model") == model { return }
+    _ = try? await engine.call("remote.profiles.save", [
+      "project": projectID, "name": string(existing, "name", string(project, "name")),
+      "harness": harness, "provider": provider, "model": model,
+      "local_only": existing["local_only"] as? Bool ?? false, "source": "mac",
+    ])
+  }
+
+  func applyPhoneConnection() async {
+    guard !applyingPhoneConnection, !projectID.isEmpty else { return }
+    guard let status = try? await engine.call("remote.status") as? [String: Any],
+      let profiles = status["profiles"] as? [[String: Any]],
+      let profile = profiles.first(where: { string($0, "project") == projectID }),
+      string(profile, "source") == "phone" else { return }
+    let revision = (profile["revision"] as? NSNumber)?.intValue ?? 0
+    guard revision > appliedPhoneRevision else { return }
+    applyingPhoneConnection = true
+    defer { applyingPhoneConnection = false }
+    appliedPhoneRevision = revision
+    let nextHarness = string(profile, "harness")
+    if !nextHarness.isEmpty && nextHarness != harness { chooseHarness(nextHarness) }
+    let nextProvider = string(profile, "provider", provider)
+    let nextModel = string(profile, "model")
+    if nextProvider != provider || nextModel != model {
+      provider = nextProvider
+      model = nextModel
+      savePreferences()
+    }
+  }
+
   func savePreferences() {
     pendingPreferences = [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)]
     guard !writingPreferences else { return }
@@ -788,9 +893,11 @@ private struct DialogAuditHost: View {
       defer { self.writingPreferences = false }
       while let snapshot = self.pendingPreferences {
         self.pendingPreferences = nil
+        let touchesConnection = snapshot.contains { ["provider", "model", "harness"].contains($0.0) }
         for (key, value) in snapshot {
           _ = try await self.engine.call("settings.set", ["key": key, "value": value])
         }
+        if touchesConnection { await self.syncSharedProjectConnection() }
       }
     }
   }
@@ -887,6 +994,31 @@ private struct DialogAuditHost: View {
         }
         connectionTestJob = ""
       }
+      if !projectID.isEmpty {
+        let phoneTurn = phoneTurnToOpen(
+          jobs: jobs, projectID: projectID, seen: seenPhoneJobs, includeFinished: primedPhoneJobs)
+        if !phoneTurn.isEmpty, phoneTurn != selectedJob, !busy {
+          let row = jobs.first { string($0, "id") == phoneTurn } ?? [:]
+          selectJob(
+            phoneTurn, restoreConnection: false,
+            conversationID: string(row, "conversation_id", phoneTurn), targetSection: "Workspace")
+        }
+        if phoneTurn.isEmpty || !busy {
+          for row in jobs where string(row, "project") == projectID && !string(row, "phone_origin").isEmpty {
+            seenPhoneJobs.insert(string(row, "id"))
+          }
+          primedPhoneJobs = true
+        }
+      }
+      if followConversationTip, !busy, !selectedJob.isEmpty {
+        let row = jobs.first { string($0, "id") == selectedJob } ?? [:]
+        let conversation = string(row, "conversation_id", selectedJob)
+        let project = string(row, "project", projectID)
+        let tip = conversationTipID(jobs: jobs, conversationID: conversation, projectID: project)
+        if !tip.isEmpty, tip != selectedJob {
+          selectJob(tip, restoreConnection: false, conversationID: conversation)
+        }
+      }
     } catch {
       self.error = error.localizedDescription
     }
@@ -906,6 +1038,15 @@ private struct DialogAuditHost: View {
     connectionMetadata = [:]
     routeStatus = [:]
     verifiedRoute = ""
+  }
+
+  private func openedConversationTip(_ id: String) -> Bool {
+    guard !id.isEmpty else { return false }
+    guard jobs.contains(where: { string($0, "id") == id }) else { return true }
+    let row = jobs.first { string($0, "id") == id } ?? [:]
+    let conversation = string(row, "conversation_id", id)
+    let project = string(row, "project", projectID)
+    return conversationTipID(jobs: jobs, conversationID: conversation, projectID: project) == id
   }
 
   func selectJob(_ id: String, restoreConnection: Bool = true,
@@ -935,6 +1076,7 @@ private struct DialogAuditHost: View {
     earlierHistory = ""
     loadingHistory = false
     selectedJob = id
+    followConversationTip = openedConversationTip(id)
     let summary = projectJobs.first { string($0, "id") == id }
     let identity = conversationID ?? summary.map { string($0, "conversation_id", id) }
     loadingConversationDraft = !id.isEmpty && identity == nil
@@ -2633,7 +2775,7 @@ private struct DialogAuditHost: View {
       ]
       content = AnyView(VStack(alignment: .leading, spacing: 24) {
         PageTitle(eyebrow: "Thread identity preview", title: "Know which agents did the work",
-          subtitle: "Example threads · colour accents identify the harness; a blank conversation stays disconnected.")
+          subtitle: "Example threads · logos identify the harnesses; a blank conversation stays disconnected.")
         HStack(spacing: 10) {
           Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(.secondary)
           Text("New conversation").font(.headline)
@@ -2646,12 +2788,12 @@ private struct DialogAuditHost: View {
             VStack(alignment: .leading, spacing: 8) {
               Text(string(row, "title")).font(.headline)
               Text(HarnessIdentity.used(in: row).map(\.name).joined(separator: " · "))
-                .font(.callout).foregroundStyle(HarnessIdentity.current(in: row)?.accent ?? Color.secondary)
+                .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
           }.padding(16).brandSurface()
         }
-        Text("Colour is a harness identity accent, not connection status. Custom harnesses get a stable colour and a generic symbol.")
+        Text("Logos retain their own colours when available. Missing and monochrome logos stay neutral; the border marks the last used harness.")
           .font(.caption).foregroundStyle(.secondary)
         Spacer()
       }.padding(28).frame(width: 860, height: 740).background(Color.qPanel).preferredColorScheme(lightPreview ? .light : .dark))

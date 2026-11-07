@@ -63,6 +63,11 @@ struct ConnectionStatus: View {
     }
   }
   var body: some View {
+    if store.reachable && store.message.isEmpty && !store.isPreview { EmptyView() }
+    else { statusBanner }
+  }
+
+  private var statusBanner: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
         if store.phase == .connecting { ProgressView().controlSize(.small) }
@@ -87,9 +92,11 @@ struct ProjectsScreen: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         VStack(alignment: .leading, spacing: 8) {
-          Text("YOUR WORKSPACE").font(.caption.weight(.semibold)).tracking(1.8).foregroundStyle(.secondary)
-          Text("Make room\nfor your next idea.").font(.system(.largeTitle, design: .rounded, weight: .bold))
-          Text("Your Mac does the work. You stay in the flow.").font(.subheadline).foregroundStyle(.secondary)
+          Text("Private companion preview").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+          Text("The harness layer for coding agents")
+            .font(.system(.title, design: .rounded, weight: .bold))
+          Text("Your Mac. Your models. Your harnesses.")
+            .font(.subheadline).foregroundStyle(.secondary)
         }.padding(.top, 12)
         macCard
         if attention > 0 {
@@ -110,16 +117,18 @@ struct ProjectsScreen: View {
           Spacer()
           Button { showingDrafts = true } label: { Label(draftCount > 0 ? "Drafts · \(draftCount)" : "Drafts", systemImage: "square.and.pencil") }.font(.subheadline)
         }
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 16)], spacing: 16) {
+        VStack(spacing: 16) {
           ForEach(store.projects) { project in
-            NavigationLink { ProjectScreen(project: project) } label: { projectCard(project) }.buttonStyle(.plain)
+            NavigationLink { ProjectScreen(project: project) } label: { projectCard(project) }
+              .buttonStyle(.plain)
+              .accessibilityIdentifier("workspace." + project.id)
           }
         }
         if store.projects.isEmpty {
           ContentUnavailableView("A workspace of your own", systemImage: "folder.badge.plus",
             description: Text("Share a project connection in your Mac's Private remote access settings. It will appear here."))
         }
-        Text("Models, credentials and execution stay on your Mac. Your phone receives the conversations and results you request.")
+        Text("Projects and API keys stay on your Mac. Cloud models still receive prompts from the providers you configure. Your phone receives the conversations and results you request.")
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("Workspaces").companionNavigationBrand()

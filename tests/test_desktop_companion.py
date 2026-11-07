@@ -47,6 +47,68 @@ def pair(access, profile, permissions=None):
     return claimed["token"], access.authenticate(claimed["token"], PRINCIPAL)
 
 
+def test_one_project_share_keeps_later_harness_changes(companion):
+    service, project, _, profile, access = companion
+    assert profile["id"] == "project:" + project["id"]
+    updated = access.handle(
+        "remote.profiles.save",
+        {
+            "project": project["id"],
+            "name": "Home model",
+            "harness": "core",
+            "provider": "ollama",
+            "model": "changed",
+            "local_only": False,
+            "source": "mac",
+        },
+    )
+    assert updated["id"] == profile["id"]
+    assert updated["model"] == "changed"
+    assert updated["revision"] == 2
+    assert len(access.config["profiles"]) == 1
+    _, device = pair(access, updated)
+    switched = access.rpc(
+        device,
+        "project.connection",
+        {"project": project["id"], "harness": "core", "provider": "ollama", "model": "from-phone"},
+        "switch-harness",
+    )
+    assert switched["source"] == "phone"
+    assert switched["model"] == "from-phone"
+    assert access.profiles(device)[0]["model"] == "from-phone"
+
+
+def test_phone_can_pair_before_a_harness_is_shared(desktop):
+    (
+        service,
+        project,
+        _,
+    ) = desktop
+    access = service.companion
+    access.config.update(enabled=True, private_url=ORIGIN)
+    access.server = SimpleNamespace(running=True, stop=lambda: None)
+    with pytest.raises(ValueError, match="Choose the Mac connections"):
+        access.handle("remote.pairing.create", {"profiles": ["missing"]})
+    invitation = access.handle("remote.pairing.create", {"profiles": []})
+    pending = access.request_pairing(invitation["code"], "My phone", PRINCIPAL)
+    access.handle("remote.pairing.approve", {"id": pending["id"]})
+    claimed = access.claim_pairing(pending["id"], pending["claim"], PRINCIPAL)
+    device = access.authenticate(claimed["token"], PRINCIPAL)
+    assert access.rpc(device, "projects.list", {}) == []
+    access.handle(
+        "remote.profiles.save",
+        {
+            "project": project["id"],
+            "name": "Later",
+            "harness": "core",
+            "provider": "ollama",
+            "model": "fixture",
+            "local_only": False,
+        },
+    )
+    assert [item["id"] for item in access.rpc(device, "projects.list", {})] == [project["id"]]
+
+
 def test_pairing_requires_invitation_local_approval_and_correct_claim(companion):
     _, _, _, profile, access = companion
     with pytest.raises(PermissionError):
@@ -505,3 +567,105 @@ def test_direct_chat_capability_rejects_agent_managed_routes_before_reserving(co
         )
         == []
     )
+
+
+def test_phone_connection_list_follows_the_mac_connect_ladder():
+    from superqode.desktop_service.remote_access import connection_choice, order_connection_choices
+
+    rows = [
+        connection_choice(
+            {
+                "id": "acp:opencode",
+                "name": "OpenCode",
+                "desktop_kind": "acp",
+                "agent_id": "opencode",
+                "available": True,
+                "command": "opencode acp",
+                "description": "Local ACP agent",
+            },
+            "routes.list",
+        ),
+        connection_choice(
+            {
+                "id": "connection:antigravity",
+                "name": "Antigravity CLI",
+                "desktop_kind": "connection",
+                "runtime": "antigravity-cli",
+                "subscription_vendor": "antigravity",
+                "available": True,
+                "command": "agy",
+                "extra_env": {"TOKEN": "secret"},
+            },
+            "routes.list",
+        ),
+        connection_choice(
+            {
+                "id": "acp:cursor",
+                "name": "Cursor",
+                "desktop_kind": "acp",
+                "subscription_vendor": "cursor",
+                "agent_id": "cursor",
+                "available": True,
+            },
+            "routes.list",
+        ),
+        connection_choice(
+            {
+                "id": "attach:qwen",
+                "name": "Qwen Code",
+                "desktop_kind": "attached",
+                "available": True,
+                "description": "Connect with your API key or a local model",
+            },
+            "routes.list",
+        ),
+        connection_choice(
+            {
+                "id": "core",
+                "name": "SuperQode Core",
+                "runtime": "builtin",
+                "available": True,
+                "description": "SuperQode harness",
+            },
+            "harnesses.list",
+        ),
+        connection_choice(
+            {
+                "id": "remote:abc",
+                "name": "Remote agent",
+                "kind": "a2a",
+                "available": True,
+            },
+            "routes.list",
+        ),
+    ]
+    ordered = order_connection_choices(rows)
+    assert [row["group"] for row in ordered] == [
+        "subscription",
+        "subscription",
+        "model",
+        "harness",
+        "acp",
+        "protocol",
+    ]
+    assert [row["name"] for row in ordered[:2]] == ["Antigravity CLI", "Cursor"]
+    antigravity = ordered[0]
+    assert antigravity["icon_key"] == "antigravity"
+    assert antigravity["desktop_kind"] == "connection"
+    assert set(antigravity) == {
+        "id",
+        "name",
+        "provider",
+        "model",
+        "group",
+        "desktop_kind",
+        "icon_key",
+        "description",
+    }
+    assert "command" not in antigravity
+    assert "extra_env" not in antigravity
+    assert ordered[3]["group"] == "harness"
+    assert ordered[3]["icon_key"] == "superqode"
+    assert ordered[4]["group"] == "acp"
+    assert ordered[4]["icon_key"] == "opencode"
+    assert ordered[5]["group"] == "protocol"

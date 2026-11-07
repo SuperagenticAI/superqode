@@ -25,8 +25,8 @@ Choose an installed simulator name using `xcrun simctl list devices available`. 
 1. Install [Tailscale](https://tailscale.com/download) on both devices and join your own private network. Review tailnet access rules so only the intended people/devices can reach the Mac's service. Do not use a shared SuperQode-operated tailnet.
 2. In the source-built Mac app, open Settings, Private remote access, Set up iPhone companion. Enable the existing background engine. Agent work then survives closing the app; a restart, logout or sleeping Mac can still interrupt access.
 3. Configure [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) with the Mac's Configure private Serve button, or use the displayed command when vendor approval or manual setup is needed. Verify the connection in the app. The gateway listens only on `127.0.0.1:47831`; Serve provides private HTTPS at `https://your-mac.your-tailnet.ts.net:47832`. Use the exact address shown by the Mac, including the port. The dedicated private port leaves another app's Serve service on port 443 intact. Configuration is explicit: the app does not install a VPN, replace other Serve services or enable public Funnel.
-4. Open a project and select the harness/provider/model on the Mac. Share that connection. Local inference only currently requires Core or No-tool with a verified loopback model binding created through Local AI. Other agents can be shared with an explicit provider/agent-managed inference setting.
-5. Enable private remote access, select the connections this phone can access, and create a five-minute invitation. Scan the QR in the companion or enter the private address and code manually. Camera permission is requested only when Scan is tapped.
+4. Enable private remote access and create a five-minute invitation. No harness or model is required to pair. Scan the QR in the companion or enter the private address and code manually. Camera permission is requested only when Scan is tapped.
+5. Share each project once. Later harness, provider and model changes on the Mac update that project for the phone. A harness change on the phone updates the Mac while that project is open. Local inference only currently requires Core or No-tool with a verified loopback model binding created through Local AI.
 6. Approve the pending request on the Mac, checking the Tailscale identity and device name. The invitation is single-use, and a separate secret is required to claim its outcome. Device credentials expire after 30 days, are hashed on the Mac and stored in this iPhone's device-only Keychain. Tokens never appear in URLs or normal preferences.
 7. Disable iPhone Wi-Fi and verify over mobile data with Tailscale enabled. Create a task, check it appears on the Mac, inspect output, approve/deny an exact action and stop the same job from either device. Close/reopen the phone app and verify the recorded state returns without resubmitting the task. Revoke the device on the Mac and confirm access is refused.
 
@@ -63,11 +63,8 @@ Local-only optimization is disabled until separate reflection/optimizer routes c
 The phone is a client of SuperQode's engine, not a remote-control driver for every other app. It can use supported agent routes already configured on the Mac, with credentials retained there.
 
 - Codex: existing SuperQode Codex SDK/ACP connections can be shared. This does not provide arbitrary control of the Codex desktop app's private live sessions.
-- Omnigent: the architecture follows its private Serve pattern. Direct Omnigent server integration is not claimed. A future documented adapter or compatible ACP route can reuse the same engine boundary.
-- T3 Code, Orca and other GUIs: no undocumented control API is assumed. Integration requires a documented protocol/adapter and verification. The names alone do not establish compatibility.
-- Other clients can implement the documented companion HTTP contract and receive their own Mac-approved device grant. This is SuperQode protocol 1, not a claim of wire compatibility with another vendor's API.
-
-The review reference is [Omnigent's private access guide](https://github.com/omnigent-ai/omnigent/blob/main/deploy/tailscale/README.md). No Omnigent source was copied.
+- Other desktop apps are not remote-controlled from the phone. A route is available only when SuperQode already has a documented adapter for it on the Mac.
+- Other clients can implement the documented companion HTTP contract and receive their own Mac-approved device grant. This is SuperQode protocol 1.
 
 ## API and boundaries
 

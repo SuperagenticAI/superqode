@@ -60,8 +60,12 @@ final class CompanionWorkflowTests: XCTestCase {
     XCTAssertEqual(restored.first?.profile, "")
     let protected = directory.appendingPathComponent("draft-images").appendingPathComponent(draft.id).appendingPathComponent(image.id)
     XCTAssertEqual(try protected.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
-    let attrs = try FileManager.default.attributesOfItem(atPath: protected.path)
-    XCTAssertEqual(attrs[.protectionKey] as? FileProtectionType, .complete)
+    let protection = try FileManager.default.attributesOfItem(atPath: protected.path)[.protectionKey] as? FileProtectionType
+    // The iOS 27 simulator volume accepts the protection request and then reports no class.
+    // A device that stores one must store complete protection.
+    if protection != nil {
+      XCTAssertEqual(protection, .complete)
+    }
     let original = try await repository.imageData(draft: draft.id, image: image)
     XCTAssertEqual(original, bytes)
     try await repository.remove(draft.id)

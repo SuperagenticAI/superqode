@@ -62,4 +62,14 @@ enum BundledAgentIcons {
     "stakpak": "Agent-stakpak",
     "vtcode": "Agent-vtcode",
   ]
+  /// Official marks that keep their brand colours instead of a template tint.
+  static let brandColoured: Set<String> = [
+    "Agent-antigravity-acp",
+    "Agent-claude-acp",
+    "Agent-cortex-code",
+    "Agent-gemini",
+    "Agent-junie",
+    "Agent-mistral-vibe",
+    "Agent-qwen-code",
+  ]
 }

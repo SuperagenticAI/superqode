@@ -1,25 +1,44 @@
 import SwiftUI
+import UIKit
+
+private struct PendingSend: Identifiable, Equatable {
+  let id: String
+  let text: String
+}
 
 struct JobScreen: View {
   let identity: String
   @EnvironmentObject private var store: CompanionStore
   @Environment(\.scenePhase) private var scenePhase
+  @State private var shownID: String
+  @State private var reply = ""
+  @State private var pending: [PendingSend] = []
+  @State private var showNewThread = false
+  @FocusState private var composing: Bool
+  @State private var pendingHold = false
+  @State private var connections: [RemoteRecord] = []
+  @State private var nextConnection: RemoteRecord?
   @State private var detail: [String: JSONValue] = [:]
+  init(identity: String) {
+    self.identity = identity
+    _shownID = State(initialValue: identity)
+  }
   @State private var events: [RemoteRecord] = []
   @State private var earlier: [RemoteRecord] = []
   @State private var historyCursor = ""
   @State private var eventCursor: Double = 0
   @State private var issue = ""
-  @State private var loading = false
+  @State private var loadGeneration = 0
   @State private var acting = false
-  @State private var continueThread = false
   @State private var steering = ""
   @State private var steerKey = UUID().uuidString
   @State private var confirmApproval = false
   @State private var approvalSnapshot: [String: JSONValue] = [:]
   @State private var confirmStop = false
+  @State private var showComparison = false
+  @State private var comparisonData: [String: JSONValue] = [:]
   private var job: RemoteRecord { RemoteRecord(raw: detail) }
-  private var pending: [String: JSONValue] { detail.object("pending_approval") }
+  private var approvalRequest: [String: JSONValue] { detail.object("pending_approval") }
   private var failureMessage: String {
     guard job.text("status") == "failed" else { return "" }
     let result = detail.object("result")
@@ -33,6 +52,14 @@ struct JobScreen: View {
       }
     }
     return "Open run activity for the recorded details, or inspect this run on your Mac."
+  }
+  private var showWorking: Bool {
+    job.active || acting || (!pending.isEmpty && !pendingHold)
+  }
+  private var workingStatus: String {
+    let status = job.text("status")
+    if ["needs_approval", "cancelling", "running", "queued"].contains(status) { return status }
+    return "running"
   }
   private var assistantText: String {
     events.compactMap { event -> String? in
@@ -50,7 +77,7 @@ struct JobScreen: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 18) {
         ConnectionStatus()
-        if acting { ProgressView("Waiting for your Mac…") }
+        if acting { ProgressView("Sending…") }
         if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning) }
         CompanionCard {
           HStack {
@@ -85,15 +112,15 @@ struct JobScreen: View {
             Text(detail.object("request").text("prompt")).textSelection(.enabled)
           }
         }
-        if !pending.isEmpty {
+        if !approvalRequest.isEmpty {
           approvalCard
         } else if job.text("status") == "needs_approval" {
           Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(CompanionTheme.warning)
         }
         if !detail.text("project").isEmpty {
           CompanionCard {
-            NavigationLink("Export recorded evidence") { RecordedEvidenceExportScreen(project: detail.text("project"), job: identity) }
-            if job.text("kind") == "task", !job.active { NavigationLink("Handoff to a new thread") { ThreadHandoffScreen(project: detail.text("project"), job: identity) } }
+            NavigationLink("Export recorded evidence") { RecordedEvidenceExportScreen(project: detail.text("project"), job: shownID) }
+            if job.text("kind") == "task", !job.active { NavigationLink("Handoff to a new thread") { ThreadHandoffScreen(project: detail.text("project"), job: shownID) } }
           }
         }
         if !assistantText.isEmpty {
@@ -102,8 +129,19 @@ struct JobScreen: View {
             AssistantText(text: assistantText).equatable()
           }
         }
+        ForEach(pending) { item in
+          CompanionCard {
+            Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+            Text(item.text).textSelection(.enabled)
+            Text(pendingHold && !issue.isEmpty ? issue : (job.active ? "Sends when this turn finishes" : "Sending…"))
+              .font(.caption).foregroundStyle(.secondary)
+          }
+        }
         if !detail.object("result").isEmpty, ["evaluation", "optimization"].contains(job.text("kind")) {
-          EvaluationResultCard(result: detail.object("result"))
+          EvaluationResultCard(result: detail.object("result")) { comparison in
+            comparisonData = comparison
+            showComparison = true
+          }
         } else if !detail.object("result").isEmpty && job.text("kind") != "task" {
           CompanionCard {
             Label("Recorded result", systemImage: "doc.text").font(.headline)
@@ -121,7 +159,7 @@ struct JobScreen: View {
               let text = steering
               let key = steerKey
               Task {
-                if await act("jobs.steer", ["id": .string(identity), "text": .string(text)], key: key) {
+                if await act("jobs.steer", ["id": .string(shownID), "text": .string(text)], key: key) {
                   steering = ""; steerKey = UUID().uuidString
                 }
               }
@@ -145,43 +183,232 @@ struct JobScreen: View {
           }.font(.subheadline)
         }
         if !job.active, job.text("kind") == "task" {
-          NavigationLink { ProjectReviewScreen(project: job.text("project"), job: identity) } label: { Label("Review this turn", systemImage: "text.magnifyingglass") }
-        }
-        if !job.active, job.text("kind") == "task", store.permissions.contains("tasks") {
-          Button { continueThread = true } label: { Label("Continue conversation", systemImage: "arrow.turn.down.right") }
-            .buttonStyle(CompanionPrimaryButton())
+          NavigationLink { ProjectReviewScreen(project: job.text("project"), job: shownID) } label: { Label("Review this turn", systemImage: "text.magnifyingglass") }
         }
         if job.active, store.permissions.contains("cancel") {
           Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting || !store.canMutate)
         }
       }.padding(20)
-    }.background(CompanionTheme.background)
+    }
+    .scrollDismissesKeyboard(.immediately)
+    .background(CompanionTheme.background)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+          if showWorking {
+            CompanionWorkingCard(status: workingStatus)
+              .padding(.horizontal, 12)
+              .padding(.top, 10)
+              .padding(.bottom, 4)
+          }
+          if job.text("kind") == "task" || detail.isEmpty { replyBar }
+        }
+      }
       .navigationTitle(job.text("conversation_title", job.text("title", "Run")))
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItemGroup(placement: .keyboard) {
+          Spacer()
+          Button("Hide") { composing = false }
+        }
+        ToolbarItem(placement: .primaryAction) {
+          Button("New thread") { showNewThread = true }
+            .disabled(job.text("project").isEmpty || !store.permissions.contains("tasks"))
+        }
+      }
       .refreshable { await load() }
-      .task(id: scenePhase) {
+      .task(id: "\(shownID)-\(scenePhase)") {
         guard scenePhase == .active else { return }
+        events = []; eventCursor = 0; earlier = []; historyCursor = ""; detail = [:]
         await load()
-        if job.text("kind") == "task", earlier.isEmpty { await loadHistory() }
+        if job.text("kind") == "task" || detail.isEmpty, earlier.isEmpty { await loadHistory() }
+        await loadConnections()
         while !Task.isCancelled {
-          do { try await Task.sleep(for: .seconds(job.active ? 2 : 8)) } catch { break }
+          do { try await Task.sleep(for: .seconds(job.active || !pending.isEmpty ? 1 : 8)) } catch { break }
           await load()
         }
       }
-      .sheet(isPresented: $continueThread) { NavigationStack { ComposeTaskScreen(project: job.text("project"), parent: identity) } }
+      .navigationDestination(isPresented: $showComparison) { EvaluationComparisonScreen(comparison: comparisonData) }
       .confirmationDialog("Approve this exact action on your Mac?", isPresented: $confirmApproval, titleVisibility: .visible) {
         Button("Approve once") {
           let request = approvalSnapshot.text("request_id")
-          Task { _ = await act("jobs.approve", ["id": .string(identity), "request_id": .string(request), "allow": .bool(true)], key: "approve:\(identity):\(request)") }
+          Task { _ = await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(true)], key: "approve:\(shownID):\(request)") }
         }
       } message: { Text("Approve \(approvalSnapshot.object("tool").text("tool", approvalSnapshot.object("tool").text("name", "this action"))) once. If the pending request changed, the Mac will reject this decision.") }
       .confirmationDialog("Stop this run?", isPresented: $confirmStop, titleVisibility: .visible) {
-        Button("Stop run", role: .destructive) { Task { _ = await act("jobs.cancel", ["id": .string(identity)], key: "cancel:\(identity)") } }
+        Button("Stop run", role: .destructive) { Task { _ = await act("jobs.cancel", ["id": .string(shownID)], key: "cancel:\(shownID)") } }
       } message: { Text("Stopping cannot undo edits or commands already completed on the Mac.") }
+      .sheet(isPresented: $showNewThread) {
+        NavigationStack { ComposeTaskScreen(project: job.text("project")) }
+      }
+  }
+
+  private var replyBar: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Menu {
+        if connections.isEmpty {
+          Button("Open the Mac once so its harnesses can be listed") {}.disabled(true)
+        }
+        ForEach(HarnessChoiceGroup.sections(connections)) { section in
+          Section(section.title) {
+            ForEach(section.rows) { choice in
+              Button(connectionLabel(choice)) { Task { await chooseHarness(choice) } }
+            }
+          }
+        }
+      } label: {
+        HStack(spacing: 6) {
+          if let current = nextConnection ?? selectedRequestConnection {
+            HarnessMark(name: current.text("name"), iconKey: current.text("icon_key"), size: 16)
+          }
+          Text(selectedConnectionLabel).lineLimit(1)
+          Image(systemName: "chevron.up.chevron.down")
+        }
+        .font(.caption.weight(.semibold))
+      }
+      .accessibilityIdentifier("thread.harness")
+      .disabled(acting || !store.canMutate)
+      HStack(alignment: .bottom, spacing: 8) {
+        TextField("Message", text: $reply, axis: .vertical).lineLimit(1...6)
+          .focused($composing)
+          .accessibilityIdentifier("thread.message")
+        Button { Task { await sendReply() } } label: {
+          Image(systemName: "arrow.up.circle.fill").font(.title2)
+        }
+        .accessibilityLabel("Send")
+        .disabled(acting || detail.isEmpty || !store.canMutate || !store.permissions.contains("tasks") || reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+      if pendingHold && !issue.isEmpty {
+        Button("Try again") {
+          pendingHold = false
+          issue = ""
+          Task { await deliverPending() }
+        }.font(.caption.weight(.semibold))
+      }
+    }.padding(12).background(.bar)
+  }
+
+  private var selectedConnectionLabel: String {
+    if let nextConnection { return connectionLabel(nextConnection) }
+    let request = detail.object("request")
+    let harness = request.text("harness")
+    let model = request.text("model")
+    if harness.isEmpty { return "Harness" }
+    return model.isEmpty ? harness : harness + " · " + model
+  }
+
+  private var selectedRequestConnection: RemoteRecord? {
+    let current = detail.object("request").text("harness")
+    return connections.first { $0.id == current }
+  }
+
+  private func connectionLabel(_ choice: RemoteRecord) -> String {
+    let model = choice.text("model")
+    return model.isEmpty ? choice.text("name") : choice.text("name") + " · " + model
+  }
+
+  private func loadConnections() async {
+    guard let api = store.api, !store.isPreview, !job.text("project").isEmpty else { return }
+    do {
+      connections = try await api.rpc("project.connections", ["project": .string(job.text("project"))]).array.map { RemoteRecord(raw: $0.object) }
+      if nextConnection == nil {
+        let current = store.profiles.first { $0.text("project") == job.text("project") }?.text("harness")
+          ?? detail.object("request").text("harness")
+        nextConnection = connections.first { $0.id == current }
+      }
+    } catch {
+      if connections.isEmpty, detail.isEmpty { issue = error.localizedDescription }
+    }
+  }
+
+  private func chooseHarness(_ choice: RemoteRecord) async {
+    guard let api = store.api, !acting else { return }
+    let previous = nextConnection
+    nextConnection = choice
+    acting = true; issue = ""
+    defer { acting = false }
+    do {
+      _ = try await api.rpc("project.connection", [
+        "project": .string(job.text("project")), "harness": .string(choice.id),
+        "provider": .string(choice.text("provider", "agent")), "model": .string(choice.text("model")),
+      ], key: "connection-" + UUID().uuidString)
+      await store.refresh()
+    } catch {
+      nextConnection = previous
+      issue = error.localizedDescription
+    }
+  }
+
+  private func sendReply() async {
+    composing = false
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty, !detail.isEmpty else { return }
+    pending.append(PendingSend(id: UUID().uuidString, text: text))
+    reply = ""
+    pendingHold = false
+    issue = ""
+    await deliverPending()
+  }
+
+  private func deliverPending() async {
+    guard !acting, !pendingHold, let item = pending.first, !detail.isEmpty, !job.active else { return }
+    guard let api = store.api else { return }
+    guard let profile = store.profiles.first(where: { $0.text("project") == job.text("project") }) else {
+      issue = "Share this project on the Mac before sending."
+      pendingHold = true
+      return
+    }
+    acting = true
+    defer { acting = false }
+    do {
+      let mode = detail.object("request").text("interaction_mode", "code")
+      let result = try await api.rpc("tasks.start", [
+        "profile": .string(profile.id), "prompt": .string(item.text), "parent_id": .string(shownID),
+        "interaction_mode": .string(mode.isEmpty ? "code" : mode),
+      ], key: item.id).object
+      let next = result.text("id")
+      guard !next.isEmpty else { throw CompanionError("The Mac returned no run ID. Check Activity before sending again.") }
+      pending.removeAll { $0.id == item.id }
+      issue = ""
+      shownID = next
+      await store.refreshActivity()
+    } catch is CancellationError { }
+    catch {
+      let message = error.localizedDescription
+      if message.localizedCaseInsensitiveContains("finished task") { return }
+      if message.localizedCaseInsensitiveContains("uncertain") {
+        await reconcile(item)
+        return
+      }
+      issue = message
+      pendingHold = true
+    }
+  }
+
+  private func reconcile(_ item: PendingSend) async {
+    guard let api = store.api else { return }
+    do {
+      let status = try await api.rpc("companion.request_status", ["key": .string(item.id)]).object
+      let next = status.object("result").text("id")
+      if !next.isEmpty {
+        pending.removeAll { $0.id == item.id }
+        issue = ""
+        shownID = next
+        await store.refreshActivity()
+        return
+      }
+      pending.removeAll { $0.id == item.id }
+      pending.insert(PendingSend(id: UUID().uuidString, text: item.text), at: 0)
+      issue = "That message was not accepted. Try again."
+      pendingHold = true
+    } catch {
+      issue = error.localizedDescription
+      pendingHold = true
+    }
   }
 
   private var approvalCard: some View {
-    let snapshot = pending
+    let snapshot = approvalRequest
     return CompanionCard {
       Label("Your approval is needed", systemImage: "hand.raised.fill").font(.headline).foregroundStyle(CompanionTheme.warning)
       let tool = snapshot.object("tool")
@@ -194,34 +421,46 @@ struct JobScreen: View {
         Button("Approve once") { approvalSnapshot = snapshot; confirmApproval = true }.buttonStyle(CompanionPrimaryButton())
         Button("Deny", role: .destructive) {
           let request = snapshot.text("request_id")
-          Task { _ = await act("jobs.approve", ["id": .string(identity), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(identity):\(request)") }
+          Task { _ = await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(shownID):\(request)") }
         }
       }.disabled(acting || !store.canMutate || !store.permissions.contains("approve"))
     }
   }
 
   private func load() async {
-    guard let api = store.api, !loading else { return }
-    loading = true
-    defer { loading = false }
+    guard let api = store.api else { return }
+    loadGeneration += 1
+    let generation = loadGeneration
+    let id = shownID
     do {
       // Catch up in bounded pages; never discard unseen events or replay a mutation.
+      var cursor = eventCursor
+      var merged = events
+      var page = detail
       for _ in 0..<4 {
-        let page = try await api.rpc("jobs.get", ["id": .string(identity), "after": .number(eventCursor)]).object
+        page = try await api.rpc("jobs.get", ["id": .string(id), "after": .number(cursor)]).object
+        guard generation == loadGeneration, id == shownID else { return }
         let next = page.records("events")
-        if !next.isEmpty { events.append(contentsOf: next) }
-        eventCursor = page.number("next_sequence")
-        detail = page
+        if !next.isEmpty { merged.append(contentsOf: next) }
+        cursor = page.number("next_sequence")
         if !page.flag("has_more_events") { break }
       }
-      issue = ""
+      guard generation == loadGeneration, id == shownID else { return }
+      events = merged
+      eventCursor = cursor
+      detail = page
+      if !pendingHold { issue = "" }
+      await deliverPending()
     } catch is CancellationError { }
-    catch { issue = error.localizedDescription }
+    catch {
+      guard generation == loadGeneration, id == shownID else { return }
+      if detail.isEmpty { issue = error.localizedDescription }
+    }
   }
   private func loadHistory(before: String? = nil) async {
     guard let api = store.api else { return }
     do {
-      var params: [String: JSONValue] = ["id": .string(identity)]
+      var params: [String: JSONValue] = ["id": .string(shownID)]
       if let before { params["before"] = .string(before) }
       let history = try await api.rpc("conversations.get", params).object
       earlier = history.records("turns") + earlier
@@ -244,6 +483,7 @@ struct JobScreen: View {
 
 struct EvaluationResultCard: View {
   let result: [String: JSONValue]
+  var onCompare: ([String: JSONValue]) -> Void = { _ in }
   var body: some View {
     CompanionCard {
       Label("Evaluation evidence", systemImage: "chart.bar.xaxis").font(.headline)
@@ -261,7 +501,7 @@ struct EvaluationResultCard: View {
       let comparison = result.object("comparison")
       if comparison.flag("available") {
         if let first = comparison.records("candidates").first { OutcomeCounts(counts: first.raw.object("counts")) }
-        NavigationLink { EvaluationComparisonScreen(comparison: comparison) } label: { Label("Compare task outcomes", systemImage: "arrow.left.arrow.right") }
+        Button { onCompare(comparison) } label: { Label("Compare task outcomes", systemImage: "arrow.left.arrow.right") }
       } else if !comparison.text("message").isEmpty { Text(comparison.text("message")).font(.caption).foregroundStyle(.secondary) }
       ForEach((evidence["variants"]?.array ?? []).enumerated().map { RemoteRecord(raw: $0.element.object.merging(["id": .string(String($0.offset))]) { old, _ in old }) }) { variant in
         VStack(alignment: .leading, spacing: 5) {

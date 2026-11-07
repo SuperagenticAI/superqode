@@ -16,6 +16,7 @@ from .remote_project import (
 )
 
 READS = {
+    "project.connections": {"project"},
     "threads.list": {"project", "query", "view", "limit", "cursor"},
     "threads.get": {"project", "id"},
     "jobs.get": {"id", "after"},
@@ -47,6 +48,7 @@ READS = {
 }
 WRITES = {
     "review.stage": ("review", {"project", "scope", "job", "base_ref", "file_id", "snapshot_id"}),
+    "project.connection": ("tasks", {"project", "harness", "provider", "model"}),
     "threads.update": ("tasks", {"project", "id", "title", "pinned", "archived"}),
     "tasks.start": (
         "tasks",
@@ -191,6 +193,8 @@ def dispatch(access, device, method, params, key):
         request["project"] = profile["project"]
     if "project" in request and request["project"] not in projects:
         raise PermissionError("This project is not shared with this device")
+    if method == "project.connections":
+        return access.connection_choices(request["project"])
     if (
         method
         in {
@@ -336,7 +340,10 @@ def dispatch(access, device, method, params, key):
             (device["id"], key, signature, time.time()),
         )
     try:
-        result = remote_editing.execute(access, device, method, request, profiles)
+        if method == "project.connection":
+            result = access.update_connection(device, request)
+        else:
+            result = remote_editing.execute(access, device, method, request, profiles)
     except BaseException:
         if method in WRITES:
             access._audit(device["id"], method + ":failed", request.get("project", ""), job or "")

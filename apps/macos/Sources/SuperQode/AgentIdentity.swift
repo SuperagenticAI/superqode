@@ -6,13 +6,18 @@ struct HarnessIdentity: Identifiable, Equatable {
   let name: String
   let iconKey: String
   var assetName: String? { iconKey == "superqode" ? "BrandMark" : BundledAgentIcons.assets[iconKey] }
+  /// Coloured official marks render as drawn; monochrome marks follow the appearance.
+  var keepsBrandColours: Bool {
+    guard let assetName else { return false }
+    return assetName == "BrandMark" || BundledAgentIcons.brandColoured.contains(assetName)
+  }
 
   init(_ row: [String: Any]) {
     let referenceID = string(row, "id", string(row, "harness", "core"))
     id = referenceID
     name = string(row, "name", referenceID)
     let runtime = string(row, "runtime")
-    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "claude-code": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini", "factory": "factory-droid", "droid": "factory-droid", "opencode": "opencode"]
+    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "claude-code": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini", "factory": "factory-droid", "droid": "factory-droid", "opencode": "opencode", "antigravity-cli": "antigravity", "antigravity-sdk": "antigravity", "antigravity-managed": "antigravity"]
     let reference = ["acp:", "connection:", "attach:", "vendor-key:"].first { referenceID.hasPrefix($0) }
       .map { String(referenceID.dropFirst($0.count)) } ?? referenceID
     let fallback = runtimes[runtime] ?? runtimes[reference] ?? (["core", "pipy", "codegem", "systemone"].contains(referenceID) ? "superqode" : reference)
@@ -42,22 +47,32 @@ struct HarnessIdentity: Identifiable, Equatable {
 struct HarnessIcon: View {
   let identity: HarnessIdentity
   var size: CGFloat = 30
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
-        Image(nsImage: image).renderingMode(identity.iconKey == "superqode" ? .original : .template)
-          .resizable().scaledToFit().foregroundStyle(identity.symbolGradient)
-      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(identity.symbolGradient) }
+        colouredMark(image)
+      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
     }.padding(size * 0.18).frame(width: size, height: size)
-      .background {
-        RoundedRectangle(cornerRadius: size * 0.28).fill(Color.qPanel)
-        RoundedRectangle(cornerRadius: size * 0.28)
-          .fill(identity.symbolGradient.opacity(scheme == .dark ? 0.18 : 0.09))
-      }
-      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(identity.accent.opacity(contrast == .increased ? 0.85 : 0.35), lineWidth: contrast == .increased ? 1.5 : 1))
+      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
+      .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
       .accessibilityLabel(identity.name).help(identity.name)
+  }
+
+  /// resizable() drops an earlier rendering mode, so the mode is applied after it.
+  /// A template tint on top of that was turning official colour marks black and white.
+  @ViewBuilder private func colouredMark(_ image: NSImage) -> some View {
+    let picture = sourceImage(image)
+    if identity.keepsBrandColours {
+      Image(nsImage: picture).resizable().renderingMode(.original).scaledToFit()
+    } else {
+      Image(nsImage: picture).resizable().renderingMode(.template).scaledToFit().foregroundStyle(.primary)
+    }
+  }
+
+  private func sourceImage(_ image: NSImage) -> NSImage {
+    let picture = (image.copy() as? NSImage) ?? image
+    if identity.keepsBrandColours { picture.isTemplate = false }
+    return picture
   }
 }
 
@@ -76,10 +91,10 @@ struct HarnessIconStack: View {
     HStack(spacing: -5) {
       ForEach(HarnessIdentity.visible(in: row, limit: limit)) { identity in
         HarnessIcon(identity: identity, size: size)
-          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? identity.accent : .clear, lineWidth: 2))
+          .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(emphasizeCurrent && identity.id == string(row, "harness") ? Color.primary.opacity(0.16) : .clear))
       }
       if identities.count > limit {
-        Text("+\(identities.count - limit)").font(.system(size: size * 0.38, weight: .semibold))
+        Text("+\(identities.count - limit)").foregroundStyle(.secondary).font(.system(size: size * 0.38, weight: .semibold))
           .frame(width: size, height: size).background(Color.qPanel, in: Circle())
           .overlay(Circle().strokeBorder(.primary.opacity(0.16)))
       }

@@ -70,9 +70,11 @@ struct EvaluationComparisonScreen: View {
   }
   private func metric(_ title: String, _ key: String, currency: Bool = false, delta: Bool = false) -> some View {
     let value = evidenceMetric(candidate[key], currency: currency, delta: delta)
-    return LabeledContent(title, value: value).font(.subheadline.monospacedDigit())
-      .accessibilityElement(children: .ignore).accessibilityLabel(title).accessibilityValue(value)
-      .accessibilityIdentifier("comparison." + key)
+    return LabeledContent {
+      Text(value).font(.subheadline.monospacedDigit()).accessibilityIdentifier("comparison." + key)
+    } label: {
+      Text(title).font(.subheadline)
+    }.accessibilityElement(children: .contain)
   }
   private func task(_ row: RemoteRecord) -> some View {
     DisclosureGroup {

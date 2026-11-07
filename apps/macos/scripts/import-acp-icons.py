@@ -12,14 +12,33 @@ import sys
 
 from superqode.providers.acp_registry import registry_short_name
 
+from agent_brand_colours import PRESERVE_COLOUR_ASSETS, SOURCES as BRAND_SOURCES, coloured
+
 root = Path(__file__).resolve().parents[1]
 source = Path(sys.argv[1])
 registry = json.loads((source / "registry.json").read_text())
-assets, origins = {}, []
+assets, origins, brand = {}, [], []
 for agent in registry["agents"]:
     identity = agent["id"]
     if not re.fullmatch(r"[a-zA-Z0-9._-]+", identity):
         raise ValueError("Invalid agent identity")
+    asset = "Agent-" + identity
+    destination = root / "resources/Assets.xcassets" / (asset + ".imageset")
+    if identity in PRESERVE_COLOUR_ASSETS:
+        colour_file = destination / "icon.png"
+        if not colour_file.exists():
+            raise ValueError("Official colour asset is missing: " + identity)
+        brand.append(asset)
+        assets[identity] = asset
+        assets[registry_short_name(identity)] = asset
+        origins.append(
+            {
+                "id": identity,
+                "url": BRAND_SOURCES[identity][1],
+                "sha256": hashlib.sha256(colour_file.read_bytes()).hexdigest(),
+            }
+        )
+        continue
     icon = source / (identity + ".svg")
     if not icon.exists():
         continue
@@ -28,11 +47,15 @@ for agent in registry["agents"]:
         r"<(script|foreignObject)\b|(?:href|src)=[\"'](?:https?:|//)", content, re.I
     ):
         raise ValueError("Icon must be a self-contained SVG")
-    asset = "Agent-" + identity
-    destination = root / "resources/Assets.xcassets" / (asset + ".imageset")
     destination.mkdir(exist_ok=True)
     # Registry glyphs use CSS currentColor; asset templates supply the native tint.
-    (destination / "icon.svg").write_text(content.replace("currentColor", "#000000"))
+    glyph = content.replace("currentColor", "#000000")
+    recolour = coloured(identity)
+    if recolour:
+        # Official coloured marks keep their brand colours; the rest stay templates.
+        glyph = recolour(glyph)
+        brand.append(asset)
+    (destination / "icon.svg").write_text(glyph)
     (destination / "Contents.json").write_text(
         json.dumps(
             {
@@ -40,7 +63,7 @@ for agent in registry["agents"]:
                 "info": {"author": "xcode", "version": 1},
                 "properties": {
                     "preserves-vector-representation": True,
-                    "template-rendering-intent": "template",
+                    "template-rendering-intent": "original" if recolour else "template",
                 },
             },
             indent=2,
@@ -62,6 +85,12 @@ lines = [
     "  static let assets: [String: String] = [",
 ]
 lines += [f"    {json.dumps(key)}: {json.dumps(value)}," for key, value in sorted(assets.items())]
+lines += [
+    "  ]",
+    "  /// Official marks that keep their brand colours instead of a template tint.",
+    "  static let brandColoured: Set<String> = [",
+]
+lines += [f"    {json.dumps(value)}," for value in sorted(brand)]
 lines += ["  ]", "}", ""]
 (root / "Sources/SuperQode/BundledAgentIcons.swift").write_text("\n".join(lines))
 (root / "resources/agent-icons-provenance.json").write_text(
@@ -70,6 +99,10 @@ lines += ["  ]", "}", ""]
             "source": "https://github.com/agentclientprotocol/registry",
             "registry_license": "Apache-2.0",
             "icons": origins,
+            "brand_colours": {
+                identity: {"colours": colours, "source": source}
+                for identity, (colours, source) in sorted(BRAND_SOURCES.items())
+            },
         },
         indent=2,
     )

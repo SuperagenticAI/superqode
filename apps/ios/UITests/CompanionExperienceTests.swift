@@ -6,14 +6,12 @@ final class CompanionExperienceTests: XCTestCase {
     app.launchArguments = ["--design-preview", "projects"]
     app.launch()
     XCTAssertTrue(app.buttons["workflow.code"].waitForExistence(timeout: 10))
-    let workspace = app.staticTexts["SuperQode Studio"]
-    for _ in 0..<5 { if workspace.isHittable { break }; app.swipeUp() }
-    workspace.tap()
+    openSampleWorkspace(app)
     let files = app.buttons["project.files"]
     XCTAssertTrue(files.waitForExistence(timeout: 5))
     files.tap()
     let readme = app.buttons["project.file.README.md"]
-    XCTAssertTrue(readme.waitForExistence(timeout: 5))
+    XCTAssertTrue(reveal(readme, in: app))
     readme.tap()
     app.buttons["Edit"].tap()
     XCTAssertTrue(app.textViews["file.editor"].waitForExistence(timeout: 5))
@@ -25,7 +23,8 @@ final class CompanionExperienceTests: XCTestCase {
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]
     app.launch()
     for action in ["code", "review", "evaluate", "optimize"] {
-      XCTAssertTrue(app.buttons["workflow." + action].waitForExistence(timeout: 10))
+      let shortcut = element(app, "workflow." + action)
+      XCTAssertTrue(reveal(shortcut, in: app))
     }
     app.buttons["All features"].tap()
     let search = app.searchFields.firstMatch
@@ -45,11 +44,10 @@ final class CompanionExperienceTests: XCTestCase {
     for _ in 0..<4 { if compare.isHittable { break }; app.swipeUp() }
     XCTAssertTrue(compare.exists)
     compare.tap()
-    let baseline = app.descendants(matching: .any).matching(identifier: "comparison.baseline_cost_usd").firstMatch
-    for _ in 0..<4 { if baseline.isHittable { break }; app.swipeUp() }
-    XCTAssertTrue(baseline.exists)
-    XCTAssertEqual(baseline.value as? String, "$0.0000")
-    XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "comparison.candidate_cost_usd").firstMatch.value as? String, "Unknown")
+    let baseline = element(app, "comparison.baseline_cost_usd")
+    XCTAssertTrue(reveal(baseline, in: app))
+    XCTAssertEqual(shown(baseline), "$0.0000")
+    XCTAssertEqual(shown(element(app, "comparison.candidate_cost_usd")), "Unknown")
   }
   func testFailedRunExplainsTheRepairWithoutExpandingActivity() {
     let app = XCUIApplication()
@@ -64,11 +62,8 @@ final class CompanionExperienceTests: XCTestCase {
     app.launchArguments = ["--design-preview", "projects", "-companionAppearance", "dark"]
     app.launch()
     XCTAssertTrue(app.buttons["workflow.code"].waitForExistence(timeout: 10))
-    let workspace = app.staticTexts["SuperQode Studio"]
-    for _ in 0..<5 { if workspace.isHittable { break }; app.swipeUp() }
-    XCTAssertTrue(workspace.exists)
-    workspace.tap()
-    app.buttons["New conversation"].tap()
+    openSampleWorkspace(app)
+    app.buttons["New thread"].tap()
     let connection = app.buttons["composer.connection"]
     XCTAssertTrue(connection.waitForExistence(timeout: 5))
     XCTAssertTrue((connection.label + String(describing: connection.value)).contains("Choose a connection"))
@@ -78,8 +73,11 @@ final class CompanionExperienceTests: XCTestCase {
     prompt.tap()
     prompt.typeText("Check reconnect handling")
     XCTAssertFalse(app.buttons["composer.send"].isEnabled)
-    app.buttons["composer.close"].tap()
-    app.buttons["New conversation"].tap()
+    if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+    let close = element(app, "composer.close")
+    XCTAssertTrue(close.waitForExistence(timeout: 5))
+    close.tap()
+    app.buttons["New thread"].tap()
     XCTAssertTrue(connection.waitForExistence(timeout: 5))
     XCTAssertEqual(app.textViews["composer.prompt"].value as? String ?? "", "")
     XCTAssertTrue((connection.label + String(describing: connection.value)).contains("Choose a connection"))
@@ -99,5 +97,35 @@ final class CompanionExperienceTests: XCTestCase {
     details.tap()
     XCTAssertTrue(raw.firstMatch.waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["Approve once"].isEnabled)
+  }
+
+  private func openSampleWorkspace(_ app: XCUIApplication) {
+    let workspace = app.buttons["workspace.sample-workspace"]
+    XCTAssertTrue(workspace.waitForExistence(timeout: 5))
+    for _ in 0..<8 {
+      if workspace.isHittable { break }
+      app.swipeUp()
+    }
+    XCTAssertTrue(workspace.isHittable)
+    workspace.tap()
+  }
+
+  private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+    app.descendants(matching: .any)[identifier]
+  }
+
+  @discardableResult
+  private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    if element.waitForExistence(timeout: 2) { return true }
+    for _ in 0..<6 {
+      app.swipeUp()
+      if element.exists { return true }
+    }
+    return element.waitForExistence(timeout: 3)
+  }
+
+  private func shown(_ element: XCUIElement) -> String {
+    if let value = element.value as? String, !value.isEmpty { return value }
+    return element.label
   }
 }

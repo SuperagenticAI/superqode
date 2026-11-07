@@ -13,9 +13,13 @@ struct PairMacScreen: View {
       VStack(alignment: .leading, spacing: 24) {
         VStack(alignment: .leading, spacing: 16) {
           SuperQodeMark(size: 72).padding(.top, 12)
-          Text("Your Mac. Your models.\nA little more freedom.")
+          Text("The harness layer for coding agents")
             .font(.system(.largeTitle, design: .rounded, weight: .bold))
-          Text("Code, review and evaluate from your iPhone. Everything runs on the Mac you already own.")
+          Text("Discover, build, run, evaluate and optimize coding-agent harnesses.")
+            .font(.subheadline).foregroundStyle(.secondary)
+          Text("Your Mac. Your models. Your harnesses.")
+            .font(.title3.weight(.semibold))
+          Text("Private by design. Your iPhone connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results.")
             .font(.subheadline).foregroundStyle(.secondary)
         }
         if store.waitingForApproval {
@@ -56,13 +60,14 @@ struct PairMacScreen: View {
         Button { store.enterExploreMode() } label: { Label("Explore the app with sample data", systemImage: "eye") }.font(.subheadline)
           .disabled(store.connecting)
         VStack(alignment: .leading, spacing: 14) {
-          setupStep("1", "Your private connection", "Install Tailscale on your Mac and iPhone and sign in to your own private network.")
-          setupStep("2", "You approve access", "Pair once and approve the phone on your Mac. Share only the workspaces and connections you choose.")
-          setupStep("3", "Pick up from anywhere", "Leave the Mac awake and online. Open the companion from mobile data or another Wi-Fi network.")
+          setupStep("1", "Create your free Tailscale account", "The companion works with your Tailscale account. SuperQode does not put you on a shared network.")
+          setupStep("2", "Install Tailscale", "Install it on your Mac and on this iPhone.")
+          setupStep("3", "Sign in on both", "Use that same Tailscale account on the Mac and on this iPhone.")
+          setupStep("4", "Create an invitation", "On the Mac, open Private remote access and create an invitation.")
+          setupStep("5", "Approve this iPhone", "Scan the invitation here, then approve this iPhone on the Mac.")
+          setupStep("6", "Confirm mobile data", "Turn off Wi-Fi once to confirm it works on mobile data.")
         }
         NavigationLink { CompanionSetupGuide() } label: { Label("Setup guide and account help", systemImage: "questionmark.circle") }.font(.subheadline)
-        Label("No hosted SuperQode backend", systemImage: "checkmark.shield")
-          .font(.caption).foregroundStyle(CompanionTheme.accent)
       }.padding(24).frame(maxWidth: 620).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("SuperQode").companionNavigationBrand()
       .scrollDismissesKeyboard(.interactively)
@@ -115,8 +120,9 @@ struct CompanionSetupGuide: View {
     List {
       Section {
         SuperQodeWordmark().padding(.vertical, 12)
-        Text("Two devices. One workspace.").font(.title2.bold())
-        Text("Your Mac runs SuperQode and your models. Your phone connects privately to control the same jobs. You do not need to host a SuperQode server.")
+        Text("Private by design").font(.title2.bold())
+        Text("Your iPhone connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results, and your projects and API keys stay on your Mac.")
+        Text("Cloud models still receive prompts from the providers you configure.")
       }
       Section("On the Mac") {
         Text("Use a Mac build that includes Private remote access. Open a project, configure its connection, enable the background engine and share the connection with your phone.")
@@ -128,13 +134,13 @@ struct CompanionSetupGuide: View {
         Text("If an invitation expires or a camera is unavailable, enter a fresh invitation manually. A new conversation always asks you to choose a connection.")
       }
       Section("Accounts and credentials") {
-        Text("Use your Tailscale account in the Tailscale app. Personal noncommercial use can qualify for its free plan; business use follows Tailscale's terms.")
+        Text("The companion works with your Tailscale account. Personal noncommercial use can qualify for its free plan; business use follows Tailscale's terms.")
         Link("Tailscale plans", destination: URL(string: "https://tailscale.com/pricing")!)
         Text("Model and agent credentials stay configured on the Mac. The companion stores its own device authorization in this iPhone's Keychain.")
         Text("For source builds, add your Apple Developer account in Xcode Settings → Accounts and select your team under Signing & Capabilities. No Apple password or private signing key belongs in the source code.")
       }
       Section("Privacy") {
-        Text("Tailscale supplies private networking and may relay encrypted traffic. SuperQode has no hosted relay. Cloud agents can still contact their own providers; choose a verified Local only connection when you want local inference.")
+        Text("Tailscale supplies the private network and may relay encrypted traffic. SuperQode runs no cloud relay for your prompts, files or results. Cloud models still receive prompts from the providers you configure. Choose a verified Local only connection when you want local inference.")
         Text("Phone access can be revoked on the Mac. Unsent drafts are protected on this iPhone and excluded from backups. Work continues on the Mac when the phone app closes; live updates resume when you reopen it.")
       }
     }.navigationTitle("Get started").navigationBarTitleDisplayMode(.inline)

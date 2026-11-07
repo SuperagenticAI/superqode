@@ -560,7 +560,7 @@ struct CodingView: View {
   private var workbenchToolbar: some View {
     HStack(spacing: 12) {
       if !app.selectedJob.isEmpty {
-        if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
+        if app.active { BrandActivityIndicator(status: app.activityStatus) }
         else {
           ThreadStatusIndicator(status: string(app.detail, "status"))
           Text(ThreadStatusIndicator.title(string(app.detail, "status"))).font(.caption).foregroundStyle(.secondary)
@@ -1218,9 +1218,9 @@ struct EventStream: View {
       if app.active || !activity.isEmpty {
         Divider()
         VStack(spacing: 6) {
-          if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
+          if app.active { AgentWorkingCard(status: app.activityStatus, activity: currentAgentActivity(app.events)) }
           if !activity.isEmpty {
-            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
+            AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")
               .id(app.selectedJob)
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)

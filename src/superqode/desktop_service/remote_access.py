@@ -51,6 +51,97 @@ def text(value, label, maximum=200):
     return value.strip()
 
 
+# Same ladder as Connect on the Mac: subscription, bring your own model,
+# SuperQode harnesses, ACP agents, then remote agent protocols.
+_CONNECTION_GROUPS = ("subscription", "model", "harness", "acp", "protocol")
+_RUNTIME_ICONS = {
+    "codex-cli": "codex",
+    "codex-sdk": "codex",
+    "claude-agent-sdk": "claude",
+    "claude-code": "claude",
+    "copilot-sdk": "copilot",
+    "gemini-cli": "gemini",
+    "factory": "factory-droid",
+    "droid": "factory-droid",
+    "opencode": "opencode",
+    "antigravity-cli": "antigravity",
+    "antigravity-sdk": "antigravity",
+    "antigravity-managed": "antigravity",
+}
+_SUPERQODE_HARNESSES = {"core", "pipy", "codegem", "systemone", "no-tool"}
+
+
+def connection_group(row, source):
+    """Which Connect section a phone row belongs in."""
+    if source == "harnesses.list":
+        return "harness"
+    identity = str(row.get("id") or "")
+    kind = str(row.get("desktop_kind") or "")
+    protocol = str(row.get("kind") or "")
+    if (
+        identity.startswith("remote:")
+        or protocol in {"a2a", "uhp"}
+        or kind in {"a2a", "uhp", "remote"}
+    ):
+        return "protocol"
+    if kind == "attached" or identity.startswith("attach:"):
+        return "model"
+    if identity.startswith("connection:") or kind == "connection" or row.get("subscription_vendor"):
+        return "subscription"
+    if kind == "acp" or identity.startswith("acp:"):
+        return "acp"
+    return "harness"
+
+
+def connection_icon_key(row):
+    for key in ("icon_key", "agent_id", "subscription_vendor"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    identity = str(row.get("id") or "")
+    for prefix in ("acp:", "connection:", "attach:", "vendor-key:", "remote:"):
+        if identity.startswith(prefix):
+            identity = identity[len(prefix) :]
+            break
+    runtime = str(row.get("runtime") or "")
+    if runtime in _RUNTIME_ICONS:
+        return _RUNTIME_ICONS[runtime]
+    if identity in _RUNTIME_ICONS:
+        return _RUNTIME_ICONS[identity]
+    if identity in _SUPERQODE_HARNESSES:
+        return "superqode"
+    return identity
+
+
+def connection_choice(row, source):
+    """Fields the phone may show. Launch commands and environment stay on the Mac."""
+    identity = row["id"]
+    description = row.get("description") if isinstance(row.get("description"), str) else ""
+    provider = row.get("provider") if isinstance(row.get("provider"), str) else ""
+    model = row.get("model") if isinstance(row.get("model"), str) else ""
+    kind = row.get("desktop_kind") if isinstance(row.get("desktop_kind"), str) else ""
+    return {
+        "id": identity,
+        "name": row.get("name")
+        if isinstance(row.get("name"), str) and row.get("name")
+        else identity,
+        "provider": provider or "agent",
+        "model": model,
+        "group": connection_group(row, source),
+        "desktop_kind": kind,
+        "icon_key": connection_icon_key(row),
+        "description": description.strip()[:240],
+    }
+
+
+def order_connection_choices(choices):
+    rank = {name: index for index, name in enumerate(_CONNECTION_GROUPS)}
+    return sorted(
+        choices,
+        key=lambda row: (rank.get(row["group"], len(rank)), str(row["name"]).casefold(), row["id"]),
+    )
+
+
 class RemoteAccess:
     def __init__(self, service):
         self.service = service
@@ -222,13 +313,7 @@ class RemoteAccess:
             if method == "remote.network.setup":
                 return remote_network.setup(PORT)
             if method == "remote.profiles.save":
-                profile = self.validate_profile(params)
-                profiles = [p for p in self.config.get("profiles", []) if p["id"] != profile["id"]]
-                if len(profiles) >= 20:
-                    raise ValueError("Use up to 20 remote connections")
-                self.config["profiles"] = [*profiles, profile]
-                self._save()
-                return profile
+                return self._save_project_profile(params)
             if method == "remote.profiles.remove":
                 self.config["profiles"] = [
                     p for p in self.config.get("profiles", []) if p["id"] != params["id"]
@@ -241,12 +326,11 @@ class RemoteAccess:
                 if not self.server or not self.server.running:
                     raise ValueError("Enable private remote access before pairing a phone")
                 self._expire()
-                profiles = params.get("profiles")
+                profiles = params.get("profiles") or []
                 allowed = {p["id"] for p in self.config.get("profiles", [])}
                 permissions = params.get("permissions", DEFAULT_PERMISSIONS)
                 if (
                     not isinstance(profiles, list)
-                    or not profiles
                     or len(profiles) > 20
                     or not all(isinstance(p, str) and p in allowed for p in profiles)
                 ):
@@ -322,8 +406,6 @@ class RemoteAccess:
             network = remote_network.inspect(PORT)
             if not network["ready"]:
                 raise ValueError(network["issue"])
-            if not self.config.get("profiles"):
-                raise ValueError("Share at least one project connection before enabling access")
             if self.service._closing:
                 raise ValueError("The Mac engine is shutting down")
             if self.server and self.server.running:
@@ -406,6 +488,85 @@ class RemoteAccess:
     def profiles(self, device):
         allowed = json.loads(device["profiles"])
         return [p for p in self.config.get("profiles", []) if p["id"] in allowed]
+
+    def _save_project_profile(self, params):
+        """One shared connection per project. Later harness changes replace it in place."""
+        profile = self.validate_profile(params)
+        project = profile["project"]
+        profile["id"] = "project:" + project
+        existing = next(
+            (p for p in self.config.get("profiles", []) if p["project"] == project), None
+        )
+        unchanged = existing and all(
+            existing.get(key) == profile[key]
+            for key in ("harness", "provider", "model", "local_only")
+        )
+        if unchanged:
+            return existing
+        source = params.get("source") if params.get("source") in {"mac", "phone"} else "mac"
+        profile["source"] = source
+        profile["revision"] = int((existing or {}).get("revision") or 0) + 1
+        if existing:
+            profile["reflection_model"] = profile["reflection_model"] or existing.get(
+                "reflection_model", ""
+            )
+            profile["optimizer_model"] = profile["optimizer_model"] or existing.get(
+                "optimizer_model", ""
+            )
+        others = [p for p in self.config.get("profiles", []) if p["project"] != project]
+        if len(others) >= 20:
+            raise ValueError("Use up to 20 remote connections")
+        self.config["profiles"] = [*others, profile]
+        self._grant_profile(profile["id"])
+        self._save()
+        return profile
+
+    def connection_choices(self, project):
+        """Phone harness list, in the same order as Connect on the Mac."""
+        choices = []
+        seen = set()
+        for method in ("routes.list", "harnesses.list"):
+            for row in self.service.dispatch(method, {"project": project}):
+                if not isinstance(row, dict) or not row.get("available"):
+                    continue
+                identity = row.get("id")
+                if not isinstance(identity, str) or not identity or identity in seen:
+                    continue
+                seen.add(identity)
+                choices.append(connection_choice(row, method))
+        return order_connection_choices(choices)
+
+    def update_connection(self, device, params):
+        """The phone changes the harness inside a project that was already shared."""
+        project = text(params.get("project"), "a project")
+        grant = next((p for p in self.profiles(device) if p["project"] == project), None)
+        if not grant:
+            raise PermissionError("This project is not shared with this device")
+        harness = text(params.get("harness"), "a harness", 500)
+        provider = params.get("provider") if isinstance(params.get("provider"), str) else ""
+        model = params.get("model") if isinstance(params.get("model"), str) else ""
+        return self._save_project_profile(
+            {
+                **grant,
+                "harness": harness,
+                "provider": provider or "agent",
+                "model": model,
+                "source": "phone",
+            }
+        )
+
+    def _grant_profile(self, profile_id):
+        """A connection shared after pairing becomes available to phones already approved."""
+        for row in self.service._all(
+            "SELECT id, profiles FROM companion_devices WHERE revoked IS NULL"
+        ):
+            allowed = json.loads(row["profiles"])
+            if profile_id in allowed:
+                continue
+            self.service._write(
+                "UPDATE companion_devices SET profiles=? WHERE id=?",
+                (json.dumps([*allowed, profile_id]), row["id"]),
+            )
 
     def clean(self, result):
         credentials = [*self.service.credentials.values(), *self.service.vendor_keys.values()]

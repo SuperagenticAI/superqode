@@ -124,7 +124,7 @@ struct RemoteAccessSettingsView: View {
   private var sharingSection: some View {
     GroupBox("2. Share a project connection") {
       VStack(alignment: .leading, spacing: 10) {
-        Text("Only connections you explicitly share are available to paired phones. Configure providers, models and credentials on the Mac.").font(.caption).foregroundStyle(.secondary)
+        Text("Share a project once. Changing its harness or model on the Mac updates the phone, and a change on the phone updates the Mac. Credentials stay on the Mac.").font(.caption).foregroundStyle(.secondary)
         if !app.projectID.isEmpty {
           Text("Current selection: \(string(app.project, "name")) · \(app.harness) · \(app.model.isEmpty ? "Agent-managed model" : app.model)")
           TextField("Connection name", text: $profileName)
@@ -140,7 +140,7 @@ struct RemoteAccessSettingsView: View {
               Text("Explicit model routes are required. Optimization can incur provider charges; adoption remains on the Mac.").font(.caption).foregroundStyle(.secondary)
             }
           }
-          Button("Share current connection") { action {
+          Button("Share this project") { action {
             _ = try await call("remote.profiles.save", [
               "project": app.projectID, "name": profileName.isEmpty ? app.harness : profileName,
               "harness": app.harness, "provider": app.provider, "model": app.model,
@@ -173,7 +173,9 @@ struct RemoteAccessSettingsView: View {
       } else {
         Button("Enable private remote access") { action { _ = try await call("remote.start") } }
           .buttonStyle(.borderedProminent)
-          .disabled(network["ready"] as? Bool != true || profiles.isEmpty || !app.backgroundEngineMode)
+          .disabled(network["ready"] as? Bool != true || !app.backgroundEngineMode)
+        Text("No harness or model is required to pair. Turn on the background engine above, then enable access.")
+          .font(.caption).foregroundStyle(.secondary)
       }
     }
   }
@@ -181,7 +183,7 @@ struct RemoteAccessSettingsView: View {
   private var pairingSection: some View {
     GroupBox("3. Pair your iPhone") {
       VStack(alignment: .leading, spacing: 12) {
-        Text("Select shared connections above, create a five-minute invitation, then scan it in the companion. Approve the phone's request here.")
+        Text("Create a five-minute invitation and scan it in the companion. Approve the phone here. A harness can be shared after the phone is paired.")
         Toggle("Allow staged optimization", isOn: $allowOptimization)
         Toggle("Allow staging reviewed files", isOn: $allowReview)
         Text("Staging changes the Git index after a review on the phone. It does not commit or merge code.").font(.caption).foregroundStyle(.secondary)
@@ -197,7 +199,7 @@ struct RemoteAccessSettingsView: View {
           if allowReview { permissions.append("review") }
           permissions.append(contentsOf: extraPermissions.sorted())
           invitation = try await call("remote.pairing.create", ["profiles": Array(selectedProfiles), "permissions": permissions])
-        } }.disabled(!running || selectedProfiles.isEmpty)
+        } }.disabled(!running)
         if let expires = invitation["expires"] as? Double, Date(timeIntervalSince1970: expires) > Date() {
           HStack(alignment: .top, spacing: 18) {
             if let image = pairingImage { Image(nsImage: image).interpolation(.none).resizable().frame(width: 150, height: 150).padding(8).background(.white, in: RoundedRectangle(cornerRadius: 12)) }

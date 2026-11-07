@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ComposeTaskScreen: View {
   let project: String
@@ -16,6 +17,10 @@ struct ComposeTaskScreen: View {
   @State private var showFiles = false
   @State private var showContext = false
   @State private var showingAttachments = false
+  @State private var connections: [RemoteRecord] = []
+  @State private var harnessChoice = ""
+  @State private var choosingHarness = false
+  @State private var showHarnesses = false
   @FocusState private var editing: Bool
   init(project: String, parent: String? = nil, restored: LocalDraft? = nil, enqueue: Bool = false) {
     self.project = project
@@ -36,13 +41,17 @@ struct ComposeTaskScreen: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
+        HStack {
+          Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close")
+          Spacer()
+        }
         ConnectionStatus()
-        if !store.reachable { Button("Reconnect to Mac") { Task { await store.refresh() } } }
+        if !store.reachable { Button("Try again") { Task { await store.refresh() } } }
         if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
         connectionCard
         CompanionCard {
           HStack {
-            Text("What are we building?").font(.headline)
+            Text(parent == nil ? "New thread" : "Continue").font(.headline)
             Spacer()
             if saved { Label("Saved on iPhone", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary) }
           }
@@ -65,8 +74,12 @@ struct ComposeTaskScreen: View {
         } else if frozen {
           pendingRequestCard
         } else {
-          Button { editing = false; Task { await submit() } } label: {
-            HStack { if submitting { ProgressView().tint(.white) }; Label(draft.enqueue == true ? "Add to queue" : "Send to \(store.macName)", systemImage: "arrow.up") }
+          Button {
+            editing = false
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            Task { await submit() }
+          } label: {
+            HStack { if submitting { ProgressView().tint(.white) }; Label(draft.enqueue == true ? "Add to queue" : "Send", systemImage: "arrow.up") }
           }.buttonStyle(CompanionPrimaryButton()).accessibilityIdentifier("composer.send")
             .disabled(submitting || !store.canMutate || !store.permissions.contains("tasks") || (draft.enqueue == true && !store.permissions.contains("queue")) || wrongMac || !supportedMode || (draft.mode == "chat" && !(draft.contextFiles ?? []).isEmpty) || draft.profile.isEmpty || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.prompt.count > 32000)
           if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
@@ -74,15 +87,24 @@ struct ComposeTaskScreen: View {
             .font(.caption).foregroundStyle(.secondary)
         }
       }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
-    }.background(CompanionTheme.background).navigationTitle(draft.enqueue == true ? "Queue a task" : parent == nil ? "New conversation" : "Continue conversation")
+    }
+    .scrollDismissesKeyboard(.immediately)
+    .background(CompanionTheme.background).navigationTitle(draft.enqueue == true ? "Queue a task" : parent == nil ? "New thread" : "Continue conversation")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close") }
         ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = false } }
       }
       .interactiveDismissDisabled(submitting)
+      .sheet(isPresented: $showHarnesses) { harnessSheet }
       .sheet(isPresented: $showFiles) { NavigationStack { ContextFilesScreen(profile: draft.profile, initial: draft.contextFiles ?? []) { draft.contextFiles = $0 } } }
       .sheet(isPresented: $showContext) { NavigationStack { ContextPreviewScreen(params: ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode), "context_files": .array((draft.contextFiles ?? []).map(JSONValue.string))]) } }
+      .task {
+        // A new thread stays on "Choose a connection" until the harness is picked.
+        if draft.profile.isEmpty, parent != nil {
+          draft.profile = profiles.first?.id ?? ""
+        }
+        await loadConnections()
+      }
       .navigationDestination(item: $startedRun) { JobScreen(identity: $0.id).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }
       .task {
         if draft.origin.isEmpty { draft.origin = store.address }
@@ -114,19 +136,45 @@ struct ComposeTaskScreen: View {
     CompanionCard {
       HStack {
         SuperQodeMark(size: 26)
-        Text(parent == nil ? "Start with a clean slate" : "Pick up where you left off").font(.headline)
+        Text("Harness").font(.headline)
+      }
+      if parent == nil {
+        Text("This starts a separate thread. Pick the harness first.").font(.caption).foregroundStyle(.secondary)
       }
       Picker("Harness connection", selection: $draft.profile) {
         Text("Choose a connection").tag("")
         ForEach(profiles) { Text($0.text("name")).tag($0.id) }
-      }.disabled(frozen || submitting).accessibilityIdentifier("composer.connection")
+      }
+      .disabled(frozen || submitting)
+      .accessibilityIdentifier("composer.connection")
+      .accessibilityLabel(draft.profile.isEmpty ? "Choose a connection" : "Harness connection")
+      if !connections.isEmpty {
+        Button { showHarnesses = true } label: {
+          HStack(spacing: 10) {
+            if let selected = selectedHarness {
+              HarnessMark(name: selected.text("name"), iconKey: selected.text("icon_key"), size: 22)
+              Text(selected.text("name")).lineLimit(1)
+            } else {
+              Text("Choose a harness")
+            }
+            Spacer()
+            Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
+          }
+        }
+        .buttonStyle(.plain)
+        .disabled(frozen || submitting || choosingHarness)
+        .accessibilityIdentifier("composer.harness")
+        .accessibilityLabel("Harness")
+        Text("Subscriptions, connect a model, SuperQode harnesses, then ACP agents and protocols.")
+          .font(.caption).foregroundStyle(.secondary)
+      }
       if let profile {
-        HarnessBadge(name: profile.text("harness"))
+        HarnessBadge(name: profile.text("harness"), iconKey: selectedHarness?.text("icon_key") ?? "")
         Text(profile.text("permission_note")).font(.caption).foregroundStyle(.secondary)
         if !profile.flag("local_only") { Label("This connection may use cloud models", systemImage: "cloud").font(.caption).foregroundStyle(.secondary) }
         if !profile.flag("chat") { Text("Use Code for conversations with this agent. Direct Chat requires a local or API model connection.").font(.caption).foregroundStyle(.secondary) }
       } else {
-        Text("Every new conversation starts without a connection. Choose one explicitly.").font(.caption).foregroundStyle(.secondary)
+        Text("Choose a harness for this conversation. You can switch it later from the thread.").font(.caption).foregroundStyle(.secondary)
       }
       Picker("Mode", selection: $draft.mode) {
         Text("Code").tag("code")
@@ -162,6 +210,70 @@ struct ComposeTaskScreen: View {
       Button("Discard saved draft", role: .destructive) { discard = true }.disabled(submitting)
       if submitting { ProgressView() }
     }
+  }
+
+  private var selectedHarness: RemoteRecord? {
+    let current = harnessChoice.isEmpty ? profile?.text("harness") ?? "" : harnessChoice
+    return connections.first { $0.id == current }
+  }
+
+  private var harnessSheet: some View {
+    NavigationStack {
+      List {
+        ForEach(HarnessChoiceGroup.sections(connections)) { section in
+          Section {
+            ForEach(section.rows) { choice in
+              Button {
+                let picked = choice.id
+                showHarnesses = false
+                guard picked != profile?.text("harness") else { return }
+                harnessChoice = picked
+                Task { await selectHarness(picked) }
+              } label: {
+                HarnessChoiceLabel(choice: choice, selected: choice.id == (selectedHarness?.id ?? ""))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .contentShape(Rectangle())
+              }
+              .buttonStyle(.plain)
+              .disabled(choosingHarness)
+            }
+          } header: {
+            Text(section.title)
+          } footer: {
+            Text(section.subtitle)
+          }
+        }
+      }
+      .navigationTitle("Harness")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Close") { showHarnesses = false }
+        }
+      }
+    }
+  }
+
+  private func loadConnections() async {
+    guard let api = store.api, !store.isPreview else { return }
+    do {
+      connections = try await api.rpc("project.connections", ["project": .string(project)]).array.map { RemoteRecord(raw: $0.object) }
+      if harnessChoice.isEmpty { harnessChoice = profile?.text("harness") ?? "" }
+    } catch { }
+  }
+
+  private func selectHarness(_ choice: String) async {
+    guard let api = store.api, let selected = connections.first(where: { $0.id == choice }), !choosingHarness else { return }
+    choosingHarness = true
+    defer { choosingHarness = false }
+    do {
+      _ = try await api.rpc("project.connection", [
+        "project": .string(project), "harness": .string(selected.id),
+        "provider": .string(selected.text("provider", "agent")), "model": .string(selected.text("model")),
+      ], key: "connection-" + selected.id)
+      await store.refresh()
+      draft.profile = profiles.first?.id ?? draft.profile
+    } catch { issue = error.localizedDescription }
   }
 
   private func saveOnExit() {

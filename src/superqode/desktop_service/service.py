@@ -155,7 +155,12 @@ class DesktopService:
 
     def job_summaries(self, identity=None, *, include_metadata=True, identities=None):
         """Keep individual run records, with a stable conversation identity for recent rows."""
-        columns = "id,project,kind,title,status,created,updated,json_extract(request,'$.harness') AS harness,json_extract(request,'$._fork_origin') AS fork_origin"
+        columns = (
+            "id,project,kind,title,status,created,updated,"
+            "json_extract(request,'$.harness') AS harness,"
+            "json_extract(request,'$.remote_origin.device') AS phone_origin,"
+            "json_extract(request,'$._fork_origin') AS fork_origin"
+        )
         rows = (
             (
                 self._all(
@@ -242,6 +247,7 @@ class DesktopService:
         for row in rows:
             root = roots.get(row["id"], row)
             summary = {key: value for key, value in row.items() if key != "request"}
+            summary["phone_origin"] = row["phone_origin"] or ""
             summary["fork_origin"] = json.loads(row["fork_origin"]) if row["fork_origin"] else None
             summary.update(conversation_id=root["id"], conversation_title=root["title"])
             saved = metadata.get((row["project"], root["id"]), {})

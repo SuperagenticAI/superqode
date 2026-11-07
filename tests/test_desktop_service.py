@@ -810,6 +810,34 @@ def test_recent_metadata_keeps_original_conversation_title(desktop):
     assert {row["conversation_title"] for row in rows} == {"Title root"}
     assert "private_request_field" not in json.dumps(rows)
     assert "request" not in rows[0]
+    assert rows[0]["phone_origin"] == ""
+
+
+def test_job_summary_marks_a_phone_run_without_its_prompt(desktop):
+    service, project, _ = desktop
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        (
+            "phone-run",
+            project["id"],
+            "task",
+            "From phone",
+            "running",
+            json.dumps(
+                {
+                    "remote_origin": {"device": "phone-1", "name": "iPhone"},
+                    "prompt": "secret prompt",
+                }
+            ),
+            "{}",
+            1,
+            1,
+        ),
+    )
+    row = service.dispatch("jobs.list", {})[0]
+    assert row["id"] == "phone-run"
+    assert row["phone_origin"] == "phone-1"
+    assert "secret prompt" not in json.dumps(row)
 
 
 def test_recent_metadata_resolves_parent_outside_recent_window(desktop):

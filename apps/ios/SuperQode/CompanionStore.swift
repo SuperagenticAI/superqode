@@ -33,6 +33,7 @@ enum MacConnectionPhase: Equatable {
   private var pairingTask: Task<Void, Never>?
   private var generation = 0
   private var refreshing = false
+  private var missedConnections = 0
   var reachable: Bool { phase == .connected }
   var waitingForApproval: Bool { phase == .waitingForApproval }
   var canMutate: Bool { reachable && !isPreview }
@@ -154,6 +155,7 @@ enum MacConnectionPhase: Equatable {
       phase = .connected
       lastConnected = Date()
       message = ""
+      missedConnections = 0
     } catch is CancellationError { }
     catch { if request == generation { connectionFailed(error) } }
   }
@@ -166,6 +168,7 @@ enum MacConnectionPhase: Equatable {
       try Task.checkCancellation()
       guard request == generation, paired else { return }
       if jobs != next { jobs = next }
+      missedConnections = 0
       if phase != .connected { await refresh() }
     } catch is CancellationError { }
     catch { if request == generation { connectionFailed(error) } }
@@ -174,9 +177,17 @@ enum MacConnectionPhase: Equatable {
   private func connectionFailed(_ error: Error) {
     let value = error.localizedDescription
     let lower = value.lowercased()
-    phase = (error as? CompanionError)?.status == 403 && (lower.contains("expired") || lower.contains("revoked"))
-      ? .authorizationExpired : .offline
-    message = value
+    if (error as? CompanionError)?.status == 403 && (lower.contains("expired") || lower.contains("revoked")) {
+      phase = .authorizationExpired
+      message = value
+      missedConnections = 0
+      return
+    }
+    // One slow request is not a lost pairing. Keep the session and retry.
+    missedConnections += 1
+    guard missedConnections >= 2 || phase != .connected else { return }
+    phase = .offline
+    message = "Reconnecting to your Mac…"
   }
 
   func disconnect() async {

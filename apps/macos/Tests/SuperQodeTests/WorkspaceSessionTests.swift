@@ -214,6 +214,72 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertFalse(app.inspectorVisible)
   }
 
+  func testANewMessageInTheOpenConversationBecomesTheOpenTurn() {
+    let first: [String: Any] = [
+      "id": "turn-1", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "completed", "updated": 10,
+    ]
+    let second: [String: Any] = [
+      "id": "turn-2", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "running", "updated": 20,
+    ]
+    let finishedLater: [String: Any] = [
+      "id": "turn-3", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "completed", "updated": 40,
+    ]
+    let other: [String: Any] = [
+      "id": "other", "project": "project", "kind": "task", "conversation_id": "other",
+      "status": "running", "updated": 50,
+    ]
+    XCTAssertEqual(
+      conversationTipID(jobs: [first, second], conversationID: "turn-1", projectID: "project"),
+      "turn-2")
+    XCTAssertEqual(
+      conversationTipID(
+        jobs: [first, second, finishedLater], conversationID: "turn-1", projectID: "project"),
+      "turn-2")
+    XCTAssertEqual(
+      conversationTipID(jobs: [first, other], conversationID: "turn-1", projectID: "project"),
+      "turn-1")
+  }
+
+  func testAPhoneRunOpensOnTheMacBeforeItFinishes() {
+    let mac: [String: Any] = [
+      "id": "mac-turn", "project": "project", "kind": "task", "status": "running", "updated": 30,
+    ]
+    let phone: [String: Any] = [
+      "id": "phone-turn", "project": "project", "kind": "task", "status": "running",
+      "phone_origin": "phone-1", "updated": 20,
+    ]
+    let finished: [String: Any] = [
+      "id": "phone-done", "project": "project", "kind": "task", "status": "completed",
+      "phone_origin": "phone-1", "updated": 40,
+    ]
+    let elsewhere: [String: Any] = [
+      "id": "other-phone", "project": "other", "kind": "task", "status": "running",
+      "phone_origin": "phone-1", "updated": 50,
+    ]
+    XCTAssertEqual(
+      phoneTurnToOpen(jobs: [mac, phone], projectID: "project", seen: [], includeFinished: false),
+      "phone-turn")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [phone, finished], projectID: "project", seen: [], includeFinished: true),
+      "phone-turn")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [finished], projectID: "project", seen: [], includeFinished: false),
+      "")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [finished], projectID: "project", seen: [], includeFinished: true),
+      "phone-done")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [phone, elsewhere], projectID: "project", seen: ["phone-turn"], includeFinished: true),
+      "")
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

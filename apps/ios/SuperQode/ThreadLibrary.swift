@@ -39,6 +39,8 @@ struct ProjectScreen: View {
   @State private var evaluate = false
   @State private var renaming: RemoteRecord?
   @State private var renameTitle = ""
+  @State private var tool: ProjectTool?
+  private enum ProjectTool: Hashable { case files, review }
   private var canOrganize: Bool {
     store.canMutate && store.permissions.contains("tasks")
       && (store.features["threads"]?.array.contains(.string("rename")) == true)
@@ -48,9 +50,10 @@ struct ProjectScreen: View {
     List {
       Section {
         HStack(spacing: 12) {
-          NavigationLink { FilesScreen(project: project.id) } label: { Label("Files", systemImage: "doc.text") }
+          Button { tool = .files } label: { Label("Files", systemImage: "doc.text") }
             .accessibilityIdentifier("project.files")
-          NavigationLink { ProjectReviewScreen(project: project.id) } label: { Label("Review", systemImage: "text.magnifyingglass") }
+          Button { tool = .review } label: { Label("Review", systemImage: "text.magnifyingglass") }
+            .accessibilityIdentifier("project.review")
           Button { evaluate = true } label: { Label("Evaluate", systemImage: "chart.bar.xaxis") }
             .disabled(!store.permissions.contains("evaluate") && !store.permissions.contains("optimize"))
         }.font(.subheadline).buttonStyle(.borderless)
@@ -61,6 +64,8 @@ struct ProjectScreen: View {
           Text("Recent").tag("active"); Text("Pinned").tag("pinned"); Text("Archived").tag("archived")
         }.pickerStyle(.segmented).listRowBackground(Color.clear)
         if !library.issue.isEmpty { Text(library.issue).foregroundStyle(CompanionTheme.warning) }
+        Button { compose = true } label: { Label("New thread", systemImage: "square.and.pencil") }
+          .disabled(!store.permissions.contains("tasks"))
         if library.loading && library.items.isEmpty { ProgressView("Loading conversations…") }
         ForEach(library.items) { thread in
           NavigationLink { JobScreen(identity: thread.id) } label: { JobRow(job: thread) }
@@ -73,7 +78,7 @@ struct ProjectScreen: View {
         if !library.loading && library.items.isEmpty && library.issue.isEmpty {
           ContentUnavailableView(query.isEmpty ? "A clean slate" : "No matching conversations",
             systemImage: query.isEmpty ? "bubble.left.and.bubble.right" : "magnifyingglass",
-            description: Text(query.isEmpty ? "Start a conversation using a connection shared by your Mac." : "Try another title or switch the filter."))
+            description: Text(query.isEmpty ? "Tap New thread, pick a harness, then send." : "Try another title or switch the filter."))
         }
         if !library.cursor.isEmpty {
           Button { Task { await load(reset: false) } } label: { HStack { Text("Load more conversations"); if library.loading { ProgressView() } } }
@@ -83,7 +88,12 @@ struct ProjectScreen: View {
     }.scrollContentBackground(.hidden).background(CompanionTheme.background)
       .navigationTitle(project.text("name"))
       .searchable(text: $query, prompt: "Search every conversation")
-      .toolbar { Button { compose = true } label: { Label("New conversation", systemImage: "square.and.pencil") }.disabled(!store.permissions.contains("tasks")) }
+      .navigationDestination(item: $tool) { choice in
+        switch choice {
+        case .files: FilesScreen(project: project.id)
+        case .review: ProjectReviewScreen(project: project.id)
+        }
+      }
       .sheet(isPresented: $compose, onDismiss: { Task { await load() } }) { NavigationStack { ComposeTaskScreen(project: project.id) } }
       .sheet(isPresented: $evaluate) { NavigationStack { EvaluationScreen(project: project.id) } }
       .refreshable { await load() }
