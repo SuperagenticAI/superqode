@@ -165,7 +165,7 @@ struct ComposeTaskScreen: View {
         .disabled(frozen || submitting || choosingHarness)
         .accessibilityIdentifier("composer.harness")
         .accessibilityLabel("Harness")
-        Text("Subscriptions, connect a model, SuperQode harnesses, then ACP agents and protocols.")
+        Text("Only harnesses your Mac allows for this project are listed. Subscriptions, connect a model, SuperQode harnesses, then ACP agents and protocols.")
           .font(.caption).foregroundStyle(.secondary)
       }
       if let profile {
@@ -270,7 +270,7 @@ struct ComposeTaskScreen: View {
       _ = try await api.rpc("project.connection", [
         "project": .string(project), "harness": .string(selected.id),
         "provider": .string(selected.text("provider", "agent")), "model": .string(selected.text("model")),
-      ], key: "connection-" + selected.id)
+      ], key: "connection-" + UUID().uuidString)
       await store.refresh()
       draft.profile = profiles.first?.id ?? draft.profile
     } catch { issue = error.localizedDescription }

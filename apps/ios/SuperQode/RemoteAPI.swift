@@ -54,8 +54,12 @@ struct RemoteRecord: Identifiable, Equatable, Sendable {
 struct CompanionError: LocalizedError {
   let message: String
   let status: Int
+  /// True when the Mac could not be reached at all, as opposed to the Mac answering with an error.
+  let transport: Bool
   var errorDescription: String? { message }
-  init(_ message: String, status: Int = 0) { self.message = message; self.status = status }
+  init(_ message: String, status: Int = 0, transport: Bool = false) {
+    self.message = message; self.status = status; self.transport = transport
+  }
 }
 
 enum PrivateMacAddress {
@@ -128,7 +132,7 @@ struct RemoteAPI: CompanionTransport {
     do { (data, response) = try await Self.session.data(for: request) }
     catch is CancellationError { throw CancellationError() }
     catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-    catch { throw CompanionError("Cannot reach your Mac. Check that Tailscale is connected on both devices and the Mac is awake, online and running SuperQode. Refresh activity before retrying a submitted action.") }
+    catch { throw CompanionError("Cannot reach your Mac. Check that Tailscale is connected on both devices and the Mac is awake, online and running SuperQode. Refresh activity before retrying a submitted action.", transport: true) }
     guard let http = response as? HTTPURLResponse, data.count <= 8 * 1024 * 1024 else {
       throw CompanionError("The Mac returned an oversized or invalid response. Inspect this operation on the Mac.")
     }

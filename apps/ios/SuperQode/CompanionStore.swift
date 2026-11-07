@@ -183,7 +183,17 @@ enum MacConnectionPhase: Equatable {
       missedConnections = 0
       return
     }
-    // One slow request is not a lost pairing. Keep the session and retry.
+    // The Mac answered with a real error, such as a project that is no longer shared
+    // or a missing permission. Show it as it is; the connection itself is fine.
+    let transport = (error as? CompanionError)?.transport ?? (error is URLError)
+    if !transport {
+      missedConnections = 0
+      if phase == .connecting { phase = .offline }
+      message = value
+      return
+    }
+    // Only transport failures count as a missed connection. One slow request is not
+    // a lost pairing, so keep the session and retry.
     missedConnections += 1
     guard missedConnections >= 2 || phase != .connected else { return }
     phase = .offline

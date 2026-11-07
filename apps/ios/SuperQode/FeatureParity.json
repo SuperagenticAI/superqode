@@ -125,7 +125,7 @@
     "title": "Harness Hub",
     "group": "Harness quality",
     "status": "Shared harnesses",
-    "detail": "Use harnesses explicitly shared by your Mac. Discovering, installing and configuring new harnesses remains in the Mac's Harness Hub.",
+    "detail": "Switch a shared project to the harnesses allowed for it on the Mac (by default the shared harness plus built-in harnesses using the Mac's model). Discovering, installing, configuring and allowing new harnesses remains on the Mac.",
     "workflow": "Shared connections",
     "mac_sections": [
       "Harness Hub"
