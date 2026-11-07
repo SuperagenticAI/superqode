@@ -20,7 +20,7 @@ Do not put an Apple password, signing private key, App Store Connect `.p8` key o
 
 On a Mac with Xcode 16 or newer, open `SuperQodeCompanion.xcodeproj`, select an iPhone simulator and Run. Simulator CI uses ad-hoc signing, which allows the Keychain tests to exercise real secure storage. Tap **Explore the app with sample data** to inspect the complete interface without Tailscale or a connected Mac. Explore mode is clearly labelled, runs offline and cannot execute tasks.
 
-The icon preparation build phase reuses the existing Mac icon and makes its square background opaque for iOS. The original logo files and purple, pink and orange artwork are retained. No third-party iOS packages are needed.
+The iPhone and the Mac use the same full-bleed SuperQode icon. Light and dark mode keep that icon. A tinted Home Screen uses a grayscale version of the same mark, and iOS applies the rounded mask. The original logo files and purple, pink and orange artwork are retained. No third-party iOS packages are needed.
 
 ## Install on your own iPhone
 

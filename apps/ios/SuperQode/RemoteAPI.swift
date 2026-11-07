@@ -137,7 +137,7 @@ struct RemoteAPI: CompanionTransport {
       throw CompanionError("The Mac returned an oversized or invalid response. Inspect this operation on the Mac.")
     }
     guard let envelope = try? JSONDecoder().decode(JSONValue.self, from: data).object else {
-      throw CompanionError("The private address did not return the SuperQode API. Verify Tailscale Serve on the Mac.", status: http.statusCode)
+      throw CompanionError("The Mac did not answer. On the Mac, open SuperQode settings, Private remote access, and click Connect this Mac.", status: http.statusCode)
     }
     guard (200..<300).contains(http.statusCode) else {
       throw CompanionError(envelope.text("error", "The Mac could not complete this request."), status: http.statusCode)

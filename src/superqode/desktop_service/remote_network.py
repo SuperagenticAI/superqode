@@ -1,4 +1,4 @@
-"""Inspect private Tailscale access without installing or reconfiguring a VPN."""
+"""Inspect and start private Tailscale access without installing a VPN."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import time
 from urllib.parse import urlsplit
 
 HTTPS_PORT = 47832
@@ -52,6 +53,11 @@ def tailscale_binary():
     )
 
 
+def tailscale_app():
+    path = Path("/Applications/Tailscale.app")
+    return path if path.is_dir() else None
+
+
 def command(binary, *arguments):
     result = subprocess.run(
         [binary, *arguments], capture_output=True, text=True, timeout=3, check=False
@@ -68,17 +74,17 @@ def inspect(port=47831):
         "installed": bool(binary),
         "ready": False,
         "private_url": "",
-        "issue": "Install Tailscale on this Mac and your iPhone, then sign in to your private network.",
+        "issue": "Install Tailscale on this Mac and on the iPhone, then sign in to the same account on both.",
         "docs": "https://tailscale.com/docs/features/tailscale-serve",
         "download": "https://tailscale.com/download",
-        "command": f"tailscale serve --bg --https={HTTPS_PORT} http://127.0.0.1:{port}",
+        "command": "",
     }
     if not binary:
         return result
     try:
         status = command(binary, "status", "--json")
         if status.get("BackendState") != "Running":
-            raise ValueError("Open Tailscale and connect this Mac before enabling remote access")
+            raise ValueError("Tailscale is not connected yet.")
         host = str((status.get("Self") or {}).get("DNSName") or "").rstrip(".")
         result["private_url"] = private_origin(f"https://{host}:{HTTPS_PORT}")
         serving = command(binary, "serve", "status", "--json")
@@ -90,9 +96,7 @@ def inspect(port=47831):
         web = (serving.get("Web") or {}).get(f"{host}:{HTTPS_PORT}", {})
         handler = (web.get("Handlers") or {}).get("/", {})
         if handler.get("Proxy") not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
-            raise ValueError(
-                "Configure private Tailscale Serve using the command below, then verify again. Existing services are not changed automatically."
-            )
+            raise ValueError("Click Connect this Mac to finish the private link.")
         result.update(ready=True, issue="")
     except (ValueError, OSError, subprocess.TimeoutExpired, TypeError):
         # Only controlled repair text is shown; CLI output may contain identities or tokens.
@@ -124,7 +128,7 @@ def setup(port=47831):
         str(HTTPS_PORT)
     ):
         raise ValueError(
-            "Existing Tailscale services were left unchanged. Review the private Serve command and configure its route manually."
+            "Another Tailscale service is already using this private port. Existing services were left unchanged. Turn that service off in Tailscale, then click Connect again."
         )
     try:
         result = subprocess.run(
@@ -132,15 +136,73 @@ def setup(port=47831):
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
-            timeout=8,
+            timeout=25,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise ValueError(
-            "Tailscale setup did not finish. Complete the private Serve command in Terminal and verify again."
+            "Tailscale is still starting. Stay signed in and click Connect again."
         ) from None
     if result.returncode:
         raise ValueError(
-            "Tailscale needs additional setup or approval. Follow the private Serve documentation or run the displayed command, then verify again."
+            "Tailscale did not finish the private link. Stay signed in and click Connect again."
         )
     return inspect(port)
+
+
+def _backend(binary):
+    try:
+        return command(binary, "status", "--json")
+    except (ValueError, OSError, subprocess.TimeoutExpired, TypeError):
+        return {}
+
+
+def _ensure_running(binary):
+    """Start the installed Tailscale app. Never enables public Funnel or changes routes."""
+    status = _backend(binary)
+    if status.get("BackendState") == "Running":
+        return
+    app = tailscale_app()
+    if app is not None:
+        subprocess.run(
+            ["open", "-a", str(app)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    try:
+        subprocess.run(
+            [binary, "up", "--timeout=8s"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    for _ in range(6):
+        status = _backend(binary)
+        if status.get("BackendState") == "Running":
+            return
+        time.sleep(0.4)
+    if status.get("BackendState") == "NeedsLogin":
+        raise ValueError("Sign in to Tailscale on this Mac, then click Connect again.")
+    raise ValueError("Open Tailscale, sign in, then click Connect again.")
+
+
+def connect(port=47831):
+    """One click: start Tailscale when it is installed, then publish the private link."""
+    binary = tailscale_binary()
+    if not binary:
+        raise ValueError(
+            "Install Tailscale on this Mac and on the iPhone, sign in to the same account on both, then click Connect again."
+        )
+    _ensure_running(binary)
+    result = setup(port)
+    if not result.get("ready"):
+        raise ValueError(
+            result.get("issue") or "The private connection is not ready yet. Click Connect again."
+        )
+    return result

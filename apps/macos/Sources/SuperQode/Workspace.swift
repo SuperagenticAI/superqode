@@ -68,6 +68,67 @@ func phoneTurnToOpen(
   return string(tip, "id")
 }
 
+/// Show a phone run in the discussion when the Mac is not already working.
+/// A busy Mac keeps a banner so its open turn stays put.
+enum PhoneRunPresentation {
+  case open, banner, none
+}
+
+func phoneRunPresentation(
+  turn: String, conversation: String, selectedJob: String, selectedConversation: String,
+  macActive: Bool
+) -> PhoneRunPresentation {
+  guard !turn.isEmpty, turn != selectedJob else { return .none }
+  if !macActive { return .open }
+  return conversation == selectedConversation ? .none : .banner
+}
+
+/// Harness and model chosen on the iPhone. Agent fields stay unset when the
+/// shared project profile has no ACP options, so a profile update does not wipe them.
+struct PhoneConnectionSelection: Equatable {
+  var harness: String
+  var provider: String
+  var model: String
+  var mode = ""
+  var agentModel: String?
+  var agentMode: String?
+  var agentConfig: [String: String]?
+}
+
+func phoneConnection(fromProfile profile: [String: Any]) -> PhoneConnectionSelection? {
+  guard string(profile, "source") == "phone" else { return nil }
+  let harness = string(profile, "harness")
+  guard !harness.isEmpty else { return nil }
+  return PhoneConnectionSelection(
+    harness: harness, provider: string(profile, "provider"), model: string(profile, "model"))
+}
+
+func phoneConnection(fromJobRequest request: [String: Any]) -> PhoneConnectionSelection? {
+  let harness = string(request, "harness")
+  guard !harness.isEmpty else { return nil }
+  let options = request["acp_options"] as? [String: Any] ?? [:]
+  return PhoneConnectionSelection(
+    harness: harness,
+    provider: string(request, "provider"),
+    model: string(request, "model"),
+    mode: string(request, "interaction_mode"),
+    agentModel: string(options, "model"),
+    agentMode: string(options, "mode"),
+    agentConfig: options["config"] as? [String: String] ?? [:]
+  )
+}
+
+/// Name and model recorded on a turn, for the open conversation.
+func recordedConnectionLabel(request: [String: Any], harnesses: [[String: Any]]) -> String {
+  let id = string(request, "harness")
+  guard !id.isEmpty, id != "disconnected" else { return "" }
+  let name = string(harnesses.first { string($0, "id") == id } ?? [:], "name", id)
+  let options = request["acp_options"] as? [String: Any] ?? [:]
+  let model = string(request, "model", string(options, "model"))
+  guard !model.isEmpty else { return name }
+  return name + " · " + model
+}
+
 private func jobStamp(_ row: [String: Any]) -> Double {
   let value = row["updated"] ?? row["created"]
   if let number = value as? Double { return number }
@@ -417,7 +478,11 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   private var poller: Task<Void, Never>?
   private var detailGeneration = 0
   private var detailRequests = Set<String>()
-  private var pendingPreferences: [(String, String)]?
+  private struct PreferenceWrite {
+    var values: [(String, String)]
+    var syncConnection: Bool
+  }
+  private var pendingPreferences: PreferenceWrite?
   private var writingPreferences = false
   private var projectGeneration = 0
   private var gitGeneration = 0
@@ -446,6 +511,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var earlierHistory = ""
   @Published var loadingHistory = false
   private var restoreSelectedConnection = false
+  private var adoptPhoneConnection = false
   func loadConversationHistory(earlier: Bool = false) async {
     let id = selectedJob
     let generation = detailGeneration
@@ -667,8 +733,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           guard !Task.isCancelled else { return }
           if ContinuousClock.now >= nextJobs {
             await self.refreshJobs()
-            // The shared-project check runs only while private remote access is on.
-            if self.remoteAccessRunning { await self.applyPhoneConnection() }
+            // Apply a phone harness even if remote access started after launch.
+            if !self.projectID.isEmpty { await self.applyPhoneConnection() }
             nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
           }
           if self.activityLoadError.isEmpty && (self.active || self.hasMoreRunEvents || self.eventStreamOpen) {
@@ -800,15 +866,11 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     if isManaged && recordHistory { perform { await self.checkManagedConnection() } }
   }
-  func chooseHarness(_ id: String) {
+  func chooseHarness(_ id: String, restoreRemembered: Bool = true) {
     let previousACP = isManaged
     let changed = harness != id
     if changed {
-      let key = "nativeRouteChoices:" + projectID
-      var choices = UserDefaults.standard.dictionary(forKey: key) ?? [:]
-      choices[harness] = ["provider": provider, "model": model,
-        "agentModel": agentModel, "agentMode": agentMode, "agentConfig": agentConfig]
-      UserDefaults.standard.set(choices, forKey: key)
+      rememberCurrentRoute()
       connectionGeneration += 1
       checkingConnection = false
       routeStatus = [:]
@@ -825,7 +887,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       provider = "openai"
       model = ""
     }
-    if changed, let choices = UserDefaults.standard.dictionary(forKey: "nativeRouteChoices:" + projectID),
+    if changed && restoreRemembered,
+      let choices = preferences.dictionary(forKey: "nativeRouteChoices:" + projectID),
       let choice = choices[id] as? [String: Any] {
       provider = string(choice, "provider", provider)
       model = string(choice, "model", model)
@@ -911,22 +974,45 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     remoteAccessRunning = status["running"] as? Bool == true
     let profiles = status["profiles"] as? [[String: Any]] ?? []
     seedPhoneRevisions(profiles)
-    guard let profile = profiles.first(where: { string($0, "project") == projectID }) else { return }
+    guard remoteAccessRunning,
+      let profile = profiles.first(where: { string($0, "project") == projectID }),
+      let selection = phoneConnection(fromProfile: profile) else { return }
     let revision = (profile["revision"] as? NSNumber)?.intValue ?? 0
     guard revision > appliedPhoneRevisions[projectID, default: 0] else { return }
     appliedPhoneRevisions[projectID] = revision
-    guard string(profile, "source") == "phone" else { return }
+    adoptPhoneSelection(selection)
+  }
+
+  /// Show the iPhone's harness and model on this Mac without writing that choice back as the Mac's.
+  func adoptPhoneSelection(_ selection: PhoneConnectionSelection) {
+    guard !selection.harness.isEmpty, !projectID.isEmpty else { return }
     applyingPhoneConnection = true
     defer { applyingPhoneConnection = false }
-    let nextHarness = string(profile, "harness")
-    if !nextHarness.isEmpty && nextHarness != harness { chooseHarness(nextHarness) }
-    let nextProvider = string(profile, "provider", provider)
-    let nextModel = string(profile, "model")
-    if nextProvider != provider || nextModel != model {
-      provider = nextProvider
-      model = nextModel
-      savePreferences()
+    if selection.harness != harness {
+      chooseHarness(selection.harness, restoreRemembered: false)
     }
+    provider = selection.provider
+    model = selection.model
+    if !selection.mode.isEmpty { interactionMode = selection.mode }
+    if let agentModel = selection.agentModel { self.agentModel = agentModel }
+    if let agentMode = selection.agentMode { self.agentMode = agentMode }
+    if let agentConfig = selection.agentConfig { self.agentConfig = agentConfig }
+    rememberCurrentRoute()
+    savePreferences()
+    if !harnesses.contains(where: { string($0, "id") == selection.harness }) {
+      perform { try? await self.refreshDefinitions() }
+    }
+  }
+
+  private func rememberCurrentRoute() {
+    guard !projectID.isEmpty, !harness.isEmpty else { return }
+    let key = "nativeRouteChoices:" + projectID
+    var choices = preferences.dictionary(forKey: key) ?? [:]
+    choices[harness] = [
+      "provider": provider, "model": model,
+      "agentModel": agentModel, "agentMode": agentMode, "agentConfig": agentConfig,
+    ]
+    preferences.set(choices, forKey: key)
   }
 
   func openPhoneRun() {
@@ -934,22 +1020,27 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     let conversation = string(phoneRunBanner, "conversation_id", id)
     phoneRunBanner = [:]
     guard !id.isEmpty else { return }
-    selectJob(id, restoreConnection: false, conversationID: conversation, targetSection: "Workspace")
+    selectJob(
+      id, restoreConnection: false, conversationID: conversation, targetSection: "Workspace",
+      adoptPhone: true)
   }
 
   func savePreferences() {
-    pendingPreferences = [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)]
+    pendingPreferences = PreferenceWrite(
+      values: [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)],
+      // A phone selection must not be saved back over the shared project as the Mac's choice.
+      syncConnection: !applyingPhoneConnection)
     guard !writingPreferences else { return }
     writingPreferences = true
     perform {
       defer { self.writingPreferences = false }
       while let snapshot = self.pendingPreferences {
         self.pendingPreferences = nil
-        let touchesConnection = snapshot.contains { ["provider", "model", "harness"].contains($0.0) }
-        for (key, value) in snapshot {
+        let touchesConnection = snapshot.values.contains { ["provider", "model", "harness"].contains($0.0) }
+        for (key, value) in snapshot.values {
           _ = try await self.engine.call("settings.set", ["key": key, "value": value])
         }
-        if touchesConnection { await self.syncSharedProjectConnection() }
+        if touchesConnection && snapshot.syncConnection { await self.syncSharedProjectConnection() }
       }
     }
   }
@@ -1052,12 +1143,23 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         if !phoneTurn.isEmpty, phoneTurn != selectedJob {
           let row = jobs.first { string($0, "id") == phoneTurn } ?? [:]
           let conversation = string(row, "conversation_id", phoneTurn)
-          // Never take over what the Mac has open. The open conversation follows its own tip below.
-          if conversation != selectedConversationID {
+          switch phoneRunPresentation(
+            turn: phoneTurn, conversation: conversation, selectedJob: selectedJob,
+            selectedConversation: selectedConversationID, macActive: active
+          ) {
+          case .open:
+            phoneRunBanner = [:]
+            seenPhoneJobs.insert(phoneTurn)
+            selectJob(
+              phoneTurn, restoreConnection: false, conversationID: conversation,
+              targetSection: "Workspace", adoptPhone: true)
+          case .banner:
             phoneRunBanner = [
               "id": phoneTurn, "conversation_id": conversation,
               "title": string(row, "conversation_title", string(row, "title", "New run")),
             ]
+          case .none:
+            break
           }
         }
         for row in jobs where string(row, "project") == projectID && !string(row, "phone_origin").isEmpty {
@@ -1071,7 +1173,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         let project = string(row, "project", projectID)
         let tip = conversationTipID(jobs: jobs, conversationID: conversation, projectID: project)
         if !tip.isEmpty, tip != selectedJob {
-          selectJob(tip, restoreConnection: false, conversationID: conversation)
+          let tipRow = jobs.first { string($0, "id") == tip } ?? [:]
+          selectJob(
+            tip, restoreConnection: false, conversationID: conversation,
+            adoptPhone: !string(tipRow, "phone_origin").isEmpty)
         }
       }
     } catch {
@@ -1105,7 +1210,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
 
   func selectJob(_ id: String, restoreConnection: Bool = true,
-    conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil) {
+    conversationID: String? = nil, recordHistory: Bool = true, targetSection: String? = nil,
+    adoptPhone: Bool = false) {
     // Reselecting the current recorded turn is navigation, not a reload. Keep
     // its transcript, connection and draft mounted. New-thread actions and
     // explicit restoration still perform the complete reset below.
@@ -1126,7 +1232,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     nextNavigation.closeExpandedDrawer()
     if nextNavigation != navigationState { navigationState = nextNavigation }
     detailGeneration += 1
-    restoreSelectedConnection = restoreConnection
+    restoreSelectedConnection = restoreConnection && !adoptPhone
+    adoptPhoneConnection = adoptPhone
     conversationHistory = []
     earlierHistory = ""
     loadingHistory = false
@@ -1180,7 +1287,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           restoreComposer(conversationID: identity)
           restoreSessionDestination()
         }
-        if firstLoad && restoreSelectedConnection,
+        if firstLoad && adoptPhoneConnection,
+          string(result, "kind") == "task", let request = result["request"] as? [String: Any],
+          let selection = phoneConnection(fromJobRequest: request) {
+          adoptPhoneConnection = false
+          restoreSelectedConnection = false
+          adoptPhoneSelection(selection)
+        } else if firstLoad && restoreSelectedConnection,
           string(result, "kind") == "task", let request = result["request"] as? [String: Any] {
           restoreSelectedConnection = false
           chooseHarness(string(request, "harness", harness))

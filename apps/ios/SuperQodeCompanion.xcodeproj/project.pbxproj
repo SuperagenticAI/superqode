@@ -89,7 +89,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000041 /* Build configuration list for PBXNativeTarget "SuperQodeCompanion" */;
 			buildPhases = (
-				A00000000000000000000015 /* Prepare original SuperQode icon */,
+				A00000000000000000000015 /* Prepare the iOS app icon */,
 				A00000000000000000000012 /* Sources */,
 				A00000000000000000000013 /* Frameworks */,
 				A00000000000000000000014 /* Resources */,
@@ -222,22 +222,22 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		A00000000000000000000015 /* Prepare original SuperQode icon */ = {
+		A00000000000000000000015 /* Prepare the iOS app icon */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/scripts/prepare-app-icon.swift",
-				"$(SRCROOT)/../macos/resources/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png",
+				"$(SRCROOT)/../macos/scripts/export-brand-assets.swift",
+				"$(SRCROOT)/../../assets/superqode-logo.svg",
 			);
-			name = "Prepare original SuperQode icon";
+			name = "Prepare the iOS app icon";
 			outputPaths = (
 				"$(SRCROOT)/SuperQode/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/usr/bin/xcrun --sdk macosx swift -sdk \"$(/usr/bin/xcrun --sdk macosx --show-sdk-path)\" \"$SRCROOT/scripts/prepare-app-icon.swift\" \"$SRCROOT\"\n";
+			shellScript = "/usr/bin/xcrun --sdk macosx swift -sdk \"$(/usr/bin/xcrun --sdk macosx --show-sdk-path)\" \"$SRCROOT/../macos/scripts/export-brand-assets.swift\" ios \"$SRCROOT\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

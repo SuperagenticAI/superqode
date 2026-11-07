@@ -664,7 +664,8 @@ struct CodingComposer: View {
   private var routeDisplayName: String {
     if app.connectionDisconnected { return "Connect an agent" }
     let name = string(route, "name", app.harness)
-    return app.isManaged ? name : name + " · " + (app.model.isEmpty ? "Choose model" : app.model)
+    if app.model.isEmpty { return app.isManaged ? name : name + " · Choose model" }
+    return name + " · " + app.model
   }
   private var continuesConversation: Bool {
     app.canContinueConversation
@@ -1148,6 +1149,10 @@ struct EventStream: View {
                 Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
                   .foregroundStyle(Color.qAccent)
                 Text(string(request, "prompt")).font(.system(size: 15)).textSelection(.enabled)
+                let route = recordedConnectionLabel(request: request, harnesses: app.harnesses)
+                if !route.isEmpty {
+                  Text(route).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if let continuity = request["_continuity"] as? [String: Any] {
                   Label(string(continuity, "mode") == "handoff" ? "Conversation handed to this agent" : "Agent session resumed",
                     systemImage: "arrow.triangle.branch").font(.caption).foregroundStyle(.secondary)

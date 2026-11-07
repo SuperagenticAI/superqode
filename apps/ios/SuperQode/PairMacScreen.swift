@@ -27,7 +27,11 @@ struct PairMacScreen: View {
         } else {
           CompanionCard {
             Label("Connect your workspace", systemImage: "lock.shield").font(.headline)
-            Text("On your Mac, open SuperQode Settings → Private remote access and create an invitation.")
+            Text("Install Tailscale on this iPhone and on your Mac, then sign in to the same account on both.")
+              .font(.subheadline).foregroundStyle(.secondary)
+            Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
+              .font(.subheadline)
+            Text("On your Mac, open SuperQode Settings → Private remote access, click Connect this Mac, and create an invitation.")
               .font(.subheadline).foregroundStyle(.secondary)
             if invitationReady {
               Label("Invitation ready", systemImage: "checkmark.circle.fill").foregroundStyle(CompanionTheme.accent)
@@ -125,12 +129,12 @@ struct CompanionSetupGuide: View {
         Text("Cloud models still receive prompts from the providers you configure.")
       }
       Section("On the Mac") {
-        Text("Use a Mac build that includes Private remote access. Open a project, configure its connection, enable the background engine and share the connection with your phone.")
-        Text("Install Tailscale and use Configure private Serve in SuperQode. Keep the Mac awake, online and signed in; closing the lid can make it unavailable.")
-        Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download")!)
+        Text("Install Tailscale on the Mac and sign in. Open Private remote access and click Connect this Mac. Keep the Mac awake, online and signed in; closing the lid can make it unavailable.")
+        Link("Get Tailscale for Mac", destination: URL(string: "https://tailscale.com/download")!)
       }
       Section("On this iPhone") {
-        Text("Sign in to the same private Tailscale network. Scan the invitation from your Mac, request access, then approve it on the Mac. Camera permission is only requested when you tap Scan.")
+        Text("Install Tailscale on this iPhone and sign in to the same account as the Mac. Then scan the invitation, request access, and approve this iPhone on the Mac. Camera permission is only requested when you tap Scan.")
+        Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
         Text("If an invitation expires or a camera is unavailable, enter a fresh invitation manually. A new conversation always asks you to choose a connection.")
       }
       Section("Accounts and credentials") {

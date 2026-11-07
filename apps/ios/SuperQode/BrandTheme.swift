@@ -9,6 +9,22 @@ enum CompanionTheme {
   static let orange = Color(red: 1, green: 164 / 255, blue: 0)
   static let gradient = LinearGradient(
     colors: [purple, pink, orange], startPoint: .bottomLeading, endPoint: .topTrailing)
+  /// Same readable text gradient as the Mac working card.
+  static func textGradient(_ scheme: ColorScheme) -> LinearGradient {
+    LinearGradient(
+      colors: scheme == .dark
+        ? [
+          Color(red: 0.933, green: 0.894, blue: 1),
+          Color(red: 1, green: 0.890, blue: 0.945),
+          Color(red: 1, green: 0.945, blue: 0.831),
+        ]
+        : [
+          Color(red: 0.392, green: 0.082, blue: 0.733),
+          Color(red: 0.667, green: 0.067, blue: 0.396),
+          Color(red: 0.592, green: 0.341, blue: 0),
+        ],
+      startPoint: .leading, endPoint: .trailing)
+  }
   static let background = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .black : .white })
   static let panel = Color(uiColor: UIColor {
     $0.userInterfaceStyle == .dark
@@ -63,38 +79,48 @@ struct SuperQodeWordmark: View {
   }
 }
 
-/// Same 4pt sweep as the macOS app: purple, pink, then orange.
+/// Same 4pt sweep as the macOS app: purple, pink, then orange, moving left to right.
+/// The track is laid out first so the sweep is given that exact size. A canvas or a
+/// geometry reader outside this track was left at zero height, which showed only the grey line.
 struct ThinkingBar: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
-    Group {
-      if reduceMotion {
-        Capsule().fill(CompanionTheme.accent.opacity(0.65))
-      } else {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
-          Canvas { context, size in
+    Capsule()
+      .fill(Color.primary.opacity(0.07))
+      .frame(maxWidth: .infinity)
+      .frame(height: 4)
+      .overlay {
+        if reduceMotion {
+          Capsule().fill(CompanionTheme.accent.opacity(0.85))
+        } else {
+          TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
             let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2) / 2
-            let width = size.width * 0.46
-            let x = (size.width + width) * phase - width
-            let rect = CGRect(x: x, y: 0, width: width, height: size.height)
-            let colors: [Color] = contrast == .increased
-              ? [.primary, .primary]
-              : [CompanionTheme.purple, CompanionTheme.pink, CompanionTheme.orange]
-            context.fill(
-              Path(roundedRect: rect, cornerRadius: size.height / 2),
-              with: .linearGradient(
-                Gradient(colors: colors),
-                startPoint: CGPoint(x: x, y: 0),
-                endPoint: CGPoint(x: x + width, y: 0)))
+            GeometryReader { geo in
+              let width = max(geo.size.width, 1)
+              let sweep = max(width * 0.46, 36)
+              Capsule()
+                .fill(LinearGradient(
+                  colors: [CompanionTheme.purple, CompanionTheme.pink, CompanionTheme.orange],
+                  startPoint: .leading,
+                  endPoint: .trailing))
+                .frame(width: sweep, height: max(geo.size.height, 4))
+                .offset(x: (width + sweep) * phase - sweep)
+            }
           }
         }
       }
-    }
-    .frame(height: 4)
-    .background(.primary.opacity(0.07), in: Capsule())
-    .clipShape(Capsule())
-    .accessibilityHidden(true)
+      .clipShape(Capsule())
+      .accessibilityHidden(true)
+  }
+}
+
+private struct CompanionBrandText: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.colorSchemeContrast) private var contrast
+  func body(content: Content) -> some View {
+    content.foregroundStyle(
+      contrast == .increased
+        ? AnyShapeStyle(Color.primary) : AnyShapeStyle(CompanionTheme.textGradient(scheme)))
   }
 }
 
@@ -119,27 +145,36 @@ struct WorkingStatusText: View {
 
 struct CompanionWorkingCard: View {
   let status: String
+  var activity = ""
   var body: some View {
     let waiting = status == "needs_approval"
     let stopping = status == "cancelling"
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 8) {
-        SuperQodeMark(size: 22)
-        if waiting {
-          Text("Waiting for permission").font(.subheadline.weight(.semibold))
-        } else if stopping {
-          Text("Stopping agent").font(.subheadline.weight(.semibold))
+    let label = waiting ? "Waiting for permission" : stopping ? "Stopping agent" : "Working"
+    HStack(alignment: .top, spacing: 12) {
+      SuperQodeMark(size: 25)
+      VStack(alignment: .leading, spacing: 8) {
+        if waiting || stopping {
+          Text(label).font(.system(size: 13, weight: .semibold)).modifier(CompanionBrandText())
         } else {
-          WorkingStatusText().font(.subheadline.weight(.semibold))
+          WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(CompanionBrandText())
         }
-        Spacer(minLength: 0)
+        if !waiting { ThinkingBar() }
+        if waiting || stopping || !activity.isEmpty {
+          Text(waiting ? "Waiting for your approval" : stopping ? "Waiting for the agent to stop" : activity)
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+        }
       }
-      if !waiting { ThinkingBar() }
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(12)
+    .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
+    .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 12))
+    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(CompanionTheme.accent.opacity(0.12)))
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(waiting ? "Waiting for permission" : stopping ? "Stopping agent" : "Working")
+    .accessibilityLabel(label)
   }
 }
 
@@ -186,20 +221,44 @@ struct HarnessMark: View {
   }
   var body: some View {
     Group {
-      if let asset {
-        if coloured {
-          Image(asset).resizable().renderingMode(.original).scaledToFit()
-        } else {
-          Image(asset).resizable().renderingMode(.template).scaledToFit()
-            .foregroundStyle(CompanionTheme.harnessColor(name))
-        }
+      if let asset, let image = HarnessMarkImage.fitted(asset, side: size, coloured: coloured) {
+        Image(uiImage: image)
+          .foregroundStyle(coloured ? Color.primary : CompanionTheme.harnessColor(name))
       } else {
         Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary)
       }
     }
     .frame(width: size, height: size)
+    .clipped()
     .accessibilityHidden(true)
   }
+}
+
+/// Menu labels draw an image at its point size. Fit the asset to the badge so a
+/// large PNG, such as Antigravity, does not fill the discussion.
+enum HarnessMarkImage {
+  private static var cache: [String: UIImage] = [:]
+  static func fitted(_ asset: String, side: CGFloat, coloured: Bool) -> UIImage? {
+    let side = max(side, 1)
+    let key = "\(asset):\(Int(side.rounded())):\(coloured)"
+    if let cached = cache[key] { return cached }
+    guard let image = UIImage(named: asset), let cg = image.cgImage, cg.width > 0 else { return nil }
+    let fitted = UIImage(cgImage: cg, scale: CGFloat(cg.width) / side, orientation: image.imageOrientation)
+      .withRenderingMode(coloured ? .alwaysOriginal : .alwaysTemplate)
+    cache[key] = fitted
+    return fitted
+  }
+}
+
+/// Harness and model for a shared project. The share nickname is not the workspace name.
+func companionConnectionTitle(_ profile: RemoteRecord) -> String {
+  let harness = profile.text("harness")
+  let tail = harness.split(separator: ":").last.map(String.init) ?? harness
+  let name = tail.replacingOccurrences(of: "-", with: " ").capitalized
+  let model = profile.text("model")
+  if name.isEmpty { return profile.text("name") }
+  if model.isEmpty || profile.text("provider") == "agent" { return name }
+  return name + " · " + model
 }
 
 struct HarnessBadge: View {
@@ -229,7 +288,7 @@ enum HarnessChoiceGroup {
   static let order: [(id: String, title: String, subtitle: String)] = [
     ("subscription", "Subscriptions", "Vendor plans you sign in to with your own account."),
     ("model", "Connect a model", "Open harnesses. Connect with your API key or a local model."),
-    ("harness", "SuperQode harnesses", "SuperQode harnesses. The model stays the one connected on the Mac."),
+    ("harness", "SuperQode harnesses", "Uses a model already connected on your Mac."),
     ("acp", "ACP agents", "Agents that speak Agent Client Protocol."),
     ("protocol", "Agent protocols", "Reach a remote agent with A2A or UHP."),
   ]
@@ -242,6 +301,18 @@ enum HarnessChoiceGroup {
     if id.hasPrefix("connection:") { return "subscription" }
     if id.hasPrefix("acp:") { return "acp" }
     return "harness"
+  }
+  /// Missing means an older payload. A false value still needs Connect on the Mac.
+  static func readyOnMac(_ choice: RemoteRecord) -> Bool {
+    guard choice.raw["available"] != nil else { return true }
+    return choice.flag("available")
+  }
+  /// SuperQode harnesses need a model the Mac already has. Subscriptions and ACP agents bring their own.
+  static func needsConnectedModel(_ choice: RemoteRecord, profile: RemoteRecord?) -> Bool {
+    guard groupID(choice) == "harness" else { return false }
+    let provider = profile?.text("provider") ?? ""
+    let model = profile?.text("model") ?? ""
+    return model.isEmpty || provider.isEmpty || provider == "agent"
   }
   static func sections(_ rows: [RemoteRecord]) -> [HarnessChoiceSection] {
     let known = Set(order.map(\.id))
@@ -266,6 +337,32 @@ enum HarnessChoiceGroup {
   }
 }
 
+struct MacModelChoiceSheet: View {
+  let choices: [RemoteRecord]
+  let onPick: (RemoteRecord) -> Void
+  @Environment(\.dismiss) private var dismiss
+  var body: some View {
+    NavigationStack {
+      List(choices) { choice in
+        Button { onPick(choice) } label: {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(choice.text("name")).foregroundStyle(.primary)
+            Text(choice.text("model")).font(.caption).foregroundStyle(.secondary)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+      .navigationTitle("Model")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+      }
+    }
+  }
+}
+
 struct HarnessChoiceLabel: View {
   let choice: RemoteRecord
   var selected = false
@@ -274,9 +371,13 @@ struct HarnessChoiceLabel: View {
       HarnessMark(name: choice.text("name"), iconKey: choice.text("icon_key"), size: 28)
       VStack(alignment: .leading, spacing: 2) {
         Text(choice.text("name")).foregroundStyle(.primary).lineLimit(1)
-        let detail = choice.text("model").isEmpty ? choice.text("description") : choice.text("model")
-        if !detail.isEmpty {
-          Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        if !HarnessChoiceGroup.readyOnMac(choice) {
+          Text("Set up on the Mac").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        } else {
+          let detail = choice.text("model").isEmpty ? choice.text("description") : choice.text("model")
+          if !detail.isEmpty {
+            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+          }
         }
       }
       Spacer(minLength: 8)

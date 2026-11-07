@@ -131,6 +131,7 @@ def connection_choice(row, source):
         "desktop_kind": kind,
         "icon_key": connection_icon_key(row),
         "description": description.strip()[:240],
+        "available": bool(row.get("available")),
     }
 
 
@@ -139,6 +140,19 @@ def order_connection_choices(choices):
     return sorted(
         choices,
         key=lambda row: (rank.get(row["group"], len(rank)), str(row["name"]).casefold(), row["id"]),
+    )
+
+
+def _usable_model(provider, model):
+    """A provider and model the Mac can run. Agent-managed routes have neither."""
+    return (
+        isinstance(provider, str)
+        and isinstance(model, str)
+        and bool(provider.strip())
+        and provider.strip().lower() != "agent"
+        and bool(model.strip())
+        and len(provider) <= 80
+        and len(model) <= 200
     )
 
 
@@ -192,6 +206,8 @@ class RemoteAccess:
     def status(self):
         with self.lock:
             self._expire()
+            for profile in self.config.get("profiles", []):
+                self._effective_allowed(profile)
             return {
                 "running": self.server is not None and self.server.running,
                 "enabled": self.config.get("enabled", False),
@@ -315,6 +331,8 @@ class RemoteAccess:
                 return remote_network.inspect(PORT)
             if method == "remote.network.setup":
                 return remote_network.setup(PORT)
+            if method == "remote.network.connect":
+                return remote_network.connect(PORT)
             if method == "remote.profiles.save":
                 return self._save_project_profile(params, "mac")
             if method == "remote.profiles.choices":
@@ -515,29 +533,58 @@ class RemoteAccess:
         )
         if source == "phone":
             # The phone can only move within the list the Mac allowed.
+            if existing:
+                self._effective_allowed(existing)
             allowed = list(
                 (existing or {}).get("allowed_harnesses")
                 or ([existing["harness"]] if existing else [])
             )
+            if existing and existing.get("allowed_mode") in {"all", "custom"}:
+                profile["allowed_mode"] = existing["allowed_mode"]
         else:
             requested = params.get("allowed_harnesses")
             if requested is None:
+                if existing:
+                    self._effective_allowed(existing)
                 allowed = list(
                     (existing or {}).get("allowed_harnesses")
                     or self._default_allowed_harnesses(project, profile["harness"])
                 )
+                explicit = False
             elif isinstance(requested, list) and all(
                 isinstance(item, str) and 0 < len(item) <= 500 for item in requested
             ):
-                allowed = requested[:50]
+                # A full Connect catalog is larger than the old installed-only list.
+                allowed = requested[:500]
+                explicit = True
             else:
                 raise ValueError("Choose the harnesses this phone may switch to")
             if profile["harness"] not in allowed:
                 allowed = [profile["harness"], *allowed]
+            if explicit:
+                full = list(
+                    dict.fromkeys(self._default_allowed_harnesses(project, profile["harness"]))
+                )
+                if set(allowed) == set(full):
+                    profile["allowed_mode"] = "all"
+                    allowed = full
+                else:
+                    profile["allowed_mode"] = "custom"
+            elif not existing:
+                profile["allowed_mode"] = "all"
+            elif existing.get("allowed_mode") in {"all", "custom"}:
+                profile["allowed_mode"] = existing["allowed_mode"]
         profile["allowed_harnesses"] = list(dict.fromkeys(allowed))
         unchanged = existing and all(
             existing.get(key) == profile[key]
-            for key in ("harness", "provider", "model", "local_only", "allowed_harnesses")
+            for key in (
+                "harness",
+                "provider",
+                "model",
+                "local_only",
+                "allowed_harnesses",
+                "allowed_mode",
+            )
         )
         if unchanged:
             return existing
@@ -564,44 +611,181 @@ class RemoteAccess:
         self._save()
         return profile
 
-    def _default_allowed_harnesses(self, project, harness):
-        """The shared harness plus SuperQode's built-in harnesses, which use the Mac's model."""
-        builtins = [
-            row["id"]
-            for row in self.service.dispatch("harnesses.list", {"project": project})
-            if isinstance(row, dict)
-            and row.get("available")
-            and row.get("id") in _BUILTIN_HARNESSES
-            and row.get("runtime") == "builtin"
-        ]
-        return [harness, *builtins]
-
-    def connection_choices(self, project, allowed=None):
-        """Harness list in the same order as Connect on the Mac, limited to ``allowed``."""
-        choices = []
+    def _catalog(self, project, *, ready_only=False):
+        """Connect's routes and harnesses. Ready-only is the old installed snapshot."""
+        rows = []
         seen = set()
         for method in ("routes.list", "harnesses.list"):
             for row in self.service.dispatch(method, {"project": project}):
-                if not isinstance(row, dict) or not row.get("available"):
+                if not isinstance(row, dict):
+                    continue
+                if ready_only and not row.get("available"):
                     continue
                 identity = row.get("id")
                 if not isinstance(identity, str) or not identity or identity in seen:
                     continue
-                if allowed is not None and identity not in allowed:
-                    continue
                 seen.add(identity)
-                choices.append(connection_choice(row, method))
+                rows.append((row, method))
+        return rows
+
+    def _default_allowed_harnesses(self, project, harness):
+        """Every harness Connect shows, including ones that still need setup."""
+        identities = [row["id"] for row, _source in self._catalog(project)]
+        return [harness, *[item for item in identities if item != harness]]
+
+    def _effective_allowed(self, profile):
+        """Follow the full Connect catalog unless the Mac saved an explicit shorter list."""
+        saved = list(dict.fromkeys(profile.get("allowed_harnesses") or [profile["harness"]]))
+        harness = profile.get("harness") or ""
+        # Only a list saved from the Mac toggles stays narrow. Older automatic
+        # lists named a handful of installed harnesses and have no mode.
+        if profile.get("allowed_mode") == "custom":
+            return set(saved)
+        rows = self._catalog(profile["project"])
+        full = list(
+            dict.fromkeys([harness, *[row["id"] for row, _source in rows if row["id"] != harness]])
+        )
+        if profile.get("allowed_harnesses") != full or profile.get("allowed_mode") != "all":
+            profile["allowed_harnesses"] = full
+            profile["allowed_mode"] = "all"
+            self._save()
+        return set(full)
+
+    def connection_choices(self, project, allowed=None):
+        """Harness list in the same order as Connect on the Mac, limited to ``allowed``."""
+        choices = []
+        for row, method in self._catalog(project):
+            if allowed is not None and row["id"] not in allowed:
+                continue
+            choices.append(connection_choice(row, method))
         return order_connection_choices(choices)
 
     def phone_connection_choices(self, device, project):
         grant = next((p for p in self.profiles(device) if p["project"] == project), None)
         if not grant:
             raise PermissionError("This project is not shared with this device")
-        return self.connection_choices(project, self._allowed(grant))
+        return self.connection_choices(project, self._effective_allowed(grant))
 
-    @staticmethod
-    def _allowed(profile):
-        return set(profile.get("allowed_harnesses") or [profile["harness"]])
+    def model_choices(self, project):
+        """Models the Mac can already run. Credentials stay on the Mac."""
+        from .connections import list_connections
+
+        profile = next(
+            (p for p in self.config.get("profiles", []) if p.get("project") == project), None
+        )
+        local_only = bool(profile and profile.get("local_only"))
+        catalog = list_connections(self.service.credentials)
+        by_id = {row["id"]: row for row in catalog}
+        choices = []
+        seen = set()
+
+        def known(provider):
+            row = by_id.get(provider)
+            if row and (row.get("local") or row.get("credential_configured")):
+                return row
+            return None
+
+        def add(provider, model, name, local):
+            if local_only and not local:
+                return
+            if not _usable_model(provider, model):
+                return
+            key = (provider, model)
+            if key in seen:
+                return
+            seen.add(key)
+            choices.append(
+                {
+                    "id": provider + "/" + model,
+                    "provider": provider,
+                    "model": model,
+                    "name": name,
+                    "local": bool(local),
+                }
+            )
+
+        for source in (profile,):
+            if not source:
+                continue
+            row = known(source.get("provider") or "")
+            if row:
+                add(
+                    row["id"],
+                    source.get("model") or "",
+                    row["name"] + " · " + str(source.get("model") or ""),
+                    row["local"],
+                )
+        settings = {
+            row["key"]: json.loads(row["value"])
+            for row in self.service._all(
+                "SELECT key,value FROM settings WHERE key IN ('provider','model')"
+            )
+        }
+        saved_provider = (
+            settings.get("provider") if isinstance(settings.get("provider"), str) else ""
+        )
+        saved = known(saved_provider)
+        if saved:
+            add(
+                saved["id"],
+                settings.get("model") or "",
+                saved["name"] + " · " + str(settings.get("model") or ""),
+                saved["local"],
+            )
+        ollama = known("ollama")
+        if ollama and ollama.get("local"):
+            try:
+                from superqode.local.inventory import list_ollama_models
+
+                for item in list_ollama_models():
+                    name = item.bare_id
+                    if not name or any(word in name.lower() for word in ("embed", "rerank")):
+                        continue
+                    add("ollama", name, "Ollama · " + name, True)
+                    if len(choices) >= 24:
+                        break
+            except (OSError, ValueError):
+                pass
+        if not local_only:
+            for row in catalog:
+                if row.get("local") or not row.get("credential_configured"):
+                    continue
+                for model in (row.get("example_models") or [])[:4]:
+                    if isinstance(model, str):
+                        add(row["id"], model, row["name"] + " · " + model, False)
+                    if len(choices) >= 40:
+                        return choices
+        return choices[:40]
+
+    def _builtin_route(self, grant, params):
+        """A SuperQode harness runs a model the Mac already connected."""
+        requested_provider = (
+            params.get("provider") if isinstance(params.get("provider"), str) else ""
+        )
+        requested_model = params.get("model") if isinstance(params.get("model"), str) else ""
+        grant_provider, grant_model = grant.get("provider"), grant.get("model")
+        if _usable_model(grant_provider, grant_model) and (
+            not _usable_model(requested_provider, requested_model)
+            or (requested_provider == grant_provider and requested_model == grant_model)
+        ):
+            return grant_provider, grant_model
+        if _usable_model(requested_provider, requested_model):
+            match = next(
+                (
+                    choice
+                    for choice in self.model_choices(grant["project"])
+                    if choice["provider"] == requested_provider
+                    and choice["model"] == requested_model
+                ),
+                None,
+            )
+            if match:
+                return match["provider"], match["model"]
+        if _usable_model(grant_provider, grant_model):
+            return grant_provider, grant_model
+        raise ValueError(
+            "Choose a model already connected on the Mac. SuperQode harnesses use that model."
+        )
 
     def update_connection(self, device, params):
         """The phone changes the harness inside a project that was already shared."""
@@ -610,15 +794,14 @@ class RemoteAccess:
         if not grant:
             raise PermissionError("This project is not shared with this device")
         harness = text(params.get("harness"), "a harness", 500)
-        if harness not in self._allowed(grant):
+        if harness not in self._effective_allowed(grant):
             raise PermissionError("Allow this harness for the phone on the Mac first")
         if harness in _BUILTIN_HARNESSES:
-            # Built-in harnesses keep the provider and model the Mac chose.
-            provider, model = grant["provider"], grant["model"]
+            provider, model = self._builtin_route(grant, params)
         else:
             # Routes use the Mac's own record, never a provider or model sent by the phone.
             choice = next((c for c in self.connection_choices(project) if c["id"] == harness), None)
-            if not choice:
+            if not choice or not choice.get("available"):
                 raise ValueError("Set up this harness or connection on the Mac first")
             provider, model = choice["provider"] or "agent", choice["model"]
         return self._save_project_profile(

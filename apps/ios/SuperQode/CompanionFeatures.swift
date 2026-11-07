@@ -73,7 +73,7 @@ struct WorkflowProjectPicker: View {
           Section { ConnectionStatus(); Text("Choose the workspace for " + workflow.rawValue.lowercased() + ".").font(.footnote).foregroundStyle(.secondary) }
           ForEach(store.projects) { project in NavigationLink(project.text("name")) { destination(project) } }
           if store.projects.isEmpty { ContentUnavailableView("Share a workspace first", systemImage: "folder.badge.plus", description: Text("Select and share a connection from Private remote access on your Mac.")) }
-        }.navigationTitle(workflow.rawValue)
+        }.navigationTitle(workflow.rawValue).navigationBarTitleDisplayMode(.inline)
       }
     }
   }

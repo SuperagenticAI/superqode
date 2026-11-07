@@ -25,7 +25,7 @@ struct RemoteAccessSettingsView: View {
   @State private var pairingImage: NSImage?
   @State private var error = ""
   @State private var working = false
-  @State private var localOnly = true
+  @State private var localOnly = false
   @State private var allowOptimization = false
   @State private var allowReview = false
   @State private var extraPermissions: Set<String> = []
@@ -49,7 +49,7 @@ struct RemoteAccessSettingsView: View {
           .font(.system(size: 30)).foregroundStyle(Color.qAccent)
         VStack(alignment: .leading, spacing: 4) {
           Text("Your Mac. Anywhere.").font(.title2.bold())
-          Text("Private remote access · iPhone companion preview").foregroundStyle(.secondary)
+          Text("Private remote access").foregroundStyle(.secondary)
         }
         Spacer()
         Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -66,7 +66,7 @@ struct RemoteAccessSettingsView: View {
           activationSection
           pairingSection
           devicesSection
-          Text("Companion preview: tasks, approvals, read-only project review, evaluations and supported staged optimization. Provider setup, raw terminals and candidate adoption stay on the Mac. Other apps require a supported protocol; private app sessions are not automatically controllable.")
+          Text("Tasks, approvals, read-only project review, evaluations and supported staged optimization. Provider setup, raw terminals and candidate adoption stay on the Mac. Other apps require a supported protocol; private app sessions are not automatically controllable.")
             .font(.caption).foregroundStyle(.secondary)
         }.padding(24).disabled(working)
       }
@@ -91,33 +91,39 @@ struct RemoteAccessSettingsView: View {
         Label(running ? "Remote access is running" : "Remote access is off",
           systemImage: running ? "checkmark.shield.fill" : "shield.lefthalf.filled")
           .foregroundStyle(running ? Color.green : Color.secondary)
-        Text("Install Tailscale on your Mac and iPhone and connect both to your private network. Use Serve; public Funnel is refused.")
-        HStack {
-          Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download")!)
-          Link("Private Serve setup", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
-          Spacer()
-          Button("Verify connection") { action { network = try await call("remote.network.check") } }
-        }
-        if network["installed"] as? Bool == true, network["ready"] as? Bool != true {
-          Button("Configure private Serve") { action { network = try await call("remote.network.setup") } }
-          Text("Creates the private proxy after you click. Existing Tailscale services are preserved; setup needing vendor approval falls back to the command below.")
+        Text("Tailscale connects this Mac to your iPhone. Install it on both, sign in to the same account, then SuperQode can start it here. Public Funnel stays off.")
+        if network.isEmpty {
+          ProgressView().controlSize(.small)
+        } else if network["installed"] as? Bool != true {
+          Text("Tailscale is not on this Mac yet. Install it here and on the iPhone, sign in on both, then open this screen again.")
             .font(.caption).foregroundStyle(.secondary)
-        }
-        if !string(network, "issue").isEmpty { Text(string(network, "issue")).foregroundStyle(.secondary) }
-        if !string(network, "command").isEmpty {
           HStack {
-            Text(string(network, "command")).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-            Spacer()
-            Button("Copy command") {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(string(network, "command"), forType: .string)
+            Link("Get Tailscale for Mac", destination: URL(string: "https://tailscale.com/download")!)
+            Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
+          }
+        } else if network["ready"] as? Bool == true {
+          Label("This Mac is ready for your iPhone", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        } else {
+          Button("Connect this Mac") {
+            action {
+              network = try await call("remote.network.connect")
+              if network["ready"] as? Bool == true, status["running"] as? Bool != true {
+                status = try await call("remote.start")
+              }
             }
           }
+          .buttonStyle(.borderedProminent)
+          Text("One click starts Tailscale on this Mac. The iPhone still needs the Tailscale app, signed in to the same account.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if !string(network, "issue").isEmpty, network["ready"] as? Bool != true {
+          Text(string(network, "issue")).foregroundStyle(.secondary)
         }
         if !string(network, "private_url").isEmpty { Text(string(network, "private_url")).textSelection(.enabled) }
         if !app.backgroundEngineMode {
-          Text("Enable the background engine to keep phone access available when the Mac app quits.").font(.caption).foregroundStyle(.secondary)
-          Button("Enable background engine") { action { try await app.changeBackgroundEngine(true) } }
+          Text("Optional. Keep the iPhone connected after you quit SuperQode. Turning this on reconnects the Mac app.")
+            .font(.caption).foregroundStyle(.secondary)
+          Button("Keep access after quitting") { action { try await app.changeBackgroundEngine(true) } }
             .disabled(app.anyActive || app.busy)
         }
         Text("Keep the Mac awake, signed in and online. Closing the lid or putting the Mac to sleep can interrupt access. Your phone needs Tailscale enabled when away from home.")
@@ -161,6 +167,7 @@ struct RemoteAccessSettingsView: View {
               })) {
                 VStack(alignment: .leading) {
                   Text(string(profile, "name")).fontWeight(.medium)
+                  Text("Next pairing invitation").font(.caption).foregroundStyle(.secondary)
                   Text("\(string(profile, "harness")) · \(profile["local_only"] as? Bool == true ? "Local only" : "Agent/provider managed")").font(.caption).foregroundStyle(.secondary)
                 }
               }.accessibilityIdentifier("remote.share.invite." + string(profile, "id"))
@@ -175,7 +182,7 @@ struct RemoteAccessSettingsView: View {
           }.padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
         }
         if !profiles.isEmpty {
-          Text("Turn a project on above to include it in the next pairing invitation.").font(.caption).foregroundStyle(.secondary)
+          Text("Show on iPhone adds a project to a phone you already paired. The switch beside the name only adds it to the next pairing invitation.").font(.caption).foregroundStyle(.secondary)
         }
       }.padding(10)
     }
@@ -189,8 +196,8 @@ struct RemoteAccessSettingsView: View {
       } else {
         Button("Enable private remote access") { action { _ = try await call("remote.start") } }
           .buttonStyle(.borderedProminent)
-          .disabled(network["ready"] as? Bool != true || !app.backgroundEngineMode)
-        Text("Turn on the background engine above, then enable access. Share at least one project before pairing a phone.")
+          .disabled(network["ready"] as? Bool != true)
+        Text("Connect this Mac above, share a project, then pair the iPhone. The Mac app can stay open.")
           .font(.caption).foregroundStyle(.secondary)
       }
     }
@@ -327,26 +334,33 @@ private struct SharedProjectAccess: View {
   private var profileID: String { profile["id"] as? String ?? "" }
   private var currentHarness: String { profile["harness"] as? String ?? "" }
   private var allowed: [String] {
+    if profile["allowed_mode"] as? String == "all" {
+      let listed = (choices ?? []).compactMap { $0["id"] as? String }
+      if !listed.isEmpty { return listed }
+    }
     let list = profile["allowed_harnesses"] as? [String] ?? []
     return list.isEmpty ? [currentHarness] : list
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      DisclosureGroup("Phones that can open this project") {
-        if devices.isEmpty { Text("No paired phones yet.").font(.caption).foregroundStyle(.secondary) }
+      if devices.isEmpty {
+        Text("Pair an iPhone first. Sharing a project does not add it to a phone by itself.").font(.caption).foregroundStyle(.secondary)
+      } else {
         ForEach(devices, id: \.remoteID) { device in
           let id = device["id"] as? String ?? ""
           let granted = (device["profiles"] as? [String] ?? []).contains(profileID)
-          Toggle(device["name"] as? String ?? "iPhone", isOn: Binding(get: { granted }, set: { setDevice(id, $0) }))
+          let phone = device["name"] as? String ?? "iPhone"
+          Toggle("Show on \(phone)", isOn: Binding(get: { granted }, set: { setDevice(id, $0) }))
+            .font(.caption)
             .accessibilityIdentifier("remote.share.device." + id)
         }
-      }.font(.caption)
+      }
       DisclosureGroup("Harnesses the phone may switch to") {
-        Text("Off by default except this project's harness and SuperQode's built-in harnesses, which use the model chosen here. Turn on paid subscriptions or cloud agents only if the phone should use them.")
+        Text("The phone lists the same harnesses as Connect on this Mac, including ones that still need setup. Turn one off to hide it. SuperQode harnesses use a model already connected on the Mac.")
           .font(.caption).foregroundStyle(.secondary)
         if choices == nil { ProgressView().controlSize(.small).onAppear(perform: loadChoices) }
-        else if choices?.isEmpty == true { Text("No other harnesses are set up on this Mac.").font(.caption).foregroundStyle(.secondary) }
+        else if choices?.isEmpty == true { Text("Connect has no harnesses to list yet.").font(.caption).foregroundStyle(.secondary) }
         ForEach(choices ?? [], id: \.remoteID) { choice in
           let id = choice["id"] as? String ?? ""
           Toggle(choice["name"] as? String ?? id, isOn: Binding(get: { allowed.contains(id) }, set: { on in

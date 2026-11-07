@@ -84,7 +84,7 @@ struct PhoneRunBanner: View {
   var body: some View {
     HStack(spacing: 8) {
       Image(systemName: "iphone").foregroundStyle(.secondary)
-      Text("New run from iPhone").font(.caption.weight(.semibold))
+      Text("Your iPhone started a conversation").font(.caption.weight(.semibold))
       Text(string(app.phoneRunBanner, "title")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
       Spacer()
       Button("Open") { app.openPhoneRun() }.controlSize(.small)

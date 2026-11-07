@@ -164,9 +164,19 @@ enum MacConnectionPhase: Equatable {
     guard let api else { return }
     let request = generation
     do {
-      let next = try await api.rpc("jobs.list").array.map { RemoteRecord(raw: $0.object) }
+      async let projectPage = api.rpc("projects.list")
+      async let jobPage = api.rpc("jobs.list")
+      async let catalogPage = api.rpc("companion.catalog")
+      let (projectResult, jobResult, catalogResult) = try await (projectPage, jobPage, catalogPage)
       try Task.checkCancellation()
       guard request == generation, paired else { return }
+      let catalog = catalogResult.object
+      guard catalog.number("protocol") == 1 else { return }
+      let nextProfiles = catalog.records("profiles")
+      let nextProjects = projectResult.array.map { RemoteRecord(raw: $0.object) }
+      let next = jobResult.array.map { RemoteRecord(raw: $0.object) }
+      if profiles != nextProfiles { profiles = nextProfiles }
+      if projects != nextProjects { projects = nextProjects }
       if jobs != next { jobs = next }
       missedConnections = 0
       if phase != .connected { await refresh() }

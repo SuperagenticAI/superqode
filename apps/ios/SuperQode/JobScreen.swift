@@ -18,6 +18,9 @@ struct JobScreen: View {
   @State private var pendingHold = false
   @State private var connections: [RemoteRecord] = []
   @State private var nextConnection: RemoteRecord?
+  @State private var showModels = false
+  @State private var modelChoices: [RemoteRecord] = []
+  @State private var pendingHarness: RemoteRecord?
   @State private var detail: [String: JSONValue] = [:]
   init(identity: String) {
     self.identity = identity
@@ -61,6 +64,60 @@ struct JobScreen: View {
     if ["needs_approval", "cancelling", "running", "queued"].contains(status) { return status }
     return "running"
   }
+  /// One current action under the working bar, the same place the Mac shows it.
+  private var currentActivity: String {
+    let starts = ["tool_call", "tool_start", "tool.requested", "tool.started", "tool.start", "tool_execution_start"]
+    let updates = ["tool_update", "tool_call_update", "tool.updated", "tool.update", "tool_execution_update"]
+    let ends = ["tool_result", "tool_end", "tool.completed", "tool.result", "tool.end", "tool_execution_end"]
+    let terminal = ["completed", "failed", "cancelled", "canceled", "error", "done", "success", "succeeded", "interrupted"]
+    var pending: [String: String] = [:]
+    var order: [String] = []
+    var finished = ""
+    for event in events {
+      let data = event.raw.object("data")
+      let name = data.text("event", event.text("type"))
+      if ["thinking", "reasoning", "delta", "model_delta", "message.delta", "answer"].contains(name) {
+        finished = ""
+      }
+      guard (starts + updates + ends).contains(name) else { continue }
+      let payload = data.object("payload").isEmpty ? data : data.object("payload")
+      let id = payload.text("toolCallId", payload.text("tool_call_id", payload.text("id", payload.text("tool_name", "anonymous"))))
+      let action = toolAction(payload)
+      let status = payload.text("status").lowercased()
+      let done = terminal.contains(status) || (ends.contains(name) && (name != "tool.completed" || status.isEmpty))
+      if done {
+        pending.removeValue(forKey: id)
+        order.removeAll { $0 == id }
+        if !action.isEmpty {
+          let prefix = ["failed", "error"].contains(status) ? "Failed · " : ["cancelled", "canceled", "interrupted"].contains(status) ? "Stopped · " : "Finished · "
+          finished = prefix + action
+        }
+      } else if !action.isEmpty {
+        if pending[id] == nil { order.append(id) }
+        pending[id] = action
+      }
+    }
+    if let id = order.last, let action = pending[id] { return action }
+    return finished
+  }
+  private func toolAction(_ payload: [String: JSONValue]) -> String {
+    let arguments = payload.object("arguments").isEmpty ? payload.object("args") : payload.object("arguments")
+    let raw = payload.object("rawInput").isEmpty ? payload.object("raw_input") : payload.object("rawInput")
+    let sources = [arguments, raw, payload]
+    for source in sources {
+      for key in ["command", "cmd", "command_line", "shell_command"] {
+        let value = source.text(key)
+        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return value }
+      }
+    }
+    for source in sources {
+      for key in ["title", "tool_name", "name", "path", "file_path"] {
+        let value = source.text(key)
+        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return value }
+      }
+    }
+    return ""
+  }
   private var assistantText: String {
     events.compactMap { event -> String? in
       let data = event.raw.object("data")
@@ -81,7 +138,10 @@ struct JobScreen: View {
         if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning) }
         CompanionCard {
           HStack {
-            HarnessBadge(name: detail.object("request").text("harness", "Run"))
+            HarnessBadge(
+              name: selectedRequestConnection?.text("name") ?? detail.object("request").text("harness", "Run"),
+              iconKey: selectedRequestConnection?.text("icon_key") ?? ""
+            )
             Spacer()
             Text(job.text("status").replacingOccurrences(of: "_", with: " ").capitalized)
               .font(.caption).foregroundStyle(job.text("status") == "needs_approval" ? CompanionTheme.warning : Color.secondary)
@@ -195,21 +255,18 @@ struct JobScreen: View {
       .safeAreaInset(edge: .bottom, spacing: 0) {
         VStack(spacing: 0) {
           if showWorking {
-            CompanionWorkingCard(status: workingStatus)
+            CompanionWorkingCard(status: workingStatus, activity: currentActivity)
               .padding(.horizontal, 12)
               .padding(.top, 8)
-              .padding(.bottom, 4)
+              .padding(.bottom, 8)
           }
           if job.text("kind") == "task" || detail.isEmpty { replyBar }
         }
+        .background(CompanionTheme.background.ignoresSafeArea(edges: .bottom))
       }
       .navigationTitle(job.text("conversation_title", job.text("title", "Run")))
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItemGroup(placement: .keyboard) {
-          Spacer()
-          Button("Hide") { composing = false }
-        }
         ToolbarItem(placement: .primaryAction) {
           Button("New thread") { showNewThread = true }
             .disabled(job.text("project").isEmpty || !store.permissions.contains("tasks"))
@@ -240,6 +297,14 @@ struct JobScreen: View {
       .sheet(isPresented: $showNewThread) {
         NavigationStack { ComposeTaskScreen(project: job.text("project")) }
       }
+      .sheet(isPresented: $showModels) {
+        MacModelChoiceSheet(choices: modelChoices) { model in
+          let harness = pendingHarness
+          showModels = false
+          guard let harness else { return }
+          Task { await commitHarness(harness, model: model) }
+        }
+      }
   }
 
   private var replyBar: some View {
@@ -252,6 +317,7 @@ struct JobScreen: View {
           Section(section.title) {
             ForEach(section.rows) { choice in
               Button(connectionLabel(choice)) { Task { await chooseHarness(choice) } }
+                .disabled(!HarnessChoiceGroup.readyOnMac(choice))
             }
           }
         }
@@ -260,7 +326,7 @@ struct JobScreen: View {
           if let current = nextConnection ?? selectedRequestConnection {
             HarnessMark(name: current.text("name"), iconKey: current.text("icon_key"), size: 16)
           }
-          Text(selectedConnectionLabel).lineLimit(1)
+          Text(selectedConnectionLabel).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
           Image(systemName: "chevron.up.chevron.down")
         }
         .font(.caption.weight(.semibold))
@@ -268,11 +334,13 @@ struct JobScreen: View {
       .accessibilityIdentifier("thread.harness")
       .disabled(acting || !store.canMutate)
       HStack(alignment: .bottom, spacing: 8) {
-        TextField("Message", text: $reply, axis: .vertical).lineLimit(1...6)
+        TextField("Message", text: $reply, axis: .vertical)
+          .lineLimit(4...8)
+          .font(.body)
           .focused($composing)
           .accessibilityIdentifier("thread.message")
         Button { Task { await sendReply() } } label: {
-          Image(systemName: "arrow.up.circle.fill").font(.title2)
+          Text("Send").font(.body.weight(.semibold))
         }
         .accessibilityLabel("Send")
         .disabled(acting || detail.isEmpty || !store.canMutate || !store.permissions.contains("tasks") || reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -292,7 +360,14 @@ struct JobScreen: View {
   }
 
   private var selectedConnectionLabel: String {
-    if let nextConnection { return connectionLabel(nextConnection) }
+    if let nextConnection {
+      let model = projectProfile?.text("model") ?? ""
+      if nextConnection.text("model").isEmpty, !model.isEmpty, projectProfile?.text("provider") != "agent",
+        HarnessChoiceGroup.groupID(nextConnection) == "harness" {
+        return nextConnection.text("name") + " · " + model
+      }
+      return connectionLabel(nextConnection)
+    }
     let request = detail.object("request")
     let harness = request.text("harness")
     let model = request.text("model")
@@ -307,7 +382,8 @@ struct JobScreen: View {
 
   private func connectionLabel(_ choice: RemoteRecord) -> String {
     let model = choice.text("model")
-    return model.isEmpty ? choice.text("name") : choice.text("name") + " · " + model
+    let name = model.isEmpty ? choice.text("name") : choice.text("name") + " · " + model
+    return HarnessChoiceGroup.readyOnMac(choice) ? name : name + " · Set up on the Mac"
   }
 
   private func loadConnections() async {
@@ -324,16 +400,57 @@ struct JobScreen: View {
     }
   }
 
+  private var projectProfile: RemoteRecord? {
+    store.profiles.first { $0.text("project") == job.text("project") }
+  }
+
   private func chooseHarness(_ choice: RemoteRecord) async {
+    guard !acting else { return }
+    guard HarnessChoiceGroup.readyOnMac(choice) else {
+      issue = "Set up this harness or connection on the Mac first"
+      return
+    }
+    if HarnessChoiceGroup.needsConnectedModel(choice, profile: projectProfile) {
+      await presentModels(for: choice)
+      return
+    }
+    await commitHarness(choice, model: nil)
+  }
+
+  private func presentModels(for choice: RemoteRecord) async {
+    guard let api = store.api, !acting else { return }
+    acting = true
+    defer { acting = false }
+    do {
+      let models = try await api.rpc("project.models", ["project": .string(job.text("project"))]).array.map { RemoteRecord(raw: $0.object) }
+      if models.isEmpty {
+        issue = "Connect a model on the Mac first. SuperQode harnesses use a model already set up there."
+        return
+      }
+      if models.count == 1 {
+        acting = false
+        await commitHarness(choice, model: models[0])
+        return
+      }
+      pendingHarness = choice
+      modelChoices = models
+      showModels = true
+    } catch { issue = error.localizedDescription }
+  }
+
+  private func commitHarness(_ choice: RemoteRecord, model: RemoteRecord?) async {
     guard let api = store.api, !acting else { return }
     let previous = nextConnection
     nextConnection = choice
-    acting = true; issue = ""
+    acting = true
+    issue = ""
     defer { acting = false }
     do {
+      let provider = model?.text("provider") ?? choice.text("provider", "agent")
+      let modelID = model?.text("model") ?? choice.text("model")
       _ = try await api.rpc("project.connection", [
         "project": .string(job.text("project")), "harness": .string(choice.id),
-        "provider": .string(choice.text("provider", "agent")), "model": .string(choice.text("model")),
+        "provider": .string(provider), "model": .string(modelID),
       ], key: "connection-" + UUID().uuidString)
       await store.refresh()
     } catch {

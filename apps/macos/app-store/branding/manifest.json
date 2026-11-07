@@ -51,7 +51,7 @@
       "width" : 1024
     }
   ],
-  "rendering" : "Original SVG mark on a glossy dimensional macOS tile; transparent Dock silhouette; opaque submission preview; native vector rendering at every size",
+  "rendering" : "Original SVG mark on a black full-bleed icon. Light and dark mode use this artwork. The system applies the rounded mask. Native vector rendering at every size",
   "source" : "assets\/superqode-logo.svg",
   "source_sha256" : "afd4017fb2c51fa62cb3f402ce8eee6aea8abe768454b20392f314ca8db0bb03"
 }

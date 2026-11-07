@@ -50,34 +50,29 @@ struct HarnessIcon: View {
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
-        colouredMark(image)
+        // Menu labels use the image's own point size. A 540px PNG would otherwise
+        // fill the discussion. The copy is already the badge size.
+        let mark = Image(nsImage: displayImage(image))
+          .renderingMode(identity.keepsBrandColours ? .original : .template)
+        if identity.keepsBrandColours { mark } else { mark.foregroundStyle(.primary) }
       } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
-    }.padding(size * 0.18).frame(width: size, height: size)
+    }.padding(size * 0.18).frame(width: size, height: size).clipped()
       .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
       .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
       .accessibilityLabel(identity.name).help(identity.name)
   }
 
-  /// resizable() drops an earlier rendering mode, so the mode is applied after it.
-  /// A template tint on top of that was turning official colour marks black and white.
-  @ViewBuilder private func colouredMark(_ image: NSImage) -> some View {
-    let picture = sourceImage(image)
-    if identity.keepsBrandColours {
-      Image(nsImage: picture).resizable().renderingMode(.original).scaledToFit()
-    } else {
-      Image(nsImage: picture).resizable().renderingMode(.template).scaledToFit().foregroundStyle(.primary)
-    }
-  }
+  /// Colour marks need a non-template copy at the badge's point size.
+  @MainActor private static var sizedCopies: [String: NSImage] = [:]
 
-  /// Colour marks need a non-template copy. Make it once per asset, not on every render.
-  @MainActor private static var colourCopies: [String: NSImage] = [:]
-
-  private func sourceImage(_ image: NSImage) -> NSImage {
-    guard identity.keepsBrandColours, let asset = identity.assetName else { return image }
-    if let cached = Self.colourCopies[asset] { return cached }
+  private func displayImage(_ image: NSImage) -> NSImage {
+    let side = max(1, size * 0.64)
+    let key = "\(identity.assetName ?? ""):\(Int(side.rounded())):\(identity.keepsBrandColours)"
+    if let cached = Self.sizedCopies[key] { return cached }
     let picture = (image.copy() as? NSImage) ?? image
-    picture.isTemplate = false
-    Self.colourCopies[asset] = picture
+    picture.size = NSSize(width: side, height: side)
+    picture.isTemplate = !identity.keepsBrandColours
+    Self.sizedCopies[key] = picture
     return picture
   }
 }

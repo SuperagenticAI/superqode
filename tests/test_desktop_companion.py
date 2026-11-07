@@ -82,13 +82,6 @@ def test_one_project_share_keeps_later_harness_changes(companion):
 def test_phone_harness_switch_is_limited_to_the_mac_allow_list(companion):
     _, project, _, profile, access = companion
     _, device = pair(access, profile)
-    with pytest.raises(PermissionError, match="Allow this harness"):
-        access.rpc(
-            device,
-            "project.connection",
-            {"project": project["id"], "harness": "acp:codex", "provider": "openai", "model": "x"},
-            "switch-to-cloud",
-        )
     narrowed = access.handle(
         "remote.profiles.save",
         {
@@ -252,6 +245,45 @@ def test_permission_and_removed_profile_are_enforced(companion):
         access.rpc(device, "tasks.start", {"profile": profile["id"], "prompt": "test"}, "read-only")
     access.handle("remote.profiles.remove", {"id": profile["id"]})
     assert access.rpc(device, "projects.list", {}) == []
+
+
+def test_a_later_shared_project_can_start_a_task(companion, monkeypatch, tmp_path):
+    service, _, _, first, access = companion
+    folder = tmp_path / "second"
+    folder.mkdir()
+    other = service.open_project(str(folder))
+    second = access.handle(
+        "remote.profiles.save",
+        {
+            "project": other["id"],
+            "name": "Second",
+            "harness": "core",
+            "provider": "ollama",
+            "model": "fixture",
+            "local_only": False,
+        },
+    )
+    _, device = pair(access, first)
+    access.handle(
+        "remote.devices.grant", {"id": device["id"], "profile": second["id"], "allow": True}
+    )
+    device = service._all("SELECT * FROM companion_devices WHERE id=?", (device["id"],))[0]
+    assert [p["id"] for p in access.profiles(device)] == [first["id"], second["id"]]
+    recorded = []
+
+    def start(project, kind, params):
+        recorded.append(project)
+        return {"id": "second-run"}
+
+    monkeypatch.setattr(service, "start", start)
+    result = access.rpc(
+        device,
+        "tasks.start",
+        {"profile": second["id"], "prompt": "fixture only"},
+        "second-project",
+    )
+    assert result["id"] == "second-run"
+    assert recorded == [other["id"]]
 
 
 def test_idempotency_prevents_duplicate_launch_and_rejects_changed_request(companion, monkeypatch):
@@ -442,6 +474,45 @@ def test_private_setup_never_overwrites_existing_services_or_enables_funnel(monk
     ]
 
 
+def test_connect_starts_tailscale_without_asking_for_a_shell_command(monkeypatch):
+    monkeypatch.setattr(remote_network, "tailscale_binary", lambda: "/fixture/tailscale")
+    monkeypatch.setattr(remote_network, "tailscale_app", lambda: None)
+    monkeypatch.setattr(remote_network.time, "sleep", lambda _seconds: None)
+    state = {"backend": "Stopped", "served": False}
+
+    def command(binary, *args):
+        if args[0] == "status":
+            return {
+                "BackendState": state["backend"],
+                "Self": {"DNSName": "home.example-tailnet.ts.net."},
+            }
+        web = {}
+        if state["served"]:
+            web["home.example-tailnet.ts.net:47832"] = {
+                "Handlers": {"/": {"Proxy": "http://127.0.0.1:47831"}}
+            }
+        return {"AllowFunnel": {}, "Web": web}
+
+    def run(argv, **kwargs):
+        if "up" in argv:
+            state["backend"] = "Running"
+        if "--bg" in argv:
+            state["served"] = True
+            assert "--funnel" not in argv
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(remote_network, "command", command)
+    monkeypatch.setattr(remote_network.subprocess, "run", run)
+    checked = remote_network.inspect()
+    assert checked["command"] == ""
+    assert checked["ready"] is False
+    assert "tailscale serve" not in checked["issue"]
+    connected = remote_network.connect()
+    assert connected["ready"] is True
+    assert connected["command"] == ""
+    assert state["served"] is True
+
+
 def test_approval_snapshot_is_current_even_after_event_pagination(companion):
     service, project, _, profile, access = companion
     _, device = pair(access, profile)
@@ -617,6 +688,191 @@ def test_direct_chat_capability_rejects_agent_managed_routes_before_reserving(co
     )
 
 
+def _add_route(monkeypatch, route):
+    from superqode.desktop_service import connect_workflow
+
+    original = connect_workflow.desktop_routes
+
+    def extra(root):
+        return [*original(root), route]
+
+    monkeypatch.setattr(connect_workflow, "desktop_routes", extra)
+
+
+def test_phone_sees_the_same_harnesses_as_the_mac(companion, monkeypatch):
+    service, project, _, profile, access = companion
+    _add_route(
+        monkeypatch,
+        {
+            "id": "acp:phone-fixture",
+            "name": "Phone fixture agent",
+            "desktop_kind": "acp",
+            "agent_id": "phone-fixture",
+            "available": True,
+        },
+    )
+    builtins = [
+        row["id"]
+        for row in service.dispatch("harnesses.list", {"project": project["id"]})
+        if row.get("available")
+        and row.get("runtime") == "builtin"
+        and row["id"]
+        in {
+            "core",
+            "pipy",
+            "codegem",
+            "systemone",
+            "no-tool",
+        }
+    ]
+    access.config["profiles"][0]["allowed_harnesses"] = list(
+        dict.fromkeys([profile["harness"], *builtins])
+    )
+    _, device = pair(access, profile)
+    choices = access.rpc(device, "project.connections", {"project": project["id"]})
+    assert "acp:phone-fixture" in {choice["id"] for choice in choices}
+    assert "core" in {choice["id"] for choice in choices}
+    assert "acp:phone-fixture" in access.config["profiles"][0]["allowed_harnesses"]
+    access.handle(
+        "remote.profiles.save",
+        {**profile, "allowed_harnesses": ["core"], "local_only": False},
+    )
+    narrowed = access.rpc(device, "project.connections", {"project": project["id"]})
+    assert {choice["id"] for choice in narrowed} <= {"core"}
+
+
+def test_phone_lists_connect_rows_that_still_need_setup(companion, monkeypatch):
+    """An automatic installed-only list grows to the full Connect catalog."""
+    _, project, _, profile, access = companion
+    hidden = {
+        "command": "do-not-send",
+        "install": {"command": "curl hidden"},
+        "extra_env": {"TOKEN": "secret"},
+    }
+    _add_route(
+        monkeypatch,
+        {
+            "id": "acp:not-ready",
+            "name": "Not ready agent",
+            "desktop_kind": "acp",
+            "agent_id": "not-ready",
+            "available": False,
+            "description": "An ACP agent that is not set up on this Mac",
+            **hidden,
+        },
+    )
+    _add_route(
+        monkeypatch,
+        {
+            "id": "connection:not-ready-plan",
+            "name": "Not ready plan",
+            "desktop_kind": "connection",
+            "subscription_vendor": "example",
+            "available": False,
+            **hidden,
+        },
+    )
+    stored = access.config["profiles"][0]
+    stored.pop("allowed_mode", None)
+    # The list this Mac actually saved: a handful of installed names, not an
+    # explicit toggle of the whole Connect catalog.
+    stored["allowed_harnesses"] = ["core", "connection:antigravity", "acp:opencode", "grok"]
+    assert "acp:not-ready" not in stored["allowed_harnesses"]
+    _, device = pair(access, profile)
+    choices = access.rpc(device, "project.connections", {"project": project["id"]})
+    by_id = {choice["id"]: choice for choice in choices}
+    assert by_id["acp:not-ready"]["group"] == "acp"
+    assert by_id["acp:not-ready"]["available"] is False
+    assert by_id["connection:not-ready-plan"]["group"] == "subscription"
+    assert by_id["connection:not-ready-plan"]["available"] is False
+    for choice in (by_id["acp:not-ready"], by_id["connection:not-ready-plan"]):
+        assert "command" not in choice
+        assert "install" not in choice
+        assert "extra_env" not in choice
+        assert "TOKEN" not in json.dumps(choice)
+    assert "acp:not-ready" in stored["allowed_harnesses"]
+    assert stored["allowed_mode"] == "all"
+    with pytest.raises(ValueError, match="Set up this harness"):
+        access.rpc(
+            device,
+            "project.connection",
+            {
+                "project": project["id"],
+                "harness": "acp:not-ready",
+                "provider": "agent",
+                "model": "",
+            },
+            "use-not-ready",
+        )
+    access.handle(
+        "remote.profiles.save",
+        {**profile, "allowed_harnesses": ["core"], "local_only": False},
+    )
+    narrowed = access.rpc(device, "project.connections", {"project": project["id"]})
+    assert {choice["id"] for choice in narrowed} <= {"core"}
+
+
+def test_superqode_harness_uses_a_model_connected_on_the_mac(companion, monkeypatch):
+    service, project, _, profile, access = companion
+    monkeypatch.setattr("superqode.local.inventory.list_ollama_models", lambda: [])
+    _add_route(
+        monkeypatch,
+        {
+            "id": "connection:antigravity",
+            "name": "Antigravity CLI",
+            "desktop_kind": "connection",
+            "runtime": "antigravity-cli",
+            "subscription_vendor": "antigravity",
+            "available": True,
+        },
+    )
+    shared = access.handle(
+        "remote.profiles.save",
+        {
+            "project": project["id"],
+            "name": profile["name"],
+            "harness": "connection:antigravity",
+            "provider": "agent",
+            "model": "",
+            "local_only": False,
+        },
+    )
+    _, device = pair(access, shared)
+    with pytest.raises(ValueError, match="Choose a model"):
+        access.rpc(
+            device,
+            "project.connection",
+            {"project": project["id"], "harness": "core", "provider": "agent", "model": ""},
+            "needs-model",
+        )
+    with pytest.raises(ValueError, match="Choose a model"):
+        access.rpc(
+            device,
+            "project.connection",
+            {
+                "project": project["id"],
+                "harness": "core",
+                "provider": "openai",
+                "model": "phone-invented-model",
+            },
+            "invented-model",
+        )
+    service.dispatch("settings.set", {"key": "provider", "value": "ollama"})
+    service.dispatch("settings.set", {"key": "model", "value": "fixture"})
+    listed = access.rpc(device, "project.models", {"project": project["id"]})
+    assert any(row["provider"] == "ollama" and row["model"] == "fixture" for row in listed)
+    assert all("key" not in row and "credential" not in row for row in listed)
+    switched = access.rpc(
+        device,
+        "project.connection",
+        {"project": project["id"], "harness": "core", "provider": "ollama", "model": "fixture"},
+        "use-connected-model",
+    )
+    assert switched["harness"] == "core"
+    assert switched["provider"] == "ollama"
+    assert switched["model"] == "fixture"
+
+
 def test_phone_connection_list_follows_the_mac_connect_ladder():
     from superqode.desktop_service.remote_access import connection_choice, order_connection_choices
 
@@ -709,6 +965,7 @@ def test_phone_connection_list_follows_the_mac_connect_ladder():
         "desktop_kind",
         "icon_key",
         "description",
+        "available",
     }
     assert "command" not in antigravity
     assert "extra_env" not in antigravity

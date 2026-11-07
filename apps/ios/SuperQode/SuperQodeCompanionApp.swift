@@ -92,7 +92,6 @@ struct ProjectsScreen: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         VStack(alignment: .leading, spacing: 8) {
-          Text("Private companion preview").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
           Text("The harness layer for coding agents")
             .font(.system(.title, design: .rounded, weight: .bold))
           Text("Your Mac. Your models. Your harnesses.")
@@ -159,10 +158,11 @@ struct ProjectsScreen: View {
         Image(systemName: "folder.fill").font(.title2).foregroundStyle(CompanionTheme.accent)
         Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
       }
-      Text(project.text("name")).font(.title3.bold()).foregroundStyle(.primary)
+      Text(project.text("name")).font(.title3.bold()).foregroundStyle(.primary).lineLimit(2)
       let profiles = store.profiles.filter { $0.text("project") == project.id }
-      Text("\(profiles.count) shared connection\(profiles.count == 1 ? "" : "s")").font(.subheadline).foregroundStyle(.secondary)
-      if let profile = profiles.first { HarnessBadge(name: profile.text("name")) }
+      if let profile = profiles.first {
+        Text(companionConnectionTitle(profile)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+      }
     }
   }
   private func refreshDraftCount() async {

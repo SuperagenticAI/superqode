@@ -17,6 +17,7 @@ from .remote_project import (
 
 READS = {
     "project.connections": {"project"},
+    "project.models": {"project"},
     "threads.list": {"project", "query", "view", "limit", "cursor"},
     "threads.get": {"project", "id"},
     "jobs.get": {"id", "after"},
@@ -187,7 +188,10 @@ def dispatch(access, device, method, params, key):
     job = None
     profile = None
     if "profile" in request:
-        profile = next((p for p in profiles if p["id"] == request.pop("profile")), None)
+        # Pop once. Doing it inside the scan removes the id on the first miss,
+        # so every shared project after the first raises KeyError.
+        chosen = request.pop("profile")
+        profile = next((p for p in profiles if p["id"] == chosen), None)
         if not profile:
             raise PermissionError("This connection was removed or is not shared with this device")
         request["project"] = profile["project"]
@@ -195,6 +199,8 @@ def dispatch(access, device, method, params, key):
         raise PermissionError("This project is not shared with this device")
     if method == "project.connections":
         return access.phone_connection_choices(device, request["project"])
+    if method == "project.models":
+        return access.model_choices(request["project"])
     if (
         method
         in {

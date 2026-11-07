@@ -10,7 +10,7 @@ struct ComposeTaskScreen: View {
   @State private var draft: LocalDraft
   @State private var submitting = false
   @State private var issue = ""
-  @State private var saved = false
+  @State private var macRefused = false
   @State private var submitted = false
   @State private var startedRun: OpenedRun?
   @State private var discard = false
@@ -21,6 +21,9 @@ struct ComposeTaskScreen: View {
   @State private var harnessChoice = ""
   @State private var choosingHarness = false
   @State private var showHarnesses = false
+  @State private var showModels = false
+  @State private var modelChoices: [RemoteRecord] = []
+  @State private var pendingHarness: RemoteRecord?
   @FocusState private var editing: Bool
   init(project: String, parent: String? = nil, restored: LocalDraft? = nil, enqueue: Bool = false) {
     self.project = project
@@ -45,64 +48,82 @@ struct ComposeTaskScreen: View {
   }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-          HStack {
-            Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close")
-            Spacer()
-            if saved { Label("Saved on iPhone", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary) }
-          }
-          ConnectionStatus()
-          if !store.reachable { Button("Try again") { Task { await store.refresh() } } }
-          if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
-          connectionCard
-          DisclosureGroup("Reference files and images · \((draft.contextFiles ?? []).count + (draft.images ?? []).count)", isExpanded: $showingAttachments) {
-            contextCard
-            MobileImageAttachments(draft: $draft, frozen: frozen || submitting)
-          }.font(.subheadline)
-          if submitted {
-            Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-          } else if frozen {
-            if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
-            pendingRequestCard
-          } else {
-            if !store.permissions.contains("tasks") { Text("Allow coding tasks when pairing this phone on the Mac to send feedback or start work.").font(.caption).foregroundStyle(CompanionTheme.warning) }
-            Text(store.isPreview ? "Pair your own Mac to send a task. Explore mode does not execute requests or save drafts." : "Your Mac runs the task. Queued tasks run when their queue is started. You can return to the same recorded work later.")
-              .font(.caption).foregroundStyle(.secondary)
-            promptDock
-          }
-        }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
-    }
-    .scrollDismissesKeyboard(.interactively)
-    .background(CompanionTheme.background).navigationTitle(draft.enqueue == true ? "Queue a task" : parent == nil ? "New thread" : "Continue conversation")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = false } }
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Button("Close") { dismiss() }.disabled(submitting).accessibilityIdentifier("composer.close")
+        Spacer()
       }
+      ConnectionStatus()
+      if !store.reachable { Button("Try again") { Task { await store.refresh() } } }
+      if wrongMac { Text("This draft belongs to another Mac. Pair that Mac to submit it.").foregroundStyle(CompanionTheme.warning) }
+      if submitted {
+        Label("Your task was accepted by the Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+      } else if frozen {
+        if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
+        pendingRequestCard
+      } else {
+        connectionCard
+        DisclosureGroup("Reference files and images · \((draft.contextFiles ?? []).count + (draft.images ?? []).count)", isExpanded: $showingAttachments) {
+          contextCard
+          MobileImageAttachments(draft: $draft, frozen: frozen || submitting)
+        }.font(.subheadline)
+        promptField
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .layoutPriority(1)
+        if !store.permissions.contains("tasks") {
+          Text("Allow coding tasks when pairing this phone on the Mac to send work.")
+            .font(.caption).foregroundStyle(CompanionTheme.warning)
+        }
+        if !issue.isEmpty {
+          Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(CompanionTheme.warning).textSelection(.enabled)
+        }
+      }
+    }
+    .padding(.horizontal, 16)
+    .padding(.top, 4)
+    .frame(maxWidth: 760)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background(CompanionTheme.background)
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if !frozen && !submitted { sendBar }
+    }
+    .navigationTitle(workspaceName.isEmpty ? (draft.enqueue == true ? "Queue a task" : parent == nil ? "New thread" : "Continue conversation") : workspaceName)
+      .navigationBarTitleDisplayMode(.inline)
       .interactiveDismissDisabled(submitting)
       .sheet(isPresented: $showHarnesses) { harnessSheet }
+      .sheet(isPresented: $showModels) {
+        MacModelChoiceSheet(choices: modelChoices) { model in
+          let harness = pendingHarness
+          showModels = false
+          guard let harness else { return }
+          Task { await commitHarness(harness, model: model) }
+        }
+      }
       .sheet(isPresented: $showFiles) { NavigationStack { ContextFilesScreen(profile: draft.profile, initial: draft.contextFiles ?? []) { draft.contextFiles = $0 } } }
       .sheet(isPresented: $showContext) { NavigationStack { ContextPreviewScreen(params: ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode), "context_files": .array((draft.contextFiles ?? []).map(JSONValue.string))]) } }
       .task {
-        // A new thread stays on "Choose a connection" until the harness is picked.
-        if draft.profile.isEmpty, parent != nil {
+        // A follow-up keeps the conversation's connection. A new thread uses the
+        // one connection already chosen with the workspace. Preview stays blank.
+        if draft.profile.isEmpty, parent != nil || (!store.isPreview && profiles.count == 1) {
           draft.profile = profiles.first?.id ?? ""
         }
         await loadConnections()
       }
-      .navigationDestination(item: $startedRun) { JobScreen(identity: $0.id).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }
+      .onChange(of: profiles.map(\.id)) { _, _ in
+        guard draft.profile.isEmpty, !store.isPreview, profiles.count == 1 else { return }
+        draft.profile = profiles[0].id
+      }
+      .navigationDestination(item: $startedRun) { JobScreen(identity: $0.id) }
       .task {
         if draft.origin.isEmpty { draft.origin = store.address }
       }
       .task(id: draft) {
         guard !submitted, !submitting, !store.isPreview else { return }
-        saved = false
         do {
           try await Task.sleep(for: .milliseconds(350))
           try Task.checkCancellation()
           guard !submitted, !submitting else { return }
           try await store.drafts.save(draft)
-          saved = !draft.prompt.isEmpty
         } catch is CancellationError { }
         catch { issue = "Draft could not be saved: " + error.localizedDescription }
       }
@@ -117,72 +138,90 @@ struct ComposeTaskScreen: View {
       } message: { Text("This removes the iPhone draft. It does not cancel a task the Mac may already have accepted. Check Activity before starting another.") }
   }
 
-  private var promptDock: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text(draft.enqueue == true ? "Task" : "Message").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-        Spacer()
-        Text("\(draft.prompt.count.formatted()) / 32,000").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-        if !draft.prompt.isEmpty { Button("Copy") { PrivateClipboard.copy(draft.prompt) }.font(.caption2) }
+  private var promptField: some View {
+    ZStack(alignment: .topLeading) {
+      if draft.prompt.isEmpty {
+        Text("Describe the change")
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 8)
+          .allowsHitTesting(false)
       }
-      if !issue.isEmpty {
-        Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(CompanionTheme.warning).textSelection(.enabled)
-      }
-      HStack(alignment: .bottom, spacing: 8) {
-        TextEditor(text: $draft.prompt)
-          .frame(minHeight: 88)
-          .scrollContentBackground(.hidden)
-          .focused($editing)
-          .disabled(frozen || submitting)
-          .accessibilityLabel("Task prompt")
-          .accessibilityIdentifier("composer.prompt")
-          .padding(.horizontal, 10)
-          .padding(.vertical, 6)
-          .background(CompanionTheme.background, in: RoundedRectangle(cornerRadius: 14))
-        Button {
-          editing = false
-          UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-          Task { await submit() }
-        } label: {
-          Image(systemName: draft.enqueue == true ? "plus.circle.fill" : "arrow.up.circle.fill")
-            .font(.system(size: 32))
-            .frame(width: 36, height: 36)
-            .foregroundStyle(canSend ? CompanionTheme.accent : Color.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("composer.send")
-        .accessibilityLabel(draft.enqueue == true ? "Add to queue" : "Send")
-        .disabled(!canSend)
-      }
+      TextEditor(text: $draft.prompt)
+        .font(.body)
+        .scrollContentBackground(.hidden)
+        .focused($editing)
+        .disabled(frozen || submitting)
+        .accessibilityLabel("Task prompt")
+        .accessibilityIdentifier("composer.prompt")
     }
-    .padding(.horizontal, 12)
-    .padding(.top, 8)
-    .padding(.bottom, 6)
-    .background(.bar)
+    .padding(12)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 16))
+    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.primary.opacity(0.12)))
   }
 
+  private var sendBar: some View {
+    VStack(spacing: 6) {
+      if draft.prompt.count > 28_000 {
+        Text("\(draft.prompt.count.formatted()) / 32,000")
+          .font(.caption2.monospacedDigit())
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .trailing)
+      }
+      Button {
+        editing = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        Task { await submit() }
+      } label: {
+        Label(draft.enqueue == true ? "Add to queue" : "Send", systemImage: "arrow.up")
+      }
+      .buttonStyle(CompanionPrimaryButton())
+      .accessibilityIdentifier("composer.send")
+      .accessibilityLabel(draft.enqueue == true ? "Add to queue" : "Send")
+      .disabled(!canSend || submitting)
+    }
+    .padding(.horizontal, 16)
+    .padding(.top, 8)
+    .padding(.bottom, 8)
+    .background(CompanionTheme.background)
+  }
+
+  private var workspaceName: String {
+    store.projects.first { $0.id == project }?.text("name") ?? ""
+  }
+  /// The workspace was already chosen. Show its folder name, not the short share name.
   private var connectionCard: some View {
-    CompanionCard {
-      HStack {
-        SuperQodeMark(size: 26)
-        Text("Harness").font(.headline)
+    VStack(alignment: .leading, spacing: 10) {
+      if !store.isPreview, profiles.count == 1, let only = profiles.first, draft.profile == only.id {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(workspaceName.isEmpty ? only.text("name") : workspaceName)
+            .font(.headline)
+            .lineLimit(1)
+          Text(companionConnectionTitle(only))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("composer.connection")
+        .accessibilityLabel(workspaceName.isEmpty ? only.text("name") : workspaceName)
+      } else {
+        Picker("Harness connection", selection: $draft.profile) {
+          Text("Choose a connection").tag("")
+          ForEach(profiles) { Text($0.text("name")).tag($0.id) }
+        }
+        .disabled(frozen || submitting)
+        .accessibilityIdentifier("composer.connection")
+        .accessibilityLabel(draft.profile.isEmpty ? "Choose a connection" : "Harness connection")
       }
-      if parent == nil {
-        Text("This starts a separate thread. Pick the harness first.").font(.caption).foregroundStyle(.secondary)
-      }
-      Picker("Harness connection", selection: $draft.profile) {
-        Text("Choose a connection").tag("")
-        ForEach(profiles) { Text($0.text("name")).tag($0.id) }
-      }
-      .disabled(frozen || submitting)
-      .accessibilityIdentifier("composer.connection")
-      .accessibilityLabel(draft.profile.isEmpty ? "Choose a connection" : "Harness connection")
       if !connections.isEmpty {
         Button { showHarnesses = true } label: {
           HStack(spacing: 10) {
             if let selected = selectedHarness {
               HarnessMark(name: selected.text("name"), iconKey: selected.text("icon_key"), size: 22)
-              Text(selected.text("name")).lineLimit(1)
+              Text(harnessButtonTitle(selected)).lineLimit(1)
             } else {
               Text("Choose a harness")
             }
@@ -194,16 +233,6 @@ struct ComposeTaskScreen: View {
         .disabled(frozen || submitting || choosingHarness)
         .accessibilityIdentifier("composer.harness")
         .accessibilityLabel("Harness")
-        Text("Only harnesses your Mac allows for this project are listed. Subscriptions, connect a model, SuperQode harnesses, then ACP agents and protocols.")
-          .font(.caption).foregroundStyle(.secondary)
-      }
-      if let profile {
-        HarnessBadge(name: profile.text("harness"), iconKey: selectedHarness?.text("icon_key") ?? "")
-        Text(profile.text("permission_note")).font(.caption).foregroundStyle(.secondary)
-        if !profile.flag("local_only") { Label("This connection may use cloud models", systemImage: "cloud").font(.caption).foregroundStyle(.secondary) }
-        if !profile.flag("chat") { Text("Use Code for conversations with this agent. Direct Chat requires a local or API model connection.").font(.caption).foregroundStyle(.secondary) }
-      } else {
-        Text("Choose a harness for this conversation. You can switch it later from the thread.").font(.caption).foregroundStyle(.secondary)
       }
       Picker("Mode", selection: $draft.mode) {
         Text("Code").tag("code")
@@ -230,7 +259,9 @@ struct ComposeTaskScreen: View {
   private var pendingRequestCard: some View {
     CompanionCard {
       Label("Your request is saved", systemImage: "arrow.triangle.2.circlepath").font(.headline)
-      Text("The connection may have dropped after the Mac accepted it. Check its status first. A retry uses the same request ID.")
+      Text(macRefused
+        ? "The Mac answered with an error, so this was not a dropped connection. Check its status, then retry with the same request ID."
+        : "The connection may have dropped after the Mac accepted it. Check its status first. A retry uses the same request ID.")
         .font(.subheadline).foregroundStyle(.secondary)
       Button("Check request status") { Task { await reconcile() } }
         .buttonStyle(CompanionPrimaryButton())
@@ -264,7 +295,7 @@ struct ComposeTaskScreen: View {
                   .contentShape(Rectangle())
               }
               .buttonStyle(.plain)
-              .disabled(choosingHarness)
+              .disabled(choosingHarness || !HarnessChoiceGroup.readyOnMac(choice))
             }
           } header: {
             Text(section.title)
@@ -291,17 +322,62 @@ struct ComposeTaskScreen: View {
     } catch { }
   }
 
+  private func harnessButtonTitle(_ selected: RemoteRecord) -> String {
+    let model = profile?.text("model") ?? ""
+    if HarnessChoiceGroup.groupID(selected) == "harness", !model.isEmpty, profile?.text("provider") != "agent" {
+      return selected.text("name") + " · " + model
+    }
+    return selected.text("name")
+  }
+
   private func selectHarness(_ choice: String) async {
-    guard let api = store.api, let selected = connections.first(where: { $0.id == choice }), !choosingHarness else { return }
+    guard let selected = connections.first(where: { $0.id == choice }), !choosingHarness else { return }
+    guard HarnessChoiceGroup.readyOnMac(selected) else {
+      issue = "Set up this harness or connection on the Mac first"
+      return
+    }
+    if HarnessChoiceGroup.needsConnectedModel(selected, profile: profile) {
+      await presentModels(for: selected)
+      return
+    }
+    await commitHarness(selected, model: nil)
+  }
+
+  private func presentModels(for choice: RemoteRecord) async {
+    guard let api = store.api, !choosingHarness else { return }
     choosingHarness = true
     defer { choosingHarness = false }
     do {
+      let models = try await api.rpc("project.models", ["project": .string(project)]).array.map { RemoteRecord(raw: $0.object) }
+      if models.isEmpty {
+        issue = "Connect a model on the Mac first. SuperQode harnesses use a model already set up there."
+        return
+      }
+      if models.count == 1 {
+        choosingHarness = false
+        await commitHarness(choice, model: models[0])
+        return
+      }
+      pendingHarness = choice
+      modelChoices = models
+      showModels = true
+    } catch { issue = error.localizedDescription }
+  }
+
+  private func commitHarness(_ choice: RemoteRecord, model: RemoteRecord?) async {
+    guard let api = store.api, !choosingHarness else { return }
+    choosingHarness = true
+    defer { choosingHarness = false }
+    do {
+      let provider = model?.text("provider") ?? choice.text("provider", "agent")
+      let modelID = model?.text("model") ?? choice.text("model")
       _ = try await api.rpc("project.connection", [
-        "project": .string(project), "harness": .string(selected.id),
-        "provider": .string(selected.text("provider", "agent")), "model": .string(selected.text("model")),
+        "project": .string(project), "harness": .string(choice.id),
+        "provider": .string(provider), "model": .string(modelID),
       ], key: "connection-" + UUID().uuidString)
       await store.refresh()
       draft.profile = profiles.first?.id ?? draft.profile
+      harnessChoice = choice.id
     } catch { issue = error.localizedDescription }
   }
 
@@ -321,7 +397,7 @@ struct ComposeTaskScreen: View {
     guard let api = store.api, store.canMutate, store.permissions.contains("tasks"), !wrongMac, !submitting, !draft.isExperiment, draft.fileEdit == nil else { return }
     guard draft.enqueue != true || store.permissions.contains("queue") else { return }
     guard draft.attempt != nil || supportedMode else { return }
-    submitting = true; issue = ""
+    submitting = true; issue = ""; macRefused = false
     defer { submitting = false }
     if draft.attempt == nil {
       var params: [String: JSONValue] = ["profile": .string(draft.profile), "prompt": .string(draft.prompt), "interaction_mode": .string(draft.mode)]
@@ -347,11 +423,14 @@ struct ComposeTaskScreen: View {
       let result = try await api.rpc(attempt.method ?? "tasks.start", attempt.params, key: attempt.key).object
       guard !result.text("id").isEmpty else { throw CompanionError("The Mac returned no run ID. Check the saved request status before retrying.") }
       await open(result.text("id"))
+    } catch let error as CompanionError {
+      issue = error.localizedDescription
+      macRefused = !error.transport && error.status != 0
     } catch { issue = error.localizedDescription }
   }
   private func reconcile() async {
     guard let api = store.api, let attempt = draft.attempt, !submitting else { return }
-    submitting = true; issue = ""
+    submitting = true; issue = ""; macRefused = false
     defer { submitting = false }
     do {
       let status = try await api.rpc("companion.request_status", ["key": .string(attempt.key)]).object
@@ -360,6 +439,9 @@ struct ComposeTaskScreen: View {
       else { issue = status.text("state") == "not_recorded"
         ? "The Mac has not recorded this request. Retrying with its original ID is safe."
         : "The outcome is still uncertain. Check Activity or inspect the Mac before starting another task." }
+    } catch let error as CompanionError {
+      issue = error.localizedDescription
+      macRefused = !error.transport && error.status != 0
     } catch { issue = error.localizedDescription }
   }
 }
