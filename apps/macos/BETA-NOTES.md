@@ -167,16 +167,14 @@ the current session. Repeated checks use a restricted read/edit profile and
 do not certify a complete harness. External history imports reviewed text,
 not live sessions. Background execution requires opt-in and cannot survive
 engine or Mac loss. Local compatibility checks are not coding-quality scores.
-The Pro Settings section remains an illustrative preview.
+The Pro Settings section provides a link to the SuperQode website.
 
 ## Version 0.2.1
 
-Version 0.2.1 (build 15) adds a SuperQode Pro preview in Settings. It describes
-the planned release-confidence workflow, includes an explicitly fictional
-hold-for-review example and links to the design-partner programme. Commercial
-verification, record inspection, licensing and team approval controls are not
-available in this build. The welcome tagline is now "The harness layer for
-coding agents". The bundled Python engine remains 2.30.0.
+Version 0.2.1 (build 15) introduced the SuperQode Pro section in Settings.
+The section now contains only a link to the SuperQode website, with no
+commercial workflows or release-decision examples. The welcome tagline is
+"The harness layer for coding agents". This version bundled Python engine 2.30.0.
 
 Opening a project from Welcome now enters its workspace even if that project's
 saved destination was Welcome. Saved tabs and drafts are preserved.

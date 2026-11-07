@@ -259,4 +259,4 @@ The regression suite kills a real process after 70 of 100 case commits. A fresh 
 
 Deferred-catalog fixtures cover 0, 10, 100, and 1,000 unused tools and verify constant initial schema payloads. Benchmarks use fresh workspace copies and deterministic expected text or checks; a successful CLI exit without a correctness criterion is ungraded. Scorecards include all reported attempt costs per solved task and retain unknown spend explicitly.
 
-A paid, pinned Pi-versus-SuperQode comparison has not been run for these changes. Composition remains opt-in and evaluation recovery remains a pilot until matched task success, cost, latency, and recovery evidence justify promotion.
+Composition remains opt-in and evaluation recovery remains a pilot. Promotion requires measured task success, cost, latency, and recovery evidence; the included fixtures alone do not establish live-model performance.

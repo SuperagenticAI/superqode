@@ -114,6 +114,6 @@ Protected graders are checked before and after grading. These checks validate
 report consistency; revision declarations still need independent verification,
 and ordinary subprocess workspaces do not isolate global settings or credentials.
 
-A live Pi comparison is deferred. The included regression fixtures test the
-runner and scorecard without paid model requests; they do not establish a
-competitive performance advantage.
+The included regression fixtures test the runner and scorecard without paid
+model requests. They validate reporting behavior, not live-model coding quality,
+cost, or latency.

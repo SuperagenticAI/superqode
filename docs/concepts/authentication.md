@@ -329,23 +329,17 @@ uv tool install "superqode[web]"
 
 ---
 
-## Comparison with Other Tools
+## Authentication boundaries
 
-| Feature | SuperQode | OpenCode | Pi | FastAgent |
-|---------|-----------|----------|----|-----------|
-| BYOK env vars | Yes | Yes | Yes | Yes |
-| Local credential file | Yes | Yes | Yes | Partial |
-| Secure local file permissions | 0600 | 0600 | 0600-style local storage | Keyring for OAuth |
-| Delegated agent auth | Yes | No | No | MCP/request scoped auth |
-| Optional web/server protection | Tokened local URL and remote opt-in | Server password option | Local provider auth focus | Request bearer token focus |
-| Product account required for local coding | No | No | No | No |
+SuperQode supports several authentication paths:
 
-The best pattern for SuperQode is a hybrid:
+- provider credentials supplied through environment variables or local storage
+- delegated authentication owned by a connected agent
+- request-scoped bearer tokens for MCP and server integrations
+- token-protected local web access, with remote serving explicitly enabled
 
-- keep OpenCode/Pi-style local provider auth for individual users
-- keep FastAgent-style request-scoped bearer tokens for MCP and server integrations
-- add SuperQode GitHub/email identity only for hosted features
-- make remote web serving an explicit opt-in, not a side effect of changing `--host`
+Local coding does not require a SuperQode product account. Choose the
+credential scope required by the connection and keep remote access opt-in.
 
 ---
 

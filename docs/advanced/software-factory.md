@@ -260,22 +260,17 @@ The current factory can:
 
 The current boundary is equally important:
 
-- SuperQode does not provide Omnigent-style synchronized web, mobile, and desktop collaboration surfaces. It does provide focused Telegram/Slack/Discord remote control, a local companion API, and an authenticated Enterprise browser TUI.
+- SuperQode provides focused Telegram/Slack/Discord remote control and a local companion API. The open-source package does not provide synchronized multi-client collaboration or hosted team administration.
 - Contextual policy is file-backed and terminal-operated; SuperQode does not provide a hosted organization identity or policy administration service.
 - Usage budgets are enforced at task boundaries, not streamed during one provider call; an in-flight call can finish above its limit, but its output cannot enter the integration tree.
 - The credential broker currently injects named bindings for `fetch` and `web_fetch`; arbitrary third-party native-runtime HTTP clients require their own broker adapter.
 - The default WorkOrder store is local SQLite; operating a shared filesystem and process supervisor remains the deployer's responsibility.
 
-These boundaries keep the product honest: SuperQode is already an execution, evidence, delivery, and improvement system for terminal builders, but it does not claim feature parity with a managed collaboration platform.
+These boundaries describe the supported execution, evidence, delivery, and improvement workflows without implying hosted collaboration capabilities.
 
-## Relationship to Omnigent
+## Repository-owned workflows
 
-Omnigent and SuperQode overlap directly in multi-harness operation, portable agent definitions, terminal execution, sessions, tools, models, policy, and sandbox concerns.
-
-Their centers of gravity differ:
-
-- Omnigent centers the persistent, shareable live session across terminal, web, mobile, and desktop interfaces.
-- SuperQode centers the repository-owned harness and durable WorkOrder: build it, run it through isolated workers, prove the result, deliver it safely, and improve the harness from evidence.
+SuperQode centers the repository-owned harness and durable WorkOrder. Define the execution contract, run work through isolated workers, inspect the resulting evidence, and review an exact candidate before integration. Evaluation and guarded optimization can then inform later harness revisions.
 
 Import compatible Omnigent agent definitions into a SuperQode HarnessSpec. See
 [Omnigent Compatibility](omnigent-compat.md) for supported fields and import instructions.
