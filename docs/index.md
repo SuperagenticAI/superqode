@@ -238,21 +238,17 @@ SuperQode makes the harness a repository-owned engineering artifact, connects ex
 
 ## Where SuperQode fits
 
-Two ownership boundaries distinguish coding-agent products: control of the
-model and control of the harness. The harness is the complete agent loop,
-including prompts, context strategy, tools, memory, permissions, workflow, and
-verification behavior.
+SuperQode stores the coding-agent contract in a repository-owned HarnessSpec.
+That contract describes prompts, context strategy, tools, memory, permissions,
+workflow, and verification behavior.
 
-| Ecosystem pattern | Model choice | Harness ownership | Typical examples | Practical result |
-| --- | --- | --- | --- | --- |
-| **Closed model, closed harness** | Primarily the vendor's models | The vendor owns and evolves the agent loop | Vendor coding agents such as [Claude Code with Claude](https://docs.anthropic.com/en/docs/claude-code/getting-started) | The vendor manages model access and agent-loop changes as one product |
-| **Open or selectable models, closed harness** | Several providers or model families may be available | The product vendor still controls the complete loop | Multi-model products such as [Cursor](https://docs.cursor.com/models/) | The team can select models, while the complete harness remains product-controlled |
-| **Open models, open harness** | Hosted, open-weight, or local models | The agent implementation is open source and configurable | [Cline](https://github.com/cline/cline), [OpenCode](https://github.com/anomalyco/opencode), and [Aider](https://aider.chat/docs/llms.html) | The source and model routes are inspectable; execution generally follows the framework's established loop |
-
-These categories describe control boundaries and can overlap. SuperQode
-classifies an integration by whether the complete working contract can be
-stored in a repository, executed across agents and models, evaluated
-independently, and promoted as a reviewed revision.
+| Control | SuperQode workflow |
+| --- | --- |
+| Model routes | Configure supported hosted, open-weight, or local model routes |
+| Harness definition | Store the execution contract alongside the code and review changes as revisions |
+| Agent connections | Connect supported agents through their native runtimes or ACP |
+| Evaluation | Record task results, usage, failures, and missing evidence |
+| Promotion | Review an exact candidate before adopting a harness revision |
 
 ### Coding agents, static harnesses, meta-harnesses, and SuperQode
 
