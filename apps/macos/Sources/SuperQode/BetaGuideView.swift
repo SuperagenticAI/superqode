@@ -38,7 +38,7 @@ struct BetaGuideView: View {
           )
           guidance(
             "Beta limitations",
-            "Connection support depends on the installed agent, its advertised capabilities and your account. Experimental routes and advanced workflows may fail. Full terminal feature parity, remote access and Intel Macs are not included. See the download page for the routes tested with real accounts in this release."
+            "Connection support depends on the installed agent, its advertised capabilities and your account. Experimental routes and advanced workflows may fail. Full terminal feature parity and Intel Macs are not included. An iPhone can open shared projects on this Mac through your own Tailscale account. See the download page for the routes tested with real accounts in this release."
           )
           guidance(
             "Updates and feedback",

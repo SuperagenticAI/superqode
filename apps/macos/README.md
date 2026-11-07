@@ -304,7 +304,7 @@ Agents and terminal commands run with your Mac user's access; the app is not an 
 
 ## Beta notes and feedback
 
-Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon; Intel Macs and remote access to your Mac are not included. Updates are manual: quit SuperQode and replace it with a newer download.
+Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon. Intel Macs are not included. Private iPhone access uses your own Tailscale account and stays on this Mac. Updates are manual: quit SuperQode and replace it with a newer download.
 
 Read the [beta notes](BETA-NOTES.md), [verify the checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256), or [report an issue](https://github.com/SuperagenticAI/superqode/issues). Include app, macOS and agent versions and remove credentials and private project content from reports.
 

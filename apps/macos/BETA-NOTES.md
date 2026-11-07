@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.5
+# SuperQode for macOS public beta 0.3.6
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -11,10 +11,31 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 ## Privacy, permissions and costs
 
 - The app bundles its Python engine and communicates with it locally over private pipes. It does not require a SuperQode account or send history to a SuperQode cloud service.
+- A paired iPhone reaches this Mac through your own Tailscale account. Projects, keys and history stay on the Mac. Cloud models still receive prompts from the providers you configured.
 - Configured providers and remote agents receive the requests and context sent to them. Their privacy terms and billing apply. Evaluation and optimization can make multiple paid requests; review budgets before starting them.
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.6
+
+Version 0.3.6 (build 22) bundles Python engine 2.31.4. Private remote access
+lets a paired iPhone open projects you share from this Mac. The phone uses your
+own Tailscale account. SuperQode does not relay that connection, and public
+Funnel stays off.
+
+Share each project once. Show on iPhone chooses which paired phone can open
+that project. A project shared later does not require pairing again. Each
+project has one connection. Harness and model changes stay with that project,
+including a change made on the phone.
+
+Local inference only starts off. Off means the phone uses the harness and model
+already chosen on this Mac. On means the phone may use only a model running on
+this Mac. Connect this Mac starts Tailscale when it is already installed and
+signed in, then publishes the private route.
+
+A run started on the iPhone can open in the Mac discussion for the project that
+is already open. The Dock icon is the black full-bleed SuperQode mark.
 
 ## Version 0.3.5
 
@@ -236,7 +257,7 @@ unsaved file edits offers conflict handling when files have changed on disk.
 
 Connection availability depends on the installed agent, its version, advertised capabilities and your account. Integrations and advanced workflows are experimental during the beta and may fail. A catalog entry does not guarantee compatibility with every account or agent version.
 
-Full terminal parity is not included. Dedicated session fork/tree controls, global approval-mode switching, bespoke resource/optimizer dashboards and remote access to your Mac are not part of this beta. Some advanced workflows use typed command forms. Resume, model configuration and cancellation depend on the selected runtime's capabilities.
+Full terminal parity is not included. Dedicated session fork/tree controls, global approval-mode switching and bespoke resource/optimizer dashboards are not part of this beta. Private iPhone access uses your own Tailscale account and stays on this Mac. Public tunnels are not used. Some advanced workflows use typed command forms. Resume, model configuration and cancellation depend on the selected runtime's capabilities.
 
 ## Update, report and recover
 
