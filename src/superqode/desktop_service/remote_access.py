@@ -206,14 +206,17 @@ class RemoteAccess:
     def status(self):
         with self.lock:
             self._expire()
-            for profile in self.config.get("profiles", []):
-                self._effective_allowed(profile)
             return {
                 "running": self.server is not None and self.server.running,
                 "enabled": self.config.get("enabled", False),
                 "private_url": self.config.get("private_url", ""),
                 "port": PORT,
-                "profiles": self.config.get("profiles", []),
+                # A status read stays cheap and never saves. Only a list saved from
+                # the Mac toggles is narrow; every other share follows Connect.
+                "profiles": [
+                    p if p.get("allowed_mode") == "custom" else {**p, "allowed_mode": "all"}
+                    for p in self.config.get("profiles", [])
+                ],
                 "issue": self.issue,
                 "pairings": [
                     {

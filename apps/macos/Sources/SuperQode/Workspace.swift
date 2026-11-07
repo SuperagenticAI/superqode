@@ -733,8 +733,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           guard !Task.isCancelled else { return }
           if ContinuousClock.now >= nextJobs {
             await self.refreshJobs()
-            // Apply a phone harness even if remote access started after launch.
-            if !self.projectID.isEmpty { await self.applyPhoneConnection() }
+            // No phone checks at all while private remote access is off. The flag is
+            // set at launch and whenever Remote Access settings start or stop it.
+            if self.remoteAccessRunning && !self.projectID.isEmpty { await self.applyPhoneConnection() }
             nextJobs = ContinuousClock.now.advanced(by: self.anyActive ? .seconds(1) : .seconds(3))
           }
           if self.activityLoadError.isEmpty && (self.active || self.hasMoreRunEvents || self.eventStreamOpen) {
@@ -1005,7 +1006,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
 
   private func rememberCurrentRoute() {
-    guard !projectID.isEmpty, !harness.isEmpty else { return }
+    // Remember the route even before a project opens; the key matches the restore lookup.
+    guard !harness.isEmpty else { return }
     let key = "nativeRouteChoices:" + projectID
     var choices = preferences.dictionary(forKey: key) ?? [:]
     choices[harness] = [
