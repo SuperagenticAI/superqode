@@ -161,14 +161,10 @@ if CommandLine.arguments.count > 2 && CommandLine.arguments[1] == "ios" {
   }
   let catalog = root.appendingPathComponent("SuperQode/Assets.xcassets/AppIcon.appiconset")
   let standardURL = catalog.appendingPathComponent("AppIcon.png")
-  let darkURL = catalog.appendingPathComponent("AppIcon-Dark.png")
   let tintedURL = catalog.appendingPathComponent("AppIcon-Tinted.png")
   SuperQodeIcon.write(
     SuperQodeIcon.render(logo: phoneLogo, pixels: 1024, appearance: .standard), to: standardURL)
-  if FileManager.default.fileExists(atPath: darkURL.path) {
-    try FileManager.default.removeItem(at: darkURL)
-  }
-  try FileManager.default.copyItem(at: standardURL, to: darkURL)
+  // AppIcon-Dark.png is a committed artwork variant on a deep plum field. It is not regenerated here.
   SuperQodeIcon.write(
     SuperQodeIcon.render(logo: phoneLogo, pixels: 1024, appearance: .tinted), to: tintedURL)
   exit(0)
@@ -256,7 +252,8 @@ let dock = submission.appendingPathComponent("SuperQode-Dock.png")
 if FileManager.default.fileExists(atPath: dock.path) { try FileManager.default.removeItem(at: dock) }
 try FileManager.default.copyItem(at: master, to: dock)
 let phone = root.appendingPathComponent("apps/ios/SuperQode/Assets.xcassets/AppIcon.appiconset")
-for name in ["AppIcon.png", "AppIcon-Dark.png"] {
+// AppIcon-Dark.png is a committed variant on a deep plum field; only the standard icon is copied.
+for name in ["AppIcon.png"] {
   let destination = phone.appendingPathComponent(name)
   if FileManager.default.fileExists(atPath: destination.path) {
     try FileManager.default.removeItem(at: destination)
