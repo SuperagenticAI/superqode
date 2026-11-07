@@ -6,16 +6,21 @@ final class AgentIdentityTests: XCTestCase {
     let openCode = HarnessIdentity(["id": "acp:opencode", "name": "OpenCode", "model": "claude"])
     let sameAgent = HarnessIdentity(["id": "acp:opencode", "name": "Local coding", "model": "qwen"])
     XCTAssertEqual(openCode.assetName, sameAgent.assetName)
-    XCTAssertEqual(openCode.assetName, HarnessIdentity(["id": "opencode-v2"]).assetName)
+    XCTAssertEqual(openCode.assetName, "Agent-opencode")
+    XCTAssertEqual(HarnessIdentity(["id": "opencode-v2"]).assetName, "Agent-opencode-v2")
+    XCTAssertNotEqual(openCode.assetName, HarnessIdentity(["id": "opencode-v2"]).assetName)
     XCTAssertNotEqual(openCode.assetName, HarnessIdentity(["id": "connection:codex", "runtime": "codex-cli"]).assetName)
     XCTAssertNotEqual(openCode.assetName, HarnessIdentity(["id": "core", "model": "opencode"]).assetName)
     XCTAssertTrue(HarnessIdentity.used(in: ["harness": "disconnected"]).isEmpty)
   }
 
   func testOnlyOfficiallyColouredMarksKeepBrandColours() {
-    for id in ["acp:claude", "acp:gemini", "acp:qwen-code", "acp:mistral-vibe", "acp:junie", "acp:cortex-code", "core"] {
+    for id in ["acp:claude", "acp:gemini", "acp:qwen-code", "acp:mistral-vibe", "acp:junie", "acp:cortex-code", "acp:antigravity", "connection:antigravity", "core"] {
       XCTAssertTrue(HarnessIdentity(["id": id]).keepsBrandColours, id)
     }
+    let antigravity = HarnessIdentity(["id": "connection:antigravity", "runtime": "antigravity-cli", "subscription_vendor": "antigravity"])
+    XCTAssertEqual(antigravity.assetName, "Agent-antigravity-acp")
+    XCTAssertTrue(antigravity.keepsBrandColours)
     for id in ["acp:codex", "acp:grok-build", "acp:cursor", "acp:github-copilot-cli", "acp:opencode", "acp:kimi", "acp:custom-research"] {
       XCTAssertFalse(HarnessIdentity(["id": id]).keepsBrandColours, id)
     }
@@ -63,6 +68,7 @@ final class AgentIdentityTests: XCTestCase {
       ("claude-code", "claude-agent-sdk", "Agent-claude-acp"),
       ("droid", "factory", "Agent-factory-droid"),
       ("acp:opencode", "acp", "Agent-opencode"),
+      ("antigravity", "antigravity-cli", "Agent-antigravity-acp"),
     ] {
       XCTAssertEqual(HarnessIdentity(["id": id, "runtime": runtime]).assetName, asset, id)
     }

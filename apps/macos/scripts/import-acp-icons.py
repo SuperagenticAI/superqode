@@ -12,7 +12,7 @@ import sys
 
 from superqode.providers.acp_registry import registry_short_name
 
-from agent_brand_colours import SOURCES as BRAND_SOURCES, coloured
+from agent_brand_colours import PRESERVE_COLOUR_ASSETS, SOURCES as BRAND_SOURCES, coloured
 
 root = Path(__file__).resolve().parents[1]
 source = Path(sys.argv[1])
@@ -22,6 +22,23 @@ for agent in registry["agents"]:
     identity = agent["id"]
     if not re.fullmatch(r"[a-zA-Z0-9._-]+", identity):
         raise ValueError("Invalid agent identity")
+    asset = "Agent-" + identity
+    destination = root / "resources/Assets.xcassets" / (asset + ".imageset")
+    if identity in PRESERVE_COLOUR_ASSETS:
+        colour_file = destination / "icon.png"
+        if not colour_file.exists():
+            raise ValueError("Official colour asset is missing: " + identity)
+        brand.append(asset)
+        assets[identity] = asset
+        assets[registry_short_name(identity)] = asset
+        origins.append(
+            {
+                "id": identity,
+                "url": BRAND_SOURCES[identity][1],
+                "sha256": hashlib.sha256(colour_file.read_bytes()).hexdigest(),
+            }
+        )
+        continue
     icon = source / (identity + ".svg")
     if not icon.exists():
         continue
@@ -30,8 +47,6 @@ for agent in registry["agents"]:
         r"<(script|foreignObject)\b|(?:href|src)=[\"'](?:https?:|//)", content, re.I
     ):
         raise ValueError("Icon must be a self-contained SVG")
-    asset = "Agent-" + identity
-    destination = root / "resources/Assets.xcassets" / (asset + ".imageset")
     destination.mkdir(exist_ok=True)
     # Registry glyphs use CSS currentColor; asset templates supply the native tint.
     glyph = content.replace("currentColor", "#000000")

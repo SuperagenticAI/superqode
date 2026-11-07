@@ -10,6 +10,10 @@ import re
 # Colours come from each owner's own site or brand page, cross-checked with
 # simple-icons where it lists the mark.
 SOURCES = {
+    "antigravity-acp": (
+        "official full-color icon",
+        "https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png",
+    ),
     "claude-acp": ("#D97757", "https://claude.ai (simple-icons Claude, Claude Code)"),
     "cortex-code": ("#29B5E8", "https://www.snowflake.com/brand-guidelines/"),
     "gemini": (
@@ -20,6 +24,10 @@ SOURCES = {
     "mistral-vibe": ("#FFAF01, #FF8204, #FA500F, #E61300, #C4001D", "https://mistral.ai/brand"),
     "qwen-code": ("#6950EF", "https://qwen.ai (simple-icons QWen)"),
 }
+
+# The registry glyph is monochrome. These identities keep a separate official
+# full-colour file in the asset catalog, so a registry import must not replace it.
+PRESERVE_COLOUR_ASSETS = {"antigravity-acp"}
 
 SOLID = {
     "claude-acp": "#D97757",

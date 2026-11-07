@@ -64,6 +64,7 @@ enum BundledAgentIcons {
   ]
   /// Official marks that keep their brand colours instead of a template tint.
   static let brandColoured: Set<String> = [
+    "Agent-antigravity-acp",
     "Agent-claude-acp",
     "Agent-cortex-code",
     "Agent-gemini",

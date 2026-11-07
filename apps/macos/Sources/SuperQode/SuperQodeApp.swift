@@ -259,7 +259,6 @@ struct RootView: View {
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Evaluations", "Optimization":
       ExperimentView(optimize: app.section == "Optimization").id(app.projectID)
-    case "Tools": ToolsView()
     default: EmptyView()
     }
   }
@@ -336,6 +335,13 @@ struct RootView: View {
                   .disabled(app.section != "Models")
                   .allowsHitTesting(app.section == "Models")
                   .accessibilityHidden(app.section != "Models")
+              }
+              if app.navigationState.toolsMounted && !app.projectID.isEmpty {
+                ToolsView(active: app.section == "Tools").id(app.projectID)
+                  .opacity(app.section == "Tools" ? 1 : 0)
+                  .disabled(app.section != "Tools")
+                  .allowsHitTesting(app.section == "Tools")
+                  .accessibilityHidden(app.section != "Tools")
               }
               featureContent
             }.disabled(app.openingProject || app.restoringNavigation).frame(
@@ -554,7 +560,7 @@ struct CodingView: View {
   private var workbenchToolbar: some View {
     HStack(spacing: 12) {
       if !app.selectedJob.isEmpty {
-        if app.active { BrandActivityIndicator(status: string(app.detail, "status")) }
+        if app.active { BrandActivityIndicator(status: app.activityStatus) }
         else {
           ThreadStatusIndicator(status: string(app.detail, "status"))
           Text(ThreadStatusIndicator.title(string(app.detail, "status"))).font(.caption).foregroundStyle(.secondary)
@@ -658,7 +664,8 @@ struct CodingComposer: View {
   private var routeDisplayName: String {
     if app.connectionDisconnected { return "Connect an agent" }
     let name = string(route, "name", app.harness)
-    return app.isManaged ? name : name + " · " + (app.model.isEmpty ? "Choose model" : app.model)
+    if app.model.isEmpty { return app.isManaged ? name : name + " · Choose model" }
+    return name + " · " + app.model
   }
   private var continuesConversation: Bool {
     app.canContinueConversation
@@ -1142,6 +1149,10 @@ struct EventStream: View {
                 Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
                   .foregroundStyle(Color.qAccent)
                 Text(string(request, "prompt")).font(.system(size: 15)).textSelection(.enabled)
+                let route = recordedConnectionLabel(request: request, harnesses: app.harnesses)
+                if !route.isEmpty {
+                  Text(route).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if let continuity = request["_continuity"] as? [String: Any] {
                   Label(string(continuity, "mode") == "handoff" ? "Conversation handed to this agent" : "Agent session resumed",
                     systemImage: "arrow.triangle.branch").font(.caption).foregroundStyle(.secondary)
@@ -1212,9 +1223,9 @@ struct EventStream: View {
       if app.active || !activity.isEmpty {
         Divider()
         VStack(spacing: 6) {
-          if app.active { AgentWorkingCard(status: string(app.detail, "status"), activity: currentAgentActivity(app.events)) }
+          if app.active { AgentWorkingCard(status: app.activityStatus, activity: currentAgentActivity(app.events)) }
           if !activity.isEmpty {
-            AgentActivityView(events: activity, active: app.active && string(app.detail, "status") != "needs_approval")
+            AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")
               .id(app.selectedJob)
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)

@@ -5,7 +5,9 @@ import SwiftUI
 struct ToolsView: View {
   @EnvironmentObject var app: Workspace
   let workflow: String?
-  init(workflow: String? = nil) {
+  var active = true
+  init(workflow: String? = nil, active: Bool = true) {
+    self.active = active
     self.workflow = workflow
     _category = State(initialValue: workflow?.components(separatedBy: " ").first ?? "work")
   }
@@ -122,7 +124,7 @@ struct ToolsView: View {
               }.padding(18)
             }.defaultScrollAnchor(.top).id(selected)
           }
-          if string(app.detail, "kind") == "tool" {
+          if active && string(app.detail, "kind") == "tool" {
             Divider()
             EventStream().frame(minHeight: 180, idealHeight: 260, maxHeight: 360)
           }
@@ -131,12 +133,15 @@ struct ToolsView: View {
     }.centeredDialog(isPresented: $showWorkBoard, title: "WorkOrders") {
       WorkOrderBoardView().environmentObject(app)
     }
-    .padding(26).onChange(of: category) { _, _ in
+    .padding(26).onChange(of: active) { _, visible in
+      if !visible { showWorkBoard = false }
+    }.onChange(of: category) { _, _ in
       selected = ""
       inputs = [:]
       flags = [:]
       failure = ""
-    }.task {
+    }.task(id: app.projectID + "\n" + String(active)) {
+      guard active, catalog.isEmpty else { return }
       do {
         catalog = try await app.engine.call("tools.catalog") as? [[String: Any]] ?? []
         if let workflow, let row = catalog.first(where: { string($0, "id") == workflow }) {

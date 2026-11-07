@@ -1,0 +1,143 @@
+{
+  "summary": "Sample evidence: one regression and one improvement. Candidate held for review.",
+  "heldout_eval": {
+    "live": true,
+    "baseline": "core-baseline",
+    "task_count": 2,
+    "tasks_hash": "sample-only-suite-identity",
+    "variants": [
+      {
+        "harness": "core-baseline",
+        "name": "Core \u00b7 baseline",
+        "passed": 1,
+        "failed": 1,
+        "skipped": 0,
+        "cost_usd": 0.0,
+        "duration_seconds": 1.5,
+        "tasks": [
+          {
+            "id": "queue-reconnect",
+            "split": "held-out",
+            "status": "passed",
+            "reason": "Original request resumed once.",
+            "evaluation": {
+              "status": "passed",
+              "evaluator": "decision",
+              "evidence": {
+                "smoke_only": false
+              }
+            }
+          },
+          {
+            "id": "cancel-routing",
+            "split": "held-out",
+            "status": "failed",
+            "reason": "Cancellation reached the wrong run.",
+            "evaluation": {
+              "status": "failed",
+              "evaluator": "decision",
+              "evidence": {
+                "smoke_only": false
+              }
+            }
+          }
+        ]
+      },
+      {
+        "harness": "core-candidate",
+        "name": "Core \u00b7 candidate",
+        "passed": 1,
+        "failed": 1,
+        "skipped": 0,
+        "duration_seconds": 2.0,
+        "tasks": [
+          {
+            "id": "queue-reconnect",
+            "split": "held-out",
+            "status": "failed",
+            "reason": "A repeated delivery created a second request.",
+            "evaluation": {
+              "status": "failed",
+              "evaluator": "decision",
+              "evidence": {
+                "smoke_only": false
+              }
+            }
+          },
+          {
+            "id": "cancel-routing",
+            "split": "held-out",
+            "status": "passed",
+            "reason": "Cancellation targeted the requested run.",
+            "evaluation": {
+              "status": "passed",
+              "evaluator": "decision",
+              "evidence": {
+                "smoke_only": false
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "adoption_gate": {
+    "accepted": false
+  },
+  "comparison": {
+    "available": true,
+    "baseline": "core-baseline",
+    "scope": "held-out",
+    "tasks_hash": "sample-only-suite-identity",
+    "candidates": [
+      {
+        "index": 1,
+        "name": "core-candidate",
+        "state": "regressed",
+        "counts": {
+          "regression": 1,
+          "improvement": 1,
+          "unchanged": 0,
+          "unverified": 0
+        },
+        "ungraded_pairs": 0,
+        "issues": [],
+        "rows": [
+          {
+            "key": "[\"string\", \"queue-reconnect\"]",
+            "id": "queue-reconnect",
+            "identity_type": "string",
+            "split": "held-out",
+            "baseline_status": "passed",
+            "candidate_status": "failed",
+            "outcome": "regression",
+            "fully_graded": true,
+            "reason": "",
+            "baseline_reason": "Original request resumed once.",
+            "candidate_reason": "A repeated delivery created a second request."
+          },
+          {
+            "key": "[\"string\", \"cancel-routing\"]",
+            "id": "cancel-routing",
+            "identity_type": "string",
+            "split": "held-out",
+            "baseline_status": "failed",
+            "candidate_status": "passed",
+            "outcome": "improvement",
+            "fully_graded": true,
+            "reason": "",
+            "baseline_reason": "Cancellation reached the wrong run.",
+            "candidate_reason": "Cancellation targeted the requested run."
+          }
+        ],
+        "baseline_cost_usd": 0.0,
+        "candidate_cost_usd": null,
+        "cost_delta_usd": null,
+        "baseline_duration_seconds": 1.5,
+        "candidate_duration_seconds": 2.0,
+        "duration_delta_seconds": 0.5
+      }
+    ],
+    "message": "Observed task outcomes, not a promotion decision or a billing guarantee."
+  }
+}

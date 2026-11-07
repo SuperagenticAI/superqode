@@ -214,6 +214,140 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertFalse(app.inspectorVisible)
   }
 
+  func testANewMessageInTheOpenConversationBecomesTheOpenTurn() {
+    let first: [String: Any] = [
+      "id": "turn-1", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "completed", "updated": 10,
+    ]
+    let second: [String: Any] = [
+      "id": "turn-2", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "running", "updated": 20,
+    ]
+    let finishedLater: [String: Any] = [
+      "id": "turn-3", "project": "project", "kind": "task", "conversation_id": "turn-1",
+      "status": "completed", "updated": 40,
+    ]
+    let other: [String: Any] = [
+      "id": "other", "project": "project", "kind": "task", "conversation_id": "other",
+      "status": "running", "updated": 50,
+    ]
+    XCTAssertEqual(
+      conversationTipID(jobs: [first, second], conversationID: "turn-1", projectID: "project"),
+      "turn-2")
+    XCTAssertEqual(
+      conversationTipID(
+        jobs: [first, second, finishedLater], conversationID: "turn-1", projectID: "project"),
+      "turn-2")
+    XCTAssertEqual(
+      conversationTipID(jobs: [first, other], conversationID: "turn-1", projectID: "project"),
+      "turn-1")
+  }
+
+  func testAPhoneRunOpensOnTheMacBeforeItFinishes() {
+    let mac: [String: Any] = [
+      "id": "mac-turn", "project": "project", "kind": "task", "status": "running", "updated": 30,
+    ]
+    let phone: [String: Any] = [
+      "id": "phone-turn", "project": "project", "kind": "task", "status": "running",
+      "phone_origin": "phone-1", "updated": 20,
+    ]
+    let finished: [String: Any] = [
+      "id": "phone-done", "project": "project", "kind": "task", "status": "completed",
+      "phone_origin": "phone-1", "updated": 40,
+    ]
+    let elsewhere: [String: Any] = [
+      "id": "other-phone", "project": "other", "kind": "task", "status": "running",
+      "phone_origin": "phone-1", "updated": 50,
+    ]
+    XCTAssertEqual(
+      phoneTurnToOpen(jobs: [mac, phone], projectID: "project", seen: [], includeFinished: false),
+      "phone-turn")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [phone, finished], projectID: "project", seen: [], includeFinished: true),
+      "phone-turn")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [finished], projectID: "project", seen: [], includeFinished: false),
+      "")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [finished], projectID: "project", seen: [], includeFinished: true),
+      "phone-done")
+    XCTAssertEqual(
+      phoneTurnToOpen(
+        jobs: [phone, elsewhere], projectID: "project", seen: ["phone-turn"], includeFinished: true),
+      "")
+    XCTAssertEqual(
+      phoneRunPresentation(
+        turn: "phone-turn", conversation: "phone-thread", selectedJob: "mac-turn",
+        selectedConversation: "mac-thread", macActive: false),
+      .open)
+    XCTAssertEqual(
+      phoneRunPresentation(
+        turn: "phone-turn", conversation: "phone-thread", selectedJob: "mac-turn",
+        selectedConversation: "mac-thread", macActive: true),
+      .banner)
+    XCTAssertEqual(
+      phoneRunPresentation(
+        turn: "phone-turn", conversation: "same", selectedJob: "mac-turn",
+        selectedConversation: "same", macActive: true),
+      .none)
+    XCTAssertNil(phoneConnection(fromProfile: [
+      "source": "mac", "harness": "core", "provider": "openai", "model": "old",
+    ]))
+    let profile = phoneConnection(fromProfile: [
+      "source": "phone", "harness": "core", "provider": "ollama", "model": "qwen",
+    ])
+    XCTAssertEqual(profile?.harness, "core")
+    XCTAssertEqual(profile?.provider, "ollama")
+    XCTAssertEqual(profile?.model, "qwen")
+    XCTAssertNil(profile?.agentModel)
+    let job = phoneConnection(fromJobRequest: [
+      "harness": "acp:opencode", "provider": "agent", "model": "",
+      "interaction_mode": "code",
+      "acp_options": ["model": "gpt", "mode": "build", "config": ["effort": "low"]],
+    ])
+    XCTAssertEqual(job?.harness, "acp:opencode")
+    XCTAssertEqual(job?.agentModel, "gpt")
+    XCTAssertEqual(job?.agentConfig?["effort"], "low")
+    XCTAssertEqual(
+      recordedConnectionLabel(
+        request: ["harness": "core", "model": "qwen"],
+        harnesses: [["id": "core", "name": "Core"]]),
+      "Core · qwen")
+  }
+
+  @MainActor func testPhoneHarnessAndModelReplaceTheMacSelection() {
+    let app = workspace()
+    app.harnesses = [
+      ["id": "core", "name": "Core"],
+      ["id": "connection:antigravity", "name": "Antigravity", "desktop_kind": "connection"],
+    ]
+    app.harness = "core"
+    app.provider = "openai"
+    app.model = "gpt-4o-mini"
+    app.preferences.set(
+      ["connection:antigravity": ["provider": "agent", "model": "remembered-on-mac"]],
+      forKey: "nativeRouteChoices:project")
+    app.chooseHarness("connection:antigravity")
+    XCTAssertEqual(app.harness, "connection:antigravity")
+    XCTAssertEqual(app.model, "remembered-on-mac")
+    app.adoptPhoneSelection(PhoneConnectionSelection(
+      harness: "connection:antigravity", provider: "agent", model: "gemini-from-iphone"))
+    XCTAssertEqual(app.model, "gemini-from-iphone")
+    app.adoptPhoneSelection(PhoneConnectionSelection(
+      harness: "core", provider: "ollama", model: "qwen", mode: "code"))
+    XCTAssertEqual(app.harness, "core")
+    XCTAssertEqual(app.provider, "ollama")
+    XCTAssertEqual(app.model, "qwen")
+    let saved = app.preferences.dictionary(forKey: "nativeRouteChoices:project")
+    let core = saved?["core"] as? [String: Any]
+    XCTAssertEqual(core?["model"] as? String, "qwen")
+    let antigravity = saved?["connection:antigravity"] as? [String: Any]
+    XCTAssertEqual(antigravity?["model"] as? String, "gemini-from-iphone")
+  }
+
   @MainActor private func workspace(store: WorkspaceRecoveryStore? = nil, engine: Engine? = nil)
     -> Workspace
   {

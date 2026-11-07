@@ -1,4 +1,4 @@
-"""Desktop commands over an inherited JSON-lines pipe; no network listener."""
+"""Desktop commands over a local pipe; private companion access is opt-in."""
 
 from __future__ import annotations
 
@@ -125,6 +125,11 @@ class DesktopService:
         self.task_queues = TaskQueues(self)
         for row in self._all("SELECT id FROM jobs WHERE kind='task' AND status='interrupted'"):
             self._notify(row["id"], "interrupted")
+        from .remote_access import RemoteAccess
+
+        self.companion = RemoteAccess(self)
+        if self.companion.config.get("enabled"):
+            self._background(self.companion.resume)
 
     def _all(self, query, args=()):
         with self.lock:
@@ -150,7 +155,12 @@ class DesktopService:
 
     def job_summaries(self, identity=None, *, include_metadata=True, identities=None):
         """Keep individual run records, with a stable conversation identity for recent rows."""
-        columns = "id,project,kind,title,status,created,updated,json_extract(request,'$.harness') AS harness,json_extract(request,'$._fork_origin') AS fork_origin"
+        columns = (
+            "id,project,kind,title,status,created,updated,"
+            "json_extract(request,'$.harness') AS harness,"
+            "json_extract(request,'$.remote_origin.device') AS phone_origin,"
+            "json_extract(request,'$._fork_origin') AS fork_origin"
+        )
         rows = (
             (
                 self._all(
@@ -237,6 +247,7 @@ class DesktopService:
         for row in rows:
             root = roots.get(row["id"], row)
             summary = {key: value for key, value in row.items() if key != "request"}
+            summary["phone_origin"] = row["phone_origin"] or ""
             summary["fork_origin"] = json.loads(row["fork_origin"]) if row["fork_origin"] else None
             summary.update(conversation_id=root["id"], conversation_title=root["title"])
             saved = metadata.get((row["project"], root["id"]), {})
@@ -893,6 +904,8 @@ class DesktopService:
             )
 
     def dispatch(self, method: str, params: dict):
+        if method.startswith("remote."):
+            return self.companion.handle(method, params)
         if method == "engine.status":
             return {
                 "mode": "attached",
@@ -2183,6 +2196,8 @@ class DesktopService:
             if self._closed:
                 return
             self._closing = True
+        self.companion.stop()
+        with self.lock:
             self.task_queues.enabled.clear()
         self.authentication.begin_close()
         for job_id in list(self.processes):

@@ -3795,47 +3795,43 @@ async def test_codex_models_picker_supports_arrows_enter_and_mouse(monkeypatch):
         assert selected == ["gpt-second", "gpt-first"]
 
 
-async def test_local_dependency_card_supports_arrow_and_enter(monkeypatch):
-    """MLX setup uses the shared picker interaction instead of an Enter/n prompt."""
+async def test_local_setup_card_supports_arrow_and_enter(monkeypatch):
+    """The active isolated-installer card retains shared keyboard and click choices."""
     import re
-    from types import SimpleNamespace
+    from rich.text import Text
 
     app = SuperQodeApp()
     choices: list[str] = []
     async with app.run_test(size=(110, 40)) as pilot:
         log = app.query_one("#log", ConversationLog)
-        app._show_local_dependency_install_picker(
-            "mlx",
+        app._show_local_server_setup_card(
+            "ollama",
             log,
-            env=SimpleNamespace(
-                label="test environment",
-                python="/test/python",
-                target="test environment",
-            ),
-            command="uv pip install mlx-lm",
+            content=Text("Install Ollama."),
+            command="ollama serve",
+            can_start=False,
+            title="Install Ollama",
         )
         monkeypatch.setattr(
             app,
-            "_apply_local_dependency_install_choice",
-            lambda choice, *, pending: choices.append(choice),
+            "_apply_local_server_setup_choice",
+            lambda choice, *, pending, log: choices.append(choice),
         )
         await pilot.pause()
         await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause()
 
-        assert choices == ["copy"]
-        assert not app._prompts.is_active("local_dependency_install")
+        assert choices == ["recheck"]
+        assert not app._prompts.is_active("local_server_setup")
 
-        app._show_local_dependency_install_picker(
-            "mlx",
+        app._show_local_server_setup_card(
+            "ollama",
             log,
-            env=SimpleNamespace(
-                label="test environment",
-                python="/test/python",
-                target="test environment",
-            ),
-            command="uv pip install mlx-lm",
+            content=Text("Install Ollama."),
+            command="ollama serve",
+            can_start=False,
+            title="Install Ollama",
         )
         await pilot.pause()
         rows = [
@@ -3848,7 +3844,7 @@ async def test_local_dependency_card_supports_arrow_and_enter(monkeypatch):
         x = log.region.x + min(len(row_text) - 2, log.region.width - 2)
         await pilot.click(offset=(x, y))
         await pilot.pause()
-        assert choices == ["copy", "cancel"]
+        assert choices == ["recheck", "back"]
 
 
 async def test_mlx_install_uses_visible_shared_progress_and_continues(monkeypatch):

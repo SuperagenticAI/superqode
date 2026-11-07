@@ -17,7 +17,7 @@ struct HarnessIdentity: Identifiable, Equatable {
     id = referenceID
     name = string(row, "name", referenceID)
     let runtime = string(row, "runtime")
-    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "claude-code": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini", "factory": "factory-droid", "droid": "factory-droid", "opencode": "opencode"]
+    let runtimes = ["codex-cli": "codex", "codex-sdk": "codex", "claude-agent-sdk": "claude", "claude-code": "claude", "copilot-sdk": "copilot", "gemini-cli": "gemini", "factory": "factory-droid", "droid": "factory-droid", "opencode": "opencode", "antigravity-cli": "antigravity", "antigravity-sdk": "antigravity", "antigravity-managed": "antigravity"]
     let reference = ["acp:", "connection:", "attach:", "vendor-key:"].first { referenceID.hasPrefix($0) }
       .map { String(referenceID.dropFirst($0.count)) } ?? referenceID
     let fallback = runtimes[runtime] ?? runtimes[reference] ?? (["core", "pipy", "codegem", "systemone"].contains(referenceID) ? "superqode" : reference)
@@ -50,14 +50,30 @@ struct HarnessIcon: View {
   var body: some View {
     Group {
       if let asset = identity.assetName, let image = NSImage(named: asset) {
-        // Only the glyph carries colour, and only when the official mark is coloured.
-        Image(nsImage: image).renderingMode(identity.keepsBrandColours ? .original : .template)
-          .resizable().scaledToFit().foregroundStyle(.primary)
+        // Menu labels use the image's own point size. A 540px PNG would otherwise
+        // fill the discussion. The copy is already the badge size.
+        let mark = Image(nsImage: displayImage(image))
+          .renderingMode(identity.keepsBrandColours ? .original : .template)
+        if identity.keepsBrandColours { mark } else { mark.foregroundStyle(.primary) }
       } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
-    }.padding(size * 0.18).frame(width: size, height: size)
+    }.padding(size * 0.18).frame(width: size, height: size).clipped()
       .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
       .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
       .accessibilityLabel(identity.name).help(identity.name)
+  }
+
+  /// Colour marks need a non-template copy at the badge's point size.
+  @MainActor private static var sizedCopies: [String: NSImage] = [:]
+
+  private func displayImage(_ image: NSImage) -> NSImage {
+    let side = max(1, size * 0.64)
+    let key = "\(identity.assetName ?? ""):\(Int(side.rounded())):\(identity.keepsBrandColours)"
+    if let cached = Self.sizedCopies[key] { return cached }
+    let picture = (image.copy() as? NSImage) ?? image
+    picture.size = NSSize(width: side, height: side)
+    picture.isTemplate = !identity.keepsBrandColours
+    Self.sizedCopies[key] = picture
+    return picture
   }
 }
 

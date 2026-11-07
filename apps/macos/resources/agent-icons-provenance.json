@@ -14,8 +14,8 @@
     },
     {
       "id": "antigravity-acp",
-      "url": "https://cdn.agentclientprotocol.com/registry/v1/latest/antigravity-acp.svg",
-      "sha256": "ef068db27db956dbf947b59a3e6d21e8aa170656c55ff04d0b66fa673ea852c1"
+      "url": "https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png",
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e"
     },
     {
       "id": "auggie",
@@ -219,6 +219,10 @@
     }
   ],
   "brand_colours": {
+    "antigravity-acp": {
+      "colours": "official full-color icon",
+      "source": "https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png"
+    },
     "claude-acp": {
       "colours": "#D97757",
       "source": "https://claude.ai (simple-icons Claude, Claude Code)"

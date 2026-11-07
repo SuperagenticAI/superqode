@@ -53,7 +53,7 @@ final class EngineFrames {
   }
 }
 
-/// Inherited pipes only. The application never opens a network port.
+/// Native control uses inherited pipes. Private companion access is a separate opt-in gateway.
 @MainActor final class Engine {
   private var process: Process?
   private var input: FileHandle?
