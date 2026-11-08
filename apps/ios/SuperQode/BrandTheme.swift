@@ -51,7 +51,7 @@ enum CompanionTheme {
   }
   /// Third-party harness logos can be swapped for a generic symbol, for example if App Review
   /// asks for it. Build with the STORE_GENERIC_HARNESS_ICONS Swift flag, or set
-  /// SQGenericHarnessIcons to YES in Info.plist. The default keeps the bundled logos.
+  /// SQGenericHarnessIcons to YES in Info.plist. The Store build ships with it set to YES.
   static let genericHarnessIcons: Bool = {
     #if STORE_GENERIC_HARNESS_ICONS
     return true

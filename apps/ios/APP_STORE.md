@@ -1,6 +1,6 @@
 # App Store submission
 
-This is the working checklist for submitting the SuperQode iOS companion, version 0.1.0 (build 1), bundle ID `dev.superqode.companion`. Nothing here uploads or publishes the app. Signing and upload are done by hand in Xcode and App Store Connect.
+This is the working checklist for submitting the SuperQode iOS companion, version 0.1.0 (build 2), bundle ID `dev.superqode.companion`. Nothing here uploads or publishes the app. Signing and upload are done by hand in Xcode and App Store Connect.
 
 ## Before you upload
 
@@ -8,12 +8,12 @@ This is the working checklist for submitting the SuperQode iOS companion, versio
 | --- | --- |
 | Toolchain | Xcode 26 or newer with the iOS 26 SDK. App Store Connect has required it for uploads since 28 April 2026. |
 | Deployment target | iOS 17.0, iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`). |
-| Version | `MARKETING_VERSION = 0.1.0`, `CURRENT_PROJECT_VERSION = 1`. Raise the build number for every new upload. |
+| Version | `MARKETING_VERSION = 0.1.0`, `CURRENT_PROJECT_VERSION = 2`. Raise the build number for every new upload. |
 | Encryption | `ITSAppUsesNonExemptEncryption = NO` in `Resources/Info.plist`. The app uses only Apple's HTTPS and Keychain. |
 | Privacy manifest | `SuperQode/PrivacyInfo.xcprivacy` declares UserDefaults (reason `CA92.1`), no tracking and no collected data. |
 | Permissions | Camera only, requested when Scan is tapped. Photos use the system picker, which needs no permission. |
 | App icon | Committed 1024 px PNGs without alpha: light (black field), dark (deep plum field) and tinted (grayscale). No build script generates icons. |
-| Third-party logos | Shown by default for harnesses the user connected on the Mac. Set `SQGenericHarnessIcons` to `YES` in Info.plist, or build with the `STORE_GENERIC_HARNESS_ICONS` Swift flag, to show a generic symbol instead. |
+| Third-party logos | Not shown. `SQGenericHarnessIcons` is `YES` in `Resources/Info.plist`, or the build uses the `STORE_GENERIC_HARNESS_ICONS` Swift flag, so harnesses the user connected on the Mac render with a generic symbol. Set the key to `NO` (and omit the flag) to show the bundled logos instead. |
 | Privacy and support | In-app links in Settings, Help & about and in the Get started guide: https://superqode.dev/privacy and https://superqode.dev/support. Publish both pages before submitting; the text is in `store/privacy.md` and `store/support.md`. |
 | Feature list | The in-app "What you can do on iPhone" list shows only workflows the phone can use. Mac-only work is described as staying on the Mac. |
 
