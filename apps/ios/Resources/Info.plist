@@ -38,7 +38,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Scan a pairing invitation displayed by SuperQode on your Mac. Camera access is requested only when you tap Scan.</string>
 	<key>SQGenericHarnessIcons</key>
-	<false/>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

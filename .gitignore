@@ -244,6 +244,9 @@ reference/
 examples/bench/runs/
 examples/bench/results/
 
+# Generated iOS App Store screenshot assets are kept locally.
+/apps/ios/app-store/screenshots/
+
 # Local research notes and run evidence are not release content.
 /docs/research/
 /docs/advanced/appearance-workflow-review.md

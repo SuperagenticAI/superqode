@@ -99,7 +99,7 @@ Paste into App Review Information, Notes:
 >
 > Real use needs SuperQode on a Mac with Private remote access turned on and the free Tailscale app on both devices. The camera is used only to scan the pairing QR code shown on the Mac. A screen recording of a real Mac and iPhone pairing and running a task is available on request, and we can join a call if that helps.
 >
-> Harness logos are shown only for tools the user has installed and connected on their own Mac, to identify them.
+> Harness names are shown only for tools the user has installed and connected on their own Mac, to identify them.
 
 No demo account is needed: the app has no sign-in. Leave "Sign-in required" unchecked.
 
