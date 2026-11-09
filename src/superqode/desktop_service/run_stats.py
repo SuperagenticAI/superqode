@@ -13,6 +13,11 @@ from typing import Any
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted", "regressed"})
 
 _IN = ("tokens_in", "input_tokens", "prompt_tokens", "inputTokens", "promptTokens")
+# Cumulative usage events: ACP usage_update / prompt usage (the ACP worker
+# forwards the client's merged running totals) and run end summaries.
+_CUMULATIVE = {"usage", "usage_update", "run_end", "run.completed"}
+# One model call each; these add up.
+_PER_CALL = {"model_result", "model.completed"}
 _OUT = (
     "tokens_out",
     "output_tokens",
@@ -74,7 +79,9 @@ class UsageCollector:
     """Collect usage from a run's event stream.
 
     Priority: usage in the terminal result, then the latest cumulative report
-    (ACP usage updates, run end), then the sum of per-model-call reports.
+    (ACP usage updates, run end) completed by the ACP result stats, then the
+    sum of per-model-call reports. Cumulative reports replace each other and
+    are never added, so running totals are not double counted.
     """
 
     def __init__(self) -> None:
@@ -89,7 +96,7 @@ class UsageCollector:
         if not isinstance(data, dict):
             return
         if kind == "usage":
-            self.latest = normalize_usage(data) or self.latest
+            self._cumulative(normalize_usage(data))
             return
         if kind != "harness_event":
             return
@@ -100,17 +107,50 @@ class UsageCollector:
         found = normalize_usage(payload.get("usage")) or normalize_usage(payload)
         if not found:
             return
-        if name in {"run_end", "run.completed"}:
-            self.latest = found
-        elif name in {"model_result", "model.completed"}:
+        if name in _CUMULATIVE:
+            self._cumulative(found)
+        elif name in _PER_CALL:
             self.summed = _add(self.summed, found)
 
+    def _cumulative(self, found: dict | None) -> None:
+        if not found:
+            return
+        # A later running total wins per field. Fields it omits (for example a
+        # context-only update without tokens) keep the earlier value.
+        self.latest = {**(self.latest or {}), **found}
+
     def result(self, result: Any) -> dict | None:
+        stats = None
         if isinstance(result, dict):
             reported = normalize_usage(result.get("usage"))
             if reported:
                 return reported
-        return self.latest or self.summed
+            stats = acp_stats_usage(result.get("stats"))
+        if self.latest or stats:
+            # Same running totals from two places: fill gaps, never add.
+            merged = {**(stats or {}), **(self.latest or {})}
+            if (
+                "total_tokens" not in (self.latest or {})
+                and {"tokens_in", "tokens_out"} <= merged.keys()
+            ):
+                merged["total_tokens"] = merged["tokens_in"] + merged["tokens_out"]
+            return merged
+        return self.summed
+
+
+def acp_stats_usage(stats: Any) -> dict | None:
+    """Usage from an ACP result's stats. Zero means not reported there."""
+    if not isinstance(stats, dict):
+        return None
+    tokens_in = _number(stats.get("prompt_tokens"))
+    tokens_out = _number(stats.get("completion_tokens"))
+    cost = _number(stats.get("cost"))
+    raw = {
+        "tokens_in": tokens_in or None,
+        "tokens_out": tokens_out or None,
+        "cost": cost or None,
+    }
+    return normalize_usage({key: value for key, value in raw.items() if value is not None})
 
 
 def _add(left: dict | None, right: dict) -> dict:
