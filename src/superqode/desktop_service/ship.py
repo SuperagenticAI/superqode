@@ -146,6 +146,15 @@ def is_private(relative: str) -> bool:
     return any(part in PRIVATE_PARTS or part.startswith(PRIVATE_PREFIXES) for part in parts)
 
 
+def is_refused(relative: str) -> bool:
+    """True for files never committed from the app: secrets, Git and SSH data,
+    cloud credentials and SuperQode project state, matched on any path segment."""
+    parts = PurePosixPath(relative).parts
+    return is_private(relative) or any(
+        part in SENSITIVE_PARTS or part.startswith(".env") for part in parts
+    )
+
+
 def _real_root(root: Path) -> Path:
     return Path(os.path.realpath(root))
 
@@ -167,10 +176,14 @@ def _relative_path(root: Path, value) -> str:
     if target == real_root:
         raise ValueError("Choose files, not the whole project")
     relative = PurePosixPath(value)
-    if any(part in SENSITIVE_PARTS for part in relative.parts) or relative.name.startswith(".env"):
-        raise ValueError(f"{relative} looks sensitive and cannot be committed from here")
     if is_private(value):
         raise ValueError(f"{relative} is SuperQode project state and is never committed")
+    if is_refused(value):
+        raise ValueError(f"{relative} looks sensitive and cannot be committed from here")
+    # Folders (including a symlink to one) would stage everything inside them,
+    # nested secrets too. Deleted files do not exist on disk and stay allowed.
+    if target.is_dir():
+        raise ValueError(f"{relative} is a folder. Choose the files inside it instead")
     return value
 
 
@@ -185,7 +198,7 @@ def _prefix(root: Path) -> str:
     return _git(root, "rev-parse", "--show-prefix").strip()
 
 
-def changed_files(root: Path) -> list[dict]:
+def changed_files(root: Path, hidden: list[str] | None = None) -> list[dict]:
     """Changed files inside the project, relative to the project root.
 
     Git reports porcelain paths relative to the repository top level, so a
@@ -196,6 +209,7 @@ def changed_files(root: Path) -> list[dict]:
     raw = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".")
     entries = raw.split("\0")
     files = []
+    hidden = hidden if hidden is not None else []
     index = 0
 
     def local(path: str) -> str | None:
@@ -214,7 +228,12 @@ def changed_files(root: Path) -> list[dict]:
             source = entries[index] if index < len(entries) else ""
             index += 1
         relative = local(path)
-        if not relative or is_private(relative):
+        if not relative:
+            continue
+        original = local(source) if source else None
+        # Same rules as staging, so selecting every listed file never fails.
+        if is_refused(relative) or (original and is_refused(original)):
+            hidden.append(relative)
             continue
         item = {
             "path": relative,
@@ -223,8 +242,7 @@ def changed_files(root: Path) -> list[dict]:
             # Changes in the working tree that still need staging.
             "unstaged": code[1] != " ",
         }
-        original = local(source) if source else None
-        if original and not is_private(original):
+        if original:
             item["original"] = original
         files.append(item)
     return files
@@ -268,7 +286,8 @@ def status(root: Path) -> dict:
             ):
                 default_branch = candidate
                 break
-    files = changed_files(root)
+    hidden: list[str] = []
+    files = changed_files(root, hidden)
     gh = _gh_path()
     gh_ready = False
     if gh:
@@ -285,6 +304,8 @@ def status(root: Path) -> dict:
         "on_default_branch": bool(branch) and branch in {default_branch, "main", "master"},
         "files": files[:2000],
         "repository_prefix": prefix,
+        # Changed files that are never committed from here (secrets, project state).
+        "hidden_count": len(hidden),
         "gh_installed": bool(gh),
         "gh_ready": gh_ready,
     }

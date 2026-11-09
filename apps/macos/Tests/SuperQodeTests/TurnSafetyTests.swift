@@ -60,5 +60,10 @@ final class TurnSafetyTests: XCTestCase {
     XCTAssertTrue(ShipRules.isPrivate(".superqode-edit-1234"))
     XCTAssertFalse(ShipRules.isPrivate("Sources/superqode.swift"))
     XCTAssertFalse(ShipRules.isPrivate("docs/superqode/guide.md"))
+    for refused in [".env", ".env.local", "config/.env", "apps/web/.env.production", ".git/config", "home/.ssh/id_ed25519", ".aws/credentials", ".superqode/checkpoints/state.json"] {
+      XCTAssertTrue(ShipRules.isRefused(refused), refused)
+    }
+    XCTAssertFalse(ShipRules.isRefused("Sources/environment.swift"))
+    XCTAssertFalse(ShipRules.isRefused("docs/env.md"))
   }
 }

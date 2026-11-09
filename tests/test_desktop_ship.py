@@ -185,3 +185,53 @@ def test_run_cannot_start_while_git_action_holds_project(desktop, monkeypatch):
 
     assert_project_idle(service, project)
     assert project not in service._ship_projects
+
+
+def test_paths_reject_folders_including_symlinked_ones(repo):
+    (repo / "sub").mkdir()
+    (repo / "sub" / "a.txt").write_text("a\n")
+    os.symlink(repo / "sub", repo / "dirlink")
+    for value in ["sub", "sub/", "dirlink"]:
+        with pytest.raises(ValueError):
+            ship._paths(repo, [value])
+    with pytest.raises(ValueError, match="folder"):
+        ship._paths(repo, ["sub"])
+    assert ship._paths(repo, ["sub/a.txt"]) == [":(literal)sub/a.txt"]
+
+
+def test_nested_env_files_are_not_stageable(repo):
+    (repo / "sub").mkdir()
+    for value in ["sub/.env", "sub/.env.local", "deep/nested/.env.production"]:
+        with pytest.raises(ValueError, match="sensitive"):
+            ship._paths(repo, [value])
+
+
+def test_status_hides_env_files_and_counts_them(repo):
+    (repo / "config").mkdir()
+    (repo / ".env").write_text("TOKEN=1\n")
+    (repo / ".env.local").write_text("TOKEN=2\n")
+    (repo / "config" / ".env").write_text("TOKEN=3\n")
+    (repo / "notes.txt").write_text("keep\n")
+    result = ship.status(repo)
+    assert [f["path"] for f in result["files"]] == ["notes.txt"]
+    assert result["hidden_count"] == 3
+    # Every listed file can be staged, so selecting All never fails.
+    ship._paths(repo, [f["path"] for f in result["files"]])
+
+
+def test_deleted_file_is_still_committable(repo):
+    (repo / "hello.txt").unlink()
+    status = ship.status(repo)
+    assert [f["path"] for f in status["files"]] == ["hello.txt"]
+
+    class Idle:
+        processes = {}
+
+        def _all(self, query, params=()):
+            return []
+
+    result = ship.commit(
+        Idle(), repo, {"project": "p", "paths": ["hello.txt"], "message": "Remove hello"}
+    )
+    assert result["ok"]
+    assert "D\thello.txt" in git(repo, "show", "--name-status", "--format=", "HEAD")

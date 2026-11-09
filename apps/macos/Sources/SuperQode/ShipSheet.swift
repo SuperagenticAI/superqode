@@ -9,6 +9,14 @@ enum ShipRules {
     path.split(separator: "/").contains { $0 == ".superqode" || $0.hasPrefix(".superqode-") }
   }
 
+  /// Files the engine never stages: secrets (.env, .env.*), Git, SSH and cloud
+  /// credential folders, and SuperQode project state. Same rule as the engine,
+  /// matched on any path segment, so selecting All never picks a refused file.
+  static func isRefused(_ path: String) -> Bool {
+    let sensitive: Set<Substring> = [".git", ".ssh", ".aws", ".gnupg"]
+    return isPrivate(path) || path.split(separator: "/").contains { sensitive.contains($0) || $0.hasPrefix(".env") }
+  }
+
   /// A drafted message may replace the text only when the box is empty or still
   /// holds the previous draft unchanged. Typed text is never overwritten.
   static func mayApplyDraft(current: String, lastDraft: String) -> Bool {
@@ -29,6 +37,8 @@ struct ShipSheet: View {
   @State private var message = ""
   /// The last message drafted automatically, to tell it apart from typed text.
   @State private var lastDraft = ""
+  /// Changed files left out because they are never committed from here.
+  @State private var hiddenCount = 0
   /// The project when the sheet opened. Git actions never follow navigation.
   @State private var project = ""
   @State private var newBranch = ""
@@ -159,6 +169,10 @@ struct ShipSheet: View {
         }
       }.frame(height: min(180, CGFloat(max(files.count, 1)) * 22))
       if files.isEmpty { Text("No uncommitted changes.").font(.caption).foregroundStyle(.secondary) }
+      if hiddenCount > 0 {
+        Text("\(hiddenCount) private file\(hiddenCount == 1 ? "" : "s") hidden, such as .env or SuperQode project state. Commit those in Terminal if you really mean to.")
+          .font(.caption).foregroundStyle(.tertiary)
+      }
     }
   }
 
@@ -206,7 +220,9 @@ struct ShipSheet: View {
     do {
       let result = try await app.engine.call("ship.status", ["project": projectID]) as? [String: Any] ?? [:]
       status = result
-      files = (result["files"] as? [[String: Any]] ?? []).filter { !ShipRules.isPrivate(string($0, "path")) }
+      let listed = result["files"] as? [[String: Any]] ?? []
+      files = listed.filter { !ShipRules.isRefused(string($0, "path")) && !ShipRules.isRefused(string($0, "original")) }
+      hiddenCount = (result["hidden_count"] as? Int ?? 0) + (listed.count - files.count)
       if !loaded {
         selectTurn()
         if selected.isEmpty && turnFiles.isEmpty { selected = Set(files.map { string($0, "path") }) }
